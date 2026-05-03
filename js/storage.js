@@ -40,8 +40,14 @@ const SEED_EXERCISES = [
 
   // Arms
   { name: 'Barbell Curl', category: 'Arms', imageSlug: 'Barbell_Curl' },
+  { name: 'EZ Bar Curl', category: 'Arms', imageSlug: 'EZ-Bar_Curl' },
   { name: 'Dumbbell Curl', category: 'Arms', imageSlug: 'Dumbbell_Bicep_Curl' },
+  { name: 'Incline Dumbbell Curl', category: 'Arms', imageSlug: 'Incline_Dumbbell_Curl' },
   { name: 'Hammer Curl', category: 'Arms', imageSlug: 'Hammer_Curls' },
+  { name: 'Concentration Curl', category: 'Arms', imageSlug: 'Concentration_Curls' },
+  { name: 'Spider Curl', category: 'Arms', imageSlug: 'Spider_Curl' },
+  { name: 'Reverse Curl', category: 'Arms', imageSlug: 'Reverse_Barbell_Curl' },
+  { name: 'Chin-Up', category: 'Arms', imageSlug: 'Chin-Up' },
   { name: 'Tricep Pushdown', category: 'Arms', imageSlug: 'Triceps_Pushdown' },
   { name: 'Tricep Extension', category: 'Arms', imageSlug: 'Standing_Dumbbell_Triceps_Extension' },
   { name: 'Dips', category: 'Arms', imageSlug: 'Dips_-_Triceps_Version' },
