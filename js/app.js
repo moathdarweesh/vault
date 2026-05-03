@@ -3380,8 +3380,6 @@ function renderPlanner(el) {
             <div class="planner-day-title ${day ? '' : 'empty'}">${escapeHtml(day?.name || t('rest_day'))}</div>
             ${exCount > 0 ? `<div class="planner-day-count num">${fmtNum(exCount)} ${exCount === 1 ? t('exercise') : t('exercises')}</div>` : ''}
           </div>
-          ${day && exCount > 0 ? `<button type="button" class="planner-edit-btn" data-edit-day="${dow}" aria-label="${escapeHtml(t('edit_day'))}">${icon('edit', 16)}</button>` : ''}
-          <div class="exercise-chev">${icon('chevronRight', 18)}</div>
         </div>
         ${hasMuscles ? `
           <div class="planner-day-muscles">
@@ -3429,12 +3427,10 @@ function renderPlanner(el) {
   });
 
   // Tap a day card:
-  //   - if it has exercises → open the workout-session page for that day
+  //   - if it has exercises → open the workout-session page (edit available there)
   //   - if it's empty (rest day) → open the editor so the user can add exercises
   el.querySelectorAll('[data-day]').forEach((b) =>
-    b.addEventListener('click', (e) => {
-      // Pen icon inside the card opens the editor instead
-      if (e.target.closest('[data-edit-day]')) return;
+    b.addEventListener('click', () => {
       const dow = Number(b.dataset.day);
       const day = (DB.plan.get() || {})[String(dow)];
       if (day && day.exerciseIds && day.exerciseIds.length > 0) {
@@ -3442,13 +3438,6 @@ function renderPlanner(el) {
       } else {
         openDayEditorModal(dow);
       }
-    })
-  );
-
-  el.querySelectorAll('[data-edit-day]').forEach((b) =>
-    b.addEventListener('click', (e) => {
-      e.stopPropagation();
-      openDayEditorModal(Number(b.dataset.editDay));
     })
   );
 }

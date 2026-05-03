@@ -3002,24 +3002,6 @@ body[dir="rtl"] .planner-day { text-align: right; }
 /* =========================================================================
    SESSION DAY VIEW — log all the day's exercises in one page
    ========================================================================= */
-.planner-edit-btn {
-  flex-shrink: 0;
-  width: 32px;
-  height: 32px;
-  border-radius: 8px;
-  background: var(--surface-2);
-  border: 1px solid var(--border);
-  color: var(--text-mute);
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  margin-right: 4px;
-  transition: background 0.15s, color 0.15s;
-}
-.planner-edit-btn:hover { background: var(--surface-3); color: var(--text); }
-.planner-edit-btn:active { transform: scale(0.94); }
-body[dir="rtl"] .planner-edit-btn { margin-right: 0; margin-left: 4px; }
-
 .sd-toolbar {
   display: flex;
   align-items: flex-end;
