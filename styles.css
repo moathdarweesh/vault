@@ -2999,6 +2999,210 @@ body[dir="rtl"] .tool-card { text-align: right; align-items: flex-end; }
 
 body[dir="rtl"] .planner-day { text-align: right; }
 
+/* =========================================================================
+   SESSION DAY VIEW — log all the day's exercises in one page
+   ========================================================================= */
+.planner-edit-btn {
+  flex-shrink: 0;
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  color: var(--text-mute);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  margin-right: 4px;
+  transition: background 0.15s, color 0.15s;
+}
+.planner-edit-btn:hover { background: var(--surface-3); color: var(--text); }
+.planner-edit-btn:active { transform: scale(0.94); }
+body[dir="rtl"] .planner-edit-btn { margin-right: 0; margin-left: 4px; }
+
+.sd-toolbar {
+  display: flex;
+  align-items: flex-end;
+  gap: 10px;
+  margin-bottom: 14px;
+}
+
+.sd-list {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.sd-card {
+  background: var(--surface-1);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  padding: 14px;
+  transition: border-color 0.18s ease, background 0.18s ease;
+}
+.sd-card.logged {
+  border-color: var(--accent-line);
+  background: linear-gradient(180deg, var(--accent-soft), transparent 30%), var(--surface-1);
+}
+
+.sd-card-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+
+.sd-thumb {
+  width: 56px;
+  height: 56px;
+  border-radius: 12px;
+  background: var(--surface-2);
+  background-size: cover;
+  background-position: center;
+  flex-shrink: 0;
+  position: relative;
+  overflow: hidden;
+}
+.sd-thumb.fallback {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 18px;
+  font-weight: 800;
+  color: var(--text-dim);
+}
+.sd-thumb.machine-bg { background: #0c2733; }
+.sd-thumb.machine-bg svg { position: absolute; inset: 0; width: 100%; height: 100%; }
+.sd-thumb.machine-bg img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+
+.sd-card-main {
+  flex: 1;
+  min-width: 0;
+}
+.sd-card-name {
+  font-size: 15px;
+  font-weight: 800;
+  letter-spacing: -0.015em;
+  color: var(--text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.sd-card-last {
+  margin-top: 3px;
+  font-size: 11px;
+  color: var(--text-mute);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.sd-status-pill {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 10px;
+  background: var(--accent);
+  color: var(--accent-ink);
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 900;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+.sd-status-pill svg { width: 12px; height: 12px; }
+
+.sd-sets-head {
+  display: grid;
+  grid-template-columns: 32px 1fr 1fr 32px;
+  gap: 8px;
+  margin-bottom: 4px;
+  font-size: 10px;
+  font-weight: 800;
+  color: var(--text-dim);
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  padding: 0 4px;
+}
+.sd-sets-head div:nth-child(2),
+.sd-sets-head div:nth-child(3) { text-align: center; }
+
+.sd-sets {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.sd-set-row {
+  display: grid;
+  grid-template-columns: 32px 1fr 1fr 32px;
+  gap: 8px;
+  align-items: center;
+}
+.sd-set-n {
+  font-weight: 900;
+  color: var(--text-dim);
+  text-align: center;
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+}
+.sd-set-row input {
+  width: 100%;
+  padding: 10px 12px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  color: var(--text);
+  font-size: 15px;
+  font-weight: 700;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+  outline: none;
+  transition: border-color 0.15s, background 0.15s;
+}
+.sd-set-row input:focus {
+  border-color: var(--accent);
+  background: var(--surface-1);
+}
+
+.sd-set-remove {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: transparent;
+  border: 1px solid var(--border);
+  color: var(--text-dim);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
+}
+.sd-set-remove:hover { background: var(--red-bg, rgba(239,68,68,0.1)); color: var(--red, #ef4444); border-color: var(--red, #ef4444); }
+.sd-set-remove svg { width: 14px; height: 14px; }
+
+.sd-card-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border);
+}
+.sd-add-set-btn {
+  font-size: 12px;
+  padding: 8px 12px;
+  height: auto;
+}
+.sd-save-btn {
+  font-size: 13px;
+  padding: 10px 22px;
+  height: auto;
+  font-weight: 800;
+}
+
 /* Day editor: exercise picker */
 .picker-list {
   display: flex;

@@ -559,6 +559,8 @@ const I18N = {
     no_plan_today_sub: 'No exercises scheduled for today.',
     start_workout: 'Start Workout',
     edit_day: 'Edit Day',
+    logged: 'Logged',
+    logged_today: 'logged for this day',
     day_name_placeholder: 'e.g. Push, Chest Day',
     pick_exercises: 'Pick Exercises',
     no_exercises_picked: 'No exercises picked yet',
@@ -862,6 +864,8 @@ const I18N = {
     no_plan_today_sub: 'ما في تمارين مجدولة اليوم.',
     start_workout: 'ابدأ التمرين',
     edit_day: 'تعديل اليوم',
+    logged: 'مُسجَّل',
+    logged_today: 'مُسجَّل لهذا اليوم',
     day_name_placeholder: 'مثلاً: صدر، ظهر',
     pick_exercises: 'اختر تمارين',
     no_exercises_picked: 'ما اخترت تمارين بعد',
@@ -1175,6 +1179,7 @@ function renderView(view) {
     case 'calendar': renderCalendar(el); break;
     case 'supplements': renderSupplements(el); break;
     case 'foodlog': renderFoodLog(el); break;
+    case 'session-day': renderSessionDay(el); break;
   }
 }
 
@@ -3375,6 +3380,7 @@ function renderPlanner(el) {
             <div class="planner-day-title ${day ? '' : 'empty'}">${escapeHtml(day?.name || t('rest_day'))}</div>
             ${exCount > 0 ? `<div class="planner-day-count num">${fmtNum(exCount)} ${exCount === 1 ? t('exercise') : t('exercises')}</div>` : ''}
           </div>
+          ${day && exCount > 0 ? `<button type="button" class="planner-edit-btn" data-edit-day="${dow}" aria-label="${escapeHtml(t('edit_day'))}">${icon('edit', 16)}</button>` : ''}
           <div class="exercise-chev">${icon('chevronRight', 18)}</div>
         </div>
         ${hasMuscles ? `
@@ -3422,8 +3428,28 @@ function renderPlanner(el) {
     });
   });
 
+  // Tap a day card:
+  //   - if it has exercises → open the workout-session page for that day
+  //   - if it's empty (rest day) → open the editor so the user can add exercises
   el.querySelectorAll('[data-day]').forEach((b) =>
-    b.addEventListener('click', () => openDayEditorModal(Number(b.dataset.day)))
+    b.addEventListener('click', (e) => {
+      // Pen icon inside the card opens the editor instead
+      if (e.target.closest('[data-edit-day]')) return;
+      const dow = Number(b.dataset.day);
+      const day = (DB.plan.get() || {})[String(dow)];
+      if (day && day.exerciseIds && day.exerciseIds.length > 0) {
+        navigate('session-day', { dow });
+      } else {
+        openDayEditorModal(dow);
+      }
+    })
+  );
+
+  el.querySelectorAll('[data-edit-day]').forEach((b) =>
+    b.addEventListener('click', (e) => {
+      e.stopPropagation();
+      openDayEditorModal(Number(b.dataset.editDay));
+    })
   );
 }
 
@@ -3591,6 +3617,238 @@ function openDayEditorModal(dow) {
     showToast(t('day_saved'));
     renderView(currentView);
   });
+}
+
+// ==========================================================================
+// SESSION DAY — log all the day's exercises in one page
+// ==========================================================================
+// Tapping a day in the Planner opens this view. It shows every exercise
+// scheduled for that day as its own session card with inline reps/weight
+// inputs. Saving a card writes a session for the chosen date — overwriting
+// any existing session for the same exercise+date so the card stays a
+// single source of truth for that day's training.
+function renderSessionDay(el) {
+  const dow = Number(viewContext.dow);
+  const plan = DB.plan.get() || {};
+  const day = plan[String(dow)];
+  const exerciseById = Object.fromEntries(DB.exercises.list().map((e) => [e.id, e]));
+  const exObjs = (day?.exerciseIds || []).map((id) => exerciseById[id]).filter(Boolean);
+
+  // Per-exercise local state for unsaved edits. Persists across re-renders
+  // until the user navigates away.
+  if (!viewContext.sdState) viewContext.sdState = {};
+  const sdState = viewContext.sdState;
+
+  // Date stored on viewContext so the user's pick survives re-renders
+  if (!viewContext.sdDate) viewContext.sdDate = todayISO();
+
+  // Modal-level unit (defaults to user's prefs unit, switchable per page)
+  if (!viewContext.sdUnit) viewContext.sdUnit = (DB.prefs.get().unit) || 'kg';
+
+  function modalConvertForDisplay(kg) {
+    if (viewContext.sdUnit === 'lb') return Math.round(kg * KG_TO_LB * 2) / 2;
+    return Math.round(kg * 100) / 100;
+  }
+  function modalConvertToKg(value) {
+    if (viewContext.sdUnit === 'lb') return Math.round((Number(value) / KG_TO_LB) * 100) / 100;
+    return Number(value);
+  }
+
+  // Find the existing logged session for an exercise on the chosen date (if any)
+  function todaySessionFor(exId) {
+    return DB.sessions
+      .listByExercise(exId)
+      .find((s) => s.date === viewContext.sdDate);
+  }
+
+  // Initialize state for an exercise the first time it's rendered. Pre-fills
+  // sets from today's session (if already started) → otherwise from the most
+  // recent session → otherwise three blank rows.
+  function initState(exId) {
+    if (sdState[exId]) return sdState[exId];
+    const today = todaySessionFor(exId);
+    const last = DB.sessions.lastForExercise(exId);
+    let sets;
+    if (today) sets = today.sets.map((s) => ({ reps: s.reps, weight: s.weight }));
+    else if (last) sets = last.sets.map((s) => ({ reps: s.reps, weight: s.weight }));
+    else sets = [{ reps: 10, weight: 0 }, { reps: 10, weight: 0 }, { reps: 10, weight: 0 }];
+    sdState[exId] = { sets, savedSessionId: today ? today.id : null, dirty: false };
+    return sdState[exId];
+  }
+
+  function renderExerciseCard(ex) {
+    const st = initState(ex.id);
+    const url = exerciseImgSrc(ex);
+    const machineSvg = ex.machineType ? machineSvgFor(ex.machineType) : '';
+    const last = DB.sessions.lastForExercise(ex.id, st.savedSessionId);
+    const lastPreview = last
+      ? last.sets.map((s) => `${s.reps}×${fmtNum(modalConvertForDisplay(s.weight))}${viewContext.sdUnit}`).join(' · ')
+      : t('no_sessions_yet');
+    const isLogged = !!st.savedSessionId;
+
+    let bgHtml;
+    if (machineSvg) {
+      bgHtml = `<div class="sd-thumb machine-bg">${machineSvg}${url ? `<img src="${url}" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="this.remove()">` : ''}</div>`;
+    } else if (url) {
+      bgHtml = `<div class="sd-thumb" style="background-image:url('${url}')"></div>`;
+    } else {
+      bgHtml = `<div class="sd-thumb fallback">${escapeHtml(initialsOf(ex.name))}</div>`;
+    }
+
+    const setsRows = st.sets.map((s, i) => {
+      const wDisplay = (s.weight === '' || s.weight == null) ? '' : modalConvertForDisplay(Number(s.weight));
+      return `
+        <div class="sd-set-row" data-ex="${ex.id}" data-set="${i}">
+          <div class="sd-set-n num">${i + 1}</div>
+          <input type="number" inputmode="numeric" step="1" min="0" placeholder="0" value="${s.reps || ''}" data-field="reps" aria-label="${t('reps')}">
+          <input type="number" inputmode="decimal" step="0.5" min="0" placeholder="0" value="${wDisplay || ''}" data-field="weight" aria-label="${viewContext.sdUnit}">
+          <button type="button" class="sd-set-remove" data-remove-set>${icon('close', 14)}</button>
+        </div>
+      `;
+    }).join('');
+
+    return `
+      <div class="sd-card ${isLogged ? 'logged' : ''}" data-ex-card="${ex.id}">
+        <div class="sd-card-head">
+          ${bgHtml}
+          <div class="sd-card-main">
+            <div class="sd-card-name">${escapeHtml(ex.name)}</div>
+            <div class="sd-card-last">${escapeHtml(lastPreview)}</div>
+          </div>
+          ${isLogged ? `<div class="sd-status-pill">${icon('check', 12)} ${t('logged')}</div>` : ''}
+        </div>
+
+        <div class="sd-sets-head">
+          <div>${t('set_n')}</div>
+          <div>${t('reps')}</div>
+          <div>${viewContext.sdUnit.toUpperCase()}</div>
+          <div></div>
+        </div>
+        <div class="sd-sets" data-ex-sets="${ex.id}">${setsRows}</div>
+
+        <div class="sd-card-actions">
+          <button type="button" class="btn btn-ghost sd-add-set-btn" data-add-set="${ex.id}">${icon('plus', 14)} ${t('add_set')}</button>
+          <button type="button" class="btn btn-primary sd-save-btn" data-save-ex="${ex.id}">${isLogged ? t('update') : t('save')}</button>
+        </div>
+      </div>
+    `;
+  }
+
+  const totalEx = exObjs.length;
+  const loggedCount = exObjs.filter((ex) => sdState[ex.id]?.savedSessionId || todaySessionFor(ex.id)).length;
+
+  el.innerHTML = `
+    <div class="detail-top">
+      <button class="back-btn" data-goto="planner">${icon('back', 20)}</button>
+      <div class="detail-top-title">${escapeHtml(dayName(dow, true))}</div>
+      <button class="icon-btn icon-btn-tile" id="sd-edit-day" aria-label="${escapeHtml(t('edit_day'))}">${icon('edit', 18)}</button>
+    </div>
+
+    <div class="page-header">
+      <div class="page-eyebrow">${escapeHtml(dayName(dow, true))}</div>
+      <h1 class="page-title">${escapeHtml(day?.name || t('start_workout'))}</h1>
+      <p class="page-subtitle">${fmtNum(loggedCount)} / ${fmtNum(totalEx)} ${t('logged_today')}</p>
+    </div>
+
+    <div class="sd-toolbar">
+      <div class="form-group" style="flex:1;margin:0">
+        <label class="form-label" style="font-size:10px">${t('date')}</label>
+        <input type="date" id="sd-date" value="${viewContext.sdDate}">
+      </div>
+      <div class="modal-unit-toggle" role="group" aria-label="${escapeHtml(t('unit'))}">
+        <button type="button" data-sd-unit="kg" class="${viewContext.sdUnit === 'kg' ? 'active' : ''}">KG</button>
+        <button type="button" data-sd-unit="lb" class="${viewContext.sdUnit === 'lb' ? 'active' : ''}">LB</button>
+      </div>
+    </div>
+
+    ${totalEx === 0
+      ? emptyState({ iconName: 'dumbbell', title: t('rest_day'), text: t('no_plan_today_sub') })
+      : `<div class="sd-list">${exObjs.map(renderExerciseCard).join('')}</div>`
+    }
+  `;
+
+  // ----- Bindings -----
+
+  $('#sd-edit-day', el)?.addEventListener('click', () => openDayEditorModal(dow));
+
+  $('#sd-date', el)?.addEventListener('change', (e) => {
+    viewContext.sdDate = e.target.value || todayISO();
+    viewContext.sdState = {}; // re-init since date changed
+    renderSessionDay(el);
+  });
+
+  el.querySelectorAll('[data-sd-unit]').forEach((b) =>
+    b.addEventListener('click', () => {
+      viewContext.sdUnit = b.dataset.sdUnit === 'lb' ? 'lb' : 'kg';
+      renderSessionDay(el);
+    })
+  );
+
+  // Set-row inputs (reps/weight) — write to sdState as the user types.
+  el.querySelectorAll('.sd-set-row').forEach((row) => {
+    const exId = row.dataset.ex;
+    const idx = Number(row.dataset.set);
+    row.querySelectorAll('input').forEach((inp) => {
+      inp.addEventListener('input', () => {
+        const v = inp.value;
+        const st = initState(exId);
+        if (inp.dataset.field === 'weight') {
+          st.sets[idx].weight = v === '' ? '' : modalConvertToKg(v);
+        } else {
+          st.sets[idx][inp.dataset.field] = v === '' ? '' : Number(v);
+        }
+        st.dirty = true;
+      });
+    });
+    row.querySelector('[data-remove-set]')?.addEventListener('click', () => {
+      const st = initState(exId);
+      if (st.sets.length <= 1) { showToast(t('set_min_one')); return; }
+      st.sets.splice(idx, 1);
+      st.dirty = true;
+      renderSessionDay(el);
+    });
+  });
+
+  // Add Set button per exercise
+  el.querySelectorAll('[data-add-set]').forEach((b) =>
+    b.addEventListener('click', () => {
+      const exId = b.dataset.addSet;
+      const st = initState(exId);
+      const last = st.sets[st.sets.length - 1];
+      st.sets.push({ reps: last?.reps || 10, weight: last?.weight || 0 });
+      st.dirty = true;
+      renderSessionDay(el);
+    })
+  );
+
+  // Save button per exercise — creates or updates the session for the chosen date
+  el.querySelectorAll('[data-save-ex]').forEach((b) =>
+    b.addEventListener('click', () => {
+      const exId = b.dataset.saveEx;
+      const st = initState(exId);
+      const cleaned = st.sets
+        .map((s) => ({ reps: Number(s.reps) || 0, weight: Number(s.weight) || 0 }))
+        .filter((s) => s.reps > 0 || s.weight > 0);
+      if (cleaned.length === 0) { showToast(t('add_at_least_one')); return; }
+
+      // Prefer the in-memory savedSessionId, else look up in DB by date
+      let existingId = st.savedSessionId;
+      if (!existingId) {
+        const existing = todaySessionFor(exId);
+        if (existing) existingId = existing.id;
+      }
+      if (existingId) {
+        DB.sessions.update(existingId, { date: viewContext.sdDate, sets: cleaned });
+        showToast(t('session_updated'));
+      } else {
+        const created = DB.sessions.add({ exerciseId: exId, date: viewContext.sdDate, sets: cleaned });
+        st.savedSessionId = created.id;
+        showToast(t('session_saved'));
+      }
+      st.dirty = false;
+      renderSessionDay(el);
+    })
+  );
 }
 
 // ==========================================================================
