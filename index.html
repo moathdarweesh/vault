@@ -71,15 +71,15 @@
           await Promise.all(regs.map((r) => r.unregister()));
           const keys = await caches.keys();
           await Promise.all(keys.map((k) => caches.delete(k)));
-          if (!sessionStorage.getItem('__cleaned_v33')) {
-            sessionStorage.setItem('__cleaned_v33', '1');
+          if (!sessionStorage.getItem('__cleaned_v34')) {
+            sessionStorage.setItem('__cleaned_v34', '1');
             location.reload();
           }
         }
       }).catch(() => {});
     }
   </script>
-  <script src="js/storage.js?v=33"></script>
-  <script src="js/app.js?v=33"></script>
+  <script src="js/storage.js?v=34"></script>
+  <script src="js/app.js?v=34"></script>
 </body>
 </html>

@@ -1298,7 +1298,7 @@ function renderHome(el) {
     }
   });
 
-  const heatCells = EXERCISE_CATEGORIES.map((cat) => {
+  const heatCells = EXERCISE_CATEGORIES.filter((c) => c !== 'Other').map((cat) => {
     const count = catCounts[cat] || 0;
     let lvl = 0;
     if (count >= 1) lvl = 1;
