@@ -64,7 +64,7 @@ class HealthConnectPlugin : Plugin() {
 
     /** True only when ALL of our read permissions have been granted. */
     @PluginMethod
-    fun checkPermissions(call: PluginCall) {
+    fun checkHealthPermissions(call: PluginCall) {
         scope.launch {
             try {
                 val client = clientOrNull() ?: return@launch call.reject("Health Connect not available")
@@ -82,7 +82,7 @@ class HealthConnectPlugin : Plugin() {
 
     /** Shows the system Health Connect permission dialog. */
     @PluginMethod
-    fun requestPermissions(call: PluginCall) {
+    fun requestHealthPermissions(call: PluginCall) {
         if (clientOrNull() == null) {
             call.reject("Health Connect not available")
             return

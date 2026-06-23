@@ -66,7 +66,7 @@
     const body = document.getElementById('health-body');
     if (body) body.innerHTML = `<div class="health-msg">${tr('health_syncing')}</div>`;
     try {
-      const perm = await plugin().requestPermissions();
+      const perm = await plugin().requestHealthPermissions();
       if (!perm || !perm.granted) {
         if (body) body.innerHTML = `<div class="health-msg">${tr('health_no_permission')}</div>` + connectBtn();
         wire();
