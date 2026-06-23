@@ -21,12 +21,17 @@
     return typeof fmtNum === 'function' ? fmtNum(n) : String(n);
   }
 
-  function statRow(label, value, unit) {
-    const v = value == null ? '—' : `${value}${unit ? ' ' + unit : ''}`;
+  const ic = (name) => (typeof icon === 'function' ? icon(name, 20) : '');
+
+  function card(iconName, label, value, unit, color) {
+    const val = value == null
+      ? '<span class="health-card-empty">—</span>'
+      : `${value}${unit ? `<span class="health-card-unit">${unit}</span>` : ''}`;
     return `
-      <div class="health-stat">
-        <span class="health-stat-label">${label}</span>
-        <span class="health-stat-value num">${v}</span>
+      <div class="health-card">
+        <div class="health-card-icon" style="background:${color}1f;color:${color}">${ic(iconName)}</div>
+        <div class="health-card-value num">${val}</div>
+        <div class="health-card-label">${label}</div>
       </div>`;
   }
 
@@ -34,20 +39,21 @@
     const hr = data.heartRate || {};
     const ox = data.oxygen || {};
     const sleep = Array.isArray(data.sleep) ? data.sleep : [];
-    // Most recent sleep session
+    // Most recent sleep session, formatted as "7h 20m"
     let sleepStr = null;
     if (sleep.length) {
       const last = sleep.reduce((a, b) => (new Date(a.end) > new Date(b.end) ? a : b));
       const h = Math.floor(last.minutes / 60);
       const m = last.minutes % 60;
-      sleepStr = `${h}h ${m}${tr('health_min')}`;
+      sleepStr = `${h}<span class="health-card-unit">h</span> ${m}<span class="health-card-unit">m</span>`;
     }
-    return [
-      statRow(tr('health_steps'), data.steps != null ? fmt(data.steps) : null, ''),
-      statRow(tr('health_hr'), hr.latest != null ? fmt(hr.latest) : null, tr('health_bpm')),
-      statRow(tr('health_oxygen'), ox.latest != null ? Math.round(ox.latest) : null, '%'),
-      statRow(tr('health_sleep'), sleepStr, ''),
-    ].join('');
+    return `
+      <div class="health-grid">
+        ${card('footprints', tr('health_steps'), data.steps != null ? fmt(data.steps) : null, '', '#34d399')}
+        ${card('heartPulse', tr('health_hr'), hr.latest != null ? fmt(hr.latest) : null, tr('health_bpm'), '#f87171')}
+        ${card('droplet', tr('health_oxygen'), ox.latest != null ? Math.round(ox.latest) : null, '%', '#38bdf8')}
+        ${card('moon', tr('health_sleep'), sleepStr, '', '#a78bfa')}
+      </div>`;
   }
 
   function bodyHtml(inner) {
