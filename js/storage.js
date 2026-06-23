@@ -474,6 +474,47 @@ const DB = {
       });
       save();
     },
+    // Move an exercise within a day (reorder) or to another day. Called by the
+    // planner's drag-and-drop. toIndex is the desired position in the target
+    // day's list (null = append). Source day keeps its name even if emptied.
+    moveExercise(fromKey, toKey, exId, toIndex) {
+      const from = STATE.plan[String(fromKey)];
+      if (!from || !Array.isArray(from.exerciseIds)) return;
+      const idx = from.exerciseIds.indexOf(exId);
+      if (idx === -1) return;
+
+      // Same day → just reorder
+      if (String(fromKey) === String(toKey)) {
+        from.exerciseIds.splice(idx, 1);
+        let at = (toIndex == null) ? from.exerciseIds.length : toIndex;
+        at = Math.max(0, Math.min(at, from.exerciseIds.length));
+        from.exerciseIds.splice(at, 0, exId);
+        save();
+        return;
+      }
+
+      // Cross-day move
+      from.exerciseIds.splice(idx, 1);
+      let to = STATE.plan[String(toKey)];
+      if (!to) {
+        to = { name: 'Workout', exerciseIds: [] };
+        STATE.plan[String(toKey)] = to;
+      }
+      if (!Array.isArray(to.exerciseIds)) to.exerciseIds = [];
+      if (!to.exerciseIds.includes(exId)) {
+        let at = (toIndex == null) ? to.exerciseIds.length : toIndex;
+        at = Math.max(0, Math.min(at, to.exerciseIds.length));
+        to.exerciseIds.splice(at, 0, exId);
+      }
+      save();
+    },
+    // Remove a single exercise from a day's plan.
+    removeExercise(dayKey, exId) {
+      const day = STATE.plan[String(dayKey)];
+      if (!day || !Array.isArray(day.exerciseIds)) return;
+      day.exerciseIds = day.exerciseIds.filter((id) => id !== exId);
+      save();
+    },
   },
 
   // ----- Supplements -----

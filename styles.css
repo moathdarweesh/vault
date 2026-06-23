@@ -2999,6 +2999,154 @@ body[dir="rtl"] .tool-card { text-align: right; align-items: flex-end; }
 
 body[dir="rtl"] .planner-day { text-align: right; }
 
+/* ---- Planner: per-day exercise rows + drag & drop ---- */
+.planner-day-head { cursor: pointer; }
+
+.planner-day-add {
+  flex-shrink: 0;
+  width: 34px;
+  height: 34px;
+  border-radius: 10px;
+  border: 1px solid var(--border-hi);
+  background: var(--surface-2);
+  color: var(--text-mute);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: transform 0.1s, background 0.15s, color 0.15s;
+}
+.planner-day-add:active {
+  transform: scale(0.9);
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
+.planner-ex-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding-top: 10px;
+  border-top: 1px solid var(--border);
+}
+
+.planner-empty-hint {
+  font-size: 12px;
+  color: var(--text-faint);
+  font-weight: 600;
+  padding: 4px 2px;
+}
+
+.planner-ex-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 8px;
+  border-radius: 10px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+}
+
+.planner-ex-grip {
+  flex-shrink: 0;
+  width: 32px;
+  height: 32px;
+  margin: -4px -2px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-faint);
+  cursor: grab;
+  touch-action: none;
+}
+.planner-ex-grip:active { cursor: grabbing; color: var(--text-mute); }
+
+.planner-ex-cat {
+  width: 5px;
+  height: 22px;
+  border-radius: 3px;
+  flex-shrink: 0;
+  background: var(--text-faint);
+}
+.planner-ex-cat[data-cat="Chest"] { background: var(--cat-chest); }
+.planner-ex-cat[data-cat="Back"]  { background: var(--cat-back); }
+.planner-ex-cat[data-cat="Legs"]  { background: var(--cat-legs); }
+.planner-ex-cat[data-cat="Shoulders"] { background: var(--cat-shoulders); }
+.planner-ex-cat[data-cat="Arms"]  { background: var(--cat-arms); }
+.planner-ex-cat[data-cat="Core"]  { background: var(--cat-core); }
+
+.planner-ex-name {
+  flex: 1;
+  font-size: 13px;
+  font-weight: 700;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.planner-ex-remove {
+  flex-shrink: 0;
+  width: 26px;
+  height: 26px;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-faint);
+  background: transparent;
+  border: none;
+}
+.planner-ex-remove:active {
+  color: #f87171;
+  background: var(--surface-1);
+}
+
+/* The floating clone that follows the finger/cursor */
+.planner-ex-ghost {
+  position: fixed;
+  z-index: 9999;
+  pointer-events: none;
+  margin: 0;
+  box-shadow: 0 14px 34px rgba(0, 0, 0, 0.55);
+  border-color: var(--accent-line) !important;
+  background: var(--surface-1);
+  opacity: 0.97;
+  transform: scale(1.03);
+}
+
+/* The gap that opens up where the row will land */
+.planner-ex-placeholder {
+  height: 38px;
+  border-radius: 10px;
+  border: 2px dashed var(--accent-line);
+  background: var(--accent-soft);
+}
+
+.planner-day.drop-target {
+  border-color: var(--accent);
+  background: linear-gradient(180deg, var(--accent-soft), transparent 70%), var(--surface-1);
+}
+
+body.planner-dragging {
+  -webkit-user-select: none;
+  user-select: none;
+}
+body.planner-dragging .planner-day-head { cursor: grabbing; }
+
+.planner-drag-hint {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  color: var(--text-faint);
+  font-weight: 600;
+  margin-bottom: 12px;
+  padding: 0 2px;
+}
+.planner-drag-hint svg { flex-shrink: 0; }
+
+body[dir="rtl"] .planner-ex-row,
+body[dir="rtl"] .planner-day-head { text-align: right; }
+
 /* =========================================================================
    SESSION DAY VIEW — log all the day's exercises in one page
    ========================================================================= */
@@ -4227,3 +4375,40 @@ body[dir="rtl"] .variation-select svg { transform: scaleX(-1); }
 .mb-8 { margin-bottom: 8px; }
 .mb-16 { margin-bottom: 16px; }
 .mb-20 { margin-bottom: 20px; }
+
+/* ---- Health Connect modal ---- */
+.health-msg {
+  font-size: 14px;
+  color: var(--text-mute);
+  text-align: center;
+  padding: 24px 8px;
+  line-height: 1.5;
+}
+
+.health-stats {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.health-stat {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 16px;
+  border-radius: 12px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+}
+
+.health-stat-label {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text-mute);
+}
+
+.health-stat-value {
+  font-size: 18px;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+}

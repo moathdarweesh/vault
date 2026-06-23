@@ -13,6 +13,7 @@ const ICONS = {
   chevronRight: '<path d="m9 18 6-6-6-6"/>',
   trash: '<path d="M3 6h18"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>',
   edit: '<path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>',
+  grip: '<line x1="4" y1="8" x2="20" y2="8"/><line x1="4" y1="12" x2="20" y2="12"/><line x1="4" y1="16" x2="20" y2="16"/>',
   calendar: '<rect width="18" height="18" x="3" y="4" rx="2"/><line x1="16" x2="16" y1="2" y2="6"/><line x1="8" x2="8" y1="2" y2="6"/><line x1="3" x2="21" y1="10" y2="10"/>',
   chart: '<line x1="18" x2="18" y1="20" y2="10"/><line x1="12" x2="12" y1="20" y2="4"/><line x1="6" x2="6" y1="20" y2="14"/>',
   dumbbell: '<path d="M4 9v6"/><path d="M7 7v10"/><path d="M10 10v4"/><path d="M14 10v4"/><path d="M17 7v10"/><path d="M20 9v6"/><path d="M10 12h4"/>',
@@ -530,6 +531,18 @@ const I18N = {
     theme_dusk: 'Dusk', theme_dusk_sub: 'Muted plum',
     export_data: 'Export Data', export_data_sub: 'Download a JSON backup',
     import_data: 'Import Data', import_data_sub: 'Restore from a JSON backup',
+    health_section: 'Health Connect',
+    health_connect: 'Sync from Health Connect',
+    health_connect_sub: 'Steps, heart rate, oxygen & sleep from your watch',
+    health_only_android: 'Available only in the Android app',
+    health_unavailable: 'Health Connect is not installed on this device',
+    health_no_permission: 'Permission not granted',
+    health_syncing: 'Syncing…',
+    health_synced: 'Synced from Health Connect',
+    health_steps: 'Steps', health_hr: 'Heart rate', health_oxygen: 'Blood oxygen', health_sleep: 'Sleep',
+    health_no_data: 'No data in this range',
+    health_connect_btn: 'Connect', health_open_settings: 'Open Health Connect',
+    health_last_night: 'Last night', health_today: 'Today', health_bpm: 'bpm', health_min: 'min',
     reset_data: 'Reset All Data', reset_data_sub: 'Delete everything and start fresh',
     reset_q: 'Reset all data?',
     reset_text: 'This will permanently delete all exercises, sessions, cardio, food, sleep, and settings.',
@@ -586,6 +599,10 @@ const I18N = {
     plan_cleared: 'Plan cleared',
     day_saved: 'Day saved',
     day_cleared: 'Day cleared',
+    drag_to_move: 'Hold ⠿ and drag to move exercises between days',
+    empty_day_drop: 'Rest day — tap + or drag an exercise here',
+    exercise_moved: 'Exercise moved',
+    remove_from_day: 'Remove from day',
 
     // Templates
     templates_title: 'Templates',
@@ -837,6 +854,18 @@ const I18N = {
     theme_dusk: 'Dusk', theme_dusk_sub: 'برقوقي هادئ',
     export_data: 'تصدير البيانات', export_data_sub: 'تنزيل نسخة JSON احتياطية',
     import_data: 'استيراد البيانات', import_data_sub: 'استرجاع من نسخة JSON',
+    health_section: 'هيلث كونيكت',
+    health_connect: 'مزامنة من Health Connect',
+    health_connect_sub: 'الخطوات والنبض والأكسجين والنوم من ساعتك',
+    health_only_android: 'متاح فقط في تطبيق أندرويد',
+    health_unavailable: 'Health Connect غير مثبّت على هذا الجهاز',
+    health_no_permission: 'لم يتم منح الإذن',
+    health_syncing: 'جارٍ المزامنة…',
+    health_synced: 'تمت المزامنة من Health Connect',
+    health_steps: 'الخطوات', health_hr: 'النبض', health_oxygen: 'الأكسجين', health_sleep: 'النوم',
+    health_no_data: 'لا توجد بيانات في هذه الفترة',
+    health_connect_btn: 'ربط', health_open_settings: 'فتح Health Connect',
+    health_last_night: 'الليلة الماضية', health_today: 'اليوم', health_bpm: 'نبضة/د', health_min: 'دقيقة',
     reset_data: 'إعادة تعيين الكل', reset_data_sub: 'حذف كل شي والبدء من جديد',
     reset_q: 'إعادة تعيين كل البيانات؟',
     reset_text: 'سيُحذف كل شي نهائياً: التمارين، الجلسات، الكارديو، الأكل، النوم، والإعدادات.',
@@ -891,6 +920,10 @@ const I18N = {
     plan_cleared: 'تم مسح الخطة',
     day_saved: 'تم حفظ اليوم',
     day_cleared: 'تم مسح اليوم',
+    drag_to_move: 'امسك ⠿ واسحب لنقل التمارين بين الأيام',
+    empty_day_drop: 'يوم راحة — اضغط + أو اسحب تمرين لهون',
+    exercise_moved: 'تم نقل التمرين',
+    remove_from_day: 'إزالة من اليوم',
 
     templates_title: 'القوالب',
     templates_subtitle: 'اختار برنامج يعبّي خطتك الأسبوعية.',
@@ -3132,6 +3165,17 @@ function renderSettings(el) {
     </div>
 
     <div class="settings-section">
+      <div class="section-title">${t('health_section')}</div>
+      <button class="settings-action-row" id="health-btn">
+        <div class="settings-action-icon">${icon('heartPulse', 18)}</div>
+        <div class="settings-action-main">
+          <div class="settings-action-title">${t('health_connect')}</div>
+          <div class="settings-action-sub">${t('health_connect_sub')}</div>
+        </div>
+      </button>
+    </div>
+
+    <div class="settings-section">
       <div class="section-title">${t('data')}</div>
       <button class="settings-action-row" id="export-btn">
         <div class="settings-action-icon">${icon('download', 18)}</div>
@@ -3182,6 +3226,12 @@ function renderSettings(el) {
       renderSettings(el);
     })
   );
+
+  // Health Connect (provided by js/health.js — runs only inside the Android app)
+  $('#health-btn', el)?.addEventListener('click', () => {
+    if (window.Health && typeof window.Health.open === 'function') window.Health.open();
+    else showToast(t('health_only_android'));
+  });
 
   // Export
   $('#export-btn', el).addEventListener('click', () => {
@@ -3366,40 +3416,40 @@ function renderPlanner(el) {
 
   const hasAnyPlan = Object.values(plan).some((d) => d && d.exerciseIds && d.exerciseIds.length > 0);
 
+  // A single draggable exercise row inside a day.
+  const exRow = (ex, dow) => `
+    <div class="planner-ex-row" data-exid="${ex.id}" data-dow="${dow}">
+      <span class="planner-ex-grip" aria-label="drag">${icon('grip', 18)}</span>
+      <span class="planner-ex-cat" data-cat="${escapeHtml(ex.category)}"></span>
+      <span class="planner-ex-name">${escapeHtml(ex.name)}</span>
+      <button class="planner-ex-remove" data-remove="${ex.id}" data-rdow="${dow}" aria-label="${t('remove_from_day')}">${icon('close', 14)}</button>
+    </div>
+  `;
+
   const dayCards = dayOrder.map((dow) => {
     const day = plan[String(dow)];
     const isToday = dow === today;
-    const exCount = day && day.exerciseIds ? day.exerciseIds.length : 0;
     const exObjs = (day?.exerciseIds || []).map((id) => exerciseById[id]).filter(Boolean);
-    const muscles = groupMusclesFromExercises(exObjs);
-    const hasMuscles = muscles.anterior.length > 0 || muscles.posterior.length > 0;
+    const exCount = exObjs.length;
+    const hasPlan = !!day && (exCount > 0 || !!(day.name && day.name.trim()));
 
-    const sideRow = (label, keys, sideClass) => keys.length === 0 ? '' : `
-      <div class="planner-side ${sideClass}">
-        <span class="planner-side-label">${escapeHtml(label)}</span>
-        <div class="planner-muscle-chips">
-          ${keys.map((k) => `<span class="muscle-chip ${sideClass}">${escapeHtml(t('muscle_' + k))}</span>`).join('')}
-        </div>
-      </div>
-    `;
+    const body = exCount > 0
+      ? `<div class="planner-ex-list" data-daylist="${dow}">${exObjs.map((ex) => exRow(ex, dow)).join('')}</div>`
+      : `<div class="planner-ex-list empty" data-daylist="${dow}"><div class="planner-empty-hint">${t('empty_day_drop')}</div></div>`;
 
     return `
-      <button class="planner-day ${day ? 'has-plan' : ''} ${isToday ? 'today' : ''}" data-day="${dow}">
-        <div class="planner-day-head">
+      <div class="planner-day ${hasPlan ? 'has-plan' : ''} ${isToday ? 'today' : ''}" data-day="${dow}">
+        <div class="planner-day-head" data-day-open="${dow}">
           <div class="planner-day-dot"></div>
           <div class="planner-day-main">
             <div class="planner-day-name">${escapeHtml(dayName(dow, true))}${isToday ? ' · ' + t('today').toUpperCase() : ''}</div>
-            <div class="planner-day-title ${day ? '' : 'empty'}">${escapeHtml(day?.name || t('rest_day'))}</div>
-            ${exCount > 0 ? `<div class="planner-day-count num">${fmtNum(exCount)} ${exCount === 1 ? t('exercise') : t('exercises')}</div>` : ''}
+            <div class="planner-day-title ${hasPlan ? '' : 'empty'}">${escapeHtml(day?.name || t('rest_day'))}</div>
           </div>
+          ${exCount > 0 ? `<div class="planner-day-count num">${fmtNum(exCount)}</div>` : ''}
+          <button class="planner-day-add" data-day-add="${dow}" aria-label="${t('add')}">${icon('plus', 18)}</button>
         </div>
-        ${hasMuscles ? `
-          <div class="planner-day-muscles">
-            ${sideRow(t('anterior'), muscles.anterior, 'anterior')}
-            ${sideRow(t('posterior'), muscles.posterior, 'posterior')}
-          </div>
-        ` : ''}
-      </button>
+        ${body}
+      </div>
     `;
   }).join('');
 
@@ -3415,10 +3465,12 @@ function renderPlanner(el) {
       <p class="page-subtitle">${t('planner_subtitle')}</p>
     </div>
 
-    <div style="display:flex;gap:8px;margin-bottom:18px">
+    <div style="display:flex;gap:8px;margin-bottom:14px">
       <button class="btn btn-primary" id="apply-template-btn" style="flex:1">${icon('plus', 16)} ${t('apply_template')}</button>
       ${hasAnyPlan ? `<button class="btn btn-ghost" id="clear-plan-btn">${icon('trash', 16)}</button>` : ''}
     </div>
+
+    ${hasAnyPlan ? `<div class="planner-drag-hint">${icon('grip', 14)} ${t('drag_to_move')}</div>` : ''}
 
     <div class="planner-list">${dayCards}</div>
   `;
@@ -3438,12 +3490,12 @@ function renderPlanner(el) {
     });
   });
 
-  // Tap a day card:
+  // Tap a day's header:
   //   - if it has exercises → open the workout-session page (edit available there)
   //   - if it's empty (rest day) → open the editor so the user can add exercises
-  el.querySelectorAll('[data-day]').forEach((b) =>
+  el.querySelectorAll('[data-day-open]').forEach((b) =>
     b.addEventListener('click', () => {
-      const dow = Number(b.dataset.day);
+      const dow = Number(b.dataset.dayOpen);
       const day = (DB.plan.get() || {})[String(dow)];
       if (day && day.exerciseIds && day.exerciseIds.length > 0) {
         navigate('session-day', { dow });
@@ -3452,6 +3504,159 @@ function renderPlanner(el) {
       }
     })
   );
+
+  // Quick "+" on each day opens the picker straight for that day.
+  el.querySelectorAll('[data-day-add]').forEach((b) =>
+    b.addEventListener('click', (e) => {
+      e.stopPropagation();
+      openDayEditorModal(Number(b.dataset.dayAdd));
+    })
+  );
+
+  // Remove a single exercise from a day.
+  el.querySelectorAll('[data-remove]').forEach((b) =>
+    b.addEventListener('click', (e) => {
+      e.stopPropagation();
+      DB.plan.removeExercise(Number(b.dataset.rdow), b.dataset.remove);
+      renderPlanner(el);
+    })
+  );
+
+  setupPlannerDrag(el);
+}
+
+// Pointer-based drag-and-drop for the planner. Works with both mouse and
+// touch. Listeners are attached to the persistent view element once; they
+// re-query the live DOM on each event so they survive re-renders.
+function setupPlannerDrag(el) {
+  if (el._plannerDragInit) return;
+  el._plannerDragInit = true;
+
+  const scroller = el.closest('.main') || document.scrollingElement || document.documentElement;
+  let drag = null;
+  let scrollRAF = null;
+  let scrollDir = 0;
+
+  function stopAutoScroll() {
+    scrollDir = 0;
+    if (scrollRAF) { cancelAnimationFrame(scrollRAF); scrollRAF = null; }
+  }
+  function autoScrollTick() {
+    if (!drag || scrollDir === 0) { scrollRAF = null; return; }
+    scroller.scrollTop += scrollDir * 11;
+    scrollRAF = requestAnimationFrame(autoScrollTick);
+  }
+  function maybeAutoScroll(clientY) {
+    const r = scroller.getBoundingClientRect();
+    const edge = 72;
+    if (clientY < r.top + edge) scrollDir = -1;
+    else if (clientY > r.bottom - edge) scrollDir = 1;
+    else scrollDir = 0;
+    if (scrollDir !== 0 && !scrollRAF) scrollRAF = requestAnimationFrame(autoScrollTick);
+    if (scrollDir === 0) stopAutoScroll();
+  }
+
+  // Position the placeholder inside a target list and compute the insert index.
+  function positionPlaceholder(list, clientY) {
+    const rows = [...list.querySelectorAll('.planner-ex-row')].filter(
+      (r) => r !== drag.row && r.style.display !== 'none'
+    );
+    let before = null;
+    for (const r of rows) {
+      const rb = r.getBoundingClientRect();
+      if (clientY < rb.top + rb.height / 2) { before = r; break; }
+    }
+    if (before) {
+      list.insertBefore(drag.placeholder, before);
+    } else {
+      const hint = list.querySelector('.planner-empty-hint');
+      if (hint) list.insertBefore(drag.placeholder, hint);
+      else list.appendChild(drag.placeholder);
+    }
+    const seq = [...list.children].filter(
+      (n) => n === drag.placeholder ||
+        (n.classList.contains('planner-ex-row') && n !== drag.row && n.style.display !== 'none')
+    );
+    drag.targetIndex = seq.indexOf(drag.placeholder);
+  }
+
+  el.addEventListener('pointerdown', (e) => {
+    const grip = e.target.closest('.planner-ex-grip');
+    if (!grip) return;
+    const row = grip.closest('.planner-ex-row');
+    if (!row) return;
+    e.preventDefault();
+
+    const rect = row.getBoundingClientRect();
+    const ghost = row.cloneNode(true);
+    ghost.classList.add('planner-ex-ghost');
+    ghost.style.width = rect.width + 'px';
+    ghost.style.left = rect.left + 'px';
+    ghost.style.top = rect.top + 'px';
+    document.body.appendChild(ghost);
+
+    const ph = document.createElement('div');
+    ph.className = 'planner-ex-placeholder';
+
+    drag = {
+      exId: row.dataset.exid,
+      fromDow: row.dataset.dow,
+      row, ghost, placeholder: ph,
+      offsetX: e.clientX - rect.left,
+      offsetY: e.clientY - rect.top,
+      targetDow: row.dataset.dow,
+      targetIndex: null,
+    };
+
+    row.parentNode.insertBefore(ph, row.nextSibling);
+    row.style.display = 'none';
+    document.body.classList.add('planner-dragging');
+    try { grip.setPointerCapture(e.pointerId); } catch (_) {}
+  });
+
+  el.addEventListener('pointermove', (e) => {
+    if (!drag) return;
+    e.preventDefault();
+    drag.ghost.style.left = (e.clientX - drag.offsetX) + 'px';
+    drag.ghost.style.top = (e.clientY - drag.offsetY) + 'px';
+
+    const below = document.elementFromPoint(e.clientX, e.clientY);
+    const dayCard = below && below.closest('.planner-day');
+    if (dayCard) {
+      const list = dayCard.querySelector('.planner-ex-list');
+      if (list) {
+        drag.targetDow = dayCard.dataset.day;
+        positionPlaceholder(list, e.clientY);
+        el.querySelectorAll('.planner-day.drop-target').forEach((d) => d.classList.remove('drop-target'));
+        dayCard.classList.add('drop-target');
+      }
+    }
+    maybeAutoScroll(e.clientY);
+  });
+
+  function finish() {
+    if (!drag) return;
+    const { exId, fromDow, targetDow, targetIndex } = drag;
+    drag.ghost.remove();
+    if (drag.placeholder.parentNode) drag.placeholder.remove();
+    drag.row.style.display = '';
+    document.body.classList.remove('planner-dragging');
+    el.querySelectorAll('.planner-day.drop-target').forEach((d) => d.classList.remove('drop-target'));
+    stopAutoScroll();
+
+    const crossDay = String(targetDow) !== String(fromDow);
+    const reordered = targetIndex != null;
+    drag = null;
+
+    if (targetDow != null && (crossDay || reordered)) {
+      DB.plan.moveExercise(fromDow, targetDow, exId, targetIndex);
+      if (crossDay) showToast(t('exercise_moved'));
+      renderPlanner(el);
+    }
+  }
+
+  el.addEventListener('pointerup', finish);
+  el.addEventListener('pointercancel', finish);
 }
 
 function openTemplatesModal() {
