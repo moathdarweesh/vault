@@ -3000,7 +3000,52 @@ body[dir="rtl"] .tool-card { text-align: right; align-items: flex-end; }
 body[dir="rtl"] .planner-day { text-align: right; }
 
 /* ---- Planner: per-day exercise rows + drag & drop ---- */
-.planner-day-head { cursor: pointer; }
+.planner-day-head { display: flex; align-items: center; gap: 8px; width: 100%; }
+
+/* Tappable part of the day header (opens the day) */
+.planner-day-open {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: none;
+  border: none;
+  padding: 0;
+  text-align: start;
+  cursor: pointer;
+  color: inherit;
+}
+
+/* Grip to drag the whole day onto another day */
+.planner-day-grip {
+  flex-shrink: 0;
+  width: 30px;
+  height: 36px;
+  margin: -4px -4px -4px -6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-faint);
+  cursor: grab;
+  touch-action: none;
+}
+.planner-day-grip:active { cursor: grabbing; color: var(--text-mute); }
+
+/* The whole-day card floating under the finger while dragging */
+.planner-day-ghost {
+  position: fixed;
+  z-index: 9999;
+  pointer-events: none;
+  margin: 0;
+  box-shadow: 0 18px 40px rgba(0, 0, 0, 0.6);
+  border-color: var(--accent-line) !important;
+  opacity: 0.96;
+  transform: scale(1.02);
+}
+
+/* The source day card, dimmed while its ghost is being dragged */
+.planner-day.day-drag-source { opacity: 0.4; }
 
 .planner-day-add {
   flex-shrink: 0;

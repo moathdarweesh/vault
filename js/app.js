@@ -610,6 +610,8 @@ const I18N = {
     empty_day_drop: 'Rest day — tap + or drag an exercise here',
     exercise_moved: 'Exercise moved',
     remove_from_day: 'Remove from day',
+    move_day: 'Drag to move the whole day',
+    day_moved: 'Day moved',
 
     // Templates
     templates_title: 'Templates',
@@ -936,6 +938,8 @@ const I18N = {
     empty_day_drop: 'يوم راحة — اضغط + أو اسحب تمرين لهون',
     exercise_moved: 'تم نقل التمرين',
     remove_from_day: 'إزالة من اليوم',
+    move_day: 'اسحب لنقل اليوم كامل',
+    day_moved: 'تم نقل اليوم',
 
     templates_title: 'القوالب',
     templates_subtitle: 'اختار برنامج يعبّي خطتك الأسبوعية.',
@@ -3454,13 +3458,16 @@ function renderPlanner(el) {
 
     return `
       <div class="planner-day ${hasPlan ? 'has-plan' : ''} ${isToday ? 'today' : ''}" data-day="${dow}">
-        <div class="planner-day-head" data-day-open="${dow}">
-          <div class="planner-day-dot"></div>
-          <div class="planner-day-main">
-            <div class="planner-day-name">${escapeHtml(dayName(dow, true))}${isToday ? ' · ' + t('today').toUpperCase() : ''}</div>
-            <div class="planner-day-title ${hasPlan ? '' : 'empty'}">${escapeHtml(day?.name || t('rest_day'))}</div>
-          </div>
-          ${exCount > 0 ? `<div class="planner-day-count num">${fmtNum(exCount)}</div>` : ''}
+        <div class="planner-day-head">
+          ${hasPlan ? `<span class="planner-day-grip" data-daygrip="${dow}" aria-label="${t('move_day')}">${icon('grip', 16)}</span>` : ''}
+          <button class="planner-day-open" data-day-open="${dow}">
+            <div class="planner-day-dot"></div>
+            <div class="planner-day-main">
+              <div class="planner-day-name">${escapeHtml(dayName(dow, true))}${isToday ? ' · ' + t('today').toUpperCase() : ''}</div>
+              <div class="planner-day-title ${hasPlan ? '' : 'empty'}">${escapeHtml(day?.name || t('rest_day'))}</div>
+            </div>
+            ${exCount > 0 ? `<div class="planner-day-count num">${fmtNum(exCount)}</div>` : ''}
+          </button>
           <button class="planner-day-add" data-day-add="${dow}" aria-label="${t('add')}">${icon('plus', 18)}</button>
         </div>
         ${body}
@@ -3596,6 +3603,37 @@ function setupPlannerDrag(el) {
   }
 
   el.addEventListener('pointerdown', (e) => {
+    // Whole-day drag (grip on the day header) — moves the entire day's plan.
+    const dayGrip = e.target.closest('.planner-day-grip');
+    if (dayGrip) {
+      const card = dayGrip.closest('.planner-day');
+      if (!card) return;
+      e.preventDefault();
+
+      const rect = card.getBoundingClientRect();
+      const ghost = card.cloneNode(true);
+      ghost.classList.add('planner-day-ghost');
+      ghost.style.width = rect.width + 'px';
+      ghost.style.left = rect.left + 'px';
+      ghost.style.top = rect.top + 'px';
+      document.body.appendChild(ghost);
+
+      drag = {
+        mode: 'day',
+        fromDow: dayGrip.dataset.daygrip,
+        card, ghost,
+        offsetX: e.clientX - rect.left,
+        offsetY: e.clientY - rect.top,
+        targetDow: null,
+      };
+
+      card.classList.add('day-drag-source');
+      document.body.classList.add('planner-dragging');
+      try { dayGrip.setPointerCapture(e.pointerId); } catch (_) {}
+      return;
+    }
+
+    // Single-exercise drag (grip on a row).
     const grip = e.target.closest('.planner-ex-grip');
     if (!grip) return;
     const row = grip.closest('.planner-ex-row');
@@ -3614,6 +3652,7 @@ function setupPlannerDrag(el) {
     ph.className = 'planner-ex-placeholder';
 
     drag = {
+      mode: 'row',
       exId: row.dataset.exid,
       fromDow: row.dataset.dow,
       row, ghost, placeholder: ph,
@@ -3637,7 +3676,17 @@ function setupPlannerDrag(el) {
 
     const below = document.elementFromPoint(e.clientX, e.clientY);
     const dayCard = below && below.closest('.planner-day');
-    if (dayCard) {
+
+    if (drag.mode === 'day') {
+      // Highlight a different day as the swap target.
+      el.querySelectorAll('.planner-day.drop-target').forEach((d) => d.classList.remove('drop-target'));
+      if (dayCard && dayCard.dataset.day !== String(drag.fromDow)) {
+        drag.targetDow = dayCard.dataset.day;
+        dayCard.classList.add('drop-target');
+      } else {
+        drag.targetDow = null;
+      }
+    } else if (dayCard) {
       const list = dayCard.querySelector('.planner-ex-list');
       if (list) {
         drag.targetDow = dayCard.dataset.day;
@@ -3651,14 +3700,29 @@ function setupPlannerDrag(el) {
 
   function finish() {
     if (!drag) return;
-    const { exId, fromDow, targetDow, targetIndex } = drag;
+    const mode = drag.mode;
+    const { fromDow, targetDow } = drag;
     drag.ghost.remove();
-    if (drag.placeholder.parentNode) drag.placeholder.remove();
-    drag.row.style.display = '';
     document.body.classList.remove('planner-dragging');
     el.querySelectorAll('.planner-day.drop-target').forEach((d) => d.classList.remove('drop-target'));
+    el.querySelectorAll('.planner-day.day-drag-source').forEach((d) => d.classList.remove('day-drag-source'));
     stopAutoScroll();
 
+    if (mode === 'day') {
+      const valid = targetDow != null && String(targetDow) !== String(fromDow);
+      drag = null;
+      if (valid) {
+        DB.plan.swapDays(fromDow, targetDow);
+        showToast(t('day_moved'));
+        renderPlanner(el);
+      }
+      return;
+    }
+
+    // Single-exercise drag
+    const { exId, targetIndex } = drag;
+    if (drag.placeholder.parentNode) drag.placeholder.remove();
+    drag.row.style.display = '';
     const crossDay = String(targetDow) !== String(fromDow);
     const reordered = targetIndex != null;
     drag = null;

@@ -518,6 +518,16 @@ const DB = {
       day.exerciseIds = day.exerciseIds.filter((id) => id !== exId);
       save();
     },
+    // Swap two whole days (name + all exercises). Used when dragging a day card
+    // onto another in the planner — moves a full day's plan in one motion.
+    swapDays(keyA, keyB) {
+      const a = String(keyA), b = String(keyB);
+      if (a === b) return;
+      const tmp = STATE.plan[a] || null;
+      STATE.plan[a] = STATE.plan[b] || null;
+      STATE.plan[b] = tmp;
+      save();
+    },
   },
 
   // ----- Health Connect (Android) -----
