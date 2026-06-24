@@ -4434,3 +4434,80 @@ body[dir="rtl"] .variation-select svg { transform: scaleX(-1); }
   font-weight: 700;
   color: var(--text-mute);
 }
+
+/* Home screen health section */
+.home-health {
+  margin: 4px 0 22px;
+}
+.health-home-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+.health-home-actions {
+  display: flex;
+  gap: 6px;
+}
+.health-home-btn {
+  width: 34px;
+  height: 34px;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: var(--surface-2);
+  color: var(--text-mute);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.health-home-btn:active { transform: scale(0.92); }
+.health-home-btn.spinning svg { animation: hc-spin 0.8s linear infinite; }
+@keyframes hc-spin { to { transform: rotate(360deg); } }
+
+.health-connect-prompt {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 18px;
+  border-radius: 16px;
+  border: 1px dashed var(--border-hi);
+  background: var(--surface-2);
+  color: var(--text-mute);
+  font-size: 13px;
+  font-weight: 700;
+}
+.health-connect-prompt:active { transform: scale(0.99); }
+
+/* Show/hide toggle on cards inside the settings modal */
+.health-card { position: relative; }
+.health-card.selectable { cursor: pointer; }
+.health-card.is-hidden { opacity: 0.4; }
+.health-card-toggle {
+  position: absolute;
+  top: 10px;
+  inset-inline-end: 10px;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 2px solid var(--border-hi);
+  color: transparent;
+  background: transparent;
+}
+.health-card-toggle.on {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--accent-ink);
+}
+
+.health-hint {
+  font-size: 12px;
+  color: var(--text-faint);
+  text-align: center;
+  margin-top: 12px;
+  line-height: 1.5;
+}

@@ -283,6 +283,7 @@ function defaultState() {
     supplements: [],
     supplementLogs: {},
     foodLogs: {},
+    health: { data: null, syncedAt: 0, hidden: [] },
   };
 }
 
@@ -317,6 +318,8 @@ function loadState() {
     parsed.supplements = parsed.supplements || [];
     parsed.supplementLogs = parsed.supplementLogs || {};
     parsed.foodLogs = parsed.foodLogs || {};
+    parsed.health = parsed.health || { data: null, syncedAt: 0, hidden: [] };
+    if (!Array.isArray(parsed.health.hidden)) parsed.health.hidden = [];
 
     // Migration: backfill missing fields + add any new seed exercises
     const seedByName = Object.fromEntries(SEED_EXERCISES.map((e) => [e.name, e]));
@@ -513,6 +516,30 @@ const DB = {
       const day = STATE.plan[String(dayKey)];
       if (!day || !Array.isArray(day.exerciseIds)) return;
       day.exerciseIds = day.exerciseIds.filter((id) => id !== exId);
+      save();
+    },
+  },
+
+  // ----- Health Connect (Android) -----
+  // Caches the last sync so the home screen can show cards offline, plus the
+  // per-metric show/hide preferences for the home screen.
+  health: {
+    get() { return STATE.health || { data: null, syncedAt: 0, hidden: [] }; },
+    setData(data) {
+      const h = STATE.health || { hidden: [] };
+      h.data = data;
+      h.syncedAt = Date.now();
+      if (!Array.isArray(h.hidden)) h.hidden = [];
+      STATE.health = h;
+      save();
+    },
+    isHidden(key) { return (STATE.health?.hidden || []).includes(key); },
+    toggle(key) {
+      const h = STATE.health || { data: null, syncedAt: 0, hidden: [] };
+      const set = new Set(h.hidden || []);
+      if (set.has(key)) set.delete(key); else set.add(key);
+      h.hidden = [...set];
+      STATE.health = h;
       save();
     },
   },

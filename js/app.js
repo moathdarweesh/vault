@@ -548,6 +548,8 @@ const I18N = {
     health_calories: 'Calories', health_distance: 'Distance', health_vo2: 'VO₂ max',
     health_exercise: 'Exercise', health_power: 'Power', health_speed: 'Speed',
     health_kcal: 'kcal', health_km: 'km', health_kmh: 'km/h', health_watt: 'W', health_vo2_unit: 'ml/kg',
+    health_home: 'Health', health_toggle_hint: 'Tap a card to show or hide it on your home screen.',
+    health_all_hidden: 'All hidden — tap to choose cards',
     reset_data: 'Reset All Data', reset_data_sub: 'Delete everything and start fresh',
     reset_q: 'Reset all data?',
     reset_text: 'This will permanently delete all exercises, sessions, cardio, food, sleep, and settings.',
@@ -874,6 +876,8 @@ const I18N = {
     health_calories: 'السعرات', health_distance: 'المسافة', health_vo2: 'VO₂ max',
     health_exercise: 'التمارين', health_power: 'الطاقة', health_speed: 'السرعة',
     health_kcal: 'سعرة', health_km: 'كم', health_kmh: 'كم/س', health_watt: 'واط', health_vo2_unit: 'مل/كغ',
+    health_home: 'صحّتي', health_toggle_hint: 'اضغط على المربّع لإظهاره أو إخفائه من الشاشة الرئيسية.',
+    health_all_hidden: 'الكل مخفي — اضغط لاختيار المربّعات',
     reset_data: 'إعادة تعيين الكل', reset_data_sub: 'حذف كل شي والبدء من جديد',
     reset_q: 'إعادة تعيين كل البيانات؟',
     reset_text: 'سيُحذف كل شي نهائياً: التمارين، الجلسات، الكارديو، الأكل، النوم، والإعدادات.',
@@ -1524,6 +1528,8 @@ function renderHome(el) {
       </button>
     </div>
 
+    ${typeof Health !== 'undefined' ? Health.homeSectionHtml() : ''}
+
     <div class="muscle-heatmap">
       <div class="heatmap-head">
         <div>
@@ -1579,6 +1585,7 @@ function renderHome(el) {
   `;
 
   bindVaultAction(() => navigate('settings'));
+  if (typeof Health !== 'undefined') Health.bindHomeSection();
 }
 
 // ==========================================================================
