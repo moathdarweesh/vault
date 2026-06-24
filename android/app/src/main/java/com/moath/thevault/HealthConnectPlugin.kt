@@ -4,10 +4,16 @@ import androidx.activity.result.ActivityResult
 import androidx.health.connect.client.HealthConnectClient
 import androidx.health.connect.client.PermissionController
 import androidx.health.connect.client.permission.HealthPermission
+import androidx.health.connect.client.records.DistanceRecord
+import androidx.health.connect.client.records.ExerciseSessionRecord
 import androidx.health.connect.client.records.HeartRateRecord
 import androidx.health.connect.client.records.OxygenSaturationRecord
+import androidx.health.connect.client.records.PowerRecord
 import androidx.health.connect.client.records.SleepSessionRecord
+import androidx.health.connect.client.records.SpeedRecord
 import androidx.health.connect.client.records.StepsRecord
+import androidx.health.connect.client.records.TotalCaloriesBurnedRecord
+import androidx.health.connect.client.records.Vo2MaxRecord
 import androidx.health.connect.client.request.ReadRecordsRequest
 import androidx.health.connect.client.time.TimeRangeFilter
 import com.getcapacitor.JSArray
@@ -42,6 +48,12 @@ class HealthConnectPlugin : Plugin() {
         HealthPermission.getReadPermission(HeartRateRecord::class),
         HealthPermission.getReadPermission(OxygenSaturationRecord::class),
         HealthPermission.getReadPermission(SleepSessionRecord::class),
+        HealthPermission.getReadPermission(TotalCaloriesBurnedRecord::class),
+        HealthPermission.getReadPermission(DistanceRecord::class),
+        HealthPermission.getReadPermission(Vo2MaxRecord::class),
+        HealthPermission.getReadPermission(ExerciseSessionRecord::class),
+        HealthPermission.getReadPermission(PowerRecord::class),
+        HealthPermission.getReadPermission(SpeedRecord::class),
     )
 
     private fun clientOrNull(): HealthConnectClient? {
@@ -72,7 +84,8 @@ class HealthConnectPlugin : Plugin() {
                     client.permissionController.getGrantedPermissions()
                 }
                 val ret = JSObject()
-                ret.put("granted", granted.containsAll(permissions))
+                // Forgiving: proceed if the user granted at least one of our types.
+                ret.put("granted", granted.any { it in permissions })
                 call.resolve(ret)
             } catch (e: Exception) {
                 call.reject(e.message, e)
@@ -102,7 +115,8 @@ class HealthConnectPlugin : Plugin() {
                     client.permissionController.getGrantedPermissions()
                 }
                 val ret = JSObject()
-                ret.put("granted", granted.containsAll(permissions))
+                // Forgiving: proceed if the user granted at least one of our types.
+                ret.put("granted", granted.any { it in permissions })
                 call.resolve(ret)
             } catch (e: Exception) {
                 call.reject(e.message, e)
@@ -111,9 +125,12 @@ class HealthConnectPlugin : Plugin() {
     }
 
     /**
-     * Reads all four metrics within a time window.
+     * Reads all selected metrics within a time window. Each type is read
+     * independently (runCatching) so a missing type never fails the whole call.
      * Params: { startTime: epochMillis, endTime: epochMillis }
-     * Returns: { steps, heartRate:{latest,latestTime,samples}, oxygen:{latest,latestTime}, sleep:[{start,end,minutes}] }
+     * Cumulative types (calories/distance/exercise/steps) use [start,end];
+     * instantaneous types (hr/oxygen/vo2/power/speed) take the latest/peak in
+     * that window; sleep always looks back 36h from end to catch last night.
      */
     @PluginMethod
     fun readData(call: PluginCall) {
@@ -124,60 +141,100 @@ class HealthConnectPlugin : Plugin() {
             return
         }
         val range = TimeRangeFilter.between(Instant.ofEpochMilli(startMs), Instant.ofEpochMilli(endMs))
+        val sleepRange = TimeRangeFilter.between(
+            Instant.ofEpochMilli(endMs - 36L * 3600 * 1000),
+            Instant.ofEpochMilli(endMs)
+        )
 
         scope.launch {
             try {
                 val client = clientOrNull() ?: return@launch call.reject("Health Connect not available")
-                val result = withContext(Dispatchers.IO) {
-                    val steps = client.readRecords(ReadRecordsRequest(StepsRecord::class, range))
-                        .records.sumOf { it.count }
+                val ret = withContext(Dispatchers.IO) {
+                    val out = JSObject()
 
-                    val hrSamples = client.readRecords(ReadRecordsRequest(HeartRateRecord::class, range))
-                        .records.flatMap { it.samples }
-                    val latestHr = hrSamples.maxByOrNull { it.time }
+                    runCatching {
+                        val steps = client.readRecords(ReadRecordsRequest(StepsRecord::class, range))
+                            .records.sumOf { it.count }
+                        out.put("steps", steps)
+                    }
 
-                    val oxRecords = client.readRecords(ReadRecordsRequest(OxygenSaturationRecord::class, range))
-                        .records
-                    val latestOx = oxRecords.maxByOrNull { it.time }
+                    runCatching {
+                        val samples = client.readRecords(ReadRecordsRequest(HeartRateRecord::class, range))
+                            .records.flatMap { it.samples }
+                        val latest = samples.maxByOrNull { it.time }
+                        val hr = JSObject()
+                        if (latest != null) {
+                            hr.put("latest", latest.beatsPerMinute)
+                            hr.put("latestTime", latest.time.toString())
+                        }
+                        hr.put("samples", samples.size)
+                        out.put("heartRate", hr)
+                    }
 
-                    val sleepSessions = client.readRecords(ReadRecordsRequest(SleepSessionRecord::class, range))
-                        .records
+                    runCatching {
+                        val latest = client.readRecords(ReadRecordsRequest(OxygenSaturationRecord::class, range))
+                            .records.maxByOrNull { it.time }
+                        val ox = JSObject()
+                        if (latest != null) {
+                            ox.put("latest", latest.percentage.value)
+                            ox.put("latestTime", latest.time.toString())
+                        }
+                        out.put("oxygen", ox)
+                    }
 
-                    Triple(steps, Pair(hrSamples.size, latestHr), Pair(latestOx, sleepSessions))
+                    runCatching {
+                        val sessions = client.readRecords(ReadRecordsRequest(SleepSessionRecord::class, sleepRange)).records
+                        val arr = JSArray()
+                        for (s in sessions) {
+                            val o = JSObject()
+                            o.put("start", s.startTime.toString())
+                            o.put("end", s.endTime.toString())
+                            o.put("minutes", Duration.between(s.startTime, s.endTime).toMinutes())
+                            arr.put(o)
+                        }
+                        out.put("sleep", arr)
+                    }
+
+                    runCatching {
+                        val kcal = client.readRecords(ReadRecordsRequest(TotalCaloriesBurnedRecord::class, range))
+                            .records.sumOf { it.energy.inKilocalories }
+                        out.put("calories", kcal)
+                    }
+
+                    runCatching {
+                        val km = client.readRecords(ReadRecordsRequest(DistanceRecord::class, range))
+                            .records.sumOf { it.distance.inKilometers }
+                        out.put("distance", km)
+                    }
+
+                    runCatching {
+                        val latest = client.readRecords(ReadRecordsRequest(Vo2MaxRecord::class, range))
+                            .records.maxByOrNull { it.time }
+                        if (latest != null) out.put("vo2max", latest.vo2MillilitersPerMinuteKilogram)
+                    }
+
+                    runCatching {
+                        val sessions = client.readRecords(ReadRecordsRequest(ExerciseSessionRecord::class, range)).records
+                        val ex = JSObject()
+                        ex.put("count", sessions.size)
+                        ex.put("minutes", sessions.sumOf { Duration.between(it.startTime, it.endTime).toMinutes() })
+                        out.put("exercise", ex)
+                    }
+
+                    runCatching {
+                        val maxW = client.readRecords(ReadRecordsRequest(PowerRecord::class, range))
+                            .records.flatMap { it.samples }.maxByOrNull { it.power.inWatts }?.power?.inWatts
+                        if (maxW != null) out.put("power", maxW)
+                    }
+
+                    runCatching {
+                        val maxKmh = client.readRecords(ReadRecordsRequest(SpeedRecord::class, range))
+                            .records.flatMap { it.samples }.maxByOrNull { it.speed.inKilometersPerHour }?.speed?.inKilometersPerHour
+                        if (maxKmh != null) out.put("speed", maxKmh)
+                    }
+
+                    out
                 }
-
-                val (totalSteps, hrPair, oxSleep) = result
-                val (hrCount, latestHr) = hrPair
-                val (latestOx, sleepSessions) = oxSleep
-
-                val ret = JSObject()
-                ret.put("steps", totalSteps)
-
-                val hr = JSObject()
-                if (latestHr != null) {
-                    hr.put("latest", latestHr.beatsPerMinute)
-                    hr.put("latestTime", latestHr.time.toString())
-                }
-                hr.put("samples", hrCount)
-                ret.put("heartRate", hr)
-
-                val ox = JSObject()
-                if (latestOx != null) {
-                    ox.put("latest", latestOx.percentage.value)
-                    ox.put("latestTime", latestOx.time.toString())
-                }
-                ret.put("oxygen", ox)
-
-                val sleepArr = JSArray()
-                for (s in sleepSessions) {
-                    val o = JSObject()
-                    o.put("start", s.startTime.toString())
-                    o.put("end", s.endTime.toString())
-                    o.put("minutes", Duration.between(s.startTime, s.endTime).toMinutes())
-                    sleepArr.put(o)
-                }
-                ret.put("sleep", sleepArr)
-
                 call.resolve(ret)
             } catch (e: Exception) {
                 call.reject(e.message, e)

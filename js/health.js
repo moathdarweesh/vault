@@ -38,7 +38,9 @@
   function renderResults(data) {
     const hr = data.heartRate || {};
     const ox = data.oxygen || {};
+    const ex = data.exercise || {};
     const sleep = Array.isArray(data.sleep) ? data.sleep : [];
+
     // Most recent sleep session, formatted as "7h 20m"
     let sleepStr = null;
     if (sleep.length) {
@@ -47,12 +49,20 @@
       const m = last.minutes % 60;
       sleepStr = `${h}<span class="health-card-unit">h</span> ${m}<span class="health-card-unit">m</span>`;
     }
+
+    const round = (v, d) => (v == null ? null : (d ? Number(v).toFixed(d) : Math.round(v)));
+
     return `
       <div class="health-grid">
-        ${card('footprints', tr('health_steps'), data.steps != null ? fmt(data.steps) : null, '', '#34d399')}
         ${card('heartPulse', tr('health_hr'), hr.latest != null ? fmt(hr.latest) : null, tr('health_bpm'), '#f87171')}
-        ${card('droplet', tr('health_oxygen'), ox.latest != null ? Math.round(ox.latest) : null, '%', '#38bdf8')}
         ${card('moon', tr('health_sleep'), sleepStr, '', '#a78bfa')}
+        ${card('droplet', tr('health_oxygen'), round(ox.latest), '%', '#38bdf8')}
+        ${card('flame', tr('health_calories'), data.calories != null ? fmt(round(data.calories)) : null, tr('health_kcal'), '#fb923c')}
+        ${card('run', tr('health_distance'), round(data.distance, 2), tr('health_km'), '#34d399')}
+        ${card('chart', tr('health_vo2'), round(data.vo2max, 1), tr('health_vo2_unit'), '#facc15')}
+        ${card('dumbbell', tr('health_exercise'), ex.minutes != null ? ex.minutes : null, tr('health_min'), '#f472b6')}
+        ${card('zap', tr('health_power'), round(data.power), tr('health_watt'), '#fbbf24')}
+        ${card('bike', tr('health_speed'), round(data.speed, 1), tr('health_kmh'), '#22d3ee')}
       </div>`;
   }
 
@@ -78,10 +88,10 @@
         wire();
         return;
       }
-      const now = Date.now();
+      // Cumulative metrics use today's window; sleep looks back 36h natively.
       const data = await plugin().readData({
-        startTime: Math.min(startOfTodayMs(), now - 36 * 3600 * 1000), // catch last night's sleep
-        endTime: now,
+        startTime: startOfTodayMs(),
+        endTime: Date.now(),
       });
       if (body) body.innerHTML = `<div class="health-stats">${renderResults(data)}</div>` + connectBtn(true);
       wire();
