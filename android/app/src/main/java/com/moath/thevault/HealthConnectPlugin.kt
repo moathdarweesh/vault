@@ -141,8 +141,10 @@ class HealthConnectPlugin : Plugin() {
             return
         }
         val range = TimeRangeFilter.between(Instant.ofEpochMilli(startMs), Instant.ofEpochMilli(endMs))
+        // Sleep looks back 30 days so the app's sleep log can backfill history,
+        // not just last night. The home card still shows the most recent night.
         val sleepRange = TimeRangeFilter.between(
-            Instant.ofEpochMilli(endMs - 36L * 3600 * 1000),
+            Instant.ofEpochMilli(endMs - 30L * 24 * 3600 * 1000),
             Instant.ofEpochMilli(endMs)
         )
         // Instantaneous "latest reading" types look back a week so a card always

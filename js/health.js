@@ -131,6 +131,13 @@
     return merged;
   }
 
+  // Write fresh Health Connect data into the app's own logs (sleep, …) so it
+  // shows up in the records, not just the home cards. Deduped inside storage.
+  function applyToLogs(data) {
+    if (!data || typeof DB === 'undefined') return;
+    try { if (DB.sleep && DB.sleep.importFromHealth) DB.sleep.importFromHealth(data.sleep); } catch (_) { /* ignore */ }
+  }
+
   // Pull fresh data without prompting (only if permission already granted).
   async function silentSync() {
     if (!isNative() || !plugin()) return;
@@ -142,6 +149,7 @@
       if (!perm || !perm.granted) return;
       const fresh = await plugin().readData({ startTime: startOfTodayMs(), endTime: now });
       DB.health.setData(mergeData(DB.health.get().data, fresh));
+      applyToLogs(fresh);
       if (typeof currentView !== 'undefined' && currentView === 'home' && typeof renderView === 'function') {
         renderView('home');
       }
@@ -159,6 +167,7 @@
       const fresh = await plugin().readData({ startTime: startOfTodayMs(), endTime: Date.now() });
       lastSyncAt = Date.now();
       DB.health.setData(mergeData(DB.health.get().data, fresh));
+      applyToLogs(fresh);
       if (typeof showToast === 'function') showToast(tr('health_synced'));
       if (typeof renderView === 'function') renderView('home');
     } catch (e) {
@@ -216,6 +225,7 @@
       lastSyncAt = Date.now();
       const data = mergeData(DB.health.get().data, fresh);
       DB.health.setData(data);
+      applyToLogs(fresh);
       if (body) body.innerHTML = modalBody(data);
       wireModal();
       if (typeof showToast === 'function') showToast(tr('health_synced'));

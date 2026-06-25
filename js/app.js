@@ -541,6 +541,7 @@ const I18N = {
     health_no_permission: 'Permission not granted',
     health_syncing: 'Syncing…',
     health_synced: 'Synced from Health Connect',
+    from_watch: 'Watch',
     health_steps: 'Steps', health_hr: 'Heart rate', health_oxygen: 'Blood oxygen', health_sleep: 'Sleep',
     health_no_data: 'No data in this range',
     health_connect_btn: 'Connect', health_open_settings: 'Open Health Connect',
@@ -871,6 +872,7 @@ const I18N = {
     health_no_permission: 'لم يتم منح الإذن',
     health_syncing: 'جارٍ المزامنة…',
     health_synced: 'تمت المزامنة من Health Connect',
+    from_watch: 'الساعة',
     health_steps: 'الخطوات', health_hr: 'النبض', health_oxygen: 'الأكسجين', health_sleep: 'النوم',
     health_no_data: 'لا توجد بيانات في هذه الفترة',
     health_connect_btn: 'ربط', health_open_settings: 'فتح Health Connect',
@@ -2789,7 +2791,7 @@ function renderSleep(el) {
     <div class="data-row">
       <div class="data-icon sleep">${icon('bed', 20)}</div>
       <div class="data-main">
-        <div class="data-title">${formatDate(s.date)}</div>
+        <div class="data-title">${formatDate(s.date)}${s.source === 'health' ? `<span class="src-badge">${icon('refresh', 11)}${t('from_watch')}</span>` : ''}</div>
         <div class="data-meta">
           <span class="num">${formatTime12(s.sleepTime)}</span>
           <span>→</span>

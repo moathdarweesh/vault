@@ -950,6 +950,36 @@ const DB = {
       STATE.sleep = STATE.sleep.filter((s) => s.id !== id);
       save();
     },
+    // Import sleep sessions read from Health Connect into the log. Deduped by
+    // the session start time (hcKey) so re-syncing never creates duplicates.
+    // Manual entries are left untouched. Returns how many were newly added.
+    importFromHealth(sessions) {
+      if (!Array.isArray(sessions) || !sessions.length) return 0;
+      const pad = (n) => String(n).padStart(2, '0');
+      const seen = new Set(STATE.sleep.map((s) => s.hcKey).filter(Boolean));
+      let added = 0;
+      sessions.forEach((s) => {
+        if (!s || !s.start || !s.end || seen.has(s.start)) return;
+        const start = new Date(s.start);
+        const end = new Date(s.end);
+        if (isNaN(start.getTime()) || isNaN(end.getTime())) return;
+        const date = `${end.getFullYear()}-${pad(end.getMonth() + 1)}-${pad(end.getDate())}`;
+        STATE.sleep.push({
+          id: uid(),
+          date,
+          sleepTime: pad(start.getHours()) + ':' + pad(start.getMinutes()),
+          wakeTime: pad(end.getHours()) + ':' + pad(end.getMinutes()),
+          durationMinutes: s.minutes != null ? s.minutes : Math.round((end - start) / 60000),
+          source: 'health',
+          hcKey: s.start,
+          createdAt: new Date().toISOString(),
+        });
+        seen.add(s.start);
+        added++;
+      });
+      if (added) save();
+      return added;
+    },
   },
 };
 

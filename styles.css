@@ -4421,6 +4421,24 @@ body[dir="rtl"] .variation-select svg { transform: scaleX(-1); }
 .mb-16 { margin-bottom: 16px; }
 .mb-20 { margin-bottom: 20px; }
 
+/* "Synced from watch" badge in the sleep log */
+.src-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  margin-inline-start: 8px;
+  padding: 2px 7px;
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  color: var(--accent);
+  background: var(--accent-soft);
+  border: 1px solid var(--accent-line);
+  vertical-align: middle;
+}
+.src-badge svg { width: 11px; height: 11px; }
+
 /* ---- Health Connect modal ---- */
 .health-msg {
   font-size: 14px;
