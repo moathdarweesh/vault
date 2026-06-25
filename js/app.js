@@ -481,7 +481,19 @@ const I18N = {
     protein_g: 'Protein (g)', carbs_g: 'Carbs (g)',
     delete_food_q: 'Delete food?',
     delete_food_text: 'This food will be removed from your reference list.',
-    cal: 'cal', protein_label: 'protein', carbs_label: 'carbs',
+    cal: 'cal', protein_label: 'protein', carbs_label: 'carbs', fat_label: 'fat',
+    ai_chat_btn: 'AI', ai_chat_title: 'Calorie Chat', ai_chat_sub: 'Describe a meal — get calories & macros',
+    ai_chat_placeholder: 'e.g. rice with chicken',
+    ai_need_key: 'A free Google Gemini API key is needed (one-time).',
+    ai_key_step1: 'Get a free key from',
+    ai_key_step2: 'Paste it below — it stays on your device only.',
+    ai_key_label: 'Gemini API key',
+    ai_save_key: 'Save key',
+    ai_analyzing: 'calculating…',
+    ai_no_result: 'No result — try rephrasing.',
+    ai_add_to_log: 'Add to log',
+    ai_added: 'Added',
+    ai_error: 'Something went wrong',
 
     // Sleep
     sleep_subtitle: 'Track when you sleep and wake up.',
@@ -815,7 +827,19 @@ const I18N = {
     protein_g: 'بروتين (جم)', carbs_g: 'كارب (جم)',
     delete_food_q: 'حذف الأكل؟',
     delete_food_text: 'سيُحذف هذا الأكل من قائمتك المرجعية.',
-    cal: 'سعرة', protein_label: 'بروتين', carbs_label: 'كارب',
+    cal: 'سعرة', protein_label: 'بروتين', carbs_label: 'كارب', fat_label: 'دهون',
+    ai_chat_btn: 'ذكاء', ai_chat_title: 'شات السعرات', ai_chat_sub: 'اوصف وجبتك — تطلعلك السعرات والماكروز',
+    ai_chat_placeholder: 'مثلاً: رز مع دجاج',
+    ai_need_key: 'بدّو مفتاح Google Gemini مجاني (مرّة وحدة).',
+    ai_key_step1: 'احصل على مفتاح مجاني من',
+    ai_key_step2: 'الصقه تحت — بيتخزّن على جهازك فقط.',
+    ai_key_label: 'مفتاح Gemini',
+    ai_save_key: 'حفظ المفتاح',
+    ai_analyzing: 'جارٍ الحساب…',
+    ai_no_result: 'ما في نتيجة — جرّب صياغة ثانية.',
+    ai_add_to_log: 'أضف للسجل',
+    ai_added: 'تمت الإضافة',
+    ai_error: 'صار خطأ',
 
     sleep_subtitle: 'تتبّع متى تنام ومتى تصحى.',
     no_sleep_logged: 'لا يوجد نوم مسجّل',
@@ -4486,6 +4510,7 @@ function renderFoodLog(el) {
             <span><span class="num">${fmtNum(Math.round(e.protein * m * 10) / 10)}</span>g ${t('protein_label')}</span>
             <span class="dot-sep"></span>
             <span><span class="num">${fmtNum(Math.round(e.carbs * m * 10) / 10)}</span>g ${t('carbs_label')}</span>
+            ${e.fat ? `<span class="dot-sep"></span><span><span class="num">${fmtNum(Math.round(e.fat * m * 10) / 10)}</span>g ${t('fat_label')}</span>` : ''}
           </div>
         </div>
         <button class="icon-btn danger" data-del-food="${e.id}">${icon('trash', 15)}</button>
@@ -4523,11 +4548,18 @@ function renderFoodLog(el) {
         <div class="macro-total-label">${t('carbs_label')}</div>
         <div class="macro-total-value num">${fmtNum(Math.round(totals.carbs * 10) / 10)}<span class="macro-total-unit">g</span></div>
       </div>
+      <div class="macro-total fat">
+        <div class="macro-total-label">${t('fat_label')}</div>
+        <div class="macro-total-value num">${fmtNum(Math.round((totals.fat || 0) * 10) / 10)}<span class="macro-total-unit">g</span></div>
+      </div>
     </div>
 
     <div class="row-between mb-16">
       <div class="section-title" style="margin:0">${t('food_log_title')}</div>
-      <button class="btn btn-primary" id="add-foodlog-btn">${icon('plus', 16)} ${t('add_food_log')}</button>
+      <div style="display:flex;gap:8px">
+        <button class="btn btn-ghost" id="ai-food-btn">${icon('zap', 16)} ${t('ai_chat_btn')}</button>
+        <button class="btn btn-primary" id="add-foodlog-btn">${icon('plus', 16)} ${t('add_food_log')}</button>
+      </div>
     </div>
 
     ${entries.length === 0
@@ -4551,6 +4583,9 @@ function renderFoodLog(el) {
   });
 
   $('#add-foodlog-btn', el).addEventListener('click', () => openFoodPickerModal(ctx.date));
+  $('#ai-food-btn', el)?.addEventListener('click', () => {
+    if (window.FoodAI) window.FoodAI.open(ctx.date);
+  });
 
   el.querySelectorAll('[data-del-food]').forEach((b) =>
     b.addEventListener('click', () => {

@@ -3680,8 +3680,8 @@ body[dir="rtl"] .picker-row { text-align: right; }
 
 .macro-totals {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 8px;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 6px;
   margin-bottom: 18px;
 }
 
@@ -3721,6 +3721,52 @@ body[dir="rtl"] .picker-row { text-align: right; }
 .macro-total.cal .macro-total-value { color: var(--cat-arms); }
 .macro-total.pro .macro-total-value { color: var(--cat-legs); }
 .macro-total.carb .macro-total-value { color: var(--cat-back); }
+.macro-total.fat .macro-total-value { color: var(--cat-shoulders); }
+
+/* ---- AI calorie chat ---- */
+.ai-keypanel { display: flex; flex-direction: column; gap: 12px; }
+.ai-steps {
+  margin: 0; padding-inline-start: 20px;
+  font-size: 13px; color: var(--text-mute); line-height: 1.7;
+}
+.ai-steps a { color: var(--accent); }
+.ai-keypanel input,
+.ai-input-row input {
+  width: 100%; padding: 12px 14px; border-radius: 12px;
+  border: 1px solid var(--border); background: var(--surface-2);
+  color: var(--text); font-size: 14px;
+}
+.ai-results {
+  display: flex; flex-direction: column; gap: 12px;
+  max-height: 52vh; overflow-y: auto; margin-bottom: 12px;
+}
+.ai-pending {
+  display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap;
+  font-size: 14px;
+}
+.ai-q { font-weight: 800; }
+.ai-dots { color: var(--text-faint); font-size: 12px; }
+.ai-err { color: #f87171; font-size: 12px; }
+.ai-card {
+  background: var(--surface-2); border: 1px solid var(--border);
+  border-radius: 14px; padding: 14px; display: flex;
+  flex-direction: column; gap: 10px;
+}
+.ai-card-name { font-size: 15px; font-weight: 800; }
+.ai-macros { display: flex; flex-wrap: wrap; gap: 6px; }
+.ai-macro {
+  font-size: 12px; font-weight: 700; padding: 4px 10px;
+  border-radius: 999px; background: var(--surface-1);
+  border: 1px solid var(--border-hi); color: var(--text-mute);
+}
+.ai-macro b { color: var(--text); margin-inline-end: 2px; }
+.ai-macro.cal b { color: var(--cat-arms); }
+.ai-macro.pro b { color: var(--cat-legs); }
+.ai-macro.carb b { color: var(--cat-back); }
+.ai-macro.fat b { color: var(--cat-shoulders); }
+.ai-input-row { display: flex; gap: 8px; align-items: center; }
+.ai-input-row input { flex: 1; }
+.ai-input-row .btn { flex-shrink: 0; width: 46px; padding: 12px 0; justify-content: center; }
 
 .food-log-row {
   background: var(--surface-1);

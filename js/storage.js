@@ -622,7 +622,7 @@ const DB = {
       return STATE.foodLogs[date] || [];
     },
     add(date, entry) {
-      // entry: { foodId, name, servings, calories, protein, carbs }
+      // entry: { foodId, name, servings, calories, protein, carbs, fat, source }
       if (!STATE.foodLogs[date]) STATE.foodLogs[date] = [];
       const item = {
         id: uid(),
@@ -632,6 +632,8 @@ const DB = {
         calories: Number(entry.calories) || 0,
         protein: Number(entry.protein) || 0,
         carbs: Number(entry.carbs) || 0,
+        fat: Number(entry.fat) || 0,
+        source: entry.source || null,
         addedAt: new Date().toISOString(),
       };
       STATE.foodLogs[date].push(item);
@@ -646,6 +648,7 @@ const DB = {
       if (data.calories != null) it.calories = Number(data.calories);
       if (data.protein != null) it.protein = Number(data.protein);
       if (data.carbs != null) it.carbs = Number(data.carbs);
+      if (data.fat != null) it.fat = Number(data.fat);
       save();
       return it;
     },
@@ -662,9 +665,10 @@ const DB = {
           acc.calories += (x.calories || 0) * m;
           acc.protein += (x.protein || 0) * m;
           acc.carbs += (x.carbs || 0) * m;
+          acc.fat += (x.fat || 0) * m;
           return acc;
         },
-        { calories: 0, protein: 0, carbs: 0 }
+        { calories: 0, protein: 0, carbs: 0, fat: 0 }
       );
     },
   },
