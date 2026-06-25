@@ -145,6 +145,12 @@ class HealthConnectPlugin : Plugin() {
             Instant.ofEpochMilli(endMs - 36L * 3600 * 1000),
             Instant.ofEpochMilli(endMs)
         )
+        // Instantaneous "latest reading" types look back a week so a card always
+        // shows the most recent known value, not only today's.
+        val latestRange = TimeRangeFilter.between(
+            Instant.ofEpochMilli(endMs - 7L * 24 * 3600 * 1000),
+            Instant.ofEpochMilli(endMs)
+        )
 
         scope.launch {
             try {
@@ -159,7 +165,7 @@ class HealthConnectPlugin : Plugin() {
                     }
 
                     runCatching {
-                        val samples = client.readRecords(ReadRecordsRequest(HeartRateRecord::class, range))
+                        val samples = client.readRecords(ReadRecordsRequest(HeartRateRecord::class, latestRange))
                             .records.flatMap { it.samples }
                         val latest = samples.maxByOrNull { it.time }
                         val hr = JSObject()
@@ -172,7 +178,7 @@ class HealthConnectPlugin : Plugin() {
                     }
 
                     runCatching {
-                        val latest = client.readRecords(ReadRecordsRequest(OxygenSaturationRecord::class, range))
+                        val latest = client.readRecords(ReadRecordsRequest(OxygenSaturationRecord::class, latestRange))
                             .records.maxByOrNull { it.time }
                         val ox = JSObject()
                         if (latest != null) {
@@ -208,7 +214,7 @@ class HealthConnectPlugin : Plugin() {
                     }
 
                     runCatching {
-                        val latest = client.readRecords(ReadRecordsRequest(Vo2MaxRecord::class, range))
+                        val latest = client.readRecords(ReadRecordsRequest(Vo2MaxRecord::class, latestRange))
                             .records.maxByOrNull { it.time }
                         if (latest != null) out.put("vo2max", latest.vo2MillilitersPerMinuteKilogram)
                     }
@@ -222,13 +228,13 @@ class HealthConnectPlugin : Plugin() {
                     }
 
                     runCatching {
-                        val maxW = client.readRecords(ReadRecordsRequest(PowerRecord::class, range))
+                        val maxW = client.readRecords(ReadRecordsRequest(PowerRecord::class, latestRange))
                             .records.flatMap { it.samples }.maxByOrNull { it.power.inWatts }?.power?.inWatts
                         if (maxW != null) out.put("power", maxW)
                     }
 
                     runCatching {
-                        val maxKmh = client.readRecords(ReadRecordsRequest(SpeedRecord::class, range))
+                        val maxKmh = client.readRecords(ReadRecordsRequest(SpeedRecord::class, latestRange))
                             .records.flatMap { it.samples }.maxByOrNull { it.speed.inKilometersPerHour }?.speed?.inKilometersPerHour
                         if (maxKmh != null) out.put("speed", maxKmh)
                     }

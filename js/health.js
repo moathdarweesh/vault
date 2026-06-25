@@ -112,23 +112,36 @@
       if (b) b.addEventListener('click', open);
     });
 
-    // Auto-refresh once per app load if Health Connect is connected.
-    if (!autoSynced && isNative()) {
-      autoSynced = true;
-      silentSync();
-    }
+    // Auto-refresh whenever the home screen renders (throttled in silentSync).
+    if (isNative()) silentSync();
   }
 
-  let autoSynced = false;
+  let lastSyncAt = 0;
+
+  // Merge a fresh read over the cached data so a metric that comes back empty
+  // (nothing logged yet today, or Samsung Health hasn't pushed it) never blanks
+  // out a value the user already saw.
+  function mergeData(oldD, newD) {
+    if (!oldD) return newD || null;
+    if (!newD) return oldD;
+    const merged = Object.assign({}, oldD);
+    METRICS.forEach((m) => {
+      if (m.val(newD) != null) merged[m.key] = newD[m.key];
+    });
+    return merged;
+  }
 
   // Pull fresh data without prompting (only if permission already granted).
   async function silentSync() {
     if (!isNative() || !plugin()) return;
+    const now = Date.now();
+    if (now - lastSyncAt < 20000) return; // throttle load + resume bursts
+    lastSyncAt = now;
     try {
       const perm = await plugin().checkHealthPermissions();
       if (!perm || !perm.granted) return;
-      const data = await plugin().readData({ startTime: startOfTodayMs(), endTime: Date.now() });
-      DB.health.setData(data);
+      const fresh = await plugin().readData({ startTime: startOfTodayMs(), endTime: now });
+      DB.health.setData(mergeData(DB.health.get().data, fresh));
       if (typeof currentView !== 'undefined' && currentView === 'home' && typeof renderView === 'function') {
         renderView('home');
       }
@@ -143,8 +156,9 @@
     try {
       const perm = await plugin().requestHealthPermissions();
       if (!perm || !perm.granted) { open(); return; }
-      const data = await plugin().readData({ startTime: startOfTodayMs(), endTime: Date.now() });
-      DB.health.setData(data);
+      const fresh = await plugin().readData({ startTime: startOfTodayMs(), endTime: Date.now() });
+      lastSyncAt = Date.now();
+      DB.health.setData(mergeData(DB.health.get().data, fresh));
       if (typeof showToast === 'function') showToast(tr('health_synced'));
       if (typeof renderView === 'function') renderView('home');
     } catch (e) {
@@ -198,7 +212,9 @@
         wireModal();
         return;
       }
-      const data = await plugin().readData({ startTime: startOfTodayMs(), endTime: Date.now() });
+      const fresh = await plugin().readData({ startTime: startOfTodayMs(), endTime: Date.now() });
+      lastSyncAt = Date.now();
+      const data = mergeData(DB.health.get().data, fresh);
       DB.health.setData(data);
       if (body) body.innerHTML = modalBody(data);
       wireModal();
@@ -248,6 +264,13 @@
       const body = document.getElementById('health-body');
       if (body && !cached) body.innerHTML = `<div class="health-msg">${(e && e.message) || tr('health_unavailable')}</div>`;
     }
+  }
+
+  // Auto-sync whenever the app is brought back to the foreground.
+  if (typeof document !== 'undefined') {
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'visible') silentSync();
+    });
   }
 
   window.Health = { open, sync, isNative, homeSectionHtml, bindHomeSection };
