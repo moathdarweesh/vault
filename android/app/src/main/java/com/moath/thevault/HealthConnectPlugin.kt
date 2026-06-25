@@ -56,6 +56,19 @@ class HealthConnectPlugin : Plugin() {
         HealthPermission.getReadPermission(SpeedRecord::class),
     )
 
+    // Map a Health Connect exercise type to one of the app's cardio type ids.
+    // Returns null for non-cardio activities (e.g. strength) so they're skipped.
+    private fun cardioTypeFor(type: Int): String? = when (type) {
+        ExerciseSessionRecord.EXERCISE_TYPE_RUNNING -> "running"
+        ExerciseSessionRecord.EXERCISE_TYPE_RUNNING_TREADMILL -> "treadmill"
+        ExerciseSessionRecord.EXERCISE_TYPE_WALKING -> "walking"
+        ExerciseSessionRecord.EXERCISE_TYPE_HIKING -> "walking"
+        ExerciseSessionRecord.EXERCISE_TYPE_BIKING -> "cycling"
+        ExerciseSessionRecord.EXERCISE_TYPE_BIKING_STATIONARY -> "cycling"
+        ExerciseSessionRecord.EXERCISE_TYPE_ELLIPTICAL -> "treadmill"
+        else -> null
+    }
+
     private fun clientOrNull(): HealthConnectClient? {
         return if (HealthConnectClient.getSdkStatus(context) == HealthConnectClient.SDK_AVAILABLE) {
             HealthConnectClient.getOrCreate(context)
@@ -153,6 +166,11 @@ class HealthConnectPlugin : Plugin() {
             Instant.ofEpochMilli(endMs - 7L * 24 * 3600 * 1000),
             Instant.ofEpochMilli(endMs)
         )
+        // Cardio sessions backfill 30 days into the app's cardio log.
+        val historyRange = TimeRangeFilter.between(
+            Instant.ofEpochMilli(endMs - 30L * 24 * 3600 * 1000),
+            Instant.ofEpochMilli(endMs)
+        )
 
         scope.launch {
             try {
@@ -227,6 +245,33 @@ class HealthConnectPlugin : Plugin() {
                         ex.put("count", sessions.size)
                         ex.put("minutes", sessions.sumOf { Duration.between(it.startTime, it.endTime).toMinutes() })
                         out.put("exercise", ex)
+                    }
+
+                    // Individual cardio sessions (last 30 days) for the cardio log.
+                    runCatching {
+                        val sessions = client.readRecords(ReadRecordsRequest(ExerciseSessionRecord::class, historyRange)).records
+                        val arr = JSArray()
+                        for (s in sessions) {
+                            val type = cardioTypeFor(s.exerciseType)
+                            if (type != null) {
+                                val cal = runCatching {
+                                    client.readRecords(
+                                        ReadRecordsRequest(
+                                            TotalCaloriesBurnedRecord::class,
+                                            TimeRangeFilter.between(s.startTime, s.endTime)
+                                        )
+                                    ).records.sumOf { it.energy.inKilocalories }
+                                }.getOrDefault(0.0)
+                                val o = JSObject()
+                                o.put("start", s.startTime.toString())
+                                o.put("end", s.endTime.toString())
+                                o.put("type", type)
+                                o.put("minutes", Duration.between(s.startTime, s.endTime).toMinutes())
+                                o.put("calories", Math.round(cal))
+                                arr.put(o)
+                            }
+                        }
+                        out.put("exerciseSessions", arr)
                     }
 
                     runCatching {

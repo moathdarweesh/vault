@@ -840,6 +840,35 @@ const DB = {
       STATE.cardio = STATE.cardio.filter((c) => c.id !== id);
       save();
     },
+    // Import cardio exercise sessions read from Health Connect. The plugin maps
+    // each session's exercise type to one of our cardio type ids. Deduped by the
+    // session start time; manual entries are untouched.
+    importFromHealth(sessions) {
+      if (!Array.isArray(sessions) || !sessions.length) return 0;
+      const pad = (n) => String(n).padStart(2, '0');
+      const seen = new Set(STATE.cardio.map((c) => c.hcKey).filter(Boolean));
+      let added = 0;
+      sessions.forEach((s) => {
+        if (!s || !s.start || !s.type || seen.has(s.start)) return;
+        const end = new Date(s.end || s.start);
+        if (isNaN(end.getTime())) return;
+        const date = `${end.getFullYear()}-${pad(end.getMonth() + 1)}-${pad(end.getDate())}`;
+        STATE.cardio.push({
+          id: uid(),
+          type: s.type,
+          date,
+          duration: Number(s.minutes) || 0,
+          calories: Number(s.calories) || 0,
+          source: 'health',
+          hcKey: s.start,
+          createdAt: new Date().toISOString(),
+        });
+        seen.add(s.start);
+        added++;
+      });
+      if (added) save();
+      return added;
+    },
   },
 
   // ----- Custom cardio types -----

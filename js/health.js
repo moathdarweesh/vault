@@ -136,6 +136,7 @@
   function applyToLogs(data) {
     if (!data || typeof DB === 'undefined') return;
     try { if (DB.sleep && DB.sleep.importFromHealth) DB.sleep.importFromHealth(data.sleep); } catch (_) { /* ignore */ }
+    try { if (DB.cardio && DB.cardio.importFromHealth) DB.cardio.importFromHealth(data.exerciseSessions); } catch (_) { /* ignore */ }
   }
 
   // Re-render the home view if it's the one currently on screen — checked from

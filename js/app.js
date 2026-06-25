@@ -2392,7 +2392,7 @@ function renderCardio(el) {
       <div class="data-row">
         <div class="data-icon ${tm.cls}">${icon(tm.iconName, 20)}</div>
         <div class="data-main">
-          <div class="data-title">${escapeHtml(tm.label)}</div>
+          <div class="data-title">${escapeHtml(tm.label)}${c.source === 'health' ? `<span class="src-badge">${icon('refresh', 11)}${t('from_watch')}</span>` : ''}</div>
           <div class="data-meta">
             <span>${escapeHtml(daysAgoLocalized(c.date))}</span>
             <span class="dot-sep"></span>
