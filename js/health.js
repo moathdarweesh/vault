@@ -138,6 +138,22 @@
     try { if (DB.sleep && DB.sleep.importFromHealth) DB.sleep.importFromHealth(data.sleep); } catch (_) { /* ignore */ }
   }
 
+  // Re-render the home view if it's the one currently on screen — checked from
+  // the DOM so it works regardless of when the app sets its currentView.
+  function refreshHome() {
+    const v = document.querySelector('.view[data-view="home"]');
+    if (v && v.classList.contains('active') && typeof renderView === 'function') renderView('home');
+  }
+
+  // Read + cache + import into logs + refresh the home cards.
+  async function pull() {
+    const fresh = await plugin().readData({ startTime: startOfTodayMs(), endTime: Date.now() });
+    lastSyncAt = Date.now();
+    DB.health.setData(mergeData(DB.health.get().data, fresh));
+    applyToLogs(fresh);
+    refreshHome();
+  }
+
   // Pull fresh data without prompting (only if permission already granted).
   async function silentSync() {
     if (!isNative() || !plugin()) return;
@@ -147,13 +163,34 @@
     try {
       const perm = await plugin().checkHealthPermissions();
       if (!perm || !perm.granted) return;
-      const fresh = await plugin().readData({ startTime: startOfTodayMs(), endTime: now });
-      DB.health.setData(mergeData(DB.health.get().data, fresh));
-      applyToLogs(fresh);
-      if (typeof currentView !== 'undefined' && currentView === 'home' && typeof renderView === 'function') {
-        renderView('home');
-      }
+      await pull();
     } catch (_) { /* ignore */ }
+  }
+
+  // Runs on every app launch/resume: if permission is granted, sync silently;
+  // if it's the very first launch and not granted, ask once — so the user never
+  // has to open Settings to connect.
+  async function autoStart() {
+    if (!isNative() || !plugin()) return;
+    try {
+      const perm = await plugin().checkHealthPermissions();
+      if (perm && perm.granted) { await pull(); return; }
+      if (localStorage.getItem('hc_prompted')) return; // don't nag after a decline
+      localStorage.setItem('hc_prompted', '1');
+      const req = await plugin().requestHealthPermissions();
+      if (req && req.granted) await pull();
+    } catch (_) { /* ignore */ }
+  }
+
+  // Wait for the Capacitor bridge to be ready, then auto-start (native only).
+  function bootstrap() {
+    let tries = 0;
+    const tick = () => {
+      if (plugin()) { autoStart(); return; }
+      if (++tries > 24) return; // ~6s, then give up (e.g. plain web build)
+      setTimeout(tick, 250);
+    };
+    tick();
   }
 
   // Explicit sync from the home refresh / connect button (may prompt).
@@ -281,6 +318,9 @@
     document.addEventListener('visibilitychange', () => {
       if (document.visibilityState === 'visible') silentSync();
     });
+    // Kick off the first sync (and one-time permission prompt) on launch.
+    if (document.readyState === 'complete') bootstrap();
+    else window.addEventListener('load', bootstrap);
   }
 
   window.Health = { open, sync, isNative, homeSectionHtml, bindHomeSection };
