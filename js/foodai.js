@@ -28,23 +28,24 @@
   const SCHEMA = {
     type: 'object',
     properties: {
-      isFood: { type: 'boolean' },
       name: { type: 'string' },
       calories: { type: 'number' },
       protein: { type: 'number' },
       carbs: { type: 'number' },
       fat: { type: 'number' },
+      isFood: { type: 'boolean' },
     },
-    required: ['isFood', 'name', 'calories', 'protein', 'carbs', 'fat'],
+    required: ['name', 'calories', 'protein', 'carbs', 'fat', 'isFood'],
+    propertyOrdering: ['name', 'calories', 'protein', 'carbs', 'fat', 'isFood'],
   };
 
   const SYSTEM = [
-    'You are a nutrition estimator for a fitness app. The user sends one message.',
-    'If it describes a food or meal (Arabic or English), set isFood=true, name to a',
-    'short label in the same language, and estimate TOTAL nutrition for the portion',
-    '(calories kcal, protein/carbs/fat grams; one typical serving if none given).',
-    'If it is NOT about food (question, greeting, joke, random text), set isFood=false,',
-    'name to "", and all numbers to 0. Never invent a meal. Reply with the JSON only.',
+    'You estimate nutrition for meals in a fitness app. Treat the user message as a food log entry.',
+    'If it names ANY food, drink, dish, snack, or ingredient (any language), it IS food: set name to a',
+    'short label in the user language, estimate calories (kcal) and protein/carbs/fat (grams) for one',
+    'typical serving or the stated portion, and set isFood=true. Default to isFood=true whenever it',
+    'could plausibly be food. ONLY when clearly NOT edible (a question, greeting, joke, command, or',
+    'random characters) set name="", every number 0, and isFood=false. Reply with the JSON only.',
   ].join(' ');
 
   const useProxy = () => !!PROXY_URL;
