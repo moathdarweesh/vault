@@ -24,26 +24,35 @@
   const setKey = (v) => { try { localStorage.setItem(KEY_STORE, (v || '').trim()); } catch (_) {} };
   const hasKey = () => !!getKey();
 
-  // Force the model to return exactly the fields we need.
+  // Force the model to return a list of food items.
   const SCHEMA = {
     type: 'object',
     properties: {
-      name: { type: 'string' },
-      calories: { type: 'number' },
-      protein: { type: 'number' },
-      carbs: { type: 'number' },
-      fat: { type: 'number' },
+      items: {
+        type: 'array',
+        items: {
+          type: 'object',
+          properties: {
+            name: { type: 'string' },
+            calories: { type: 'number' },
+            protein: { type: 'number' },
+            carbs: { type: 'number' },
+            fat: { type: 'number' },
+          },
+          required: ['name', 'calories', 'protein', 'carbs', 'fat'],
+        },
+      },
     },
-    required: ['name', 'calories', 'protein', 'carbs', 'fat'],
+    required: ['items'],
   };
 
   const SYSTEM = [
-    'You estimate nutrition for a fitness app food log.',
-    'If the user message names any food, drink, dish, snack, or ingredient (any language),',
-    'set name to a short label in the user language and estimate calories (kcal) and',
-    'protein/carbs/fat (grams) for one typical serving or the stated portion.',
-    'If the message is NOT food (a question, greeting, joke, command, or random text),',
-    'set name to exactly "NOT_FOOD" and every number to 0. Reply with the JSON only.',
+    'You read a food-log message for a fitness app. The user talks naturally and may',
+    'mention several foods across different meals (breakfast, lunch, dinner, snacks).',
+    'Extract EVERY distinct food or drink they say they ate or drank. For each item set',
+    'name (a short label in the user language) and estimate calories (kcal) and',
+    'protein/carbs/fat (grams) for the portion described, or one typical serving if unspecified.',
+    'If the message contains no food at all, return an empty items array. Reply with JSON only.',
   ].join(' ');
 
   const useProxy = () => !!PROXY_URL;
@@ -59,22 +68,29 @@
     });
     const data = await res.json().catch(() => ({}));
     if (!res.ok) throw new Error((data && data.error) || ('HTTP ' + res.status));
-    return normalize(data, text);
+    return toItems(data);
   }
 
-  // Shape a raw model/worker response, deciding whether it's actually food.
-  // Uses the worker's isFood flag when present; otherwise falls back to "all
-  // macros zero → not food" so even an older worker degrades gracefully.
-  function normalize(d, text) {
-    const calories = Math.max(0, Math.round(Number(d.calories) || 0));
-    const protein = Math.max(0, Math.round(Number(d.protein) || 0));
-    const carbs = Math.max(0, Math.round(Number(d.carbs) || 0));
-    const fat = Math.max(0, Math.round(Number(d.fat) || 0));
-    const nameRaw = String(d.name || '').trim();
-    const isFood = (d.isFood !== undefined)
-      ? !!d.isFood
-      : (nameRaw.toUpperCase() !== 'NOT_FOOD' && !(calories === 0 && protein === 0 && carbs === 0 && fat === 0));
-    return { isFood, name: isFood ? (nameRaw || text).slice(0, 80) : '', calories, protein, carbs, fat };
+  // Clean one food item.
+  function normalizeItem(d) {
+    const calories = Math.max(0, Math.round(Number(d && d.calories) || 0));
+    const protein = Math.max(0, Math.round(Number(d && d.protein) || 0));
+    const carbs = Math.max(0, Math.round(Number(d && d.carbs) || 0));
+    const fat = Math.max(0, Math.round(Number(d && d.fat) || 0));
+    const name = String((d && d.name) || '').trim();
+    return { name: name.slice(0, 80), calories, protein, carbs, fat };
+  }
+  const isRealFood = (it) =>
+    it.name && it.name.toUpperCase() !== 'NOT_FOOD' &&
+    (it.calories > 0 || it.protein > 0 || it.carbs > 0 || it.fat > 0);
+
+  // Turn any worker/model response into { items: [...] }. Supports the new
+  // multi-item shape and the legacy single-object shape.
+  function toItems(data) {
+    let raw = [];
+    if (Array.isArray(data.items)) raw = data.items;
+    else if (data && (data.name !== undefined || data.calories !== undefined)) raw = [data];
+    return { items: raw.map(normalizeItem).filter(isRealFood) };
   }
 
   // Call Gemini and return { name, calories, protein, carbs, fat }.
@@ -102,7 +118,7 @@
       data.candidates[0].content && data.candidates[0].content.parts &&
       data.candidates[0].content.parts[0] && data.candidates[0].content.parts[0].text;
     if (!partText) throw new Error(tr('ai_no_result'));
-    return normalize(JSON.parse(partText), text);
+    return toItems(JSON.parse(partText));
   }
 
   // ---------------------------------------------------------------- UI
@@ -147,7 +163,8 @@
   function open(dateForLog) {
     if (typeof openModal !== 'function') return;
     logDate = dateForLog || (typeof todayISO === 'function' ? todayISO() : null);
-    const results = {}; // id -> result
+    const results = {}; // cardId -> item
+    const groups = {};  // messageId -> items[]
     let n = 0;
 
     openModal(`
@@ -188,14 +205,22 @@
           box.insertAdjacentHTML('beforeend', `<div class="ai-pending" id="${id}-p"><span class="ai-q">${esc(text)}</span><span class="ai-dots">${tr('ai_analyzing')}</span></div>`);
           box.scrollTop = box.scrollHeight;
           try {
-            const r = await window.FoodAI.analyze(text);
+            const { items } = await window.FoodAI.analyze(text);
             const p = document.getElementById(id + '-p');
-            if (r.isFood === false) {
-              // Not a meal — politely decline instead of showing fake numbers.
+            if (!items.length) {
+              // No food found — politely decline instead of showing fake numbers.
               if (p) p.innerHTML = `<span class="ai-q">${esc(text)}</span><span class="ai-decline">${tr('ai_not_food')}</span>`;
             } else {
-              results[id] = r;
-              if (p) p.outerHTML = `<div class="ai-pending"><span class="ai-q">${esc(text)}</span></div>` + resultCardHtml(r, id);
+              groups[id] = items;
+              const cards = items.map((it, i) => {
+                const cid = id + '-' + i;
+                results[cid] = it;
+                return resultCardHtml(it, cid);
+              }).join('');
+              const addAll = items.length > 1
+                ? `<button class="btn btn-ghost btn-block ai-add-all" data-addall="${id}">${ic('plus', 15)} ${tr('ai_add_all')} (${fmtNum(items.length)})</button>`
+                : '';
+              if (p) p.outerHTML = `<div class="ai-pending"><span class="ai-q">${esc(text)}</span></div>` + cards + addAll;
               bindAdds();
             }
             box.scrollTop = box.scrollHeight;
@@ -211,24 +236,48 @@
       bindAdds();
     }
 
+    function logItem(it) {
+      if (!it || typeof DB === 'undefined') return;
+      DB.foodLogs.add(logDate, {
+        name: it.name, servings: 1,
+        calories: it.calories, protein: it.protein, carbs: it.carbs, fat: it.fat,
+        source: 'ai',
+      });
+    }
+    function refreshFoodLog() {
+      if (typeof currentView !== 'undefined' && currentView === 'foodlog' && typeof renderView === 'function') {
+        renderView('foodlog');
+      }
+    }
+    function markAdded(b) {
+      b.disabled = true;
+      b.innerHTML = ic('check', 15) + ' ' + tr('ai_added');
+    }
+
     function bindAdds() {
+      // Add one item
       document.querySelectorAll('#ai-results [data-add]').forEach((b) => {
         if (b.dataset.bound) return;
         b.dataset.bound = '1';
         b.addEventListener('click', () => {
-          const r = results[b.dataset.add];
-          if (!r || typeof DB === 'undefined') return;
-          DB.foodLogs.add(logDate, {
-            name: r.name, servings: 1,
-            calories: r.calories, protein: r.protein, carbs: r.carbs, fat: r.fat,
-            source: 'ai',
-          });
+          logItem(results[b.dataset.add]);
           showToast(tr('ai_added'));
-          b.disabled = true;
-          b.innerHTML = ic('check', 15) + ' ' + tr('ai_added');
-          if (typeof currentView !== 'undefined' && currentView === 'foodlog' && typeof renderView === 'function') {
-            renderView('foodlog');
-          }
+          markAdded(b);
+          refreshFoodLog();
+        });
+      });
+      // Add every item from one message
+      document.querySelectorAll('#ai-results [data-addall]').forEach((b) => {
+        if (b.dataset.bound) return;
+        b.dataset.bound = '1';
+        b.addEventListener('click', () => {
+          const items = groups[b.dataset.addall] || [];
+          items.forEach(logItem);
+          showToast(tr('ai_added'));
+          markAdded(b);
+          // disable the per-item buttons in this group too
+          (document.querySelectorAll(`#ai-results [data-add^="${b.dataset.addall}-"]`) || []).forEach(markAdded);
+          refreshFoodLog();
         });
       });
     }

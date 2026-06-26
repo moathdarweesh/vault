@@ -12,23 +12,32 @@ const MODEL = 'gemini-2.5-flash';
 const SCHEMA = {
   type: 'object',
   properties: {
-    name: { type: 'string' },
-    calories: { type: 'number' },
-    protein: { type: 'number' },
-    carbs: { type: 'number' },
-    fat: { type: 'number' },
+    items: {
+      type: 'array',
+      items: {
+        type: 'object',
+        properties: {
+          name: { type: 'string' },
+          calories: { type: 'number' },
+          protein: { type: 'number' },
+          carbs: { type: 'number' },
+          fat: { type: 'number' },
+        },
+        required: ['name', 'calories', 'protein', 'carbs', 'fat'],
+      },
+    },
   },
-  required: ['name', 'calories', 'protein', 'carbs', 'fat'],
+  required: ['items'],
 };
 
 const SYSTEM = [
-  'You estimate nutrition for a fitness app food log.',
-  'If the user message names any food, drink, dish, snack, or ingredient (any language),',
-  'set name to a short label in the user language and estimate calories (kcal) and',
-  'protein/carbs/fat (grams) for one typical serving or the stated portion.',
-  'If the message is NOT food (a question, greeting, joke, command, or random text),',
-  'set name to exactly "NOT_FOOD" and every number to 0.',
-  'Reply with the JSON object only.',
+  'You read a food-log message for a fitness app. The user talks naturally and may',
+  'mention several foods across different meals (breakfast, lunch, dinner, snacks).',
+  'Extract EVERY distinct food or drink they say they ate or drank. For each item set',
+  'name (a short label in the user language) and estimate calories (kcal) and',
+  'protein/carbs/fat (grams) for the portion described, or one typical serving if unspecified.',
+  'If the message contains no food at all (a question, greeting, joke, or random text),',
+  'return an empty items array. Reply with the JSON object only.',
 ].join(' ');
 
 const CORS = {
@@ -90,17 +99,17 @@ export default {
     let obj;
     try { obj = JSON.parse(partText); } catch (_) { return json({ error: 'parse error' }, 502); }
 
-    const calories = Math.max(0, Math.round(Number(obj.calories) || 0));
-    const protein = Math.max(0, Math.round(Number(obj.protein) || 0));
-    const carbs = Math.max(0, Math.round(Number(obj.carbs) || 0));
-    const fat = Math.max(0, Math.round(Number(obj.fat) || 0));
-    const nameRaw = String(obj.name || '').trim();
-    const isFood = nameRaw.toUpperCase() !== 'NOT_FOOD' &&
-      (calories > 0 || protein > 0 || carbs > 0 || fat > 0);
-    return json({
-      isFood,
-      name: isFood ? (nameRaw || text).slice(0, 80) : '',
-      calories, protein, carbs, fat,
-    }, 200);
+    const rawItems = Array.isArray(obj.items) ? obj.items : [];
+    const items = rawItems.map((it) => ({
+      name: String((it && it.name) || '').trim().slice(0, 80),
+      calories: Math.max(0, Math.round(Number(it && it.calories) || 0)),
+      protein: Math.max(0, Math.round(Number(it && it.protein) || 0)),
+      carbs: Math.max(0, Math.round(Number(it && it.carbs) || 0)),
+      fat: Math.max(0, Math.round(Number(it && it.fat) || 0)),
+    })).filter((it) =>
+      it.name && it.name.toUpperCase() !== 'NOT_FOOD' &&
+      (it.calories > 0 || it.protein > 0 || it.carbs > 0 || it.fat > 0)
+    );
+    return json({ items }, 200);
   },
 };
