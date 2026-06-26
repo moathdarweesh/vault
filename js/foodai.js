@@ -5,6 +5,11 @@
 (function () {
   'use strict';
 
+  // Backend proxy (Cloudflare Worker) that holds the Gemini key server-side.
+  // When set, the app calls this instead of Gemini directly — the user never
+  // enters a key and just sees the chat. Leave '' to use the per-user key flow.
+  const PROXY_URL = '';
+
   // Free-tier model. If Google retires it, change this one line.
   const MODEL = 'gemini-2.5-flash';
   const endpoint = (key) =>
@@ -41,8 +46,31 @@
     'Reply with the JSON object only.',
   ].join(' ');
 
+  const useProxy = () => !!PROXY_URL;
+  // Ready to chat = either a backend proxy is configured, or the user saved a key.
+  const ready = () => useProxy() || hasKey();
+
+  // Call the backend proxy (no key in the app) and return the macros.
+  async function analyzeViaProxy(text) {
+    const res = await fetch(PROXY_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ text: String(text) }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error((data && data.error) || ('HTTP ' + res.status));
+    return {
+      name: String(data.name || text).slice(0, 80),
+      calories: Math.max(0, Math.round(Number(data.calories) || 0)),
+      protein: Math.max(0, Math.round(Number(data.protein) || 0)),
+      carbs: Math.max(0, Math.round(Number(data.carbs) || 0)),
+      fat: Math.max(0, Math.round(Number(data.fat) || 0)),
+    };
+  }
+
   // Call Gemini and return { name, calories, protein, carbs, fat }.
   async function analyze(text) {
+    if (useProxy()) return analyzeViaProxy(text);
     const key = getKey();
     if (!key) throw new Error(tr('ai_need_key'));
     const body = {
@@ -128,7 +156,7 @@
         </div>
         <button class="icon-btn icon-btn-tile" data-close>${ic('close', 18)}</button>
       </div>
-      <div id="ai-body">${hasKey() ? chatPanelHtml() : keyPanelHtml()}</div>
+      <div id="ai-body">${ready() ? chatPanelHtml() : keyPanelHtml()}</div>
     `);
 
     wire();
