@@ -494,6 +494,7 @@ const I18N = {
     ai_add_to_log: 'Add to log',
     ai_added: 'Added',
     ai_error: 'Something went wrong',
+    ai_not_food: 'This chat is for food only — type a meal to calculate it.',
 
     // Sleep
     sleep_subtitle: 'Track when you sleep and wake up.',
@@ -840,6 +841,7 @@ const I18N = {
     ai_add_to_log: 'أضف للسجل',
     ai_added: 'تمت الإضافة',
     ai_error: 'صار خطأ',
+    ai_not_food: 'هذا الشات للطعام فقط — اكتب وجبة لأحسبها.',
 
     sleep_subtitle: 'تتبّع متى تنام ومتى تصحى.',
     no_sleep_logged: 'لا يوجد نوم مسجّل',

@@ -12,22 +12,25 @@ const MODEL = 'gemini-2.5-flash';
 const SCHEMA = {
   type: 'object',
   properties: {
+    isFood: { type: 'boolean' },
     name: { type: 'string' },
     calories: { type: 'number' },
     protein: { type: 'number' },
     carbs: { type: 'number' },
     fat: { type: 'number' },
   },
-  required: ['name', 'calories', 'protein', 'carbs', 'fat'],
+  required: ['isFood', 'name', 'calories', 'protein', 'carbs', 'fat'],
 };
 
 const SYSTEM = [
-  'You are a nutrition estimator for a fitness app.',
-  'The user describes a meal in Arabic or English (e.g. "رز مع دجاج").',
-  'Estimate the TOTAL nutrition for the portion described — calories in kcal,',
-  'protein/carbs/fat in grams. If no portion is given, assume one typical serving.',
-  'The "name" field: a short label of the meal in the SAME language as the input.',
-  'Reply with the JSON object only.',
+  'You are a nutrition estimator for a fitness app. The user sends one message.',
+  'If the message describes a food or meal (Arabic or English), set isFood=true,',
+  'set name to a short label of the meal in the same language, and estimate the TOTAL',
+  'nutrition for the portion described — calories in kcal, protein/carbs/fat in grams',
+  '(assume one typical serving if no portion is given).',
+  'If the message is NOT about food (a question, greeting, joke, opinion, random text,',
+  'or anything not edible), set isFood=false, name to "", and all numbers to 0.',
+  'Never invent a meal that the user did not mention. Reply with the JSON object only.',
 ].join(' ');
 
 const CORS = {
@@ -89,8 +92,10 @@ export default {
     let obj;
     try { obj = JSON.parse(partText); } catch (_) { return json({ error: 'parse error' }, 502); }
 
+    const isFood = obj.isFood !== false;
     return json({
-      name: String(obj.name || text).slice(0, 80),
+      isFood,
+      name: isFood ? String(obj.name || text).slice(0, 80) : '',
       calories: Math.max(0, Math.round(Number(obj.calories) || 0)),
       protein: Math.max(0, Math.round(Number(obj.protein) || 0)),
       carbs: Math.max(0, Math.round(Number(obj.carbs) || 0)),

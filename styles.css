@@ -3747,6 +3747,7 @@ body[dir="rtl"] .picker-row { text-align: right; }
 .ai-q { font-weight: 800; }
 .ai-dots { color: var(--text-faint); font-size: 12px; }
 .ai-err { color: #f87171; font-size: 12px; }
+.ai-decline { color: var(--text-mute); font-size: 12px; font-weight: 600; }
 .ai-card {
   background: var(--surface-2); border: 1px solid var(--border);
   border-radius: 14px; padding: 14px; display: flex;

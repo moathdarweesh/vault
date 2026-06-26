@@ -28,22 +28,23 @@
   const SCHEMA = {
     type: 'object',
     properties: {
+      isFood: { type: 'boolean' },
       name: { type: 'string' },
       calories: { type: 'number' },
       protein: { type: 'number' },
       carbs: { type: 'number' },
       fat: { type: 'number' },
     },
-    required: ['name', 'calories', 'protein', 'carbs', 'fat'],
+    required: ['isFood', 'name', 'calories', 'protein', 'carbs', 'fat'],
   };
 
   const SYSTEM = [
-    'You are a nutrition estimator for a fitness app.',
-    'The user describes a meal in Arabic or English (e.g. "رز مع دجاج").',
-    'Estimate the TOTAL nutrition for the portion described — calories in kcal,',
-    'protein/carbs/fat in grams. If no portion is given, assume one typical serving.',
-    'The "name" field: a short label of the meal in the SAME language as the input.',
-    'Reply with the JSON object only.',
+    'You are a nutrition estimator for a fitness app. The user sends one message.',
+    'If it describes a food or meal (Arabic or English), set isFood=true, name to a',
+    'short label in the same language, and estimate TOTAL nutrition for the portion',
+    '(calories kcal, protein/carbs/fat grams; one typical serving if none given).',
+    'If it is NOT about food (question, greeting, joke, random text), set isFood=false,',
+    'name to "", and all numbers to 0. Never invent a meal. Reply with the JSON only.',
   ].join(' ');
 
   const useProxy = () => !!PROXY_URL;
@@ -59,13 +60,21 @@
     });
     const data = await res.json().catch(() => ({}));
     if (!res.ok) throw new Error((data && data.error) || ('HTTP ' + res.status));
-    return {
-      name: String(data.name || text).slice(0, 80),
-      calories: Math.max(0, Math.round(Number(data.calories) || 0)),
-      protein: Math.max(0, Math.round(Number(data.protein) || 0)),
-      carbs: Math.max(0, Math.round(Number(data.carbs) || 0)),
-      fat: Math.max(0, Math.round(Number(data.fat) || 0)),
-    };
+    return normalize(data, text);
+  }
+
+  // Shape a raw model/worker response, deciding whether it's actually food.
+  // Uses the worker's isFood flag when present; otherwise falls back to "all
+  // macros zero → not food" so even an older worker degrades gracefully.
+  function normalize(d, text) {
+    const calories = Math.max(0, Math.round(Number(d.calories) || 0));
+    const protein = Math.max(0, Math.round(Number(d.protein) || 0));
+    const carbs = Math.max(0, Math.round(Number(d.carbs) || 0));
+    const fat = Math.max(0, Math.round(Number(d.fat) || 0));
+    const isFood = (d.isFood !== undefined)
+      ? !!d.isFood
+      : !(calories === 0 && protein === 0 && carbs === 0 && fat === 0);
+    return { isFood, name: String(d.name || text).slice(0, 80), calories, protein, carbs, fat };
   }
 
   // Call Gemini and return { name, calories, protein, carbs, fat }.
@@ -93,14 +102,7 @@
       data.candidates[0].content && data.candidates[0].content.parts &&
       data.candidates[0].content.parts[0] && data.candidates[0].content.parts[0].text;
     if (!partText) throw new Error(tr('ai_no_result'));
-    const obj = JSON.parse(partText);
-    return {
-      name: String(obj.name || text).slice(0, 80),
-      calories: Math.max(0, Math.round(Number(obj.calories) || 0)),
-      protein: Math.max(0, Math.round(Number(obj.protein) || 0)),
-      carbs: Math.max(0, Math.round(Number(obj.carbs) || 0)),
-      fat: Math.max(0, Math.round(Number(obj.fat) || 0)),
-    };
+    return normalize(JSON.parse(partText), text);
   }
 
   // ---------------------------------------------------------------- UI
@@ -187,10 +189,15 @@
           box.scrollTop = box.scrollHeight;
           try {
             const r = await window.FoodAI.analyze(text);
-            results[id] = r;
             const p = document.getElementById(id + '-p');
-            if (p) p.outerHTML = `<div class="ai-pending"><span class="ai-q">${esc(text)}</span></div>` + resultCardHtml(r, id);
-            bindAdds();
+            if (r.isFood === false) {
+              // Not a meal — politely decline instead of showing fake numbers.
+              if (p) p.innerHTML = `<span class="ai-q">${esc(text)}</span><span class="ai-decline">${tr('ai_not_food')}</span>`;
+            } else {
+              results[id] = r;
+              if (p) p.outerHTML = `<div class="ai-pending"><span class="ai-q">${esc(text)}</span></div>` + resultCardHtml(r, id);
+              bindAdds();
+            }
             box.scrollTop = box.scrollHeight;
           } catch (e) {
             const p = document.getElementById(id + '-p');
