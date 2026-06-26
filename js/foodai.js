@@ -8,7 +8,7 @@
   // Backend proxy (Cloudflare Worker) that holds the Gemini key server-side.
   // When set, the app calls this instead of Gemini directly — the user never
   // enters a key and just sees the chat. Leave '' to use the per-user key flow.
-  const PROXY_URL = '';
+  const PROXY_URL = 'https://vault-calories.moathdarweesh2000.workers.dev';
 
   // Free-tier model. If Google retires it, change this one line.
   const MODEL = 'gemini-2.5-flash';
