@@ -17,20 +17,17 @@ const SCHEMA = {
     protein: { type: 'number' },
     carbs: { type: 'number' },
     fat: { type: 'number' },
-    isFood: { type: 'boolean' },
   },
-  required: ['name', 'calories', 'protein', 'carbs', 'fat', 'isFood'],
-  propertyOrdering: ['name', 'calories', 'protein', 'carbs', 'fat', 'isFood'],
+  required: ['name', 'calories', 'protein', 'carbs', 'fat'],
 };
 
 const SYSTEM = [
-  'You estimate nutrition for meals in a fitness app. Treat the user message as a food log entry.',
-  'If it names ANY food, drink, dish, snack, or ingredient (in any language), it IS food:',
-  'set name to a short label in the user language, estimate calories (kcal) and protein/carbs/fat',
-  '(grams) for one typical serving or the stated portion, and set isFood=true.',
-  'Default to isFood=true whenever the message could plausibly be food.',
-  'ONLY when the message is clearly NOT edible (a question, greeting, joke, command, or random',
-  'characters) set name="", every number 0, and isFood=false.',
+  'You estimate nutrition for a fitness app food log.',
+  'If the user message names any food, drink, dish, snack, or ingredient (any language),',
+  'set name to a short label in the user language and estimate calories (kcal) and',
+  'protein/carbs/fat (grams) for one typical serving or the stated portion.',
+  'If the message is NOT food (a question, greeting, joke, command, or random text),',
+  'set name to exactly "NOT_FOOD" and every number to 0.',
   'Reply with the JSON object only.',
 ].join(' ');
 
@@ -93,14 +90,17 @@ export default {
     let obj;
     try { obj = JSON.parse(partText); } catch (_) { return json({ error: 'parse error' }, 502); }
 
-    const isFood = obj.isFood !== false;
+    const calories = Math.max(0, Math.round(Number(obj.calories) || 0));
+    const protein = Math.max(0, Math.round(Number(obj.protein) || 0));
+    const carbs = Math.max(0, Math.round(Number(obj.carbs) || 0));
+    const fat = Math.max(0, Math.round(Number(obj.fat) || 0));
+    const nameRaw = String(obj.name || '').trim();
+    const isFood = nameRaw.toUpperCase() !== 'NOT_FOOD' &&
+      (calories > 0 || protein > 0 || carbs > 0 || fat > 0);
     return json({
       isFood,
-      name: isFood ? String(obj.name || text).slice(0, 80) : '',
-      calories: Math.max(0, Math.round(Number(obj.calories) || 0)),
-      protein: Math.max(0, Math.round(Number(obj.protein) || 0)),
-      carbs: Math.max(0, Math.round(Number(obj.carbs) || 0)),
-      fat: Math.max(0, Math.round(Number(obj.fat) || 0)),
+      name: isFood ? (nameRaw || text).slice(0, 80) : '',
+      calories, protein, carbs, fat,
     }, 200);
   },
 };
