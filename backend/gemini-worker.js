@@ -7,21 +7,20 @@
 // named GEMINI_KEY with your free Gemini API key (Settings → Variables → Add
 // secret). See backend/README.md for step-by-step.
 
-const MODEL = 'gemini-2.5-flash';
+const MODEL = 'gemini-3.5-flash';
 
 // gemini-2.5-flash mis-handles a strict array responseSchema (returns empty for
 // everything), so we drive the JSON shape with the prompt + examples instead.
 const SYSTEM = [
-  'You read a food-log message for a fitness app and reply with JSON only (no markdown).',
-  'The user talks naturally and may mention several foods across meals (breakfast, lunch, dinner, snacks).',
-  'Return: {"items":[{"name":string,"calories":number,"protein":number,"carbs":number,"fat":number}, ...]}',
-  'Add one item per distinct food or drink the user ate, name = a short label in the user language,',
-  'and estimate macros for the portion described (one typical serving if unspecified;',
-  'calories in kcal, protein/carbs/fat in grams).',
-  'If the message contains no food (a question, greeting, joke, or random text), return {"items":[]}.',
-  'Examples:',
-  'Input: "فطور بيض وخبز وغدا برجر" -> {"items":[{"name":"بيض وخبز","calories":280,"protein":16,"carbs":24,"fat":13},{"name":"برجر","calories":400,"protein":20,"carbs":40,"fat":18}]}',
-  'Input: "كيف الطقس" -> {"items":[]}',
+  'You convert a user food message into JSON for a calorie tracker. Output JSON only — no markdown.',
+  'List every food or drink the user explicitly says they ate or drank, one object per item.',
+  'NEVER add a food the user did not mention. NEVER skip a food the user did mention. One food = one item.',
+  'name = a short label in the user language; calories in kcal; protein, carbs, fat in grams —',
+  'for the stated portion, or one typical serving if not stated.',
+  'If the message contains no food at all (a question, greeting, chit-chat, or random text), output {"items":[]}.',
+  'Shape: {"items":[{"name":"...","calories":0,"protein":0,"carbs":0,"fat":0}]}',
+  'Example: "تفاحة وكوب قهوة" -> {"items":[{"name":"تفاحة","calories":95,"protein":0,"carbs":25,"fat":0},{"name":"قهوة","calories":5,"protein":0,"carbs":1,"fat":0}]}',
+  'Example: "مرحبا كيفك" -> {"items":[]}',
 ].join(' ');
 
 const CORS = {
@@ -55,7 +54,7 @@ export default {
     const geminiBody = {
       systemInstruction: { parts: [{ text: SYSTEM }] },
       contents: [{ parts: [{ text }] }],
-      generationConfig: { responseMimeType: 'application/json', temperature: 0.3 },
+      generationConfig: { responseMimeType: 'application/json', temperature: 0.2 },
     };
 
     let res;

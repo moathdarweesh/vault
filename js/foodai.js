@@ -11,7 +11,7 @@
   const PROXY_URL = 'https://vault-calories.moathdarweesh2000.workers.dev';
 
   // Free-tier model. If Google retires it, change this one line.
-  const MODEL = 'gemini-2.5-flash';
+  const MODEL = 'gemini-3.5-flash';
   const endpoint = (key) =>
     `https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:generateContent?key=${encodeURIComponent(key)}`;
 
@@ -83,7 +83,7 @@
     const body = {
       systemInstruction: { parts: [{ text: SYSTEM }] },
       contents: [{ parts: [{ text: String(text) }] }],
-      generationConfig: { responseMimeType: 'application/json', temperature: 0.3 },
+      generationConfig: { responseMimeType: 'application/json', temperature: 0.2 },
     };
     const res = await fetch(endpoint(key), {
       method: 'POST',
