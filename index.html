@@ -72,17 +72,17 @@
           await Promise.all(regs.map((r) => r.unregister()));
           const keys = await caches.keys();
           await Promise.all(keys.map((k) => caches.delete(k)));
-          if (!sessionStorage.getItem('__cleaned_v52')) {
-            sessionStorage.setItem('__cleaned_v52', '1');
+          if (!sessionStorage.getItem('__cleaned_v53')) {
+            sessionStorage.setItem('__cleaned_v53', '1');
             location.reload();
           }
         }
       }).catch(() => {});
     }
   </script>
-  <script src="js/storage.js?v=52"></script>
-  <script src="js/app.js?v=52"></script>
-  <script src="js/health.js?v=52"></script>
-  <script src="js/foodai.js?v=52"></script>
+  <script src="js/storage.js?v=53"></script>
+  <script src="js/app.js?v=53"></script>
+  <script src="js/health.js?v=53"></script>
+  <script src="js/foodai.js?v=53"></script>
 </body>
 </html>

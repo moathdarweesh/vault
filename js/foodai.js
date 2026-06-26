@@ -24,35 +24,17 @@
   const setKey = (v) => { try { localStorage.setItem(KEY_STORE, (v || '').trim()); } catch (_) {} };
   const hasKey = () => !!getKey();
 
-  // Force the model to return a list of food items.
-  const SCHEMA = {
-    type: 'object',
-    properties: {
-      items: {
-        type: 'array',
-        items: {
-          type: 'object',
-          properties: {
-            name: { type: 'string' },
-            calories: { type: 'number' },
-            protein: { type: 'number' },
-            carbs: { type: 'number' },
-            fat: { type: 'number' },
-          },
-          required: ['name', 'calories', 'protein', 'carbs', 'fat'],
-        },
-      },
-    },
-    required: ['items'],
-  };
-
+  // Prompt-driven JSON (no strict schema — gemini-2.5-flash mis-handles the
+  // nested array schema). Mirrors backend/gemini-worker.js.
   const SYSTEM = [
-    'You read a food-log message for a fitness app. The user talks naturally and may',
-    'mention several foods across different meals (breakfast, lunch, dinner, snacks).',
-    'Extract EVERY distinct food or drink they say they ate or drank. For each item set',
-    'name (a short label in the user language) and estimate calories (kcal) and',
-    'protein/carbs/fat (grams) for the portion described, or one typical serving if unspecified.',
-    'If the message contains no food at all, return an empty items array. Reply with JSON only.',
+    'You read a food-log message for a fitness app and reply with JSON only (no markdown).',
+    'The user talks naturally and may mention several foods across meals.',
+    'Return: {"items":[{"name":string,"calories":number,"protein":number,"carbs":number,"fat":number}, ...]}',
+    'Add one item per distinct food/drink, name = a short label in the user language, macros for the',
+    'portion (one typical serving if unspecified; calories kcal, protein/carbs/fat grams).',
+    'If no food, return {"items":[]}.',
+    'Input: "فطور بيض وخبز وغدا برجر" -> {"items":[{"name":"بيض وخبز","calories":280,"protein":16,"carbs":24,"fat":13},{"name":"برجر","calories":400,"protein":20,"carbs":40,"fat":18}]}',
+    'Input: "كيف الطقس" -> {"items":[]}',
   ].join(' ');
 
   const useProxy = () => !!PROXY_URL;
@@ -101,7 +83,7 @@
     const body = {
       systemInstruction: { parts: [{ text: SYSTEM }] },
       contents: [{ parts: [{ text: String(text) }] }],
-      generationConfig: { responseMimeType: 'application/json', responseSchema: SCHEMA, temperature: 0.3 },
+      generationConfig: { responseMimeType: 'application/json', temperature: 0.3 },
     };
     const res = await fetch(endpoint(key), {
       method: 'POST',
@@ -118,7 +100,8 @@
       data.candidates[0].content && data.candidates[0].content.parts &&
       data.candidates[0].content.parts[0] && data.candidates[0].content.parts[0].text;
     if (!partText) throw new Error(tr('ai_no_result'));
-    return toItems(JSON.parse(partText));
+    const cleaned = String(partText).trim().replace(/^```(?:json)?/i, '').replace(/```$/, '').trim();
+    return toItems(JSON.parse(cleaned));
   }
 
   // ---------------------------------------------------------------- UI
