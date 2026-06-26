@@ -7,19 +7,20 @@
 // named GEMINI_KEY with your free Gemini API key (Settings → Variables → Add
 // secret). See backend/README.md for step-by-step.
 
-const MODEL = 'gemini-3.5-flash';
+const MODEL = 'gemini-2.5-flash';
 
-// gemini-2.5-flash mis-handles a strict array responseSchema (returns empty for
-// everything), so we drive the JSON shape with the prompt + examples instead.
+// No strict responseSchema (the model mis-handles the nested array). Drive the
+// JSON shape with the prompt + examples instead.
 const SYSTEM = [
   'You convert a user food message into JSON for a calorie tracker. Output JSON only — no markdown.',
-  'List every food or drink the user explicitly says they ate or drank, one object per item.',
-  'NEVER add a food the user did not mention. NEVER skip a food the user did mention. One food = one item.',
+  'List every food or drink mentioned in the message, one object per item — treat each as something the user ate.',
+  'NEVER add a food that is not in the message. NEVER skip a food that is in the message. One food = one item.',
   'name = a short label in the user language; calories in kcal; protein, carbs, fat in grams —',
   'for the stated portion, or one typical serving if not stated.',
-  'If the message contains no food at all (a question, greeting, chit-chat, or random text), output {"items":[]}.',
+  'If the message has no food at all (a question, greeting, chit-chat, or random text), output {"items":[]}.',
   'Shape: {"items":[{"name":"...","calories":0,"protein":0,"carbs":0,"fat":0}]}',
-  'Example: "تفاحة وكوب قهوة" -> {"items":[{"name":"تفاحة","calories":95,"protein":0,"carbs":25,"fat":0},{"name":"قهوة","calories":5,"protein":0,"carbs":1,"fat":0}]}',
+  'Example: "تفاحة" -> {"items":[{"name":"تفاحة","calories":95,"protein":0,"carbs":25,"fat":0}]}',
+  'Example: "فطور بيض وخبز وغدا برجر" -> {"items":[{"name":"بيض","calories":150,"protein":13,"carbs":1,"fat":11},{"name":"خبز","calories":80,"protein":3,"carbs":15,"fat":1},{"name":"برجر","calories":400,"protein":20,"carbs":40,"fat":18}]}',
   'Example: "مرحبا كيفك" -> {"items":[]}',
 ].join(' ');
 

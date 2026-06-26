@@ -11,7 +11,7 @@
   const PROXY_URL = 'https://vault-calories.moathdarweesh2000.workers.dev';
 
   // Free-tier model. If Google retires it, change this one line.
-  const MODEL = 'gemini-3.5-flash';
+  const MODEL = 'gemini-2.5-flash';
   const endpoint = (key) =>
     `https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:generateContent?key=${encodeURIComponent(key)}`;
 
@@ -27,14 +27,15 @@
   // Prompt-driven JSON (no strict schema — gemini-2.5-flash mis-handles the
   // nested array schema). Mirrors backend/gemini-worker.js.
   const SYSTEM = [
-    'You read a food-log message for a fitness app and reply with JSON only (no markdown).',
-    'The user talks naturally and may mention several foods across meals.',
-    'Return: {"items":[{"name":string,"calories":number,"protein":number,"carbs":number,"fat":number}, ...]}',
-    'Add one item per distinct food/drink, name = a short label in the user language, macros for the',
-    'portion (one typical serving if unspecified; calories kcal, protein/carbs/fat grams).',
-    'If no food, return {"items":[]}.',
-    'Input: "فطور بيض وخبز وغدا برجر" -> {"items":[{"name":"بيض وخبز","calories":280,"protein":16,"carbs":24,"fat":13},{"name":"برجر","calories":400,"protein":20,"carbs":40,"fat":18}]}',
-    'Input: "كيف الطقس" -> {"items":[]}',
+    'You convert a user food message into JSON for a calorie tracker. Output JSON only — no markdown.',
+    'List every food or drink mentioned in the message, one object per item — treat each as something the user ate.',
+    'NEVER add a food that is not in the message. NEVER skip a food that is in the message. One food = one item.',
+    'name = a short label in the user language; calories in kcal; protein, carbs, fat in grams —',
+    'for the stated portion, or one typical serving if not stated.',
+    'If the message has no food at all, output {"items":[]}.',
+    'Example: "تفاحة" -> {"items":[{"name":"تفاحة","calories":95,"protein":0,"carbs":25,"fat":0}]}',
+    'Example: "فطور بيض وخبز وغدا برجر" -> {"items":[{"name":"بيض","calories":150,"protein":13,"carbs":1,"fat":11},{"name":"خبز","calories":80,"protein":3,"carbs":15,"fat":1},{"name":"برجر","calories":400,"protein":20,"carbs":40,"fat":18}]}',
+    'Example: "مرحبا كيفك" -> {"items":[]}',
   ].join(' ');
 
   const useProxy = () => !!PROXY_URL;
