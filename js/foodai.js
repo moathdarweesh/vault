@@ -10,7 +10,8 @@
   // enters a key and just sees the chat. Leave '' to use the per-user key flow.
   const PROXY_URL = 'https://vault-calories.moathdarweesh2000.workers.dev';
 
-  // Free-tier model. If Google retires it, change this one line.
+  // Free-tier model (direct-key path only; the proxy tries several). Keep the
+  // full flash model — the lite variant is too weak and echoes the examples.
   const MODEL = 'gemini-2.5-flash';
   const endpoint = (key) =>
     `https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:generateContent?key=${encodeURIComponent(key)}`;
@@ -23,6 +24,31 @@
   const getKey = () => { try { return localStorage.getItem(KEY_STORE) || ''; } catch (_) { return ''; } };
   const setKey = (v) => { try { localStorage.setItem(KEY_STORE, (v || '').trim()); } catch (_) {} };
   const hasKey = () => !!getKey();
+
+  // ---- result cache --------------------------------------------------------
+  // The model RE-ESTIMATES on every call, so the same meal can come back with
+  // slightly different numbers. We cache by normalized text so an identical
+  // message always returns the SAME macros (and skips a network call).
+  const CACHE_STORE = 'foodai_cache';
+  const normKey = (text) =>
+    String(text)
+      .trim()
+      .toLowerCase()
+      .replace(/[ـً-ْ]/g, '') // strip Arabic tatweel + tashkeel
+      .replace(/\s+/g, ' ');
+  function cacheGet(text) {
+    try { const m = JSON.parse(localStorage.getItem(CACHE_STORE) || '{}'); return m[normKey(text)] || null; }
+    catch (_) { return null; }
+  }
+  function cacheSet(text, items) {
+    try {
+      const m = JSON.parse(localStorage.getItem(CACHE_STORE) || '{}');
+      m[normKey(text)] = items;
+      const keys = Object.keys(m);
+      if (keys.length > 500) delete m[keys[0]]; // keep it bounded
+      localStorage.setItem(CACHE_STORE, JSON.stringify(m));
+    } catch (_) {}
+  }
 
   // Prompt-driven JSON (no strict schema — gemini-2.5-flash mis-handles the
   // nested array schema). Mirrors backend/gemini-worker.js.
@@ -50,7 +76,13 @@
       body: JSON.stringify({ text: String(text) }),
     });
     const data = await res.json().catch(() => ({}));
-    if (!res.ok) throw new Error((data && data.error) || ('HTTP ' + res.status));
+    if (!res.ok) {
+      // Quota hit on every free model — surface a friendly message.
+      if (res.status === 429 || (data && (data.code === 'RATE_LIMIT' || data.error === 'rate_limited'))) {
+        throw new Error(tr('ai_rate_limit'));
+      }
+      throw new Error((data && data.error) || ('HTTP ' + res.status));
+    }
     return toItems(data);
   }
 
@@ -76,15 +108,25 @@
     return { items: raw.map(normalizeItem).filter(isRealFood) };
   }
 
-  // Call Gemini and return { name, calories, protein, carbs, fat }.
+  // Public entry — checks the cache first so the SAME text always returns the
+  // SAME macros, then falls back to the model and caches the result.
   async function analyze(text) {
+    const cached = cacheGet(text);
+    if (cached) return { items: cached };
+    const result = await analyzeUncached(text);
+    if (result && result.items && result.items.length) cacheSet(text, result.items);
+    return result;
+  }
+
+  // Call Gemini and return { name, calories, protein, carbs, fat }.
+  async function analyzeUncached(text) {
     if (useProxy()) return analyzeViaProxy(text);
     const key = getKey();
     if (!key) throw new Error(tr('ai_need_key'));
     const body = {
       systemInstruction: { parts: [{ text: SYSTEM }] },
       contents: [{ parts: [{ text: String(text) }] }],
-      generationConfig: { responseMimeType: 'application/json', temperature: 0.2 },
+      generationConfig: { responseMimeType: 'application/json', temperature: 0 },
     };
     const res = await fetch(endpoint(key), {
       method: 'POST',
@@ -229,8 +271,15 @@
       });
     }
     function refreshFoodLog() {
+      // Make the day's food log (with running calorie/macro totals) the screen
+      // behind the chat — so the moment the user closes it they SEE what they
+      // added, no matter whether they opened the chat from the Food tab or the
+      // log itself.
+      if (typeof viewContext !== 'undefined') viewContext.foodLog = { date: logDate };
       if (typeof currentView !== 'undefined' && currentView === 'foodlog' && typeof renderView === 'function') {
         renderView('foodlog');
+      } else if (typeof navigate === 'function') {
+        navigate('foodlog');
       }
     }
     function markAdded(b) {

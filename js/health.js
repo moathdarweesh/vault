@@ -58,7 +58,7 @@
     return `
       <div class="${cls}"${attr}>
         ${toggle}
-        <div class="health-card-icon" style="background:${m.color}1f;color:${m.color}">${ic(m.icon)}</div>
+        <div class="health-card-icon" style="background:var(--accent-soft);color:var(--accent)">${ic(m.icon)}</div>
         <div class="health-card-value num">${valHtml}</div>
         <div class="health-card-label">${tr(m.label)}</div>
       </div>`;

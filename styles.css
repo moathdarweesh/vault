@@ -11,28 +11,28 @@
 }
 
 :root, body.theme-dark {
-  /* ===== Theme: Dark Vault (default) ===== */
-  --bg:          #06141b;
-  --bg-grad:     radial-gradient(1200px 600px at 50% -200px, #0c2830 0%, transparent 60%), #06141b;
-  --surface-1:   #0c1f28;
-  --surface-2:   #122733;
-  --surface-3:   #1a3240;
-  --surface-hi:  #234353;
-  --border:      rgba(255, 255, 255, 0.06);
-  --border-hi:   rgba(255, 255, 255, 0.12);
-  --border-focus:rgba(45, 212, 191, 0.45);
+  /* ===== Theme: Pure Black (default) — one uniform background ===== */
+  --bg:          #000000;
+  --bg-grad:     #000000;
+  --surface-1:   #000000;
+  --surface-2:   #121212;
+  --surface-3:   #1c1c1c;
+  --surface-hi:  #262626;
+  --border:      rgba(255, 255, 255, 0.14);
+  --border-hi:   rgba(255, 255, 255, 0.22);
+  --border-focus:rgba(91, 141, 239, 0.55);
 
-  --text:        #e6f4f6;
-  --text-mute:   #90a8b2;
-  --text-dim:    #5e7884;
-  --text-faint:  #3b515b;
+  --text:        #ffffff;
+  --text-mute:   #a3a3a3;
+  --text-dim:    #6b6b6b;
+  --text-faint:  #454545;
 
-  --accent:      #2dd4bf;
-  --accent-2:    #14b8a6;
-  --accent-3:    #0d9488;
-  --accent-soft: rgba(45, 212, 191, 0.13);
-  --accent-line: rgba(45, 212, 191, 0.3);
-  --accent-ink:  #021a17;
+  --accent:      #5b8def;
+  --accent-2:    #3f6fd1;
+  --accent-3:    #325cae;
+  --accent-soft: rgba(91, 141, 239, 0.13);
+  --accent-line: rgba(91, 141, 239, 0.30);
+  --accent-ink:  #ffffff;
 
   --green:       #22c55e;
   --green-2:     #16a34a;
@@ -2759,8 +2759,8 @@ body[dir="rtl"] .tool-card { text-align: right; align-items: flex-end; }
    TODAY'S PLAN CARD (Home)
    ========================================================================= */
 .today-plan {
-  background: linear-gradient(180deg, var(--accent-soft), transparent), var(--surface-1);
-  border: 1px solid var(--accent-line);
+  background: var(--surface-1);
+  border: 1px solid var(--border);
   border-radius: var(--radius-md);
   padding: 16px 18px;
   margin-bottom: 18px;
@@ -2865,7 +2865,7 @@ body[dir="rtl"] .tool-card { text-align: right; align-items: flex-end; }
 
 .planner-day.today {
   border-color: var(--accent-line);
-  background: linear-gradient(180deg, var(--accent-soft), transparent 60%), var(--surface-1);
+  background: var(--surface-1);
 }
 
 .planner-day-head {
@@ -4297,8 +4297,8 @@ body[dir="rtl"] .variation-select svg { transform: scaleX(-1); }
 }
 
 .theme-preview-dark {
-  background: radial-gradient(400px 200px at 50% -50px, #0c2830 0%, transparent 60%), #06141b;
-  color: #2dd4bf;
+  background: #000000;
+  color: #5b8def;
 }
 
 .theme-preview-light {
@@ -4620,4 +4620,119 @@ body[dir="rtl"] .variation-select svg { transform: scaleX(-1); }
   text-align: center;
   margin-top: 12px;
   line-height: 1.5;
+}
+
+/* ==========================================================================
+   Auth gate (cloud sign-in)
+   ========================================================================== */
+.auth-gate {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  background: var(--bg-grad, var(--bg));
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  padding-top: max(24px, env(safe-area-inset-top));
+  padding-bottom: max(24px, env(safe-area-inset-bottom));
+  overflow-y: auto;
+}
+.auth-card {
+  width: 100%;
+  max-width: 380px;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  text-align: center;
+}
+.auth-logo {
+  width: 64px;
+  height: 64px;
+  margin: 0 auto 18px;
+  border-radius: var(--radius-md, 16px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--accent-soft, var(--surface-2));
+  color: var(--accent);
+}
+.auth-title {
+  font-size: 26px;
+  font-weight: 900;
+  letter-spacing: 1px;
+  color: var(--text);
+}
+.auth-sub {
+  font-size: 14px;
+  color: var(--text-mute);
+  margin: 4px 0 22px;
+  line-height: 1.5;
+}
+.auth-seg {
+  display: flex;
+  gap: 4px;
+  margin: 22px 0 14px;
+  padding: 4px;
+  background: var(--surface-1);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md, 14px);
+}
+.auth-seg-btn {
+  flex: 1;
+  padding: 12px 8px;
+  border: none;
+  background: none;
+  color: var(--text-mute);
+  font-family: inherit;
+  font-size: 15px;
+  font-weight: 700;
+  border-radius: 10px;
+  cursor: pointer;
+  transition: background .15s, color .15s;
+}
+.auth-seg-btn.active {
+  background: var(--accent);
+  color: var(--accent-ink, #04201a);
+}
+.auth-input {
+  width: 100%;
+  height: 50px;
+  padding: 0 16px;
+  margin-bottom: 12px;
+  border-radius: var(--radius-md, 14px);
+  border: 1px solid var(--border);
+  background: var(--surface-1);
+  color: var(--text);
+  font-size: 16px;
+  font-family: inherit;
+  outline: none;
+}
+.auth-input:focus { border-color: var(--border-focus, var(--accent)); }
+.auth-err {
+  min-height: 18px;
+  font-size: 13px;
+  color: var(--red);
+  margin-bottom: 8px;
+  text-align: center;
+}
+.auth-card .btn-block { height: 50px; font-size: 16px; }
+.auth-toggle {
+  background: none;
+  border: none;
+  color: var(--accent);
+  font-family: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  padding: 16px 8px 6px;
+  cursor: pointer;
+}
+.auth-skip {
+  background: none;
+  border: none;
+  color: var(--text-faint);
+  font-family: inherit;
+  font-size: 13px;
+  padding: 8px;
+  cursor: pointer;
 }

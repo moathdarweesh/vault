@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
-  <meta name="theme-color" content="#06141b">
+  <meta name="theme-color" content="#000000">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="mobile-web-app-capable" content="yes">
@@ -14,7 +14,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=Tajawal:wght@400;500;700;800;900&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="styles.css">
+  <link rel="stylesheet" href="styles.css?v=71">
 </head>
 <body class="theme-dark">
   <div class="app">
@@ -72,17 +72,18 @@
           await Promise.all(regs.map((r) => r.unregister()));
           const keys = await caches.keys();
           await Promise.all(keys.map((k) => caches.delete(k)));
-          if (!sessionStorage.getItem('__cleaned_v55')) {
-            sessionStorage.setItem('__cleaned_v55', '1');
+          if (!sessionStorage.getItem('__cleaned_v71')) {
+            sessionStorage.setItem('__cleaned_v71', '1');
             location.reload();
           }
         }
       }).catch(() => {});
     }
   </script>
-  <script src="js/storage.js?v=55"></script>
-  <script src="js/app.js?v=55"></script>
-  <script src="js/health.js?v=55"></script>
-  <script src="js/foodai.js?v=55"></script>
+  <script src="js/cloud.js?v=71"></script>
+  <script src="js/storage.js?v=71"></script>
+  <script src="js/app.js?v=71"></script>
+  <script src="js/health.js?v=71"></script>
+  <script src="js/foodai.js?v=71"></script>
 </body>
 </html>

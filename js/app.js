@@ -495,7 +495,54 @@ const I18N = {
     ai_add_to_log: 'Add to log',
     ai_added: 'Added',
     ai_error: 'Something went wrong',
+    ai_rate_limit: 'The free AI service is busy right now — please try again in a minute.',
     ai_not_food: 'This chat is for food only — type a meal to calculate it.',
+
+    // Auth / cloud sync
+    auth_sub_in: 'Sign in to sync your data',
+    auth_sub_up: 'Create an account to sync across devices',
+    auth_email: 'Email',
+    auth_password: 'Password',
+    auth_signin: 'Sign in',
+    auth_signup: 'Create account',
+    auth_toggle_to_up: "Don't have an account? Create one",
+    auth_toggle_to_in: 'Already have an account? Sign in',
+    auth_skip: 'Continue without an account',
+    auth_forgot: 'Forgot password?',
+    auth_reset_title: 'Reset password',
+    auth_reset_sub: 'Enter your email and we’ll send you a link to set a new password.',
+    auth_reset_send: 'Send reset link',
+    auth_reset_sent: 'Check your email for the reset link',
+    auth_signing: 'Please wait…',
+    auth_checking: 'Checking…',
+    auth_err_fields: 'Enter your email and password',
+    auth_pw_short: 'Password must be at least 6 characters',
+    auth_signup_check_email: 'Account created — confirm via the email we sent, then sign in.',
+    auth_err_invalid: 'Wrong email or password',
+    auth_err_exists: 'This email already has an account — sign in instead',
+    auth_err_email: 'Enter a valid email',
+    auth_err_network: 'Connection problem — check your internet',
+    auth_err_generic: 'Could not sign in. Try again.',
+    auth_not_signed: 'Not signed in',
+    auth_signin_sub: 'Sign in to sync your data across devices',
+    account: 'Account',
+    account_synced_sub: 'Your data syncs automatically',
+    sync_now: 'Sync now',
+    sync_now_sub: 'Pull the latest and push your changes',
+    synced: 'Synced',
+    logout: 'Log out',
+    logout_sub: 'Stop syncing on this device',
+    logout_confirm: 'Your data stays on this device. Sign in again anytime to resume syncing.',
+    change_password: 'Change password',
+    change_password_sub: 'Set a new password for this account',
+    change_password_new: 'New password',
+    change_password_confirm: 'Confirm new password',
+    change_password_mismatch: 'Passwords do not match',
+    change_password_done: 'Password changed',
+    conflict_title: 'Existing data found',
+    conflict_text: 'Your account already has saved data. Which version do you want to keep?',
+    conflict_cloud: 'Keep account data',
+    conflict_local: "Keep this device's data",
 
     // Sleep
     sleep_subtitle: 'Track when you sleep and wake up.',
@@ -843,7 +890,54 @@ const I18N = {
     ai_add_to_log: 'أضف للسجل',
     ai_added: 'تمت الإضافة',
     ai_error: 'صار خطأ',
+    ai_rate_limit: 'خدمة الذكاء المجانية مشغولة حالياً — جرّب بعد دقيقة.',
     ai_not_food: 'هذا الشات للطعام فقط — اكتب وجبة لأحسبها.',
+
+    // المصادقة / المزامنة السحابية
+    auth_sub_in: 'سجّل دخولك لمزامنة بياناتك',
+    auth_sub_up: 'أنشئ حساباً لمزامنة بياناتك بين الأجهزة',
+    auth_email: 'البريد الإلكتروني',
+    auth_password: 'كلمة السر',
+    auth_signin: 'تسجيل الدخول',
+    auth_signup: 'إنشاء حساب',
+    auth_toggle_to_up: 'ما عندك حساب؟ أنشئ واحد',
+    auth_toggle_to_in: 'عندك حساب؟ سجّل دخول',
+    auth_skip: 'المتابعة بدون حساب',
+    auth_forgot: 'نسيت كلمة السر؟',
+    auth_reset_title: 'استعادة كلمة السر',
+    auth_reset_sub: 'أدخل بريدك ونرسل لك رابطاً لتعيين كلمة سر جديدة.',
+    auth_reset_send: 'إرسال رابط الاستعادة',
+    auth_reset_sent: 'تفقّد بريدك — أرسلنا لك رابط الاستعادة',
+    auth_signing: 'لحظة…',
+    auth_checking: 'جارٍ التحقق…',
+    auth_err_fields: 'أدخل البريد وكلمة السر',
+    auth_pw_short: 'كلمة السر 6 أحرف على الأقل',
+    auth_signup_check_email: 'تم إنشاء الحساب — أكّد عبر الإيميل المُرسَل ثم سجّل دخول.',
+    auth_err_invalid: 'البريد أو كلمة السر غير صحيحة',
+    auth_err_exists: 'هذا البريد له حساب — سجّل دخول بدلاً من الإنشاء',
+    auth_err_email: 'أدخل بريداً صحيحاً',
+    auth_err_network: 'مشكلة اتصال — تأكد من الإنترنت',
+    auth_err_generic: 'تعذّر تسجيل الدخول. حاول مرة أخرى.',
+    auth_not_signed: 'غير مسجّل دخول',
+    auth_signin_sub: 'سجّل دخول لمزامنة بياناتك بين الأجهزة',
+    account: 'الحساب',
+    account_synced_sub: 'بياناتك تتزامن تلقائياً',
+    sync_now: 'زامِن الآن',
+    sync_now_sub: 'اسحب آخر التغييرات وارفع تعديلاتك',
+    synced: 'تمت المزامنة',
+    logout: 'تسجيل الخروج',
+    logout_sub: 'إيقاف المزامنة على هذا الجهاز',
+    logout_confirm: 'بياناتك تبقى على هذا الجهاز. سجّل دخول مجدداً في أي وقت لاستئناف المزامنة.',
+    change_password: 'تغيير كلمة السر',
+    change_password_sub: 'عيّن كلمة سر جديدة لهذا الحساب',
+    change_password_new: 'كلمة السر الجديدة',
+    change_password_confirm: 'تأكيد كلمة السر الجديدة',
+    change_password_mismatch: 'كلمتا السر غير متطابقتين',
+    change_password_done: 'تم تغيير كلمة السر',
+    conflict_title: 'يوجد بيانات في حسابك',
+    conflict_text: 'حسابك فيه بيانات محفوظة مسبقاً. أي نسخة تريد أن تبقي؟',
+    conflict_cloud: 'إبقاء بيانات الحساب (السحابة)',
+    conflict_local: 'إبقاء بيانات هذا الجهاز',
 
     sleep_subtitle: 'تتبّع متى تنام ومتى تصحى.',
     no_sleep_logged: 'لا يوجد نوم مسجّل',
@@ -1233,8 +1327,11 @@ function bindVaultAction(handler) {
 // ==========================================================================
 let currentView = 'home';
 let viewContext = {};
+// In-app navigation history so the Android hardware back button steps back one
+// screen instead of quitting the app. Each entry is { view, context }.
+let navStack = [{ view: 'home', context: {} }];
 
-function navigate(view, context = {}) {
+function navigate(view, context = {}, opts = {}) {
   currentView = view;
   viewContext = context;
 
@@ -1251,7 +1348,44 @@ function navigate(view, context = {}) {
 
   renderView(view);
   $('.main').scrollTop = 0;
+
+  // Record the step for the back button — unless we got here BY going back.
+  if (!opts.fromPop) {
+    navStack.push({ view, context });
+    try { history.pushState({ depth: navStack.length }, ''); } catch (_) {}
+  }
 }
+
+// Step back one screen inside the app. Returns true if it handled the back,
+// false if we're at the root (caller should exit the app). A modal — or the
+// auth gate — is dismissed first; otherwise we pop the nav history.
+function goBack() {
+  if ($('#modal-root') && $('#modal-root').innerHTML.trim()) { closeModal(); return true; }
+  if (document.getElementById('auth-gate')) return true; // don't slip behind login
+  if (navStack.length > 1) {
+    navStack.pop();
+    const prev = navStack[navStack.length - 1];
+    navigate(prev.view, prev.context, { fromPop: true });
+    return true;
+  }
+  return false; // at the root (home)
+}
+
+// Browser back button (works in the web/preview). On Android the hardware back
+// button does NOT drive web history, so it is wired separately below.
+window.addEventListener('popstate', () => {
+  if (goBack()) { try { history.pushState({ depth: navStack.length }, ''); } catch (_) {} }
+});
+
+// Android hardware back button via the @capacitor/app plugin → same goBack(),
+// and exit the app only at the root screen.
+(function wireHardwareBack() {
+  const App = window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.App;
+  if (!App || !App.addListener) return;
+  App.addListener('backButton', () => {
+    if (!goBack()) App.exitApp();
+  });
+})();
 
 function renderView(view) {
   const el = $(`.view[data-view="${view}"]`);
@@ -1616,6 +1750,8 @@ function renderHome(el) {
     </button>
 
     ${recentHtml}
+
+    <div style="text-align:center;opacity:.4;font-size:12px;margin:24px 0 8px;letter-spacing:.5px">THE VAULT · v71</div>
   `;
 
   bindVaultAction(() => navigate('settings'));
@@ -2696,6 +2832,15 @@ function renderFood(el) {
       <p class="page-subtitle">${t('food_subtitle')}</p>
     </div>
 
+    <button class="cta-card" id="food-ai-cta" style="margin-bottom:14px">
+      <div class="cta-card-icon">${icon('zap', 20)}</div>
+      <div style="flex:1;min-width:0">
+        <div class="cta-card-title">${t('ai_chat_title')}</div>
+        <div class="cta-card-sub">${t('ai_chat_sub')}</div>
+      </div>
+      <div class="cta-card-chev">${icon('chevronRight', 18)}</div>
+    </button>
+
     <div class="toolbar" style="display:flex;gap:10px;margin-bottom:14px">
       <div class="search-wrap">
         ${icon('search', 18)}
@@ -2715,6 +2860,9 @@ function renderFood(el) {
   `;
 
   bindVaultAction(() => openFoodModal());
+  $('#food-ai-cta', el)?.addEventListener('click', () => {
+    if (window.FoodAI) window.FoodAI.open(typeof todayISO === 'function' ? todayISO() : null);
+  });
   $('#food-search', el).addEventListener('input', (e) => {
     viewContext.foodQuery = e.target.value;
     renderFood(el);
@@ -3155,7 +3303,7 @@ function renderSettings(el) {
   const currentLang = prefs.lang || 'en';
 
   const themeCards = [
-    { id: 'dark', name: t('theme_dark'), sub: t('theme_dark_sub'), cls: 'theme-preview-dark', dots: ['#2dd4bf', '#0c1f28', '#90a8b2'] },
+    { id: 'dark', name: t('theme_dark'), sub: t('theme_dark_sub'), cls: 'theme-preview-dark', dots: ['#5b8def', '#000000', '#a3a3a3'] },
     { id: 'light', name: t('theme_light'), sub: t('theme_light_sub'), cls: 'theme-preview-light', dots: ['#0d9488', '#f6f8fa', '#475569'] },
     { id: 'forest', name: t('theme_forest'), sub: t('theme_forest_sub'), cls: 'theme-preview-forest', dots: ['#86efac', '#173727', '#4ade80'] },
     { id: 'ocean', name: t('theme_ocean'), sub: t('theme_ocean_sub'), cls: 'theme-preview-ocean', dots: ['#38bdf8', '#112439', '#22d3ee'] },
@@ -3192,8 +3340,21 @@ function renderSettings(el) {
       <p class="page-subtitle">${t('settings_subtitle')}</p>
     </div>
 
+    ${(window.Cloud && Cloud.configured()) ? `
+    <div class="settings-section" id="account-section">
+      <div class="section-title" style="margin-top:0">${t('account')}</div>
+      <div id="account-body">
+        <button class="settings-action-row" style="cursor:default">
+          <div class="settings-action-icon">${icon('globe', 18)}</div>
+          <div class="settings-action-main">
+            <div class="settings-action-title">${t('auth_checking')}</div>
+          </div>
+        </button>
+      </div>
+    </div>` : ''}
+
     <div class="settings-section">
-      <div class="section-title" style="margin-top:0">${t('language')}</div>
+      <div class="section-title"${(window.Cloud && Cloud.configured()) ? '' : ' style="margin-top:0"'}>${t('language')}</div>
       <div class="lang-toggle">
         <button class="lang-option ${currentLang === 'en' ? 'active' : ''}" data-lang="en">English</button>
         <button class="lang-option ${currentLang === 'ar' ? 'active' : ''}" data-lang="ar">العربية</button>
@@ -3249,6 +3410,9 @@ function renderSettings(el) {
       </button>
     </div>
   `;
+
+  // Account (cloud sync) — populated async since the session check is async.
+  if (window.Cloud && Cloud.configured()) populateAccount(el);
 
   // Language buttons
   el.querySelectorAll('[data-lang]').forEach((b) =>
@@ -4731,9 +4895,265 @@ function openFoodLogEntryModal(date, food) {
 // ==========================================================================
 // Initial boot
 // ==========================================================================
+// ==========================================================================
+// Cloud auth gate (Supabase) — optional; app stays fully usable offline.
+// ==========================================================================
+let authMode = 'in'; // 'in' | 'up'
+
+function refreshAfterSync() {
+  const prefs = DB.prefs.get();
+  applyTheme(prefs.theme || 'dark');
+  applyLang(prefs.lang || 'en');
+  renderView(currentView || 'home');
+}
+
+function hideAuthGate() {
+  const g = document.getElementById('auth-gate');
+  if (g) g.remove();
+}
+
+function showAuthGate(mode) {
+  authMode = mode || 'in';
+  hideAuthGate();
+  const up = authMode === 'up';
+  const gate = document.createElement('div');
+  gate.id = 'auth-gate';
+  gate.className = 'auth-gate';
+  gate.innerHTML = `
+    <div class="auth-card">
+      <div class="auth-logo">${icon('home', 30)}</div>
+      <div class="auth-title">THE VAULT</div>
+      <div class="auth-seg">
+        <button class="auth-seg-btn ${up ? '' : 'active'}" data-mode="in">${t('auth_signin')}</button>
+        <button class="auth-seg-btn ${up ? 'active' : ''}" data-mode="up">${t('auth_signup')}</button>
+      </div>
+      <div class="auth-sub">${up ? t('auth_sub_up') : t('auth_sub_in')}</div>
+      <input type="email" id="auth-email" class="auth-input" placeholder="${t('auth_email')}" autocomplete="email" inputmode="email">
+      <input type="password" id="auth-password" class="auth-input" placeholder="${t('auth_password')}" autocomplete="${up ? 'new-password' : 'current-password'}">
+      <div class="auth-err" id="auth-err"></div>
+      <button class="btn btn-primary btn-block" id="auth-submit">${up ? t('auth_signup') : t('auth_signin')}</button>
+      ${up ? '' : `<button class="auth-skip" id="auth-forgot" style="color:var(--accent)">${t('auth_forgot')}</button>`}
+      <button class="auth-skip" id="auth-skip">${t('auth_skip')}</button>
+    </div>`;
+  document.body.appendChild(gate);
+
+  const err = (msg) => { const e = document.getElementById('auth-err'); if (e) e.textContent = msg || ''; };
+  const submit = document.getElementById('auth-submit');
+
+  const run = async () => {
+    const email = (document.getElementById('auth-email').value || '').trim();
+    const pw = document.getElementById('auth-password').value || '';
+    if (!email || !pw) { err(t('auth_err_fields')); return; }
+    if (up && pw.length < 6) { err(t('auth_pw_short')); return; }
+    err('');
+    submit.disabled = true;
+    const label = submit.textContent;
+    submit.textContent = t('auth_signing');
+    try {
+      const res = up ? await Cloud.signUp(email, pw) : await Cloud.signIn(email, pw);
+      if (res.error) {
+        err(translateAuthError(res.error));
+        submit.disabled = false; submit.textContent = label;
+        return;
+      }
+      if (up && !res.session) {
+        // Email confirmation is required — no session yet.
+        err(''); submit.disabled = false; submit.textContent = label;
+        showToast(t('auth_signup_check_email'));
+        showAuthGate('in');
+        return;
+      }
+      await afterLogin();
+    } catch (e) {
+      err(translateAuthError((e && e.message) || ''));
+      submit.disabled = false; submit.textContent = label;
+    }
+  };
+
+  submit.addEventListener('click', run);
+  document.getElementById('auth-password').addEventListener('keydown', (e) => { if (e.key === 'Enter') run(); });
+  gate.querySelectorAll('.auth-seg-btn').forEach((b) =>
+    b.addEventListener('click', () => { if (b.dataset.mode !== authMode) showAuthGate(b.dataset.mode); })
+  );
+  document.getElementById('auth-skip').addEventListener('click', () => { hideAuthGate(); });
+  const forgot = document.getElementById('auth-forgot');
+  if (forgot) forgot.addEventListener('click', () => showForgotPassword(document.getElementById('auth-email').value));
+}
+
+function showForgotPassword(prefillEmail) {
+  const overlay = openModal(`
+    <div class="modal-header">
+      <div class="modal-title">${t('auth_reset_title')}</div>
+      <button class="icon-btn icon-btn-tile" data-close>${icon('close', 18)}</button>
+    </div>
+    <div class="confirm-text" style="margin-bottom:12px">${t('auth_reset_sub')}</div>
+    <input type="email" id="reset-email" class="auth-input" placeholder="${t('auth_email')}" value="${escapeHtml(prefillEmail || '')}" autocomplete="email" inputmode="email">
+    <div class="auth-err" id="reset-err"></div>
+    <button class="btn btn-primary btn-block" id="reset-send">${t('auth_reset_send')}</button>
+  `, { variant: 'confirm' });
+  const err = (m) => { const e = overlay.querySelector('#reset-err'); if (e) e.textContent = m || ''; };
+  const btn = overlay.querySelector('#reset-send');
+  btn.addEventListener('click', async () => {
+    const email = (overlay.querySelector('#reset-email').value || '').trim();
+    if (!email) { err(t('auth_err_email')); return; }
+    err(''); btn.disabled = true; btn.textContent = t('auth_signing');
+    try {
+      const res = await Cloud.resetPassword(email);
+      if (res.error) { err(translateAuthError(res.error)); btn.disabled = false; btn.textContent = t('auth_reset_send'); return; }
+      closeModal();
+      showToast(t('auth_reset_sent'));
+    } catch (e) {
+      err(translateAuthError((e && e.message) || '')); btn.disabled = false; btn.textContent = t('auth_reset_send');
+    }
+  });
+}
+
+// Map common Supabase auth errors to friendly localized text.
+function translateAuthError(msg) {
+  const m = String(msg).toLowerCase();
+  if (m.includes('invalid login')) return t('auth_err_invalid');
+  if (m.includes('already registered') || m.includes('already been registered')) return t('auth_err_exists');
+  if (m.includes('password')) return t('auth_pw_short');
+  if (m.includes('email')) return t('auth_err_email');
+  if (m.includes('network') || m.includes('fetch')) return t('auth_err_network');
+  return t('auth_err_generic');
+}
+
+async function afterLogin() {
+  const r = await Cloud.resolveOnLogin();
+  if (r === 'conflict') { showConflictDialog(); return; }
+  hideAuthGate();
+  refreshAfterSync();
+  showToast(t('synced'));
+}
+
+function showConflictDialog() {
+  const overlay = openModal(`
+    <div class="confirm-title">${t('conflict_title')}</div>
+    <div class="confirm-text">${t('conflict_text')}</div>
+    <div class="form-actions" style="flex-direction:column;gap:8px">
+      <button type="button" class="btn btn-primary btn-block" data-keep="cloud">${t('conflict_cloud')}</button>
+      <button type="button" class="btn btn-ghost btn-block" data-keep="local">${t('conflict_local')}</button>
+    </div>
+  `, { variant: 'confirm' });
+  const finish = () => { closeModal(); hideAuthGate(); refreshAfterSync(); showToast(t('synced')); };
+  overlay.querySelector('[data-keep="cloud"]').addEventListener('click', async () => { await Cloud.chooseCloud(); finish(); });
+  overlay.querySelector('[data-keep="local"]').addEventListener('click', async () => { await Cloud.chooseLocal(); finish(); });
+}
+
+function showChangePassword() {
+  const overlay = openModal(`
+    <div class="modal-header">
+      <div class="modal-title">${t('change_password')}</div>
+      <button class="icon-btn icon-btn-tile" data-close>${icon('close', 18)}</button>
+    </div>
+    <input type="password" id="cpw-new" class="auth-input" placeholder="${t('change_password_new')}" autocomplete="new-password">
+    <input type="password" id="cpw-confirm" class="auth-input" placeholder="${t('change_password_confirm')}" autocomplete="new-password">
+    <div class="auth-err" id="cpw-err"></div>
+    <button class="btn btn-primary btn-block" id="cpw-save">${t('save')}</button>
+  `, { variant: 'confirm' });
+  const err = (m) => { const e = overlay.querySelector('#cpw-err'); if (e) e.textContent = m || ''; };
+  const btn = overlay.querySelector('#cpw-save');
+  btn.addEventListener('click', async () => {
+    const pw = overlay.querySelector('#cpw-new').value || '';
+    const pw2 = overlay.querySelector('#cpw-confirm').value || '';
+    if (pw.length < 6) { err(t('auth_pw_short')); return; }
+    if (pw !== pw2) { err(t('change_password_mismatch')); return; }
+    err(''); btn.disabled = true; btn.textContent = t('auth_signing');
+    try {
+      const res = await Cloud.changePassword(pw);
+      if (res.error) { err(translateAuthError(res.error)); btn.disabled = false; btn.textContent = t('save'); return; }
+      closeModal();
+      showToast(t('change_password_done'));
+    } catch (e) {
+      err(translateAuthError((e && e.message) || '')); btn.disabled = false; btn.textContent = t('save');
+    }
+  });
+}
+
+async function populateAccount(el) {
+  const body = el.querySelector('#account-body');
+  if (!body) return;
+  await Cloud.ensureSdk(); // load the Supabase SDK on demand
+  let email = null;
+  try { email = await Cloud.currentEmail(); } catch (_) {}
+  if (email) {
+    body.innerHTML = `
+      <div class="settings-action-row" style="cursor:default">
+        <div class="settings-action-icon">${icon('globe', 18)}</div>
+        <div class="settings-action-main">
+          <div class="settings-action-title">${escapeHtml(email)}</div>
+          <div class="settings-action-sub">${t('account_synced_sub')}</div>
+        </div>
+      </div>
+      <button class="settings-action-row" id="sync-now-btn">
+        <div class="settings-action-icon">${icon('refresh', 18)}</div>
+        <div class="settings-action-main">
+          <div class="settings-action-title">${t('sync_now')}</div>
+          <div class="settings-action-sub">${t('sync_now_sub')}</div>
+        </div>
+      </button>
+      <button class="settings-action-row" id="change-pw-btn">
+        <div class="settings-action-icon">${icon('settings', 18)}</div>
+        <div class="settings-action-main">
+          <div class="settings-action-title">${t('change_password')}</div>
+          <div class="settings-action-sub">${t('change_password_sub')}</div>
+        </div>
+      </button>
+      <button class="settings-action-row" id="logout-btn" style="color:var(--red)">
+        <div class="settings-action-icon" style="background:var(--red-bg);color:var(--red)">${icon('back', 18)}</div>
+        <div class="settings-action-main">
+          <div class="settings-action-title">${t('logout')}</div>
+          <div class="settings-action-sub">${t('logout_sub')}</div>
+        </div>
+      </button>`;
+    $('#change-pw-btn', el)?.addEventListener('click', showChangePassword);
+    $('#sync-now-btn', el)?.addEventListener('click', async () => {
+      showToast(t('auth_signing'));
+      try {
+        const r = await Cloud.bootSync();
+        if (r === 'pulled') refreshAfterSync();
+        showToast(t('synced'));
+      } catch (_) { showToast(t('auth_err_network')); }
+    });
+    $('#logout-btn', el)?.addEventListener('click', () => {
+      confirmDialog({
+        title: t('logout'), text: t('logout_confirm'), confirmLabel: t('logout'),
+        onConfirm: async () => { await Cloud.signOut(); showAuthGate('in'); },
+      });
+    });
+  } else {
+    body.innerHTML = `
+      <button class="settings-action-row" id="signin-btn">
+        <div class="settings-action-icon">${icon('globe', 18)}</div>
+        <div class="settings-action-main">
+          <div class="settings-action-title">${t('auth_not_signed')}</div>
+          <div class="settings-action-sub">${t('auth_signin_sub')}</div>
+        </div>
+      </button>`;
+    $('#signin-btn', el)?.addEventListener('click', () => showAuthGate('in'));
+  }
+}
+
+async function bootCloud() {
+  if (!window.Cloud || !Cloud.configured()) return; // not set up → local-only
+  await Cloud.ensureSdk(); // load the Supabase SDK on demand
+  // Opened from a password-reset link → let the user set a new password.
+  Cloud.onPasswordRecovery(() => showChangePassword());
+  let session = null;
+  try { session = await Cloud.getSession(); } catch (_) {}
+  if (!session) { showAuthGate('in'); return; }
+  // Already logged in — pick up any changes from other devices in the background.
+  try {
+    const r = await Cloud.bootSync();
+    if (r === 'pulled') refreshAfterSync();
+  } catch (_) {}
+}
+
 (function init() {
   const prefs = DB.prefs.get();
   applyTheme(prefs.theme || 'dark');
   applyLang(prefs.lang || 'en');
-  navigate('home');
+  navigate('home', {}, { fromPop: true }); // root entry — don't grow history
+  bootCloud();
 })();

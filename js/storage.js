@@ -58,33 +58,7 @@ const SEED_EXERCISES = [
   { name: 'Leg Raise', category: 'Core', imageSlug: 'Hanging_Leg_Raise' },
   { name: 'Russian Twist', category: 'Core', imageSlug: 'Russian_Twist' },
 
-  // ===== Machines (common in most gyms) =====
-  // Note: most plate-loaded / pin-loaded machines are seeded below from
-  // MACHINE_SEED with custom blueprint illustrations (no people).
-  { name: 'Incline Chest Press Machine', category: 'Chest', imageSlug: 'Leverage_Incline_Chest_Press' },
-  { name: 'Cable Crossover', category: 'Chest', imageSlug: 'Cable_Crossover' },
-  { name: 'Smith Machine Bench Press', category: 'Chest', imageSlug: 'Smith_Machine_Bench_Press' },
-
-  // Back machines (others)
-  { name: 'T-Bar Row Machine', category: 'Back', imageSlug: 'T-Bar_Row_with_Handle' },
-  { name: 'Iso-Lateral Row', category: 'Back', imageSlug: 'Leverage_Iso_Row' },
-  { name: 'Back Extension', category: 'Back', imageSlug: 'Hyperextensions_With_No_Hyperextension_Bench' },
-
-  // Leg machines (others)
-  { name: 'Smith Machine Squat', category: 'Legs', imageSlug: 'Smith_Machine_Squat' },
-  { name: 'Seated Leg Curl', category: 'Legs', imageSlug: 'Seated_Leg_Curl' },
-  { name: 'Seated Calf Raise', category: 'Legs', imageSlug: 'Seated_Calf_Raise' },
-  { name: 'Calf Raise Machine', category: 'Legs', imageSlug: 'Standing_Calf_Raises' },
-
-  // Shoulder machines (others)
-  { name: 'Smith Machine Shoulder Press', category: 'Shoulders', imageSlug: 'Smith_Machine_Overhead_Shoulder_Press' },
-  { name: 'Face Pull', category: 'Shoulders', imageSlug: 'Face_Pull' },
-  { name: 'Cable Upright Row', category: 'Shoulders', imageSlug: 'Upright_Cable_Row' },
-  { name: 'Cable Shrug', category: 'Shoulders', imageSlug: 'Cable_Shrugs' },
-
-  // Arm machines (others)
-  { name: 'Cable Curl', category: 'Arms', imageSlug: 'Standing_Biceps_Cable_Curl' },
-  { name: 'Overhead Cable Triceps', category: 'Arms', imageSlug: 'Cable_Rope_Overhead_Triceps_Extension' },
+  // Machines live in MACHINE_SEED below (each with a clean blueprint + photo).
 ];
 
 const EXERCISE_IMAGE_BASE = 'https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises';
@@ -173,6 +147,45 @@ function machineSvgFor(type) {
     ab_crunch:
       // Seat with chest pad and overhead handles
       `<line x1='90' y1='30' x2='90' y2='110'/><path d='M70 110 L130 110 L130 130 L70 130 Z'/><line x1='80' y1='50' x2='130' y2='50' stroke-width='5'/><circle cx='80' cy='40' r='5'/><circle cx='130' cy='40' r='5'/><line x1='80' y1='40' x2='80' y2='50'/><line x1='130' y1='40' x2='130' y2='50'/><rect x='180' y='60' width='28' height='100'/><line x1='180' y1='85' x2='208' y2='85'/><line x1='180' y1='115' x2='208' y2='115'/><line x1='180' y1='145' x2='208' y2='145'/>`,
+    smith_machine:
+      // Two vertical rails with a loaded barbell, bench below
+      `<line x1='68' y1='28' x2='68' y2='162'/><line x1='172' y1='28' x2='172' y2='162'/><line x1='52' y1='82' x2='188' y2='82'/><circle cx='60' cy='82' r='10'/><circle cx='180' cy='82' r='10'/><path d='M88 130 L152 130 L152 150 L88 150 Z'/><line x1='100' y1='150' x2='100' y2='165'/><line x1='140' y1='150' x2='140' y2='165'/>`,
+
+    incline_chest_press:
+      // Inclined seat back, handles forward, weight stack on right
+      `<line x1='72' y1='152' x2='98' y2='78'/><path d='M52 152 L112 152 L112 168 L52 168 Z'/><circle cx='98' cy='84' r='4'/><line x1='98' y1='84' x2='152' y2='68'/><circle cx='157' cy='66' r='6'/><line x1='98' y1='96' x2='152' y2='96'/><circle cx='157' cy='96' r='6'/><rect x='186' y='54' width='28' height='112'/><line x1='186' y1='80' x2='214' y2='80'/><line x1='186' y1='112' x2='214' y2='112'/><line x1='186' y1='144' x2='214' y2='144'/>`,
+
+    cable_crossover:
+      // Two tall towers, pulleys at top, cables to handles meeting centre
+      `<rect x='28' y='28' width='22' height='134'/><rect x='190' y='28' width='22' height='134'/><circle cx='39' cy='40' r='5'/><circle cx='201' cy='40' r='5'/><line x1='39' y1='45' x2='102' y2='92'/><line x1='201' y1='45' x2='138' y2='92'/><circle cx='104' cy='95' r='4'/><circle cx='136' cy='95' r='4'/><line x1='28' y1='70' x2='50' y2='70'/><line x1='28' y1='100' x2='50' y2='100'/><line x1='190' y1='70' x2='212' y2='70'/><line x1='190' y1='100' x2='212' y2='100'/>`,
+
+    cable_tower:
+      // Single adjustable cable column with high pulley and bar
+      `<rect x='178' y='28' width='28' height='134'/><circle cx='192' cy='40' r='6'/><line x1='192' y1='46' x2='118' y2='72'/><line x1='92' y1='72' x2='144' y2='72' stroke-width='5'/><line x1='178' y1='72' x2='206' y2='72'/><line x1='178' y1='98' x2='206' y2='98'/><line x1='178' y1='124' x2='206' y2='124'/><line x1='178' y1='150' x2='206' y2='150'/>`,
+
+    t_bar_row:
+      // Angled lever bar with a loaded plate and handles, floor pivot
+      `<line x1='40' y1='152' x2='186' y2='64'/><circle cx='40' cy='152' r='5'/><circle cx='172' cy='72' r='13'/><line x1='92' y1='124' x2='118' y2='108' stroke-width='5'/><line x1='30' y1='166' x2='150' y2='166'/><line x1='58' y1='138' x2='58' y2='166'/>`,
+
+    assisted_pullup:
+      // Tall frame, overhead handles, knee-assist platform, stack
+      `<line x1='50' y1='28' x2='50' y2='162'/><line x1='150' y1='28' x2='150' y2='162'/><line x1='50' y1='34' x2='150' y2='34'/><line x1='82' y1='34' x2='82' y2='56'/><line x1='118' y1='34' x2='118' y2='56'/><circle cx='82' cy='59' r='4'/><circle cx='118' cy='59' r='4'/><rect x='80' y='96' width='40' height='12' fill='${s}'/><rect x='180' y='70' width='26' height='92'/><line x1='180' y1='96' x2='206' y2='96'/><line x1='180' y1='128' x2='206' y2='128'/>`,
+
+    back_extension:
+      // 45-degree angled hip pad with ankle brace at the foot
+      `<line x1='48' y1='160' x2='162' y2='58'/><rect x='92' y='92' width='42' height='12' transform='rotate(-42 113 98)' fill='${s}'/><line x1='150' y1='58' x2='172' y2='58' stroke-width='5'/><line x1='42' y1='160' x2='80' y2='160'/><line x1='54' y1='150' x2='54' y2='170'/><line x1='70' y1='150' x2='70' y2='170'/>`,
+
+    hip_thrust:
+      // Bench pad low, padded bar across the hips, plates on the bar
+      `<rect x='38' y='118' width='92' height='12' fill='${s}' opacity='0.5'/><line x1='48' y1='130' x2='48' y2='156'/><line x1='120' y1='130' x2='120' y2='156'/><line x1='66' y1='92' x2='168' y2='92'/><circle cx='168' cy='92' r='11'/><circle cx='62' cy='92' r='11'/><rect x='96' y='98' width='40' height='13' fill='${s}'/>`,
+
+    standing_calf:
+      // Upright frame, shoulder pads on top, raised foot platform
+      `<line x1='58' y1='38' x2='58' y2='160'/><line x1='182' y1='38' x2='182' y2='160'/><line x1='58' y1='50' x2='182' y2='50'/><rect x='95' y='56' width='50' height='12' fill='${s}'/><line x1='112' y1='68' x2='112' y2='138'/><line x1='128' y1='68' x2='128' y2='138'/><rect x='90' y='138' width='60' height='14'/>`,
+
+    seated_calf:
+      // Seat with knee pad over the thighs, foot platform in front
+      `<path d='M48 88 L48 142'/><path d='M48 142 L100 142 L100 160 L48 160 Z'/><rect x='92' y='96' width='46' height='12' fill='${s}'/><line x1='100' y1='142' x2='162' y2='152'/><rect x='150' y='150' width='30' height='13'/>`,
   };
 
   const body = shapes[type] || shapes.chest_press;
@@ -190,27 +203,50 @@ function machineImageUrl(machineType) {
 // see MACHINE_OLD_NAMES below). Each has both a real photo (imageSlug) and
 // a vector blueprint (machineType) used as a fallback.
 const MACHINE_SEED = [
-  // Chest
-  { name: 'Chest Press Machine',         category: 'Chest',     machineType: 'chest_press',   imageSlug: 'Leverage_Chest_Press' },
-  { name: 'Pec Deck Machine',            category: 'Chest',     machineType: 'pec_deck',      imageSlug: 'Butterfly' },
-  // Shoulders
-  { name: 'Shoulder Press Machine',      category: 'Shoulders', machineType: 'shoulder_press', imageSlug: 'Seated_Cable_Shoulder_Press' },
-  { name: 'Lateral Raise Machine',       category: 'Shoulders', machineType: 'lateral_raise', imageSlug: 'Side_Lateral_Raise' },
-  { name: 'Rear Delt Fly Machine',       category: 'Shoulders', machineType: 'rear_delt_fly', imageSlug: 'Reverse_Machine_Flyes' },
-  // Back
-  { name: 'Lat Pulldown Machine',        category: 'Back',      machineType: 'lat_pulldown',  imageSlug: 'Wide-Grip_Lat_Pulldown' },
-  { name: 'Seated Row Machine',          category: 'Back',      machineType: 'seated_row',    imageSlug: 'Seated_Cable_Rows' },
-  // Legs
-  { name: 'Leg Press Machine',           category: 'Legs',      machineType: 'leg_press',     imageSlug: 'Leg_Press' },
-  { name: 'Leg Extension Machine',       category: 'Legs',      machineType: 'leg_extension', imageSlug: 'Leg_Extensions' },
-  { name: 'Leg Curl Machine',            category: 'Legs',      machineType: 'leg_curl',      imageSlug: 'Lying_Leg_Curls' },
-  { name: 'Hack Squat Machine',          category: 'Legs',      machineType: 'hack_squat',    imageSlug: 'Hack_Squat' },
-  { name: 'Hip Abductor Machine',        category: 'Legs',      machineType: 'hip_abductor',  imageSlug: 'Thigh_Abductor' },
-  { name: 'Hip Adductor Machine',        category: 'Legs',      machineType: 'hip_adductor',  imageSlug: 'Thigh_Adductor' },
-  // Arms / Core
-  { name: 'Preacher Curl Machine',       category: 'Arms',      machineType: 'preacher_curl', imageSlug: 'Preacher_Curl' },
-  { name: 'Triceps Dip Machine',         category: 'Arms',      machineType: 'triceps_dip',   imageSlug: 'Dips_-_Triceps_Version' },
-  { name: 'Ab Crunch Machine',           category: 'Core',      machineType: 'ab_crunch',     imageSlug: 'Ab_Crunch_Machine' },
+  // ---- Chest ----
+  { name: 'Chest Press Machine',          category: 'Chest',     machineType: 'chest_press',         imageSlug: 'Leverage_Chest_Press' },
+  { name: 'Incline Chest Press Machine',  category: 'Chest',     machineType: 'incline_chest_press', imageSlug: 'Leverage_Incline_Chest_Press' },
+  { name: 'Pec Deck Machine',             category: 'Chest',     machineType: 'pec_deck',            imageSlug: 'Butterfly' },
+  { name: 'Cable Crossover',              category: 'Chest',     machineType: 'cable_crossover',     imageSlug: 'Cable_Crossover' },
+  { name: 'Smith Machine Bench Press',    category: 'Chest',     machineType: 'smith_machine',       imageSlug: 'Smith_Machine_Bench_Press' },
+  // ---- Shoulders ----
+  { name: 'Shoulder Press Machine',       category: 'Shoulders', machineType: 'shoulder_press',      imageSlug: 'Seated_Cable_Shoulder_Press' },
+  { name: 'Smith Machine Shoulder Press', category: 'Shoulders', machineType: 'smith_machine',       imageSlug: 'Smith_Machine_Overhead_Shoulder_Press' },
+  { name: 'Lateral Raise Machine',        category: 'Shoulders', machineType: 'lateral_raise',       imageSlug: 'Side_Lateral_Raise' },
+  { name: 'Cable Lateral Raise',          category: 'Shoulders', machineType: 'cable_tower',         imageSlug: 'Side_Lateral_Raise' },
+  { name: 'Rear Delt Fly Machine',        category: 'Shoulders', machineType: 'rear_delt_fly',       imageSlug: 'Reverse_Machine_Flyes' },
+  { name: 'Face Pull',                    category: 'Shoulders', machineType: 'cable_tower',         imageSlug: 'Face_Pull' },
+  { name: 'Cable Upright Row',            category: 'Shoulders', machineType: 'cable_tower',         imageSlug: 'Upright_Cable_Row' },
+  { name: 'Cable Shrug',                  category: 'Shoulders', machineType: 'cable_tower',         imageSlug: 'Cable_Shrugs' },
+  // ---- Back ----
+  { name: 'Lat Pulldown Machine',         category: 'Back',      machineType: 'lat_pulldown',        imageSlug: 'Wide-Grip_Lat_Pulldown' },
+  { name: 'Seated Row Machine',           category: 'Back',      machineType: 'seated_row',          imageSlug: 'Seated_Cable_Rows' },
+  { name: 'T-Bar Row Machine',            category: 'Back',      machineType: 't_bar_row',           imageSlug: 'T-Bar_Row_with_Handle' },
+  { name: 'Iso-Lateral Row',              category: 'Back',      machineType: 't_bar_row',           imageSlug: 'Leverage_Iso_Row' },
+  { name: 'Assisted Pull-Up Machine',     category: 'Back',      machineType: 'assisted_pullup',     imageSlug: 'Machine_Assisted_Chin-Up' },
+  { name: 'Back Extension',               category: 'Back',      machineType: 'back_extension',      imageSlug: 'Hyperextensions_With_No_Hyperextension_Bench' },
+  // ---- Legs ----
+  { name: 'Leg Press Machine',            category: 'Legs',      machineType: 'leg_press',           imageSlug: 'Leg_Press' },
+  { name: 'Hack Squat Machine',           category: 'Legs',      machineType: 'hack_squat',          imageSlug: 'Hack_Squat' },
+  { name: 'Smith Machine Squat',          category: 'Legs',      machineType: 'smith_machine',       imageSlug: 'Smith_Machine_Squat' },
+  { name: 'Leg Extension Machine',        category: 'Legs',      machineType: 'leg_extension',       imageSlug: 'Leg_Extensions' },
+  { name: 'Leg Curl Machine',             category: 'Legs',      machineType: 'leg_curl',            imageSlug: 'Lying_Leg_Curls' },
+  { name: 'Seated Leg Curl',              category: 'Legs',      machineType: 'leg_curl',            imageSlug: 'Seated_Leg_Curl' },
+  { name: 'Hip Abductor Machine',         category: 'Legs',      machineType: 'hip_abductor',        imageSlug: 'Thigh_Abductor' },
+  { name: 'Hip Adductor Machine',         category: 'Legs',      machineType: 'hip_adductor',        imageSlug: 'Thigh_Adductor' },
+  { name: 'Hip Thrust Machine',           category: 'Legs',      machineType: 'hip_thrust',          imageSlug: 'Barbell_Hip_Thrust' },
+  { name: 'Calf Raise Machine',           category: 'Legs',      machineType: 'standing_calf',       imageSlug: 'Standing_Calf_Raises' },
+  { name: 'Seated Calf Raise',            category: 'Legs',      machineType: 'seated_calf',         imageSlug: 'Seated_Calf_Raise' },
+  // ---- Arms ----
+  { name: 'Preacher Curl Machine',        category: 'Arms',      machineType: 'preacher_curl',       imageSlug: 'Preacher_Curl' },
+  { name: 'Cable Curl',                   category: 'Arms',      machineType: 'cable_tower',         imageSlug: 'Standing_Biceps_Cable_Curl' },
+  { name: 'Triceps Dip Machine',          category: 'Arms',      machineType: 'triceps_dip',         imageSlug: 'Dips_-_Triceps_Version' },
+  { name: 'Assisted Dip Machine',         category: 'Arms',      machineType: 'assisted_pullup',     imageSlug: 'Dips_-_Triceps_Version' },
+  { name: 'Cable Triceps Pushdown',       category: 'Arms',      machineType: 'cable_tower',         imageSlug: 'Triceps_Pushdown' },
+  { name: 'Overhead Cable Triceps',       category: 'Arms',      machineType: 'cable_tower',         imageSlug: 'Cable_Rope_Overhead_Triceps_Extension' },
+  // ---- Core ----
+  { name: 'Ab Crunch Machine',            category: 'Core',      machineType: 'ab_crunch',           imageSlug: 'Ab_Crunch_Machine' },
+  { name: 'Cable Crunch',                 category: 'Core',      machineType: 'cable_tower',         imageSlug: 'Cable_Crunch' },
 ];
 
 // Old/legacy seed names that the new machine list supersedes — these get
@@ -419,6 +455,16 @@ let STATE = loadState();
 
 function save() {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(STATE));
+  // Notify the cloud-sync layer (if present + logged in) to push the change.
+  if (typeof window !== 'undefined' && window.Cloud && window.Cloud.onLocalChange) {
+    window.Cloud.onLocalChange();
+  }
+}
+
+// Re-read the whole state from localStorage. Used after cloud sync replaces the
+// stored blob, so the in-memory STATE reflects the freshly pulled data.
+function reloadState() {
+  STATE = loadState();
 }
 
 // ==========================================================================
@@ -1015,6 +1061,9 @@ const DB = {
     },
   },
 };
+
+// Re-read STATE from localStorage (after cloud sync swaps in pulled data).
+DB.reload = reloadState;
 
 // ==========================================================================
 // Helpers exposed for the UI layer
