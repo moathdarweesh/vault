@@ -24,15 +24,15 @@
 
   --text:        #ffffff;
   --text-mute:   #a3a3a3;
-  --text-dim:    #6b6b6b;
-  --text-faint:  #454545;
+  --text-dim:    #8c8c8c;
+  --text-faint:  #7a7a7a;
 
   --accent:      #5b8def;
   --accent-2:    #3f6fd1;
   --accent-3:    #325cae;
   --accent-soft: rgba(91, 141, 239, 0.13);
   --accent-line: rgba(91, 141, 239, 0.30);
-  --accent-ink:  #ffffff;
+  --accent-ink:  #06122e;
 
   --green:       #22c55e;
   --green-2:     #16a34a;
@@ -3766,8 +3766,20 @@ body[dir="rtl"] .picker-row { text-align: right; }
 .ai-macro.carb b { color: var(--cat-back); }
 .ai-macro.fat b { color: var(--cat-shoulders); }
 .ai-input-row { display: flex; gap: 8px; align-items: center; }
-.ai-input-row input { flex: 1; }
+.ai-input-row input[type="text"] { flex: 1; }
 .ai-input-row .btn { flex-shrink: 0; width: 46px; padding: 12px 0; justify-content: center; }
+.ai-photo-btn {
+  flex-shrink: 0; width: 46px; height: 46px;
+  display: flex; align-items: center; justify-content: center;
+  border-radius: 12px; border: 1px solid var(--border);
+  background: var(--surface-2); color: var(--text-mute); cursor: pointer;
+}
+.ai-photo-btn:active { transform: scale(0.95); }
+.ai-photo-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.ai-photo-thumb {
+  width: 88px; height: 88px; object-fit: cover;
+  border-radius: 12px; border: 1px solid var(--border); display: block;
+}
 
 .food-log-row {
   background: var(--surface-1);
@@ -4674,9 +4686,9 @@ body[dir="rtl"] .variation-select svg { transform: scaleX(-1); }
   gap: 4px;
   margin: 22px 0 14px;
   padding: 4px;
-  background: var(--surface-1);
+  background: var(--surface-2);
   border: 1px solid var(--border);
-  border-radius: var(--radius-md, 14px);
+  border-radius: var(--radius-md);
 }
 .auth-seg-btn {
   flex: 1;
@@ -4687,28 +4699,31 @@ body[dir="rtl"] .variation-select svg { transform: scaleX(-1); }
   font-family: inherit;
   font-size: 15px;
   font-weight: 700;
-  border-radius: 10px;
+  border-radius: var(--radius-sm);
   cursor: pointer;
   transition: background .15s, color .15s;
 }
 .auth-seg-btn.active {
   background: var(--accent);
-  color: var(--accent-ink, #04201a);
+  color: var(--accent-ink);
 }
 .auth-input {
   width: 100%;
   height: 50px;
   padding: 0 16px;
   margin-bottom: 12px;
-  border-radius: var(--radius-md, 14px);
+  border-radius: var(--radius-md);
   border: 1px solid var(--border);
-  background: var(--surface-1);
+  background: var(--surface-2);
   color: var(--text);
   font-size: 16px;
   font-family: inherit;
   outline: none;
 }
-.auth-input:focus { border-color: var(--border-focus, var(--accent)); }
+.auth-input:focus {
+  border-color: var(--border-focus, var(--accent));
+  box-shadow: 0 0 0 4px var(--accent-soft);
+}
 .auth-err {
   min-height: 18px;
   font-size: 13px;

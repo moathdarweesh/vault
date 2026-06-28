@@ -23,9 +23,10 @@ const SYSTEM = [
   'You convert a user food message into JSON for a calorie tracker. Output JSON only — no markdown.',
   'List every food or drink mentioned in the message, one object per item — treat each as something the user ate.',
   'NEVER add a food that is not in the message. NEVER skip a food that is in the message. One food = one item.',
+  'If an IMAGE is given, identify every food/drink you can see and estimate the calories+macros for the portion shown — one item per distinct food.',
   'name = a short label in the user language; calories in kcal; protein, carbs, fat in grams —',
   'for the stated portion, or one typical serving if not stated.',
-  'If the message has no food at all (a question, greeting, chit-chat, or random text), output {"items":[]}.',
+  'If there is no food at all (in the message or the image), output {"items":[]}.',
   'Shape: {"items":[{"name":"...","calories":0,"protein":0,"carbs":0,"fat":0}]}',
   'Example: "تفاحة" -> {"items":[{"name":"تفاحة","calories":95,"protein":0,"carbs":25,"fat":0}]}',
   'Example: "فطور بيض وخبز وغدا برجر" -> {"items":[{"name":"بيض","calories":150,"protein":13,"carbs":1,"fat":11},{"name":"خبز","calories":80,"protein":3,"carbs":15,"fat":1},{"name":"برجر","calories":400,"protein":20,"carbs":40,"fat":18}]}',
@@ -47,10 +48,13 @@ function json(obj, status) {
 
 // Call one Gemini model. Returns { ok, items } on success, or
 // { rateLimited: true } on 429, or { error } on any other failure.
-async function callModel(model, key, text) {
+// `image` is an optional { mimeType, data(base64) } for photo analysis.
+async function callModel(model, key, text, image) {
+  const parts = [{ text: text || (image ? 'Identify the food in this photo.' : '') }];
+  if (image && image.data) parts.push({ inline_data: { mime_type: image.mimeType || 'image/jpeg', data: image.data } });
   const body = {
     systemInstruction: { parts: [{ text: SYSTEM }] },
-    contents: [{ parts: [{ text }] }],
+    contents: [{ parts }],
     generationConfig: { responseMimeType: 'application/json', temperature: 0 },
   };
 
@@ -103,12 +107,23 @@ export default {
     if (request.method === 'OPTIONS') return new Response(null, { headers: CORS });
     if (request.method !== 'POST') return json({ error: 'method not allowed' }, 405);
 
+    const OK_MIME = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
+    const MAX_IMG = 1400000; // ~1MB decoded — plenty for a 1024px JPEG
+
     let text = '';
+    let image = null;
     try {
       const body = await request.json();
       text = String(body.text || '').slice(0, 500);
+      if (body.image && body.image.data) {
+        const data = String(body.image.data);
+        if (data.length > MAX_IMG) return json({ error: 'image too large' }, 413);
+        let mime = String(body.image.mimeType || 'image/jpeg').toLowerCase();
+        if (OK_MIME.indexOf(mime) === -1) mime = 'image/jpeg';
+        image = { mimeType: mime, data };
+      }
     } catch (_) { /* ignore */ }
-    if (!text.trim()) return json({ error: 'no text' }, 400);
+    if (!text.trim() && !image) return json({ error: 'no input' }, 400);
 
     const key = env.GEMINI_KEY;
     if (!key) return json({ error: 'server not configured (missing GEMINI_KEY)' }, 500);
@@ -117,7 +132,7 @@ export default {
     let lastError = null;
     let allRateLimited = true;
     for (const model of MODELS) {
-      const r = await callModel(model, key, text);
+      const r = await callModel(model, key, text, image);
       if (r.ok) return json({ items: r.items }, 200);
       if (r.rateLimited) { lastError = 'rate_limited'; continue; }
       allRateLimited = false;

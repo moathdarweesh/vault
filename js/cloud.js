@@ -29,7 +29,9 @@
       const s = document.createElement('script');
       s.src = 'js/vendor/supabase.js';
       s.onload = () => resolve(true);
-      s.onerror = () => resolve(false);
+      // On failure, clear the cached promise so a later call can retry instead
+      // of being stuck with a permanent "false".
+      s.onerror = () => { sdkPromise = null; resolve(false); };
       document.head.appendChild(s);
     });
     return sdkPromise;
@@ -114,13 +116,29 @@
     try { c.auth.onAuthStateChange((event) => { if (event === 'PASSWORD_RECOVERY') cb(); }); } catch (_) {}
   }
 
-  // ---- per-device sync stamp (last point this device agreed with cloud) ----
+  // ---- per-device sync state (persisted so it survives app restarts) -------
   const stampKey = (uid) => 'vault_synced_' + uid;
   const linkedKey = (uid) => 'vault_linked_' + uid;
+  const dirtyKey = (uid) => 'vault_dirty_' + uid; // local edits not yet pushed
   const getStamp = (uid) => { try { return localStorage.getItem(stampKey(uid)) || ''; } catch (_) { return ''; } };
   const setStamp = (uid, iso) => { try { localStorage.setItem(stampKey(uid), iso || ''); } catch (_) {} };
   const isLinked = (uid) => { try { return !!localStorage.getItem(linkedKey(uid)); } catch (_) { return false; } };
   const markLinked = (uid) => { try { localStorage.setItem(linkedKey(uid), '1'); } catch (_) {} };
+  const isDirty = (uid) => { try { return !!localStorage.getItem(dirtyKey(uid)); } catch (_) { return false; } };
+  const setDirty = (uid, v) => { try { v ? localStorage.setItem(dirtyKey(uid), '1') : localStorage.removeItem(dirtyKey(uid)); } catch (_) {} };
+
+  // Compare two ISO timestamps by real time, NOT string order — Supabase returns
+  // `+00:00` microsecond timestamps while the client writes `...Z` ms timestamps,
+  // so a lexicographic `>` would be wrong. Returns true if `a` is strictly newer.
+  function newer(a, b) {
+    const ta = Date.parse(a || ''); const tb = Date.parse(b || '');
+    if (!isFinite(ta)) return false;
+    if (!isFinite(tb)) return true;
+    return ta > tb;
+  }
+  // Does a remote blob actually hold data (vs null / {})?
+  const remoteHasData = (remote) =>
+    !!(remote && remote.data && typeof remote.data === 'object' && Object.keys(remote.data).length > 0);
 
   // ---- sync ----------------------------------------------------------------
   // Returns undefined (offline / no session), null (no row yet), or
@@ -145,6 +163,7 @@
     );
     if (error) throw new Error(error.message);
     setStamp(s.user.id, iso);
+    setDirty(s.user.id, false); // our local edits are now safely in the cloud
   }
 
   // Debounced push fired by storage.js save() after any local change.
@@ -153,14 +172,20 @@
   async function onLocalChange() {
     if (syncing) return;
     const s = await getSession(); if (!s) return; // only sync when logged in
+    setDirty(s.user.id, true); // mark unpushed local changes (persists offline)
     clearTimeout(pushTimer);
     pushTimer = setTimeout(() => { push().catch(() => {}); }, 1200);
   }
 
+  // Replace local data with the cloud blob — but NEVER overwrite a non-empty
+  // local store with an empty cloud blob. Returns true only if it applied.
   function applyRemote(remote) {
+    if (!remoteHasData(remote)) return false;
     syncing = true;
-    importRaw(JSON.stringify(remote.data || {}));
+    clearTimeout(pushTimer);            // cancel any pending echo push
+    importRaw(JSON.stringify(remote.data));
     syncing = false;
+    return true;
   }
 
   // Called right after a successful sign-in / sign-up. Decides what to do with
@@ -172,41 +197,49 @@
   async function resolveOnLogin() {
     const s = await getSession(); if (!s) return 'offline';
     const uid = s.user.id;
-    const remote = await pull();
+    let remote;
+    try { remote = await pull(); } catch (_) { return 'offline'; }
     if (remote === undefined) return 'offline';
-    if (remote === null) { await push(); markLinked(uid); return 'pushed'; }
-    // remote row exists
+    // Cloud empty (no row, or a row with no data) → seed it from this device.
+    if (remote === null || !remoteHasData(remote)) { await push(); markLinked(uid); return 'pushed'; }
+    // Cloud has data AND this device has its own data, first time → ask the user.
     if (!isLinked(uid) && localHasData()) return 'conflict';
-    applyRemote(remote); setStamp(uid, remote.updatedAt); markLinked(uid);
-    return 'pulled';
+    if (applyRemote(remote)) { setStamp(uid, remote.updatedAt); setDirty(uid, false); markLinked(uid); return 'pulled'; }
+    await push(); markLinked(uid); return 'pushed';
   }
   // Conflict resolution choices (first link only).
   async function chooseCloud() {
     const s = await getSession(); if (!s) return;
-    const remote = await pull();
-    if (remote && remote.data) { applyRemote(remote); setStamp(s.user.id, remote.updatedAt); }
-    markLinked(s.user.id);
+    let remote;
+    try { remote = await pull(); } catch (_) { return; }
+    // Only commit to "cloud wins" if the cloud actually had data to apply.
+    if (applyRemote(remote)) { setStamp(s.user.id, remote.updatedAt); setDirty(s.user.id, false); markLinked(s.user.id); }
+    else { await push(); markLinked(s.user.id); } // cloud was empty → keep local
   }
   async function chooseLocal() {
     const s = await getSession(); if (!s) return;
     await push(); markLinked(s.user.id);
   }
 
-  // Background sync on app boot for an already-linked, logged-in device: pick up
-  // changes made on other devices, and push anything made locally.
+  // Background sync on app boot for an already-linked, logged-in device. Uses a
+  // persisted "dirty" flag so it never silently loses data:
+  //   - remote newer & no local edits  → pull
+  //   - remote newer & local edits too  → conflict (let the user choose)
+  //   - otherwise                       → push our local up
   async function bootSync() {
     const s = await getSession(); if (!s) return 'offline';
     const uid = s.user.id;
     let remote;
     try { remote = await pull(); } catch (_) { return 'offline'; }
     if (remote === undefined) return 'offline';
-    if (remote === null) { await push().catch(() => {}); markLinked(uid); return 'pushed'; }
-    if (remote.updatedAt && remote.updatedAt > getStamp(uid)) {
-      applyRemote(remote); setStamp(uid, remote.updatedAt); markLinked(uid);
-      return 'pulled';
+    if (remote === null || !remoteHasData(remote)) { await push().catch(() => {}); markLinked(uid); return 'pushed'; }
+    const remoteNewer = newer(remote.updatedAt, getStamp(uid));
+    if (remoteNewer && isDirty(uid)) return 'conflict'; // both changed → ask
+    if (remoteNewer) {
+      if (applyRemote(remote)) { setStamp(uid, remote.updatedAt); setDirty(uid, false); markLinked(uid); return 'pulled'; }
+      return 'offline';
     }
-    await push().catch(() => {}); markLinked(uid);
-    return 'pushed';
+    await push().catch(() => {}); markLinked(uid); return 'pushed';
   }
 
   window.Cloud = {

@@ -47,6 +47,7 @@ const ICONS = {
   refresh: '<path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M3 21v-5h5"/>',
   info: '<circle cx="12" cy="12" r="10"/><line x1="12" x2="12" y1="16" y2="12"/><line x1="12" x2="12.01" y1="8" y2="8"/>',
   backspace: '<path d="M20 5H9l-7 7 7 7h11a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2Z"/><line x1="18" y1="9" x2="12" y2="15"/><line x1="12" y1="9" x2="18" y2="15"/>',
+  camera: '<path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3z"/><circle cx="12" cy="13" r="3.2"/>',
 };
 
 function icon(name, size = 20) {
@@ -491,6 +492,7 @@ const I18N = {
     ai_key_label: 'Gemini API key',
     ai_save_key: 'Save key',
     ai_analyzing: 'calculating…',
+    ai_photo: 'Photo',
     ai_no_result: 'No result — try rephrasing.',
     ai_add_to_log: 'Add to log',
     ai_added: 'Added',
@@ -886,6 +888,7 @@ const I18N = {
     ai_key_label: 'مفتاح Gemini',
     ai_save_key: 'حفظ المفتاح',
     ai_analyzing: 'جارٍ الحساب…',
+    ai_photo: 'صورة',
     ai_no_result: 'ما في نتيجة — جرّب صياغة ثانية.',
     ai_add_to_log: 'أضف للسجل',
     ai_added: 'تمت الإضافة',
@@ -1751,7 +1754,7 @@ function renderHome(el) {
 
     ${recentHtml}
 
-    <div style="text-align:center;opacity:.4;font-size:12px;margin:24px 0 8px;letter-spacing:.5px">THE VAULT · v71</div>
+    <div style="text-align:center;opacity:.4;font-size:12px;margin:24px 0 8px;letter-spacing:.5px">THE VAULT · v74</div>
   `;
 
   bindVaultAction(() => navigate('settings'));
@@ -4930,9 +4933,9 @@ function showAuthGate(mode) {
       <div class="auth-sub">${up ? t('auth_sub_up') : t('auth_sub_in')}</div>
       <input type="email" id="auth-email" class="auth-input" placeholder="${t('auth_email')}" autocomplete="email" inputmode="email">
       <input type="password" id="auth-password" class="auth-input" placeholder="${t('auth_password')}" autocomplete="${up ? 'new-password' : 'current-password'}">
-      <div class="auth-err" id="auth-err"></div>
+      <div class="auth-err" id="auth-err" role="alert"></div>
       <button class="btn btn-primary btn-block" id="auth-submit">${up ? t('auth_signup') : t('auth_signin')}</button>
-      ${up ? '' : `<button class="auth-skip" id="auth-forgot" style="color:var(--accent)">${t('auth_forgot')}</button>`}
+      ${up ? '' : `<button class="auth-toggle" id="auth-forgot">${t('auth_forgot')}</button>`}
       <button class="auth-skip" id="auth-skip">${t('auth_skip')}</button>
     </div>`;
   document.body.appendChild(gate);
@@ -5147,6 +5150,7 @@ async function bootCloud() {
   try {
     const r = await Cloud.bootSync();
     if (r === 'pulled') refreshAfterSync();
+    else if (r === 'conflict') showConflictDialog(); // both sides changed → ask
   } catch (_) {}
 }
 

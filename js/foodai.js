@@ -56,9 +56,10 @@
     'You convert a user food message into JSON for a calorie tracker. Output JSON only — no markdown.',
     'List every food or drink mentioned in the message, one object per item — treat each as something the user ate.',
     'NEVER add a food that is not in the message. NEVER skip a food that is in the message. One food = one item.',
+    'If an IMAGE is given, identify every food/drink you can see and estimate the calories+macros for the portion shown — one item per distinct food.',
     'name = a short label in the user language; calories in kcal; protein, carbs, fat in grams —',
     'for the stated portion, or one typical serving if not stated.',
-    'If the message has no food at all, output {"items":[]}.',
+    'If there is no food at all (in the message or the image), output {"items":[]}.',
     'Example: "تفاحة" -> {"items":[{"name":"تفاحة","calories":95,"protein":0,"carbs":25,"fat":0}]}',
     'Example: "فطور بيض وخبز وغدا برجر" -> {"items":[{"name":"بيض","calories":150,"protein":13,"carbs":1,"fat":11},{"name":"خبز","calories":80,"protein":3,"carbs":15,"fat":1},{"name":"برجر","calories":400,"protein":20,"carbs":40,"fat":18}]}',
     'Example: "مرحبا كيفك" -> {"items":[]}',
@@ -68,12 +69,15 @@
   // Ready to chat = either a backend proxy is configured, or the user saved a key.
   const ready = () => useProxy() || hasKey();
 
-  // Call the backend proxy (no key in the app) and return the macros.
-  async function analyzeViaProxy(text) {
+  // Call the backend proxy (no key in the app) and return the macros. `image`
+  // is an optional { mimeType, data(base64) } for photo-based analysis.
+  async function analyzeViaProxy(text, image) {
+    const payload = { text: String(text || '') };
+    if (image) payload.image = image;
     const res = await fetch(PROXY_URL, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ text: String(text) }),
+      body: JSON.stringify(payload),
     });
     const data = await res.json().catch(() => ({}));
     if (!res.ok) {
@@ -147,6 +151,73 @@
     return toItems(JSON.parse(cleaned));
   }
 
+  // Instruction sent WITH a photo. Tells the model to estimate the actual
+  // PORTION from visual cues (so we don't need a worker redeploy — the worker
+  // just forwards this text + the image to Gemini).
+  function imagePrompt() {
+    let lang = 'en';
+    try { lang = (DB && DB.prefs && DB.prefs.get().lang) || 'en'; } catch (_) {}
+    return [
+      'Look at this food photo. Identify every distinct food and drink.',
+      'ESTIMATE THE AMOUNT actually shown using visual cues — plate/bowl size, utensils, hands, the container, the number of pieces, and the visible volume/thickness.',
+      'Calculate calories and macros for THAT estimated amount — not a generic single serving.',
+      'Put the estimated amount inside each item\'s name (e.g. "2 slices pizza", "grilled chicken ~200g", "rice ~1.5 cup").',
+      lang === 'ar' ? 'Write the names in Arabic.' : 'Write the names in English.',
+    ].join(' ');
+  }
+
+  // Analyze a food PHOTO. `image` = { mimeType, data(base64) }. Not cached
+  // (every photo is unique).
+  async function analyzeImage(image) {
+    if (useProxy()) return analyzeViaProxy(imagePrompt(), image);
+    const key = getKey();
+    if (!key) throw new Error(tr('ai_need_key'));
+    const body = {
+      systemInstruction: { parts: [{ text: SYSTEM }] },
+      contents: [{ parts: [
+        { text: imagePrompt() },
+        { inline_data: { mime_type: image.mimeType, data: image.data } },
+      ] }],
+      generationConfig: { responseMimeType: 'application/json', temperature: 0 },
+    };
+    const res = await fetch(endpoint(key), {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
+    });
+    if (!res.ok) {
+      let msg = 'HTTP ' + res.status;
+      try { const e = await res.json(); msg = (e.error && e.error.message) || msg; } catch (_) {}
+      throw new Error(msg);
+    }
+    const data = await res.json();
+    const partText = data && data.candidates && data.candidates[0] &&
+      data.candidates[0].content && data.candidates[0].content.parts &&
+      data.candidates[0].content.parts[0] && data.candidates[0].content.parts[0].text;
+    if (!partText) throw new Error(tr('ai_no_result'));
+    const cleaned = String(partText).trim().replace(/^```(?:json)?/i, '').replace(/```$/, '').trim();
+    return toItems(JSON.parse(cleaned));
+  }
+
+  // Downscale a picked image file to a JPEG (max 1024px, q0.7) so the upload
+  // stays small. Returns { dataUrl (for the thumbnail), image: { mimeType, data } }.
+  function processImage(file, maxDim, quality) {
+    maxDim = maxDim || 1024; quality = quality || 0.7;
+    return new Promise((resolve, reject) => {
+      const img = new Image();
+      const url = URL.createObjectURL(file);
+      img.onload = () => {
+        URL.revokeObjectURL(url);
+        let w = img.width, h = img.height;
+        if (Math.max(w, h) > maxDim) { const s = maxDim / Math.max(w, h); w = Math.round(w * s); h = Math.round(h * s); }
+        const c = document.createElement('canvas'); c.width = w; c.height = h;
+        c.getContext('2d').drawImage(img, 0, 0, w, h);
+        const dataUrl = c.toDataURL('image/jpeg', quality);
+        resolve({ dataUrl: dataUrl, image: { mimeType: 'image/jpeg', data: dataUrl.split(',')[1] } });
+      };
+      img.onerror = () => { URL.revokeObjectURL(url); reject(new Error('image load failed')); };
+      img.src = url;
+    });
+  }
+
   // ---------------------------------------------------------------- UI
   let logDate = null; // which day "add to log" writes to
 
@@ -181,6 +252,8 @@
     return `
       <div class="ai-results" id="ai-results"></div>
       <div class="ai-input-row">
+        <button class="ai-photo-btn" id="ai-photo" aria-label="${tr('ai_photo')}">${ic('camera', 20)}</button>
+        <input type="file" id="ai-file" accept="image/*" capture="environment" hidden>
         <input type="text" id="ai-input" placeholder="${tr('ai_chat_placeholder')}" autocomplete="off">
         <button class="btn btn-primary" id="ai-send">${ic('arrowUp', 18)}</button>
       </div>`;
@@ -218,6 +291,25 @@
           wire();
         });
       }
+      // Render the cards (or a decline) for one query — shared by text + photo.
+      const showResult = (id, qHtml, items, box) => {
+        const p = document.getElementById(id + '-p');
+        if (!items.length) {
+          if (p) p.innerHTML = qHtml + `<span class="ai-decline">${tr('ai_not_food')}</span>`;
+        } else {
+          groups[id] = items;
+          const cards = items.map((it, i) => {
+            const cid = id + '-' + i; results[cid] = it; return resultCardHtml(it, cid);
+          }).join('');
+          const addAll = items.length > 1
+            ? `<button class="btn btn-ghost btn-block ai-add-all" data-addall="${id}">${ic('plus', 15)} ${tr('ai_add_all')} (${fmtNum(items.length)})</button>`
+            : '';
+          if (p) p.outerHTML = `<div class="ai-pending">${qHtml}</div>` + cards + addAll;
+          bindAdds();
+        }
+        box.scrollTop = box.scrollHeight;
+      };
+
       // Chat panel
       const send = document.getElementById('ai-send');
       const input = document.getElementById('ai-input');
@@ -228,36 +320,51 @@
           const id = 'r' + (++n);
           const box = document.getElementById('ai-results');
           input.value = '';
-          box.insertAdjacentHTML('beforeend', `<div class="ai-pending" id="${id}-p"><span class="ai-q">${esc(text)}</span><span class="ai-dots">${tr('ai_analyzing')}</span></div>`);
+          const qHtml = `<span class="ai-q">${esc(text)}</span>`;
+          box.insertAdjacentHTML('beforeend', `<div class="ai-pending" id="${id}-p">${qHtml}<span class="ai-dots">${tr('ai_analyzing')}</span></div>`);
           box.scrollTop = box.scrollHeight;
           try {
             const { items } = await window.FoodAI.analyze(text);
-            const p = document.getElementById(id + '-p');
-            if (!items.length) {
-              // No food found — politely decline instead of showing fake numbers.
-              if (p) p.innerHTML = `<span class="ai-q">${esc(text)}</span><span class="ai-decline">${tr('ai_not_food')}</span>`;
-            } else {
-              groups[id] = items;
-              const cards = items.map((it, i) => {
-                const cid = id + '-' + i;
-                results[cid] = it;
-                return resultCardHtml(it, cid);
-              }).join('');
-              const addAll = items.length > 1
-                ? `<button class="btn btn-ghost btn-block ai-add-all" data-addall="${id}">${ic('plus', 15)} ${tr('ai_add_all')} (${fmtNum(items.length)})</button>`
-                : '';
-              if (p) p.outerHTML = `<div class="ai-pending"><span class="ai-q">${esc(text)}</span></div>` + cards + addAll;
-              bindAdds();
-            }
-            box.scrollTop = box.scrollHeight;
+            showResult(id, qHtml, items, box);
           } catch (e) {
             const p = document.getElementById(id + '-p');
-            if (p) p.innerHTML = `<span class="ai-q">${esc(text)}</span><span class="ai-err">${esc((e && e.message) || tr('ai_error'))}</span>`;
+            if (p) p.innerHTML = qHtml + `<span class="ai-err">${esc((e && e.message) || tr('ai_error'))}</span>`;
           }
         };
         send.addEventListener('click', run);
         input.addEventListener('keydown', (e) => { if (e.key === 'Enter') run(); });
         input.focus();
+
+        // Photo → calories
+        const photoBtn = document.getElementById('ai-photo');
+        const fileInput = document.getElementById('ai-file');
+        if (photoBtn && fileInput) {
+          photoBtn.addEventListener('click', () => fileInput.click());
+          fileInput.addEventListener('change', async () => {
+            const file = fileInput.files && fileInput.files[0];
+            fileInput.value = '';
+            if (!file) return;
+            const id = 'r' + (++n);
+            const box = document.getElementById('ai-results');
+            let qHtml = `<span class="ai-q">${tr('ai_photo')}</span>`;
+            let image = null;
+            try {
+              const pic = await processImage(file);
+              qHtml = `<img class="ai-photo-thumb" src="${pic.dataUrl}" alt="">`;
+              image = pic.image;
+            } catch (_) {}
+            box.insertAdjacentHTML('beforeend', `<div class="ai-pending" id="${id}-p">${qHtml}<span class="ai-dots">${tr('ai_analyzing')}</span></div>`);
+            box.scrollTop = box.scrollHeight;
+            try {
+              if (!image) throw new Error(tr('ai_error'));
+              const { items } = await window.FoodAI.analyzeImage(image);
+              showResult(id, qHtml, items, box);
+            } catch (e) {
+              const p = document.getElementById(id + '-p');
+              if (p) p.innerHTML = qHtml + `<span class="ai-err">${esc((e && e.message) || tr('ai_error'))}</span>`;
+            }
+          });
+        }
       }
       bindAdds();
     }
@@ -316,5 +423,5 @@
     }
   }
 
-  window.FoodAI = { open, analyze, getKey, setKey, hasKey };
+  window.FoodAI = { open, analyze, analyzeImage, getKey, setKey, hasKey };
 })();
