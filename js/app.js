@@ -754,6 +754,21 @@ const I18N = {
     unit_label: 'Weight Unit',
     kg_label: 'Kilograms (kg)',
     lb_label: 'Pounds (lb)',
+
+    // Navigation a11y
+    back: 'Back',
+
+    // Personal Records
+    pr_card: 'Personal Records',
+    pr_card_sub: 'Your all-time bests',
+    pr_view_title: 'Personal Records',
+    pr_est_orm: 'Est. 1RM',
+    pr_max_weight: 'Max weight',
+    pr_empty_title: 'No records yet',
+    pr_empty_text: 'Log a session to set your first PR.',
+    pr_weight: 'New PR!',
+    pr_orm: 'New PR!',
+    pr_both: 'New PR!',
   },
 
   ar: {
@@ -1136,6 +1151,21 @@ const I18N = {
     unit_label: 'وحدة الوزن',
     kg_label: 'كيلوجرام (kg)',
     lb_label: 'باوند (lb)',
+
+    // Navigation a11y
+    back: 'رجوع',
+
+    // Personal Records
+    pr_card: 'الأرقام القياسية',
+    pr_card_sub: 'أفضل أوزانك على الإطلاق',
+    pr_view_title: 'الأرقام القياسية',
+    pr_est_orm: '1RM تقديري',
+    pr_max_weight: 'أعلى وزن',
+    pr_empty_title: 'لا توجد أرقام قياسية بعد',
+    pr_empty_text: 'سجّل جلسة لتضبط أول رقم قياسي.',
+    pr_weight: 'رقم قياسي!',
+    pr_orm: 'رقم قياسي!',
+    pr_both: 'رقم قياسي!',
   },
 };
 
@@ -1345,6 +1375,7 @@ function navigate(view, context = {}, opts = {}) {
     cardio: 'cardio', food: 'food', sleep: 'sleep',
     compare: 'home', settings: 'home',
     planner: 'home', calendar: 'home', supplements: 'home', foodlog: 'home',
+    'personal-records': 'home',
   };
   const highlightView = navMap[view] || view;
   $$('.nav-btn').forEach((b) => b.classList.toggle('active', b.dataset.view === highlightView));
@@ -1408,6 +1439,7 @@ function renderView(view) {
     case 'supplements': renderSupplements(el); break;
     case 'foodlog': renderFoodLog(el); break;
     case 'session-day': renderSessionDay(el); break;
+    case 'personal-records': renderPersonalRecords(el); break;
   }
 }
 
@@ -1435,6 +1467,43 @@ function emptyState({ iconName = 'dumbbell', title, text }) {
       <div class="empty-text">${escapeHtml(text)}</div>
     </div>
   `;
+}
+
+// ==========================================================================
+// Personal Records helper
+// ==========================================================================
+function checkPR(exerciseId, prior, newSets) {
+  // Cold-start: no toast on the very first session ever
+  if (prior.sessionCount === 0) return null;
+
+  // Compute new max weight and best Epley 1RM from the sets just saved
+  let newMaxW = 0;
+  let newBestORM = 0;
+  newSets.forEach((s) => {
+    if (s.weight > newMaxW) newMaxW = s.weight;
+    if (s.reps > 0 && s.weight > 0) {
+      const orm = s.weight * (1 + s.reps / 30);
+      if (orm > newBestORM) newBestORM = orm;
+    }
+  });
+
+  // Re-read the post-write snapshot
+  const postBest = DB.sessions.prSnapshot(exerciseId);
+
+  const wPR = postBest.maxWeight > prior.maxWeight && newMaxW >= postBest.maxWeight;
+  const ormPR = postBest.bestORM > prior.bestORM && newBestORM >= postBest.bestORM;
+
+  if (!wPR && !ormPR) return null;
+
+  if (wPR && ormPR) {
+    return t('pr_both') + ' ' + fmtWeight(postBest.maxWeight) + unitLabel()
+      + ' · ' + t('pr_est_orm') + ' ' + fmtWeight(Math.round(postBest.bestORM)) + unitLabel();
+  }
+  if (wPR) {
+    return t('pr_weight') + ' ' + fmtWeight(postBest.maxWeight) + unitLabel();
+  }
+  // ormPR only
+  return t('pr_orm') + ' ' + t('pr_est_orm') + ' ' + fmtWeight(Math.round(postBest.bestORM)) + unitLabel();
 }
 
 function computeStreak() {
@@ -1584,7 +1653,7 @@ function renderHome(el) {
     <div class="recent-list">
       ${recent.map((r) => `
         <div class="recent-item">
-          <div class="recent-item-icon data-icon ${r.iconCls}">${icon(r.iconName, 16)}</div>
+          <div class="recent-item-icon data-icon ${escapeHtml(r.iconCls)}">${icon(r.iconName, 16)}</div>
           <div class="recent-item-main">
             <div class="recent-item-title">${escapeHtml(r.title)}</div>
             <div class="recent-item-meta">${escapeHtml(daysAgoLocalized(r.date))} · ${escapeHtml(r.meta)}</div>
@@ -1741,6 +1810,13 @@ function renderHome(el) {
           <div class="tool-card-sub">${t('food_log_card_sub')}</div>
         </div>
       </button>
+      <button class="tool-card" data-goto="personal-records">
+        <div class="tool-card-icon" aria-hidden="true">${icon('trophy', 18)}</div>
+        <div>
+          <div class="tool-card-title">${t('pr_card')}</div>
+          <div class="tool-card-sub">${t('pr_card_sub')}</div>
+        </div>
+      </button>
     </div>
 
     <button class="cta-card" data-goto="compare">
@@ -1754,7 +1830,7 @@ function renderHome(el) {
 
     ${recentHtml}
 
-    <div style="text-align:center;opacity:.4;font-size:12px;margin:24px 0 8px;letter-spacing:.5px">THE VAULT · v74</div>
+    <div style="text-align:center;opacity:.4;font-size:12px;margin:24px 0 8px;letter-spacing:.5px">THE VAULT · v76</div>
   `;
 
   bindVaultAction(() => navigate('settings'));
@@ -1765,7 +1841,14 @@ function renderHome(el) {
 // Exercise card helpers
 // ==========================================================================
 function exerciseImgSrc(ex) {
-  if (ex.customImage) return ex.customImage;
+  if (ex.customImage) {
+    // Only allow safe schemes: data:image/* (local captures) or https?:// (remote CDN).
+    // javascript:, blob:, data:text/html, etc. are rejected and fall through to placeholder.
+    if (/^data:image\//i.test(ex.customImage) || /^https?:\/\//i.test(ex.customImage)) {
+      return ex.customImage;
+    }
+    return '';
+  }
   if (ex.imageSlug) return exerciseImageUrl(ex.imageSlug);
   return '';
 }
@@ -2257,7 +2340,7 @@ function renderExerciseDetail(el, exerciseId) {
         <div class="sets-row ${isBest ? 'best' : ''}">
           <div class="sets-row-n">${t('set_n')} ${i + 1}</div>
           <div class="sets-row-reps">
-            <span class="sets-row-num num">${set.reps}</span>
+            <span class="sets-row-num num">${escapeHtml(String(set.reps))}</span>
             <span class="sets-row-unit">${t('reps')}</span>
           </div>
           <div class="sets-row-weight">${fmtWeightDual(set.weight)}</div>
@@ -2455,7 +2538,7 @@ function openSessionModal(exerciseId, sessionId = null) {
         <span>${daysAgoLocalized(lastSession.date)}</span>
       </div>
       <div class="prev-session-sets">
-        ${lastSession.sets.map((s) => `${s.reps} × ${fmtWeight(s.weight)}${unitLabel()}`).join(' · ')}
+        ${lastSession.sets.map((s) => `${escapeHtml(String(s.reps))} × ${fmtWeight(s.weight)}${unitLabel()}`).join(' · ')}
       </div>
     </div>
   ` : '';
@@ -2518,12 +2601,18 @@ function openSessionModal(exerciseId, sessionId = null) {
       .map((s) => ({ reps: Number(s.reps) || 0, weight: Number(s.weight) || 0 }))
       .filter((s) => s.reps > 0 || s.weight > 0);
     if (cleaned.length === 0) { showToast(t('add_at_least_one')); return; }
+    // Snapshot BEFORE write (full snapshot including the session being edited)
+    const prior = DB.sessions.prSnapshot(exerciseId);
     if (existing) {
       DB.sessions.update(existing.id, { date, sets: cleaned });
-      showToast(t('session_updated'));
     } else {
       DB.sessions.add({ exerciseId, date, sets: cleaned });
-      showToast(t('session_saved'));
+    }
+    const prMsg = checkPR(exerciseId, prior, cleaned);
+    if (prMsg) {
+      showToast(prMsg);
+    } else {
+      showToast(existing ? t('session_updated') : t('session_saved'));
     }
     closeModal();
     renderView(currentView);
@@ -4164,7 +4253,7 @@ function renderSessionDay(el) {
     const machineSvg = ex.machineType ? machineSvgFor(ex.machineType) : '';
     const last = DB.sessions.lastForExercise(ex.id, st.savedSessionId);
     const lastPreview = last
-      ? last.sets.map((s) => `${s.reps}×${fmtNum(modalConvertForDisplay(s.weight))}${viewContext.sdUnit}`).join(' · ')
+      ? last.sets.map((s) => `${escapeHtml(String(s.reps))}×${fmtNum(modalConvertForDisplay(s.weight))}${viewContext.sdUnit}`).join(' · ')
       : t('no_sessions_yet');
     const isLogged = !!st.savedSessionId;
 
@@ -4319,13 +4408,19 @@ function renderSessionDay(el) {
         const existing = todaySessionFor(exId);
         if (existing) existingId = existing.id;
       }
+      // Snapshot BEFORE write (full snapshot including the session being edited)
+      const prior = DB.sessions.prSnapshot(exId);
       if (existingId) {
         DB.sessions.update(existingId, { date: viewContext.sdDate, sets: cleaned });
-        showToast(t('session_updated'));
       } else {
         const created = DB.sessions.add({ exerciseId: exId, date: viewContext.sdDate, sets: cleaned });
         st.savedSessionId = created.id;
-        showToast(t('session_saved'));
+      }
+      const prMsg = checkPR(exId, prior, cleaned);
+      if (prMsg) {
+        showToast(prMsg);
+      } else {
+        showToast(existingId ? t('session_updated') : t('session_saved'));
       }
       st.dirty = false;
       renderSessionDay(el);
@@ -4461,7 +4556,7 @@ function openCalendarDayModal(iso) {
     cardio.forEach((c) => {
       html += `
         <div class="data-row">
-          <div class="data-icon ${c.type}">${icon(c.type === 'cycling' ? 'bike' : c.type === 'walking' ? 'walk' : 'treadmill', 18)}</div>
+          <div class="data-icon ${escapeHtml(c.type)}">${icon(c.type === 'cycling' ? 'bike' : c.type === 'walking' ? 'walk' : 'treadmill', 18)}</div>
           <div class="data-main">
             <div class="data-title">${escapeHtml(t(c.type))}</div>
             <div class="data-meta">
@@ -4519,7 +4614,7 @@ function renderSupplements(el) {
     const streak = DB.supplements.streak(s.id);
     return `
       <div class="supp-row ${taken ? 'taken' : ''}">
-        <div class="supp-color" style="background:${escapeHtml(s.color)}"></div>
+        <div class="supp-color" style="background:${/^#[0-9a-fA-F]{3,8}$/.test(s.color) ? s.color : '#888888'}"></div>
         <div class="supp-main">
           <div class="supp-name">${escapeHtml(s.name)}</div>
           ${s.dose ? `<div class="supp-dose">${escapeHtml(s.dose)}</div>` : ''}
@@ -5136,6 +5231,57 @@ async function populateAccount(el) {
       </button>`;
     $('#signin-btn', el)?.addEventListener('click', () => showAuthGate('in'));
   }
+}
+
+// ==========================================================================
+// PERSONAL RECORDS VIEW
+// ==========================================================================
+function renderPersonalRecords(el) {
+  const exercises = DB.exercises.list();
+
+  // Build rows: skip exercises with no sessions or bodyweight-only (maxWeight === 0); null-guard orphan ids
+  const rows = exercises
+    .map((ex) => {
+      if (!ex) return null;
+      const snap = DB.sessions.prSnapshot(ex.id);
+      if (snap.sessionCount === 0) return null;
+      if (snap.maxWeight === 0) return null; // bodyweight-only exercises (push-ups, pull-ups, etc.)
+      return { ex, snap };
+    })
+    .filter(Boolean)
+    .sort((a, b) => a.ex.name.localeCompare(b.ex.name));
+
+  const listHtml = rows.map(({ ex, snap }) => `
+    <div class="data-row pr-row">
+      <div class="data-icon custom" aria-hidden="true">${icon('trophy', 20)}</div>
+      <div class="data-main">
+        <div class="data-title">${escapeHtml(ex.name)}</div>
+        <div class="data-meta pr-stats">
+          <span>${escapeHtml(t('pr_max_weight'))}: <span class="num">${fmtWeight(snap.maxWeight)}${unitLabel()}</span></span>
+          <span class="dot-sep"></span>
+          <span>${escapeHtml(t('pr_est_orm'))}: <span class="num">${fmtWeight(Math.round(snap.bestORM))}${unitLabel()}</span></span>
+        </div>
+      </div>
+    </div>
+  `).join('');
+
+  el.innerHTML = `
+    <div class="detail-top">
+      <button class="back-btn" data-goto="home" aria-label="${t('back')}">${icon('back', 20)}</button>
+      <div class="detail-top-title">${t('pr_view_title')}</div>
+    </div>
+
+    <div class="page-header">
+      <div class="page-eyebrow">${t('tools_section')}</div>
+      <h1 class="page-title">${t('pr_view_title')}</h1>
+      <p class="page-subtitle">${t('pr_card_sub')}</p>
+    </div>
+
+    ${rows.length === 0
+      ? emptyState({ iconName: 'trophy', title: t('pr_empty_title'), text: t('pr_empty_text') })
+      : `<div class="data-list">${listHtml}</div>`
+    }
+  `;
 }
 
 async function bootCloud() {

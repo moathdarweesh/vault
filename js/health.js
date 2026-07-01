@@ -13,6 +13,10 @@
   const ic = (name, size) => (typeof icon === 'function' ? icon(name, size || 20) : '');
   const fmt = (n) => (typeof fmtNum === 'function' ? fmtNum(n) : String(n));
   const round = (v, d) => (v == null ? null : (d ? Number(v).toFixed(d) : Math.round(v)));
+  // Escape HTML for untrusted strings (e.g. native error messages from the plugin).
+  const esc = (s) => typeof escapeHtml === 'function'
+    ? escapeHtml(s)
+    : String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
 
   function startOfTodayMs() {
     const d = new Date();
@@ -268,7 +272,7 @@
       wireModal();
       if (typeof showToast === 'function') showToast(tr('health_synced'));
     } catch (e) {
-      if (body) body.innerHTML = `<div class="health-msg">${(e && e.message) || tr('health_no_data')}</div>` + actions(false);
+      if (body) body.innerHTML = `<div class="health-msg">${esc((e && e.message) || tr('health_no_data'))}</div>` + actions(false);
       wireModal();
     }
   }
@@ -310,7 +314,7 @@
       await sync();
     } catch (e) {
       const body = document.getElementById('health-body');
-      if (body && !cached) body.innerHTML = `<div class="health-msg">${(e && e.message) || tr('health_unavailable')}</div>`;
+      if (body && !cached) body.innerHTML = `<div class="health-msg">${esc((e && e.message) || tr('health_unavailable'))}</div>`;
     }
   }
 

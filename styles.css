@@ -4751,3 +4751,9 @@ body[dir="rtl"] .variation-select svg { transform: scaleX(-1); }
   padding: 8px;
   cursor: pointer;
 }
+
+/* Personal Records */
+/* .pr-row: override .data-row's center alignment so the trophy icon top-aligns when the meta line wraps */
+.pr-row { align-items: flex-start; }
+/* .pr-stats: override .data-meta gap from 8px to match dot-sep spacing at narrower widths */
+.pr-stats { gap: 8px; }

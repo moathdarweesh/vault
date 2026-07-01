@@ -49,8 +49,26 @@
 
   // ---- whole-state snapshot/restore ----------------------------------------
   const exportRaw = () => { try { return localStorage.getItem(STORE_KEY); } catch (_) { return null; } };
+
+  // Validate a parsed blob before writing it to localStorage.
+  // Mirrors DB._validateBlob — only requires keys that must exist; optional
+  // arrays are checked only when present so old backups still apply cleanly.
+  function validateBlob(data) {
+    if (!data || typeof data !== 'object' || Array.isArray(data)) return false;
+    if (!Array.isArray(data.exercises)) return false;
+    if ('sessions' in data && !Array.isArray(data.sessions)) return false;
+    if ('cardio' in data && !Array.isArray(data.cardio)) return false;
+    if ('supplements' in data && !Array.isArray(data.supplements)) return false;
+    return true;
+  }
+
   function importRaw(raw) {
     try {
+      // Guard: parse and validate shape before touching localStorage so a
+      // corrupt or hostile remote blob can never replace good local state.
+      let parsed;
+      try { parsed = JSON.parse(raw); } catch (_) { return false; }
+      if (!validateBlob(parsed)) return false;
       localStorage.setItem(STORE_KEY, raw);
       if (typeof DB !== 'undefined' && DB.reload) DB.reload();
       return true;

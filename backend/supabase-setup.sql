@@ -23,3 +23,9 @@ create policy "vault_insert_own" on public.vault_data
 drop policy if exists "vault_update_own" on public.vault_data;
 create policy "vault_update_own" on public.vault_data
   for update using (auth.uid() = user_id) with check (auth.uid() = user_id);
+
+-- ACTION REQUIRED: run the statement below in Supabase SQL editor to apply it.
+-- Editing this file alone does NOT affect the live database.
+drop policy if exists "vault_delete_own" on public.vault_data;
+create policy "vault_delete_own" on public.vault_data
+  for delete using (auth.uid() = user_id);

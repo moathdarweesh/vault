@@ -33,16 +33,33 @@ const SYSTEM = [
   'Example: "مرحبا كيفك" -> {"items":[]}',
 ].join(' ');
 
-const CORS = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Methods': 'POST, OPTIONS',
-  'Access-Control-Allow-Headers': 'Content-Type',
-};
+// Origins allowed to call this Worker.
+// NOTE: if the AI stops working on the Android phone, check that the
+// Capacitor WebView origin (typically https://localhost for Android) is in
+// this list and redeploy. The current set covers: GitHub Pages prod,
+// Capacitor Android (https://localhost), and local dev variants.
+const ALLOWED_ORIGINS = new Set([
+  'https://moathdarweesh.github.io',
+  'https://localhost',
+  'http://localhost',
+  'http://localhost:8080',
+]);
 
-function json(obj, status) {
+function corsHeaders(requestOrigin) {
+  const origin = ALLOWED_ORIGINS.has(requestOrigin)
+    ? requestOrigin
+    : 'https://moathdarweesh.github.io';
+  return {
+    'Access-Control-Allow-Origin': origin,
+    'Access-Control-Allow-Methods': 'POST, OPTIONS',
+    'Access-Control-Allow-Headers': 'Content-Type',
+  };
+}
+
+function json(obj, status, requestOrigin) {
   return new Response(JSON.stringify(obj), {
     status,
-    headers: { 'Content-Type': 'application/json', ...CORS },
+    headers: { 'Content-Type': 'application/json', ...corsHeaders(requestOrigin) },
   });
 }
 
@@ -73,9 +90,11 @@ async function callModel(model, key, text, image) {
   if (res.status === 429 || res.status === 404) return { rateLimited: true };
 
   if (!res.ok) {
+    // Log server-side for debugging but don't leak provider internals to the client.
     let msg = 'HTTP ' + res.status;
     try { const e = await res.json(); msg = (e.error && e.error.message) || msg; } catch (_) {}
-    return { error: msg };
+    console.error('[gemini-worker] upstream error:', msg);
+    return { error: 'upstream_error' };
   }
 
   const data = await res.json();
@@ -90,7 +109,7 @@ async function callModel(model, key, text, image) {
 
   const rawItems = Array.isArray(obj.items) ? obj.items : [];
   const items = rawItems.map((it) => ({
-    name: String((it && it.name) || '').trim().slice(0, 80),
+    name: String((it && it.name) || '').trim().slice(0, 80).replace(/[<>]/g, ''),
     calories: Math.max(0, Math.round(Number(it && it.calories) || 0)),
     protein: Math.max(0, Math.round(Number(it && it.protein) || 0)),
     carbs: Math.max(0, Math.round(Number(it && it.carbs) || 0)),
@@ -104,8 +123,11 @@ async function callModel(model, key, text, image) {
 
 export default {
   async fetch(request, env) {
-    if (request.method === 'OPTIONS') return new Response(null, { headers: CORS });
-    if (request.method !== 'POST') return json({ error: 'method not allowed' }, 405);
+    const origin = request.headers.get('Origin') || '';
+
+    // Preflight: reflect allowed origin.
+    if (request.method === 'OPTIONS') return new Response(null, { headers: corsHeaders(origin) });
+    if (request.method !== 'POST') return json({ error: 'method not allowed' }, 405, origin);
 
     const OK_MIME = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
     const MAX_IMG = 1400000; // ~1MB decoded — plenty for a 1024px JPEG
@@ -117,23 +139,24 @@ export default {
       text = String(body.text || '').slice(0, 500);
       if (body.image && body.image.data) {
         const data = String(body.image.data);
-        if (data.length > MAX_IMG) return json({ error: 'image too large' }, 413);
+        // Reject oversize images here, before forwarding to Gemini (returns 413).
+        if (data.length > MAX_IMG) return json({ error: 'image too large' }, 413, origin);
         let mime = String(body.image.mimeType || 'image/jpeg').toLowerCase();
         if (OK_MIME.indexOf(mime) === -1) mime = 'image/jpeg';
         image = { mimeType: mime, data };
       }
     } catch (_) { /* ignore */ }
-    if (!text.trim() && !image) return json({ error: 'no input' }, 400);
+    if (!text.trim() && !image) return json({ error: 'no input' }, 400, origin);
 
     const key = env.GEMINI_KEY;
-    if (!key) return json({ error: 'server not configured (missing GEMINI_KEY)' }, 500);
+    if (!key) return json({ error: 'server misconfigured' }, 500, origin);
 
     // Try each model until one answers. Track whether failures were all quota.
     let lastError = null;
     let allRateLimited = true;
     for (const model of MODELS) {
       const r = await callModel(model, key, text, image);
-      if (r.ok) return json({ items: r.items }, 200);
+      if (r.ok) return json({ items: r.items }, 200, origin);
       if (r.rateLimited) { lastError = 'rate_limited'; continue; }
       allRateLimited = false;
       lastError = r.error;
@@ -141,7 +164,9 @@ export default {
 
     // Every model failed. Use 429 + a clear code for quota so the app can show
     // a friendly "try again later" message instead of a raw English error.
-    if (allRateLimited) return json({ error: 'rate_limited', code: 'RATE_LIMIT' }, 429);
-    return json({ error: lastError || 'unavailable' }, 502);
+    if (allRateLimited) return json({ error: 'rate_limited', code: 'RATE_LIMIT' }, 429, origin);
+    // Generic 502 — don't leak the internal error string to the client.
+    console.error('[gemini-worker] all models failed, last error:', lastError);
+    return json({ error: 'service unavailable' }, 502, origin);
   },
 };

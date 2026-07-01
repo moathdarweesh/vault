@@ -723,10 +723,21 @@ const DB = {
   exportJSON() {
     return JSON.stringify(STATE, null, 2);
   },
+  // Validate that a parsed blob has the expected shape before we accept it.
+  // Lenient: only requires what must exist; optional arrays are checked only
+  // when present (older backups may lack newer keys and still import fine).
+  _validateBlob(data) {
+    if (!data || typeof data !== 'object' || Array.isArray(data)) return false;
+    if (!Array.isArray(data.exercises)) return false;
+    if ('sessions' in data && !Array.isArray(data.sessions)) return false;
+    if ('cardio' in data && !Array.isArray(data.cardio)) return false;
+    if ('supplements' in data && !Array.isArray(data.supplements)) return false;
+    return true;
+  },
   importJSON(json) {
     try {
       const data = JSON.parse(json);
-      if (!data.exercises) throw new Error('Missing exercises');
+      if (!this._validateBlob(data)) return false;
       STATE = data;
       save();
       return true;
@@ -853,6 +864,39 @@ const DB = {
         if (sessionVol > maxVolume) maxVolume = sessionVol;
       });
       return { maxWeight, maxReps, maxVolume, totalSets, sessionCount: list.length };
+    },
+    // Returns the best Epley 1RM (kg) across all sets of all sessions for an
+    // exercise. Must scan raw per-set values because maxWeight and maxReps in
+    // bestStats() can come from DIFFERENT sets, making the naive product wrong.
+    bestOneRM(exerciseId) {
+      let best = 0;
+      this.listByExercise(exerciseId).forEach((s) => {
+        (s.sets || []).forEach((set) => {
+          if (set.reps > 0 && set.weight > 0) {
+            const orm = set.weight * (1 + set.reps / 30);
+            if (orm > best) best = orm;
+          }
+        });
+      });
+      return best; // 0 if no valid sets
+    },
+    // Snapshot of both PR values, optionally excluding one session id (edit path).
+    // Returns { maxWeight, bestORM, sessionCount } for the exercise.
+    prSnapshot(exerciseId, excludeId = null) {
+      const sessions = excludeId
+        ? this.listByExercise(exerciseId).filter((s) => s.id !== excludeId)
+        : this.listByExercise(exerciseId);
+      let maxWeight = 0, bestORM = 0;
+      sessions.forEach((s) => {
+        (s.sets || []).forEach((set) => {
+          if (set.weight > maxWeight) maxWeight = set.weight;
+          if (set.reps > 0 && set.weight > 0) {
+            const orm = set.weight * (1 + set.reps / 30);
+            if (orm > bestORM) bestORM = orm;
+          }
+        });
+      });
+      return { maxWeight, bestORM, sessionCount: sessions.length };
     },
   },
 
