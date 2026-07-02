@@ -630,6 +630,8 @@ const I18N = {
     library_subtitle: 'Browse all exercises and add the ones you do.',
     browse_library: 'Browse Library',
     add_from_library: 'Add from Library',
+    add_exercise: 'Add exercise',
+    exercise_removed: 'Exercise removed',
     pick_mode_title: 'Tap to add to Train',
     pick_mode_sub: 'Tap any exercise to add or remove it instantly.',
     add_to_train: 'Add to Train',
@@ -1042,6 +1044,8 @@ const I18N = {
     library_subtitle: 'تصفّح كل التمارين وأضف اللي تسويها.',
     browse_library: 'تصفّح المكتبة',
     add_from_library: 'إضافة من المكتبة',
+    add_exercise: 'أضف تمرين',
+    exercise_removed: 'تم إزالة التمرين',
     pick_mode_title: 'اضغط على التمرين لإضافته',
     pick_mode_sub: 'كل ضغطة تضيف أو تشيل التمرين من قائمة التدريب فوراً.',
     add_to_train: 'أضف للتمارين',
@@ -1812,7 +1816,7 @@ function renderHome(el) {
 
     ${recentHtml}
 
-    <div style="text-align:center;opacity:.4;font-size:12px;margin:24px 0 8px;letter-spacing:.5px">THE VAULT · v84</div>
+    <div style="text-align:center;opacity:.4;font-size:12px;margin:24px 0 8px;letter-spacing:.5px">THE VAULT · v85</div>
   `;
 
   // Count-up the hero/stat numerals (sleep is stored ×10 for one decimal)
@@ -4356,6 +4360,7 @@ function renderSessionDay(el) {
             <div class="sd-card-last">${escapeHtml(lastPreview)}</div>
           </div>
           ${isLogged ? `<div class="sd-status-pill">${icon('check', 12)} ${t('logged')}</div>` : ''}
+          <button type="button" class="icon-btn danger sd-remove-ex" data-remove-ex="${ex.id}" aria-label="${escapeHtml(t('remove_from_day'))}">${icon('trash', 15)}</button>
         </div>
 
         <div class="sd-sets-head">
@@ -4405,11 +4410,29 @@ function renderSessionDay(el) {
       ? emptyState({ iconName: 'dumbbell', title: t('rest_day'), text: t('no_plan_today_sub') })
       : `<div class="sd-list">${exObjs.map(renderExerciseCard).join('')}</div>`
     }
+
+    <button type="button" class="btn btn-ghost btn-block" id="sd-add-ex" style="margin-top:12px">${icon('plus', 16)} ${t('add_exercise')}</button>
   `;
 
   // ----- Bindings -----
 
   $('#sd-edit-day', el)?.addEventListener('click', () => openDayEditorModal(dow));
+
+  // Add an exercise from the library — reuses the day editor's searchable
+  // picker (pre-selects the day's current exercises; saving updates the day).
+  $('#sd-add-ex', el)?.addEventListener('click', () => openDayEditorModal(dow));
+
+  // Remove one exercise from this day, inline. Clears its unsaved set state so
+  // it doesn't linger, then re-renders. Logged sessions in history are kept.
+  el.querySelectorAll('[data-remove-ex]').forEach((b) =>
+    b.addEventListener('click', () => {
+      const exId = b.dataset.removeEx;
+      DB.plan.removeExercise(dow, exId);
+      delete viewContext.sdState[exId];
+      showToast(t('exercise_removed'));
+      renderSessionDay(el);
+    })
+  );
 
   $('#sd-date', el)?.addEventListener('change', (e) => {
     viewContext.sdDate = e.target.value || todayISO();
