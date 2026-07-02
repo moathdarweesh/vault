@@ -1747,9 +1747,8 @@ body[dir="rtl"] .bento-card.wide .bento-card-name-tag { left: 14px; }
   align-items: center;
   gap: 10px;
   padding: 6px 0 14px;
-  position: sticky;
-  top: 0;
-  background: var(--bg);
+  position: relative;
+  background: transparent;
   z-index: 5;
 }
 
