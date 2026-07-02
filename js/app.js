@@ -1816,7 +1816,7 @@ function renderHome(el) {
 
     ${recentHtml}
 
-    <div style="text-align:center;opacity:.4;font-size:12px;margin:24px 0 8px;letter-spacing:.5px">THE VAULT · v85</div>
+    <div style="text-align:center;opacity:.4;font-size:12px;margin:24px 0 8px;letter-spacing:.5px">THE VAULT · v86</div>
   `;
 
   // Count-up the hero/stat numerals (sleep is stored ×10 for one decimal)
@@ -2513,7 +2513,7 @@ function openSessionModal(exerciseId, sessionId = null) {
     ? existing.sets.map((s) => ({ reps: s.reps, weight: s.weight }))
     : lastSession
     ? lastSession.sets.map((s) => ({ reps: s.reps, weight: s.weight }))
-    : [{ reps: 10, weight: 0 }, { reps: 10, weight: 0 }, { reps: 10, weight: 0 }];
+    : [{ reps: 10, weight: 0 }]; // start with one set; user adds/removes as needed
 
   const initialDate = existing ? existing.date : todayISO();
 
@@ -4315,7 +4315,7 @@ function renderSessionDay(el) {
     let sets;
     if (today) sets = today.sets.map((s) => ({ reps: s.reps, weight: s.weight }));
     else if (last) sets = last.sets.map((s) => ({ reps: s.reps, weight: s.weight }));
-    else sets = [{ reps: 10, weight: 0 }, { reps: 10, weight: 0 }, { reps: 10, weight: 0 }];
+    else sets = [{ reps: 10, weight: 0 }]; // start with one set; user adds/removes as needed
     sdState[exId] = { sets, savedSessionId: today ? today.id : null, dirty: false };
     return sdState[exId];
   }
