@@ -717,6 +717,48 @@ const DB = {
         { calories: 0, protein: 0, carbs: 0, fat: 0 }
       );
     },
+    // Most-frequently-logged foods across ALL dates — derived on demand, no
+    // new storage. Keyed by foodId when present, else lowercased name so
+    // AI/manual entries of the same food still group. Each result carries the
+    // macros + servings from its MOST RECENT logging (by addedAt) so a one-tap
+    // re-add reproduces the last real entry. Excludes anything already logged
+    // on `excludeDate` so the quick-add rail doesn't suggest today's foods.
+    frequent(limit = 6, excludeDate = null) {
+      const excludeKeys = new Set(
+        (excludeDate ? (STATE.foodLogs[excludeDate] || []) : []).map(
+          (e) => e.foodId || ('name:' + (e.name || '').toLowerCase())
+        )
+      );
+      const map = {};
+      Object.keys(STATE.foodLogs).forEach((date) => {
+        (STATE.foodLogs[date] || []).forEach((e) => {
+          const key = e.foodId || ('name:' + (e.name || '').toLowerCase());
+          if (!e.name) return;
+          if (!map[key]) map[key] = { key, count: 0, last: null, entry: null };
+          map[key].count += 1;
+          const at = e.addedAt || (date + 'T00:00:00');
+          if (!map[key].last || at > map[key].last) {
+            map[key].last = at;
+            map[key].entry = e;
+          }
+        });
+      });
+      return Object.values(map)
+        .filter((m) => !excludeKeys.has(m.key))
+        .sort((a, b) => (b.count - a.count) || (b.last || '').localeCompare(a.last || ''))
+        .slice(0, limit)
+        .map((m) => ({
+          foodId: m.entry.foodId || null,
+          name: m.entry.name,
+          servings: m.entry.servings || 1,
+          calories: m.entry.calories || 0,
+          protein: m.entry.protein || 0,
+          carbs: m.entry.carbs || 0,
+          fat: m.entry.fat || 0,
+          source: m.entry.source || null,
+          count: m.count,
+        }));
+    },
   },
 
   // ----- Bulk export / import (for backup) -----

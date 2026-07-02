@@ -725,6 +725,9 @@ const I18N = {
     carbs_per_serving: 'Carbs per serving (g)',
     food_added: 'Food logged',
     food_removed: 'Removed',
+    quick_add: 'Quick add',
+    take_all: 'Take all',
+    all_taken: 'All marked as taken',
     empty_food_list: 'Your reference list is empty',
     empty_food_list_text: 'Go to Food and add your foods first.',
     go_to_food: 'Go to Food',
@@ -760,6 +763,7 @@ const I18N = {
 
     // Personal Records
     pr_card: 'Personal Records',
+    compare_card: 'Compare',
     pr_card_sub: 'Your all-time bests',
     pr_view_title: 'Personal Records',
     pr_est_orm: 'Est. 1RM',
@@ -1126,6 +1130,9 @@ const I18N = {
     carbs_per_serving: 'الكارب لكل حصة (جم)',
     food_added: 'تم التسجيل',
     food_removed: 'تم الحذف',
+    quick_add: 'إضافة سريعة',
+    take_all: 'أخذ الكل',
+    all_taken: 'تم تعليم الكل كمأخوذ',
     empty_food_list: 'قائمتك المرجعية فاضية',
     empty_food_list_text: 'روح لـ "الأكل" وضيف أكلاتك أول.',
     go_to_food: 'روح للأكل',
@@ -1157,6 +1164,7 @@ const I18N = {
 
     // Personal Records
     pr_card: 'الأرقام القياسية',
+    compare_card: 'قارن',
     pr_card_sub: 'أفضل أوزانك على الإطلاق',
     pr_view_title: 'الأرقام القياسية',
     pr_est_orm: '1RM تقديري',
@@ -1560,6 +1568,28 @@ function deltaBlock(current, previous, unit) {
 
 function formatDelta(n) { return (Math.round(n * 10) / 10).toString(); }
 
+// Count-up animation for hero/stat numerals (rAF, ease-out cubic).
+// Respects prefers-reduced-motion and cancels a previous run on re-render
+// so navigating away and back never leaks a frame callback.
+function animateNum(el, target, opts) {
+  const ms = (opts && opts.ms) || 600;
+  const fmt = (opts && opts.fmt) || fmtNum;
+  if (window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches) {
+    el.textContent = fmt(target);
+    return;
+  }
+  if (el.__animNum) cancelAnimationFrame(el.__animNum);
+  const start = performance.now();
+  const step = (now) => {
+    const p = Math.min(1, (now - start) / ms);
+    const eased = 1 - Math.pow(1 - p, 3);
+    el.textContent = fmt(Math.round(target * eased));
+    if (p < 1) el.__animNum = requestAnimationFrame(step);
+    else el.__animNum = null;
+  };
+  el.__animNum = requestAnimationFrame(step);
+}
+
 // ==========================================================================
 // HOME VIEW
 // ==========================================================================
@@ -1667,12 +1697,14 @@ function renderHome(el) {
   const streakUnit = streak === 1 ? t('streak_one_day') : t('streak_days');
   const streakLabel = streak > 0 ? t('streak_active') : t('streak_start');
 
-  // Today's plan card
+  // Hero "Today" card — the flagship element of the redesigned home.
+  // Plan scheduled today → plan name + muscles + a bold Start CTA.
+  // No plan → this week's set count as a large count-up numeral.
   const todayDow = String(now.getDay());
   const todayPlan = (DB.plan.get() || {})[todayDow];
-  const exerciseById = Object.fromEntries(DB.exercises.list().map((e) => [e.id, e]));
+  const exerciseById = Object.fromEntries(exercises.map((e) => [e.id, e]));
 
-  let todayPlanHtml = '';
+  let heroHtml = '';
   if (todayPlan && todayPlan.exerciseIds && todayPlan.exerciseIds.length > 0) {
     const exObjs = todayPlan.exerciseIds.map((id) => exerciseById[id]).filter(Boolean);
     const muscles = groupMusclesFromExercises(exObjs);
@@ -1685,31 +1717,25 @@ function renderHome(el) {
       </div>
     `;
 
-    todayPlanHtml = `
-      <button class="today-plan" data-goto="planner" style="width:100%;display:block;text-align:left">
-        <div class="today-plan-head">
-          <div class="today-plan-eyebrow">${t('today_plan')}</div>
-          <div class="today-plan-day">${escapeHtml(dayName(now.getDay(), true))}</div>
-        </div>
-        <div class="today-plan-name">${escapeHtml(todayPlan.name || t('start_workout'))}</div>
-        <div class="today-plan-meta">${fmtNum(exObjs.length)} ${exObjs.length === 1 ? t('exercise') : t('exercises')}</div>
-        <div class="planner-day-muscles" style="margin-top:10px">
+    heroHtml = `
+      <button class="hero-card" data-goto="planner">
+        <div class="hero-eyebrow">${t('today_plan')} · ${escapeHtml(dayName(now.getDay(), true))}</div>
+        <div class="hero-title">${escapeHtml(todayPlan.name || t('start_workout'))}</div>
+        <div class="hero-meta">${fmtNum(exObjs.length)} ${exObjs.length === 1 ? t('exercise') : t('exercises')} · ${fmtNum(weekSetsCount)} ${t('sessions_this_week')}</div>
+        <div class="planner-day-muscles">
           ${sideRow(t('anterior'), muscles.anterior, 'anterior')}
           ${sideRow(t('posterior'), muscles.posterior, 'posterior')}
         </div>
+        <div class="hero-cta">${icon('dumbbell', 18)}<span>${t('start_workout')}</span></div>
       </button>
     `;
   } else {
-    todayPlanHtml = `
-      <button class="today-plan" data-goto="planner" style="width:100%;display:block">
-        <div class="today-plan-head">
-          <div class="today-plan-eyebrow">${t('today_plan')}</div>
-          <div class="today-plan-day">${escapeHtml(dayName(now.getDay(), true))}</div>
-        </div>
-        <div class="today-plan-rest">
-          <div class="today-plan-rest-title">${t('no_plan_today')}</div>
-          <div class="today-plan-rest-sub">${t('no_plan_today_sub')}</div>
-        </div>
+    heroHtml = `
+      <button class="hero-card" data-goto="planner">
+        <div class="hero-eyebrow">${t('this_week')} · ${escapeHtml(dayName(now.getDay(), true))}</div>
+        <div class="hero-numeral num anim" data-count="${weekSetsCount}">0</div>
+        <div class="hero-meta">${t('sessions_this_week')}</div>
+        <div class="hero-cta ghost"><span>${t('no_plan_today_sub')}</span></div>
       </button>
     `;
   }
@@ -1717,54 +1743,30 @@ function renderHome(el) {
   el.innerHTML = `
     ${vaultBar({ action: icon('settings', 20) })}
 
-    <div class="home-hello">${escapeHtml(dayLabel)}</div>
-    <div class="home-hero">${greeting}.</div>
-
-    <div class="streak-banner">
-      <div class="streak-icon">${icon('flame', 24)}</div>
-      <div class="streak-text">
-        <div class="streak-number num">${streak}<span class="unit">${streakUnit}</span></div>
-        <div class="streak-label">${escapeHtml(streakLabel)}</div>
+    <div class="home-head">
+      <div class="home-head-text">
+        <div class="home-hello">${escapeHtml(dayLabel)}</div>
+        <div class="home-hero">${greeting}.</div>
       </div>
+      <button class="streak-chip" data-goto="calendar" aria-label="${escapeHtml(streakLabel)}">
+        ${icon('flame', 16)}<span class="num">${streak}</span><span class="streak-chip-unit">${streakUnit}</span>
+      </button>
     </div>
 
-    ${todayPlanHtml}
+    ${heroHtml}
 
-    <div class="stat-grid">
-      <button class="stat-tile" data-goto="workouts">
-        <div class="stat-tile-head">
-          <div class="stat-tile-label">${t('workouts')}</div>
-          <div class="stat-tile-icon">${icon('dumbbell', 15)}</div>
-        </div>
-        <div class="stat-tile-value num">${fmtNum(weekSetsCount)}</div>
-        <div class="stat-tile-sub">${t('sessions_this_week')}</div>
+    <div class="stat-strip">
+      <button class="stat-cell" data-goto="workouts">
+        <div class="stat-cell-value num"><span class="anim" data-count="${weekWorkoutDays}">0</span></div>
+        <div class="stat-cell-label">${t('sessions_label')}</div>
       </button>
-
-      <button class="stat-tile" data-goto="workouts">
-        <div class="stat-tile-head">
-          <div class="stat-tile-label">${t('sessions_label')}</div>
-          <div class="stat-tile-icon">${icon('calendar', 15)}</div>
-        </div>
-        <div class="stat-tile-value num">${fmtNum(weekWorkoutDays)}</div>
-        <div class="stat-tile-sub">${t('this_week')}</div>
+      <button class="stat-cell" data-goto="cardio">
+        <div class="stat-cell-value num"><span class="anim" data-count="${cardioMinutes}">0</span><span class="unit">${t('minutes').slice(0, 3).toLowerCase()}</span></div>
+        <div class="stat-cell-label">${t('cardio')}</div>
       </button>
-
-      <button class="stat-tile" data-goto="cardio">
-        <div class="stat-tile-head">
-          <div class="stat-tile-label">${t('cardio')}</div>
-          <div class="stat-tile-icon">${icon('run', 15)}</div>
-        </div>
-        <div class="stat-tile-value num">${cardioMinutes}<span class="unit">${t('minutes').slice(0, 3).toLowerCase()}</span></div>
-        <div class="stat-tile-sub">${t('this_week')}</div>
-      </button>
-
-      <button class="stat-tile" data-goto="sleep">
-        <div class="stat-tile-head">
-          <div class="stat-tile-label">${t('last_sleep')}</div>
-          <div class="stat-tile-icon">${icon('moon', 15)}</div>
-        </div>
-        <div class="stat-tile-value num">${sleepHours != null ? sleepHours : '—'}${sleepHours != null ? '<span class="unit">h</span>' : ''}</div>
-        <div class="stat-tile-sub">${escapeHtml(sleepSub)}</div>
+      <button class="stat-cell" data-goto="sleep">
+        <div class="stat-cell-value num">${sleepHours != null ? `<span class="anim" data-count="${Math.round(parseFloat(sleepHours) * 10)}" data-fixed="1">0</span><span class="unit">h</span>` : '—'}</div>
+        <div class="stat-cell-label">${t('last_sleep')}</div>
       </button>
     </div>
 
@@ -1777,61 +1779,48 @@ function renderHome(el) {
           <div class="heatmap-sub">${t('muscle_focus_sub')}</div>
         </div>
       </div>
-      <div class="heatmap-grid">${heatCells}</div>
+      <div class="heatmap-grid band">${heatCells}</div>
     </div>
 
     <div class="section-title">${t('tools_section')}</div>
-    <div class="tools-grid">
-      <button class="tool-card" data-goto="planner">
-        <div class="tool-card-icon">${icon('calendar', 18)}</div>
-        <div>
-          <div class="tool-card-title">${t('plan_card')}</div>
-          <div class="tool-card-sub">${t('plan_card_sub')}</div>
-        </div>
+    <div class="tool-rail">
+      <button class="tool-pod" data-goto="planner">
+        <div class="tool-pod-icon">${icon('calendar', 18)}</div>
+        <div class="tool-pod-label">${t('plan_card')}</div>
       </button>
-      <button class="tool-card" data-goto="calendar">
-        <div class="tool-card-icon">${icon('chart', 18)}</div>
-        <div>
-          <div class="tool-card-title">${t('calendar_card')}</div>
-          <div class="tool-card-sub">${t('calendar_card_sub')}</div>
-        </div>
+      <button class="tool-pod" data-goto="calendar">
+        <div class="tool-pod-icon">${icon('chart', 18)}</div>
+        <div class="tool-pod-label">${t('calendar_card')}</div>
       </button>
-      <button class="tool-card" data-goto="supplements">
-        <div class="tool-card-icon">${icon('zap', 18)}</div>
-        <div>
-          <div class="tool-card-title">${t('supplements_card')}</div>
-          <div class="tool-card-sub">${t('supplements_card_sub')}</div>
-        </div>
+      <button class="tool-pod" data-goto="supplements">
+        <div class="tool-pod-icon">${icon('zap', 18)}</div>
+        <div class="tool-pod-label">${t('supplements_card')}</div>
       </button>
-      <button class="tool-card" data-goto="foodlog">
-        <div class="tool-card-icon">${icon('utensils', 18)}</div>
-        <div>
-          <div class="tool-card-title">${t('food_log_card')}</div>
-          <div class="tool-card-sub">${t('food_log_card_sub')}</div>
-        </div>
+      <button class="tool-pod" data-goto="foodlog">
+        <div class="tool-pod-icon">${icon('utensils', 18)}</div>
+        <div class="tool-pod-label">${t('food_log_card')}</div>
       </button>
-      <button class="tool-card" data-goto="personal-records">
-        <div class="tool-card-icon" aria-hidden="true">${icon('trophy', 18)}</div>
-        <div>
-          <div class="tool-card-title">${t('pr_card')}</div>
-          <div class="tool-card-sub">${t('pr_card_sub')}</div>
-        </div>
+      <button class="tool-pod" data-goto="personal-records">
+        <div class="tool-pod-icon" aria-hidden="true">${icon('trophy', 18)}</div>
+        <div class="tool-pod-label">${t('pr_card')}</div>
+      </button>
+      <button class="tool-pod" data-goto="compare">
+        <div class="tool-pod-icon">${icon('arrowUp', 18)}</div>
+        <div class="tool-pod-label">${t('compare_card')}</div>
       </button>
     </div>
 
-    <button class="cta-card" data-goto="compare">
-      <div class="cta-card-icon">${icon('chart', 20)}</div>
-      <div style="flex:1;min-width:0">
-        <div class="cta-card-title">${t('compare_progress')}</div>
-        <div class="cta-card-sub">${t('compare_progress_sub')}</div>
-      </div>
-      <div class="cta-card-chev">${icon('chevronRight', 18)}</div>
-    </button>
-
     ${recentHtml}
 
-    <div style="text-align:center;opacity:.4;font-size:12px;margin:24px 0 8px;letter-spacing:.5px">THE VAULT · v76</div>
+    <div style="text-align:center;opacity:.4;font-size:12px;margin:24px 0 8px;letter-spacing:.5px">THE VAULT · v81</div>
   `;
+
+  // Count-up the hero/stat numerals (sleep is stored ×10 for one decimal)
+  el.querySelectorAll('.anim[data-count]').forEach((n) => {
+    const target = parseInt(n.dataset.count, 10) || 0;
+    const fixed = n.dataset.fixed === '1';
+    animateNum(n, target, fixed ? { fmt: (v) => (v / 10).toFixed(1) } : undefined);
+  });
 
   bindVaultAction(() => navigate('settings'));
   if (typeof Health !== 'undefined') Health.bindHomeSection();
@@ -1872,8 +1861,12 @@ function bentoCardHtml(ex, i, { showPR = true, toggle = null } = {}) {
     ? `<div class="bento-pr">${icon('trophy', 10)} ${t('pr')} ${fmtWeight(stats.maxWeight)}${unitLabel()}</div>`
     : '';
 
+  // Rendered as <span role="button">, NOT <button>: the card itself is a
+  // <button>, and HTML forbids nesting buttons — the parser closes the card
+  // early and spills the rest of the card (badges + content footer) out as
+  // siblings. The span keeps the DOM intact; clicks/keys are delegated.
   const toggleBtn = toggle
-    ? `<button class="bento-toggle ${toggle.added ? 'added' : ''}" data-toggle-ex="${ex.id}" aria-label="${escapeHtml(toggle.added ? t('remove_image') : t('add_to_train'))}">${icon(toggle.added ? 'check' : 'plus', 16)}</button>`
+    ? `<span class="bento-toggle ${toggle.added ? 'added' : ''}" data-toggle-ex="${ex.id}" role="button" tabindex="0" aria-label="${escapeHtml(toggle.added ? t('remove_image') : t('add_to_train'))}">${icon(toggle.added ? 'check' : 'plus', 16)}</span>`
     : '';
 
   // When the card is part of a list with a toggle (Library), mark cards that
@@ -1920,53 +1913,15 @@ function bentoCardHtml(ex, i, { showPR = true, toggle = null } = {}) {
 function renderWorkouts(el) {
   const all = DB.exercises.list();
   const myList = all.filter((e) => e.inMyList);
-
-  const query = (viewContext.workoutQuery || '').toLowerCase();
+  const query = viewContext.workoutQuery || '';
   const filter = viewContext.workoutFilter || 'All';
-
-  let filtered = myList;
-  if (filter !== 'All') filtered = filtered.filter((e) => e.category === filter);
-  if (query) filtered = filtered.filter((e) => e.name.toLowerCase().includes(query));
 
   const filterPills = ['All', ...EXERCISE_CATEGORIES]
     .map((f) => `<button class="filter-pill ${f === filter ? 'active' : ''}" data-filter="${f}">${escapeHtml(categoryLabel(f))}</button>`)
     .join('');
 
-  const cards = filtered.map((ex, i) => bentoCardHtml(ex, i)).join('');
-
-  const addCard = `
-    <button class="bento-card bento-add" id="add-exercise-btn">
-      ${icon('plus', 26)}
-      <div>
-        <div class="bento-add-title">${t('new_exercise')}</div>
-        <div class="bento-add-sub">${t('add_custom')}</div>
-      </div>
-    </button>
-  `;
-
-  let gridHtml;
-  if (filtered.length === 0 && myList.length === 0) {
-    // Truly empty: show empty-state CTA to browse library
-    gridHtml = `
-      <div class="empty">
-        <div class="empty-icon">${icon('dumbbell', 52)}</div>
-        <div class="empty-title">${t('train_empty_title')}</div>
-        <div class="empty-text">${t('train_empty_text')}</div>
-        <div style="display:flex;gap:8px;justify-content:center;margin-top:18px;flex-wrap:wrap">
-          <button class="btn btn-accent" data-library-pick>${icon('plus', 16)} ${t('add_from_library')}</button>
-          <button class="btn btn-ghost" id="add-exercise-btn">${icon('plus', 16)} ${t('add_custom')}</button>
-        </div>
-      </div>
-    `;
-  } else if (filtered.length === 0) {
-    gridHtml = emptyState({ iconName: 'search', title: t('no_matches'), text: t('no_matches_hint') });
-  } else {
-    const parts = cards.split('</button>').filter(Boolean);
-    const first = parts[0] + '</button>';
-    const rest = parts.slice(1).map((p) => p + '</button>').join('');
-    gridHtml = `<div class="bento-grid">${first}${addCard}${rest}</div>`;
-  }
-
+  // Shell renders ONCE — search box and filter bar survive list updates, so
+  // the keyboard never loses focus and no cursor-restore hack is needed.
   el.innerHTML = `
     ${vaultBar({ action: icon('chart', 20) })}
 
@@ -1986,38 +1941,89 @@ function renderWorkouts(el) {
 
     ${myList.length > 0 ? `<div class="filter-bar">${filterPills}</div>` : ''}
 
-    ${gridHtml}
+    <div id="workout-grid"></div>
   `;
+
+  // Rebuild ONLY the card grid (search/filter changes) — not the whole view.
+  function updateWorkoutGrid() {
+    const grid = $('#workout-grid', el);
+    if (!grid) return;
+    const q = (viewContext.workoutQuery || '').toLowerCase();
+    const f = viewContext.workoutFilter || 'All';
+    const mine = DB.exercises.list().filter((e) => e.inMyList);
+
+    let filtered = mine;
+    if (f !== 'All') filtered = filtered.filter((e) => e.category === f);
+    if (q) filtered = filtered.filter((e) => e.name.toLowerCase().includes(q));
+
+    // Keep cards as an ARRAY so the "add" card can be spliced after the first
+    // card without string-searching for '</button>' (which would break the day
+    // a card gains a nested control).
+    const cards = filtered.map((ex, i) => bentoCardHtml(ex, i));
+
+    const addCard = `
+      <button class="bento-card bento-add" id="add-exercise-btn">
+        ${icon('plus', 26)}
+        <div>
+          <div class="bento-add-title">${t('new_exercise')}</div>
+          <div class="bento-add-sub">${t('add_custom')}</div>
+        </div>
+      </button>
+    `;
+
+    if (filtered.length === 0 && mine.length === 0) {
+      // Truly empty: show empty-state CTA to browse library
+      grid.innerHTML = `
+        <div class="empty">
+          <div class="empty-icon">${icon('dumbbell', 52)}</div>
+          <div class="empty-title">${t('train_empty_title')}</div>
+          <div class="empty-text">${t('train_empty_text')}</div>
+          <div style="display:flex;gap:8px;justify-content:center;margin-top:18px;flex-wrap:wrap">
+            <button class="btn btn-accent" data-library-pick>${icon('plus', 16)} ${t('add_from_library')}</button>
+            <button class="btn btn-ghost" id="add-exercise-btn">${icon('plus', 16)} ${t('add_custom')}</button>
+          </div>
+        </div>
+      `;
+    } else if (filtered.length === 0) {
+      grid.innerHTML = emptyState({ iconName: 'search', title: t('no_matches'), text: t('no_matches_hint') });
+    } else {
+      cards.splice(1, 0, addCard); // after the first (wide) card
+      grid.innerHTML = `<div class="bento-grid">${cards.join('')}</div>`;
+    }
+  }
+  updateWorkoutGrid();
 
   // Vault top action → open Library
   bindVaultAction(() => navigate('library'));
 
+  // Debounced search → grid-only update (was a full view re-render per keystroke)
+  let searchTimer = null;
   $('#workout-search', el)?.addEventListener('input', (e) => {
     viewContext.workoutQuery = e.target.value;
-    renderWorkouts(el);
-    const s = $('#workout-search', el);
-    if (s) { s.focus(); const pos = e.target.value.length; s.setSelectionRange(pos, pos); }
+    clearTimeout(searchTimer);
+    searchTimer = setTimeout(updateWorkoutGrid, 150);
   });
 
   el.querySelectorAll('[data-filter]').forEach((btn) =>
     btn.addEventListener('click', () => {
       viewContext.workoutFilter = btn.dataset.filter;
-      renderWorkouts(el);
+      el.querySelectorAll('[data-filter]').forEach((b) => b.classList.toggle('active', b === btn));
+      updateWorkoutGrid();
     })
   );
 
-  el.querySelectorAll('#add-exercise-btn').forEach((b) =>
-    b.addEventListener('click', openNewExerciseModal)
-  );
+  // ONE delegated listener for the grid (cards + add button + empty-state CTAs),
+  // attached once — no re-binding per keystroke.
+  $('#workout-grid', el).addEventListener('click', (e) => {
+    if (e.target.closest('#add-exercise-btn')) { openNewExerciseModal(); return; }
+    if (e.target.closest('[data-library-pick]')) { navigate('library', { libraryPickMode: true }); return; }
+    const card = e.target.closest('[data-exercise]');
+    if (card) navigate('exercise-detail', { exerciseId: card.dataset.exercise });
+  });
 
-  // The "Add from Library" buttons on the Train page navigate to Library in
-  // pick mode — tapping any exercise there adds it directly to Train.
-  el.querySelectorAll('[data-library-pick]').forEach((b) =>
+  // The toolbar's "Add from Library" button lives outside the grid.
+  el.querySelectorAll('.toolbar [data-library-pick]').forEach((b) =>
     b.addEventListener('click', () => navigate('library', { libraryPickMode: true }))
-  );
-
-  el.querySelectorAll('[data-exercise]').forEach((btn) =>
-    btn.addEventListener('click', () => navigate('exercise-detail', { exerciseId: btn.dataset.exercise }))
   );
 }
 
@@ -2026,42 +2032,13 @@ function renderWorkouts(el) {
 // ==========================================================================
 function renderLibrary(el) {
   const exercises = DB.exercises.list();
-  const query = (viewContext.libraryQuery || '').toLowerCase();
+  const query = viewContext.libraryQuery || '';
   const filter = viewContext.libraryFilter || 'All';
   const pickMode = !!viewContext.libraryPickMode;
   const addedCount = exercises.filter((e) => e.inMyList).length;
 
-  let filtered = exercises;
-  if (filter !== 'All') filtered = filtered.filter((e) => e.category === filter);
-  if (query) filtered = filtered.filter((e) => e.name.toLowerCase().includes(query));
-
   const filterPills = ['All', ...EXERCISE_CATEGORIES]
     .map((f) => `<button class="filter-pill ${f === filter ? 'active' : ''}" data-filter="${f}">${escapeHtml(categoryLabel(f))}</button>`)
-    .join('');
-
-  // Group filtered exercises by category, in EXERCISE_CATEGORIES order
-  const grouped = {};
-  filtered.forEach((ex) => {
-    if (!grouped[ex.category]) grouped[ex.category] = [];
-    grouped[ex.category].push(ex);
-  });
-
-  const groupsHtml = EXERCISE_CATEGORIES
-    .filter((cat) => grouped[cat] && grouped[cat].length > 0)
-    .map((cat) => {
-      const items = grouped[cat].map((ex, i) =>
-        bentoCardHtml(ex, i, { showPR: false, toggle: { added: !!ex.inMyList } })
-      ).join('');
-      return `
-        <div class="lib-section">
-          <div class="lib-section-head">
-            <h2 class="lib-section-title" data-cat="${cat}">${escapeHtml(categoryLabel(cat))}</h2>
-            <span class="lib-section-count num">${fmtNum(grouped[cat].length)}</span>
-          </div>
-          <div class="bento-grid">${items}</div>
-        </div>
-      `;
-    })
     .join('');
 
   const topBar = pickMode
@@ -2098,6 +2075,8 @@ function renderLibrary(el) {
       </div>
     `;
 
+  // Shell renders ONCE — search box and filter bar are never rebuilt, so the
+  // keyboard keeps focus and no cursor-restore hack is needed.
   el.innerHTML = `
     ${topBar}
 
@@ -2112,43 +2091,127 @@ function renderLibrary(el) {
 
     <div class="filter-bar">${filterPills}</div>
 
-    ${filtered.length === 0
-      ? emptyState({ iconName: 'search', title: t('no_matches'), text: t('no_matches_hint') })
-      : groupsHtml
-    }
+    <div id="library-list"></div>
   `;
 
   // In pick mode, mark the body so we can style cards differently (cursor, hover)
   document.body.classList.toggle('library-pick-mode', pickMode);
 
+  // Rebuild ONLY the grouped card list — called on search/filter changes.
+  function updateLibraryList() {
+    const list = $('#library-list', el);
+    if (!list) return;
+    const q = (viewContext.libraryQuery || '').toLowerCase();
+    const f = viewContext.libraryFilter || 'All';
+
+    let filtered = DB.exercises.list();
+    if (f !== 'All') filtered = filtered.filter((x) => x.category === f);
+    if (q) filtered = filtered.filter((x) => x.name.toLowerCase().includes(q));
+
+    // Group filtered exercises by category, in EXERCISE_CATEGORIES order
+    const grouped = {};
+    filtered.forEach((ex) => {
+      if (!grouped[ex.category]) grouped[ex.category] = [];
+      grouped[ex.category].push(ex);
+    });
+
+    const groupsHtml = EXERCISE_CATEGORIES
+      .filter((cat) => grouped[cat] && grouped[cat].length > 0)
+      .map((cat) => {
+        const items = grouped[cat].map((ex, i) =>
+          bentoCardHtml(ex, i, { showPR: false, toggle: { added: !!ex.inMyList } })
+        ).join('');
+        return `
+          <div class="lib-section">
+            <div class="lib-section-head">
+              <h2 class="lib-section-title" data-cat="${cat}">${escapeHtml(categoryLabel(cat))}</h2>
+              <span class="lib-section-count num">${fmtNum(grouped[cat].length)}</span>
+            </div>
+            <div class="bento-grid">${items}</div>
+          </div>
+        `;
+      })
+      .join('');
+
+    list.innerHTML = filtered.length === 0
+      ? emptyState({ iconName: 'search', title: t('no_matches'), text: t('no_matches_hint') })
+      : groupsHtml;
+  }
+  updateLibraryList();
+
+  // Debounced search → list-only update (was a full 100+ card re-render per keystroke)
+  let searchTimer = null;
   $('#library-search', el)?.addEventListener('input', (e) => {
     viewContext.libraryQuery = e.target.value;
-    renderLibrary(el);
-    const s = $('#library-search', el);
-    if (s) { s.focus(); const pos = e.target.value.length; s.setSelectionRange(pos, pos); }
+    clearTimeout(searchTimer);
+    searchTimer = setTimeout(updateLibraryList, 150);
   });
 
   el.querySelectorAll('[data-filter]').forEach((btn) =>
     btn.addEventListener('click', () => {
       viewContext.libraryFilter = btn.dataset.filter;
-      renderLibrary(el);
+      el.querySelectorAll('[data-filter]').forEach((b) => b.classList.toggle('active', b === btn));
+      updateLibraryList();
     })
   );
 
-  // Toggle add/remove (must stop propagation so card click doesn't fire)
-  el.querySelectorAll('[data-toggle-ex]').forEach((btn) =>
-    btn.addEventListener('click', (e) => {
+  // Flip ONE card's added-state in place — no list re-render, scroll preserved.
+  function setCardAdded(id, added) {
+    el.querySelectorAll(`.bento-card[data-exercise="${id}"]`).forEach((card) => {
+      card.classList.toggle('added', added);
+      const tBtn = card.querySelector('[data-toggle-ex]');
+      if (tBtn) {
+        tBtn.classList.toggle('added', added);
+        tBtn.innerHTML = icon(added ? 'check' : 'plus', 16);
+        tBtn.setAttribute('aria-label', added ? t('remove_image') : t('add_to_train'));
+      }
+      const stripe = card.querySelector('.bento-added-stripe');
+      if (added && !stripe) {
+        card.insertAdjacentHTML('beforeend',
+          `<div class="bento-added-stripe"><span class="bento-added-stripe-icon">${icon('check', 13)}</span><span>${t('added')}</span></div>`);
+      } else if (!added && stripe) {
+        stripe.remove();
+      }
+    });
+    const count = $('.pick-banner-count', el);
+    if (count) count.textContent = fmtNum(DB.exercises.list().filter((x) => x.inMyList).length);
+  }
+
+  function toggleExercise(id) {
+    const ex = DB.exercises.getById(id);
+    if (!ex) return;
+    const newState = !ex.inMyList;
+    DB.exercises.setInMyList(id, newState);
+    showToast(newState ? t('added_to_train') : t('removed_from_train'));
+    setCardAdded(id, newState);
+  }
+
+  // ONE delegated click listener for the whole list (was 100+ per-card
+  // listeners re-attached on every keystroke). Preserves all three behaviors:
+  // toggle button, pick-mode whole-card toggle, normal navigate-to-detail.
+  $('#library-list', el).addEventListener('click', (e) => {
+    const toggleBtn = e.target.closest('[data-toggle-ex]');
+    if (toggleBtn) {
       e.stopPropagation();
       e.preventDefault();
-      const id = btn.dataset.toggleEx;
-      const ex = DB.exercises.getById(id);
-      if (!ex) return;
-      const newState = !ex.inMyList;
-      DB.exercises.setInMyList(id, newState);
-      showToast(newState ? t('added_to_train') : t('removed_from_train'));
-      renderLibrary(el);
-    })
-  );
+      toggleExercise(toggleBtn.dataset.toggleEx);
+      return;
+    }
+    const card = e.target.closest('[data-exercise]');
+    if (!card) return;
+    if (pickMode) toggleExercise(card.dataset.exercise);
+    else navigate('exercise-detail', { exerciseId: card.dataset.exercise });
+  });
+
+  // Keyboard support for the span-based toggle (role="button")
+  $('#library-list', el).addEventListener('keydown', (e) => {
+    if (e.key !== 'Enter' && e.key !== ' ') return;
+    const toggleBtn = e.target.closest('[data-toggle-ex]');
+    if (toggleBtn) {
+      e.preventDefault();
+      toggleExercise(toggleBtn.dataset.toggleEx);
+    }
+  });
 
   // Done button — exits pick mode and returns to Train
   el.querySelectorAll('[data-pick-done]').forEach((b) =>
@@ -2156,24 +2219,6 @@ function renderLibrary(el) {
       viewContext.libraryPickMode = false;
       document.body.classList.remove('library-pick-mode');
       navigate('workouts');
-    })
-  );
-
-  el.querySelectorAll('[data-exercise]').forEach((btn) =>
-    btn.addEventListener('click', () => {
-      // In pick mode the whole card adds/removes the exercise from Train.
-      // Otherwise, navigate to the exercise detail page.
-      if (pickMode) {
-        const id = btn.dataset.exercise;
-        const ex = DB.exercises.getById(id);
-        if (!ex) return;
-        const newState = !ex.inMyList;
-        DB.exercises.setInMyList(id, newState);
-        showToast(newState ? t('added_to_train') : t('removed_from_train'));
-        renderLibrary(el);
-      } else {
-        navigate('exercise-detail', { exerciseId: btn.dataset.exercise });
-      }
     })
   );
 }
@@ -3515,12 +3560,22 @@ function renderSettings(el) {
     })
   );
 
-  // Theme cards
+  // Theme cards — apply live (body class swap) and move the active state /
+  // checkmark in place, no full settings re-render (keeps scroll position).
   el.querySelectorAll('[data-theme]').forEach((b) =>
     b.addEventListener('click', () => {
       DB.prefs.setTheme(b.dataset.theme);
       applyTheme(b.dataset.theme);
-      renderSettings(el);
+      el.querySelectorAll('[data-theme]').forEach((card) => {
+        const on = card === b;
+        card.classList.toggle('active', on);
+        const existing = card.querySelector('.theme-check');
+        if (on && !existing) {
+          card.insertAdjacentHTML('beforeend', `<div class="theme-check">${icon('check', 12)}</div>`);
+        } else if (!on && existing) {
+          existing.remove();
+        }
+      });
     })
   );
 
@@ -4464,16 +4519,29 @@ function renderCalendar(el) {
   const dowLabels = ['dow_sun', 'dow_mon', 'dow_tue', 'dow_wed', 'dow_thu', 'dow_fri', 'dow_sat']
     .map((k) => `<div class="calendar-dow">${escapeHtml(t(k))}</div>`).join('');
 
-  // Empty cells before the first day
-  const empties = Array.from({ length: firstDow }, () => `<div class="calendar-cell empty"></div>`).join('');
-  const cells = Array.from({ length: daysInMonth }, (_, i) => {
-    const day = i + 1;
-    const iso = `${ctx.year}-${String(ctx.month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
-    const count = setsByDate[iso] || 0;
-    const lvl = lvlFor(count);
-    const isToday = today.getFullYear() === ctx.year && today.getMonth() === ctx.month && today.getDate() === day;
-    return `<button class="calendar-cell lvl-${lvl} ${isToday ? 'today' : ''}" data-day-iso="${iso}">${fmtNum(day)}</button>`;
-  }).join('');
+  // Build just the month grid + label — called on prev/next so month nav
+  // repaints only the grid, not the whole view (header, legend stay put).
+  function buildGrid() {
+    const first = new Date(ctx.year, ctx.month, 1);
+    const firstDowN = first.getDay();
+    const daysN = new Date(ctx.year, ctx.month + 1, 0).getDate();
+    const byDate = {};
+    DB.sessions.listAll().forEach((s) => {
+      const d = new Date(s.date + 'T00:00:00');
+      if (d.getFullYear() === ctx.year && d.getMonth() === ctx.month) {
+        byDate[s.date] = (byDate[s.date] || 0) + s.sets.length;
+      }
+    });
+    const empties = Array.from({ length: firstDowN }, () => `<div class="calendar-cell empty"></div>`).join('');
+    const cells = Array.from({ length: daysN }, (_, i) => {
+      const day = i + 1;
+      const iso = `${ctx.year}-${String(ctx.month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+      const lvl = lvlFor(byDate[iso] || 0);
+      const isToday = today.getFullYear() === ctx.year && today.getMonth() === ctx.month && today.getDate() === day;
+      return `<button class="calendar-cell lvl-${lvl} ${isToday ? 'today' : ''}" data-day-iso="${iso}">${fmtNum(day)}</button>`;
+    }).join('');
+    return empties + cells;
+  }
 
   el.innerHTML = `
     <div class="detail-top">
@@ -4489,36 +4557,46 @@ function renderCalendar(el) {
 
     <div class="calendar-head">
       <button class="calendar-nav-btn" id="cal-prev">${icon('back', 18)}</button>
-      <div class="calendar-month-label">${escapeHtml(monthLabel)}</div>
+      <div class="calendar-month-label" id="cal-month-label">${escapeHtml(monthLabel)}</div>
       <button class="calendar-nav-btn" id="cal-next">${icon('chevronRight', 18)}</button>
     </div>
 
     <div class="calendar-dow-row">${dowLabels}</div>
-    <div class="calendar-grid">${empties}${cells}</div>
+    <div class="calendar-grid" id="calendar-grid">${buildGrid()}</div>
 
     <div class="calendar-legend">
       <span>—</span>
       <span class="calendar-legend-dot" style="background:var(--surface-2)"></span>
-      <span class="calendar-legend-dot" style="background:rgba(45,212,191,0.18)"></span>
-      <span class="calendar-legend-dot" style="background:rgba(45,212,191,0.32)"></span>
-      <span class="calendar-legend-dot" style="background:rgba(45,212,191,0.55)"></span>
+      <span class="calendar-legend-dot" style="background:rgba(var(--accent-rgb),0.18)"></span>
+      <span class="calendar-legend-dot" style="background:rgba(var(--accent-rgb),0.32)"></span>
+      <span class="calendar-legend-dot" style="background:rgba(var(--accent-rgb),0.55)"></span>
       <span class="calendar-legend-dot" style="background:var(--accent)"></span>
       <span>+</span>
     </div>
   `;
 
+  function repaintMonth() {
+    const label = $('#cal-month-label', el);
+    const grid = $('#calendar-grid', el);
+    if (label) label.textContent = new Date(ctx.year, ctx.month, 1)
+      .toLocaleDateString((DB.prefs.get().lang || 'en') === 'ar' ? 'ar-u-nu-latn' : 'en-US', { month: 'long', year: 'numeric' });
+    if (grid) grid.innerHTML = buildGrid();
+  }
+
   $('#cal-prev', el).addEventListener('click', () => {
     if (ctx.month === 0) { ctx.month = 11; ctx.year -= 1; } else ctx.month -= 1;
-    renderCalendar(el);
+    repaintMonth();
   });
   $('#cal-next', el).addEventListener('click', () => {
     if (ctx.month === 11) { ctx.month = 0; ctx.year += 1; } else ctx.month += 1;
-    renderCalendar(el);
+    repaintMonth();
   });
 
-  el.querySelectorAll('[data-day-iso]').forEach((b) =>
-    b.addEventListener('click', () => openCalendarDayModal(b.dataset.dayIso))
-  );
+  // Delegated — cells are rebuilt on month nav, one listener survives.
+  $('#calendar-grid', el).addEventListener('click', (e) => {
+    const cell = e.target.closest('[data-day-iso]');
+    if (cell) openCalendarDayModal(cell.dataset.dayIso);
+  });
 }
 
 function openCalendarDayModal(iso) {
@@ -4609,11 +4687,13 @@ function renderSupplements(el) {
   const list = DB.supplements.list();
   const todayIso = todayISO();
 
-  const items = list.map((s) => {
+  // One supplement row — rebuilt in place on toggle (class + streak change),
+  // so a tap never re-renders the whole list or resets the scroll position.
+  function suppRowHtml(s) {
     const taken = DB.supplements.isTaken(s.id, todayIso);
     const streak = DB.supplements.streak(s.id);
     return `
-      <div class="supp-row ${taken ? 'taken' : ''}">
+      <div class="supp-row ${taken ? 'taken' : ''}" data-supp-row="${s.id}">
         <div class="supp-color" style="background:${/^#[0-9a-fA-F]{3,8}$/.test(s.color) ? s.color : '#888888'}"></div>
         <div class="supp-main">
           <div class="supp-name">${escapeHtml(s.name)}</div>
@@ -4628,7 +4708,9 @@ function renderSupplements(el) {
         </div>
       </div>
     `;
-  }).join('');
+  }
+
+  const anyUntaken = list.some((s) => !DB.supplements.isTaken(s.id, todayIso));
 
   el.innerHTML = `
     <div class="detail-top">
@@ -4644,30 +4726,64 @@ function renderSupplements(el) {
 
     <div class="row-between mb-16">
       <div class="section-title" style="margin:0">${t('supplements_title')}</div>
-      <button class="btn btn-primary" id="add-supp-btn">${icon('plus', 16)} ${t('new_supplement')}</button>
+      <div style="display:flex;gap:8px">
+        ${list.length > 0 ? `<button class="btn btn-ghost" id="take-all-btn" ${anyUntaken ? '' : 'disabled style="opacity:.5"'}>${icon('check', 16)} ${t('take_all')}</button>` : ''}
+        <button class="btn btn-primary" id="add-supp-btn">${icon('plus', 16)} ${t('new_supplement')}</button>
+      </div>
     </div>
 
-    ${list.length === 0
-      ? emptyState({ iconName: 'zap', title: t('no_supplements'), text: t('no_supplements_text') })
-      : `<div class="data-list">${items}</div>`
-    }
+    <div class="data-list" id="supp-list">
+      ${list.length === 0
+        ? emptyState({ iconName: 'zap', title: t('no_supplements'), text: t('no_supplements_text') })
+        : list.map(suppRowHtml).join('')
+      }
+    </div>
   `;
+
+  // Replace ONE supplement's row DOM in place from current DB state.
+  function refreshSuppRow(id) {
+    const row = el.querySelector(`[data-supp-row="${id}"]`);
+    const s = DB.supplements.list().find((x) => x.id === id);
+    if (!row || !s) return;
+    row.outerHTML = suppRowHtml(s);
+  }
+
+  function syncTakeAllBtn() {
+    const btn = $('#take-all-btn', el);
+    if (!btn) return;
+    const untaken = DB.supplements.list().some((s) => !DB.supplements.isTaken(s.id, todayIso));
+    btn.disabled = !untaken;
+    btn.style.opacity = untaken ? '' : '.5';
+  }
 
   $('#add-supp-btn', el).addEventListener('click', () => openSupplementModal());
 
-  el.querySelectorAll('[data-toggle-supp]').forEach((b) =>
-    b.addEventListener('click', () => {
-      const id = b.dataset.toggleSupp;
+  $('#take-all-btn', el)?.addEventListener('click', () => {
+    DB.supplements.list().forEach((s) => {
+      if (!DB.supplements.isTaken(s.id, todayIso)) {
+        DB.supplements.setTaken(s.id, todayIso, true);
+        refreshSuppRow(s.id);
+      }
+    });
+    syncTakeAllBtn();
+    showToast(t('all_taken'));
+  });
+
+  // Delegated toggle + edit — in-place row refresh, no full re-render.
+  $('#supp-list', el).addEventListener('click', (e) => {
+    const toggle = e.target.closest('[data-toggle-supp]');
+    if (toggle) {
+      const id = toggle.dataset.toggleSupp;
       const isTaken = DB.supplements.isTaken(id, todayIso);
       DB.supplements.setTaken(id, todayIso, !isTaken);
+      refreshSuppRow(id);
+      syncTakeAllBtn();
       showToast(!isTaken ? t('taken') : t('not_taken'));
-      renderSupplements(el);
-    })
-  );
-
-  el.querySelectorAll('[data-edit-supp]').forEach((b) =>
-    b.addEventListener('click', () => openSupplementModal(b.dataset.editSupp))
-  );
+      return;
+    }
+    const edit = e.target.closest('[data-edit-supp]');
+    if (edit) openSupplementModal(edit.dataset.editSupp);
+  });
 }
 
 function openSupplementModal(id = null) {
@@ -4761,10 +4877,11 @@ function renderFoodLog(el) {
 
   const dayLabel = isToday ? t('today_totals') : formatDate(ctx.date);
 
-  const items = entries.map((e) => {
+  // One food-log row (also used when quick-add appends a single row live).
+  function foodRowHtml(e) {
     const m = e.servings || 1;
     return `
-      <div class="food-log-row">
+      <div class="food-log-row" data-food-row="${e.id}">
         <div class="food-log-main">
           <div class="food-log-name">
             ${escapeHtml(e.name)}
@@ -4782,7 +4899,22 @@ function renderFoodLog(el) {
         <button class="icon-btn danger" data-del-food="${e.id}">${icon('trash', 15)}</button>
       </div>
     `;
-  }).join('');
+  }
+  const items = entries.map(foodRowHtml).join('');
+
+  // Quick-add rail: most-logged foods, minus ones already on this day.
+  const frequent = DB.foodLogs.frequent(6, ctx.date);
+  const quickAddHtml = frequent.length === 0 ? '' : `
+    <div class="section-title" style="margin:18px 0 10px">${t('quick_add')}</div>
+    <div class="quick-add-rail" id="quick-add-rail">
+      ${frequent.map((f, i) => `
+        <button class="quick-add-chip" data-quick-idx="${i}">
+          <span class="quick-add-name">${escapeHtml(f.name)}</span>
+          <span class="quick-add-cal num">${fmtNum(Math.round(f.calories * (f.servings || 1)))} ${t('cal')}</span>
+        </button>
+      `).join('')}
+    </div>
+  `;
 
   el.innerHTML = `
     <div class="detail-top">
@@ -4820,6 +4952,8 @@ function renderFoodLog(el) {
       </div>
     </div>
 
+    ${quickAddHtml}
+
     <div class="row-between mb-16">
       <div class="section-title" style="margin:0">${t('food_log_title')}</div>
       <div style="display:flex;gap:8px">
@@ -4828,10 +4962,12 @@ function renderFoodLog(el) {
       </div>
     </div>
 
-    ${entries.length === 0
-      ? emptyState({ iconName: 'apple', title: t('no_food_logged'), text: t('no_food_logged_text') })
-      : `<div class="data-list" style="gap:6px">${items}</div>`
-    }
+    <div class="data-list" id="food-log-list" style="gap:6px">
+      ${entries.length === 0
+        ? emptyState({ iconName: 'apple', title: t('no_food_logged'), text: t('no_food_logged_text') })
+        : items
+      }
+    </div>
   `;
 
   $('#day-prev', el).addEventListener('click', () => {
@@ -4853,13 +4989,50 @@ function renderFoodLog(el) {
     if (window.FoodAI) window.FoodAI.open(ctx.date);
   });
 
-  el.querySelectorAll('[data-del-food]').forEach((b) =>
-    b.addEventListener('click', () => {
-      DB.foodLogs.remove(ctx.date, b.dataset.delFood);
-      showToast(t('food_removed'));
-      renderFoodLog(el);
-    })
-  );
+  // Refresh only the macro-totals block from current DB state.
+  function refreshTotals() {
+    const tt = DB.foodLogs.totalsForDate(ctx.date);
+    const set = (sel, v) => { const n = $(sel, el); if (n) n.childNodes[0].nodeValue = v; };
+    set('.macro-total.cal .macro-total-value', fmtNum(Math.round(tt.calories)));
+    set('.macro-total.pro .macro-total-value', fmtNum(Math.round(tt.protein * 10) / 10));
+    set('.macro-total.carb .macro-total-value', fmtNum(Math.round(tt.carbs * 10) / 10));
+    set('.macro-total.fat .macro-total-value', fmtNum(Math.round((tt.fat || 0) * 10) / 10));
+  }
+
+  // Quick-add: one tap re-logs a frequent food with its last-used serving, and
+  // appends a single row + updates totals — no full view re-render (no flash).
+  $('#quick-add-rail', el)?.addEventListener('click', (e) => {
+    const chip = e.target.closest('[data-quick-idx]');
+    if (!chip) return;
+    const src = frequent[Number(chip.dataset.quickIdx)];
+    if (!src) return;
+    const entry = DB.foodLogs.add(ctx.date, {
+      foodId: src.foodId, name: src.name, servings: src.servings,
+      calories: src.calories, protein: src.protein, carbs: src.carbs, fat: src.fat,
+      source: 'quick',
+    });
+    // Drop the empty-state placeholder if this is the first row of the day.
+    const list = $('#food-log-list', el);
+    if (list.querySelector('.empty')) list.innerHTML = '';
+    list.insertAdjacentHTML('beforeend', foodRowHtml(entry));
+    refreshTotals();
+    chip.remove(); // it's now on today's list — stop suggesting it
+    showToast(t('food_added'));
+  });
+
+  // Delegated delete — append/remove keep working without rebinding.
+  $('#food-log-list', el).addEventListener('click', (e) => {
+    const btn = e.target.closest('[data-del-food]');
+    if (!btn) return;
+    DB.foodLogs.remove(ctx.date, btn.dataset.delFood);
+    const row = btn.closest('[data-food-row]');
+    if (row) row.remove();
+    if (!$('#food-log-list', el).querySelector('[data-food-row]')) {
+      $('#food-log-list', el).innerHTML = emptyState({ iconName: 'apple', title: t('no_food_logged'), text: t('no_food_logged_text') });
+    }
+    refreshTotals();
+    showToast(t('food_removed'));
+  });
 }
 
 function openFoodPickerModal(date) {
@@ -5299,6 +5472,14 @@ async function bootCloud() {
     else if (r === 'conflict') showConflictDialog(); // both sides changed → ask
   } catch (_) {}
 }
+
+// Fade newly-loaded images in smoothly. One capture listener covers every
+// <img> in the app (load events don't bubble, so capture is required) —
+// no per-render JS needed. CSS pairs .machine-photo/.detail-hero img with
+// opacity 0 → .loaded 1.
+document.addEventListener('load', (e) => {
+  if (e.target && e.target.tagName === 'IMG') e.target.classList.add('loaded');
+}, true);
 
 (function init() {
   const prefs = DB.prefs.get();

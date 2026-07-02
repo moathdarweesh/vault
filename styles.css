@@ -75,12 +75,72 @@
   --radius-md:   16px;
   --radius-lg:   22px;
   --radius-pill: 999px;
+
+  /* ===== Design tokens (Athletic Premium) ===== */
+  /* Type scale */
+  --fs-hero:    40px;
+  --fs-display: 32px;
+  --fs-title:   24px;
+  --fs-h2:      19px;
+  --fs-body:    15px;
+  --fs-sub:     13px;
+  --fs-caption: 11px;
+  --fw-display: 800;
+  --fw-title:   700;
+  --fw-body:    500;
+  --tracking-tight: -0.02em;
+  --tracking-caps:  0.08em;
+
+  /* Spacing rhythm (4pt grid) */
+  --sp-1: 4px;
+  --sp-2: 8px;
+  --sp-3: 12px;
+  --sp-4: 16px;
+  --sp-5: 20px;
+  --sp-6: 24px;
+  --sp-8: 32px;
+
+  /* Unified card (surface-dependent aliases live on body — see below) */
+  --card-radius: var(--radius-md);
+  --card-pad:    var(--sp-4);
+  --card-pad-sm: var(--sp-3);
+  --card-gap:    var(--sp-3);
+
+  /* Unified chip */
+  --chip-h:      30px;
+  --chip-pad-x:  12px;
+  --chip-fs:     var(--fs-sub);
+  --chip-radius: var(--radius-pill);
+
+  /* Motion */
+  --dur-press: 120ms;
+  --dur:       200ms;
+  --dur-slow:  300ms;
+  --ease:      cubic-bezier(0.2, 0.8, 0.2, 1);
+  --press-scale: 0.97;
+
+  /* Theme-safe channels (each theme overrides --accent-rgb; light themes override --overlay) */
+  --accent-rgb: 91, 141, 239;
+  --overlay:    rgba(0, 0, 0, 0.72);
+}
+
+/* Surface-dependent aliases are declared on body (NOT :root): theme classes
+   live on body, and custom properties resolve var() at the element they're
+   declared on — declaring these at :root would freeze them to the dark
+   surfaces before the theme class swaps --surface-2/3. */
+body {
+  --card-bg:     var(--surface-2);
+  --card-border: 1px solid var(--border);
+  --hero-surface:    var(--surface-2);
+  --img-placeholder: var(--surface-3);
 }
 
 /* =========================================================================
    THEME: LIGHT CLEAN
    ========================================================================= */
 body.theme-light {
+  --accent-rgb:  13, 148, 136;
+  --overlay:     rgba(15, 23, 42, 0.45);
   --bg:          #f6f8fa;
   --bg-grad:     radial-gradient(1200px 600px at 50% -200px, #e6f7f4 0%, transparent 60%), #f6f8fa;
   --surface-1:   #ffffff;
@@ -114,12 +174,12 @@ body.theme-light .bottom-nav {
 }
 
 body.theme-light .vault-logo { color: var(--accent); }
-body.theme-light .bento-card-bg { background-color: #dde5eb; }
 
 /* =========================================================================
    THEME: FOREST (deep pine on near-black)
    ========================================================================= */
 body.theme-forest {
+  --accent-rgb:  134, 239, 172;
   --bg:          #0a1812;
   --bg-grad:     radial-gradient(1200px 600px at 50% -200px, #112d1f 0%, transparent 60%), #0a1812;
   --surface-1:   #122a1f;
@@ -154,6 +214,7 @@ body.theme-forest .bottom-nav { background: rgba(10, 24, 18, 0.85); }
    THEME: OCEAN (deep navy marine)
    ========================================================================= */
 body.theme-ocean {
+  --accent-rgb:  56, 189, 248;
   --bg:          #0a1929;
   --bg-grad:     radial-gradient(1200px 600px at 50% -200px, #102b48 0%, transparent 60%), #0a1929;
   --surface-1:   #112439;
@@ -188,6 +249,8 @@ body.theme-ocean .bottom-nav { background: rgba(10, 25, 41, 0.85); }
    THEME: SAND (light warm cream + terracotta)
    ========================================================================= */
 body.theme-sand {
+  --accent-rgb:  194, 65, 12;
+  --overlay:     rgba(61, 44, 24, 0.45);
   --bg:          #fbf6ee;
   --bg-grad:     radial-gradient(1200px 600px at 50% -200px, #f4ead8 0%, transparent 60%), #fbf6ee;
   --surface-1:   #ffffff;
@@ -218,12 +281,12 @@ body.theme-sand {
 
 body.theme-sand .bottom-nav { background: rgba(251, 246, 238, 0.92); }
 body.theme-sand .vault-logo { color: var(--accent); }
-body.theme-sand .bento-card-bg { background-color: #d6c5a3; }
 
 /* =========================================================================
    THEME: MOCHA (dark coffee earth)
    ========================================================================= */
 body.theme-mocha {
+  --accent-rgb:  231, 200, 160;
   --bg:          #1c1411;
   --bg-grad:     radial-gradient(1200px 600px at 50% -200px, #2d1f18 0%, transparent 60%), #1c1411;
   --surface-1:   #261c17;
@@ -258,6 +321,7 @@ body.theme-mocha .bottom-nav { background: rgba(28, 20, 17, 0.85); }
    THEME: OLIVE (army earth)
    ========================================================================= */
 body.theme-olive {
+  --accent-rgb:  190, 242, 100;
   --bg:          #14170c;
   --bg-grad:     radial-gradient(1200px 600px at 50% -200px, #1f2412 0%, transparent 60%), #14170c;
   --surface-1:   #1d2113;
@@ -292,6 +356,7 @@ body.theme-olive .bottom-nav { background: rgba(20, 23, 12, 0.85); }
    THEME: AURORA GLASS (glassmorphism, purple/pink) — restored
    ========================================================================= */
 body.theme-aurora {
+  --accent-rgb:  236, 72, 153;
   --bg:          #0b0821;
   --bg-grad:
     radial-gradient(600px 400px at 0% 0%, rgba(236, 72, 153, 0.35), transparent 60%),
@@ -353,6 +418,7 @@ body.theme-aurora .bottom-nav {
    THEME: SUNSET (warm amber + rose) — restored
    ========================================================================= */
 body.theme-sunset {
+  --accent-rgb:  251, 146, 60;
   --bg:          #1a0f14;
   --bg-grad:
     radial-gradient(1200px 600px at 50% -100px, rgba(234, 88, 12, 0.25), transparent 60%),
@@ -392,6 +458,7 @@ body.theme-sunset .bottom-nav {
    THEME: NEBULA (deep navy + electric violet) — restored
    ========================================================================= */
 body.theme-nebula {
+  --accent-rgb:  168, 85, 247;
   --bg:          #070714;
   --bg-grad:
     radial-gradient(900px 500px at 30% -100px, rgba(99, 102, 241, 0.3), transparent 60%),
@@ -431,6 +498,7 @@ body.theme-nebula .bottom-nav {
    THEME: SLATE (neutral warm grey + bronze)
    ========================================================================= */
 body.theme-slate {
+  --accent-rgb:  212, 163, 115;
   --bg:          #1a1a1c;
   --bg-grad:     radial-gradient(1200px 600px at 50% -200px, #232325 0%, transparent 60%), #1a1a1c;
   --surface-1:   #232326;
@@ -465,6 +533,8 @@ body.theme-slate .bottom-nav { background: rgba(26, 26, 28, 0.85); }
    THEME: FROST (cool light blue/grey)
    ========================================================================= */
 body.theme-frost {
+  --accent-rgb:  71, 85, 105;
+  --overlay:     rgba(26, 35, 51, 0.45);
   --bg:          #eef2f7;
   --bg-grad:     radial-gradient(1200px 600px at 50% -200px, #dde7f0 0%, transparent 60%), #eef2f7;
   --surface-1:   #ffffff;
@@ -495,12 +565,12 @@ body.theme-frost {
 
 body.theme-frost .bottom-nav { background: rgba(238, 242, 247, 0.92); }
 body.theme-frost .vault-logo { color: var(--accent); }
-body.theme-frost .bento-card-bg { background-color: #c5d2e0; }
 
 /* =========================================================================
    THEME: DUSK (muted plum twilight)
    ========================================================================= */
 body.theme-dusk {
+  --accent-rgb:  217, 165, 178;
   --bg:          #1c1620;
   --bg-grad:     radial-gradient(1200px 600px at 50% -200px, #2a1f30 0%, transparent 60%), #1c1620;
   --surface-1:   #261d2c;
@@ -623,7 +693,7 @@ img { display: block; max-width: 100%; }
 .view {
   display: none;
   padding: 0 16px 8px;
-  animation: fadeUp 0.26s cubic-bezier(0.33, 1, 0.68, 1);
+  animation: fadeUp var(--dur) var(--ease);
 }
 .view.active { display: block; }
 
@@ -677,7 +747,7 @@ img { display: block; max-width: 100%; }
   transition: transform 0.12s, background 0.15s;
 }
 .vault-action svg { width: 20px; height: 20px; }
-.vault-action:active { transform: scale(0.94); background: rgba(45, 212, 191, 0.22); }
+.vault-action:active { transform: scale(0.94); background: rgba(var(--accent-rgb), 0.22); }
 
 /* =========================================================================
    BOTTOM NAV
@@ -755,7 +825,7 @@ img { display: block; max-width: 100%; }
   align-items: center;
   justify-content: center;
   margin-top: -18px;
-  box-shadow: 0 8px 24px rgba(45, 212, 191, 0.35), 0 0 0 4px var(--bg);
+  box-shadow: 0 8px 24px rgba(var(--accent-rgb), 0.35), 0 0 0 4px var(--bg);
   transition: transform 0.18s ease, box-shadow 0.18s ease;
 }
 
@@ -766,7 +836,7 @@ img { display: block; max-width: 100%; }
 }
 
 .nav-btn.home-center.active .home-center-icon {
-  box-shadow: 0 10px 30px rgba(45, 212, 191, 0.55), 0 0 0 4px var(--bg);
+  box-shadow: 0 10px 30px rgba(var(--accent-rgb), 0.55), 0 0 0 4px var(--bg);
 }
 
 .nav-btn.home-center span {
@@ -1045,7 +1115,7 @@ input[type="date"], input[type="time"] { color-scheme: dark; }
   right: -40px;
   width: 160px;
   height: 160px;
-  background: radial-gradient(circle, rgba(45, 212, 191, 0.2), transparent 65%);
+  background: radial-gradient(circle, rgba(var(--accent-rgb), 0.18), transparent 65%);
 }
 
 .streak-icon {
@@ -1108,11 +1178,6 @@ input[type="date"], input[type="time"] { color-scheme: dark; }
   position: relative;
   overflow: hidden;
   transition: transform 0.12s ease, border-color 0.15s;
-}
-
-.stat-tile:active {
-  transform: scale(0.98);
-  border-color: var(--border-hi);
 }
 
 .stat-tile-head {
@@ -1217,8 +1282,6 @@ input[type="date"], input[type="time"] { color-scheme: dark; }
   overflow: hidden;
 }
 
-.heat-cell:active { transform: scale(0.96); }
-
 .heat-cell-name {
   font-size: 10px;
   font-weight: 700;
@@ -1243,17 +1306,17 @@ input[type="date"], input[type="time"] { color-scheme: dark; }
 
 /* Heat levels — the more sessions, the stronger the color */
 .heat-cell.lvl-0 .heat-cell-count { color: var(--text-faint); }
-.heat-cell.lvl-1 { background: rgba(45, 212, 191, 0.12); }
+.heat-cell.lvl-1 { background: rgba(var(--accent-rgb), 0.12); }
 .heat-cell.lvl-1 .heat-cell-count { color: var(--accent); }
-.heat-cell.lvl-2 { background: rgba(45, 212, 191, 0.25); }
+.heat-cell.lvl-2 { background: rgba(var(--accent-rgb), 0.25); }
 .heat-cell.lvl-2 .heat-cell-count { color: var(--accent); }
-.heat-cell.lvl-3 { background: rgba(45, 212, 191, 0.4); border: 1px solid var(--accent-line); }
-.heat-cell.lvl-3 .heat-cell-count { color: #e6f4f6; }
+.heat-cell.lvl-3 { background: rgba(var(--accent-rgb), 0.4); border: 1px solid var(--accent-line); }
+.heat-cell.lvl-3 .heat-cell-count { color: var(--text); }
 .heat-cell.lvl-4 {
   background: var(--accent);
   border: 1px solid var(--accent);
 }
-.heat-cell.lvl-4 .heat-cell-name { color: rgba(2, 26, 23, 0.65); }
+.heat-cell.lvl-4 .heat-cell-name { color: var(--accent-ink); opacity: 0.7; }
 .heat-cell.lvl-4 .heat-cell-count { color: var(--accent-ink); }
 
 /* Compare CTA */
@@ -1270,7 +1333,7 @@ input[type="date"], input[type="time"] { color-scheme: dark; }
   transition: transform 0.12s ease, border-color 0.15s;
 }
 
-.cta-card:active { transform: scale(0.99); border-color: var(--border-hi); }
+/* .cta-card:active press feedback is owned by the unified block near end of file */
 
 .cta-card-icon {
   width: 44px;
@@ -1387,11 +1450,6 @@ input[type="date"], input[type="time"] { color-scheme: dark; }
   isolation: isolate;
 }
 
-.bento-card:active {
-  transform: scale(0.98);
-  border-color: var(--border-hi);
-}
-
 .bento-card.wide {
   grid-column: span 2;
   aspect-ratio: 16 / 10;
@@ -1402,7 +1460,7 @@ input[type="date"], input[type="time"] { color-scheme: dark; }
   inset: 0;
   background-size: cover;
   background-position: center;
-  background-color: #e8eff2;
+  background-color: var(--img-placeholder);
   z-index: 0;
   transition: transform 0.4s ease;
 }
@@ -1413,7 +1471,7 @@ input[type="date"], input[type="time"] { color-scheme: dark; }
    real photo on top. If the photo 404s or is blocked, it removes itself and
    the SVG shows through — no broken-image icons. */
 .bento-card-bg.machine-bg {
-  background: #0c2733;
+  background: var(--surface-3);
   display: block;
   position: absolute;
   inset: 0;
@@ -1706,7 +1764,7 @@ body[dir="rtl"] .bento-card.wide .bento-card-name-tag { left: 14px; }
 .detail-hero {
   width: 100%;
   aspect-ratio: 4 / 3;
-  background: #fafafa;
+  background: var(--hero-surface);
   position: relative;
   overflow: hidden;
 }
@@ -1807,9 +1865,9 @@ body[dir="rtl"] .bento-card.wide .bento-card-name-tag { left: 14px; }
 }
 
 .stat-box-value {
-  font-size: 20px;
+  font-size: var(--fs-title);
   font-weight: 900;
-  letter-spacing: -0.03em;
+  letter-spacing: var(--tracking-tight);
   font-variant-numeric: tabular-nums;
   line-height: 1;
 }
@@ -1841,7 +1899,7 @@ body[dir="rtl"] .bento-card.wide .bento-card-name-tag { left: 14px; }
 
 .session-card.pr {
   border-color: var(--accent-line);
-  background: linear-gradient(180deg, var(--accent-soft) 0%, var(--surface-1) 40%);
+  background: linear-gradient(180deg, var(--accent-soft) 0%, var(--card-bg) 40%);
 }
 
 .session-card-header {
@@ -2140,14 +2198,14 @@ body[dir="rtl"] .w-unit { margin-left: 0; margin-right: 2px; }
 .modal-overlay {
   position: fixed;
   inset: 0;
-  background: rgba(0, 0, 0, 0.7);
+  background: var(--overlay);
   backdrop-filter: blur(10px);
   -webkit-backdrop-filter: blur(10px);
   z-index: 100;
   display: flex;
   align-items: flex-end;
   justify-content: center;
-  animation: overlayIn 0.2s ease;
+  animation: overlayIn var(--dur) var(--ease);
 }
 
 @keyframes overlayIn {
@@ -2163,7 +2221,7 @@ body[dir="rtl"] .w-unit { margin-left: 0; margin-right: 2px; }
   padding: 22px 18px calc(22px + var(--safe-b));
   max-height: 92dvh;
   overflow-y: auto;
-  animation: sheetUp 0.3s cubic-bezier(0.22, 1, 0.36, 1);
+  animation: sheetUp var(--dur-slow) var(--ease);
   border-top: 1px solid var(--border);
   border-left: 1px solid var(--border);
   border-right: 1px solid var(--border);
@@ -2251,7 +2309,7 @@ body[dir="rtl"] .w-unit { margin-left: 0; margin-right: 2px; }
   max-width: 340px;
   width: 90%;
   text-align: center;
-  animation: popIn 0.18s ease;
+  animation: popIn var(--dur) var(--ease);
 }
 
 @keyframes popIn {
@@ -2567,11 +2625,6 @@ body[dir="rtl"] .w-unit { margin-left: 0; margin-right: 2px; }
   transition: transform 0.12s, border-color 0.15s;
 }
 
-.compare-card:active {
-  transform: scale(0.99);
-  border-color: var(--border-hi);
-}
-
 .compare-card-title {
   font-size: 14px;
   font-weight: 800;
@@ -2722,11 +2775,6 @@ body[dir="rtl"] .w-unit { margin-left: 0; margin-right: 2px; }
   text-align: left;
   width: 100%;
   transition: transform 0.12s ease, border-color 0.15s;
-}
-
-.tool-card:active {
-  transform: scale(0.98);
-  border-color: var(--border-hi);
 }
 
 .tool-card-icon {
@@ -3141,7 +3189,7 @@ body[dir="rtl"] .planner-day { text-align: right; }
   border: none;
 }
 .planner-ex-remove:active {
-  color: #f87171;
+  color: var(--red);
   background: var(--surface-1);
 }
 
@@ -3246,7 +3294,7 @@ body[dir="rtl"] .planner-day-head { text-align: right; }
   font-weight: 800;
   color: var(--text-dim);
 }
-.sd-thumb.machine-bg { background: #0c2733; }
+.sd-thumb.machine-bg { background: var(--surface-3); }
 .sd-thumb.machine-bg svg { position: absolute; inset: 0; width: 100%; height: 100%; }
 .sd-thumb.machine-bg img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
 
@@ -3542,16 +3590,14 @@ body[dir="rtl"] .picker-row { text-align: right; }
   font-weight: 800;
 }
 
-.calendar-cell.lvl-1 { background: rgba(45, 212, 191, 0.18); color: var(--accent); }
-.calendar-cell.lvl-2 { background: rgba(45, 212, 191, 0.32); color: var(--accent); }
+.calendar-cell.lvl-1 { background: rgba(var(--accent-rgb), 0.18); color: var(--accent); }
+.calendar-cell.lvl-2 { background: rgba(var(--accent-rgb), 0.32); color: var(--accent); }
 .calendar-cell.lvl-3 {
-  background: rgba(45, 212, 191, 0.55);
-  color: #fff;
+  background: rgba(var(--accent-rgb), 0.55);
+  color: var(--text);
   border-color: var(--accent-line);
 }
 .calendar-cell.lvl-4 { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
-
-.calendar-cell:active { transform: scale(0.92); }
 
 .calendar-legend {
   display: flex;
@@ -3996,11 +4042,12 @@ body[dir="rtl"] .lib-section-count {
 .bento-toggle {
   position: absolute;
   top: 10px;
-  left: 10px;
+  inset-inline-start: 10px;
+  cursor: pointer;
   width: 34px;
   height: 34px;
   border-radius: 50%;
-  background: rgba(6, 20, 27, 0.78);
+  background: var(--overlay);
   backdrop-filter: blur(8px);
   -webkit-backdrop-filter: blur(8px);
   border: 1px solid var(--border-hi);
@@ -4009,10 +4056,11 @@ body[dir="rtl"] .lib-section-count {
   align-items: center;
   justify-content: center;
   z-index: 4;
-  transition: transform 0.12s, background 0.15s;
+  transition: transform var(--dur-press) var(--ease), background var(--dur) var(--ease);
 }
 .bento-toggle svg { width: 16px; height: 16px; }
 .bento-toggle:active { transform: scale(0.9); }
+.bento-toggle:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .bento-toggle.added {
   background: var(--accent);
   color: var(--accent-ink);
@@ -4292,7 +4340,7 @@ body[dir="rtl"] .variation-select svg { transform: scaleX(-1); }
   padding: 0;
 }
 
-.theme-card:active { transform: scale(0.97); }
+/* .theme-card:active press feedback is owned by the unified block near end of file */
 
 .theme-card.active {
   border-color: var(--accent);
@@ -4757,3 +4805,375 @@ body[dir="rtl"] .variation-select svg { transform: scaleX(-1); }
 .pr-row { align-items: flex-start; }
 /* .pr-stats: override .data-meta gap from 8px to match dot-sep spacing at narrower widths */
 .pr-stats { gap: 8px; }
+
+/* =========================================================================
+   ATHLETIC PREMIUM FOUNDATION (v77)
+   Unified card/chip system, global press feedback, motion + skeleton.
+   Appended LAST on purpose — the cascade upgrades the legacy per-component
+   declarations without touching every render function. New tokens live in
+   :root (see Design tokens block at the top).
+   ========================================================================= */
+
+/* --- Unified card surface: one background, one border, one radius --- */
+.stat-tile, .bento-card, .session-card, .data-row, .tool-card,
+.compare-card, .recent-item, .today-plan, .muscle-heatmap, .cta-card {
+  background: var(--card-bg);
+  border: var(--card-border);
+  border-radius: var(--card-radius);
+  transition: transform var(--dur-press) var(--ease), border-color var(--dur) var(--ease);
+}
+/* Unified padding — image-full .bento-card is intentionally excluded */
+.stat-tile, .tool-card, .compare-card, .today-plan, .muscle-heatmap, .cta-card {
+  padding: var(--card-pad);
+}
+.data-row, .recent-item, .session-card {
+  padding: var(--card-pad-sm) var(--card-pad);
+}
+
+/* --- Chip consistency: macro-chip joins the pill-radius family --- */
+.macro-chip { border-radius: var(--chip-radius); }
+
+/* --- Global press feedback: one scale, everywhere tappable --- */
+.nav-btn:active, .btn:active, .stat-tile:active, .tool-card:active,
+.session-card:active, .recent-item:active, .heat-cell:active,
+.calendar-cell:active, .bento-card:active, .compare-card:active,
+.cta-card:active, .filter-pill:active, .theme-card:active,
+.planner-day:active, .settings-action-row:active {
+  transform: scale(var(--press-scale));
+}
+.stat-tile:active, .tool-card:active, .bento-card:active,
+.compare-card:active, .cta-card:active, .session-card:active {
+  border-color: var(--border-hi);
+}
+
+/* --- Skeleton shimmer (placeholders while images/content load) --- */
+.skeleton {
+  position: relative;
+  overflow: hidden;
+  background: var(--surface-2);
+}
+.skeleton::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  transform: translateX(-100%);
+  background: linear-gradient(90deg, transparent, rgba(var(--accent-rgb), 0.07), transparent);
+  animation: shimmer 1.2s var(--ease) infinite;
+}
+@keyframes shimmer { to { transform: translateX(100%); } }
+
+/* =========================================================================
+   HOME v2 (Athletic Premium, v78)
+   Compact header + streak chip · hero "Today" card · 3-stat strip ·
+   heatmap band · horizontal tool rail.
+   ========================================================================= */
+
+/* Header row: date + greeting on one side, streak chip on the other */
+.home-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-3);
+  margin-bottom: var(--sp-5);
+}
+.home-head-text { min-width: 0; }
+.home-head .home-hello {
+  font-size: var(--fs-caption);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: var(--tracking-caps);
+  color: var(--text-dim);
+  margin-bottom: 6px;
+}
+.home-head .home-hero {
+  font-size: var(--fs-title);
+  font-weight: var(--fw-display);
+  letter-spacing: var(--tracking-tight);
+  line-height: 1.1;
+  margin-bottom: 0;
+}
+
+.streak-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+  min-height: 44px;
+  padding: 8px 16px;
+  background: rgba(var(--accent-rgb), 0.12);
+  border: 1px solid rgba(var(--accent-rgb), 0.3);
+  border-radius: var(--radius-pill);
+  color: var(--accent);
+  font-family: inherit;
+  font-size: var(--fs-body);
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  transition: transform var(--dur-press) var(--ease);
+}
+.streak-chip svg { width: 16px; height: 16px; }
+.streak-chip-unit {
+  font-size: var(--fs-caption);
+  font-weight: 600;
+  color: var(--text-mute);
+}
+.streak-chip:active { transform: scale(var(--press-scale)); }
+
+/* Hero "Today" card */
+.hero-card {
+  width: 100%;
+  display: block;
+  text-align: start;
+  background: var(--card-bg);
+  border: var(--card-border);
+  border-radius: var(--radius-lg);
+  padding: var(--sp-5);
+  margin-bottom: var(--card-gap);
+  position: relative;
+  overflow: hidden;
+  font-family: inherit;
+  color: var(--text);
+  transition: transform var(--dur-press) var(--ease), border-color var(--dur) var(--ease);
+}
+.hero-card::before {
+  content: '';
+  position: absolute;
+  top: -70px;
+  inset-inline-end: -70px;
+  width: 220px;
+  height: 220px;
+  background: radial-gradient(circle, rgba(var(--accent-rgb), 0.15), transparent 65%);
+  pointer-events: none;
+}
+.hero-card:active {
+  transform: scale(var(--press-scale));
+  border-color: var(--border-hi);
+}
+.hero-eyebrow {
+  font-size: var(--fs-caption);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: var(--tracking-caps);
+  color: var(--accent);
+  margin-bottom: var(--sp-2);
+  position: relative;
+}
+.hero-title {
+  font-size: var(--fs-title);
+  font-weight: var(--fw-display);
+  letter-spacing: var(--tracking-tight);
+  line-height: 1.15;
+  margin-bottom: var(--sp-1);
+  position: relative;
+}
+.hero-numeral {
+  font-size: var(--fs-hero);
+  font-weight: 900;
+  letter-spacing: var(--tracking-tight);
+  line-height: 1;
+  margin: var(--sp-1) 0;
+  font-variant-numeric: tabular-nums;
+  position: relative;
+}
+.hero-meta {
+  font-size: var(--fs-sub);
+  font-weight: var(--fw-body);
+  color: var(--text-mute);
+  position: relative;
+}
+.hero-card .planner-day-muscles { margin-top: var(--sp-3); position: relative; }
+.hero-cta {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  margin-top: var(--sp-4);
+  height: 48px;
+  background: var(--accent);
+  color: var(--accent-ink);
+  border-radius: var(--radius);
+  font-size: var(--fs-body);
+  font-weight: 800;
+  position: relative;
+}
+.hero-cta svg { width: 18px; height: 18px; }
+.hero-cta.ghost {
+  background: var(--surface-3);
+  color: var(--text-mute);
+  font-weight: 700;
+  font-size: var(--fs-sub);
+}
+
+/* 3-stat strip */
+.stat-strip {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: var(--card-gap);
+  margin-bottom: var(--card-gap);
+}
+.stat-cell {
+  background: var(--card-bg);
+  border: var(--card-border);
+  border-radius: var(--card-radius);
+  padding: var(--sp-4) var(--sp-2);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  font-family: inherit;
+  color: var(--text);
+  transition: transform var(--dur-press) var(--ease), border-color var(--dur) var(--ease);
+}
+.stat-cell:active {
+  transform: scale(var(--press-scale));
+  border-color: var(--border-hi);
+}
+.stat-cell-value {
+  font-size: var(--fs-display);
+  font-weight: 900;
+  letter-spacing: var(--tracking-tight);
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+.stat-cell-value .unit {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-mute);
+  margin-inline-start: 2px;
+}
+.stat-cell-label {
+  font-size: var(--fs-caption);
+  font-weight: 700;
+  color: var(--text-mute);
+  text-transform: uppercase;
+  letter-spacing: var(--tracking-caps);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
+}
+
+/* Muscle heatmap as one horizontal band */
+.heatmap-grid.band {
+  display: flex;
+  gap: var(--sp-2);
+  overflow-x: auto;
+  scrollbar-width: none;
+  margin: 0 -4px;
+  padding: 0 4px;
+}
+.heatmap-grid.band::-webkit-scrollbar { display: none; }
+.heatmap-grid.band .heat-cell { flex: 0 0 88px; }
+
+/* Quick-add food rail: horizontal chips of most-logged foods (v80) */
+.quick-add-rail {
+  display: flex;
+  gap: var(--sp-2);
+  overflow-x: auto;
+  scrollbar-width: none;
+  margin: 0 -16px var(--sp-4);
+  padding: 2px 16px;
+}
+.quick-add-rail::-webkit-scrollbar { display: none; }
+.quick-add-chip {
+  flex: 0 0 auto;
+  max-width: 160px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 3px;
+  padding: 10px 14px;
+  background: var(--card-bg);
+  border: var(--card-border);
+  border-radius: var(--radius);
+  font-family: inherit;
+  text-align: start;
+  transition: transform var(--dur-press) var(--ease), border-color var(--dur) var(--ease);
+}
+.quick-add-chip:active {
+  transform: scale(var(--press-scale));
+  border-color: var(--border-hi);
+}
+.quick-add-name {
+  font-size: var(--fs-sub);
+  font-weight: 700;
+  color: var(--text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
+}
+.quick-add-cal {
+  font-size: var(--fs-caption);
+  font-weight: 600;
+  color: var(--accent);
+}
+
+/* Image fade-in: images start invisible over the --img-placeholder surface
+   and fade in when the global capture load-listener adds .loaded */
+.machine-photo,
+.detail-hero img {
+  opacity: 0;
+  transition: opacity var(--dur) var(--ease);
+}
+.machine-photo.loaded,
+.detail-hero img.loaded {
+  opacity: 1;
+}
+
+/* Horizontal tool rail (replaces the 2x2 tools grid + compare CTA) */
+.tool-rail {
+  display: flex;
+  gap: var(--sp-2);
+  overflow-x: auto;
+  scroll-snap-type: x proximity;
+  scrollbar-width: none;
+  margin: 0 -16px var(--sp-4);
+  padding: 2px 16px;
+}
+.tool-rail::-webkit-scrollbar { display: none; }
+.tool-pod {
+  flex: 0 0 auto;
+  min-width: 86px;
+  scroll-snap-align: start;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: var(--sp-3) var(--sp-3);
+  background: var(--card-bg);
+  border: var(--card-border);
+  border-radius: var(--card-radius);
+  font-family: inherit;
+  transition: transform var(--dur-press) var(--ease), border-color var(--dur) var(--ease);
+}
+.tool-pod:active {
+  transform: scale(var(--press-scale));
+  border-color: var(--border-hi);
+}
+.tool-pod-icon {
+  width: 38px;
+  height: 38px;
+  border-radius: 12px;
+  background: rgba(var(--accent-rgb), 0.12);
+  color: var(--accent);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.tool-pod-icon svg { width: 18px; height: 18px; }
+.tool-pod-label {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--text-mute);
+  white-space: nowrap;
+}
+
+/* --- Respect reduced-motion preferences (accessibility) --- */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
