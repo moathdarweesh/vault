@@ -17,7 +17,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=Tajawal:wght@400;500;700;800;900&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="styles.css?v=81">
+  <link rel="stylesheet" href="styles.css?v=82">
 </head>
 <body class="theme-dark">
   <div class="app">
@@ -76,18 +76,18 @@
           await Promise.all(regs.map((r) => r.unregister()));
           const keys = await caches.keys();
           await Promise.all(keys.map((k) => caches.delete(k)));
-          if (!sessionStorage.getItem('__cleaned_v81')) {
-            sessionStorage.setItem('__cleaned_v81', '1');
+          if (!sessionStorage.getItem('__cleaned_v82')) {
+            sessionStorage.setItem('__cleaned_v82', '1');
             location.reload();
           }
         }
       }).catch(() => {});
     }
   </script>
-  <script src="js/cloud.js?v=81"></script>
-  <script src="js/storage.js?v=81"></script>
-  <script src="js/app.js?v=81"></script>
-  <script src="js/health.js?v=81"></script>
-  <script src="js/foodai.js?v=81"></script>
+  <script src="js/cloud.js?v=82"></script>
+  <script src="js/storage.js?v=82"></script>
+  <script src="js/app.js?v=82"></script>
+  <script src="js/health.js?v=82"></script>
+  <script src="js/foodai.js?v=82"></script>
 </body>
 </html>

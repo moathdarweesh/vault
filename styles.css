@@ -710,8 +710,7 @@ img { display: block; max-width: 100%; }
   justify-content: space-between;
   align-items: center;
   padding: 14px 0 18px;
-  position: sticky;
-  top: 0;
+  position: relative;
   z-index: 5;
   background: transparent;
 }
@@ -917,6 +916,14 @@ body.theme-nebula .home-center-icon { box-shadow: 0 8px 28px rgba(168, 85, 247, 
   letter-spacing: -0.01em;
   transition: transform 0.12s ease, background 0.15s ease;
   white-space: nowrap;
+}
+/* Constrain inline icons in buttons: the global `svg{width:100%}` would
+   otherwise blow the icon up to fill a stretched (flex:1 / btn-block) button,
+   which also forces the button abnormally tall. Keep them small everywhere. */
+.btn svg {
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
 }
 
 .btn-primary {
