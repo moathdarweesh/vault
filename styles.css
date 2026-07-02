@@ -2910,8 +2910,11 @@ body[dir="rtl"] .tool-card { text-align: right; align-items: flex-end; }
   gap: 10px;
   width: 100%;
   text-align: left;
+  cursor: pointer;
   transition: transform 0.12s, border-color 0.15s;
 }
+/* The controls inside keep their own cursors (drag handles, remove/add). */
+.planner-day-grip, .planner-ex-grip { cursor: grab; }
 
 .planner-day:active {
   transform: scale(0.99);

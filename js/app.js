@@ -1812,7 +1812,7 @@ function renderHome(el) {
 
     ${recentHtml}
 
-    <div style="text-align:center;opacity:.4;font-size:12px;margin:24px 0 8px;letter-spacing:.5px">THE VAULT · v82</div>
+    <div style="text-align:center;opacity:.4;font-size:12px;margin:24px 0 8px;letter-spacing:.5px">THE VAULT · v83</div>
   `;
 
   // Count-up the hero/stat numerals (sleep is stored ×10 for one decimal)
@@ -3853,20 +3853,29 @@ function renderPlanner(el) {
     });
   });
 
-  // Tap a day's header:
-  //   - if it has exercises → open the workout-session page (edit available there)
-  //   - if it's empty (rest day) → open the editor so the user can add exercises
-  el.querySelectorAll('[data-day-open]').forEach((b) =>
-    b.addEventListener('click', () => {
-      const dow = Number(b.dataset.dayOpen);
+  // Tap ANYWHERE on a day card (not just the header) opens that day:
+  //   - if it has exercises → the workout-session page (exercises + sessions)
+  //   - if it's empty (rest day) → the editor so the user can add exercises
+  // Uses `click`, so a scroll gesture never triggers it (a moved touch cancels
+  // the click). The grips / X / + are excluded so they keep their own actions,
+  // and _suppressClick (set on drag-release) guards against a drag opening it.
+  // Attached once to the persistent view element — survives re-renders.
+  if (!el._plannerOpenInit) {
+    el._plannerOpenInit = true;
+    el.addEventListener('click', (e) => {
+      if (el._suppressClick) return;
+      if (e.target.closest('.planner-day-grip, .planner-ex-grip, [data-remove], [data-day-add]')) return;
+      const card = e.target.closest('.planner-day');
+      if (!card) return;
+      const dow = Number(card.dataset.day);
       const day = (DB.plan.get() || {})[String(dow)];
       if (day && day.exerciseIds && day.exerciseIds.length > 0) {
         navigate('session-day', { dow });
       } else {
         openDayEditorModal(dow);
       }
-    })
-  );
+    });
+  }
 
   // Quick "+" on each day opens the picker straight for that day.
   el.querySelectorAll('[data-day-add]').forEach((b) =>
@@ -3944,6 +3953,8 @@ function setupPlannerDrag(el) {
   }
 
   el.addEventListener('pointerdown', (e) => {
+    // A fresh pointer interaction clears any lingering post-drag click guard.
+    el._suppressClick = false;
     // Whole-day drag (grip on the day header) — moves the entire day's plan.
     const dayGrip = e.target.closest('.planner-day-grip');
     if (dayGrip) {
@@ -4041,6 +4052,9 @@ function setupPlannerDrag(el) {
 
   function finish() {
     if (!drag) return;
+    // A real drag just ended — the browser fires a click right after pointerup;
+    // suppress it so releasing a drag over a card doesn't open that day.
+    el._suppressClick = true;
     const mode = drag.mode;
     const { fromDow, targetDow } = drag;
     drag.ghost.remove();
