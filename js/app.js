@@ -1788,7 +1788,7 @@ function renderHome(el) {
     `;
 
     heroHtml = `
-      <button class="hero-card" data-goto="planner">
+      <button class="hero-card" id="home-start-workout">
         <div class="hero-eyebrow">${t('today_plan')} · ${escapeHtml(dayName(now.getDay(), true))}</div>
         <div class="hero-title">${escapeHtml(todayPlan.name || t('start_workout'))}</div>
         <div class="hero-meta">${fmtNum(exObjs.length)} ${exObjs.length === 1 ? t('exercise') : t('exercises')} · ${fmtNum(weekSetsCount)} ${t('sessions_this_week')}</div>
@@ -1882,7 +1882,7 @@ function renderHome(el) {
 
     ${recentHtml}
 
-    <div style="text-align:center;opacity:.4;font-size:12px;margin:24px 0 8px;letter-spacing:.5px">THE VAULT · v99</div>
+    <div style="text-align:center;opacity:.4;font-size:12px;margin:24px 0 8px;letter-spacing:.5px">THE VAULT · v100</div>
   `;
 
   // Count-up the hero/stat numerals (sleep is stored ×10 for one decimal)
@@ -1893,6 +1893,10 @@ function renderHome(el) {
   });
 
   bindVaultAction(() => navigate('settings'));
+  // "Start Workout" hero card → straight into today's session logging.
+  $('#home-start-workout', el)?.addEventListener('click', () =>
+    navigate('session-day', { dow: now.getDay() })
+  );
   if (typeof Health !== 'undefined') Health.bindHomeSection();
 }
 
