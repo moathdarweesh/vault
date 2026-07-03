@@ -2930,19 +2930,24 @@ body[dir="rtl"] .tool-card { text-align: right; align-items: flex-end; }
 }
 .schedule-days {
   display: grid;
-  grid-template-columns: repeat(7, 1fr);
-  gap: 6px;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 5px;
   margin-bottom: var(--sp-5);
 }
 .schedule-day {
-  height: 44px;
+  height: 46px;
+  min-width: 0;
+  padding: 0 2px;
   border-radius: var(--radius-sm);
   border: 1px solid var(--border);
   background: var(--surface-2);
   color: var(--text-mute);
   font-family: inherit;
-  font-size: var(--fs-sub);
+  font-size: 10px;
   font-weight: 800;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
   transition: transform var(--dur-press) var(--ease), background var(--dur) var(--ease), color var(--dur) var(--ease), border-color var(--dur) var(--ease);
 }
 .schedule-day:active { transform: scale(var(--press-scale)); }

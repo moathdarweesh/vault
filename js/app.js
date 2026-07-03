@@ -635,6 +635,11 @@ const I18N = {
     schedule_title: 'Your training days',
     schedule_days_label: 'training days',
     schedule_hint: 'Tap the days you want to train. Rest days stay empty, and the workouts are arranged across your training days in order.',
+    workouts_label: 'workouts',
+    tmpl_desc_ppl: 'Classic push / pull / legs split',
+    tmpl_desc_upper_lower: 'Balanced upper / lower split',
+    tmpl_desc_full_body: 'Full-body sessions',
+    tmpl_desc_bro_split: 'Bodybuilding muscle split',
     pick_mode_title: 'Tap to add to Train',
     pick_mode_sub: 'Tap any exercise to add or remove it instantly.',
     add_to_train: 'Add to Train',
@@ -805,7 +810,7 @@ const I18N = {
     streak_one_day: 'يوم',
     streak_days: 'يوم',
     streak_active: 'سلسلة نشطة — واصل!',
-    streak_start: 'سجّل جلسة عشان تبدأ سلسلتك',
+    streak_start: 'سجّل جلسة لبدء سلسلتك',
     workouts: 'التمارين', volume: 'الحجم', cardio: 'الكارديو', last_sleep: 'آخر نوم',
     sessions_label: 'الجلسات',
     sessions_this_week: 'مجموعة هذا الأسبوع',
@@ -890,7 +895,7 @@ const I18N = {
 
     food_subtitle: 'مرجعك الشخصي للأكل ومعدلاته الغذائية.',
     no_foods_yet: 'لا يوجد أكل بعد',
-    no_foods_text: 'ابنِ قائمتك المرجعية للأكل اللي تأكله عادة.',
+    no_foods_text: 'أنشئ قائمتك المرجعية بالأطعمة التي تتناولها عادةً.',
     no_matches_simple: 'لا نتائج',
     no_matches_text: 'جرّب بحث مختلف.',
     reference_items: 'مرجع',
@@ -1044,14 +1049,19 @@ const I18N = {
     months_ago: 'أشهر',
 
     library_title: 'المكتبة',
-    library_subtitle: 'تصفّح كل التمارين وأضف اللي تسويها.',
+    library_subtitle: 'تصفّح جميع التمارين وأضف ما تمارسه.',
     browse_library: 'تصفّح المكتبة',
     add_from_library: 'إضافة من المكتبة',
     add_exercise: 'أضف تمرين',
-    exercise_removed: 'تم إزالة التمرين',
+    exercise_removed: 'تمت إزالة التمرين',
     schedule_title: 'أيام تمرينك',
     schedule_days_label: 'أيام تمرين',
-    schedule_hint: 'اضغط الأيام اللي تبي تتمرّن فيها. أيام الراحة تبقى فارغة، والتمارين تتوزّع على أيام تمرينك بالترتيب.',
+    schedule_hint: 'اختر الأيام التي تريد التمرّن فيها؛ تبقى أيام الراحة فارغة، وتُوزَّع التمارين على أيام تمرينك بالترتيب.',
+    workouts_label: 'تمارين',
+    tmpl_desc_ppl: 'تقسيمة كلاسيكية: دفع / سحب / أرجل',
+    tmpl_desc_upper_lower: 'تقسيمة متوازنة: علوي / سفلي',
+    tmpl_desc_full_body: 'حصص للجسم كامل',
+    tmpl_desc_bro_split: 'تقسيمة كمال الأجسام',
     pick_mode_title: 'اضغط على التمرين لإضافته',
     pick_mode_sub: 'كل ضغطة تضيف أو تشيل التمرين من قائمة التدريب فوراً.',
     add_to_train: 'أضف للتمارين',
@@ -1069,7 +1079,7 @@ const I18N = {
     image_hint: 'اختر صورة من جهازك. تُحفظ محلياً.',
 
     planner_title: 'الخطة الأسبوعية',
-    planner_subtitle: 'حدّد وش تتمرن كل يوم في الأسبوع.',
+    planner_subtitle: 'حدّد تمرين كل يوم في الأسبوع.',
     today_plan: 'خطة اليوم',
     no_plan_today: 'يوم راحة',
     no_plan_today_sub: 'ما في تمارين مجدولة اليوم.',
@@ -1102,7 +1112,7 @@ const I18N = {
     template_applied: 'تم تطبيق القالب',
     apply: 'طبّق',
 
-    dow_sun: 'الأحد', dow_mon: 'الاثنين', dow_tue: 'الثلاثاء', dow_wed: 'الأربعاء', dow_thu: 'الخميس', dow_fri: 'الجمعة', dow_sat: 'السبت',
+    dow_sun: 'أحد', dow_mon: 'اثنين', dow_tue: 'ثلاثاء', dow_wed: 'أربعاء', dow_thu: 'خميس', dow_fri: 'جمعة', dow_sat: 'سبت',
     dow_sun_full: 'الأحد', dow_mon_full: 'الاثنين', dow_tue_full: 'الثلاثاء', dow_wed_full: 'الأربعاء',
     dow_thu_full: 'الخميس', dow_fri_full: 'الجمعة', dow_sat_full: 'السبت',
 
@@ -1119,7 +1129,7 @@ const I18N = {
     dose: 'الجرعة (اختياري)',
     color: 'اللون',
     no_supplements: 'ما في مكمّلات بعد',
-    no_supplements_text: 'أضف المكمّلات اللي تاخذها (مثلاً: كرياتين، واي).',
+    no_supplements_text: 'أضف المكمّلات التي تتناولها (مثل: الكرياتين، الواي بروتين).',
     taken: 'مأخوذ',
     not_taken: 'ما أخذته بعد',
     streak: 'سلسلة',
@@ -1142,7 +1152,7 @@ const I18N = {
     food_removed: 'تم الحذف',
     quick_add: 'إضافة سريعة',
     take_all: 'أخذ الكل',
-    all_taken: 'تم تعليم الكل كمأخوذ',
+    all_taken: 'تم تحديد الكل كمأخوذ',
     empty_food_list: 'قائمتك المرجعية فاضية',
     empty_food_list_text: 'روح لـ "الأكل" وضيف أكلاتك أول.',
     go_to_food: 'روح للأكل',
@@ -1153,7 +1163,7 @@ const I18N = {
 
     progress_chart: 'التقدم',
     max_weight_per_session: 'أقصى وزن لكل جلسة',
-    no_chart_data: 'سجّل مجموعتين فأكثر عشان تشوف رسم تقدّمك.',
+    no_chart_data: 'سجّل مجموعتين أو أكثر لعرض رسم تقدّمك.',
 
     tools_section: 'أدوات',
     plan_card: 'الخطة الأسبوعية',
@@ -1822,7 +1832,7 @@ function renderHome(el) {
 
     ${recentHtml}
 
-    <div style="text-align:center;opacity:.4;font-size:12px;margin:24px 0 8px;letter-spacing:.5px">THE VAULT · v88</div>
+    <div style="text-align:center;opacity:.4;font-size:12px;margin:24px 0 8px;letter-spacing:.5px">THE VAULT · v89</div>
   `;
 
   // Count-up the hero/stat numerals (sleep is stored ×10 for one decimal)
@@ -4107,7 +4117,7 @@ function openTemplatesModal() {
   const cards = WORKOUT_TEMPLATES.map((tmpl) => `
     <div class="compare-card" style="margin-bottom:8px">
       <div class="compare-card-title">${escapeHtml(tmpl.name)}</div>
-      <div style="font-size:12px;color:var(--text-mute);margin-bottom:10px">${escapeHtml(tmpl.description)} · ${fmtNum(tmpl.days.length)} ${tmpl.days.length === 1 ? 'day' : 'days'}</div>
+      <div style="font-size:12px;color:var(--text-mute);margin-bottom:10px">${t('tmpl_desc_' + tmpl.id.replace(/-/g, '_'))} · <span class="num">${fmtNum(tmpl.days.length)}</span> ${t('workouts_label')}</div>
       <div style="display:flex;flex-wrap:wrap;gap:5px;margin-bottom:12px">
         ${tmpl.days.map((d) => `<span class="today-plan-chip">${escapeHtml(d.name)}</span>`).join('')}
       </div>
