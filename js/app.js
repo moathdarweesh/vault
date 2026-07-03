@@ -477,6 +477,18 @@ const I18N = {
     reference_items: 'Reference',
     search_foods: 'Search foods…',
     add: 'Add',
+    food_library_title: 'Add from Library',
+    food_library_sub: 'Tap a food to add it to your list.',
+    add_manually: 'Add manually',
+    fcat_protein: 'Protein',
+    fcat_carbs: 'Grains & Carbs',
+    fcat_legumes: 'Legumes',
+    fcat_dairy: 'Dairy',
+    fcat_fruit: 'Fruits',
+    fcat_veg: 'Vegetables',
+    fcat_fats: 'Nuts & Fats',
+    fcat_meals: 'Meals',
+    fcat_drinks: 'Drinks',
     new_food: 'New Food', edit_food: 'Edit Food',
     food_quick: 'Macros per serving.',
     serving_opt: 'Serving (optional)', serving_hint: 'e.g. 100g, 1 cup',
@@ -904,6 +916,18 @@ const I18N = {
     reference_items: 'مرجع',
     search_foods: 'ابحث عن أكل…',
     add: 'أضف',
+    food_library_title: 'أضف من المكتبة',
+    food_library_sub: 'اضغط على أي طعام لإضافته إلى قائمتك.',
+    add_manually: 'إضافة يدوية',
+    fcat_protein: 'بروتين',
+    fcat_carbs: 'نشويات',
+    fcat_legumes: 'بقوليات',
+    fcat_dairy: 'ألبان',
+    fcat_fruit: 'فواكه',
+    fcat_veg: 'خضار',
+    fcat_fats: 'مكسرات ودهون',
+    fcat_meals: 'وجبات',
+    fcat_drinks: 'مشروبات',
     new_food: 'أكل جديد', edit_food: 'تعديل الأكل',
     food_quick: 'المعدلات الغذائية لكل حصة.',
     serving_opt: 'الحصة (اختياري)', serving_hint: 'مثلاً 100جم، كوب',
@@ -1855,7 +1879,7 @@ function renderHome(el) {
 
     ${recentHtml}
 
-    <div style="text-align:center;opacity:.4;font-size:12px;margin:24px 0 8px;letter-spacing:.5px">THE VAULT · v96</div>
+    <div style="text-align:center;opacity:.4;font-size:12px;margin:24px 0 8px;letter-spacing:.5px">THE VAULT · v97</div>
   `;
 
   // Count-up the hero/stat numerals (sleep is stored ×10 for one decimal)
@@ -3012,6 +3036,68 @@ function openNewCardioTypeModal(onCreated) {
 // FOOD
 // ==========================================================================
 
+// Built-in catalog of common foods with pre-computed macros (per serving).
+// Bilingual name + serving; calories/protein/carbs match the DB.foods shape.
+const FOOD_PRESETS = [
+  // Protein
+  { cat: 'protein', en: 'Chicken Breast', ar: 'صدر دجاج', s: '100g', sa: '١٠٠غ', cal: 165, pro: 31, carb: 0 },
+  { cat: 'protein', en: 'Chicken Thigh', ar: 'فخذ دجاج', s: '100g', sa: '١٠٠غ', cal: 209, pro: 26, carb: 0 },
+  { cat: 'protein', en: 'Tuna (canned)', ar: 'تونة معلبة', s: '100g', sa: '١٠٠غ', cal: 116, pro: 26, carb: 0 },
+  { cat: 'protein', en: 'Egg', ar: 'بيضة', s: '1 egg', sa: 'بيضة', cal: 78, pro: 6, carb: 1 },
+  { cat: 'protein', en: 'Beef (lean)', ar: 'لحم بقري', s: '100g', sa: '١٠٠غ', cal: 250, pro: 26, carb: 0 },
+  { cat: 'protein', en: 'Salmon', ar: 'سلمون', s: '100g', sa: '١٠٠غ', cal: 208, pro: 20, carb: 0 },
+  { cat: 'protein', en: 'Shrimp', ar: 'روبيان', s: '100g', sa: '١٠٠غ', cal: 99, pro: 24, carb: 0 },
+  { cat: 'protein', en: 'Turkey Breast', ar: 'صدر ديك رومي', s: '100g', sa: '١٠٠غ', cal: 135, pro: 30, carb: 0 },
+  // Grains & Carbs
+  { cat: 'carbs', en: 'White Rice', ar: 'رز أبيض', s: '100g', sa: '١٠٠غ', cal: 130, pro: 3, carb: 28 },
+  { cat: 'carbs', en: 'Brown Rice', ar: 'رز بني', s: '100g', sa: '١٠٠غ', cal: 111, pro: 3, carb: 23 },
+  { cat: 'carbs', en: 'White Bread', ar: 'خبز أبيض', s: '1 slice', sa: 'شريحة', cal: 80, pro: 3, carb: 15 },
+  { cat: 'carbs', en: 'Arabic Bread', ar: 'خبز عربي', s: '1 loaf', sa: 'رغيف', cal: 165, pro: 5, carb: 33 },
+  { cat: 'carbs', en: 'Pasta', ar: 'مكرونة', s: '100g', sa: '١٠٠غ', cal: 131, pro: 5, carb: 25 },
+  { cat: 'carbs', en: 'Oats', ar: 'شوفان', s: '40g', sa: '٤٠غ', cal: 150, pro: 5, carb: 27 },
+  { cat: 'carbs', en: 'Potato', ar: 'بطاطا', s: '100g', sa: '١٠٠غ', cal: 87, pro: 2, carb: 20 },
+  { cat: 'carbs', en: 'Sweet Potato', ar: 'بطاطا حلوة', s: '100g', sa: '١٠٠غ', cal: 86, pro: 2, carb: 20 },
+  // Legumes
+  { cat: 'legumes', en: 'Foul (Fava Beans)', ar: 'فول', s: '100g', sa: '١٠٠غ', cal: 110, pro: 8, carb: 15 },
+  { cat: 'legumes', en: 'Hummus', ar: 'حمص بالطحينة', s: '100g', sa: '١٠٠غ', cal: 166, pro: 8, carb: 14 },
+  { cat: 'legumes', en: 'Lentils', ar: 'عدس', s: '100g', sa: '١٠٠غ', cal: 116, pro: 9, carb: 20 },
+  { cat: 'legumes', en: 'Chickpeas', ar: 'حمص حب', s: '100g', sa: '١٠٠غ', cal: 164, pro: 9, carb: 27 },
+  // Dairy
+  { cat: 'dairy', en: 'Milk', ar: 'حليب', s: '250ml', sa: '٢٥٠مل', cal: 122, pro: 8, carb: 12 },
+  { cat: 'dairy', en: 'Greek Yogurt', ar: 'زبادي يوناني', s: '170g', sa: '١٧٠غ', cal: 100, pro: 17, carb: 6 },
+  { cat: 'dairy', en: 'Yogurt', ar: 'لبن زبادي', s: '170g', sa: '١٧٠غ', cal: 95, pro: 9, carb: 12 },
+  { cat: 'dairy', en: 'Cheddar Cheese', ar: 'جبن شيدر', s: '30g', sa: '٣٠غ', cal: 120, pro: 7, carb: 1 },
+  { cat: 'dairy', en: 'Labneh', ar: 'لبنة', s: '30g', sa: '٣٠غ', cal: 60, pro: 3, carb: 2 },
+  // Fruits
+  { cat: 'fruit', en: 'Banana', ar: 'موز', s: '1 medium', sa: 'حبة', cal: 105, pro: 1, carb: 27 },
+  { cat: 'fruit', en: 'Apple', ar: 'تفاح', s: '1 medium', sa: 'حبة', cal: 95, pro: 0, carb: 25 },
+  { cat: 'fruit', en: 'Orange', ar: 'برتقال', s: '1 medium', sa: 'حبة', cal: 62, pro: 1, carb: 15 },
+  { cat: 'fruit', en: 'Dates', ar: 'تمر', s: '3 pieces', sa: '٣ حبات', cal: 60, pro: 0, carb: 16 },
+  { cat: 'fruit', en: 'Grapes', ar: 'عنب', s: '100g', sa: '١٠٠غ', cal: 69, pro: 1, carb: 18 },
+  { cat: 'fruit', en: 'Strawberry', ar: 'فراولة', s: '100g', sa: '١٠٠غ', cal: 32, pro: 1, carb: 8 },
+  // Vegetables
+  { cat: 'veg', en: 'Cucumber', ar: 'خيار', s: '100g', sa: '١٠٠غ', cal: 15, pro: 1, carb: 4 },
+  { cat: 'veg', en: 'Tomato', ar: 'طماطم', s: '100g', sa: '١٠٠غ', cal: 18, pro: 1, carb: 4 },
+  { cat: 'veg', en: 'Mixed Salad', ar: 'سلطة خضراء', s: '100g', sa: '١٠٠غ', cal: 20, pro: 1, carb: 4 },
+  { cat: 'veg', en: 'Broccoli', ar: 'بروكلي', s: '100g', sa: '١٠٠غ', cal: 34, pro: 3, carb: 7 },
+  // Nuts & Fats
+  { cat: 'fats', en: 'Almonds', ar: 'لوز', s: '30g', sa: '٣٠غ', cal: 173, pro: 6, carb: 6 },
+  { cat: 'fats', en: 'Peanut Butter', ar: 'زبدة فول سوداني', s: '1 tbsp', sa: 'ملعقة', cal: 94, pro: 4, carb: 3 },
+  { cat: 'fats', en: 'Olive Oil', ar: 'زيت زيتون', s: '1 tbsp', sa: 'ملعقة', cal: 119, pro: 0, carb: 0 },
+  { cat: 'fats', en: 'Avocado', ar: 'أفوكادو', s: '100g', sa: '١٠٠غ', cal: 160, pro: 2, carb: 9 },
+  // Meals
+  { cat: 'meals', en: 'Shawarma Wrap', ar: 'شاورما', s: '1 wrap', sa: 'سندويش', cal: 350, pro: 20, carb: 30 },
+  { cat: 'meals', en: 'Burger', ar: 'برجر', s: '1 burger', sa: 'حبة', cal: 295, pro: 17, carb: 24 },
+  { cat: 'meals', en: 'Pizza Slice', ar: 'بيتزا', s: '1 slice', sa: 'شريحة', cal: 285, pro: 12, carb: 36 },
+  { cat: 'meals', en: 'French Fries', ar: 'بطاطا مقلية', s: '100g', sa: '١٠٠غ', cal: 312, pro: 3, carb: 41 },
+  // Drinks
+  { cat: 'drinks', en: 'Orange Juice', ar: 'عصير برتقال', s: '250ml', sa: '٢٥٠مل', cal: 112, pro: 2, carb: 26 },
+  { cat: 'drinks', en: 'Cola', ar: 'كولا', s: '330ml', sa: '٣٣٠مل', cal: 139, pro: 0, carb: 35 },
+];
+const FOOD_CAT_ORDER = ['protein', 'carbs', 'legumes', 'dairy', 'fruit', 'veg', 'fats', 'meals', 'drinks'];
+function foodPresetName(p) { return (DB.prefs.get().lang || 'en') === 'ar' ? p.ar : p.en; }
+function foodPresetServing(p) { return (DB.prefs.get().lang || 'en') === 'ar' ? p.sa : p.s; }
+
 // The AI-chat CTA floats above the bottom nav. It is mounted on `.app`
 // (a sibling of the nav) rather than inside the Food view, because the view
 // carries a `fadeUp` transform — and a transformed ancestor turns any
@@ -3093,7 +3179,7 @@ function renderFood(el) {
     }
   `;
 
-  bindVaultAction(() => openFoodModal());
+  bindVaultAction(() => openFoodLibraryModal());
   mountFoodAiBar();
   $('#food-search', el).addEventListener('input', (e) => {
     viewContext.foodQuery = e.target.value;
@@ -3101,7 +3187,7 @@ function renderFood(el) {
     const s = $('#food-search', el);
     if (s) { s.focus(); s.setSelectionRange(e.target.value.length, e.target.value.length); }
   });
-  $('#add-food-btn', el).addEventListener('click', () => openFoodModal());
+  $('#add-food-btn', el).addEventListener('click', () => openFoodLibraryModal());
   el.querySelectorAll('[data-edit-food]').forEach((b) =>
     b.addEventListener('click', () => openFoodModal(b.dataset.editFood))
   );
@@ -3182,6 +3268,87 @@ function openFoodModal(foodId = null) {
   });
 
   setTimeout(() => $('#food-name')?.focus(), 60);
+}
+
+// Quick-add picker: the built-in food catalog shown as small rectangular
+// chips, grouped by category, searchable. Tapping a chip adds it to the
+// reference list. A footer button falls back to the manual entry form.
+function openFoodLibraryModal() {
+  function buildSections() {
+    const existing = new Set(DB.foods.list().map((f) => f.name.trim().toLowerCase()));
+    return FOOD_CAT_ORDER.map((cat) => {
+      const chips = FOOD_PRESETS
+        .map((p, idx) => ({ p, idx }))
+        .filter(({ p }) => p.cat === cat)
+        .map(({ p, idx }) => {
+          const name = foodPresetName(p);
+          const added = existing.has(name.trim().toLowerCase());
+          return `
+            <button type="button" class="food-lib-chip${added ? ' added' : ''}" data-preset="${idx}" ${added ? 'disabled' : ''}>
+              <span class="flc-name">${escapeHtml(name)}</span>
+              <span class="flc-cal"><span class="num">${fmtNum(p.cal)}</span> ${t('cal')}</span>
+              <span class="flc-check">${icon('check', 14)}</span>
+            </button>`;
+        }).join('');
+      if (!chips) return '';
+      return `
+        <div class="food-lib-section">
+          <div class="food-lib-cat">${t('fcat_' + cat)}</div>
+          <div class="food-lib-grid">${chips}</div>
+        </div>`;
+    }).join('');
+  }
+
+  const overlay = openModal(`
+    <div class="modal-header">
+      <div>
+        <div class="modal-title">${t('food_library_title')}</div>
+        <div class="modal-subtitle">${t('food_library_sub')}</div>
+      </div>
+      <button class="icon-btn icon-btn-tile" data-close>${icon('close', 18)}</button>
+    </div>
+
+    <div class="search-wrap food-lib-search">
+      ${icon('search', 18)}
+      <input type="search" id="food-lib-search" placeholder="${t('search_foods')}">
+    </div>
+
+    <div class="food-lib-body" id="food-lib-body">${buildSections()}</div>
+
+    <div class="form-actions">
+      <button type="button" class="btn btn-ghost btn-block" id="food-lib-manual">${icon('plus', 16)} ${t('add_manually')}</button>
+    </div>
+  `);
+
+  const body = overlay.querySelector('#food-lib-body');
+  body.addEventListener('click', (e) => {
+    const btn = e.target.closest('.food-lib-chip');
+    if (!btn || btn.classList.contains('added')) return;
+    const p = FOOD_PRESETS[Number(btn.dataset.preset)];
+    if (!p) return;
+    DB.foods.add({ name: foodPresetName(p), serving: foodPresetServing(p), calories: p.cal, protein: p.pro, carbs: p.carb });
+    btn.classList.add('added');
+    btn.disabled = true;
+    showToast(t('saved'));
+    renderView(currentView);
+  });
+
+  overlay.querySelector('#food-lib-search').addEventListener('input', (e) => {
+    const q = e.target.value.trim().toLowerCase();
+    overlay.querySelectorAll('.food-lib-chip').forEach((c) => {
+      const nm = c.querySelector('.flc-name').textContent.toLowerCase();
+      c.style.display = (!q || nm.includes(q)) ? '' : 'none';
+    });
+    overlay.querySelectorAll('.food-lib-section').forEach((sec) => {
+      const any = [...sec.querySelectorAll('.food-lib-chip')].some((c) => c.style.display !== 'none');
+      sec.style.display = any ? '' : 'none';
+    });
+  });
+
+  overlay.querySelector('#food-lib-manual').addEventListener('click', () => {
+    closeModal();
+    openFoodModal();
+  });
 }
 
 // ==========================================================================

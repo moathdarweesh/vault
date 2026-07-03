@@ -5347,6 +5347,71 @@ body[dir="rtl"] .variation-select svg { transform: scaleX(-1); }
 /* Give the food list room so its last row clears the floating bar */
 .view[data-view="food"] { padding-bottom: 84px; }
 
+/* --- Food library picker: catalog shown as small rectangular chips --- */
+.food-lib-search { margin-bottom: 12px; }
+.food-lib-body {
+  max-height: 54vh;
+  overflow-y: auto;
+  margin: 0 -4px 6px;
+  padding: 0 4px;
+  scrollbar-width: none;
+}
+.food-lib-body::-webkit-scrollbar { display: none; }
+.food-lib-section { margin-bottom: 14px; }
+.food-lib-cat {
+  font-size: 12px;
+  font-weight: 800;
+  color: var(--text-mute);
+  margin-bottom: 8px;
+  letter-spacing: 0.01em;
+}
+.food-lib-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+.food-lib-chip {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  padding: 9px 11px;
+  min-height: 52px;
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  background: var(--surface-2);
+  text-align: start;
+  transition: transform 0.12s ease, border-color 0.15s, background 0.15s;
+}
+.food-lib-chip:active { transform: scale(0.97); }
+.food-lib-chip .flc-name {
+  font-size: 13px;
+  font-weight: 700;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
+  padding-inline-end: 16px;
+}
+.food-lib-chip .flc-cal { font-size: 11px; color: var(--text-mute); }
+.food-lib-chip .flc-cal .num { color: var(--accent); font-weight: 800; }
+.food-lib-chip .flc-check {
+  position: absolute;
+  top: 8px;
+  inset-inline-end: 8px;
+  color: var(--accent);
+  opacity: 0;
+}
+.food-lib-chip .flc-check svg { width: 14px; height: 14px; }
+.food-lib-chip.added {
+  border-color: var(--accent-line);
+  background: var(--accent-soft);
+  opacity: 0.72;
+}
+.food-lib-chip.added .flc-check { opacity: 1; }
+.btn-block { width: 100%; justify-content: center; }
+
 /* --- Respect reduced-motion preferences (accessibility) --- */
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after {
