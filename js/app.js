@@ -20,6 +20,7 @@ const ICONS = {
   chart: '<line x1="18" x2="18" y1="20" y2="10"/><line x1="12" x2="12" y1="20" y2="4"/><line x1="6" x2="6" y1="20" y2="14"/>',
   dumbbell: '<path d="M4 9v6"/><path d="M7 7v10"/><path d="M10 10v4"/><path d="M14 10v4"/><path d="M17 7v10"/><path d="M20 9v6"/><path d="M10 12h4"/>',
   vault: '<path d="M4 8v8"/><path d="M8 6v12"/><path d="M11 9v6"/><path d="M14 9v6"/><path d="M17 6v12"/><path d="M20 8v8"/><path d="M11 12h3"/>',
+  vaultDoor: '<rect x="3" y="3" width="18" height="18" rx="3.5"/><circle cx="12" cy="12" r="3.8"/><path d="M12 8.2V6"/><path d="M12 18v-2.2"/><path d="M8.2 12H6"/><path d="M18 12h-2.2"/><circle cx="12" cy="12" r="1" fill="currentColor"/>',
   run: '<circle cx="14" cy="4" r="2"/><path d="m4.5 22 3.5-7 4-2 4 5 4 1"/><path d="m12 13-4-2 1-4"/>',
   moon: '<path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79Z"/>',
   apple: '<path d="M12 10c-3 0-6 2-6 6s3 6 6 6 6-3 6-6-3-6-6-6Z"/><path d="M10 10c0-2 1-4 2-5"/><path d="M14 5c-.5.5-1 1.2-1.4 2"/>',
@@ -1879,7 +1880,7 @@ function renderHome(el) {
 
     ${recentHtml}
 
-    <div style="text-align:center;opacity:.4;font-size:12px;margin:24px 0 8px;letter-spacing:.5px">THE VAULT · v97</div>
+    <div style="text-align:center;opacity:.4;font-size:12px;margin:24px 0 8px;letter-spacing:.5px">THE VAULT · v98</div>
   `;
 
   // Count-up the hero/stat numerals (sleep is stored ×10 for one decimal)
@@ -3156,7 +3157,6 @@ function renderFood(el) {
     ${vaultBar({ action: icon('plus', 20) })}
 
     <div class="page-header">
-      <div class="page-eyebrow">${t('reference_items')} · ${list.length}</div>
       <h1 class="page-title">${t('food')}</h1>
       <p class="page-subtitle">${t('food_subtitle')}</p>
     </div>
@@ -4724,7 +4724,7 @@ function renderSessionDay(el) {
 
         <div class="sd-card-actions">
           <button type="button" class="btn btn-ghost sd-add-set-btn" data-add-set="${ex.id}">${icon('plus', 14)} ${t('add_set')}</button>
-          <button type="button" class="btn btn-primary sd-save-btn" data-save-ex="${ex.id}">${isLogged ? t('update') : t('save')}</button>
+          <button type="button" class="btn btn-primary sd-save-btn${st.dirty ? '' : ' sd-hidden'}" data-save-ex="${ex.id}">${isLogged ? t('update') : t('save')}</button>
         </div>
       </div>
     `;
@@ -4817,6 +4817,8 @@ function renderSessionDay(el) {
           st.sets[idx][inp.dataset.field] = v === '' ? '' : Number(v);
         }
         st.dirty = true;
+        // The card isn't re-rendered on keystroke, so reveal the save button here.
+        row.closest('.sd-card')?.querySelector('.sd-save-btn')?.classList.remove('sd-hidden');
       });
     });
     row.querySelector('[data-remove-set]')?.addEventListener('click', () => {
@@ -5585,7 +5587,7 @@ function showAuthGate(mode) {
   gate.className = 'auth-gate';
   gate.innerHTML = `
     <div class="auth-card">
-      <div class="auth-logo">${icon('home', 30)}</div>
+      <div class="auth-logo">${icon('vaultDoor', 30)}</div>
       <div class="auth-title">THE VAULT</div>
       <div class="auth-seg">
         <button class="auth-seg-btn ${up ? '' : 'active'}" data-mode="in">${t('auth_signin')}</button>

@@ -3533,6 +3533,8 @@ body[dir="rtl"] .planner-day-head { text-align: right; }
   height: auto;
   font-weight: 800;
 }
+/* Save/Update button is hidden until the card has unsaved edits */
+.sd-save-btn.sd-hidden { display: none; }
 
 /* Day editor: exercise picker */
 .picker-list {
