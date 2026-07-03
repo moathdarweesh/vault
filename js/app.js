@@ -653,6 +653,7 @@ const I18N = {
     // Image upload
     image_optional: 'Image (optional)',
     choose_image: 'Choose Image',
+    take_photo: 'Take photo',
     change_image: 'Change',
     remove_image: 'Remove',
     image_hint: 'Pick a photo from your device. Stored locally.',
@@ -1074,6 +1075,7 @@ const I18N = {
 
     image_optional: 'صورة (اختياري)',
     choose_image: 'اختر صورة',
+    take_photo: 'التقاط صورة',
     change_image: 'تغيير',
     remove_image: 'إزالة',
     image_hint: 'اختر صورة من جهازك. تُحفظ محلياً.',
@@ -1832,7 +1834,7 @@ function renderHome(el) {
 
     ${recentHtml}
 
-    <div style="text-align:center;opacity:.4;font-size:12px;margin:24px 0 8px;letter-spacing:.5px">THE VAULT · v91</div>
+    <div style="text-align:center;opacity:.4;font-size:12px;margin:24px 0 8px;letter-spacing:.5px">THE VAULT · v92</div>
   `;
 
   // Count-up the hero/stat numerals (sleep is stored ×10 for one decimal)
@@ -2243,7 +2245,35 @@ function renderLibrary(el) {
   );
 }
 
-function openNewExerciseModal(exerciseId = null) {
+// Small chooser shown by the session-day "Add exercise" button: pick from the
+// library, or create a new custom exercise and drop it straight into this day.
+function openAddExerciseChooser(dow) {
+  openModal(`
+    <div class="modal-header">
+      <div><div class="modal-title">${t('add_exercise')}</div></div>
+      <button class="icon-btn icon-btn-tile" data-close>${icon('close', 18)}</button>
+    </div>
+    <div style="display:flex;flex-direction:column;gap:10px;margin-top:4px">
+      <button type="button" class="btn btn-ghost btn-block" id="ch-from-lib" style="justify-content:center;gap:8px;padding:16px;font-size:15px">${icon('dumbbell', 18)} ${t('add_from_library')}</button>
+      <button type="button" class="btn btn-ghost btn-block" id="ch-new-ex" style="justify-content:center;gap:8px;padding:16px;font-size:15px">${icon('plus', 18)} ${t('new_exercise')}</button>
+    </div>
+  `);
+  // Both replace this chooser via openModal — no explicit close needed.
+  $('#ch-from-lib').addEventListener('click', () => openDayEditorModal(dow));
+  $('#ch-new-ex').addEventListener('click', () => {
+    openNewExerciseModal(null, {
+      onCreated: (ex) => {
+        if (!ex || !ex.id) return;
+        const plan = DB.plan.get() || {};
+        const day = plan[String(dow)] || { name: '', exerciseIds: [] };
+        const ids = [...(day.exerciseIds || []), ex.id];
+        DB.plan.setDay(dow, { name: day.name || dayName(dow, true), exerciseIds: ids });
+      },
+    });
+  });
+}
+
+function openNewExerciseModal(exerciseId = null, opts = {}) {
   const existing = exerciseId ? DB.exercises.getById(exerciseId) : null;
   const categoryOptions = EXERCISE_CATEGORIES.map(
     (c) => `<option value="${c}" ${existing && existing.category === c ? 'selected' : ''}>${escapeHtml(categoryLabel(c))}</option>`
@@ -2282,12 +2312,14 @@ function openNewExerciseModal(exerciseId = null) {
       <div class="image-uploader">
         <div class="image-preview" id="ex-image-preview">${previewHtml()}</div>
         <div class="image-actions">
+          <button type="button" class="btn btn-ghost" id="ex-image-camera">${icon('camera', 16)} ${t('take_photo')}</button>
           <button type="button" class="btn btn-ghost" id="ex-image-pick">${pickedImage ? t('change_image') : t('choose_image')}</button>
           ${pickedImage ? `<button type="button" class="btn btn-danger" id="ex-image-clear">${t('remove_image')}</button>` : ''}
         </div>
       </div>
       <div class="image-hint">${t('image_hint')}</div>
       <input type="file" id="ex-image-file" accept="image/*" hidden>
+      <input type="file" id="ex-image-camera-file" accept="image/*" capture="environment" hidden>
     </div>
 
     <div class="form-actions">
@@ -2318,9 +2350,8 @@ function openNewExerciseModal(exerciseId = null) {
     }
   }
 
-  $('#ex-image-pick').addEventListener('click', () => $('#ex-image-file').click());
-  $('#ex-image-file').addEventListener('change', async (e) => {
-    const file = e.target.files && e.target.files[0];
+  // Shared handler for both the gallery picker and the camera capture.
+  async function handleImageFile(file) {
     if (!file) return;
     try {
       const dataUrl = await resizeImageToDataUrl(file, 800, 0.78);
@@ -2329,7 +2360,12 @@ function openNewExerciseModal(exerciseId = null) {
     } catch (err) {
       showToast('Image error');
     }
-  });
+  }
+  $('#ex-image-pick').addEventListener('click', () => $('#ex-image-file').click());
+  $('#ex-image-file').addEventListener('change', (e) => handleImageFile(e.target.files && e.target.files[0]));
+  // Camera: capture="environment" opens the rear camera directly on mobile.
+  $('#ex-image-camera').addEventListener('click', () => $('#ex-image-camera-file').click());
+  $('#ex-image-camera-file').addEventListener('change', (e) => handleImageFile(e.target.files && e.target.files[0]));
   const initialClear = $('#ex-image-clear');
   if (initialClear) {
     initialClear.addEventListener('click', () => { pickedImage = null; refreshPreview(); });
@@ -2343,7 +2379,8 @@ function openNewExerciseModal(exerciseId = null) {
       DB.exercises.update(existing.id, { name, category, customImage: pickedImage });
       showToast(t('updated'));
     } else {
-      DB.exercises.add({ name, category, customImage: pickedImage });
+      const created = DB.exercises.add({ name, category, customImage: pickedImage });
+      if (typeof opts.onCreated === 'function') opts.onCreated(created);
       showToast(t('exercise_added'));
     }
     closeModal();
@@ -4534,9 +4571,9 @@ function renderSessionDay(el) {
 
   $('#sd-edit-day', el)?.addEventListener('click', () => openDayEditorModal(dow));
 
-  // Add an exercise from the library — reuses the day editor's searchable
-  // picker (pre-selects the day's current exercises; saving updates the day).
-  $('#sd-add-ex', el)?.addEventListener('click', () => openDayEditorModal(dow));
+  // Add an exercise: offer two choices — pick from the library, or create a
+  // brand-new custom exercise (which is then added straight to this day).
+  $('#sd-add-ex', el)?.addEventListener('click', () => openAddExerciseChooser(dow));
 
   // Remove one exercise from this day, inline. Clears its unsaved set state so
   // it doesn't linger, then re-renders. Logged sessions in history are kept.
