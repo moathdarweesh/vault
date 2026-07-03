@@ -632,6 +632,9 @@ const I18N = {
     add_from_library: 'Add from Library',
     add_exercise: 'Add exercise',
     exercise_removed: 'Exercise removed',
+    schedule_title: 'Your training days',
+    schedule_days_label: 'training days',
+    schedule_hint: 'Tap the days you want to train. Rest days stay empty, and the workouts are arranged across your training days in order.',
     pick_mode_title: 'Tap to add to Train',
     pick_mode_sub: 'Tap any exercise to add or remove it instantly.',
     add_to_train: 'Add to Train',
@@ -1046,6 +1049,9 @@ const I18N = {
     add_from_library: 'إضافة من المكتبة',
     add_exercise: 'أضف تمرين',
     exercise_removed: 'تم إزالة التمرين',
+    schedule_title: 'أيام تمرينك',
+    schedule_days_label: 'أيام تمرين',
+    schedule_hint: 'اضغط الأيام اللي تبي تتمرّن فيها. أيام الراحة تبقى فارغة، والتمارين تتوزّع على أيام تمرينك بالترتيب.',
     pick_mode_title: 'اضغط على التمرين لإضافته',
     pick_mode_sub: 'كل ضغطة تضيف أو تشيل التمرين من قائمة التدريب فوراً.',
     add_to_train: 'أضف للتمارين',
@@ -1816,7 +1822,7 @@ function renderHome(el) {
 
     ${recentHtml}
 
-    <div style="text-align:center;opacity:.4;font-size:12px;margin:24px 0 8px;letter-spacing:.5px">THE VAULT · v86</div>
+    <div style="text-align:center;opacity:.4;font-size:12px;margin:24px 0 8px;letter-spacing:.5px">THE VAULT · v87</div>
   `;
 
   // Count-up the hero/stat numerals (sleep is stored ×10 for one decimal)
@@ -4124,26 +4130,106 @@ function openTemplatesModal() {
     b.addEventListener('click', () => {
       const tmpl = WORKOUT_TEMPLATES.find((x) => x.id === b.dataset.apply);
       if (!tmpl) return;
-      // Map exercise names to user's exercise IDs (and add to inMyList if not already)
-      const allEx = DB.exercises.list();
-      const byName = Object.fromEntries(allEx.map((e) => [e.name, e]));
-      const days = tmpl.days.map((d) => {
-        const ids = [];
-        d.exercises.forEach((nm) => {
-          const ex = byName[nm];
-          if (ex) {
-            ids.push(ex.id);
-            if (!ex.inMyList) DB.exercises.setInMyList(ex.id, true);
-          }
-        });
-        return { name: d.name, exerciseIds: ids };
-      });
-      DB.plan.applyTemplate(days);
-      closeModal();
-      showToast(t('template_applied'));
-      renderView(currentView);
+      openScheduleModal(tmpl);
     })
   );
+}
+
+// Step 2 of applying a template: let the user choose which weekdays are
+// training days (the rest stay empty). The template's workouts are distributed
+// across the chosen days IN ORDER, cycling if there are more training days than
+// workouts (e.g. 5 chosen days with a 3-workout PPL → Push, Pull, Legs, Push,
+// Pull). Defaults are seeded from the classic heuristic for the workout count.
+function openScheduleModal(tmpl) {
+  const workouts = tmpl.days;           // [{ name, exercises:[names] }]
+  const M = workouts.length;
+  const dayOrder = [0, 1, 2, 3, 4, 5, 6]; // Sun..Sat
+  const defaults = M <= 3 ? [1, 3, 5]
+    : M === 4 ? [1, 2, 4, 5]
+    : M === 5 ? [1, 2, 3, 4, 5]
+    : M === 6 ? [0, 1, 2, 3, 4, 5]
+    : [0, 1, 2, 3, 4, 5, 6];
+  const training = new Set(defaults);
+
+  // Selected training days (in Sun..Sat order) → workout assigned cyclically.
+  function assignment() {
+    const sel = dayOrder.filter((d) => training.has(d));
+    return sel.map((dow, i) => ({ dow, workout: workouts[i % M] }));
+  }
+
+  function renderPreview() {
+    const box = $('#schedule-preview');
+    if (!box) return;
+    const byDow = {};
+    assignment().forEach(({ dow, workout }) => { byDow[dow] = workout; });
+    box.innerHTML = dayOrder.map((d) => {
+      const w = byDow[d];
+      return `
+        <div class="schedule-prev-row ${w ? '' : 'rest'}">
+          <span class="schedule-prev-day">${escapeHtml(dayName(d, true))}</span>
+          <span class="schedule-prev-arrow">${w ? '→' : ''}</span>
+          <span class="schedule-prev-workout">${w ? escapeHtml(w.name) : t('rest_day')}</span>
+        </div>`;
+    }).join('');
+    const count = $('#schedule-count');
+    if (count) count.textContent = fmtNum(training.size);
+    const applyBtn = $('#schedule-apply');
+    if (applyBtn) applyBtn.disabled = training.size === 0;
+  }
+
+  openModal(`
+    <div class="modal-header">
+      <div>
+        <div class="modal-title">${t('schedule_title')}</div>
+        <div class="modal-subtitle">${escapeHtml(tmpl.name)} · <span id="schedule-count" class="num">${fmtNum(training.size)}</span> ${t('schedule_days_label')}</div>
+      </div>
+      <button class="icon-btn icon-btn-tile" data-close>${icon('close', 18)}</button>
+    </div>
+
+    <p class="schedule-hint">${t('schedule_hint')}</p>
+    <div class="schedule-days">
+      ${dayOrder.map((d) => `<button type="button" class="schedule-day ${training.has(d) ? 'active' : ''}" data-day="${d}">${escapeHtml(dayName(d, false))}</button>`).join('')}
+    </div>
+
+    <div class="schedule-preview" id="schedule-preview"></div>
+
+    <div class="form-actions">
+      <button type="button" class="btn btn-ghost" data-close>${t('cancel')}</button>
+      <button type="button" class="btn btn-primary" id="schedule-apply">${t('apply')}</button>
+    </div>
+  `);
+
+  renderPreview();
+
+  document.querySelectorAll('[data-day]').forEach((b) =>
+    b.addEventListener('click', () => {
+      const d = Number(b.dataset.day);
+      if (training.has(d)) training.delete(d); else training.add(d);
+      b.classList.toggle('active');
+      renderPreview();
+    })
+  );
+
+  $('#schedule-apply').addEventListener('click', () => {
+    if (training.size === 0) return;
+    const byName = Object.fromEntries(DB.exercises.list().map((e) => [e.name, e]));
+    const map = {};
+    assignment().forEach(({ dow, workout }) => {
+      const ids = [];
+      workout.exercises.forEach((nm) => {
+        const ex = byName[nm];
+        if (ex) {
+          ids.push(ex.id);
+          if (!ex.inMyList) DB.exercises.setInMyList(ex.id, true);
+        }
+      });
+      map[String(dow)] = { name: workout.name, exerciseIds: ids };
+    });
+    DB.plan.applySchedule(map);
+    closeModal();
+    showToast(t('template_applied'));
+    renderView(currentView);
+  });
 }
 
 function openDayEditorModal(dow) {

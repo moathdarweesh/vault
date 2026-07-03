@@ -523,6 +523,19 @@ const DB = {
       });
       save();
     },
+    // Apply an explicit day→workout schedule chosen by the user. `map` is
+    // { '0'..'6': { name, exerciseIds } | null }; any day not present (or null)
+    // becomes a rest day. Replaces the whole week in one write.
+    applySchedule(map) {
+      STATE.plan = { '0': null, '1': null, '2': null, '3': null, '4': null, '5': null, '6': null };
+      Object.keys(map || {}).forEach((dow) => {
+        const d = map[dow];
+        if (d && Array.isArray(d.exerciseIds)) {
+          STATE.plan[String(dow)] = { name: d.name || 'Workout', exerciseIds: [...d.exerciseIds] };
+        }
+      });
+      save();
+    },
     // Move an exercise within a day (reorder) or to another day. Called by the
     // planner's drag-and-drop. toIndex is the desired position in the target
     // day's list (null = append). Source day keeps its name even if emptied.

@@ -2915,6 +2915,57 @@ body[dir="rtl"] .tool-card { text-align: right; align-items: flex-end; }
 /* The controls inside keep their own cursors (drag handles, remove/add). */
 .planner-day-grip, .planner-ex-grip { cursor: grab; }
 
+/* ---- Schedule picker (choose training days when applying a template) ---- */
+.schedule-hint {
+  font-size: var(--fs-sub);
+  color: var(--text-mute);
+  line-height: 1.5;
+  margin-bottom: var(--sp-4);
+}
+.schedule-days {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 6px;
+  margin-bottom: var(--sp-5);
+}
+.schedule-day {
+  height: 44px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  background: var(--surface-2);
+  color: var(--text-mute);
+  font-family: inherit;
+  font-size: var(--fs-sub);
+  font-weight: 800;
+  transition: transform var(--dur-press) var(--ease), background var(--dur) var(--ease), color var(--dur) var(--ease), border-color var(--dur) var(--ease);
+}
+.schedule-day:active { transform: scale(var(--press-scale)); }
+.schedule-day.active {
+  background: var(--accent);
+  color: var(--accent-ink);
+  border-color: var(--accent);
+}
+.schedule-preview {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-bottom: var(--sp-5);
+}
+.schedule-prev-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 12px;
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+  font-size: var(--fs-sub);
+}
+.schedule-prev-row.rest { opacity: 0.5; background: transparent; }
+.schedule-prev-day { width: 84px; flex-shrink: 0; font-weight: 700; color: var(--text); }
+.schedule-prev-arrow { color: var(--text-dim); }
+.schedule-prev-workout { font-weight: 700; color: var(--accent); }
+.schedule-prev-row.rest .schedule-prev-workout { color: var(--text-mute); font-weight: 500; }
+
 .planner-day:active {
   transform: scale(0.99);
   border-color: var(--border-hi);
