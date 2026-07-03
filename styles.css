@@ -882,6 +882,12 @@ body.theme-nebula .home-center-icon { box-shadow: 0 8px 28px rgba(168, 85, 247, 
   letter-spacing: 0.2em;
   margin-bottom: 6px;
 }
+/* An eyebrow may hold a small icon (e.g. Settings). Constrain it so the global
+   svg{width:100%} rule doesn't blow it up to the full column width. */
+.page-eyebrow svg {
+  width: 16px;
+  height: 16px;
+}
 
 .section-title {
   font-size: 11px;
