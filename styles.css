@@ -2177,22 +2177,31 @@ body[dir="rtl"] .w-unit { margin-left: 0; margin-right: 2px; }
    ========================================================================= */
 .empty {
   text-align: center;
-  padding: 60px 20px;
+  padding: 56px 24px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
 }
 
 .empty-icon {
-  width: 52px;
-  height: 52px;
-  margin: 0 auto 14px;
-  color: var(--text-faint);
-  opacity: 0.85;
+  width: 88px;
+  height: 88px;
+  margin: 0 auto 18px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background: radial-gradient(circle at 50% 38%, rgba(var(--accent-rgb), 0.16), rgba(var(--accent-rgb), 0.05));
+  border: 1px solid rgba(var(--accent-rgb), 0.2);
+  color: rgb(var(--accent-rgb));
 }
+.empty-icon svg { width: 38px; height: 38px; }
 
 .empty-title {
-  font-size: 15px;
+  font-size: 16px;
   font-weight: 800;
   color: var(--text);
-  margin-bottom: 6px;
+  margin-bottom: 7px;
   letter-spacing: -0.015em;
 }
 
@@ -2203,6 +2212,46 @@ body[dir="rtl"] .w-unit { margin-left: 0; margin-right: 2px; }
   margin: 0 auto;
   line-height: 1.55;
 }
+
+/* Tappable exercise-photo thumbnail (opens the full-screen viewer) */
+.sd-thumb-zoom { cursor: zoom-in; }
+
+/* Full-screen image viewer */
+.img-lightbox {
+  position: fixed;
+  inset: 0;
+  z-index: 3000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: rgba(0, 0, 0, 0.92);
+  opacity: 0;
+  transition: opacity var(--dur) var(--ease);
+}
+.img-lightbox.open { opacity: 1; }
+.img-lightbox img {
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+  border-radius: var(--radius-lg);
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.6);
+}
+.img-lightbox-close {
+  position: absolute;
+  top: calc(env(safe-area-inset-top, 0px) + 14px);
+  inset-inline-end: 14px;
+  width: 42px;
+  height: 42px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(255, 255, 255, 0.14);
+  border: none;
+  color: #fff;
+}
+.img-lightbox-close svg { width: 22px; height: 22px; }
 
 /* =========================================================================
    MODAL / SHEETS

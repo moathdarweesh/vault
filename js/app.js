@@ -448,6 +448,7 @@ const I18N = {
     cardio_subtitle: 'Treadmill, walking, and cycling sessions.',
     no_cardio: 'No cardio yet',
     no_cardio_text: 'Log your first treadmill, walk, or ride with the button above.',
+    close: 'Close',
     all_sessions: 'All Sessions',
     log: 'Log',
     log_cardio: 'Log Cardio', edit_cardio: 'Edit Cardio',
@@ -875,6 +876,7 @@ const I18N = {
     cardio_subtitle: 'جلسات السير، المشي، والدراجة.',
     no_cardio: 'لا يوجد كارديو بعد',
     no_cardio_text: 'سجّل أول جلسة سير أو مشي أو دراجة بالزر فوق.',
+    close: 'إغلاق',
     all_sessions: 'كل الجلسات',
     log: 'سجّل',
     log_cardio: 'سجّل كارديو', edit_cardio: 'تعديل الكارديو',
@@ -1499,6 +1501,21 @@ function emptyState({ iconName = 'dumbbell', title, text }) {
   `;
 }
 
+// Full-screen image viewer. Tap anywhere (or the close button) to dismiss.
+function openImageLightbox(src) {
+  if (!src) return;
+  document.querySelector('.img-lightbox')?.remove();
+  const box = document.createElement('div');
+  box.className = 'img-lightbox';
+  box.innerHTML = `
+    <button type="button" class="img-lightbox-close" aria-label="${escapeHtml(t('close'))}">${icon('close', 22)}</button>
+    <img src="${escapeHtml(src)}" alt="" referrerpolicy="no-referrer">
+  `;
+  box.addEventListener('click', () => box.remove());
+  document.body.appendChild(box);
+  requestAnimationFrame(() => box.classList.add('open'));
+}
+
 // ==========================================================================
 // Personal Records helper
 // ==========================================================================
@@ -1834,7 +1851,7 @@ function renderHome(el) {
 
     ${recentHtml}
 
-    <div style="text-align:center;opacity:.4;font-size:12px;margin:24px 0 8px;letter-spacing:.5px">THE VAULT · v93</div>
+    <div style="text-align:center;opacity:.4;font-size:12px;margin:24px 0 8px;letter-spacing:.5px">THE VAULT · v94</div>
   `;
 
   // Count-up the hero/stat numerals (sleep is stored ×10 for one decimal)
@@ -2310,7 +2327,6 @@ function openNewExerciseModal(exerciseId = null, opts = {}) {
     <div class="form-group">
       <label class="form-label">${t('image_optional')}</label>
       <div class="image-uploader">
-        <div class="image-preview" id="ex-image-preview">${previewHtml()}</div>
         <div class="image-actions">
           <button type="button" class="btn btn-ghost" id="ex-image-camera">${icon('camera', 16)} ${t('take_photo')}</button>
           <button type="button" class="btn btn-ghost" id="ex-image-pick">${pickedImage ? t('change_image') : t('choose_image')}</button>
@@ -4475,17 +4491,13 @@ function renderSessionDay(el) {
     const st = initState(ex.id);
     const url = exerciseImgSrc(ex);
     const machineSvg = ex.machineType ? machineSvgFor(ex.machineType) : '';
-    const last = DB.sessions.lastForExercise(ex.id, st.savedSessionId);
-    const lastPreview = last
-      ? last.sets.map((s) => `${escapeHtml(String(s.reps))}×${fmtNum(modalConvertForDisplay(s.weight))}${viewContext.sdUnit}`).join(' · ')
-      : t('no_sessions_yet');
     const isLogged = !!st.savedSessionId;
 
     let bgHtml;
     if (machineSvg) {
-      bgHtml = `<div class="sd-thumb machine-bg">${machineSvg}${url ? `<img src="${url}" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="this.remove()">` : ''}</div>`;
+      bgHtml = `<div class="sd-thumb machine-bg${url ? ' sd-thumb-zoom' : ''}"${url ? ` data-thumb-src="${escapeHtml(url)}"` : ''}>${machineSvg}${url ? `<img src="${url}" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="this.remove()">` : ''}</div>`;
     } else if (url) {
-      bgHtml = `<div class="sd-thumb" style="background-image:url('${url}')"></div>`;
+      bgHtml = `<div class="sd-thumb sd-thumb-zoom" data-thumb-src="${escapeHtml(url)}" style="background-image:url('${url}')"></div>`;
     } else {
       bgHtml = `<div class="sd-thumb fallback">${escapeHtml(initialsOf(ex.name))}</div>`;
     }
@@ -4508,7 +4520,6 @@ function renderSessionDay(el) {
           ${bgHtml}
           <div class="sd-card-main">
             <div class="sd-card-name">${escapeHtml(ex.name)}</div>
-            <div class="sd-card-last">${escapeHtml(lastPreview)}</div>
           </div>
           ${isLogged ? `<div class="sd-status-pill">${icon('check', 12)} ${t('logged')}</div>` : ''}
           <button type="button" class="icon-btn danger sd-remove-ex" data-remove-ex="${ex.id}" aria-label="${escapeHtml(t('remove_from_day'))}">${icon('trash', 15)}</button>
@@ -4572,6 +4583,11 @@ function renderSessionDay(el) {
   // Add an exercise: offer two choices — pick from the library, or create a
   // brand-new custom exercise (which is then added straight to this day).
   $('#sd-add-ex', el)?.addEventListener('click', () => openAddExerciseChooser(dow));
+
+  // Tap an exercise photo thumbnail to open it full-screen.
+  el.querySelectorAll('.sd-thumb-zoom').forEach((thumb) =>
+    thumb.addEventListener('click', () => openImageLightbox(thumb.dataset.thumbSrc))
+  );
 
   // Remove one exercise from this day, inline. Clears its unsaved set state so
   // it doesn't linger, then re-renders. Logged sessions in history are kept.
