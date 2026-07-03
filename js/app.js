@@ -1851,7 +1851,7 @@ function renderHome(el) {
 
     ${recentHtml}
 
-    <div style="text-align:center;opacity:.4;font-size:12px;margin:24px 0 8px;letter-spacing:.5px">THE VAULT · v94</div>
+    <div style="text-align:center;opacity:.4;font-size:12px;margin:24px 0 8px;letter-spacing:.5px">THE VAULT · v95</div>
   `;
 
   // Count-up the hero/stat numerals (sleep is stored ×10 for one decimal)
@@ -3042,15 +3042,6 @@ function renderFood(el) {
       <p class="page-subtitle">${t('food_subtitle')}</p>
     </div>
 
-    <button class="cta-card" id="food-ai-cta" style="margin-bottom:14px">
-      <div class="cta-card-icon">${icon('zap', 20)}</div>
-      <div style="flex:1;min-width:0">
-        <div class="cta-card-title">${t('ai_chat_title')}</div>
-        <div class="cta-card-sub">${t('ai_chat_sub')}</div>
-      </div>
-      <div class="cta-card-chev">${icon('chevronRight', 18)}</div>
-    </button>
-
     <div class="toolbar" style="display:flex;gap:10px;margin-bottom:14px">
       <div class="search-wrap">
         ${icon('search', 18)}
@@ -3067,6 +3058,15 @@ function renderFood(el) {
         })
       : `<div class="data-list">${items}</div>`
     }
+
+    <button class="cta-card cta-floating" id="food-ai-cta">
+      <div class="cta-card-icon">${icon('zap', 20)}</div>
+      <div style="flex:1;min-width:0">
+        <div class="cta-card-title">${t('ai_chat_title')}</div>
+        <div class="cta-card-sub">${t('ai_chat_sub')}</div>
+      </div>
+      <div class="cta-card-chev">${icon('chevronRight', 18)}</div>
+    </button>
   `;
 
   bindVaultAction(() => openFoodModal());
