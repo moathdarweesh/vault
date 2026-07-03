@@ -1832,7 +1832,7 @@ function renderHome(el) {
 
     ${recentHtml}
 
-    <div style="text-align:center;opacity:.4;font-size:12px;margin:24px 0 8px;letter-spacing:.5px">THE VAULT · v90</div>
+    <div style="text-align:center;opacity:.4;font-size:12px;margin:24px 0 8px;letter-spacing:.5px">THE VAULT · v91</div>
   `;
 
   // Count-up the hero/stat numerals (sleep is stored ×10 for one decimal)
@@ -4312,7 +4312,7 @@ function openDayEditorModal(dow) {
       <input type="text" id="day-name" placeholder="${t('day_name_placeholder')}" value="${escapeHtml(dayLabel)}">
     </div>
 
-    <div class="form-group">
+    <div class="form-group picker-group">
       <label class="form-label">${t('pick_exercises')}</label>
       <div class="search-wrap" style="margin-bottom:8px">
         ${icon('search', 18)}
@@ -4322,11 +4322,14 @@ function openDayEditorModal(dow) {
       <div class="picker-list" id="picker-list"></div>
     </div>
 
-    <div class="form-actions">
-      <button type="button" class="btn btn-danger" id="day-clear-btn">${icon('trash', 14)} ${t('rest_day')}</button>
+    <div class="form-actions sticky-actions">
+      <button type="button" class="btn btn-ghost day-rest-btn" id="day-clear-btn">${icon('trash', 14)} ${t('rest_day')}</button>
       <button type="button" class="btn btn-primary" id="day-save-btn">${t('save')}</button>
     </div>
   `);
+
+  // Flex layout: only the exercise list scrolls; the Save / Rest bar stays pinned.
+  document.querySelector('#modal-root .modal')?.classList.add('modal-day-editor');
 
   // Set the modal title to the actual day name
   const titleEl = document.querySelector('#modal-root .modal-title');

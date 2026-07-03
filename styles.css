@@ -3506,6 +3506,51 @@ body[dir="rtl"] .planner-day-head { text-align: right; }
   overflow-y: auto;
   padding-right: 2px;
 }
+
+/* Day editor: fixed header/name/search + a big scrolling exercise list + a
+   pinned action bar (Save / Rest always reachable without scrolling past the
+   whole list). Only the list scrolls. */
+.modal.modal-day-editor {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  padding-bottom: 0;
+}
+.modal.modal-day-editor > .sheet-handle,
+.modal.modal-day-editor > .modal-header,
+.modal.modal-day-editor > .form-group:not(.picker-group),
+.modal.modal-day-editor > .sticky-actions {
+  flex-shrink: 0;
+}
+.modal.modal-day-editor .picker-group {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-height: 0;
+  margin-bottom: 0;
+}
+.modal.modal-day-editor .picker-group > label,
+.modal.modal-day-editor .picker-group > .search-wrap,
+.modal.modal-day-editor .picker-group > .filter-bar {
+  flex-shrink: 0;
+}
+.modal.modal-day-editor .picker-group .picker-list {
+  flex: 1 1 auto;
+  max-height: none;
+  min-height: 140px;
+}
+
+/* Pinned action bar — one clean bar flush with the sheet's bottom edge. */
+.sticky-actions {
+  margin: 14px -18px 0;
+  padding: 14px 18px calc(14px + var(--safe-b));
+  background: var(--surface-1);
+  border-top: 1px solid var(--border);
+}
+.sticky-actions #day-save-btn { flex: 1.6; }
+/* Rest-day is a quiet secondary action, not a scary red button. */
+.day-rest-btn { flex: 1; color: var(--text-mute); }
+.day-rest-btn svg { width: 15px; height: 15px; }
 .picker-list::-webkit-scrollbar { width: 4px; }
 .picker-list::-webkit-scrollbar-thumb { background: var(--border-hi); border-radius: 2px; }
 
