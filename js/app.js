@@ -1400,6 +1400,10 @@ function navigate(view, context = {}, opts = {}) {
   currentView = view;
   viewContext = context;
 
+  // The Food view mounts a floating AI-chat bar on `.app`; clear it on every
+  // navigation so it never lingers over other views (renderFood re-mounts it).
+  if (typeof unmountFoodAiBar === 'function') unmountFoodAiBar();
+
   $$('.view').forEach((v) => v.classList.toggle('active', v.dataset.view === view));
 
   const navMap = {
@@ -1851,7 +1855,7 @@ function renderHome(el) {
 
     ${recentHtml}
 
-    <div style="text-align:center;opacity:.4;font-size:12px;margin:24px 0 8px;letter-spacing:.5px">THE VAULT · v95</div>
+    <div style="text-align:center;opacity:.4;font-size:12px;margin:24px 0 8px;letter-spacing:.5px">THE VAULT · v96</div>
   `;
 
   // Count-up the hero/stat numerals (sleep is stored ×10 for one decimal)
@@ -3007,6 +3011,35 @@ function openNewCardioTypeModal(onCreated) {
 // ==========================================================================
 // FOOD
 // ==========================================================================
+
+// The AI-chat CTA floats above the bottom nav. It is mounted on `.app`
+// (a sibling of the nav) rather than inside the Food view, because the view
+// carries a `fadeUp` transform — and a transformed ancestor turns any
+// position:fixed descendant into position:absolute, which would misplace it.
+function unmountFoodAiBar() {
+  document.querySelector('.app > #food-ai-cta')?.remove();
+}
+function mountFoodAiBar() {
+  const app = document.querySelector('.app');
+  if (!app) return;
+  unmountFoodAiBar();
+  const bar = document.createElement('button');
+  bar.className = 'cta-card cta-floating';
+  bar.id = 'food-ai-cta';
+  bar.innerHTML = `
+    <div class="cta-card-icon">${icon('zap', 20)}</div>
+    <div style="flex:1;min-width:0">
+      <div class="cta-card-title">${t('ai_chat_title')}</div>
+      <div class="cta-card-sub">${t('ai_chat_sub')}</div>
+    </div>
+    <div class="cta-card-chev">${icon('chevronRight', 18)}</div>
+  `;
+  bar.addEventListener('click', () => {
+    if (window.FoodAI) window.FoodAI.open(typeof todayISO === 'function' ? todayISO() : null);
+  });
+  app.appendChild(bar);
+}
+
 function renderFood(el) {
   const list = DB.foods.list();
   const query = (viewContext.foodQuery || '').toLowerCase();
@@ -3058,21 +3091,10 @@ function renderFood(el) {
         })
       : `<div class="data-list">${items}</div>`
     }
-
-    <button class="cta-card cta-floating" id="food-ai-cta">
-      <div class="cta-card-icon">${icon('zap', 20)}</div>
-      <div style="flex:1;min-width:0">
-        <div class="cta-card-title">${t('ai_chat_title')}</div>
-        <div class="cta-card-sub">${t('ai_chat_sub')}</div>
-      </div>
-      <div class="cta-card-chev">${icon('chevronRight', 18)}</div>
-    </button>
   `;
 
   bindVaultAction(() => openFoodModal());
-  $('#food-ai-cta', el)?.addEventListener('click', () => {
-    if (window.FoodAI) window.FoodAI.open(typeof todayISO === 'function' ? todayISO() : null);
-  });
+  mountFoodAiBar();
   $('#food-search', el).addEventListener('input', (e) => {
     viewContext.foodQuery = e.target.value;
     renderFood(el);
