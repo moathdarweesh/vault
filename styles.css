@@ -2135,7 +2135,8 @@ body[dir="rtl"] .w-unit { margin-left: 0; margin-right: 2px; }
 .data-actions {
   display: flex;
   gap: 2px;
-  margin-left: 4px;
+  margin-inline-start: 4px;
+  flex-shrink: 0;
 }
 
 .data-actions .icon-btn {
@@ -2147,10 +2148,12 @@ body[dir="rtl"] .w-unit { margin-left: 0; margin-right: 2px; }
 /* Macro pills (food) */
 .macro-row {
   display: flex;
+  flex-wrap: wrap;
   gap: 5px;
   font-size: 11px;
   margin-top: 5px;
 }
+.macro-chip { flex-shrink: 0; }
 
 .macro-chip {
   display: inline-flex;

@@ -493,6 +493,7 @@ const I18N = {
     new_food: 'New Food', edit_food: 'Edit Food',
     food_quick: 'Macros per serving.',
     serving_opt: 'Serving (optional)', serving_hint: 'e.g. 100g, 1 cup',
+    amount_label: 'Amount', unit_label: 'Unit', unit_hint: 'g, ml, piece',
     protein_g: 'Protein (g)', carbs_g: 'Carbs (g)',
     delete_food_q: 'Delete food?',
     delete_food_text: 'This food will be removed from your reference list.',
@@ -932,6 +933,7 @@ const I18N = {
     new_food: 'أكل جديد', edit_food: 'تعديل الأكل',
     food_quick: 'المعدلات الغذائية لكل حصة.',
     serving_opt: 'الحصة (اختياري)', serving_hint: 'مثلاً 100جم، كوب',
+    amount_label: 'الكمية', unit_label: 'الوحدة', unit_hint: 'غ، مل، حبة',
     protein_g: 'بروتين (جم)', carbs_g: 'كارب (جم)',
     delete_food_q: 'حذف الأكل؟',
     delete_food_text: 'سيُحذف هذا الأكل من قائمتك المرجعية.',
@@ -1880,7 +1882,7 @@ function renderHome(el) {
 
     ${recentHtml}
 
-    <div style="text-align:center;opacity:.4;font-size:12px;margin:24px 0 8px;letter-spacing:.5px">THE VAULT · v98</div>
+    <div style="text-align:center;opacity:.4;font-size:12px;margin:24px 0 8px;letter-spacing:.5px">THE VAULT · v99</div>
   `;
 
   // Count-up the hero/stat numerals (sleep is stored ×10 for one decimal)
@@ -3206,8 +3208,29 @@ function renderFood(el) {
   );
 }
 
+// Split a serving string ("١٠٠غ", "3 حبات", "1 slice") into a numeric amount
+// and a unit label. Arabic-Indic digits are normalised. No leading number → 1.
+function parseServing(serving) {
+  const str = String(serving || '').trim();
+  const norm = str.replace(/[٠-٩]/g, (d) => '٠١٢٣٤٥٦٧٨٩'.indexOf(d));
+  const m = norm.match(/^\s*(\d+(?:\.\d+)?)\s*(.*)$/);
+  if (m) return { amount: parseFloat(m[1]), unit: m[2].trim() };
+  return { amount: 1, unit: str };
+}
+
 function openFoodModal(foodId = null) {
   const existing = foodId ? DB.foods.list().find((f) => f.id === foodId) : null;
+  const parsed = parseServing(existing ? existing.serving : '');
+  const baseAmount = existing ? (parsed.amount || '') : '';
+  const baseUnit = existing ? parsed.unit : '';
+  // Per-unit macros — used to live-recalculate when the amount is edited.
+  const per = { cal: 0, pro: 0, carb: 0 };
+  if (existing) {
+    const a = parsed.amount || 1;
+    per.cal = existing.calories / a;
+    per.pro = existing.protein / a;
+    per.carb = existing.carbs / a;
+  }
   openModal(`
     <div class="modal-header">
       <div>
@@ -3222,9 +3245,15 @@ function openFoodModal(foodId = null) {
       <input type="text" id="food-name" placeholder="Chicken Breast" value="${existing ? escapeHtml(existing.name) : ''}">
     </div>
 
-    <div class="form-group">
-      <label class="form-label">${t('serving_opt')}</label>
-      <input type="text" id="food-serving" placeholder="${t('serving_hint')}" value="${existing ? escapeHtml(existing.serving) : ''}">
+    <div class="form-row">
+      <div class="form-group">
+        <label class="form-label">${t('amount_label')}</label>
+        <input type="number" inputmode="decimal" id="food-amount" step="1" min="0" value="${baseAmount}" placeholder="100">
+      </div>
+      <div class="form-group">
+        <label class="form-label">${t('unit_label')}</label>
+        <input type="text" id="food-unit" value="${escapeHtml(baseUnit)}" placeholder="${t('unit_hint')}">
+      </div>
     </div>
 
     <div class="form-row">
@@ -3249,9 +3278,20 @@ function openFoodModal(foodId = null) {
     </div>
   `);
 
+  // Edit the amount → live-recalculate calories/protein/carbs from per-unit.
+  $('#food-amount')?.addEventListener('input', () => {
+    const a = Number($('#food-amount').value);
+    if (!a || (!per.cal && !per.pro && !per.carb)) return;
+    $('#food-cal').value = Math.round(per.cal * a);
+    $('#food-pro').value = Math.round(per.pro * a * 10) / 10;
+    $('#food-carb').value = Math.round(per.carb * a * 10) / 10;
+  });
+
   $('#save-food-btn').addEventListener('click', () => {
     const name = $('#food-name').value.trim();
-    const serving = $('#food-serving').value.trim();
+    const amount = $('#food-amount').value.trim();
+    const unit = $('#food-unit').value.trim();
+    const serving = [amount, unit].filter(Boolean).join(' ');
     const calories = Number($('#food-cal').value);
     const protein = Number($('#food-pro').value);
     const carbs = Number($('#food-carb').value);
@@ -5587,7 +5627,6 @@ function showAuthGate(mode) {
   gate.className = 'auth-gate';
   gate.innerHTML = `
     <div class="auth-card">
-      <div class="auth-logo">${icon('vaultDoor', 30)}</div>
       <div class="auth-title">THE VAULT</div>
       <div class="auth-seg">
         <button class="auth-seg-btn ${up ? '' : 'active'}" data-mode="in">${t('auth_signin')}</button>
