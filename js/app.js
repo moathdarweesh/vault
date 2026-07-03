@@ -1832,7 +1832,7 @@ function renderHome(el) {
 
     ${recentHtml}
 
-    <div style="text-align:center;opacity:.4;font-size:12px;margin:24px 0 8px;letter-spacing:.5px">THE VAULT · v89</div>
+    <div style="text-align:center;opacity:.4;font-size:12px;margin:24px 0 8px;letter-spacing:.5px">THE VAULT · v90</div>
   `;
 
   // Count-up the hero/stat numerals (sleep is stored ×10 for one decimal)
@@ -3787,6 +3787,15 @@ function variationsHtmlForExercise(ex) {
 // PLANNER VIEW
 // ==========================================================================
 function renderPlanner(el) {
+  // Safety: clear any drag artifacts leaked by an interrupted drag. Ghosts and
+  // placeholders live on <body> and are normally removed only in finish(); an
+  // interrupted touch drag (a system gesture stealing the pointer) can leave
+  // them floating over the UI forever. Sweeping on every render guarantees a
+  // stale ghost disappears the next time the planner is opened.
+  document.querySelectorAll('.planner-ex-ghost, .planner-day-ghost, .planner-ex-placeholder')
+    .forEach((n) => n.remove());
+  document.body.classList.remove('planner-dragging');
+
   const plan = DB.plan.get() || {};
   const exerciseById = Object.fromEntries(DB.exercises.list().map((e) => [e.id, e]));
   const today = new Date().getDay();
@@ -4111,6 +4120,14 @@ function setupPlannerDrag(el) {
 
   el.addEventListener('pointerup', finish);
   el.addEventListener('pointercancel', finish);
+  el.addEventListener('lostpointercapture', finish);
+  // Global fallbacks: an interrupted touch drag may never deliver pointerup /
+  // pointercancel to `el` (capture stolen by a system scroll/gesture, window
+  // blur, etc.). Catch it at the window level so the ghost is always cleaned
+  // up. finish() no-ops when no drag is active, so extra calls are harmless.
+  window.addEventListener('pointerup', finish);
+  window.addEventListener('pointercancel', finish);
+  window.addEventListener('blur', finish);
 }
 
 function openTemplatesModal() {
