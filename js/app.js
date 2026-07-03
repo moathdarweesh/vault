@@ -1834,7 +1834,7 @@ function renderHome(el) {
 
     ${recentHtml}
 
-    <div style="text-align:center;opacity:.4;font-size:12px;margin:24px 0 8px;letter-spacing:.5px">THE VAULT · v92</div>
+    <div style="text-align:center;opacity:.4;font-size:12px;margin:24px 0 8px;letter-spacing:.5px">THE VAULT · v93</div>
   `;
 
   // Count-up the hero/stat numerals (sleep is stored ×10 for one decimal)
@@ -3898,8 +3898,6 @@ function renderPlanner(el) {
       <button class="btn btn-primary" id="apply-template-btn" style="flex:1">${icon('plus', 16)} ${t('apply_template')}</button>
       ${hasAnyPlan ? `<button class="btn btn-ghost" id="clear-plan-btn">${icon('trash', 16)}</button>` : ''}
     </div>
-
-    ${hasAnyPlan ? `<div class="planner-drag-hint">${icon('grip', 14)} ${t('drag_to_move')}</div>` : ''}
 
     <div class="planner-list">${dayCards}</div>
   `;

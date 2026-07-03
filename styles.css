@@ -3296,18 +3296,6 @@ body.planner-dragging {
 }
 body.planner-dragging .planner-day-head { cursor: grabbing; }
 
-.planner-drag-hint {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  font-size: 11px;
-  color: var(--text-faint);
-  font-weight: 600;
-  margin-bottom: 12px;
-  padding: 0 2px;
-}
-.planner-drag-hint svg { flex-shrink: 0; }
-
 body[dir="rtl"] .planner-ex-row,
 body[dir="rtl"] .planner-day-head { text-align: right; }
 
