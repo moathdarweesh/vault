@@ -1752,11 +1752,17 @@ body[dir="rtl"] .bento-card.wide .bento-card-name-tag { left: 14px; }
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 6px 0 14px;
-  position: relative;
-  background: transparent;
-  z-index: 5;
+  margin: 0 -16px;
+  padding: 8px 16px 12px;
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  background: var(--bg);
+  transition: transform var(--dur) var(--ease);
+  will-change: transform;
 }
+/* Auto-hide: tucked up out of view while scrolling down, revealed on scroll up */
+.detail-top.tuck { transform: translateY(-115%); }
 
 .detail-top-title {
   flex: 1;

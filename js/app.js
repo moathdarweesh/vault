@@ -1484,6 +1484,24 @@ window.addEventListener('popstate', () => {
   });
 })();
 
+// Auto-hide the detail header (any bar with a back button): tuck it away while
+// scrolling down, slide it back smoothly when scrolling up. One listener on the
+// scroll container drives whichever view is active.
+(function wireDetailTopAutoHide() {
+  const main = document.querySelector('.main');
+  if (!main) return;
+  let lastY = 0;
+  main.addEventListener('scroll', () => {
+    const y = main.scrollTop;
+    const bar = document.querySelector('.view.active .detail-top');
+    if (bar) {
+      if (y > lastY && y > 64) bar.classList.add('tuck');   // scrolling down, past the top
+      else bar.classList.remove('tuck');                     // scrolling up (or near the top)
+    }
+    lastY = y <= 0 ? 0 : y;
+  }, { passive: true });
+})();
+
 function renderView(view) {
   const el = $(`.view[data-view="${view}"]`);
   if (!el) return;
@@ -1517,6 +1535,13 @@ document.addEventListener('click', (e) => {
     e.preventDefault();
     navigate(goto.dataset.goto);
   }
+});
+
+// A back control that returns to the previous screen (wherever we came from),
+// instead of a fixed destination.
+document.addEventListener('click', (e) => {
+  const back = e.target.closest('[data-back]');
+  if (back) { e.preventDefault(); goBack(); }
 });
 
 // ==========================================================================
@@ -1882,7 +1907,7 @@ function renderHome(el) {
 
     ${recentHtml}
 
-    <div style="text-align:center;opacity:.4;font-size:12px;margin:24px 0 8px;letter-spacing:.5px">THE VAULT · v101</div>
+    <div style="text-align:center;opacity:.4;font-size:12px;margin:24px 0 8px;letter-spacing:.5px">THE VAULT · v102</div>
   `;
 
   // Count-up the hero/stat numerals (sleep is stored ×10 for one decimal)
@@ -2527,7 +2552,7 @@ function renderExerciseDetail(el, exerciseId) {
 
   el.innerHTML = `
     <div class="detail-top">
-      <button class="back-btn" data-goto="workouts">${icon('back', 20)}</button>
+      <button class="back-btn" data-back>${icon('back', 20)}</button>
       <div class="detail-top-title">${escapeHtml(ex.name)}</div>
       ${ex.isCustom ? `<button class="icon-btn icon-btn-tile danger" id="delete-exercise-btn">${icon('trash', 16)}</button>` : ''}
     </div>
@@ -4781,7 +4806,6 @@ function renderSessionDay(el) {
     <div class="detail-top">
       <button class="back-btn" data-goto="planner">${icon('back', 20)}</button>
       <div class="detail-top-title">${escapeHtml(dayName(dow, true))}</div>
-      <button class="icon-btn icon-btn-tile" id="sd-edit-day" aria-label="${escapeHtml(t('edit_day'))}">${icon('edit', 18)}</button>
     </div>
 
     <div class="page-header">
@@ -4811,15 +4835,23 @@ function renderSessionDay(el) {
 
   // ----- Bindings -----
 
-  $('#sd-edit-day', el)?.addEventListener('click', () => openDayEditorModal(dow));
-
   // Add an exercise: offer two choices — pick from the library, or create a
   // brand-new custom exercise (which is then added straight to this day).
   $('#sd-add-ex', el)?.addEventListener('click', () => openAddExerciseChooser(dow));
 
   // Tap an exercise photo thumbnail to open it full-screen.
   el.querySelectorAll('.sd-thumb-zoom').forEach((thumb) =>
-    thumb.addEventListener('click', () => openImageLightbox(thumb.dataset.thumbSrc))
+    thumb.addEventListener('click', (e) => { e.stopPropagation(); openImageLightbox(thumb.dataset.thumbSrc); })
+  );
+
+  // Tap an empty area of an exercise card → its full history (exercise-detail).
+  // Ignore taps on inputs, buttons, and the photo (which has its own action).
+  el.querySelectorAll('.sd-card').forEach((card) =>
+    card.addEventListener('click', (e) => {
+      if (e.target.closest('input, button, .sd-thumb-zoom')) return;
+      const exId = card.dataset.exCard;
+      if (exId) navigate('exercise-detail', { exerciseId: exId });
+    })
   );
 
   // Remove one exercise from this day, inline. Clears its unsaved set state so
