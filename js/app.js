@@ -1882,7 +1882,7 @@ function renderHome(el) {
 
     ${recentHtml}
 
-    <div style="text-align:center;opacity:.4;font-size:12px;margin:24px 0 8px;letter-spacing:.5px">THE VAULT · v100</div>
+    <div style="text-align:center;opacity:.4;font-size:12px;margin:24px 0 8px;letter-spacing:.5px">THE VAULT · v101</div>
   `;
 
   // Count-up the hero/stat numerals (sleep is stored ×10 for one decimal)
@@ -4715,7 +4715,7 @@ function renderSessionDay(el) {
     let sets;
     if (today) sets = today.sets.map((s) => ({ reps: s.reps, weight: s.weight }));
     else if (last) sets = last.sets.map((s) => ({ reps: s.reps, weight: s.weight }));
-    else sets = [{ reps: 10, weight: 0 }]; // start with one set; user adds/removes as needed
+    else sets = [{ reps: '', weight: '' }]; // start with one empty set (faint "0" placeholders)
     sdState[exId] = { sets, savedSessionId: today ? today.id : null, dirty: false };
     return sdState[exId];
   }
@@ -4880,7 +4880,7 @@ function renderSessionDay(el) {
       const exId = b.dataset.addSet;
       const st = initState(exId);
       const last = st.sets[st.sets.length - 1];
-      st.sets.push({ reps: last?.reps || 10, weight: last?.weight || 0 });
+      st.sets.push({ reps: last?.reps || '', weight: last?.weight || '' });
       st.dirty = true;
       renderSessionDay(el);
     })
