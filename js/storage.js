@@ -872,6 +872,9 @@ const DB = {
       const list = this.listByExercise(exerciseId).filter((s) => s.id !== excludeId);
       return list[0] || null;
     },
+    get(id) {
+      return STATE.sessions.find((s) => s.id === id) || null;
+    },
     add({ exerciseId, date, sets }) {
       const session = {
         id: uid(),

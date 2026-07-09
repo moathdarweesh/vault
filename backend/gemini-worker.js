@@ -107,13 +107,16 @@ async function callModel(model, key, text, image) {
   let obj;
   try { obj = JSON.parse(cleaned); } catch (_) { return { error: 'parse error' }; }
 
+  // Clamp macros to a sane range so a hallucinated/injected huge value
+  // (e.g. calories: 999999999) can't corrupt the user's stats.
+  const clamp = (v, max) => Math.min(max, Math.max(0, Math.round(Number(v) || 0)));
   const rawItems = Array.isArray(obj.items) ? obj.items : [];
   const items = rawItems.map((it) => ({
     name: String((it && it.name) || '').trim().slice(0, 80).replace(/[<>]/g, ''),
-    calories: Math.max(0, Math.round(Number(it && it.calories) || 0)),
-    protein: Math.max(0, Math.round(Number(it && it.protein) || 0)),
-    carbs: Math.max(0, Math.round(Number(it && it.carbs) || 0)),
-    fat: Math.max(0, Math.round(Number(it && it.fat) || 0)),
+    calories: clamp(it && it.calories, 10000),
+    protein: clamp(it && it.protein, 2000),
+    carbs: clamp(it && it.carbs, 2000),
+    fat: clamp(it && it.fat, 2000),
   })).filter((it) =>
     it.name && it.name.toUpperCase() !== 'NOT_FOOD' &&
     (it.calories > 0 || it.protein > 0 || it.carbs > 0 || it.fat > 0)

@@ -441,7 +441,7 @@ const I18N = {
     exercise_added: 'Exercise added',
     enter_name: 'Enter a name',
     name: 'Name', category: 'Category',
-    save: 'Save', cancel: 'Cancel', update: 'Update', delete: 'Delete', select: 'Select',
+    save: 'Save', cancel: 'Cancel', update: 'Update', delete: 'Delete', edit: 'Edit', select: 'Select',
     unit: 'Unit', done: 'Done',
     not_found: 'Not found', not_found_text: 'This exercise no longer exists.',
 
@@ -493,7 +493,9 @@ const I18N = {
     new_food: 'New Food', edit_food: 'Edit Food',
     food_quick: 'Macros per serving.',
     serving_opt: 'Serving (optional)', serving_hint: 'e.g. 100g, 1 cup',
-    amount_label: 'Amount', unit_label: 'Unit', unit_hint: 'g, ml, piece',
+    amount_label: 'Amount', serving_unit_label: 'Unit', unit_hint: 'g, ml, piece',
+    ph_exercise_name: 'e.g. Bulgarian Split Squat', ph_food_name: 'e.g. Chicken Breast', ph_supplement_name: 'e.g. Creatine',
+    view_photo: 'View photo',
     protein_g: 'Protein (g)', carbs_g: 'Carbs (g)',
     delete_food_q: 'Delete food?',
     delete_food_text: 'This food will be removed from your reference list.',
@@ -883,7 +885,7 @@ const I18N = {
     exercise_added: 'تمت إضافة التمرين',
     enter_name: 'أدخل اسماً',
     name: 'الاسم', category: 'الفئة',
-    save: 'حفظ', cancel: 'إلغاء', update: 'تحديث', delete: 'حذف', select: 'اختيار',
+    save: 'حفظ', cancel: 'إلغاء', update: 'تحديث', delete: 'حذف', edit: 'تعديل', select: 'اختيار',
     unit: 'الوحدة', done: 'تم',
     not_found: 'غير موجود', not_found_text: 'هذا التمرين لم يعد موجوداً.',
 
@@ -933,22 +935,24 @@ const I18N = {
     new_food: 'أكل جديد', edit_food: 'تعديل الأكل',
     food_quick: 'المعدلات الغذائية لكل حصة.',
     serving_opt: 'الحصة (اختياري)', serving_hint: 'مثلاً 100جم، كوب',
-    amount_label: 'الكمية', unit_label: 'الوحدة', unit_hint: 'غ، مل، حبة',
+    amount_label: 'الكمية', serving_unit_label: 'الوحدة', unit_hint: 'غ، مل، حبة',
+    ph_exercise_name: 'مثال: سكوات بلغاري', ph_food_name: 'مثال: صدر دجاج', ph_supplement_name: 'مثال: كرياتين',
+    view_photo: 'عرض الصورة',
     protein_g: 'بروتين (جم)', carbs_g: 'كارب (جم)',
     delete_food_q: 'حذف الأكل؟',
     delete_food_text: 'سيُحذف هذا الأكل من قائمتك المرجعية.',
     cal: 'سعرة', protein_label: 'بروتين', carbs_label: 'كارب', fat_label: 'دهون',
-    ai_chat_btn: 'ذكاء', ai_chat_title: 'شات السعرات', ai_chat_sub: 'احكيلي شو أكلت — وأنا أسجّل السعرات',
+    ai_chat_btn: 'ذكاء', ai_chat_title: 'شات السعرات', ai_chat_sub: 'أخبرني بما تناولت — وأنا أسجّل السعرات',
     ai_chat_placeholder: 'مثلاً: الفطور بيض وخبز، والغدا برجر',
     ai_add_all: 'أضف الكل',
-    ai_need_key: 'بدّو مفتاح Google Gemini مجاني (مرّة وحدة).',
+    ai_need_key: 'يلزم مفتاح Google Gemini مجاني (لمرة واحدة).',
     ai_key_step1: 'احصل على مفتاح مجاني من',
-    ai_key_step2: 'الصقه تحت — بيتخزّن على جهازك فقط.',
+    ai_key_step2: 'الصقه في الأسفل — يُخزَّن على جهازك فقط.',
     ai_key_label: 'مفتاح Gemini',
     ai_save_key: 'حفظ المفتاح',
     ai_analyzing: 'جارٍ الحساب…',
     ai_photo: 'صورة',
-    ai_no_result: 'ما في نتيجة — جرّب صياغة ثانية.',
+    ai_no_result: 'لا توجد نتيجة — جرّب صياغة أخرى.',
     ai_add_to_log: 'أضف للسجل',
     ai_added: 'تمت الإضافة',
     ai_error: 'صار خطأ',
@@ -1010,7 +1014,7 @@ const I18N = {
     sleep_quick: 'التاريخ هو الصباح الذي صحيت فيه.',
     sleep_time: 'وقت النوم', wake_time: 'وقت الصحيان',
     total_sleep: 'مدة النوم',
-    fill_all_fields: 'عبّي كل الخانات',
+    fill_all_fields: 'يرجى ملء جميع الحقول',
     delete_sleep_q: 'حذف إدخال النوم؟',
     delete_sleep_text: 'سيُحذف هذا الإدخال من سجلك.',
 
@@ -1113,17 +1117,17 @@ const I18N = {
     planner_subtitle: 'حدّد تمرين كل يوم في الأسبوع.',
     today_plan: 'خطة اليوم',
     no_plan_today: 'يوم راحة',
-    no_plan_today_sub: 'ما في تمارين مجدولة اليوم.',
+    no_plan_today_sub: 'لا توجد تمارين مجدولة اليوم.',
     start_workout: 'ابدأ التمرين',
     edit_day: 'تعديل اليوم',
     logged: 'مُسجَّل',
     logged_today: 'مُسجَّل لهذا اليوم',
     day_name_placeholder: 'مثلاً: صدر، ظهر',
     pick_exercises: 'اختر تمارين',
-    no_exercises_picked: 'ما اخترت تمارين بعد',
+    no_exercises_picked: 'لم تختر أي تمارين بعد',
     rest_day: 'راحة',
     plan_empty: 'خطتك الأسبوعية فاضية',
-    plan_empty_sub: 'طبّق قالب جاهز أو ابنها يوم بيوم.',
+    plan_empty_sub: 'طبّق قالبًا جاهزًا أو ابنِها يومًا بيوم.',
     apply_template: 'طبّق قالب',
     clear_plan: 'امسح الخطة',
     clear_plan_q: 'مسح كامل الخطة؟',
@@ -1149,7 +1153,7 @@ const I18N = {
 
     calendar_title: 'التقويم',
     calendar_subtitle: 'عرض شهري لنشاطك.',
-    no_activity_day: 'ما في نشاط هذا اليوم',
+    no_activity_day: 'لا يوجد نشاط في هذا اليوم',
     workouts_day: 'تمارين', cardio_day: 'كارديو', sleep_day: 'نوم',
 
     supplements_title: 'المكمّلات',
@@ -1159,7 +1163,7 @@ const I18N = {
     supplement_name: 'اسم المكمّل',
     dose: 'الجرعة (اختياري)',
     color: 'اللون',
-    no_supplements: 'ما في مكمّلات بعد',
+    no_supplements: 'لا توجد مكمّلات بعد',
     no_supplements_text: 'أضف المكمّلات التي تتناولها (مثل: الكرياتين، الواي بروتين).',
     taken: 'مأخوذ',
     not_taken: 'ما أخذته بعد',
@@ -1356,7 +1360,7 @@ function openModal(innerHtml, { variant = 'sheet' } = {}) {
   const root = $('#modal-root');
   root.innerHTML = `
     <div class="modal-overlay ${variant === 'confirm' ? 'confirm-overlay' : ''}">
-      <div class="${variant === 'confirm' ? 'confirm-dialog' : 'modal'}">
+      <div class="${variant === 'confirm' ? 'confirm-dialog' : 'modal'}" role="dialog" aria-modal="true" tabindex="-1">
         ${variant === 'sheet' ? '<div class="sheet-handle"></div>' : ''}
         ${innerHtml}
       </div>
@@ -1366,9 +1370,14 @@ function openModal(innerHtml, { variant = 'sheet' } = {}) {
   overlay.addEventListener('click', (e) => {
     if (e.target === overlay) closeModal();
   });
-  overlay.querySelectorAll('[data-close]').forEach((el) =>
-    el.addEventListener('click', () => closeModal())
-  );
+  overlay.querySelectorAll('[data-close]').forEach((el) => {
+    // Every icon-only close button gets a screen-reader name in one place.
+    if (!el.getAttribute('aria-label')) el.setAttribute('aria-label', t('close'));
+    el.addEventListener('click', () => closeModal());
+  });
+  // Move focus into the dialog so keyboard/SR users start inside it (unless a
+  // field inside will self-focus via autofocus).
+  if (!overlay.querySelector('[autofocus]')) overlay.querySelector('.modal, .confirm-dialog')?.focus();
   return overlay;
 }
 
@@ -1394,14 +1403,14 @@ function confirmDialog({ title, text, onConfirm, confirmLabel, variant = 'danger
 // ==========================================================================
 // VAULT Top Bar
 // ==========================================================================
-function vaultBar({ action = '' } = {}) {
+function vaultBar({ action = '', actionLabel = '' } = {}) {
   return `
     <div class="vault-bar">
       <div class="vault-logo">
         <span class="vault-logo-mark">${icon('vault', 22)}</span>
         <span>${t('app_name')}</span>
       </div>
-      ${action ? `<button class="vault-action" id="vault-action">${action}</button>` : '<span style="width:40px"></span>'}
+      ${action ? `<button class="vault-action" id="vault-action"${actionLabel ? ` aria-label="${escapeHtml(actionLabel)}"` : ''}>${action}</button>` : '<span style="width:40px"></span>'}
     </div>
   `;
 }
@@ -1430,6 +1439,7 @@ function navigate(view, context = {}, opts = {}) {
   // The Food view mounts a floating AI-chat bar on `.app`; clear it on every
   // navigation so it never lingers over other views (renderFood re-mounts it).
   if (typeof unmountFoodAiBar === 'function') unmountFoodAiBar();
+  document.querySelector('.img-lightbox')?.remove();
 
   $$('.view').forEach((v) => v.classList.toggle('active', v.dataset.view === view));
 
@@ -1457,6 +1467,10 @@ function navigate(view, context = {}, opts = {}) {
 // false if we're at the root (caller should exit the app). A modal — or the
 // auth gate — is dismissed first; otherwise we pop the nav history.
 function goBack() {
+  // A full-screen image lightbox lives on document.body (outside #modal-root),
+  // so dismiss it first — otherwise "back" would navigate underneath it.
+  const lb = document.querySelector('.img-lightbox');
+  if (lb) { lb.remove(); return true; }
   if ($('#modal-root') && $('#modal-root').innerHTML.trim()) { closeModal(); return true; }
   if (document.getElementById('auth-gate')) return true; // don't slip behind login
   if (navStack.length > 1) {
@@ -1495,8 +1509,9 @@ window.addEventListener('popstate', () => {
     const y = main.scrollTop;
     const bar = document.querySelector('.view.active .detail-top');
     if (bar) {
-      if (y > lastY && y > 64) bar.classList.add('tuck');   // scrolling down, past the top
-      else bar.classList.remove('tuck');                     // scrolling up (or near the top)
+      const tuck = y > lastY && y > 64;                      // down & past the top → hide
+      bar.classList.toggle('tuck', tuck);
+      bar.inert = tuck;                                       // keep the hidden back button out of the tab order / AT
     }
     lastY = y <= 0 ? 0 : y;
   }, { passive: true });
@@ -1522,6 +1537,8 @@ function renderView(view) {
     case 'session-day': renderSessionDay(el); break;
     case 'personal-records': renderPersonalRecords(el); break;
   }
+  // Give every icon-only back button an accessible name, in one place.
+  el.querySelectorAll('.back-btn:not([aria-label])').forEach((b) => b.setAttribute('aria-label', t('back')));
 }
 
 $('#bottom-nav').addEventListener('click', (e) => {
@@ -1544,6 +1561,16 @@ document.addEventListener('click', (e) => {
   if (back) { e.preventDefault(); goBack(); }
 });
 
+// Escape closes the top-most transient layer (image lightbox, then modal) —
+// keyboard parity with tapping the backdrop / hardware back.
+document.addEventListener('keydown', (e) => {
+  if (e.key !== 'Escape') return;
+  const lb = document.querySelector('.img-lightbox');
+  if (lb) { lb.remove(); return; }
+  const root = $('#modal-root');
+  if (root && root.innerHTML.trim()) closeModal();
+});
+
 // ==========================================================================
 // Helpers shared
 // ==========================================================================
@@ -1558,18 +1585,26 @@ function emptyState({ iconName = 'dumbbell', title, text }) {
 }
 
 // Full-screen image viewer. Tap anywhere (or the close button) to dismiss.
-function openImageLightbox(src) {
-  if (!src) return;
+function openImageLightbox(src, alt) {
+  // Defense in depth: the caller already filters via exerciseImgSrc, but a
+  // reusable helper re-checks the scheme so a future caller can't skip it.
+  if (!src || !/^(data:image\/|https?:\/\/)/i.test(src) || /["'<>`\\\s]/.test(src)) return;
   document.querySelector('.img-lightbox')?.remove();
+  const prevFocus = document.activeElement;
+  const label = alt || t('view_photo');
   const box = document.createElement('div');
   box.className = 'img-lightbox';
+  box.setAttribute('role', 'dialog');
+  box.setAttribute('aria-modal', 'true');
+  box.setAttribute('aria-label', label);
   box.innerHTML = `
     <button type="button" class="img-lightbox-close" aria-label="${escapeHtml(t('close'))}">${icon('close', 22)}</button>
-    <img src="${escapeHtml(src)}" alt="" referrerpolicy="no-referrer">
+    <img src="${escapeHtml(src)}" alt="${escapeHtml(label)}" referrerpolicy="no-referrer">
   `;
-  box.addEventListener('click', () => box.remove());
+  const close = () => { box.remove(); if (prevFocus && prevFocus.focus) prevFocus.focus(); };
+  box.addEventListener('click', close);
   document.body.appendChild(box);
-  requestAnimationFrame(() => box.classList.add('open'));
+  requestAnimationFrame(() => { box.classList.add('open'); box.querySelector('.img-lightbox-close')?.focus(); });
 }
 
 // ==========================================================================
@@ -1836,7 +1871,7 @@ function renderHome(el) {
   }
 
   el.innerHTML = `
-    ${vaultBar({ action: icon('settings', 20) })}
+    ${vaultBar({ action: icon('settings', 20), actionLabel: t('settings_title') })}
 
     <div class="home-head">
       <div class="home-head-text">
@@ -1907,7 +1942,7 @@ function renderHome(el) {
 
     ${recentHtml}
 
-    <div style="text-align:center;opacity:.4;font-size:12px;margin:24px 0 8px;letter-spacing:.5px">THE VAULT · v102</div>
+    <div style="text-align:center;opacity:.4;font-size:12px;margin:24px 0 8px;letter-spacing:.5px">THE VAULT · v103</div>
   `;
 
   // Count-up the hero/stat numerals (sleep is stored ×10 for one decimal)
@@ -1919,8 +1954,10 @@ function renderHome(el) {
 
   bindVaultAction(() => navigate('settings'));
   // "Start Workout" hero card → straight into today's session logging.
+  // Recompute the day at click time so it stays correct if Home was left open
+  // across midnight.
   $('#home-start-workout', el)?.addEventListener('click', () =>
-    navigate('session-day', { dow: now.getDay() })
+    navigate('session-day', { dow: new Date().getDay() })
   );
   if (typeof Health !== 'undefined') Health.bindHomeSection();
 }
@@ -1930,11 +1967,13 @@ function renderHome(el) {
 // ==========================================================================
 function exerciseImgSrc(ex) {
   if (ex.customImage) {
-    // Only allow safe schemes: data:image/* (local captures) or https?:// (remote CDN).
-    // javascript:, blob:, data:text/html, etc. are rejected and fall through to placeholder.
-    if (/^data:image\//i.test(ex.customImage) || /^https?:\/\//i.test(ex.customImage)) {
-      return ex.customImage;
-    }
+    const v = String(ex.customImage);
+    // Allow only safe schemes (data:image/* or https?://) AND reject any char
+    // that could break out of an HTML attribute or a CSS url() context
+    // (" ' < > ` \ or whitespace). This single guard protects every render
+    // sink, so a poisoned imported/synced customImage can't inject markup.
+    const schemeOk = /^data:image\//i.test(v) || /^https?:\/\//i.test(v);
+    if (schemeOk && !/["'<>`\\\s]/.test(v)) return v;
     return '';
   }
   if (ex.imageSlug) return exerciseImageUrl(ex.imageSlug);
@@ -1982,11 +2021,11 @@ function bentoCardHtml(ex, i, { showPR = true, toggle = null } = {}) {
     bgHtml = `
       <div class="bento-card-bg machine-bg" data-cat="${escapeHtml(ex.category)}">
         ${machineSvg}
-        ${url ? `<img class="machine-photo" src="${url}" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="this.remove()">` : ''}
+        ${url ? `<img class="machine-photo" src="${escapeHtml(url)}" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="this.remove()">` : ''}
       </div>
     `;
   } else if (url) {
-    bgHtml = `<div class="bento-card-bg" data-cat="${escapeHtml(ex.category)}" style="background-image:url('${url}')"></div>`;
+    bgHtml = `<div class="bento-card-bg" data-cat="${escapeHtml(ex.category)}" style="background-image:url('${escapeHtml(url)}')"></div>`;
   } else {
     bgHtml = `<div class="bento-card-bg fallback" data-cat="${escapeHtml(ex.category)}">${initials}</div>`;
   }
@@ -2022,7 +2061,7 @@ function renderWorkouts(el) {
   // Shell renders ONCE — search box and filter bar survive list updates, so
   // the keyboard never loses focus and no cursor-restore hack is needed.
   el.innerHTML = `
-    ${vaultBar({ action: icon('chart', 20) })}
+    ${vaultBar({ action: icon('chart', 20), actionLabel: t('library_title') })}
 
     <div class="page-header">
       <div class="page-eyebrow">${t('library')} · ${fmtNum(myList.length)}</div>
@@ -2376,7 +2415,7 @@ function openNewExerciseModal(exerciseId = null, opts = {}) {
 
     <div class="form-group">
       <label class="form-label">${t('name')}</label>
-      <input type="text" id="ex-name" placeholder="Bulgarian Split Squat" value="${existing ? escapeHtml(existing.name) : ''}" autofocus>
+      <input type="text" id="ex-name" placeholder="${t('ph_exercise_name')}" value="${existing ? escapeHtml(existing.name) : ''}" autofocus>
     </div>
 
     <div class="form-group">
@@ -2490,12 +2529,12 @@ function renderExerciseDetail(el, exerciseId) {
     ? `
       <div class="detail-hero-wrap">
         <div class="detail-hero">
-          <img src="${imageUrl}" alt="${escapeHtml(ex.name)}" referrerpolicy="no-referrer"
+          <img src="${escapeHtml(imageUrl)}" alt="${escapeHtml(ex.name)}" referrerpolicy="no-referrer"
                onerror="this.closest('.detail-hero').classList.add('empty'); this.remove();">
         </div>
         <div class="detail-hero-overlay">
           <div class="detail-hero-name">${escapeHtml(ex.name)}</div>
-          <div class="detail-hero-cat pill cat-${ex.category}">${escapeHtml(categoryLabel(ex.category))}</div>
+          <div class="detail-hero-cat pill cat-${escapeHtml(ex.category)}">${escapeHtml(categoryLabel(ex.category))}</div>
         </div>
       </div>
     `
@@ -2504,7 +2543,7 @@ function renderExerciseDetail(el, exerciseId) {
         <div class="detail-hero empty">${ex.isCustom ? t('custom_exercise_label') : escapeHtml(categoryLabel(ex.category).toUpperCase())}</div>
         <div class="detail-hero-overlay">
           <div class="detail-hero-name">${escapeHtml(ex.name)}</div>
-          <div class="detail-hero-cat pill cat-${ex.category}">${escapeHtml(categoryLabel(ex.category))}</div>
+          <div class="detail-hero-cat pill cat-${escapeHtml(ex.category)}">${escapeHtml(categoryLabel(ex.category))}</div>
         </div>
       </div>
     `;
@@ -2844,7 +2883,7 @@ function renderCardio(el) {
   }).join('');
 
   el.innerHTML = `
-    ${vaultBar({ action: icon('plus', 20) })}
+    ${vaultBar({ action: icon('plus', 20), actionLabel: t('add') })}
 
     <div class="page-header">
       <div class="page-eyebrow">${t('this_week')} · ${weekItems.length}</div>
@@ -3159,33 +3198,43 @@ function mountFoodAiBar() {
 }
 
 function renderFood(el) {
-  const list = DB.foods.list();
-  const query = (viewContext.foodQuery || '').toLowerCase();
-  const filtered = query ? list.filter((f) => f.name.toLowerCase().includes(query)) : list;
-
-  const items = filtered.map((f) => `
-    <div class="data-row">
-      <div class="data-icon food">${icon('utensils', 20)}</div>
-      <div class="data-main">
-        <div class="data-title">
-          ${escapeHtml(f.name)}
-          ${f.serving ? `<span style="color:var(--text-mute);font-weight:500;font-size:12px">· ${escapeHtml(f.serving)}</span>` : ''}
+  // The shell (bar/header/toolbar/AI bar) is rendered once; the list re-renders
+  // on its own so typing in search doesn't rebuild the whole view every
+  // keystroke (and doesn't churn the floating AI bar).
+  function foodListHtml() {
+    const list = DB.foods.list();
+    const query = (viewContext.foodQuery || '').toLowerCase();
+    const filtered = query ? list.filter((f) => f.name.toLowerCase().includes(query)) : list;
+    if (filtered.length === 0) {
+      return emptyState({
+        iconName: 'apple',
+        title: list.length === 0 ? t('no_foods_yet') : t('no_matches_simple'),
+        text: list.length === 0 ? t('no_foods_text') : t('no_matches_text'),
+      });
+    }
+    return `<div class="data-list">${filtered.map((f) => `
+      <div class="data-row">
+        <div class="data-icon food">${icon('utensils', 20)}</div>
+        <div class="data-main">
+          <div class="data-title">
+            ${escapeHtml(f.name)}
+            ${f.serving ? `<span style="color:var(--text-mute);font-weight:500;font-size:12px">· ${escapeHtml(f.serving)}</span>` : ''}
+          </div>
+          <div class="macro-row">
+            <span class="macro-chip"><span class="num">${f.calories}</span><span class="macro-label">${t('cal')}</span></span>
+            <span class="macro-chip"><span class="num">${f.protein}</span>g<span class="macro-label">${t('protein_label')}</span></span>
+            <span class="macro-chip"><span class="num">${f.carbs}</span>g<span class="macro-label">${t('carbs_label')}</span></span>
+          </div>
         </div>
-        <div class="macro-row">
-          <span class="macro-chip"><span class="num">${f.calories}</span><span class="macro-label">${t('cal')}</span></span>
-          <span class="macro-chip"><span class="num">${f.protein}</span>g<span class="macro-label">${t('protein_label')}</span></span>
-          <span class="macro-chip"><span class="num">${f.carbs}</span>g<span class="macro-label">${t('carbs_label')}</span></span>
+        <div class="data-actions">
+          <button class="icon-btn" data-edit-food="${f.id}" aria-label="${escapeHtml(t('edit'))}">${icon('edit', 15)}</button>
+          <button class="icon-btn danger" data-delete-food="${f.id}" aria-label="${escapeHtml(t('delete'))}">${icon('trash', 15)}</button>
         </div>
-      </div>
-      <div class="data-actions">
-        <button class="icon-btn" data-edit-food="${f.id}">${icon('edit', 15)}</button>
-        <button class="icon-btn danger" data-delete-food="${f.id}">${icon('trash', 15)}</button>
-      </div>
-    </div>
-  `).join('');
+      </div>`).join('')}</div>`;
+  }
 
   el.innerHTML = `
-    ${vaultBar({ action: icon('plus', 20) })}
+    ${vaultBar({ action: icon('plus', 20), actionLabel: t('add') })}
 
     <div class="page-header">
       <h1 class="page-title">${t('food')}</h1>
@@ -3195,46 +3244,42 @@ function renderFood(el) {
     <div class="toolbar" style="display:flex;gap:10px;margin-bottom:14px">
       <div class="search-wrap">
         ${icon('search', 18)}
-        <input type="search" id="food-search" placeholder="${t('search_foods')}" value="${escapeHtml(query)}">
+        <input type="search" id="food-search" placeholder="${t('search_foods')}" value="${escapeHtml(viewContext.foodQuery || '')}">
       </div>
       <button class="btn btn-primary" id="add-food-btn">${icon('plus', 16)} ${t('add')}</button>
     </div>
 
-    ${filtered.length === 0
-      ? emptyState({
-          iconName: 'apple',
-          title: list.length === 0 ? t('no_foods_yet') : t('no_matches_simple'),
-          text: list.length === 0 ? t('no_foods_text') : t('no_matches_text'),
-        })
-      : `<div class="data-list">${items}</div>`
-    }
+    <div id="food-list-host">${foodListHtml()}</div>
   `;
+
+  const host = $('#food-list-host', el);
+  const updateList = () => { if (host) host.innerHTML = foodListHtml(); };
 
   bindVaultAction(() => openFoodLibraryModal());
   mountFoodAiBar();
+
+  // Debounced search updates only the list container (keeps input focus).
+  let searchTimer = null;
   $('#food-search', el).addEventListener('input', (e) => {
     viewContext.foodQuery = e.target.value;
-    renderFood(el);
-    const s = $('#food-search', el);
-    if (s) { s.focus(); s.setSelectionRange(e.target.value.length, e.target.value.length); }
+    clearTimeout(searchTimer);
+    searchTimer = setTimeout(updateList, 150);
   });
   $('#add-food-btn', el).addEventListener('click', () => openFoodLibraryModal());
-  el.querySelectorAll('[data-edit-food]').forEach((b) =>
-    b.addEventListener('click', () => openFoodModal(b.dataset.editFood))
-  );
-  el.querySelectorAll('[data-delete-food]').forEach((b) =>
-    b.addEventListener('click', () => {
+
+  // One delegated listener handles edit/delete for every row.
+  host?.addEventListener('click', (e) => {
+    const editBtn = e.target.closest('[data-edit-food]');
+    if (editBtn) { openFoodModal(editBtn.dataset.editFood); return; }
+    const delBtn = e.target.closest('[data-delete-food]');
+    if (delBtn) {
       confirmDialog({
         title: t('delete_food_q'),
         text: t('delete_food_text'),
-        onConfirm: () => {
-          DB.foods.remove(b.dataset.deleteFood);
-          showToast(t('deleted'));
-          renderFood(el);
-        },
+        onConfirm: () => { DB.foods.remove(delBtn.dataset.deleteFood); showToast(t('deleted')); updateList(); },
       });
-    })
-  );
+    }
+  });
 }
 
 // Split a serving string ("١٠٠غ", "3 حبات", "1 slice") into a numeric amount
@@ -3271,7 +3316,7 @@ function openFoodModal(foodId = null) {
 
     <div class="form-group">
       <label class="form-label">${t('name')}</label>
-      <input type="text" id="food-name" placeholder="Chicken Breast" value="${existing ? escapeHtml(existing.name) : ''}">
+      <input type="text" id="food-name" placeholder="${t('ph_food_name')}" value="${existing ? escapeHtml(existing.name) : ''}">
     </div>
 
     <div class="form-row">
@@ -3280,7 +3325,7 @@ function openFoodModal(foodId = null) {
         <input type="number" inputmode="decimal" id="food-amount" step="1" min="0" value="${baseAmount}" placeholder="100">
       </div>
       <div class="form-group">
-        <label class="form-label">${t('unit_label')}</label>
+        <label class="form-label">${t('serving_unit_label')}</label>
         <input type="text" id="food-unit" value="${escapeHtml(baseUnit)}" placeholder="${t('unit_hint')}">
       </div>
     </div>
@@ -3351,7 +3396,11 @@ function openFoodLibraryModal() {
         .filter(({ p }) => p.cat === cat)
         .map(({ p, idx }) => {
           const name = foodPresetName(p);
-          const added = existing.has(name.trim().toLowerCase());
+          // Detect an already-added preset in EITHER language so switching the
+          // UI language can't create a duplicate of the same food.
+          const added = existing.has(name.trim().toLowerCase())
+            || existing.has(String(p.en).trim().toLowerCase())
+            || existing.has(String(p.ar).trim().toLowerCase());
           return `
             <button type="button" class="food-lib-chip${added ? ' added' : ''}" data-preset="${idx}" ${added ? 'disabled' : ''}>
               <span class="flc-name">${escapeHtml(name)}</span>
@@ -3382,7 +3431,10 @@ function openFoodLibraryModal() {
       <input type="search" id="food-lib-search" placeholder="${t('search_foods')}">
     </div>
 
-    <div class="food-lib-body" id="food-lib-body">${buildSections()}</div>
+    <div class="food-lib-body" id="food-lib-body">
+      ${buildSections()}
+      <div id="food-lib-empty" style="display:none">${emptyState({ iconName: 'search', title: t('no_matches_simple'), text: t('no_matches_text') })}</div>
+    </div>
 
     <div class="form-actions">
       <button type="button" class="btn btn-ghost btn-block" id="food-lib-manual">${icon('plus', 16)} ${t('add_manually')}</button>
@@ -3404,14 +3456,19 @@ function openFoodLibraryModal() {
 
   overlay.querySelector('#food-lib-search').addEventListener('input', (e) => {
     const q = e.target.value.trim().toLowerCase();
+    let anyVisible = false;
     overlay.querySelectorAll('.food-lib-chip').forEach((c) => {
       const nm = c.querySelector('.flc-name').textContent.toLowerCase();
-      c.style.display = (!q || nm.includes(q)) ? '' : 'none';
+      const show = !q || nm.includes(q);
+      c.style.display = show ? '' : 'none';
+      if (show) anyVisible = true;
     });
     overlay.querySelectorAll('.food-lib-section').forEach((sec) => {
       const any = [...sec.querySelectorAll('.food-lib-chip')].some((c) => c.style.display !== 'none');
       sec.style.display = any ? '' : 'none';
     });
+    const empty = overlay.querySelector('#food-lib-empty');
+    if (empty) empty.style.display = anyVisible ? 'none' : '';
   });
 
   overlay.querySelector('#food-lib-manual').addEventListener('click', () => {
@@ -3451,7 +3508,7 @@ function renderSleep(el) {
   `).join('');
 
   el.innerHTML = `
-    ${vaultBar({ action: icon('plus', 20) })}
+    ${vaultBar({ action: icon('plus', 20), actionLabel: t('add') })}
 
     <div class="page-header">
       <div class="page-eyebrow">${t('nights_log')} · ${list.length}</div>
@@ -4734,7 +4791,16 @@ function renderSessionDay(el) {
   // sets from today's session (if already started) → otherwise from the most
   // recent session → otherwise three blank rows.
   function initState(exId) {
-    if (sdState[exId]) return sdState[exId];
+    if (sdState[exId]) {
+      const cached = sdState[exId];
+      // Re-validate a cached savedSessionId: the session may have been deleted
+      // from the exercise-detail screen while we were away. Dropping the stale
+      // id prevents a silent no-op "update" (data loss) and a false logged pill.
+      if (cached.savedSessionId && !DB.sessions.get(cached.savedSessionId)) {
+        cached.savedSessionId = null;
+      }
+      return cached;
+    }
     const today = todaySessionFor(exId);
     const last = DB.sessions.lastForExercise(exId);
     let sets;
@@ -4750,12 +4816,17 @@ function renderSessionDay(el) {
     const url = exerciseImgSrc(ex);
     const machineSvg = ex.machineType ? machineSvgFor(ex.machineType) : '';
     const isLogged = !!st.savedSessionId;
+    // Show Save when the user edited (dirty) OR when an unlogged card is
+    // pre-filled with real values (from last workout) so it can be confirmed
+    // without a throwaway edit. A brand-new empty card stays clean.
+    const hasValues = st.sets.some((s) => (Number(s.reps) || 0) > 0 || (Number(s.weight) || 0) > 0);
+    const showSave = st.dirty || (!isLogged && hasValues);
 
     let bgHtml;
     if (machineSvg) {
-      bgHtml = `<div class="sd-thumb machine-bg${url ? ' sd-thumb-zoom' : ''}"${url ? ` data-thumb-src="${escapeHtml(url)}"` : ''}>${machineSvg}${url ? `<img src="${url}" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="this.remove()">` : ''}</div>`;
+      bgHtml = `<div class="sd-thumb machine-bg${url ? ' sd-thumb-zoom' : ''}"${url ? ` data-thumb-src="${escapeHtml(url)}"` : ''}>${machineSvg}${url ? `<img src="${escapeHtml(url)}" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="this.remove()">` : ''}</div>`;
     } else if (url) {
-      bgHtml = `<div class="sd-thumb sd-thumb-zoom" data-thumb-src="${escapeHtml(url)}" style="background-image:url('${url}')"></div>`;
+      bgHtml = `<div class="sd-thumb sd-thumb-zoom" data-thumb-src="${escapeHtml(url)}" style="background-image:url('${escapeHtml(url)}')"></div>`;
     } else {
       bgHtml = `<div class="sd-thumb fallback">${escapeHtml(initialsOf(ex.name))}</div>`;
     }
@@ -4793,7 +4864,7 @@ function renderSessionDay(el) {
 
         <div class="sd-card-actions">
           <button type="button" class="btn btn-ghost sd-add-set-btn" data-add-set="${ex.id}">${icon('plus', 14)} ${t('add_set')}</button>
-          <button type="button" class="btn btn-primary sd-save-btn${st.dirty ? '' : ' sd-hidden'}" data-save-ex="${ex.id}">${isLogged ? t('update') : t('save')}</button>
+          <button type="button" class="btn btn-primary sd-save-btn${showSave ? '' : ' sd-hidden'}" data-save-ex="${ex.id}">${isLogged ? t('update') : t('save')}</button>
         </div>
       </div>
     `;
@@ -4804,7 +4875,7 @@ function renderSessionDay(el) {
 
   el.innerHTML = `
     <div class="detail-top">
-      <button class="back-btn" data-goto="planner">${icon('back', 20)}</button>
+      <button class="back-btn" data-back aria-label="${escapeHtml(t('back'))}">${icon('back', 20)}</button>
       <div class="detail-top-title">${escapeHtml(dayName(dow, true))}</div>
     </div>
 
@@ -4816,12 +4887,12 @@ function renderSessionDay(el) {
 
     <div class="sd-toolbar">
       <div class="form-group" style="flex:1;margin:0">
-        <label class="form-label" style="font-size:10px">${t('date')}</label>
+        <label class="form-label" for="sd-date" style="font-size:10px">${t('date')}</label>
         <input type="date" id="sd-date" value="${viewContext.sdDate}">
       </div>
       <div class="modal-unit-toggle" role="group" aria-label="${escapeHtml(t('unit'))}">
-        <button type="button" data-sd-unit="kg" class="${viewContext.sdUnit === 'kg' ? 'active' : ''}">KG</button>
-        <button type="button" data-sd-unit="lb" class="${viewContext.sdUnit === 'lb' ? 'active' : ''}">LB</button>
+        <button type="button" data-sd-unit="kg" aria-pressed="${viewContext.sdUnit === 'kg'}" class="${viewContext.sdUnit === 'kg' ? 'active' : ''}">KG</button>
+        <button type="button" data-sd-unit="lb" aria-pressed="${viewContext.sdUnit === 'lb'}" class="${viewContext.sdUnit === 'lb' ? 'active' : ''}">LB</button>
       </div>
     </div>
 
@@ -4839,20 +4910,45 @@ function renderSessionDay(el) {
   // brand-new custom exercise (which is then added straight to this day).
   $('#sd-add-ex', el)?.addEventListener('click', () => openAddExerciseChooser(dow));
 
-  // Tap an exercise photo thumbnail to open it full-screen.
-  el.querySelectorAll('.sd-thumb-zoom').forEach((thumb) =>
-    thumb.addEventListener('click', (e) => { e.stopPropagation(); openImageLightbox(thumb.dataset.thumbSrc); })
-  );
+  // Tap (or keyboard-activate) an exercise photo thumbnail to open it
+  // full-screen. Made keyboard/SR reachable as a button.
+  el.querySelectorAll('.sd-thumb-zoom').forEach((thumb) => {
+    thumb.setAttribute('role', 'button');
+    thumb.setAttribute('tabindex', '0');
+    if (!thumb.getAttribute('aria-label')) thumb.setAttribute('aria-label', t('view_photo'));
+    const open = (e) => {
+      e.stopPropagation();
+      const name = thumb.closest('.sd-card')?.querySelector('.sd-card-name')?.textContent?.trim();
+      openImageLightbox(thumb.dataset.thumbSrc, name);
+    };
+    thumb.addEventListener('click', open);
+    thumb.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); open(e); }
+    });
+  });
 
   // Tap an empty area of an exercise card → its full history (exercise-detail).
   // Ignore taps on inputs, buttons, and the photo (which has its own action).
-  el.querySelectorAll('.sd-card').forEach((card) =>
+  // For keyboard/SR users the exercise NAME is the reachable history button
+  // (the card can't be one button — it contains the set inputs).
+  el.querySelectorAll('.sd-card').forEach((card) => {
+    const exId = card.dataset.exCard;
     card.addEventListener('click', (e) => {
-      if (e.target.closest('input, button, .sd-thumb-zoom')) return;
-      const exId = card.dataset.exCard;
+      if (e.target.closest('input, button, [role="button"]')) return;
       if (exId) navigate('exercise-detail', { exerciseId: exId });
-    })
-  );
+    });
+    const nameEl = card.querySelector('.sd-card-name');
+    if (nameEl && exId) {
+      nameEl.setAttribute('role', 'button');
+      nameEl.setAttribute('tabindex', '0');
+      nameEl.setAttribute('aria-label', `${nameEl.textContent.trim()} — ${t('history')}`);
+      const go = () => navigate('exercise-detail', { exerciseId: exId });
+      nameEl.addEventListener('click', (e) => { e.stopPropagation(); go(); });
+      nameEl.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); go(); }
+      });
+    }
+  });
 
   // Remove one exercise from this day, inline. Clears its unsaved set state so
   // it doesn't linger, then re-renders. Logged sessions in history are kept.
@@ -4912,7 +5008,9 @@ function renderSessionDay(el) {
       const exId = b.dataset.addSet;
       const st = initState(exId);
       const last = st.sets[st.sets.length - 1];
-      st.sets.push({ reps: last?.reps || '', weight: last?.weight || '' });
+      // Copy the last row's values, preserving an intentional 0 (bodyweight).
+      const keep = (v) => (v !== '' && v != null ? v : '');
+      st.sets.push({ reps: keep(last?.reps), weight: keep(last?.weight) });
       st.dirty = true;
       renderSessionDay(el);
     })
@@ -4936,8 +5034,12 @@ function renderSessionDay(el) {
       }
       // Snapshot BEFORE write (full snapshot including the session being edited)
       const prior = DB.sessions.prSnapshot(exId);
-      if (existingId) {
-        DB.sessions.update(existingId, { date: viewContext.sdDate, sets: cleaned });
+      // Try to update the existing session; if it no longer exists (deleted
+      // elsewhere), update() returns null and we create a fresh one instead of
+      // silently losing the edit.
+      let wasUpdate = false;
+      if (existingId && DB.sessions.update(existingId, { date: viewContext.sdDate, sets: cleaned })) {
+        wasUpdate = true;
       } else {
         const created = DB.sessions.add({ exerciseId: exId, date: viewContext.sdDate, sets: cleaned });
         st.savedSessionId = created.id;
@@ -4946,7 +5048,7 @@ function renderSessionDay(el) {
       if (prMsg) {
         showToast(prMsg);
       } else {
-        showToast(existingId ? t('session_updated') : t('session_saved'));
+        showToast(wasUpdate ? t('session_updated') : t('session_saved'));
       }
       st.dirty = false;
       renderSessionDay(el);
@@ -5275,7 +5377,7 @@ function openSupplementModal(id = null) {
 
     <div class="form-group">
       <label class="form-label">${t('supplement_name')}</label>
-      <input type="text" id="supp-name" placeholder="Creatine" value="${existing ? escapeHtml(existing.name) : ''}" autofocus>
+      <input type="text" id="supp-name" placeholder="${t('ph_supplement_name')}" value="${existing ? escapeHtml(existing.name) : ''}" autofocus>
     </div>
 
     <div class="form-group">

@@ -2178,7 +2178,7 @@ body[dir="rtl"] .w-unit { margin-left: 0; margin-right: 2px; }
 .macro-chip .macro-label {
   color: var(--text-dim);
   font-weight: 600;
-  margin-left: 1px;
+  margin-inline-start: 1px;
 }
 
 /* =========================================================================
@@ -3508,8 +3508,8 @@ body[dir="rtl"] .planner-day-head { text-align: right; }
 }
 
 .sd-set-remove {
-  width: 32px;
-  height: 32px;
+  width: 36px;
+  height: 36px;
   border-radius: 50%;
   background: transparent;
   border: 1px solid var(--border);
@@ -3517,9 +3517,11 @@ body[dir="rtl"] .planner-day-head { text-align: right; }
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  transition: background 0.15s, color 0.15s, border-color 0.15s;
+  transition: transform 0.12s, background 0.15s, color 0.15s, border-color 0.15s;
 }
-.sd-set-remove:hover { background: var(--red-bg, rgba(239,68,68,0.1)); color: var(--red, #ef4444); border-color: var(--red, #ef4444); }
+.sd-set-remove:hover,
+.sd-set-remove:active { background: var(--red-bg); color: var(--red); border-color: var(--red); }
+.sd-set-remove:active { transform: scale(var(--press-scale)); }
 .sd-set-remove svg { width: 14px; height: 14px; }
 
 .sd-card-actions {
@@ -5006,6 +5008,14 @@ body[dir="rtl"] .variation-select svg { transform: scaleX(-1); }
 .planner-day:active, .settings-action-row:active {
   transform: scale(var(--press-scale));
 }
+/* Session-day card: feedback on the real tap targets (name → history,
+   photo → lightbox) rather than the whole card, which holds the set inputs. */
+.sd-card-name[role="button"] { cursor: pointer; }
+.sd-card-name[role="button"]:hover,
+.sd-card-name[role="button"]:active { color: var(--accent); }
+.sd-thumb-zoom:active { transform: scale(var(--press-scale)); }
+.sd-card-name[role="button"]:focus-visible,
+.sd-thumb-zoom:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .stat-tile:active, .tool-card:active, .bento-card:active,
 .compare-card:active, .cta-card:active, .session-card:active {
   border-color: var(--border-hi);
@@ -5354,7 +5364,7 @@ body[dir="rtl"] .variation-select svg { transform: scaleX(-1); }
 .cta-floating .cta-card-icon { width: 38px; height: 38px; border-radius: 12px; }
 .cta-floating .cta-card-title { font-size: 14px; margin-bottom: 1px; }
 .cta-floating .cta-card-sub { font-size: 11.5px; }
-.cta-floating:active { transform: translateX(-50%) scale(0.98); }
+.cta-floating:active { transform: translateX(-50%) scale(var(--press-scale)); }
 /* Give the food list room so its last row clears the floating bar */
 .view[data-view="food"] { padding-bottom: 84px; }
 

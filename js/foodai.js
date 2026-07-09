@@ -92,10 +92,13 @@
 
   // Clean one food item.
   function normalizeItem(d) {
-    const calories = Math.max(0, Math.round(Number(d && d.calories) || 0));
-    const protein = Math.max(0, Math.round(Number(d && d.protein) || 0));
-    const carbs = Math.max(0, Math.round(Number(d && d.carbs) || 0));
-    const fat = Math.max(0, Math.round(Number(d && d.fat) || 0));
+    // Clamp to a sane range (calories ≤ 10000, macros ≤ 2000) so a bad/injected
+    // value can't corrupt the user's totals.
+    const clamp = (v, max) => Math.min(max, Math.max(0, Math.round(Number(v) || 0)));
+    const calories = clamp(d && d.calories, 10000);
+    const protein = clamp(d && d.protein, 2000);
+    const carbs = clamp(d && d.carbs, 2000);
+    const fat = clamp(d && d.fat, 2000);
     const name = String((d && d.name) || '').trim();
     return { name: name.slice(0, 80), calories, protein, carbs, fat };
   }
