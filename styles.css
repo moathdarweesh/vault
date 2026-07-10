@@ -5202,6 +5202,20 @@ body[dir="rtl"] .variation-select svg { transform: scaleX(-1); }
   text-align: center;
 }
 .auth-card .btn-block { height: 50px; font-size: 16px; }
+
+/* Mandatory-username gate */
+.uname-field { position: relative; }
+.uname-field .uname-at {
+  position: absolute; inset-inline-start: 14px; top: 0; height: 50px;
+  display: flex; align-items: center; color: var(--text-dim);
+  font-size: 16px; font-weight: 700; pointer-events: none;
+}
+.uname-field .auth-input { padding-inline-start: 32px; }
+.uname-rules {
+  font-size: 12px; color: var(--text-dim);
+  margin: -4px 0 10px; text-align: center;
+}
+.auth-err.ok { color: var(--green, #4fd1a5); }
 .auth-toggle {
   background: none;
   border: none;

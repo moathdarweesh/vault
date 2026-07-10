@@ -527,6 +527,16 @@ const I18N = {
     auth_toggle_to_up: "Don't have an account? Create one",
     auth_toggle_to_in: 'Already have an account? Sign in',
     auth_skip: 'Continue without an account',
+    username_title: 'Choose your username',
+    username_sub: 'A unique handle others will know you by. Required to continue.',
+    username_ph: 'username',
+    username_rules: '3–20 characters · letters, numbers and _ only',
+    username_save: 'Save username',
+    username_checking: 'Checking…',
+    username_available_msg: 'Available ✓',
+    username_taken: 'That username is already taken',
+    username_invalid: 'Use 3–20 letters, numbers or _',
+    username_saved: 'Username set',
     auth_forgot: 'Forgot password?',
     auth_reset_title: 'Reset password',
     auth_reset_sub: 'Enter your email and we’ll send you a link to set a new password.',
@@ -986,6 +996,16 @@ const I18N = {
     auth_toggle_to_up: 'ما عندك حساب؟ أنشئ واحد',
     auth_toggle_to_in: 'عندك حساب؟ سجّل دخول',
     auth_skip: 'المتابعة بدون حساب',
+    username_title: 'اختر اسم المستخدم',
+    username_sub: 'اسم فريد يُعرّفك أمام الآخرين. إلزامي للمتابعة.',
+    username_ph: 'اسم_المستخدم',
+    username_rules: '٣–٢٠ حرفًا · حروف إنجليزية وأرقام و _ فقط',
+    username_save: 'حفظ الاسم',
+    username_checking: 'جارٍ التحقّق…',
+    username_available_msg: 'متاح ✓',
+    username_taken: 'هذا الاسم محجوز',
+    username_invalid: 'استخدم ٣–٢٠ من الحروف الإنجليزية والأرقام و _',
+    username_saved: 'تم حفظ اسم المستخدم',
     auth_forgot: 'نسيت كلمة السر؟',
     auth_reset_title: 'استعادة كلمة السر',
     auth_reset_sub: 'أدخل بريدك ونرسل لك رابطاً لتعيين كلمة سر جديدة.',
@@ -1986,7 +2006,7 @@ function renderHome(el) {
 
     ${recentHtml}
 
-    <div style="text-align:center;opacity:.4;font-size:12px;margin:24px 0 8px;letter-spacing:.5px">THE VAULT · v107</div>
+    <div style="text-align:center;opacity:.4;font-size:12px;margin:24px 0 8px;letter-spacing:.5px">THE VAULT · v108</div>
   `;
 
   // Count-up the hero/stat numerals (sleep is stored ×10 for one decimal)
@@ -6209,6 +6229,82 @@ function showAuthGate(mode) {
   if (forgot) forgot.addEventListener('click', () => showForgotPassword(document.getElementById('auth-email').value));
 }
 
+// Mandatory unique username. Once a user is logged in AND online, they MUST pick
+// a handle before using the app — even already-registered users. Enforced by a
+// blocking gate (no skip). No-ops when offline or logged out so a solo/offline
+// user is never locked out.
+const USERNAME_RE = /^[A-Za-z0-9_]{3,20}$/;
+async function ensureUsername() {
+  if (!window.Cloud || !Cloud.configured || !Cloud.configured() || !Cloud.getUsername) return;
+  let info;
+  try { info = await Cloud.getUsername(); } catch (_) { return; }
+  if (!info || info.offline) return;   // couldn't verify → don't lock anyone out
+  if (info.username) return;           // already chosen
+  showUsernameGate();
+}
+
+function showUsernameGate() {
+  if (document.getElementById('username-gate')) return;
+  const gate = document.createElement('div');
+  gate.id = 'username-gate';
+  gate.className = 'auth-gate';
+  gate.innerHTML = `
+    <div class="auth-card">
+      <div class="auth-title">${t('username_title')}</div>
+      <div class="auth-sub">${t('username_sub')}</div>
+      <div class="uname-field">
+        <span class="uname-at">@</span>
+        <input type="text" id="uname-input" class="auth-input" placeholder="${t('username_ph')}"
+               autocomplete="off" autocapitalize="off" spellcheck="false" maxlength="20">
+      </div>
+      <div class="uname-rules">${t('username_rules')}</div>
+      <div class="auth-err" id="uname-msg" role="alert"></div>
+      <button class="btn btn-primary btn-block" id="uname-save" disabled>${t('username_save')}</button>
+    </div>`;
+  document.body.appendChild(gate);
+
+  const input = document.getElementById('uname-input');
+  const save = document.getElementById('uname-save');
+  const msgEl = document.getElementById('uname-msg');
+  const msg = (txt, cls) => { msgEl.textContent = txt || ''; msgEl.className = 'auth-err' + (cls ? ' ' + cls : ''); };
+  let timer = null, valid = false;
+  const setValid = (v) => { valid = v; save.disabled = !v; };
+
+  input.addEventListener('input', () => {
+    const v = input.value.trim();
+    if (v !== input.value) input.value = v;
+    setValid(false);
+    clearTimeout(timer);
+    if (!v) { msg(''); return; }
+    if (!USERNAME_RE.test(v)) { msg(t('username_invalid'), 'err'); return; }
+    msg(t('username_checking'), '');
+    timer = setTimeout(async () => {
+      const r = await Cloud.checkUsername(v);
+      if (input.value.trim() !== v) return;            // typed more since
+      if (r.offline) { msg(t('auth_err_network'), 'err'); return; }
+      if (r.available) { msg(t('username_available_msg'), 'ok'); setValid(true); }
+      else { msg(t('username_taken'), 'err'); }
+    }, 350);
+  });
+
+  const claim = async () => {
+    const v = input.value.trim();
+    if (!USERNAME_RE.test(v)) { msg(t('username_invalid'), 'err'); return; }
+    save.disabled = true;
+    const label = save.textContent;
+    save.textContent = t('auth_signing');
+    const r = await Cloud.setUsername(v);
+    if (r.ok) { gate.remove(); showToast(t('username_saved')); return; }
+    save.textContent = label; save.disabled = false;
+    if (r.taken) { msg(t('username_taken'), 'err'); setValid(false); }
+    else if (r.error === 'offline') { msg(t('auth_err_network'), 'err'); }
+    else { msg(t('username_invalid'), 'err'); }
+  };
+  save.addEventListener('click', claim);
+  input.addEventListener('keydown', (e) => { if (e.key === 'Enter' && valid) claim(); });
+  setTimeout(() => input.focus(), 60);
+}
+
 function showForgotPassword(prefillEmail) {
   const overlay = openModal(`
     <div class="modal-header">
@@ -6254,6 +6350,7 @@ async function afterLogin() {
   hideAuthGate();
   refreshAfterSync();
   showToast(t('synced'));
+  ensureUsername();
 }
 
 function showConflictDialog() {
@@ -6265,7 +6362,7 @@ function showConflictDialog() {
       <button type="button" class="btn btn-ghost btn-block" data-keep="local">${t('conflict_local')}</button>
     </div>
   `, { variant: 'confirm' });
-  const finish = () => { closeModal(); hideAuthGate(); refreshAfterSync(); showToast(t('synced')); };
+  const finish = () => { closeModal(); hideAuthGate(); refreshAfterSync(); showToast(t('synced')); ensureUsername(); };
   overlay.querySelector('[data-keep="cloud"]').addEventListener('click', async () => { await Cloud.chooseCloud(); finish(); });
   overlay.querySelector('[data-keep="local"]').addEventListener('click', async () => { await Cloud.chooseLocal(); finish(); });
 }
@@ -6429,6 +6526,7 @@ async function bootCloud() {
     if (r === 'pulled') refreshAfterSync();
     else if (r === 'conflict') showConflictDialog(); // both sides changed → ask
   } catch (_) {}
+  ensureUsername(); // enforce a handle for already-logged-in users too
 }
 
 // Fade newly-loaded images in smoothly. One capture listener covers every

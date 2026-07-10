@@ -292,11 +292,51 @@
     await push().catch(() => {}); markLinked(uid); return 'pushed';
   }
 
+  // ---- username (public unique handle) ------------------------------------
+  // Read the signed-in user's handle from profiles. Returns { username, offline }.
+  // offline=true means we couldn't reach the server (or aren't logged in) — the
+  // caller must NOT force a username in that case.
+  async function getUsername() {
+    const c = sb(); const s = await getSession();
+    if (!c || !s) return { username: null, offline: true };
+    try {
+      const { data, error } = await c
+        .from('profiles').select('username').eq('user_id', s.user.id).maybeSingle();
+      if (error) throw error;
+      return { username: (data && data.username) || null, offline: false };
+    } catch (_) { return { username: null, offline: true }; }
+  }
+  // Live availability check via the server RPC (also validates the shape server-side).
+  async function checkUsername(name) {
+    const c = sb(); if (!c) return { available: false, offline: true };
+    try {
+      const { data, error } = await c.rpc('username_available', { candidate: name });
+      if (error) throw error;
+      return { available: data === true, offline: false };
+    } catch (_) { return { available: false, offline: true }; }
+  }
+  // Claim a handle. A unique-violation (someone took it first) comes back as
+  // { taken:true }; the DB check constraint rejects a bad shape.
+  async function setUsername(name) {
+    const c = sb(); const s = await getSession();
+    if (!c || !s) return { error: 'offline' };
+    try {
+      const { error } = await c.from('profiles')
+        .upsert({ user_id: s.user.id, username: name }, { onConflict: 'user_id' });
+      if (error) {
+        if (/duplicate|unique/i.test(error.message)) return { taken: true };
+        return { error: error.message };
+      }
+      return { ok: true };
+    } catch (e) { return { error: (e && e.message) || 'error' }; }
+  }
+
   window.Cloud = {
     configured, ensureSdk, getSession, currentEmail,
     signUp, signIn, signOut, changePassword, resetPassword, onPasswordRecovery,
     pull, push, onLocalChange,
     resolveOnLogin, chooseCloud, chooseLocal, bootSync, applyRemote,
     getClient: sb, // exposed for the tables.js "mirror" projection (RLS-scoped)
+    getUsername, checkUsername, setUsername,
   };
 })();
