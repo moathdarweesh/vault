@@ -7,7 +7,7 @@ const ROOT = path.join(__dirname, '..');
 const OUT = path.join(ROOT, 'www');
 
 // Only the files the running app actually needs — never node_modules/android/.git.
-const ITEMS = ['index.html', 'styles.css', 'manifest.json', 'service-worker.js', 'js', 'icons'];
+const ITEMS = ['index.html', 'styles.css', 'manifest.json', 'service-worker.js', 'version.json', 'js', 'icons'];
 
 fs.rmSync(OUT, { recursive: true, force: true });
 fs.mkdirSync(OUT, { recursive: true });

@@ -537,6 +537,9 @@ const I18N = {
     username_taken: 'That username is already taken',
     username_invalid: 'Use 3–20 letters, numbers or _',
     username_saved: 'Username set',
+    update_title: 'A new version is available',
+    update_get: 'Download',
+    update_later: 'Later',
     auth_forgot: 'Forgot password?',
     auth_reset_title: 'Reset password',
     auth_reset_sub: 'Enter your email and we’ll send you a link to set a new password.',
@@ -1006,6 +1009,9 @@ const I18N = {
     username_taken: 'هذا الاسم محجوز',
     username_invalid: 'استخدم ٣–٢٠ من الحروف الإنجليزية والأرقام و _',
     username_saved: 'تم حفظ اسم المستخدم',
+    update_title: 'يتوفّر إصدار جديد',
+    update_get: 'تحميل',
+    update_later: 'لاحقاً',
     auth_forgot: 'نسيت كلمة السر؟',
     auth_reset_title: 'استعادة كلمة السر',
     auth_reset_sub: 'أدخل بريدك ونرسل لك رابطاً لتعيين كلمة سر جديدة.',
@@ -2006,7 +2012,7 @@ function renderHome(el) {
 
     ${recentHtml}
 
-    <div style="text-align:center;opacity:.4;font-size:12px;margin:24px 0 8px;letter-spacing:.5px">THE VAULT · v108</div>
+    <div style="text-align:center;opacity:.4;font-size:12px;margin:24px 0 8px;letter-spacing:.5px">THE VAULT · v109</div>
   `;
 
   // Count-up the hero/stat numerals (sleep is stored ×10 for one decimal)

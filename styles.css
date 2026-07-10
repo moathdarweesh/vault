@@ -5710,3 +5710,86 @@ body[dir="rtl"] .variation-select svg { transform: scaleX(-1); }
     transition-duration: 0.01ms !important;
   }
 }
+
+/* --- In-app "new APK available" update banner (native shell only) --- */
+.update-banner {
+  position: fixed;
+  left: max(var(--sp-3), env(safe-area-inset-left));
+  right: max(var(--sp-3), env(safe-area-inset-right));
+  bottom: calc(var(--nav-h) + var(--safe-b) + var(--sp-3));
+  z-index: 900;
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  flex-wrap: wrap;
+  padding: var(--sp-3) var(--sp-4);
+  background: var(--surface-2);
+  border: 1px solid rgba(var(--accent-rgb), 0.45);
+  border-radius: var(--radius-lg);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.45);
+  transform: translateY(140%);
+  opacity: 0;
+  transition: transform var(--dur, 200ms) var(--ease), opacity var(--dur, 200ms) var(--ease);
+}
+.update-banner.show { transform: translateY(0); opacity: 1; }
+.update-banner-main {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  flex: 1 1 200px;
+  min-width: 0;
+}
+.update-banner-icon {
+  flex: 0 0 auto;
+  width: 38px;
+  height: 38px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  color: var(--accent);
+  background: rgba(var(--accent-rgb), 0.15);
+}
+.update-banner-icon svg { width: 20px; height: 20px; }
+.update-banner-text { min-width: 0; }
+.update-banner-title {
+  font-weight: 700;
+  font-size: var(--fs-body, 15px);
+  color: var(--text);
+}
+.update-banner-notes {
+  margin-top: 2px;
+  font-size: var(--fs-sub, 13px);
+  color: var(--text-dim);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.update-banner-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  flex: 0 0 auto;
+  margin-inline-start: auto;
+}
+.update-banner-later,
+.update-banner-get {
+  height: 38px;
+  padding: 0 var(--sp-4);
+  border-radius: var(--radius-lg);
+  font-weight: 700;
+  font-size: var(--fs-body, 15px);
+  cursor: pointer;
+  border: 1px solid transparent;
+  transition: transform var(--dur-press, 120ms) var(--ease), background var(--dur, 200ms) var(--ease);
+}
+.update-banner-later {
+  background: transparent;
+  color: var(--text-dim);
+  border-color: var(--border);
+}
+.update-banner-get {
+  background: var(--accent);
+  color: #fff;
+}
+.update-banner-later:active,
+.update-banner-get:active { transform: scale(var(--press-scale, 0.97)); }

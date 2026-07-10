@@ -1,0 +1,10 @@
+{
+  "_comment": "APK-shell update manifest. The app auto-updates its web content from the live URL; this only triggers the in-app 'download new APK' banner when apk.build here is GREATER than the versionCode installed on the device. To release a NEW APK: bump android/app/build.gradle versionCode, build, upload to Drive, then set apk.build to that number + apk.url to the new Drive share link + notes, and push.",
+  "apk": {
+    "build": 2,
+    "version": "1.1",
+    "url": "https://drive.google.com/drive/folders/PUT-YOUR-DRIVE-SHARE-LINK-HERE",
+    "notes_ar": "نسخة محسّنة تدعم التحديثات التلقائية.",
+    "notes_en": "Improved build with automatic updates."
+  }
+}

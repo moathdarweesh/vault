@@ -1,5 +1,9 @@
 {
   "appId": "com.moath.thevault",
   "appName": "THE VAULT",
-  "webDir": "www"
+  "webDir": "www",
+  "server": {
+    "url": "https://moathdarweesh.github.io/vault/",
+    "cleartext": false
+  }
 }

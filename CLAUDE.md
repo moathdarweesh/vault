@@ -13,6 +13,8 @@ A fitness / workout-tracking **PWA**. Vanilla JS, **no build step**, bilingual *
 - `js/tables.js` — the **"mirror"**: additively projects the local blob into the normalized schema-v2 tables (best-effort, one-way, idempotent, RLS-scoped). Never affects local logging. Loads after storage.js.
 - `js/foodai.js` — AI calorie chat. Posts `{text}` to a **Cloudflare Worker** (`backend/gemini-worker.js`) that holds the Gemini key server-side. The key never ships to the client.
 - `js/health.js` — Health Connect bridge (Capacitor, no-op on web).
+- `js/update.js` — native-shell update checker. No-op on web (web is always latest via the live URL). On the APK it compares the installed `versionCode` (via `@capacitor/app` `App.getInfo().build`) against `version.json` → `apk.build`; if a newer APK exists, shows the dismissible "download" banner linking to Drive. Best-effort, never blocks the app.
+- `version.json` (repo root) — the APK-shell update manifest read by `js/update.js`. Bump `apk.build`/`apk.url`/notes when you ship a NEW APK.
 - `styles.css` (~100KB) — one stylesheet; reuse existing CSS variables and classes.
 - `admin.html` — standalone owner-only **admin control panel** (GitHub Pages, not in the APK). Owner logs in → `is_admin()` RLS unlocks reading every user; per-user drill-down shows all their data. Publishable key only.
 
@@ -32,13 +34,20 @@ Bump the version in **four** places in `index.html` + the label, or the change n
 2. `?v=N` on the `<link rel="stylesheet" href="styles.css?v=N">`.
 3. The `__cleaned_vN` sessionStorage key in the inline cleanup script.
 4. The visible build label `THE VAULT · vN` in `app.js`.
-Then grep for the old number — zero matches should remain. **Current version: v108.**
+Then grep for the old number — zero matches should remain. **Current version: v109.**
 
 ## Deploy
 - **Web:** commit + push to `main`; GitHub Pages auto-rebuilds.
 - **Cloudflare Worker:** changes to `backend/gemini-worker.js` require a **manual redeploy** (Cloudflare → Edit code → paste → Deploy). CORS is locked to an origin allowlist — if the AI breaks on the Android app, add the Capacitor origin to `ALLOWED_ORIGINS`.
 - **Supabase:** schema/RLS changes in `backend/supabase-setup.sql` must be run in the Supabase SQL editor.
-- **Android APK:** `npm run build:www && npx cap sync android && (cd android && ./gradlew :app:assembleDebug)` → `android/app/build/outputs/apk/debug/app-debug.apk`. Installed via Google Drive (delete the old APK first). Portable JDK/SDK live under `C:\Users\moath\at`.
+- **Android APK:** `npm run build:www && npx cap sync android && (cd android && ./gradlew :app:assembleDebug)` → `android/app/build/outputs/apk/debug/app-debug.apk`. Copied to Google Drive (`G:\ملفاتي`). Portable JDK/SDK live under `C:\Users\moath\at` (`JAVA_HOME=…\jdk\jdk-21.0.11+10`, `ANDROID_HOME=…\sdk`).
+
+## Distribution model — Live URL + native-update banner (since v109)
+`capacitor.config.json` sets `server.url = https://moathdarweesh.github.io/vault/`, so the **APK is a thin shell that loads the LIVE site**. Consequences:
+- **Ordinary updates (JS/CSS/HTML) reach everyone automatically** on next app open, with NO reinstall — a `git push` updates web AND app users at once. The bundled `www/` is only a build artifact; it is ignored at runtime.
+- The APK's WebView origin is now `https://moathdarweesh.github.io` (same as web) — the Worker CORS allowlist already includes it. **Needs internet at launch** (acceptable: the app is cloud/AI-dependent anyway).
+- A **NEW APK is only needed for NATIVE changes** (new Capacitor plugin/permission, `capacitor.config`, native code). To ship one: bump `versionCode` in `android/app/build.gradle`, build, copy to Drive, then set `version.json` → `apk.build` to the new versionCode + `apk.url` to the Drive share link + notes, and push. Installed apps then show the in-app "download update" banner (`js/update.js`).
+- Migration note: users upgrading from a pre-v109 (bundled) APK land on the new github.io origin, so localStorage/auth reset once → they log in again and cloud sync restores their data. New users are unaffected.
 
 ## Backend v2 — normalized DB, mirror, admin (APPLIED to live Supabase)
 The app is going multi-user. Alongside the legacy `vault_data` blob (still the local-first source of truth), a **normalized schema** is live in Supabase (project ref `ilmusnuchqlpirywonzx`). SQL artifacts in `backend/`:
