@@ -35,6 +35,8 @@
   .btn:active{transform:scale(.98)} .btn:disabled{opacity:.55; cursor:default}
   .msg{font-size:13px; margin-top:12px; min-height:18px; text-align:center}
   .msg.err{color:var(--red)} .msg.ok{color:var(--good)}
+  .link{display:block; width:100%; margin-top:12px; padding:6px; background:none; border:none; color:var(--accent); font-size:13.5px; font-weight:700; text-align:center}
+  .link:hover{text-decoration:underline}
 
   /* shell */
   .wrap{max-width:1120px; margin:0 auto; padding:clamp(18px,4vw,40px) clamp(14px,3.5vw,28px) 70px}
@@ -128,17 +130,43 @@
 <body>
 
   <div id="login" class="login-wrap">
-    <form class="card" id="login-form" autocomplete="on">
+    <div class="card">
       <div class="brand"><span class="v">🏋️</span> THE VAULT</div>
-      <h1>لوحة التحكّم</h1>
-      <p class="sub">سجّل دخولك بحساب المالك لإدارة كل المستخدمين وبياناتهم.</p>
-      <label for="email">البريد الإلكتروني</label>
-      <input id="email" type="email" placeholder="بريدك" autocomplete="username" required>
-      <label for="pass">كلمة السر</label>
-      <input id="pass" type="password" placeholder="كلمة السر" autocomplete="current-password" required>
-      <button class="btn" id="login-btn" type="submit">تسجيل الدخول</button>
-      <div class="msg" id="login-msg"></div>
-    </form>
+
+      <!-- sign in -->
+      <form id="panel-login" autocomplete="on">
+        <h1>لوحة التحكّم</h1>
+        <p class="sub">سجّل دخولك بحساب المالك — نفس حسابك في التطبيق.</p>
+        <label for="email">البريد الإلكتروني</label>
+        <input id="email" type="email" placeholder="بريدك" autocomplete="username" required>
+        <label for="pass">كلمة السر</label>
+        <input id="pass" type="password" placeholder="كلمة السر" autocomplete="current-password" required>
+        <button class="btn" id="login-btn" type="submit">تسجيل الدخول</button>
+        <div class="msg" id="login-msg"></div>
+        <button type="button" class="link" id="forgot-link">نسيت كلمة السر؟</button>
+      </form>
+
+      <!-- request reset -->
+      <form id="panel-reset" class="hidden" autocomplete="on">
+        <h1>إعادة تعيين كلمة السر</h1>
+        <p class="sub">أدخل بريدك ونرسل لك رابط إعادة التعيين.</p>
+        <label for="reset-email">البريد الإلكتروني</label>
+        <input id="reset-email" type="email" placeholder="بريدك" autocomplete="username" required>
+        <button class="btn" id="reset-btn" type="submit">إرسال الرابط</button>
+        <div class="msg" id="reset-msg"></div>
+        <button type="button" class="link" id="reset-back">‹ رجوع لتسجيل الدخول</button>
+      </form>
+
+      <!-- set new password (arrived via reset link) -->
+      <form id="panel-newpw" class="hidden" autocomplete="on">
+        <h1>اختر كلمة سر جديدة</h1>
+        <p class="sub">أدخل كلمة السر الجديدة لحسابك.</p>
+        <label for="newpw">كلمة السر الجديدة</label>
+        <input id="newpw" type="password" placeholder="٦ أحرف على الأقل" autocomplete="new-password" required>
+        <button class="btn" id="newpw-btn" type="submit">حفظ وتسجيل الدخول</button>
+        <div class="msg" id="newpw-msg"></div>
+      </form>
+    </div>
   </div>
 
   <div id="dash" class="wrap hidden">
@@ -209,7 +237,7 @@
       }catch(e){ msg.className='msg err'; msg.textContent='تعذّر التحقّق: '+(e.message||e); showLogin(); }
     }
 
-    $('#login-form').addEventListener('submit',async function(e){
+    $('#panel-login').addEventListener('submit',async function(e){
       e.preventDefault();
       var btn=$('#login-btn'),msg=$('#login-msg');
       btn.disabled=true; msg.className='msg'; msg.textContent='جارٍ تسجيل الدخول…';
@@ -218,6 +246,38 @@
       if(r.error){msg.className='msg err'; msg.textContent='فشل الدخول: '+r.error.message; return;}
       msg.className='msg ok'; msg.textContent='تم — جارٍ التحقّق…'; checkAdminAndLoad();
     });
+
+    // ---- panel switching + password reset ----
+    function showPanel(id){ ['panel-login','panel-reset','panel-newpw'].forEach(function(p){ $('#'+p).classList.toggle('hidden', p!==id); }); }
+    $('#forgot-link').addEventListener('click',function(){ showPanel('panel-reset'); var e=$('#reset-email'); if(e) e.value=$('#email').value.trim(); });
+    $('#reset-back').addEventListener('click',function(){ showPanel('panel-login'); });
+
+    $('#panel-reset').addEventListener('submit',async function(e){
+      e.preventDefault();
+      var btn=$('#reset-btn'),msg=$('#reset-msg'),email=$('#reset-email').value.trim();
+      if(!email){ msg.className='msg err'; msg.textContent='أدخل بريدك'; return; }
+      btn.disabled=true; msg.className='msg'; msg.textContent='جارٍ الإرسال…';
+      var redirect=location.href.split('#')[0].split('?')[0];
+      var r=await sb.auth.resetPasswordForEmail(email,{redirectTo:redirect});
+      btn.disabled=false;
+      if(r.error){ msg.className='msg err'; msg.textContent='تعذّر: '+r.error.message; return; }
+      msg.className='msg ok'; msg.textContent='تم ✓ تفقّد بريد '+email+' واضغط رابط إعادة التعيين.';
+    });
+
+    $('#panel-newpw').addEventListener('submit',async function(e){
+      e.preventDefault();
+      var btn=$('#newpw-btn'),msg=$('#newpw-msg'),pw=$('#newpw').value;
+      if(pw.length<6){ msg.className='msg err'; msg.textContent='٦ أحرف على الأقل'; return; }
+      btn.disabled=true; msg.className='msg'; msg.textContent='جارٍ الحفظ…';
+      var r=await sb.auth.updateUser({password:pw});
+      btn.disabled=false;
+      if(r.error){ msg.className='msg err'; msg.textContent='تعذّر: '+r.error.message; return; }
+      msg.className='msg ok'; msg.textContent='تم ✓ جارٍ الدخول…'; checkAdminAndLoad();
+    });
+
+    // Arrived via the reset link → let the user set a new password.
+    sb.auth.onAuthStateChange(function(event){ if(event==='PASSWORD_RECOVERY'){ showLogin(); showPanel('panel-newpw'); } });
+
     $('#logout').addEventListener('click',async function(){await sb.auth.signOut(); location.reload();});
     $('#refresh').addEventListener('click',loadOverview);
 
@@ -347,7 +407,11 @@
     }
     function sec(title,body){return '<div class="dsec"><div class="sec-head"><h3>'+title+'</h3><span class="rule"></span></div>'+body+'</div>';}
 
-    (async function(){ var s=await sb.auth.getSession(); if(s&&s.data&&s.data.session) checkAdminAndLoad(); else showLogin(); })();
+    (async function(){
+      if(location.hash.indexOf('type=recovery')!==-1){ showLogin(); showPanel('panel-newpw'); return; }
+      var s=await sb.auth.getSession();
+      if(s&&s.data&&s.data.session) checkAdminAndLoad(); else showLogin();
+    })();
   })();
   </script>
 </body>
