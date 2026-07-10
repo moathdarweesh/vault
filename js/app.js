@@ -682,6 +682,21 @@ const I18N = {
     no_plan_today: 'Rest day',
     no_plan_today_sub: 'No exercises scheduled for today.',
     start_workout: 'Start Workout',
+    exercise_word: 'Exercise',
+    of_word: 'of',
+    last_time: 'Last time',
+    first_time_no_record: 'First time — no record yet',
+    resting: 'Rest',
+    skip: 'Skip',
+    previous: 'Previous',
+    next: 'Next',
+    finish: 'Finish',
+    mark_set_done: 'Mark set done',
+    workout_summary: 'Workout Summary',
+    save_session: 'Save Session',
+    total_volume: 'Total Volume',
+    back_to_workout: 'Back to workout',
+    no_sets_to_save: 'Log at least one set first',
     edit_day: 'Edit Day',
     logged: 'Logged',
     logged_today: 'logged for this day',
@@ -1119,6 +1134,21 @@ const I18N = {
     no_plan_today: 'يوم راحة',
     no_plan_today_sub: 'لا توجد تمارين مجدولة اليوم.',
     start_workout: 'ابدأ التمرين',
+    exercise_word: 'تمرين',
+    of_word: 'من',
+    last_time: 'آخر مرة',
+    first_time_no_record: 'أول مرة — لا يوجد سجل بعد',
+    resting: 'راحة',
+    skip: 'تخطّي',
+    previous: 'السابق',
+    next: 'التالي',
+    finish: 'إنهاء',
+    mark_set_done: 'إنهاء المجموعة',
+    workout_summary: 'ملخّص الجلسة',
+    save_session: 'حفظ الجلسة',
+    total_volume: 'إجمالي الحِمل',
+    back_to_workout: 'العودة للتمرين',
+    no_sets_to_save: 'سجّل مجموعة واحدة على الأقل',
     edit_day: 'تعديل اليوم',
     logged: 'مُسجَّل',
     logged_today: 'مُسجَّل لهذا اليوم',
@@ -1440,6 +1470,8 @@ function navigate(view, context = {}, opts = {}) {
   // navigation so it never lingers over other views (renderFood re-mounts it).
   if (typeof unmountFoodAiBar === 'function') unmountFoodAiBar();
   document.querySelector('.img-lightbox')?.remove();
+  // Tear down the guided-workout rest timer so it never lingers over other views.
+  if (typeof clearRestTimer === 'function') clearRestTimer();
 
   $$('.view').forEach((v) => v.classList.toggle('active', v.dataset.view === view));
 
@@ -1535,6 +1567,7 @@ function renderView(view) {
     case 'supplements': renderSupplements(el); break;
     case 'foodlog': renderFoodLog(el); break;
     case 'session-day': renderSessionDay(el); break;
+    case 'session-run': renderSessionRun(el); break;
     case 'personal-records': renderPersonalRecords(el); break;
   }
   // Give every icon-only back button an accessible name, in one place.
@@ -1942,7 +1975,7 @@ function renderHome(el) {
 
     ${recentHtml}
 
-    <div style="text-align:center;opacity:.4;font-size:12px;margin:24px 0 8px;letter-spacing:.5px">THE VAULT · v103</div>
+    <div style="text-align:center;opacity:.4;font-size:12px;margin:24px 0 8px;letter-spacing:.5px">THE VAULT · v104</div>
   `;
 
   // Count-up the hero/stat numerals (sleep is stored ×10 for one decimal)
@@ -4896,6 +4929,11 @@ function renderSessionDay(el) {
       </div>
     </div>
 
+    ${totalEx > 0
+      ? `<button type="button" class="sd-start-run" id="sd-start-run">${icon('dumbbell', 20)}<span>${t('start_workout')}</span></button>`
+      : ''
+    }
+
     ${totalEx === 0
       ? emptyState({ iconName: 'dumbbell', title: t('rest_day'), text: t('no_plan_today_sub') })
       : `<div class="sd-list">${exObjs.map(renderExerciseCard).join('')}</div>`
@@ -4903,6 +4941,12 @@ function renderSessionDay(el) {
 
     <button type="button" class="btn btn-ghost btn-block" id="sd-add-ex" style="margin-top:12px">${icon('plus', 16)} ${t('add_exercise')}</button>
   `;
+
+  // "Start Workout" → guided one-exercise-at-a-time mode. Carry the chosen date
+  // and unit so the run logs against the same day/unit the user picked here.
+  $('#sd-start-run', el)?.addEventListener('click', () =>
+    navigate('session-run', { dow, date: viewContext.sdDate, unit: viewContext.sdUnit })
+  );
 
   // ----- Bindings -----
 
@@ -5054,6 +5098,335 @@ function renderSessionDay(el) {
       renderSessionDay(el);
     })
   );
+}
+
+// ==========================================================================
+// GUIDED WORKOUT (session-run) — one exercise at a time, with rest timer
+// ==========================================================================
+
+// Default rest between sets, in seconds.
+const REST_DEFAULT_SEC = 90;
+
+// A single floating rest-timer bar lives on `.app` (not on the animated `.view`,
+// so a view transform can't break its fixed positioning) and survives view
+// re-renders. navigate() calls clearRestTimer() to tear it down.
+let __restTimer = null;
+function clearRestTimer() {
+  if (__restTimer) { clearInterval(__restTimer.id); __restTimer = null; }
+  document.querySelector('.rest-timer')?.remove();
+}
+function startRestTimer(seconds) {
+  clearRestTimer();
+  const app = document.querySelector('.app');
+  if (!app) return;
+  let remaining = Math.max(1, Math.round(seconds));
+  const fmt = (s) => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
+  const bar = document.createElement('div');
+  bar.className = 'rest-timer';
+  bar.setAttribute('role', 'timer');
+  bar.innerHTML = `
+    <button type="button" class="rest-timer-adj" data-rest-minus aria-label="−15s">−15</button>
+    <div class="rest-timer-mid">
+      <div class="rest-timer-label">${icon('clock', 14)} ${t('resting')}</div>
+      <div class="rest-timer-count num">${fmt(remaining)}</div>
+    </div>
+    <button type="button" class="rest-timer-adj" data-rest-plus aria-label="+15s">+15</button>
+    <button type="button" class="rest-timer-skip" data-rest-skip>${t('skip')}</button>
+  `;
+  app.appendChild(bar);
+  const countEl = bar.querySelector('.rest-timer-count');
+  const id = setInterval(() => {
+    remaining -= 1;
+    if (remaining <= 0) {
+      clearRestTimer();
+      try { if (navigator.vibrate) navigator.vibrate([120, 60, 120]); } catch (_) {}
+      return;
+    }
+    countEl.textContent = fmt(remaining);
+  }, 1000);
+  __restTimer = { id };
+  bar.querySelector('[data-rest-minus]').addEventListener('click', () => {
+    remaining = Math.max(1, remaining - 15); countEl.textContent = fmt(remaining);
+  });
+  bar.querySelector('[data-rest-plus]').addEventListener('click', () => {
+    remaining += 15; countEl.textContent = fmt(remaining);
+  });
+  bar.querySelector('[data-rest-skip]').addEventListener('click', () => clearRestTimer());
+}
+
+function renderSessionRun(el) {
+  const dow = Number(viewContext.dow);
+  const plan = DB.plan.get() || {};
+  const day = plan[String(dow)];
+  const exerciseById = Object.fromEntries(DB.exercises.list().map((e) => [e.id, e]));
+  const exObjs = (day?.exerciseIds || []).map((id) => exerciseById[id]).filter(Boolean);
+  const totalEx = exObjs.length;
+
+  // Persist run state across re-renders (until navigation replaces viewContext).
+  if (!viewContext.runDate) viewContext.runDate = viewContext.date || todayISO();
+  if (!viewContext.runUnit) viewContext.runUnit = viewContext.unit || (DB.prefs.get().unit) || 'kg';
+  if (viewContext.runIdx == null) viewContext.runIdx = 0;
+  if (!viewContext.runState) viewContext.runState = {};
+  if (!viewContext.runView) viewContext.runView = 'run';
+
+  function convDisplay(kg) {
+    if (viewContext.runUnit === 'lb') return Math.round(kg * KG_TO_LB * 2) / 2;
+    return Math.round(kg * 100) / 100;
+  }
+  function convToKg(value) {
+    if (viewContext.runUnit === 'lb') return Math.round((Number(value) / KG_TO_LB) * 100) / 100;
+    return Number(value);
+  }
+
+  // Lazily init per-exercise sets: resume today's logged session, else pre-fill
+  // from the last session's numbers (as targets), else one empty row.
+  function runInit(exId) {
+    if (viewContext.runState[exId]) return viewContext.runState[exId];
+    const today = DB.sessions.listByExercise(exId).find((s) => s.date === viewContext.runDate);
+    const last = DB.sessions.lastForExercise(exId);
+    let sets, savedId = null;
+    if (today) {
+      sets = today.sets.map((s) => ({ reps: s.reps, weight: s.weight, done: true }));
+      savedId = today.id;
+    } else if (last) {
+      sets = last.sets.map((s) => ({ reps: s.reps, weight: s.weight, done: false }));
+    } else {
+      sets = [{ reps: '', weight: '', done: false }];
+    }
+    viewContext.runState[exId] = { sets, savedSessionId: savedId };
+    return viewContext.runState[exId];
+  }
+
+  // Persist one exercise's sets to the DB (add or update by date). Idempotent —
+  // called when leaving an exercise and again on the final save, so a workout is
+  // never lost if the app is closed mid-session.
+  function commitExercise(exId) {
+    const st = viewContext.runState[exId];
+    if (!st) return false;
+    const cleaned = st.sets
+      .map((s) => ({ reps: Number(s.reps) || 0, weight: Number(s.weight) || 0 }))
+      .filter((s) => s.reps > 0 || s.weight > 0);
+    if (cleaned.length === 0) return false;
+    let existingId = st.savedSessionId;
+    if (!existingId) {
+      const existing = DB.sessions.listByExercise(exId).find((s) => s.date === viewContext.runDate);
+      if (existing) existingId = existing.id;
+    }
+    if (existingId && DB.sessions.update(existingId, { date: viewContext.runDate, sets: cleaned })) {
+      st.savedSessionId = existingId;
+    } else {
+      const created = DB.sessions.add({ exerciseId: exId, date: viewContext.runDate, sets: cleaned });
+      st.savedSessionId = created.id;
+    }
+    return true;
+  }
+
+  function lastPerfLine(exId) {
+    const last = DB.sessions.lastForExercise(exId);
+    if (!last) return `<div class="run-last run-last--empty">${t('first_time_no_record')}</div>`;
+    const u = viewContext.runUnit.toUpperCase();
+    const parts = last.sets
+      .map((s) => `${fmtNum(s.reps)}×${fmtNum(convDisplay(s.weight))}`)
+      .join('  ·  ');
+    return `<div class="run-last">${t('last_time')}: <span class="run-last-sets num">${parts}</span> <span class="run-last-unit">${u}</span></div>`;
+  }
+
+  // Guard: plan emptied while away.
+  if (totalEx === 0) {
+    el.innerHTML = `
+      <div class="detail-top">
+        <button class="back-btn" data-back aria-label="${escapeHtml(t('back'))}">${icon('back', 20)}</button>
+        <div class="detail-top-title">${escapeHtml(dayName(dow, true))}</div>
+      </div>
+      ${emptyState({ iconName: 'dumbbell', title: t('rest_day'), text: t('no_plan_today_sub') })}
+    `;
+    return;
+  }
+
+  // ----- SUMMARY SCREEN -----
+  if (viewContext.runView === 'summary') {
+    let totalSets = 0, totalVolume = 0;
+    const rowsHtml = exObjs.map((ex) => {
+      const st = runInit(ex.id);
+      const done = st.sets
+        .map((s) => ({ reps: Number(s.reps) || 0, weight: Number(s.weight) || 0 }))
+        .filter((s) => s.reps > 0 || s.weight > 0);
+      if (done.length === 0) return '';
+      done.forEach((s) => { totalSets += 1; totalVolume += s.reps * s.weight; });
+      const setsStr = done
+        .map((s) => `${fmtNum(s.reps)}×${fmtNum(convDisplay(s.weight))}`)
+        .join('  ·  ');
+      return `
+        <div class="run-sum-ex">
+          <div class="run-sum-name">${escapeHtml(ex.name)}</div>
+          <div class="run-sum-sets num">${setsStr} <span class="run-sum-unit">${viewContext.runUnit.toUpperCase()}</span></div>
+        </div>`;
+    }).join('');
+
+    const nothing = totalSets === 0;
+    el.innerHTML = `
+      <div class="detail-top">
+        <button class="back-btn" data-run-back aria-label="${escapeHtml(t('back_to_workout'))}">${icon('back', 20)}</button>
+        <div class="detail-top-title">${escapeHtml(t('workout_summary'))}</div>
+      </div>
+      <div class="page-header">
+        <h1 class="page-title">${escapeHtml(t('workout_summary'))}</h1>
+        <p class="page-subtitle">${escapeHtml(dayName(dow, true))} · ${escapeHtml(day?.name || '')}</p>
+      </div>
+      ${nothing
+        ? emptyState({ iconName: 'dumbbell', title: t('no_sessions'), text: t('no_sets_to_save') })
+        : `<div class="run-summary">
+             ${rowsHtml}
+             <div class="run-sum-totals">
+               <div class="run-sum-total"><span class="run-sum-total-n num">${fmtNum(totalSets)}</span><span class="run-sum-total-l">${t('total_sets')}</span></div>
+               <div class="run-sum-total"><span class="run-sum-total-n num">${fmtNum(Math.round(totalVolume))}</span><span class="run-sum-total-l">${t('total_volume')} (${viewContext.runUnit.toUpperCase()})</span></div>
+             </div>
+           </div>`
+      }
+      <button type="button" class="btn btn-primary btn-block" data-run-save style="margin-top:16px">${icon('check', 16)} ${t('save_session')}</button>
+    `;
+
+    $('[data-run-back]', el)?.addEventListener('click', () => {
+      viewContext.runView = 'run';
+      renderSessionRun(el);
+    });
+    $('[data-run-save]', el)?.addEventListener('click', () => {
+      let saved = 0;
+      exObjs.forEach((ex) => { if (commitExercise(ex.id)) saved += 1; });
+      if (saved === 0) { showToast(t('no_sets_to_save')); return; }
+      // Force the underlying session-day screens to re-init from the DB so the
+      // freshly-logged sessions show as "logged" when we return.
+      navStack.forEach((entry) => {
+        if (entry.view === 'session-day' && entry.context) entry.context.sdState = {};
+      });
+      showToast(t('session_saved'));
+      if (!goBack()) navigate('session-day', { dow });
+    });
+    return;
+  }
+
+  // ----- RUN SCREEN (current exercise) -----
+  const idx = Math.min(viewContext.runIdx, totalEx - 1);
+  viewContext.runIdx = idx;
+  const ex = exObjs[idx];
+  const st = runInit(ex.id);
+  const isLast = idx === totalEx - 1;
+
+  const url = exerciseImgSrc(ex);
+  const machineSvg = ex.machineType ? machineSvgFor(ex.machineType) : '';
+  let mediaHtml;
+  if (machineSvg) {
+    mediaHtml = `<div class="run-ex-media machine-bg${url ? ' sd-thumb-zoom' : ''}"${url ? ` data-thumb-src="${escapeHtml(url)}"` : ''}>${machineSvg}${url ? `<img src="${escapeHtml(url)}" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="this.remove()">` : ''}</div>`;
+  } else if (url) {
+    mediaHtml = `<div class="run-ex-media sd-thumb-zoom" data-thumb-src="${escapeHtml(url)}" style="background-image:url('${escapeHtml(url)}')"></div>`;
+  } else {
+    mediaHtml = `<div class="run-ex-media fallback">${escapeHtml(initialsOf(ex.name))}</div>`;
+  }
+
+  const setsRows = st.sets.map((s, i) => {
+    const wDisplay = (s.weight === '' || s.weight == null) ? '' : convDisplay(Number(s.weight));
+    return `
+      <div class="run-set-row${s.done ? ' done' : ''}" data-set="${i}">
+        <div class="run-set-n num">${i + 1}</div>
+        <input type="number" inputmode="numeric" step="1" min="0" placeholder="0" value="${s.reps || ''}" data-field="reps" aria-label="${t('reps')}">
+        <input type="number" inputmode="decimal" step="0.5" min="0" placeholder="0" value="${wDisplay || ''}" data-field="weight" aria-label="${viewContext.runUnit}">
+        <button type="button" class="run-set-done${s.done ? ' done' : ''}" data-done aria-label="${escapeHtml(t('mark_set_done'))}" aria-pressed="${!!s.done}">${icon('check', 16)}</button>
+      </div>`;
+  }).join('');
+
+  el.innerHTML = `
+    <div class="detail-top">
+      <button class="back-btn" data-back aria-label="${escapeHtml(t('back'))}">${icon('back', 20)}</button>
+      <div class="detail-top-title">${escapeHtml(day?.name || dayName(dow, true))}</div>
+    </div>
+
+    <div class="run-progress">
+      <div class="run-progress-track"><span style="width:${Math.round(((idx + 1) / totalEx) * 100)}%"></span></div>
+      <div class="run-progress-label">${t('exercise_word')} <span class="num">${fmtNum(idx + 1)}</span> ${t('of_word')} <span class="num">${fmtNum(totalEx)}</span></div>
+    </div>
+
+    <div class="run-ex">
+      ${mediaHtml}
+      <h1 class="run-ex-name">${escapeHtml(ex.name)}</h1>
+      ${lastPerfLine(ex.id)}
+    </div>
+
+    <div class="run-sets-head">
+      <div>${t('set_n')}</div>
+      <div>${t('reps')}</div>
+      <div>${viewContext.runUnit.toUpperCase()}</div>
+      <div></div>
+    </div>
+    <div class="run-sets">${setsRows}</div>
+    <button type="button" class="btn btn-ghost run-addset" data-addset>${icon('plus', 14)} ${t('add_set')}</button>
+
+    <div class="run-nav">
+      <button type="button" class="btn btn-ghost run-prev" data-prev ${idx === 0 ? 'disabled' : ''}>${icon('back', 16)} ${t('previous')}</button>
+      <button type="button" class="btn btn-primary run-next" data-next>${isLast ? `${t('finish')} ${icon('check', 16)}` : `${t('next')} ${icon('chevronRight', 16)}`}</button>
+    </div>
+  `;
+
+  // Photo zoom
+  el.querySelectorAll('.sd-thumb-zoom').forEach((thumb) => {
+    thumb.setAttribute('role', 'button');
+    thumb.setAttribute('tabindex', '0');
+    if (!thumb.getAttribute('aria-label')) thumb.setAttribute('aria-label', t('view_photo'));
+    const open = (e) => { e.stopPropagation(); openImageLightbox(thumb.dataset.thumbSrc, ex.name); };
+    thumb.addEventListener('click', open);
+    thumb.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); open(e); }
+    });
+  });
+
+  // Set inputs → write to state as the user types.
+  el.querySelectorAll('.run-set-row').forEach((row) => {
+    const i = Number(row.dataset.set);
+    row.querySelectorAll('input').forEach((inp) => {
+      inp.addEventListener('input', () => {
+        const v = inp.value;
+        if (inp.dataset.field === 'weight') {
+          st.sets[i].weight = v === '' ? '' : convToKg(v);
+        } else {
+          st.sets[i].reps = v === '' ? '' : Number(v);
+        }
+      });
+    });
+    // ✓ Done → mark the set complete and start the rest timer.
+    row.querySelector('[data-done]')?.addEventListener('click', () => {
+      st.sets[i].done = !st.sets[i].done;
+      row.classList.toggle('done', st.sets[i].done);
+      row.querySelector('[data-done]').classList.toggle('done', st.sets[i].done);
+      row.querySelector('[data-done]').setAttribute('aria-pressed', String(st.sets[i].done));
+      if (st.sets[i].done) startRestTimer(REST_DEFAULT_SEC);
+      else clearRestTimer();
+    });
+  });
+
+  $('[data-addset]', el)?.addEventListener('click', () => {
+    const last = st.sets[st.sets.length - 1];
+    const keep = (v) => (v !== '' && v != null ? v : '');
+    st.sets.push({ reps: keep(last?.reps), weight: keep(last?.weight), done: false });
+    renderSessionRun(el);
+  });
+
+  $('[data-prev]', el)?.addEventListener('click', () => {
+    if (idx === 0) return;
+    clearRestTimer();
+    commitExercise(ex.id);
+    viewContext.runIdx = idx - 1;
+    renderSessionRun(el);
+  });
+
+  $('[data-next]', el)?.addEventListener('click', () => {
+    clearRestTimer();
+    commitExercise(ex.id);
+    if (isLast) {
+      viewContext.runView = 'summary';
+    } else {
+      viewContext.runIdx = idx + 1;
+    }
+    renderSessionRun(el);
+  });
 }
 
 // ==========================================================================
