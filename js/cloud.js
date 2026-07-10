@@ -222,6 +222,8 @@
     setDirty(s.user.id, true); // mark unpushed local changes (persists offline)
     clearTimeout(pushTimer);
     pushTimer = setTimeout(() => { push().catch(() => {}); }, 1200);
+    // Also project the change into the normalized tables (best-effort mirror).
+    if (window.Tables && Tables.scheduleProject) Tables.scheduleProject();
   }
 
   // Replace local data with the cloud blob — but NEVER overwrite a non-empty
@@ -295,5 +297,6 @@
     signUp, signIn, signOut, changePassword, resetPassword, onPasswordRecovery,
     pull, push, onLocalChange,
     resolveOnLogin, chooseCloud, chooseLocal, bootSync, applyRemote,
+    getClient: sb, // exposed for the tables.js "mirror" projection (RLS-scoped)
   };
 })();
