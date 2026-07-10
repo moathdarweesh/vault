@@ -549,6 +549,7 @@ const I18N = {
     sync_now: 'Sync now',
     sync_now_sub: 'Pull the latest and push your changes',
     synced: 'Synced',
+    cloud_backup_kept: 'Your cloud backup was kept safe — the empty data did not sync.',
     logout: 'Log out',
     logout_sub: 'Stop syncing on this device',
     logout_confirm: 'Your data stays on this device. Sign in again anytime to resume syncing.',
@@ -1007,6 +1008,7 @@ const I18N = {
     sync_now: 'زامِن الآن',
     sync_now_sub: 'اسحب آخر التغييرات وارفع تعديلاتك',
     synced: 'تمت المزامنة',
+    cloud_backup_kept: 'نسختك الاحتياطية في السحابة محفوظة — لم تُزامَن البيانات الفارغة.',
     logout: 'تسجيل الخروج',
     logout_sub: 'إيقاف المزامنة على هذا الجهاز',
     logout_confirm: 'بياناتك تبقى على هذا الجهاز. سجّل دخول مجدداً في أي وقت لاستئناف المزامنة.',
@@ -1522,6 +1524,13 @@ window.addEventListener('popstate', () => {
   if (goBack()) { try { history.pushState({ depth: navStack.length }, ''); } catch (_) {} }
 });
 
+// The cloud layer blocked a push that would have wiped a data-ful cloud backup
+// with an empty local blob (e.g. right after a Reset). Reassure the user their
+// backup is intact instead of leaving the divergence silent.
+window.addEventListener('vault:push-blocked', () => {
+  try { showToast(t('cloud_backup_kept')); } catch (_) {}
+});
+
 // Android hardware back button via the @capacitor/app plugin → same goBack(),
 // and exit the app only at the root screen.
 (function wireHardwareBack() {
@@ -1977,7 +1986,7 @@ function renderHome(el) {
 
     ${recentHtml}
 
-    <div style="text-align:center;opacity:.4;font-size:12px;margin:24px 0 8px;letter-spacing:.5px">THE VAULT · v105</div>
+    <div style="text-align:center;opacity:.4;font-size:12px;margin:24px 0 8px;letter-spacing:.5px">THE VAULT · v106</div>
   `;
 
   // Count-up the hero/stat numerals (sleep is stored ×10 for one decimal)

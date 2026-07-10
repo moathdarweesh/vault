@@ -74,15 +74,28 @@
       return true;
     } catch (_) { return false; }
   }
+  // Does a parsed blob hold real USER data (vs a fresh install / a post-reset
+  // default state)? A reset/default blob still has the seeded exercise catalog
+  // and an empty plan, so "has keys" is NOT enough — we look for user-generated
+  // content: logged sessions/cardio/sleep, foods, food/supplement logs, own
+  // supplements, or a custom exercise. Used both to detect a real local store
+  // AND to protect a data-ful cloud backup from being overwritten by an empty one.
+  function blobHasUserData(b) {
+    try {
+      if (!b || typeof b !== 'object') return false;
+      return !!(
+        (b.sessions && b.sessions.length) || (b.cardio && b.cardio.length) ||
+        (b.sleep && b.sleep.length) || (b.foods && b.foods.length) ||
+        (b.foodLogs && Object.keys(b.foodLogs).length) ||
+        (b.supplements && b.supplements.length) ||
+        (b.supplementLogs && Object.keys(b.supplementLogs).length) ||
+        (b.exercises && b.exercises.some((e) => e && e.isCustom))
+      );
+    } catch (_) { return false; }
+  }
   // Does local hold real user data (vs a fresh/empty install)?
   function localHasData() {
-    try {
-      const s = JSON.parse(exportRaw() || '{}');
-      return (s.sessions && s.sessions.length) || (s.cardio && s.cardio.length) ||
-        (s.sleep && s.sleep.length) || (s.foodLogs && Object.keys(s.foodLogs).length) ||
-        (s.supplements && s.supplements.length) ||
-        (s.exercises && s.exercises.some((e) => e.isCustom));
-    } catch (_) { return false; }
+    try { return blobHasUserData(JSON.parse(exportRaw() || '{}')); } catch (_) { return false; }
   }
 
   // ---- auth ----------------------------------------------------------------
@@ -169,11 +182,27 @@
     if (!data) return null;
     return { data: data.data || null, updatedAt: data.updated_at || '' };
   }
-  async function push() {
+  async function push(opts) {
+    const force = !!(opts && opts.force);
     const c = sb(); const s = await getSession();
     if (!c || !s) return;
     const raw = exportRaw();
     let blob; try { blob = JSON.parse(raw || '{}'); } catch (_) { blob = {}; }
+    // SAFETY GUARD (data-loss protection): never SILENTLY overwrite a cloud backup
+    // that holds real user data with a local blob that holds NONE. That is exactly
+    // what a "Reset all data", an import of an empty/other backup, or a corrupted
+    // store would otherwise do — destroying the user's only backup 1.2s later.
+    // We still allow it when the user EXPLICITLY forces it (chose "my device wins"),
+    // and it auto-allows again the moment the local store has real data. The dirty
+    // flag is left set so a later data-ful change can still sync.
+    if (!force && !blobHasUserData(blob)) {
+      let remote;
+      try { remote = await pull(); } catch (_) { remote = undefined; }
+      if (remote && blobHasUserData(remote.data)) {
+        try { if (typeof window !== 'undefined') window.dispatchEvent(new CustomEvent('vault:push-blocked')); } catch (_) {}
+        return 'blocked';
+      }
+    }
     const iso = new Date().toISOString();
     const { error } = await c.from(TABLE).upsert(
       { user_id: s.user.id, data: blob, updated_at: iso },
@@ -236,7 +265,8 @@
   }
   async function chooseLocal() {
     const s = await getSession(); if (!s) return;
-    await push(); markLinked(s.user.id);
+    // Explicit user override ("my device wins") — force past the empty-blob guard.
+    await push({ force: true }); markLinked(s.user.id);
   }
 
   // Background sync on app boot for an already-linked, logged-in device. Uses a
