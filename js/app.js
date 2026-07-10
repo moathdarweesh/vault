@@ -692,6 +692,7 @@ const I18N = {
     next: 'Next',
     finish: 'Finish',
     mark_set_done: 'Mark set done',
+    done_col: 'Done',
     workout_summary: 'Workout Summary',
     save_session: 'Save Session',
     total_volume: 'Total Volume',
@@ -1144,6 +1145,7 @@ const I18N = {
     next: 'التالي',
     finish: 'إنهاء',
     mark_set_done: 'إنهاء المجموعة',
+    done_col: 'تمّ',
     workout_summary: 'ملخّص الجلسة',
     save_session: 'حفظ الجلسة',
     total_volume: 'إجمالي الحِمل',
@@ -1975,7 +1977,7 @@ function renderHome(el) {
 
     ${recentHtml}
 
-    <div style="text-align:center;opacity:.4;font-size:12px;margin:24px 0 8px;letter-spacing:.5px">THE VAULT · v104</div>
+    <div style="text-align:center;opacity:.4;font-size:12px;margin:24px 0 8px;letter-spacing:.5px">THE VAULT · v105</div>
   `;
 
   // Count-up the hero/stat numerals (sleep is stored ×10 for one decimal)
@@ -5186,7 +5188,9 @@ function renderSessionRun(el) {
     const last = DB.sessions.lastForExercise(exId);
     let sets, savedId = null;
     if (today) {
-      sets = today.sets.map((s) => ({ reps: s.reps, weight: s.weight, done: true }));
+      // Prefill values from today's logged session, but the "done" check is a
+      // live in-session action — always start unchecked when entering the run.
+      sets = today.sets.map((s) => ({ reps: s.reps, weight: s.weight, done: false }));
       savedId = today.id;
     } else if (last) {
       sets = last.sets.map((s) => ({ reps: s.reps, weight: s.weight, done: false }));
@@ -5355,7 +5359,7 @@ function renderSessionRun(el) {
       <div>${t('set_n')}</div>
       <div>${t('reps')}</div>
       <div>${viewContext.runUnit.toUpperCase()}</div>
-      <div></div>
+      <div class="run-head-done">${t('done_col')}</div>
     </div>
     <div class="run-sets">${setsRows}</div>
     <button type="button" class="btn btn-ghost run-addset" data-addset>${icon('plus', 14)} ${t('add_set')}</button>

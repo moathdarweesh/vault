@@ -3650,7 +3650,8 @@ body[dir="rtl"] .planner-day-head { text-align: right; }
   padding: 0 4px;
 }
 .run-sets-head div:nth-child(2),
-.run-sets-head div:nth-child(3) { text-align: center; }
+.run-sets-head div:nth-child(3),
+.run-sets-head .run-head-done { text-align: center; }
 .run-sets { display: flex; flex-direction: column; gap: 8px; }
 .run-set-row {
   display: grid;
