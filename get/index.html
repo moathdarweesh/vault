@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>تحميل THE VAULT</title>
+  <meta name="theme-color" content="#000000">
+  <meta property="og:title" content="THE VAULT — تطبيق اللياقة">
+  <meta property="og:description" content="حمّل تطبيق THE VAULT لتتبّع تمارينك وتغذيتك ونومك.">
+  <link rel="icon" type="image/svg+xml" href="../icons/icon.svg">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700;800;900&display=swap" rel="stylesheet">
+  <style>
+    :root{ --accent:#5b8def; --bg:#000; --card:#101012; --text:#fff; --dim:#8c8c8c; --border:rgba(255,255,255,.1); }
+    *{ box-sizing:border-box; margin:0; padding:0; }
+    html,body{ height:100%; }
+    body{
+      background:var(--bg); color:var(--text);
+      font-family:'Tajawal',system-ui,-apple-system,'Segoe UI',sans-serif;
+      display:grid; place-items:center; min-height:100dvh; padding:24px;
+      overflow:hidden; position:relative;
+    }
+    body::before{
+      content:''; position:fixed; inset:0; z-index:0; pointer-events:none;
+      background:
+        radial-gradient(60% 50% at 50% 0%, rgba(91,141,239,.22), transparent 70%),
+        radial-gradient(50% 40% at 50% 100%, rgba(91,141,239,.10), transparent 70%);
+    }
+    .card{
+      position:relative; z-index:1; width:100%; max-width:420px; text-align:center;
+      background:linear-gradient(180deg, rgba(24,24,28,.9), rgba(12,12,14,.9));
+      border:1px solid var(--border); border-radius:28px;
+      padding:40px 28px 32px; backdrop-filter:blur(20px);
+      box-shadow:0 30px 80px rgba(0,0,0,.6);
+      animation:rise .5s cubic-bezier(.2,.8,.2,1) both;
+    }
+    @keyframes rise{ from{ opacity:0; transform:translateY(16px); } to{ opacity:1; transform:none; } }
+    .logo{
+      width:76px; height:76px; margin:0 auto 20px; border-radius:22px;
+      display:grid; place-items:center;
+      background:radial-gradient(120% 120% at 50% 0%, rgba(91,141,239,.35), rgba(91,141,239,.08));
+      border:1px solid rgba(91,141,239,.4);
+    }
+    .logo svg{ width:40px; height:40px; color:var(--accent); }
+    h1{ font-size:15px; font-weight:800; letter-spacing:6px; color:var(--dim); margin-bottom:4px; }
+    .brand{ font-size:30px; font-weight:900; letter-spacing:8px; margin-bottom:22px; }
+    .status{ display:flex; align-items:center; justify-content:center; gap:10px; color:var(--dim); font-size:15px; font-weight:500; margin-bottom:26px; min-height:22px; }
+    .spinner{ width:18px; height:18px; border:2px solid rgba(255,255,255,.18); border-top-color:var(--accent); border-radius:50%; animation:spin .8s linear infinite; }
+    @keyframes spin{ to{ transform:rotate(360deg); } }
+    .btn{
+      display:inline-flex; align-items:center; justify-content:center; gap:10px;
+      width:100%; padding:16px 22px; border-radius:16px; border:none;
+      background:var(--accent); color:#fff; font-family:inherit; font-size:17px; font-weight:800;
+      cursor:pointer; text-decoration:none; transition:transform .12s ease, filter .2s ease;
+    }
+    .btn:active{ transform:scale(.97); }
+    .btn:hover{ filter:brightness(1.08); }
+    .btn svg{ width:20px; height:20px; }
+    .meta{ margin-top:16px; font-size:13px; color:var(--dim); font-weight:500; }
+    .note{
+      margin-top:20px; padding-top:18px; border-top:1px solid var(--border);
+      font-size:12.5px; color:var(--dim); line-height:1.7; text-align:start;
+    }
+    .note b{ color:#cfcfcf; font-weight:700; }
+    .ver{ margin-top:14px; font-size:11px; letter-spacing:1px; color:#5a5a5a; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <div class="logo">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12 12 3l9 9"/><path d="M5 10v10a1 1 0 0 0 1 1h3v-6h6v6h3a1 1 0 0 0 1-1V10"/></svg>
+    </div>
+    <h1>THE</h1>
+    <div class="brand">VAULT</div>
+
+    <div class="status" id="status">
+      <span class="spinner"></span>
+      <span>جارٍ بدء التحميل…</span>
+    </div>
+
+    <a class="btn" id="download" href="#" rel="noopener">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12"/><path d="m7 10 5 5 5-5"/><path d="M5 21h14"/></svg>
+      تحميل التطبيق
+    </a>
+    <div class="meta" id="meta">تطبيق أندرويد · ملف APK</div>
+
+    <div class="note">
+      <b>خطوات التثبيت:</b><br>
+      ١) إن ظهر تحذير «تعذّر فحص الفيروسات» اضغط <b>«تنزيل على أي حال»</b> — طبيعي مع ملفات APK.<br>
+      ٢) بعد التحميل افتح الملف واسمح بـ«تثبيت من مصدر غير معروف» إن طُلب.
+    </div>
+    <div class="ver" id="ver"></div>
+  </div>
+
+  <script>
+    // Permanent, brand-clean download link. Reads the current APK URL from the
+    // app's version manifest so this page NEVER needs editing across releases;
+    // falls back to a hardcoded direct link if the manifest can't be reached.
+    var FALLBACK = 'https://drive.usercontent.google.com/download?id=1tYfS2GOdxZCY5I-ShRQJpvdSZZSQVjSv&export=download&confirm=t';
+    var btn = document.getElementById('download');
+    var statusEl = document.getElementById('status');
+    var verEl = document.getElementById('ver');
+
+    function ready(url, version){
+      btn.setAttribute('href', url);
+      statusEl.innerHTML = '<span>يبدأ التنزيل تلقائيًّا…</span>';
+      if (version) verEl.textContent = 'الإصدار ' + version;
+      // Trigger the download (attachment ⇒ starts downloading without leaving the page).
+      try { window.location.href = url; } catch (e) {}
+    }
+
+    fetch('../version.json?_=' + Date.now(), { cache: 'no-store' })
+      .then(function(r){ return r.ok ? r.json() : null; })
+      .then(function(j){
+        var apk = j && j.apk;
+        ready((apk && apk.url) ? apk.url : FALLBACK, apk && apk.version);
+      })
+      .catch(function(){ ready(FALLBACK, null); });
+  </script>
+</body>
+</html>
