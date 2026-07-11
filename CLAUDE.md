@@ -16,7 +16,7 @@ A fitness / workout-tracking **PWA**. Vanilla JS, **no build step**, bilingual *
 - `js/update.js` — native-shell update checker. No-op on web (web is always latest via the live URL). On the APK it compares the installed `versionCode` (via `@capacitor/app` `App.getInfo().build`) against `version.json` → `apk.build`; if a newer APK exists, shows the dismissible "download" banner linking to Drive. Best-effort, never blocks the app.
 - `version.json` (repo root) — the APK-shell update manifest read by `js/update.js`. Bump `apk.build`/`apk.url`/notes when you ship a NEW APK.
 - `styles.css` (~100KB) — one stylesheet; reuse existing CSS variables and classes.
-- `admin.html` — standalone owner-only **admin control panel** (GitHub Pages, not in the APK). Owner logs in → `is_admin()` RLS unlocks reading every user; per-user drill-down shows all their data. Publishable key only.
+- `admin.html` — standalone owner-only **multi-center control console** (GitHub Pages, not in the APK). Owner logs in → `is_admin()` RLS unlocks reading every user. Sidebar centers: dashboard, users (search/sort + per-user drill-down + **role/status write controls**), analytics, catalog, feedback inbox, roles/admins, releases, export. Writes go only through the `is_admin()`-gated definer RPCs (`admin_set_role`/`admin_set_status`). Publishable key only — never a service_role key.
 
 ## How to run & verify
 - **Run:** `node dev-server.js` → http://localhost:8080 (serves `Cache-Control: no-store`). Honors `$PORT`. Also `.claude/launch.json` server name `vault` for the preview tool.
@@ -34,7 +34,7 @@ Bump the version in **four** places in `index.html` + the label, or the change n
 2. `?v=N` on the `<link rel="stylesheet" href="styles.css?v=N">`.
 3. The `__cleaned_vN` sessionStorage key in the inline cleanup script.
 4. The visible build label `THE VAULT · vN` in `app.js`.
-Then grep for the old number — zero matches should remain. **Current version: v109.**
+Then grep for the old number — zero matches should remain. **Current version: v110.**
 
 ## Deploy
 - **Web:** commit + push to `main`; GitHub Pages auto-rebuilds.
@@ -55,6 +55,7 @@ The app is going multi-user. Alongside the legacy `vault_data` blob (still the l
 - **Mirror** (`js/tables.js`): ongoing blob→tables projection on login/change.
 - **Usernames**: mandatory unique `@handle` enforced by a blocking gate (app.js `ensureUsername`/`showUsernameGate`), set via the profiles table.
 - **Admin**: the owner's user_id is in `admins`; `is_admin()` unlocks all-user reads via RLS (never a service_role key in any client). Powers `admin.html`.
+- **Admin WRITE + user management** (`admin-write-v3.sql`, v110): `profiles.last_seen` (self-written activity stamp); `user_flags` (role user/coach/admin + status active/disabled/banned) — **admin-write-only via definer RPCs, no client write policy** so a user can read their own row but never escalate; `feedback` inbox (user inserts own, admin reads/resolves). Writes only through `admin_set_role`/`admin_set_status` (SECURITY DEFINER, re-check `is_admin()`, refuse self-target AND the founder owner id). App side (`js/cloud.js` `touchLastSeen`/`getMyFlags`/`submitFeedback`; `js/app.js` `enforceAccountStatus` + `showBlockedGate` + feedback form). **Ban is client-enforced (soft) — fails OPEN**; a hard RLS/auth-level ban is Roadmap. Security-audited (no isolation break, no escalation; feedback fields escaped in the inbox).
 - **Applying SQL:** run in the Supabase SQL editor. The "destructive operations" dialog is benign ONLY when the script's drops are `drop policy/trigger if exists` guards; a real DROP/DELETE/TRUNCATE needs explicit human confirmation. See the maintainer's memory (`vault-db-v2`).
 - Still pending: base64 custom-exercise images not yet uploaded to Storage; app doesn't READ from the new tables yet (mirror is one-way); social features deferred.
 

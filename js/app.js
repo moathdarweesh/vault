@@ -540,6 +540,15 @@ const I18N = {
     update_title: 'A new version is available',
     update_get: 'Download',
     update_later: 'Later',
+    feedback_title: 'Send feedback',
+    feedback_sub: 'Suggestions or issues — we read every one',
+    feedback_ph: 'Your suggestion or feedback…',
+    feedback_send: 'Send',
+    feedback_sent: 'Thanks! Your feedback was sent',
+    feedback_empty: 'Please write something first',
+    account_blocked_title: 'Account unavailable',
+    account_disabled_msg: 'Your account has been disabled. Please contact support.',
+    account_banned_msg: 'Your account has been suspended.',
     auth_forgot: 'Forgot password?',
     auth_reset_title: 'Reset password',
     auth_reset_sub: 'Enter your email and we’ll send you a link to set a new password.',
@@ -1012,6 +1021,15 @@ const I18N = {
     update_title: 'يتوفّر إصدار جديد',
     update_get: 'تحميل',
     update_later: 'لاحقاً',
+    feedback_title: 'إرسال ملاحظة',
+    feedback_sub: 'اقتراحات أو مشاكل — نقرأ كل رسالة',
+    feedback_ph: 'اقتراحك أو ملاحظتك…',
+    feedback_send: 'إرسال',
+    feedback_sent: 'شكرًا! تم إرسال ملاحظتك',
+    feedback_empty: 'اكتب شيئًا أولًا',
+    account_blocked_title: 'الحساب غير متاح',
+    account_disabled_msg: 'تم تعطيل حسابك. يرجى التواصل مع الدعم.',
+    account_banned_msg: 'تم إيقاف حسابك.',
     auth_forgot: 'نسيت كلمة السر؟',
     auth_reset_title: 'استعادة كلمة السر',
     auth_reset_sub: 'أدخل بريدك ونرسل لك رابطاً لتعيين كلمة سر جديدة.',
@@ -2012,7 +2030,7 @@ function renderHome(el) {
 
     ${recentHtml}
 
-    <div style="text-align:center;opacity:.4;font-size:12px;margin:24px 0 8px;letter-spacing:.5px">THE VAULT · v109</div>
+    <div style="text-align:center;opacity:.4;font-size:12px;margin:24px 0 8px;letter-spacing:.5px">THE VAULT · v110</div>
   `;
 
   // Count-up the hero/stat numerals (sleep is stored ×10 for one decimal)
@@ -3981,6 +3999,17 @@ function renderSettings(el) {
     </div>
 
     <div class="settings-section">
+      <div class="section-title">${t('feedback_title')}</div>
+      <button class="settings-action-row" id="feedback-btn">
+        <div class="settings-action-icon">${icon('send', 18)}</div>
+        <div class="settings-action-main">
+          <div class="settings-action-title">${t('feedback_title')}</div>
+          <div class="settings-action-sub">${t('feedback_sub')}</div>
+        </div>
+      </button>
+    </div>
+
+    <div class="settings-section">
       <div class="section-title">${t('data')}</div>
       <button class="settings-action-row" id="export-btn">
         <div class="settings-action-icon">${icon('download', 18)}</div>
@@ -4050,6 +4079,9 @@ function renderSettings(el) {
     if (window.Health && typeof window.Health.open === 'function') window.Health.open();
     else showToast(t('health_only_android'));
   });
+
+  // Feedback / suggestions
+  $('#feedback-btn', el)?.addEventListener('click', showFeedback);
 
   // Export
   $('#export-btn', el).addEventListener('click', () => {
@@ -6357,6 +6389,8 @@ async function afterLogin() {
   refreshAfterSync();
   showToast(t('synced'));
   ensureUsername();
+  if (Cloud.touchLastSeen) Cloud.touchLastSeen();
+  enforceAccountStatus();
 }
 
 function showConflictDialog() {
@@ -6401,6 +6435,61 @@ function showChangePassword() {
       err(translateAuthError((e && e.message) || '')); btn.disabled = false; btn.textContent = t('save');
     }
   });
+}
+
+function showFeedback() {
+  const overlay = openModal(`
+    <div class="modal-header">
+      <div class="modal-title">${t('feedback_title')}</div>
+      <button class="icon-btn icon-btn-tile" data-close>${icon('close', 18)}</button>
+    </div>
+    <div class="confirm-text" style="margin-bottom:12px">${t('feedback_sub')}</div>
+    <textarea id="fb-msg" class="auth-input" rows="4" style="resize:vertical;min-height:96px" placeholder="${t('feedback_ph')}"></textarea>
+    <div class="auth-err" id="fb-err"></div>
+    <button class="btn btn-primary btn-block" id="fb-send">${t('feedback_send')}</button>
+  `, { variant: 'confirm' });
+  const err = (m) => { const e = overlay.querySelector('#fb-err'); if (e) e.textContent = m || ''; };
+  const btn = overlay.querySelector('#fb-send');
+  setTimeout(() => { const ta = overlay.querySelector('#fb-msg'); if (ta) ta.focus(); }, 60);
+  btn.addEventListener('click', async () => {
+    const msg = (overlay.querySelector('#fb-msg').value || '').trim();
+    if (!msg) { err(t('feedback_empty')); return; }
+    if (!window.Cloud || !Cloud.configured() || !Cloud.submitFeedback) { err(t('auth_err_network')); return; }
+    err(''); btn.disabled = true; btn.textContent = t('auth_signing');
+    try {
+      const res = await Cloud.submitFeedback(msg, 'v110');
+      if (res && res.ok) { closeModal(); showToast(t('feedback_sent')); return; }
+      err(res && res.error === 'offline' ? t('auth_err_network') : t('auth_err_generic'));
+    } catch (_) { err(t('auth_err_generic')); }
+    btn.disabled = false; btn.textContent = t('feedback_send');
+  });
+}
+
+// Account status enforcement. An admin can disable/ban an account from the
+// control panel; on boot the app reads the user's own flags and, if the account
+// is not active, shows a blocking screen. Fails OPEN (never locks out on a
+// network error / before any flag is set) — the default is an active user.
+async function enforceAccountStatus() {
+  if (!window.Cloud || !Cloud.configured() || !Cloud.getMyFlags) return;
+  let flags;
+  try { flags = await Cloud.getMyFlags(); } catch (_) { return; }
+  if (!flags || flags.offline || flags.status === 'active') return;
+  showBlockedGate(flags.status, flags.reason);
+}
+
+function showBlockedGate(status, reason) {
+  if (document.getElementById('blocked-gate')) return;
+  const gate = document.createElement('div');
+  gate.id = 'blocked-gate';
+  gate.className = 'auth-gate';
+  const msg = status === 'banned' ? t('account_banned_msg') : t('account_disabled_msg');
+  gate.innerHTML = `
+    <div class="auth-card">
+      <div class="auth-title">${t('account_blocked_title')}</div>
+      <div class="auth-sub">${escapeHtml(msg)}</div>
+      ${reason ? `<div class="uname-rules">${escapeHtml(reason)}</div>` : ''}
+    </div>`;
+  document.body.appendChild(gate);
 }
 
 async function populateAccount(el) {
@@ -6533,6 +6622,8 @@ async function bootCloud() {
     else if (r === 'conflict') showConflictDialog(); // both sides changed → ask
   } catch (_) {}
   ensureUsername(); // enforce a handle for already-logged-in users too
+  if (Cloud.touchLastSeen) Cloud.touchLastSeen();  // fire-and-forget activity stamp
+  enforceAccountStatus();                          // block disabled/banned accounts
 }
 
 // Fade newly-loaded images in smoothly. One capture listener covers every

@@ -331,6 +331,56 @@
     } catch (e) { return { error: (e && e.message) || 'error' }; }
   }
 
+  // ---- last-seen (self-written "last active" stamp) -----------------------
+  // Best-effort upsert of the user's OWN profiles.last_seen. Never throws and
+  // never blocks the app — a failure just means the timestamp isn't refreshed.
+  async function touchLastSeen() {
+    const c = sb(); const s = await getSession();
+    if (!c || !s) return;
+    try {
+      await c.from('profiles')
+        .upsert({ user_id: s.user.id, last_seen: new Date().toISOString() }, { onConflict: 'user_id' });
+    } catch (_) { /* ignore */ }
+  }
+
+  // ---- account flags (role + status) --------------------------------------
+  // Reads the signed-in user's role/status from user_flags (admin-managed only).
+  // Defaults to an ACTIVE regular user when absent or offline, so the app never
+  // locks someone out on a transient error or before an admin ever set a flag.
+  async function getMyFlags() {
+    const c = sb(); const s = await getSession();
+    if (!c || !s) return { role: 'user', status: 'active', reason: null, offline: true };
+    try {
+      const { data, error } = await c
+        .from('user_flags').select('role,status,reason').eq('user_id', s.user.id).maybeSingle();
+      if (error) throw error;
+      return {
+        role: (data && data.role) || 'user',
+        status: (data && data.status) || 'active',
+        reason: (data && data.reason) || null,
+        offline: false,
+      };
+    } catch (_) { return { role: 'user', status: 'active', reason: null, offline: true }; }
+  }
+
+  // ---- feedback / suggestions ---------------------------------------------
+  // Insert the user's OWN feedback row (RLS enforces user_id = self). The
+  // username is snapshotted so the admin inbox reads well even if it changes.
+  async function submitFeedback(message, context) {
+    const c = sb(); const s = await getSession();
+    if (!c || !s) return { error: 'offline' };
+    const msg = String(message || '').trim();
+    if (!msg) return { error: 'empty' };
+    let username = null;
+    try { const u = await getUsername(); username = u.username; } catch (_) {}
+    try {
+      const { error } = await c.from('feedback')
+        .insert({ user_id: s.user.id, username: username, message: msg, context: context || null });
+      if (error) return { error: error.message };
+      return { ok: true };
+    } catch (e) { return { error: (e && e.message) || 'error' }; }
+  }
+
   window.Cloud = {
     configured, ensureSdk, getSession, currentEmail,
     signUp, signIn, signOut, changePassword, resetPassword, onPasswordRecovery,
@@ -338,5 +388,6 @@
     resolveOnLogin, chooseCloud, chooseLocal, bootSync, applyRemote,
     getClient: sb, // exposed for the tables.js "mirror" projection (RLS-scoped)
     getUsername, checkUsername, setUsername,
+    touchLastSeen, getMyFlags, submitFeedback,
   };
 })();

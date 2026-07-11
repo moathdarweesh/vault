@@ -20,6 +20,7 @@
   .num{font-variant-numeric:tabular-nums; unicode-bidi:plaintext}
   button{font-family:inherit; cursor:pointer}
   .hidden{display:none !important}
+  select{font-family:inherit}
 
   /* login */
   .login-wrap{min-height:100vh; display:flex; align-items:center; justify-content:center; padding:24px}
@@ -29,8 +30,8 @@
   .card h1{font-size:19px; font-weight:800; margin:14px 0 4px}
   .card p.sub{color:var(--dim); font-size:14px; margin:0 0 20px}
   label{display:block; font-size:12.5px; font-weight:700; color:var(--dim); margin:0 0 6px}
-  input{width:100%; padding:12px 14px; background:var(--surface-2); border:1px solid var(--line); border-radius:11px; color:var(--text); font-size:15px; outline:none; margin-bottom:14px; transition:border-color .15s}
-  input:focus{border-color:var(--accent)}
+  input,textarea,select.big{width:100%; padding:12px 14px; background:var(--surface-2); border:1px solid var(--line); border-radius:11px; color:var(--text); font-size:15px; outline:none; margin-bottom:14px; transition:border-color .15s}
+  input:focus,textarea:focus{border-color:var(--accent)}
   .btn{width:100%; padding:13px; border:none; border-radius:12px; background:var(--accent); color:var(--accent-ink); font-size:15px; font-weight:800; transition:filter .15s, transform .12s}
   .btn:active{transform:scale(.98)} .btn:disabled{opacity:.55; cursor:default}
   .msg{font-size:13px; margin-top:12px; min-height:18px; text-align:center}
@@ -39,42 +40,111 @@
   .link:hover{text-decoration:underline}
 
   /* shell */
-  .wrap{max-width:1120px; margin:0 auto; padding:clamp(18px,4vw,40px) clamp(14px,3.5vw,28px) 70px}
-  .top{display:flex; align-items:center; gap:14px; margin-bottom:6px; flex-wrap:wrap}
-  .top .who{color:var(--dim); font-size:13px; margin-inline-start:auto}
-  .top .out{background:transparent; border:1px solid var(--line); color:var(--dim); border-radius:10px; padding:8px 14px; font-size:13px; font-weight:700}
-  .top .out:hover{color:var(--text); border-color:var(--dim)}
-  .eyebrow{color:var(--accent); font-size:12px; font-weight:800; letter-spacing:.14em; text-transform:uppercase; margin:16px 0 4px}
-  h2.title{font-size:clamp(24px,4.5vw,34px); font-weight:900; letter-spacing:-.02em; margin:0 0 22px}
+  .shell{display:flex; min-height:100vh}
+  .sidebar{width:236px; flex-shrink:0; background:var(--surface); border-inline-end:1px solid var(--line);
+    padding:20px 14px; display:flex; flex-direction:column; gap:4px; position:sticky; top:0; height:100vh}
+  .side-brand{display:flex; align-items:center; gap:10px; font-weight:900; font-size:18px; padding:6px 8px 16px}
+  .side-brand .v{display:inline-flex; align-items:center; justify-content:center; width:32px; height:32px; border-radius:9px; background:var(--accent); color:var(--accent-ink); font-size:17px}
+  .nav{display:flex; flex-direction:column; gap:3px}
+  .nav-item{display:flex; align-items:center; gap:11px; padding:11px 13px; border-radius:12px; background:none; border:none;
+    color:var(--dim); font-size:14.5px; font-weight:700; width:100%; text-align:start; transition:background .15s,color .15s}
+  .nav-item .ic{font-size:16px; width:22px; text-align:center; flex-shrink:0}
+  .nav-item:hover{color:var(--text); background:var(--surface-2)}
+  .nav-item.active{color:var(--accent); background:var(--accent-soft)}
+  .nav-item .badge-n{margin-inline-start:auto; background:var(--red); color:#fff; font-size:10.5px; font-weight:800; border-radius:99px; padding:1px 7px; min-width:18px; text-align:center}
+  .side-foot{margin-top:auto; padding-top:14px; border-top:1px solid var(--line); display:flex; flex-direction:column; gap:9px}
+  .side-foot .who2{font-size:11.5px; color:var(--mute); word-break:break-all; padding:0 4px}
+  .out{background:transparent; border:1px solid var(--line); color:var(--dim); border-radius:10px; padding:9px 12px; font-size:13px; font-weight:700}
+  .out:hover{color:var(--text); border-color:var(--dim)}
 
-  .stats{display:grid; grid-template-columns:repeat(4,1fr); gap:12px; margin-bottom:30px}
+  .main{flex:1; min-width:0; padding:clamp(20px,3.4vw,38px) clamp(15px,3.4vw,40px) 70px}
+  .main-head{display:flex; align-items:flex-end; gap:14px; flex-wrap:wrap; margin-bottom:22px}
+  .main-head .eyebrow{color:var(--accent); font-size:12px; font-weight:800; letter-spacing:.14em; text-transform:uppercase; margin:0 0 3px}
+  .main-head h2{font-size:clamp(23px,4vw,32px); font-weight:900; letter-spacing:-.02em; margin:0}
+  .main-head .sub{color:var(--dim); font-size:13.5px; margin-top:4px}
+  .head-actions{margin-inline-start:auto; display:flex; gap:8px; align-items:center}
+  .abtn{background:var(--surface); border:1px solid var(--line); color:var(--dim); border-radius:10px; padding:9px 13px; font-size:13px; font-weight:700}
+  .abtn:hover{color:var(--text); border-color:var(--dim)}
+  .abtn.pri{background:var(--accent); color:var(--accent-ink); border-color:transparent}
+
+  .stats{display:grid; grid-template-columns:repeat(4,1fr); gap:12px; margin-bottom:26px}
   .tile{background:var(--surface); border:1px solid var(--line); border-radius:var(--radius); padding:18px}
-  .tile .n{font-size:clamp(24px,4vw,34px); font-weight:900; letter-spacing:-.02em; line-height:1}
+  .tile .n{font-size:clamp(22px,3.6vw,32px); font-weight:900; letter-spacing:-.02em; line-height:1}
   .tile .k{color:var(--dim); font-size:12.5px; margin-top:7px; font-weight:600}
   .tile.alt .n{color:var(--accent)}
 
   .sec-head{display:flex; align-items:baseline; gap:12px; margin:0 0 14px}
-  .sec-head h3{font-size:17px; font-weight:800; margin:0}
+  .sec-head h3{font-size:16px; font-weight:800; margin:0}
   .sec-head .rule{flex:1; height:1px; background:var(--line)}
-  .sec-head .refresh{background:transparent; border:1px solid var(--line); color:var(--dim); border-radius:9px; padding:6px 12px; font-size:12px; font-weight:700}
-  .sec-head .refresh:hover{color:var(--text)}
+
+  .grid2{display:grid; grid-template-columns:1fr 1fr; gap:16px}
+  .panel{background:var(--surface); border:1px solid var(--line); border-radius:var(--radius); padding:18px}
+  .panel h4{margin:0 0 14px; font-size:14px; font-weight:800}
 
   .table-wrap{background:var(--surface); border:1px solid var(--line); border-radius:var(--radius); overflow:hidden}
   .scroll-x{overflow-x:auto}
-  .tbl{width:100%; border-collapse:collapse; min-width:680px}
-  .tbl th{text-align:start; font-size:11px; font-weight:800; letter-spacing:.08em; text-transform:uppercase; color:var(--mute); padding:13px 16px; background:var(--surface-2); border-bottom:1px solid var(--line); white-space:nowrap}
-  .tbl td{padding:12px 16px; border-bottom:1px solid #1e1e25; font-size:14px}
+  .tbl{width:100%; border-collapse:collapse; min-width:720px}
+  .tbl th{text-align:start; font-size:11px; font-weight:800; letter-spacing:.06em; text-transform:uppercase; color:var(--mute); padding:12px 15px; background:var(--surface-2); border-bottom:1px solid var(--line); white-space:nowrap; cursor:pointer; user-select:none}
+  .tbl th.no-sort{cursor:default}
+  .tbl td{padding:11px 15px; border-bottom:1px solid #1e1e25; font-size:14px}
   .tbl tr:last-child td{border-bottom:none}
   .tbl tbody tr{cursor:pointer; transition:background .12s}
   .tbl tbody tr:hover td{background:rgba(91,141,239,.06)}
   .uname{font-weight:800; display:flex; align-items:center; gap:9px}
   .av{width:30px; height:30px; border-radius:9px; background:var(--accent-soft); color:var(--accent); display:inline-flex; align-items:center; justify-content:center; font-weight:900; font-size:13px; flex-shrink:0}
   .handle{color:var(--accent)} .noname{color:var(--mute); font-weight:600}
-  .pill{display:inline-block; padding:3px 9px; border-radius:999px; font-size:11.5px; font-weight:800; background:var(--surface-2); border:1px solid var(--line)}
+  .pill{display:inline-block; padding:3px 9px; border-radius:999px; font-size:11px; font-weight:800; background:var(--surface-2); border:1px solid var(--line); white-space:nowrap}
   .pill.you{background:var(--accent-soft); border-color:transparent; color:var(--accent)}
+  .pill.role-admin{background:rgba(91,141,239,.16); color:var(--accent); border-color:transparent}
+  .pill.role-coach{background:rgba(176,123,224,.16); color:var(--shoulders); border-color:transparent}
+  .pill.st-active{color:var(--good)} .pill.st-disabled{color:var(--warn)} .pill.st-banned{color:var(--red)}
   .chev{color:var(--mute)}
   .center{text-align:center; color:var(--dim); padding:40px 16px; font-size:14px}
   .muted{color:var(--mute)}
+  .searchbar{display:flex; gap:10px; margin-bottom:14px; flex-wrap:wrap}
+  .searchbar input{margin:0; max-width:340px}
+  .filterpills{display:flex; gap:6px; flex-wrap:wrap}
+  .fp{background:var(--surface); border:1px solid var(--line); color:var(--dim); border-radius:99px; padding:7px 13px; font-size:12.5px; font-weight:700}
+  .fp.active{background:var(--accent-soft); color:var(--accent); border-color:transparent}
+
+  /* analytics bars */
+  .bars{display:flex; flex-direction:column; gap:9px}
+  .bar-row{display:flex; align-items:center; gap:10px; font-size:13px}
+  .bar-label{width:132px; flex-shrink:0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; display:flex; align-items:center; gap:7px}
+  .bar-label .tag{width:8px;height:8px;border-radius:50%;flex-shrink:0}
+  .bar-track{flex:1; height:9px; background:var(--surface-2); border-radius:99px; overflow:hidden}
+  .bar-fill{height:100%; background:var(--accent); border-radius:99px}
+  .bar-val{width:38px; text-align:end; color:var(--dim); flex-shrink:0}
+
+  /* catalog / chips */
+  .chips{display:flex; flex-wrap:wrap; gap:8px}
+  .chip{display:inline-flex; align-items:center; gap:7px; background:var(--surface); border:1px solid var(--line); border-radius:999px; padding:7px 13px; font-size:13px; font-weight:700}
+  .chip .tag{width:8px;height:8px;border-radius:50%}
+  .cat-group{margin-bottom:18px}
+  .cat-group h4{margin:0 0 10px; font-size:13.5px; font-weight:800; display:flex; align-items:center; gap:8px}
+  .cat-group .count{color:var(--mute); font-size:12px; font-weight:700}
+
+  /* feedback inbox */
+  .fb-list{display:flex; flex-direction:column; gap:12px}
+  .fb-item{background:var(--surface); border:1px solid var(--line); border-radius:var(--radius); padding:15px 17px}
+  .fb-item.resolved{opacity:.55}
+  .fb-msg{font-size:14.5px; line-height:1.6; white-space:pre-wrap; word-break:break-word}
+  .fb-meta{display:flex; align-items:center; gap:10px; margin-top:11px; flex-wrap:wrap; color:var(--mute); font-size:12px}
+  .fb-meta .who3{color:var(--accent); font-weight:700}
+  .fb-resolve{margin-inline-start:auto; background:var(--surface-2); border:1px solid var(--line); color:var(--dim); border-radius:9px; padding:6px 12px; font-size:12px; font-weight:700}
+  .fb-resolve:hover{color:var(--good); border-color:var(--good)}
+
+  /* management (user detail) */
+  .mgmt{display:grid; grid-template-columns:1fr 1fr; gap:14px; margin-top:8px}
+  .mgmt .mrow{background:var(--surface); border:1px solid var(--line); border-radius:var(--radius-sm); padding:14px 16px}
+  .mgmt .mlabel{font-size:12px; font-weight:800; color:var(--dim); margin-bottom:10px; text-transform:uppercase; letter-spacing:.06em}
+  .mgmt select.big{margin:0}
+  .stbtns{display:flex; gap:8px; flex-wrap:wrap}
+  .stbtn{flex:1; min-width:74px; background:var(--surface-2); border:1px solid var(--line); color:var(--dim); border-radius:10px; padding:10px 6px; font-size:13px; font-weight:800}
+  .stbtn.on-active{background:rgba(79,209,165,.16); color:var(--good); border-color:transparent}
+  .stbtn.on-disabled{background:rgba(240,180,91,.16); color:var(--warn); border-color:transparent}
+  .stbtn.on-banned{background:rgba(239,111,111,.16); color:var(--red); border-color:transparent}
+  .mgmt .selfnote{grid-column:1/-1; color:var(--mute); font-size:12.5px}
 
   /* detail overlay */
   .detail{position:fixed; inset:0; background:var(--bg); z-index:50; overflow-y:auto; display:none}
@@ -85,7 +155,7 @@
   .d-back{background:var(--surface); border:1px solid var(--line); color:var(--text); border-radius:11px; padding:9px 15px; font-size:14px; font-weight:700}
   .d-back:hover{border-color:var(--dim)}
   .d-id{color:var(--mute); font-size:12px; margin-inline-start:auto; direction:ltr}
-  .d-title{display:flex; align-items:center; gap:12px; margin-bottom:20px}
+  .d-title{display:flex; align-items:center; gap:12px; margin-bottom:6px}
   .d-title .av{width:46px; height:46px; border-radius:13px; font-size:19px}
   .d-title .name{font-size:clamp(22px,4vw,30px); font-weight:900; letter-spacing:-.02em}
   .d-title .name .noname{font-size:.7em}
@@ -97,7 +167,6 @@
   .day ul{list-style:none; margin:0; padding:0; display:flex; flex-direction:column; gap:6px}
   .day li{display:flex; align-items:center; gap:8px; font-size:13.5px; color:#dcdce2}
   .dot{width:7px;height:7px;border-radius:50%;flex-shrink:0}
-
   .log{display:flex; flex-direction:column; gap:12px}
   .daygrp{background:var(--surface); border:1px solid var(--line); border-radius:var(--radius); overflow:hidden}
   .daygrp-h{display:flex; align-items:center; gap:10px; padding:11px 16px; background:var(--surface-2); border-bottom:1px solid var(--line)}
@@ -110,19 +179,40 @@
   .sets{display:flex; flex-wrap:wrap; gap:6px; margin-inline-start:auto}
   .set{direction:ltr; font-size:12px; font-weight:700; color:#d7d7de; background:#101015; border:1px solid var(--line); border-radius:8px; padding:3px 8px}
   .set b{color:var(--accent)}
-  .chips{display:flex; flex-wrap:wrap; gap:8px}
-  .chip{display:inline-flex; align-items:center; gap:7px; background:var(--surface); border:1px solid var(--line); border-radius:999px; padding:7px 13px; font-size:13px; font-weight:700}
-  .chip .tag{width:8px;height:8px;border-radius:50%}
   .rows2{display:flex; flex-direction:column; gap:8px}
   .row2{display:flex; align-items:center; gap:12px; background:var(--surface); border:1px solid var(--line); border-radius:var(--radius-sm); padding:11px 15px; font-size:14px}
   .row2 .r-name{font-weight:700} .row2 .r-meta{color:var(--dim); font-size:12px; margin-inline-start:auto; direction:ltr}
   .row2 .r-val{color:var(--accent); font-weight:800}
   .empty-mini{color:var(--mute); font-size:13px; padding:10px 2px}
 
-  footer{margin-top:30px; color:var(--mute); font-size:12.5px; display:flex; gap:8px 14px; flex-wrap:wrap; align-items:center}
-  .badge{display:inline-flex; align-items:center; gap:7px; color:var(--good); font-weight:700}
-  .badge::before{content:"";width:7px;height:7px;border-radius:50%;background:var(--good)}
+  /* releases / generator */
+  .rel-card{background:var(--surface); border:1px solid var(--line); border-radius:var(--radius); padding:20px; margin-bottom:16px}
+  .rel-row{display:flex; align-items:center; gap:10px; padding:8px 0; border-bottom:1px solid #1e1e25; font-size:14px}
+  .rel-row:last-child{border-bottom:none}
+  .rel-row .k{color:var(--dim); width:120px; flex-shrink:0; font-weight:700}
+  .rel-row .v{word-break:break-all; direction:ltr; text-align:start}
+  code{background:var(--surface-2); border:1px solid var(--line); border-radius:8px; padding:2px 7px; font-size:12.5px; direction:ltr; display:inline-block}
+  textarea.gen{min-height:150px; font-family:ui-monospace,monospace; font-size:12.5px; direction:ltr; text-align:start}
 
+  /* toast */
+  .toast{position:fixed; inset-inline:0; bottom:26px; margin:auto; width:max-content; max-width:90%;
+    background:var(--surface-2); border:1px solid var(--line); color:var(--text); border-radius:12px;
+    padding:12px 20px; font-size:14px; font-weight:700; z-index:120; box-shadow:0 12px 34px rgba(0,0,0,.5);
+    opacity:0; transform:translateY(12px); transition:opacity .2s, transform .2s; pointer-events:none}
+  .toast.show{opacity:1; transform:none}
+
+  @media (max-width:860px){
+    .shell{flex-direction:column}
+    .sidebar{width:auto; height:auto; position:sticky; top:0; z-index:30; flex-direction:row; align-items:center;
+      gap:4px; padding:10px; overflow-x:auto}
+    .side-brand{padding:6px 10px 6px 4px; font-size:15px; flex-shrink:0}
+    .nav{flex-direction:row; gap:4px}
+    .nav-item{white-space:nowrap; padding:9px 12px}
+    .nav-item .ic{width:auto}
+    .side-foot{margin:0; padding:0; border:none; flex-direction:row; flex-shrink:0}
+    .side-foot .who2{display:none}
+    .grid2{grid-template-columns:1fr} .mgmt{grid-template-columns:1fr}
+  }
   @media (max-width:720px){ .stats{grid-template-columns:repeat(2,1fr)} .plan{grid-template-columns:1fr} }
   @media (prefers-reduced-motion:reduce){*{transition:none !important; animation:none !important}}
 </style>
@@ -132,8 +222,6 @@
   <div id="login" class="login-wrap">
     <div class="card">
       <div class="brand"><span class="v">🏋️</span> THE VAULT</div>
-
-      <!-- sign in -->
       <form id="panel-login" autocomplete="on">
         <h1>لوحة التحكّم</h1>
         <p class="sub">سجّل دخولك بحساب المالك — نفس حسابك في التطبيق.</p>
@@ -145,8 +233,6 @@
         <div class="msg" id="login-msg"></div>
         <button type="button" class="link" id="forgot-link">نسيت كلمة السر؟</button>
       </form>
-
-      <!-- request reset -->
       <form id="panel-reset" class="hidden" autocomplete="on">
         <h1>إعادة تعيين كلمة السر</h1>
         <p class="sub">أدخل بريدك ونرسل لك رابط إعادة التعيين.</p>
@@ -156,8 +242,6 @@
         <div class="msg" id="reset-msg"></div>
         <button type="button" class="link" id="reset-back">‹ رجوع لتسجيل الدخول</button>
       </form>
-
-      <!-- set new password (arrived via reset link) -->
       <form id="panel-newpw" class="hidden" autocomplete="on">
         <h1>اختر كلمة سر جديدة</h1>
         <p class="sub">أدخل كلمة السر الجديدة لحسابك.</p>
@@ -169,30 +253,30 @@
     </div>
   </div>
 
-  <div id="dash" class="wrap hidden">
-    <div class="top">
-      <div class="brand"><span class="v">🏋️</span> THE VAULT</div>
-      <span class="who" id="who"></span>
-      <button class="out" id="logout">خروج</button>
-    </div>
-    <div class="eyebrow">لوحة التحكّم</div>
-    <h2 class="title">المستخدمون وبياناتهم</h2>
-    <div class="stats" id="stats"></div>
-    <div class="sec-head"><h3>كل المستخدمين</h3><span class="rule"></span><button class="refresh" id="refresh">↻ تحديث</button></div>
-    <div class="table-wrap"><div class="scroll-x"><table class="tbl">
-      <thead><tr>
-        <th>المستخدم</th><th>الجلسات</th><th>المجموعات</th><th>تمارين خاصة</th><th>وجبات</th><th>نوم</th><th>آخر نشاط</th><th></th>
-      </tr></thead>
-      <tbody id="rows"><tr><td colspan="8" class="center">جارٍ التحميل…</td></tr></tbody>
-    </table></div></div>
-    <footer>
-      <span class="badge">مباشر من قاعدة البيانات</span><span>·</span>
-      <span>صلاحية الأدمِن (RLS)</span><span>·</span><span id="foot-count"></span>
-    </footer>
+  <div id="app" class="shell hidden">
+    <aside class="sidebar">
+      <div class="side-brand"><span class="v">🏋️</span> THE VAULT</div>
+      <nav class="nav" id="nav"></nav>
+      <div class="side-foot">
+        <span class="who2" id="who"></span>
+        <button class="out" id="logout">خروج</button>
+      </div>
+    </aside>
+    <main class="main">
+      <div class="main-head">
+        <div>
+          <div class="eyebrow">لوحة التحكّم</div>
+          <h2 id="center-title">—</h2>
+          <div class="sub" id="center-sub"></div>
+        </div>
+        <div class="head-actions" id="head-actions"></div>
+      </div>
+      <div id="center"><div class="center">جارٍ التحميل…</div></div>
+    </main>
   </div>
 
-  <!-- per-user detail -->
   <div id="detail" class="detail"><div class="detail-inner" id="detail-inner"></div></div>
+  <div class="toast" id="toast"></div>
 
   <script src="js/vendor/supabase.js"></script>
   <script>
@@ -204,20 +288,47 @@
     var $=function(s){return document.querySelector(s);};
     function esc(s){return String(s==null?'':s).replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];});}
     function shortId(id){return String(id||'').slice(0,8);}
+    function fmt(n){return (n==null?0:n).toLocaleString('en-US');}
     var CAT={Chest:'chest',Back:'back',Legs:'legs',Shoulders:'shoulders',Arms:'arms',Core:'core'};
     function catColor(c){return 'var(--'+(CAT[c]||'other')+')';}
     function initial(u){return u.username?u.username[0].toUpperCase():'؟';}
     function nameHtml(u){return u.username?'<span class="handle">@'+esc(u.username)+'</span>':'<span class="noname">'+esc(shortId(u.id))+'…</span>';}
+    function tile(n,k,cls){return '<div class="tile '+(cls||'')+'"><div class="n num">'+n+'</div><div class="k">'+k+'</div></div>';}
+    function sec(title,body){return '<div class="dsec"><div class="sec-head"><h3>'+title+'</h3><span class="rule"></span></div>'+body+'</div>';}
+    function toast(m){var t=$('#toast'); t.textContent=m; t.classList.add('show'); clearTimeout(t._t); t._t=setTimeout(function(){t.classList.remove('show');},2200);}
+    // Supabase caps a bare .select() at 1000 rows — page through with .range() so
+    // aggregations stay correct at any scale. builder(from,to) must apply .range(from,to).
+    async function fetchAll(builder){
+      var all=[], from=0, size=1000, err=null;
+      for(;;){
+        var r=await builder(from, from+size-1);
+        if(r.error){ err=r.error; break; }
+        var chunk=r.data||[]; all=all.concat(chunk);
+        if(chunk.length<size) break;
+        from+=size; if(from>500000) break; // hard safety stop
+      }
+      return {data:all, error:err};
+    }
+    var renderToken=0;   // bumped on every showCenter → guards stale async renders
 
-    var exMap={};      // id -> {name,category}
-    var meId=null;
-    var usersById={};
-
+    var exMap={}, meId=null, DATA=null, curCenter='dashboard';
+    var usersFilter='', usersSort={key:'sessions',dir:-1}, catalogQuery='';
     function exName(id){return exMap[id]?exMap[id].name:'—';}
     function exCat(id){return exMap[id]?exMap[id].category:'Other';}
 
-    function showLogin(){$('#login').classList.remove('hidden');$('#dash').classList.add('hidden');}
-    function showDash(){$('#login').classList.add('hidden');$('#dash').classList.remove('hidden');}
+    var CENTERS=[
+      {id:'dashboard', ic:'📊', label:'لوحة القيادة', title:'لوحة القيادة', sub:'نظرة عامة على النشاط والبيانات'},
+      {id:'users',     ic:'👥', label:'المستخدمون', title:'المستخدمون', sub:'عرض/بحث/فلترة + إدارة الأدوار والحالة'},
+      {id:'analytics', ic:'📈', label:'التحليلات', title:'التحليلات', sub:'إحصاءات مجمّعة عبر كل المستخدمين'},
+      {id:'catalog',   ic:'🏋️', label:'الكتالوج', title:'الكتالوج', sub:'التمارين والكارديو المرجعية'},
+      {id:'feedback',  ic:'📮', label:'الاقتراحات', title:'صندوق الاقتراحات', sub:'ملاحظات المستخدمين'},
+      {id:'admins',    ic:'🛡️', label:'الأدوار', title:'الأدوار والمشرفون', sub:'من له صلاحية، وتعيين الأدوار'},
+      {id:'releases',  ic:'🚀', label:'الإصدارات', title:'الإصدارات', sub:'حالة التطبيق ونشر التحديثات'}
+    ];
+
+    /* ---------------- auth: login / reset / recovery (unchanged flow) ------- */
+    function showLogin(){$('#login').classList.remove('hidden');$('#app').classList.add('hidden');}
+    function showApp(){$('#login').classList.add('hidden');$('#app').classList.remove('hidden');}
 
     async function checkAdminAndLoad(){
       var msg=$('#login-msg');
@@ -228,8 +339,8 @@
           var s=await sb.auth.getSession();
           var u=s&&s.data&&s.data.session?s.data.session.user:null;
           meId=u?u.id:null;
-          $('#who').textContent=u?('مسجّل: '+u.email):'';
-          showDash(); loadOverview();
+          $('#who').textContent=u?u.email:'';
+          showApp(); buildNav(); await loadAll(); showCenter(curCenter);
         }else{
           await sb.auth.signOut();
           msg.className='msg err'; msg.textContent='هذا الحساب ليس أدمِن. لوحة التحكّم للمالك فقط.'; showLogin();
@@ -246,12 +357,9 @@
       if(r.error){msg.className='msg err'; msg.textContent='فشل الدخول: '+r.error.message; return;}
       msg.className='msg ok'; msg.textContent='تم — جارٍ التحقّق…'; checkAdminAndLoad();
     });
-
-    // ---- panel switching + password reset ----
     function showPanel(id){ ['panel-login','panel-reset','panel-newpw'].forEach(function(p){ $('#'+p).classList.toggle('hidden', p!==id); }); }
     $('#forgot-link').addEventListener('click',function(){ showPanel('panel-reset'); var e=$('#reset-email'); if(e) e.value=$('#email').value.trim(); });
     $('#reset-back').addEventListener('click',function(){ showPanel('panel-login'); });
-
     $('#panel-reset').addEventListener('submit',async function(e){
       e.preventDefault();
       var btn=$('#reset-btn'),msg=$('#reset-msg'),email=$('#reset-email').value.trim();
@@ -263,7 +371,6 @@
       if(r.error){ msg.className='msg err'; msg.textContent='تعذّر: '+r.error.message; return; }
       msg.className='msg ok'; msg.textContent='تم ✓ تفقّد بريد '+email+' واضغط رابط إعادة التعيين.';
     });
-
     $('#panel-newpw').addEventListener('submit',async function(e){
       e.preventDefault();
       var btn=$('#newpw-btn'),msg=$('#newpw-msg'),pw=$('#newpw').value;
@@ -274,91 +381,337 @@
       if(r.error){ msg.className='msg err'; msg.textContent='تعذّر: '+r.error.message; return; }
       msg.className='msg ok'; msg.textContent='تم ✓ جارٍ الدخول…'; checkAdminAndLoad();
     });
-
-    // Arrived via the reset link → let the user set a new password.
     sb.auth.onAuthStateChange(function(event){ if(event==='PASSWORD_RECOVERY'){ showLogin(); showPanel('panel-newpw'); } });
-
     $('#logout').addEventListener('click',async function(){await sb.auth.signOut(); location.reload();});
-    $('#refresh').addEventListener('click',loadOverview);
 
-    async function loadOverview(){
-      $('#rows').innerHTML='<tr><td colspan="8" class="center">جارٍ التحميل…</td></tr>';
-      try{
-        var res=await Promise.all([
-          sb.from('exercises').select('id, name, category'),
-          sb.from('profiles').select('user_id, username, created_at'),
-          sb.from('user_prefs').select('user_id, unit'),
-          sb.from('workout_sessions').select('id, user_id, performed_on'),
-          sb.from('workout_sets').select('session_id'),
-          sb.from('exercises').select('owner_id').not('owner_id','is',null),
-          sb.from('food_logs').select('user_id'),
-          sb.from('sleep_logs').select('user_id')
-        ]);
-        for(var i=0;i<res.length;i++){if(res[i].error) throw res[i].error;}
-        exMap={}; (res[0].data||[]).forEach(function(e){exMap[e.id]={name:e.name,category:e.category};});
-        var profiles=res[1].data||[],prefs=res[2].data||[],sessions=res[3].data||[],
-            sets=res[4].data||[],customs=res[5].data||[],foods=res[6].data||[],sleeps=res[7].data||[];
-        var U={};
-        function ensure(id){if(!id)return null; if(!U[id])U[id]={id:id,username:null,joined:null,sessions:0,sets:0,custom:0,foods:0,sleeps:0,unit:'kg',last:null}; return U[id];}
-        profiles.forEach(function(p){var u=ensure(p.user_id); if(u){u.username=p.username; u.joined=p.created_at;}});
-        prefs.forEach(function(p){var u=ensure(p.user_id); if(u)u.unit=p.unit||'kg';});
-        var sOf={};
-        sessions.forEach(function(s){var u=ensure(s.user_id); if(u){u.sessions++; sOf[s.id]=s.user_id; if(!u.last||s.performed_on>u.last)u.last=s.performed_on;}});
-        sets.forEach(function(st){var uid=sOf[st.session_id]; if(uid&&U[uid])U[uid].sets++;});
-        customs.forEach(function(e){var u=ensure(e.owner_id); if(u)u.custom++;});
-        foods.forEach(function(f){var u=ensure(f.user_id); if(u)u.foods++;});
-        sleeps.forEach(function(s){var u=ensure(s.user_id); if(u)u.sleeps++;});
-
-        usersById=U;
-        var list=Object.keys(U).map(function(k){return U[k];}).sort(function(a,b){return b.sessions-a.sessions;});
-        var totS=list.reduce(function(a,u){return a+u.sessions;},0),
-            totC=list.reduce(function(a,u){return a+u.custom;},0),
-            named=list.filter(function(u){return u.username;}).length;
-        $('#stats').innerHTML=tile(list.length,'مستخدم','alt')+tile(totS,'إجمالي الجلسات','')+tile(totC,'تمارين خاصة','')+tile(named+' / '+list.length,'اختاروا اسمًا','');
-        $('#foot-count').textContent=list.length+' مستخدم';
-        if(!list.length){$('#rows').innerHTML='<tr><td colspan="8" class="center">لا يوجد مستخدمون ببيانات بعد.</td></tr>'; return;}
-        $('#rows').innerHTML=list.map(function(u){
-          var you=(u.id===meId)?' <span class="pill you">أنت</span>':'';
-          return '<tr data-uid="'+esc(u.id)+'">'+
-            '<td><span class="uname"><span class="av">'+esc(initial(u))+'</span>'+nameHtml(u)+you+'</span></td>'+
-            '<td class="num">'+u.sessions+'</td><td class="num">'+u.sets+'</td>'+
-            '<td class="num">'+u.custom+'</td><td class="num">'+u.foods+'</td><td class="num">'+u.sleeps+'</td>'+
-            '<td class="num muted">'+(u.last||'—')+'</td><td class="chev">‹</td></tr>';
-        }).join('');
-        Array.prototype.forEach.call(document.querySelectorAll('#rows tr[data-uid]'),function(tr){
-          tr.addEventListener('click',function(){openUser(tr.getAttribute('data-uid'));});
-        });
-      }catch(e){ $('#rows').innerHTML='<tr><td colspan="8" class="center">تعذّر التحميل: '+esc(e.message||e)+'</td></tr>'; }
+    /* ---------------- navigation shell ------------------------------------- */
+    function buildNav(){
+      $('#nav').innerHTML=CENTERS.map(function(c){
+        return '<button class="nav-item" data-center="'+c.id+'"><span class="ic">'+c.ic+'</span>'+
+          '<span class="lbl">'+c.label+'</span><span class="badge-n hidden" data-badge="'+c.id+'"></span></button>';
+      }).join('');
+      Array.prototype.forEach.call(document.querySelectorAll('#nav .nav-item'),function(b){
+        b.addEventListener('click',function(){ showCenter(b.getAttribute('data-center')); });
+      });
     }
-    function tile(n,k,cls){return '<div class="tile '+cls+'"><div class="n num">'+n+'</div><div class="k">'+k+'</div></div>';}
+    function setBadge(id,n){ var el=document.querySelector('[data-badge="'+id+'"]'); if(!el)return; if(n>0){el.textContent=n; el.classList.remove('hidden');} else el.classList.add('hidden'); }
+    function showCenter(id){
+      curCenter=id; renderToken++;
+      var c=CENTERS.filter(function(x){return x.id===id;})[0]||CENTERS[0];
+      Array.prototype.forEach.call(document.querySelectorAll('#nav .nav-item'),function(b){ b.classList.toggle('active', b.getAttribute('data-center')===id); });
+      $('#center-title').textContent=c.title; $('#center-sub').textContent=c.sub;
+      $('#head-actions').innerHTML='';
+      var box=$('#center');
+      if(id==='dashboard') renderDashboard(box);
+      else if(id==='users') renderUsers(box);
+      else if(id==='analytics') renderAnalytics(box);
+      else if(id==='catalog') renderCatalog(box);
+      else if(id==='feedback') renderFeedback(box);
+      else if(id==='admins') renderAdmins(box);
+      else if(id==='releases') renderReleases(box);
+    }
+    function headBtn(label,cls,fn){
+      var b=document.createElement('button'); b.className='abtn '+(cls||''); b.textContent=label; b.addEventListener('click',fn);
+      $('#head-actions').appendChild(b); return b;
+    }
 
+    /* ---------------- data load + aggregate -------------------------------- */
+    async function loadAll(){
+      $('#center').innerHTML='<div class="center">جارٍ التحميل…</div>';
+      var res=await Promise.all([
+        fetchAll(function(a,b){return sb.from('exercises').select('id,name,category,owner_id').range(a,b);}),
+        fetchAll(function(a,b){return sb.from('profiles').select('user_id,username,created_at,last_seen').range(a,b);}),
+        fetchAll(function(a,b){return sb.from('user_prefs').select('user_id,unit').range(a,b);}),
+        fetchAll(function(a,b){return sb.from('user_flags').select('user_id,role,status,reason').range(a,b);}),
+        fetchAll(function(a,b){return sb.from('workout_sessions').select('id,user_id,exercise_id,performed_on').range(a,b);}),
+        fetchAll(function(a,b){return sb.from('workout_sets').select('session_id,reps,weight').range(a,b);}),
+        fetchAll(function(a,b){return sb.from('food_logs').select('user_id').range(a,b);}),
+        fetchAll(function(a,b){return sb.from('sleep_logs').select('user_id').range(a,b);}),
+        fetchAll(function(a,b){return sb.from('cardio_logs').select('user_id').range(a,b);}),
+        fetchAll(function(a,b){return sb.from('cardio_types').select('id,label,owner_id').range(a,b);}),
+        fetchAll(function(a,b){return sb.from('feedback').select('id,user_id,username,message,context,status,created_at').range(a,b);})
+      ]);
+      var d=res.map(function(r){return r.error?[]:(r.data||[]);});
+      var exercises=d[0], profiles=d[1], prefs=d[2], flags=d[3], sessions=d[4], sets=d[5],
+          foods=d[6], sleeps=d[7], cardio=d[8], cardioTypes=d[9], feedback=d[10];
+
+      exMap={}; exercises.forEach(function(e){exMap[e.id]={name:e.name,category:e.category,owner_id:e.owner_id};});
+
+      var U={};
+      function ensure(id){ if(!id) return null; if(!U[id]) U[id]={id:id,username:null,joined:null,last_seen:null,unit:'kg',
+        role:'user',status:'active',reason:null,sessions:0,sets:0,volume:0,custom:0,foods:0,sleeps:0,cardio:0,last:null}; return U[id]; }
+      profiles.forEach(function(p){var u=ensure(p.user_id); if(u){u.username=p.username; u.joined=p.created_at; u.last_seen=p.last_seen;}});
+      prefs.forEach(function(p){var u=ensure(p.user_id); if(u)u.unit=p.unit||'kg';});
+      flags.forEach(function(f){var u=ensure(f.user_id); if(u){u.role=f.role||'user'; u.status=f.status||'active'; u.reason=f.reason;}});
+      var sUser={}, sEx={};
+      sessions.forEach(function(s){var u=ensure(s.user_id); sUser[s.id]=s.user_id; sEx[s.id]=s.exercise_id; if(u){u.sessions++; if(!u.last||s.performed_on>u.last)u.last=s.performed_on;}});
+      sets.forEach(function(st){var uid=sUser[st.session_id]; if(uid&&U[uid]){U[uid].sets++; U[uid].volume+=(st.reps||0)*(+st.weight||0);}});
+      exercises.forEach(function(e){ if(e.owner_id){var u=ensure(e.owner_id); if(u)u.custom++;} });
+      foods.forEach(function(f){var u=ensure(f.user_id); if(u)u.foods++;});
+      sleeps.forEach(function(s){var u=ensure(s.user_id); if(u)u.sleeps++;});
+      cardio.forEach(function(c){var u=ensure(c.user_id); if(u)u.cardio++;});
+
+      var list=Object.keys(U).map(function(k){return U[k];});
+      // analytics
+      var now=new Date();
+      function withinDays(ds,n){ if(!ds) return false; var t=new Date(ds.length===10?ds+'T00:00:00':ds); return (now-t)/86400000<=n; }
+      function lastActive(u){ var a=u.last_seen?new Date(u.last_seen).getTime():0; var b=u.last?new Date(u.last+'T00:00:00').getTime():0; return Math.max(a,b); }
+      var active7=list.filter(function(u){return (now-lastActive(u))/86400000<=7 && lastActive(u)>0;}).length;
+      var new7=list.filter(function(u){return withinDays(u.joined,7);}).length;
+      var sessToday=sessions.filter(function(s){return withinDays(s.performed_on,1);}).length;
+      var sessWeek=sessions.filter(function(s){return withinDays(s.performed_on,7);}).length;
+      var everActive=list.filter(function(u){return lastActive(u)>0;});
+      var churn=everActive.length? Math.round(everActive.filter(function(u){return (now-lastActive(u))/86400000>30;}).length/everActive.length*100):0;
+      // top exercises by session count
+      var exCount={}; sessions.forEach(function(s){ if(s.exercise_id) exCount[s.exercise_id]=(exCount[s.exercise_id]||0)+1; });
+      var topEx=Object.keys(exCount).map(function(id){return {name:exName(id),cat:exCat(id),n:exCount[id]};}).sort(function(a,b){return b.n-a.n;}).slice(0,8);
+      // category distribution
+      var catDist={}; sessions.forEach(function(s){var c=exCat(s.exercise_id); catDist[c]=(catDist[c]||0)+1;});
+      // unit split
+      var unitSplit={kg:0,lb:0}; list.forEach(function(u){ unitSplit[u.unit==='lb'?'lb':'kg']++; });
+      // recent activity
+      var recent=sessions.slice().sort(function(a,b){return (b.performed_on||'').localeCompare(a.performed_on||'');}).slice(0,12)
+        .map(function(s){ var u=U[s.user_id]||{id:s.user_id}; return {u:u, ex:exName(s.exercise_id), cat:exCat(s.exercise_id), date:s.performed_on}; });
+
+      DATA={
+        usersById:U, usersList:list, cardioTypes:cardioTypes,
+        globalEx:exercises.filter(function(e){return !e.owner_id;}),
+        feedback:feedback.sort(function(a,b){return (b.created_at||'').localeCompare(a.created_at||'');}),
+        totals:{ users:list.length, sessions:sessions.length, sets:sets.length,
+          volume:Math.round(list.reduce(function(a,u){return a+u.volume;},0)),
+          custom:exercises.filter(function(e){return e.owner_id;}).length,
+          foods:foods.length, sleeps:sleeps.length, cardio:cardio.length,
+          named:list.filter(function(u){return u.username;}).length,
+          admins:list.filter(function(u){return u.role==='admin';}).length },
+        analytics:{ active7:active7, new7:new7, sessToday:sessToday, sessWeek:sessWeek, churn:churn,
+          topEx:topEx, catDist:catDist, unitSplit:unitSplit, recent:recent }
+      };
+      setBadge('feedback', DATA.feedback.filter(function(f){return f.status==='open';}).length);
+    }
+
+    /* ---------------- centers ---------------------------------------------- */
+    function renderDashboard(box){
+      $('#head-actions').innerHTML='';
+      headBtn('↻ تحديث','',async function(){await loadAll(); showCenter('dashboard');});
+      headBtn('⬇️ تصدير الكل','pri',exportAll);
+      var T=DATA.totals, A=DATA.analytics;
+      var recent=A.recent.length? A.recent.map(function(r){
+        return '<div class="row2"><span class="r-name"><span class="uname"><span class="av" style="width:26px;height:26px;font-size:11px">'+esc(initial(r.u))+'</span>'+nameHtml(r.u)+'</span></span>'+
+          '<span class="r-val" style="color:var(--text);font-weight:700"><span class="dot" style="background:'+catColor(r.cat)+';display:inline-block;margin-inline-end:6px"></span>'+esc(r.ex)+'</span>'+
+          '<span class="r-meta num">'+esc(r.date||'')+'</span></div>';
+      }).join('') : '<div class="empty-mini">لا نشاط بعد.</div>';
+      box.innerHTML=
+        '<div class="stats">'+tile(fmt(T.users),'مستخدم','alt')+tile(fmt(A.active7),'نشط (٧ أيام)','')+tile(fmt(T.sessions),'إجمالي الجلسات','')+tile(fmt(T.sets),'مجموعات','')+'</div>'+
+        '<div class="stats">'+tile(fmt(T.volume),'إجمالي الحِمل','')+tile(fmt(T.custom),'تمارين خاصة','')+tile(fmt(T.foods),'سجلات طعام','')+tile(fmt(T.sleeps),'سجلات نوم','')+'</div>'+
+        sec('أحدث النشاط','<div class="rows2">'+recent+'</div>');
+    }
+
+    function renderUsers(box){
+      $('#head-actions').innerHTML='';
+      headBtn('↻ تحديث','',async function(){await loadAll(); showCenter('users');});
+      var list=DATA.usersList.slice();
+      var q=usersFilter.trim().toLowerCase();
+      if(q) list=list.filter(function(u){return (u.username||'').toLowerCase().indexOf(q)>=0 || u.id.toLowerCase().indexOf(q)>=0;});
+      var k=usersSort.key, dir=usersSort.dir;
+      list.sort(function(a,b){ var av=a[k], bv=b[k]; if(k==='username'){av=av||''; bv=bv||''; return dir*String(av).localeCompare(String(bv));} return dir*((av||0)-(bv||0)); });
+      function stPill(u){return '<span class="pill st-'+u.status+'">'+(u.status==='active'?'نشط':u.status==='disabled'?'معطّل':'محظور')+'</span>';}
+      function rolePill(u){ if(u.role==='admin')return '<span class="pill role-admin">أدمن</span>'; if(u.role==='coach')return '<span class="pill role-coach">مدرب</span>'; return '<span class="pill">مستخدم</span>'; }
+      function th(key,label){ return '<th data-sort="'+key+'">'+label+(usersSort.key===key?(dir<0?' ▾':' ▴'):'')+'</th>'; }
+      var rows=list.length? list.map(function(u){
+        var you=(u.id===meId)?' <span class="pill you">أنت</span>':'';
+        return '<tr data-uid="'+esc(u.id)+'">'+
+          '<td><span class="uname"><span class="av">'+esc(initial(u))+'</span>'+nameHtml(u)+you+'</span></td>'+
+          '<td>'+rolePill(u)+'</td><td>'+stPill(u)+'</td>'+
+          '<td class="num">'+u.sessions+'</td><td class="num">'+u.sets+'</td><td class="num">'+u.custom+'</td>'+
+          '<td class="num muted">'+(u.last_seen?String(u.last_seen).slice(0,10):(u.last||'—'))+'</td><td class="chev">‹</td></tr>';
+      }).join('') : '<tr><td colspan="8" class="center">لا مستخدمون مطابقون.</td></tr>';
+      box.innerHTML=
+        '<div class="searchbar"><input id="user-search" type="search" placeholder="بحث بالاسم أو المعرّف…" value="'+esc(usersFilter)+'"></div>'+
+        '<div class="table-wrap"><div class="scroll-x"><table class="tbl"><thead><tr>'+
+          th('username','المستخدم')+th('role','الدور')+th('status','الحالة')+th('sessions','الجلسات')+th('sets','المجموعات')+th('custom','خاصة')+th('last_seen','آخر ظهور')+'<th class="no-sort"></th>'+
+        '</tr></thead><tbody>'+rows+'</tbody></table></div></div>';
+      var si=$('#user-search'); si.addEventListener('input',function(){ usersFilter=si.value; var pos=si.selectionStart; renderUsers(box); var ns=$('#user-search'); ns.focus(); try{ns.setSelectionRange(pos,pos);}catch(_){} });
+      Array.prototype.forEach.call(box.querySelectorAll('th[data-sort]'),function(th){ th.addEventListener('click',function(){ var key=th.getAttribute('data-sort'); if(usersSort.key===key)usersSort.dir*=-1; else usersSort={key:key,dir:key==='username'?1:-1}; renderUsers(box); }); });
+      Array.prototype.forEach.call(box.querySelectorAll('tr[data-uid]'),function(tr){ tr.addEventListener('click',function(){openUser(tr.getAttribute('data-uid'));}); });
+    }
+
+    function renderAnalytics(box){
+      $('#head-actions').innerHTML='';
+      headBtn('↻ تحديث','',async function(){await loadAll(); showCenter('analytics');});
+      var A=DATA.analytics, T=DATA.totals;
+      function bars(obj, colorFn){ var max=Math.max.apply(null,obj.map(function(x){return x.n;}).concat([1]));
+        return '<div class="bars">'+obj.map(function(x){ return '<div class="bar-row"><div class="bar-label">'+(colorFn?'<span class="tag" style="background:'+colorFn(x)+'"></span>':'')+esc(x.name)+'</div>'+
+          '<div class="bar-track"><div class="bar-fill" style="width:'+Math.round(x.n/max*100)+'%'+(colorFn?';background:'+colorFn(x):'')+'"></div></div><div class="bar-val num">'+x.n+'</div></div>'; }).join('')+'</div>'; }
+      var cats=Object.keys(A.catDist).map(function(c){return {name:c,cat:c,n:A.catDist[c]};}).sort(function(a,b){return b.n-a.n;});
+      var us=A.unitSplit;
+      box.innerHTML=
+        '<div class="stats">'+tile(fmt(A.active7),'نشط (٧ أيام)','alt')+tile(fmt(A.new7),'جديد (٧ أيام)','')+tile(fmt(A.sessToday),'جلسات اليوم','')+tile(fmt(A.sessWeek),'جلسات الأسبوع','')+'</div>'+
+        '<div class="stats">'+tile(A.churn+'%','معدّل الانقطاع (٣٠ يوم)','')+tile(fmt(T.named)+' / '+fmt(T.users),'اختاروا اسمًا','')+tile(us.kg,'يستخدمون kg','')+tile(us.lb,'يستخدمون lb','')+'</div>'+
+        '<div class="grid2">'+
+          '<div class="panel"><h4>أكثر التمارين استخدامًا</h4>'+(A.topEx.length?bars(A.topEx,function(x){return catColor(x.cat);}):'<div class="empty-mini">لا بيانات.</div>')+'</div>'+
+          '<div class="panel"><h4>توزيع المجموعات العضلية</h4>'+(cats.length?bars(cats,function(x){return catColor(x.cat);}):'<div class="empty-mini">لا بيانات.</div>')+'</div>'+
+        '</div>';
+    }
+
+    function renderCatalog(box){
+      var q=catalogQuery.trim().toLowerCase();
+      var ex=DATA.globalEx.filter(function(e){return !q || (e.name||'').toLowerCase().indexOf(q)>=0;});
+      var byCat={}; ex.forEach(function(e){(byCat[e.category]=byCat[e.category]||[]).push(e);});
+      var order=['Chest','Back','Legs','Shoulders','Arms','Core','Other'];
+      var groups=order.filter(function(c){return byCat[c];}).map(function(c){
+        return '<div class="cat-group"><h4><span class="dot" style="background:'+catColor(c)+'"></span>'+c+' <span class="count">('+byCat[c].length+')</span></h4>'+
+          '<div class="chips">'+byCat[c].map(function(e){return '<span class="chip"><span class="tag" style="background:'+catColor(c)+'"></span>'+esc(e.name)+'</span>';}).join('')+'</div></div>';
+      }).join('');
+      var cardio=DATA.cardioTypes.filter(function(c){return !c.owner_id;});
+      var cardioH=cardio.length? '<div class="chips">'+cardio.map(function(c){return '<span class="chip">🏃 '+esc(c.label)+'</span>';}).join('')+'</div>' : '<div class="empty-mini">—</div>';
+      box.innerHTML=
+        '<div class="searchbar"><input id="cat-search" type="search" placeholder="بحث في التمارين…" value="'+esc(catalogQuery)+'"></div>'+
+        (groups||'<div class="empty-mini">لا تمارين مطابقة.</div>')+
+        sec('أنواع الكارديو',cardioH);
+      var ci=$('#cat-search'); if(ci){ ci.addEventListener('input',function(){ catalogQuery=ci.value; var pos=ci.selectionStart; renderCatalog(box); var n=$('#cat-search'); n.focus(); try{n.setSelectionRange(pos,pos);}catch(_){} }); }
+    }
+
+    function renderFeedback(box){
+      $('#head-actions').innerHTML='';
+      headBtn('↻ تحديث','',async function(){await loadAll(); showCenter('feedback');});
+      var fb=DATA.feedback;
+      if(!fb.length){ box.innerHTML='<div class="center">لا اقتراحات بعد.</div>'; return; }
+      box.innerHTML='<div class="fb-list">'+fb.map(function(f){
+        return '<div class="fb-item'+(f.status==='resolved'?' resolved':'')+'" data-fid="'+esc(f.id)+'">'+
+          '<div class="fb-msg">'+esc(f.message)+'</div>'+
+          '<div class="fb-meta"><span class="who3">'+(f.username?'@'+esc(f.username):esc(shortId(f.user_id))+'…')+'</span>'+
+          '<span class="num">'+esc(String(f.created_at||'').slice(0,10))+'</span>'+
+          (f.context?'<span>· '+esc(f.context)+'</span>':'')+
+          (f.status==='resolved'?'<span class="pill st-active" style="margin-inline-start:auto">تمّت المعالجة</span>':'<button class="fb-resolve" data-resolve="'+esc(f.id)+'">وضع كمُعالَج</button>')+
+          '</div></div>';
+      }).join('')+'</div>';
+      Array.prototype.forEach.call(box.querySelectorAll('[data-resolve]'),function(b){
+        b.addEventListener('click',async function(){
+          var id=b.getAttribute('data-resolve'); b.disabled=true; b.textContent='…';
+          var r=await sb.from('feedback').update({status:'resolved'}).eq('id',id);
+          if(r.error){ toast('تعذّر: '+r.error.message); b.disabled=false; b.textContent='وضع كمُعالَج'; return; }
+          var it=DATA.feedback.filter(function(x){return x.id===id;})[0]; if(it)it.status='resolved';
+          setBadge('feedback', DATA.feedback.filter(function(x){return x.status==='open';}).length);
+          renderFeedback(box); toast('تمّت المعالجة');
+        });
+      });
+    }
+
+    function renderAdmins(box){
+      $('#head-actions').innerHTML='';
+      headBtn('↻ تحديث','',async function(){await loadAll(); showCenter('admins');});
+      var list=DATA.usersList.slice().sort(function(a,b){ var o={admin:0,coach:1,user:2}; return (o[a.role]-o[b.role]) || (b.sessions-a.sessions); });
+      var rows=list.map(function(u){
+        var you=(u.id===meId)?' <span class="pill you">أنت</span>':'';
+        var sel='<select class="big" data-role-for="'+esc(u.id)+'"'+(u.id===meId?' disabled':'')+' style="margin:0;max-width:150px">'+
+          ['user','coach','admin'].map(function(r){return '<option value="'+r+'"'+(u.role===r?' selected':'')+'>'+(r==='user'?'مستخدم':r==='coach'?'مدرب':'أدمن')+'</option>';}).join('')+'</select>';
+        return '<tr><td><span class="uname"><span class="av">'+esc(initial(u))+'</span>'+nameHtml(u)+you+'</span></td>'+
+          '<td>'+sel+'</td><td class="num muted">'+(u.last_seen?String(u.last_seen).slice(0,10):'—')+'</td></tr>';
+      }).join('');
+      box.innerHTML='<div class="table-wrap"><div class="scroll-x"><table class="tbl"><thead><tr><th class="no-sort">المستخدم</th><th class="no-sort">الدور</th><th class="no-sort">آخر ظهور</th></tr></thead><tbody>'+rows+'</tbody></table></div></div>'+
+        '<div class="empty-mini" style="margin-top:12px">تعيين دور «أدمن» يمنح صلاحية الوصول لهذه اللوحة. لا يمكنك تغيير دورك بنفسك.</div>';
+      Array.prototype.forEach.call(box.querySelectorAll('[data-role-for]'),function(s){
+        s.addEventListener('change',function(){ changeRole(s.getAttribute('data-role-for'), s.value, function(){ showCenter('admins'); }); });
+      });
+    }
+
+    async function renderReleases(box){
+      var tok=renderToken;
+      box.innerHTML='<div class="center">جارٍ جلب حالة الإصدار…</div>';
+      var apk=null; try{ var r=await fetch('version.json?_='+Date.now(),{cache:'no-store'}); if(r.ok){var j=await r.json(); apk=j&&j.apk;} }catch(_){}
+      if(tok!==renderToken) return;  // user navigated to another center meanwhile
+      var cur=apk? '<div class="rel-card"><h4 style="margin:0 0 12px">النسخة الحالية للتطبيق (APK)</h4>'+
+        '<div class="rel-row"><span class="k">رقم البناء</span><span class="v num">'+esc(apk.build)+'</span></div>'+
+        '<div class="rel-row"><span class="k">الإصدار</span><span class="v">'+esc(apk.version||'—')+'</span></div>'+
+        '<div class="rel-row"><span class="k">ملاحظات</span><span class="v">'+esc(apk.notes_ar||apk.notes_en||'—')+'</span></div>'+
+        '<div class="rel-row"><span class="k">رابط التحميل</span><span class="v"><a href="'+esc(apk.url||'#')+'" target="_blank" rel="noopener" style="color:var(--accent)">فتح</a></span></div>'+
+        '</div>' : '<div class="rel-card"><div class="empty-mini">تعذّر جلب version.json.</div></div>';
+      var share='<div class="rel-card"><h4 style="margin:0 0 10px">رابط المشاركة العام</h4><div class="rel-row"><span class="v"><code>https://moathdarweesh.github.io/vault/get/</code></span></div></div>';
+      var gen='<div class="rel-card"><h4 style="margin:0 0 12px">مولّد version.json لإصدار جديد</h4>'+
+        '<label>رقم البناء (versionCode)</label><input id="g-build" type="number" placeholder="3">'+
+        '<label>الإصدار</label><input id="g-ver" type="text" placeholder="1.2">'+
+        '<label>معرّف ملف Drive أو رابطه المباشر</label><input id="g-id" type="text" placeholder="Drive file id أو https://…">'+
+        '<label>ملاحظات (عربي)</label><input id="g-ar" type="text" placeholder="ماذا الجديد؟">'+
+        '<button class="btn" id="g-go" style="margin-top:4px">توليد</button>'+
+        '<textarea class="gen" id="g-out" readonly placeholder="سيظهر هنا JSON جاهز للصق في version.json" style="margin-top:12px"></textarea></div>';
+      box.innerHTML=cur+share+gen;
+      $('#g-go').addEventListener('click',function(){
+        var id=($('#g-id').value||'').trim();
+        var url=id.indexOf('http')===0?id:('https://drive.usercontent.google.com/download?id='+id+'&export=download&confirm=t');
+        var out={apk:{build:parseInt($('#g-build').value,10)||0, version:($('#g-ver').value||'').trim(), url:url, notes_ar:($('#g-ar').value||'').trim(), notes_en:''}};
+        $('#g-out').value=JSON.stringify(out,null,2);
+      });
+    }
+
+    /* ---------------- user management writes ------------------------------- */
+    async function changeRole(uid, role, after){
+      if(uid===meId){ toast('لا يمكنك تغيير دورك.'); if(after)after(); return; }
+      if(!confirm('تغيير دور هذا المستخدم إلى «'+(role==='admin'?'أدمن':role==='coach'?'مدرب':'مستخدم')+'»؟')){ if(after)after(); return; }
+      var r=await sb.rpc('admin_set_role',{target:uid,new_role:role});
+      if(r.error){ toast('تعذّر: '+r.error.message); if(after)after(); return; }
+      var u=DATA.usersById[uid]; if(u)u.role=role;
+      DATA.totals.admins=DATA.usersList.filter(function(x){return x.role==='admin';}).length;
+      toast('تم تغيير الدور'); if(after)after();
+    }
+    async function changeStatus(uid, status){
+      if(uid===meId){ toast('لا يمكنك تغيير حالتك.'); return; }
+      var reason=null;
+      if(status!=='active'){ reason=prompt('السبب (اختياري):','')||null; }
+      var verb=status==='banned'?'حظر':status==='disabled'?'تعطيل':'تفعيل';
+      if(!confirm(verb+' هذا المستخدم؟')) return;
+      var r=await sb.rpc('admin_set_status',{target:uid,new_status:status,reason:reason});
+      if(r.error){ toast('تعذّر: '+r.error.message); return; }
+      var u=DATA.usersById[uid]; if(u){u.status=status; u.reason=reason;}
+      toast('تم تحديث الحالة'); openUser(uid);
+    }
+
+    /* ---------------- per-user drilldown ----------------------------------- */
     async function openUser(uid){
-      var u=usersById[uid]||{id:uid,username:null,unit:'kg'};
+      var u=DATA.usersById[uid]||{id:uid,username:null,unit:'kg',role:'user',status:'active'};
       var box=$('#detail'), inner=$('#detail-inner');
       inner.innerHTML='<div class="center">جارٍ تحميل بيانات المستخدم…</div>';
       box.classList.add('show'); window.scrollTo(0,0);
       try{
         var r=await Promise.all([
-          sb.from('workout_sessions').select('id, exercise_id, performed_on').eq('user_id',uid),
-          sb.from('plan_days').select('day_of_week, name').eq('user_id',uid),
-          sb.from('plan_day_exercises').select('day_of_week, exercise_id, position').eq('user_id',uid),
-          sb.from('food_logs').select('logged_on, name, calories, protein, carbs, fat').eq('user_id',uid),
-          sb.from('sleep_logs').select('slept_on, sleep_time, wake_time, duration_min').eq('user_id',uid),
-          sb.from('exercises').select('id, name, category').eq('owner_id',uid)
+          fetchAll(function(a,b){return sb.from('workout_sessions').select('id, exercise_id, performed_on').eq('user_id',uid).range(a,b);}),
+          fetchAll(function(a,b){return sb.from('plan_days').select('day_of_week, name').eq('user_id',uid).range(a,b);}),
+          fetchAll(function(a,b){return sb.from('plan_day_exercises').select('day_of_week, exercise_id, position').eq('user_id',uid).range(a,b);}),
+          fetchAll(function(a,b){return sb.from('food_logs').select('logged_on, name, calories').eq('user_id',uid).range(a,b);}),
+          fetchAll(function(a,b){return sb.from('sleep_logs').select('slept_on, sleep_time, wake_time, duration_min').eq('user_id',uid).range(a,b);}),
+          fetchAll(function(a,b){return sb.from('exercises').select('id, name, category').eq('owner_id',uid).range(a,b);})
         ]);
-        for(var i=0;i<r.length;i++){if(r[i].error) throw r[i].error;}
-        var sessions=r[0].data||[], plans=r[1].data||[], planEx=r[2].data||[], foods=r[3].data||[], sleeps=r[4].data||[], customs=r[5].data||[];
-        var sets=[]; var ids=sessions.map(function(s){return s.id;});
-        if(ids.length){ var sr=await sb.from('workout_sets').select('session_id, set_index, reps, weight').in('session_id',ids); if(sr.error) throw sr.error; sets=sr.data||[]; }
+        var sessions=(r[0].data||[]), plans=(r[1].data||[]), planEx=(r[2].data||[]), foods=(r[3].data||[]), sleeps=(r[4].data||[]), customs=(r[5].data||[]);
+        // sets: chunk session ids (keeps the .in() URL short) and page each chunk
+        var sets=[], ids=sessions.map(function(s){return s.id;});
+        for(var i=0;i<ids.length;i+=60){
+          var chunk=ids.slice(i,i+60);
+          var sr=await fetchAll((function(ch){return function(a,b){return sb.from('workout_sets').select('session_id, set_index, reps, weight').in('session_id',ch).range(a,b);};})(chunk));
+          if(sr.data) sets=sets.concat(sr.data);
+        }
         renderDetail(u, {sessions:sessions,sets:sets,plans:plans,planEx:planEx,foods:foods,sleeps:sleeps,customs:customs});
       }catch(e){ inner.innerHTML='<div class="d-top"><button class="d-back" id="dback">‹ رجوع</button></div><div class="center">تعذّر التحميل: '+esc(e.message||e)+'</div>'; wireBack(); }
     }
     function wireBack(){ var b=$('#dback'); if(b)b.addEventListener('click',function(){$('#detail').classList.remove('show');}); }
 
+    function mgmtHtml(u){
+      var self=(u.id===meId);
+      var roleSel='<select class="big" id="mg-role"'+(self?' disabled':'')+'>'+
+        ['user','coach','admin'].map(function(rr){return '<option value="'+rr+'"'+(u.role===rr?' selected':'')+'>'+(rr==='user'?'مستخدم':rr==='coach'?'مدرب':'أدمن')+'</option>';}).join('')+'</select>';
+      var stbtns=['active','disabled','banned'].map(function(s){
+        var on=u.status===s?(' on-'+s):''; var lbl=s==='active'?'نشط':s==='disabled'?'معطّل':'محظور';
+        return '<button class="stbtn'+on+'" data-st="'+s+'"'+(self?' disabled':'')+'>'+lbl+'</button>';
+      }).join('');
+      return sec('الإدارة','<div class="mgmt">'+
+        '<div class="mrow"><div class="mlabel">الدور</div>'+roleSel+'</div>'+
+        '<div class="mrow"><div class="mlabel">الحالة</div><div class="stbtns">'+stbtns+'</div></div>'+
+        (u.reason?'<div class="selfnote">السبب المسجّل: '+esc(u.reason)+'</div>':'')+
+        (self?'<div class="selfnote">هذا حسابك — لا يمكنك تغيير دورك أو حالتك.</div>':'')+
+        '<div class="selfnote">آخر ظهور: '+(u.last_seen?esc(String(u.last_seen).replace('T',' ').slice(0,16)):'—')+'</div>'+
+      '</div>');
+    }
+
     function renderDetail(u, d){
-      // sets by session
       var setsBy={}; d.sets.forEach(function(s){(setsBy[s.session_id]=setsBy[s.session_id]||[]).push(s);});
-      // sessions grouped by date desc
       var byDate={}; d.sessions.forEach(function(s){(byDate[s.performed_on]=byDate[s.performed_on]||[]).push(s);});
       var dates=Object.keys(byDate).sort().reverse();
       var logHtml=dates.length? dates.map(function(dt){
@@ -369,8 +722,6 @@
         }).join('');
         return '<div class="daygrp"><div class="daygrp-h"><span class="daygrp-date">'+esc(dt)+'</span><span class="daygrp-meta">'+byDate[dt].length+' تمرين</span></div>'+exs+'</div>';
       }).join('') : '<div class="empty-mini">لا جلسات مسجّلة.</div>';
-
-      // plan
       var DOW=['الأحد','الإثنين','الثلاثاء','الأربعاء','الخميس','الجمعة','السبت'];
       var exByDay={}; d.planEx.forEach(function(p){(exByDay[p.day_of_week]=exByDay[p.day_of_week]||[]).push(p);});
       var planHtml=d.plans.length? d.plans.sort(function(a,b){return a.day_of_week-b.day_of_week;}).map(function(pd){
@@ -378,35 +729,40 @@
         var li=exs.length? exs.map(function(pe){return '<li><span class="dot" style="background:'+catColor(exCat(pe.exercise_id))+'"></span>'+esc(exName(pe.exercise_id))+'</li>';}).join('') : '<li class="muted">—</li>';
         return '<div class="day"><div class="day-name">'+esc(pd.name||DOW[pd.day_of_week])+' · '+DOW[pd.day_of_week]+'</div><ul>'+li+'</ul></div>';
       }).join('') : '<div class="empty-mini">لا خطة أسبوعية.</div>';
-
-      // customs
       var custHtml=d.customs.length? '<div class="chips">'+d.customs.map(function(e){return '<span class="chip"><span class="tag" style="background:'+catColor(e.category)+'"></span>'+esc(e.name)+'</span>';}).join('')+'</div>' : '<div class="empty-mini">لا تمارين خاصة.</div>';
-
-      // food
       var foodHtml=d.foods.length? '<div class="rows2">'+d.foods.slice().sort(function(a,b){return (b.logged_on||'').localeCompare(a.logged_on||'');}).map(function(f){
         return '<div class="row2"><span class="r-name">'+esc(f.name)+'</span><span class="r-val num">'+Math.round(+f.calories)+' سعرة</span><span class="r-meta num">'+esc(f.logged_on)+'</span></div>';
       }).join('')+'</div>' : '<div class="empty-mini">لا وجبات مسجّلة.</div>';
-
-      // sleep
       var sleepHtml=d.sleeps.length? '<div class="rows2">'+d.sleeps.slice().sort(function(a,b){return (b.slept_on||'').localeCompare(a.slept_on||'');}).map(function(s){
         var h=Math.floor((s.duration_min||0)/60), m=(s.duration_min||0)%60;
         return '<div class="row2"><span class="r-name num" style="direction:ltr">'+(s.sleep_time||'—')+' → '+(s.wake_time||'—')+'</span><span class="r-val num">'+h+'س '+m+'د</span><span class="r-meta num">'+esc(s.slept_on)+'</span></div>';
       }).join('')+'</div>' : '<div class="empty-mini">لا نوم مسجّل.</div>';
-
       var totSets=d.sets.length, totVol=Math.round(d.sets.reduce(function(a,x){return a+(x.reps*(+x.weight||0));},0));
       $('#detail-inner').innerHTML=
         '<div class="d-top"><button class="d-back" id="dback">‹ رجوع للقائمة</button><span class="d-id">'+esc(u.id)+'</span></div>'+
         '<div class="d-title"><span class="av">'+esc(initial(u))+'</span><span class="name">'+nameHtml(u)+'</span></div>'+
         '<div class="stats">'+tile(d.sessions.length,'جلسة','alt')+tile(totSets,'مجموعة','')+tile(totVol.toLocaleString('en-US'),'حِمل ('+(u.unit||'kg').toUpperCase()+')','')+tile(d.customs.length,'تمرين خاص','')+'</div>'+
+        mgmtHtml(u)+
         sec('الخطة الأسبوعية','<div class="plan">'+planHtml+'</div>')+
         sec('سجلّ التمارين','<div class="log">'+logHtml+'</div>')+
         sec('التمارين الخاصة',custHtml)+
         sec('التغذية',foodHtml)+
         sec('النوم',sleepHtml);
       wireBack();
+      var rs=$('#mg-role'); if(rs)rs.addEventListener('change',function(){ changeRole(u.id, rs.value, function(){ var uu=DATA.usersById[u.id]; if(uu)openUser(u.id); }); });
+      Array.prototype.forEach.call(document.querySelectorAll('#detail [data-st]'),function(b){ b.addEventListener('click',function(){ changeStatus(u.id, b.getAttribute('data-st')); }); });
     }
-    function sec(title,body){return '<div class="dsec"><div class="sec-head"><h3>'+title+'</h3><span class="rule"></span></div>'+body+'</div>';}
 
+    /* ---------------- export ----------------------------------------------- */
+    function exportAll(){
+      var payload={ exported:'THE VAULT admin export', totals:DATA.totals, analytics:DATA.analytics,
+        users:DATA.usersList, feedback:DATA.feedback };
+      var blob=new Blob([JSON.stringify(payload,null,2)],{type:'application/json'});
+      var a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download='vault-export.json'; a.click();
+      setTimeout(function(){URL.revokeObjectURL(a.href);},1000); toast('تم تصدير البيانات');
+    }
+
+    /* ---------------- boot -------------------------------------------------- */
     (async function(){
       if(location.hash.indexOf('type=recovery')!==-1){ showLogin(); showPanel('panel-newpw'); return; }
       var s=await sb.auth.getSession();
