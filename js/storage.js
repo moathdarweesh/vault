@@ -854,6 +854,40 @@ const DB = {
       save();
       return ex;
     },
+    // Merge admin-curated GLOBAL exercises (pulled from Supabase, owner_id IS
+    // NULL) into this device's library as ordinary, non-custom entries — same
+    // shape as the built-in seed/machine catalog above. Additive + idempotent:
+    // skips any name already present (case-insensitive) so calling this again
+    // on every boot never duplicates and never touches what the user already
+    // has. isCustom stays false so js/tables.js keeps mapping these by name to
+    // the shared global catalog instead of re-uploading them as this user's
+    // own customs. `list` items: { name, category, imageSlug, machineType }.
+    mergeGlobal(list) {
+      if (!Array.isArray(list) || !list.length) return 0;
+      const existing = new Set(STATE.exercises.map((e) => (e.name || '').trim().toLowerCase()));
+      let added = 0;
+      list.forEach((g) => {
+        const name = ((g && g.name) || '').trim();
+        if (!name) return;
+        const key = name.toLowerCase();
+        if (existing.has(key)) return;
+        existing.add(key);
+        STATE.exercises.push({
+          id: uid(),
+          name,
+          category: EXERCISE_CATEGORIES.includes(g.category) ? g.category : 'Other',
+          imageSlug: g.imageSlug || null,
+          machineType: g.machineType || null,
+          customImage: null,
+          isCustom: false,
+          inMyList: false,
+          createdAt: new Date().toISOString(),
+        });
+        added++;
+      });
+      if (added) save();
+      return added;
+    },
   },
 
   // ----- Sessions (workout sets logged per exercise) -----

@@ -106,6 +106,29 @@ const WORKOUT_TEMPLATES = [
   },
 ];
 
+// Server-provided "ready-made plans" (admin panel `preset_plans`, pulled at
+// boot — see bootCatalog()). Same shape as a WORKOUT_TEMPLATES entry
+// ({ id, name, description, days:[{name, exercises:[names]}] }) so they can
+// flow through the exact same openScheduleModal()/DB.plan.applySchedule path.
+// Starts empty so the templates browser is byte-for-byte unchanged offline or
+// before the catalog has loaded (or is empty).
+let SERVER_PRESET_PLANS = [];
+function setServerPresetPlans(rows) {
+  try {
+    SERVER_PRESET_PLANS = (Array.isArray(rows) ? rows : [])
+      .filter((p) => p && p.id && p.data && Array.isArray(p.data.days) && p.data.days.length)
+      .map((p) => ({
+        id: p.id,
+        name: (p.name || 'Plan').toString(),
+        description: (p.description || '').toString(),
+        days: p.data.days
+          .filter((d) => d && Array.isArray(d.exercises))
+          .map((d) => ({ name: (d.name || 'Workout').toString(), exercises: d.exercises.filter((n) => typeof n === 'string') })),
+      }))
+      .filter((p) => p.days.length);
+  } catch (_) { SERVER_PRESET_PLANS = []; }
+}
+
 // Exercise variations - alternative names for similar movements (case-sensitive name lookup)
 const EXERCISE_VARIATIONS = {
   'Bench Press': ['Dumbbell Press', 'Incline Bench Press', 'Push Up', 'Chest Press Machine'],
@@ -490,6 +513,7 @@ const I18N = {
     fcat_fats: 'Nuts & Fats',
     fcat_meals: 'Meals',
     fcat_drinks: 'Drinks',
+    fcat_more: 'More',
     new_food: 'New Food', edit_food: 'Edit Food',
     food_quick: 'Macros per serving.',
     serving_opt: 'Serving (optional)', serving_hint: 'e.g. 100g, 1 cup',
@@ -680,6 +704,8 @@ const I18N = {
     tmpl_desc_upper_lower: 'Balanced upper / lower split',
     tmpl_desc_full_body: 'Full-body sessions',
     tmpl_desc_bro_split: 'Bodybuilding muscle split',
+    preset_badge: 'Ready-made',
+    ready_made_section: 'More ready-made plans',
     pick_mode_title: 'Tap to add to Train',
     pick_mode_sub: 'Tap any exercise to add or remove it instantly.',
     add_to_train: 'Add to Train',
@@ -971,6 +997,7 @@ const I18N = {
     fcat_fats: 'مكسرات ودهون',
     fcat_meals: 'وجبات',
     fcat_drinks: 'مشروبات',
+    fcat_more: 'المزيد',
     new_food: 'أكل جديد', edit_food: 'تعديل الأكل',
     food_quick: 'المعدلات الغذائية لكل حصة.',
     serving_opt: 'الحصة (اختياري)', serving_hint: 'مثلاً 100جم، كوب',
@@ -1158,6 +1185,8 @@ const I18N = {
     tmpl_desc_upper_lower: 'تقسيمة متوازنة: علوي / سفلي',
     tmpl_desc_full_body: 'حصص للجسم كامل',
     tmpl_desc_bro_split: 'تقسيمة كمال الأجسام',
+    preset_badge: 'جاهزة',
+    ready_made_section: 'مزيد من الخطط الجاهزة',
     pick_mode_title: 'اضغط على التمرين لإضافته',
     pick_mode_sub: 'كل ضغطة تضيف أو تشيل التمرين من قائمة التدريب فوراً.',
     add_to_train: 'أضف للتمارين',
@@ -2030,7 +2059,7 @@ function renderHome(el) {
 
     ${recentHtml}
 
-    <div style="text-align:center;opacity:.4;font-size:12px;margin:24px 0 8px;letter-spacing:.5px">THE VAULT · v110</div>
+    <div style="text-align:center;opacity:.4;font-size:12px;margin:24px 0 8px;letter-spacing:.5px">THE VAULT · v111</div>
   `;
 
   // Count-up the hero/stat numerals (sleep is stored ×10 for one decimal)
@@ -3257,6 +3286,29 @@ const FOOD_CAT_ORDER = ['protein', 'carbs', 'legumes', 'dairy', 'fruit', 'veg', 
 function foodPresetName(p) { return (DB.prefs.get().lang || 'en') === 'ar' ? p.ar : p.en; }
 function foodPresetServing(p) { return (DB.prefs.get().lang || 'en') === 'ar' ? p.sa : p.s; }
 
+// Admin-curated global foods (server `food_catalog`, pulled at boot — see
+// bootCatalog()). Reshaped into the same { cat, en, ar, s, sa, cal, pro, carb }
+// preset shape as FOOD_PRESETS so the quick-add picker can render/search/tap
+// them identically. There's no separate admin ar/en pair, so both fields hold
+// the single stored name (same pattern as any other untranslated user content
+// in the app, e.g. custom exercise/food names). Grouped under its own "More"
+// category so it never disturbs the curated built-in categories above.
+let SERVER_FOOD_PRESETS = [];
+function setServerFoodCatalog(rows) {
+  try {
+    SERVER_FOOD_PRESETS = (Array.isArray(rows) ? rows : [])
+      .filter((f) => f && f.name)
+      .map((f) => ({
+        cat: 'more',
+        en: String(f.name), ar: String(f.name),
+        s: f.serving || '', sa: f.serving || '',
+        cal: Number(f.calories) || 0, pro: Number(f.protein) || 0, carb: Number(f.carbs) || 0,
+      }));
+  } catch (_) { SERVER_FOOD_PRESETS = []; }
+}
+function allFoodPresets() { return SERVER_FOOD_PRESETS.length ? FOOD_PRESETS.concat(SERVER_FOOD_PRESETS) : FOOD_PRESETS; }
+function allFoodCatOrder() { return SERVER_FOOD_PRESETS.length ? FOOD_CAT_ORDER.concat(['more']) : FOOD_CAT_ORDER; }
+
 // The AI-chat CTA floats above the bottom nav. It is mounted on `.app`
 // (a sibling of the nav) rather than inside the Food view, because the view
 // carries a `fadeUp` transform — and a transformed ancestor turns any
@@ -3478,8 +3530,9 @@ function openFoodModal(foodId = null) {
 function openFoodLibraryModal() {
   function buildSections() {
     const existing = new Set(DB.foods.list().map((f) => f.name.trim().toLowerCase()));
-    return FOOD_CAT_ORDER.map((cat) => {
-      const chips = FOOD_PRESETS
+    const presets = allFoodPresets();
+    return allFoodCatOrder().map((cat) => {
+      const chips = presets
         .map((p, idx) => ({ p, idx }))
         .filter(({ p }) => p.cat === cat)
         .map(({ p, idx }) => {
@@ -3533,7 +3586,7 @@ function openFoodLibraryModal() {
   body.addEventListener('click', (e) => {
     const btn = e.target.closest('.food-lib-chip');
     if (!btn || btn.classList.contains('added')) return;
-    const p = FOOD_PRESETS[Number(btn.dataset.preset)];
+    const p = allFoodPresets()[Number(btn.dataset.preset)];
     if (!p) return;
     DB.foods.add({ name: foodPresetName(p), serving: foodPresetServing(p), calories: p.cal, protein: p.pro, carbs: p.carb });
     btn.classList.add('added');
@@ -4610,6 +4663,19 @@ function openTemplatesModal() {
     </div>
   `).join('');
 
+  // Admin-curated "ready-made plans" (server preset_plans), additive to the
+  // built-in templates above. Empty/offline → this whole block renders nothing.
+  const serverCards = SERVER_PRESET_PLANS.map((tmpl) => `
+    <div class="compare-card" style="margin-bottom:8px">
+      <div class="compare-card-title">${escapeHtml(tmpl.name)} <span class="today-plan-chip" style="margin-inline-start:6px">${t('preset_badge')}</span></div>
+      <div style="font-size:12px;color:var(--text-mute);margin-bottom:10px">${tmpl.description ? escapeHtml(tmpl.description) + ' · ' : ''}<span class="num">${fmtNum(tmpl.days.length)}</span> ${t('workouts_label')}</div>
+      <div style="display:flex;flex-wrap:wrap;gap:5px;margin-bottom:12px">
+        ${tmpl.days.map((d) => `<span class="today-plan-chip">${escapeHtml(d.name)}</span>`).join('')}
+      </div>
+      <button class="btn btn-primary btn-block" data-apply-server="${tmpl.id}">${t('apply')}</button>
+    </div>
+  `).join('');
+
   openModal(`
     <div class="modal-header">
       <div>
@@ -4619,11 +4685,19 @@ function openTemplatesModal() {
       <button class="icon-btn icon-btn-tile" data-close>${icon('close', 18)}</button>
     </div>
     ${cards}
+    ${serverCards ? `<div class="modal-subtitle" style="margin:14px 0 8px">${t('ready_made_section')}</div>${serverCards}` : ''}
   `);
 
   document.querySelectorAll('[data-apply]').forEach((b) =>
     b.addEventListener('click', () => {
       const tmpl = WORKOUT_TEMPLATES.find((x) => x.id === b.dataset.apply);
+      if (!tmpl) return;
+      openScheduleModal(tmpl);
+    })
+  );
+  document.querySelectorAll('[data-apply-server]').forEach((b) =>
+    b.addEventListener('click', () => {
+      const tmpl = SERVER_PRESET_PLANS.find((x) => x.id === b.dataset.applyServer);
       if (!tmpl) return;
       openScheduleModal(tmpl);
     })
@@ -6457,7 +6531,7 @@ function showFeedback() {
     if (!window.Cloud || !Cloud.configured() || !Cloud.submitFeedback) { err(t('auth_err_network')); return; }
     err(''); btn.disabled = true; btn.textContent = t('auth_signing');
     try {
-      const res = await Cloud.submitFeedback(msg, 'v110');
+      const res = await Cloud.submitFeedback(msg, 'v111');
       if (res && res.ok) { closeModal(); showToast(t('feedback_sent')); return; }
       err(res && res.error === 'offline' ? t('auth_err_network') : t('auth_err_generic'));
     } catch (_) { err(t('auth_err_generic')); }
@@ -6626,6 +6700,137 @@ async function bootCloud() {
   enforceAccountStatus();                          // block disabled/banned accounts
 }
 
+// ==========================================================================
+// Admin-managed global catalog (Supabase `exercises` / `food_catalog` /
+// `preset_plans` / `app_config`, written from admin.html) — pulled additively
+// at boot so the app simply shows more when the owner adds content, and
+// behaves exactly as it always has when a table is empty, unreachable, or the
+// user is offline. Works logged-out too (these tables are public-read).
+// Every step is independently wrapped so a failure here is silent and can
+// NEVER block boot or break local/offline usage.
+// ==========================================================================
+async function bootCatalog() {
+  if (!window.Cloud || !Cloud.pullCatalog) return;
+  let catalog;
+  try { catalog = await Cloud.pullCatalog(); } catch (_) { return; }
+  if (!catalog) return;
+
+  // a) Global exercises → merged into the library as ordinary (non-custom)
+  // entries. DB.exercises.mergeGlobal dedupes by lowercased name, so calling
+  // this on every boot is always safe and never creates duplicates.
+  try {
+    if (Array.isArray(catalog.exercises) && catalog.exercises.length && DB.exercises && DB.exercises.mergeGlobal) {
+      const added = DB.exercises.mergeGlobal(catalog.exercises.map((g) => ({
+        name: g && g.name,
+        category: g && g.category,
+        imageSlug: g && g.image_slug,
+        machineType: g && g.machine_type,
+      })));
+      // Reflect immediately if the library happens to already be open.
+      if (added && currentView === 'library') renderView('library');
+    }
+  } catch (_) {}
+
+  // b) Ready-made plans → additive to the built-in templates browse.
+  try { setServerPresetPlans(catalog.presets); } catch (_) {}
+
+  // c) Global foods → additive to the quick-add picker.
+  try { setServerFoodCatalog(catalog.foods); } catch (_) {}
+
+  // d) Dismissible announcement banner + e) one-time default-unit seed.
+  try { if (catalog.config) showAnnouncementBanner(catalog.config); } catch (_) {}
+  try { if (catalog.config) seedDefaultUnitIfNew(catalog.config); } catch (_) {}
+}
+
+// Dismissible in-app banner for the admin's `app_config.announcement_*`.
+// Localized per the current UI language; falls back to whichever language IS
+// filled in if only one was set. Dismissal is remembered by the announcement's
+// own text (not a version number), so editing the message shows it again, but
+// re-showing the exact same text never nags a user who already dismissed it.
+function showAnnouncementBanner(config) {
+  if (!config || !config.announcement_active) return;
+  const lang = (DB.prefs.get().lang) || 'en';
+  const text = String(
+    (lang === 'ar' ? config.announcement_ar : config.announcement_en)
+    || config.announcement_en || config.announcement_ar || ''
+  ).trim();
+  if (!text) return;
+  if (document.getElementById('announcement-banner')) return;
+  const DISMISS_KEY = 'vault_announcement_dismissed';
+  let dismissed = '';
+  try { dismissed = localStorage.getItem(DISMISS_KEY) || ''; } catch (_) {}
+  if (dismissed === text) return;
+
+  const el = document.createElement('div');
+  el.id = 'announcement-banner';
+  el.className = 'update-banner announcement-banner';
+  el.innerHTML = `
+    <div class="update-banner-main">
+      <div class="update-banner-icon">${icon('info', 20)}</div>
+      <div class="update-banner-text">
+        <div class="update-banner-notes">${escapeHtml(text)}</div>
+      </div>
+    </div>
+    <div class="update-banner-actions">
+      <button type="button" class="icon-btn icon-btn-tile" id="announcement-dismiss" aria-label="${escapeHtml(t('close'))}">${icon('close', 16)}</button>
+    </div>
+  `;
+  document.body.appendChild(el);
+  requestAnimationFrame(() => el.classList.add('show'));
+
+  // Best-effort: if the native-shell "new APK" banner is also showing (both
+  // use the same fixed bottom slot), stack ours above it instead of
+  // overlapping. Purely cosmetic — never affects function.
+  let repositionObserver = null;
+  const reposition = () => {
+    const upd = document.getElementById('update-banner');
+    if (upd && upd !== el) {
+      el.style.bottom = `calc(var(--nav-h) + var(--safe-b) + var(--sp-3) + ${upd.offsetHeight + 12}px)`;
+    } else {
+      el.style.bottom = '';
+    }
+  };
+  try {
+    reposition();
+    repositionObserver = new MutationObserver(reposition);
+    repositionObserver.observe(document.body, { childList: true });
+  } catch (_) {}
+
+  el.querySelector('#announcement-dismiss').addEventListener('click', () => {
+    try { localStorage.setItem(DISMISS_KEY, text); } catch (_) {}
+    if (repositionObserver) { try { repositionObserver.disconnect(); } catch (_) {} }
+    el.classList.remove('show');
+    setTimeout(() => { if (el.parentNode) el.parentNode.removeChild(el); }, 300);
+  });
+}
+
+// One-time seed of the weight-unit preference from the admin's
+// `app_config.default_unit` — ONLY for a genuinely brand-new install (no
+// logged data yet). An existing user's setup (even an untouched 'kg' default)
+// is never overridden once they've started using the app. Guarded by a
+// persisted flag so this is attempted at most once per install, ever.
+function seedDefaultUnitIfNew(config) {
+  if (!config || (config.default_unit !== 'kg' && config.default_unit !== 'lb')) return;
+  const FLAG = 'vault_default_unit_seeded_v1';
+  try { if (localStorage.getItem(FLAG)) return; } catch (_) { return; }
+  try { localStorage.setItem(FLAG, '1'); } catch (_) { return; } // one-time, regardless of the outcome below
+  try {
+    const all = DB.getAll();
+    const hasUserData = !!(
+      (all.sessions && all.sessions.length) || (all.cardio && all.cardio.length) ||
+      (all.sleep && all.sleep.length) || (all.foods && all.foods.length) ||
+      (all.foodLogs && Object.keys(all.foodLogs).length) ||
+      (all.supplements && all.supplements.length) ||
+      (all.supplementLogs && Object.keys(all.supplementLogs).length) ||
+      (all.exercises && all.exercises.some((e) => e && e.isCustom))
+    );
+    if (hasUserData) return; // not a brand-new user — never override their setup
+    if ((all.prefs && all.prefs.unit) !== config.default_unit) {
+      DB.prefs.setUnit(config.default_unit);
+    }
+  } catch (_) {}
+}
+
 // Fade newly-loaded images in smoothly. One capture listener covers every
 // <img> in the app (load events don't bubble, so capture is required) —
 // no per-render JS needed. CSS pairs .machine-photo/.detail-hero img with
@@ -6640,4 +6845,5 @@ document.addEventListener('load', (e) => {
   applyLang(prefs.lang || 'en');
   navigate('home', {}, { fromPop: true }); // root entry — don't grow history
   bootCloud();
+  bootCatalog(); // best-effort admin-content pull; works logged-out too
 })();

@@ -34,7 +34,7 @@ Bump the version in **four** places in `index.html` + the label, or the change n
 2. `?v=N` on the `<link rel="stylesheet" href="styles.css?v=N">`.
 3. The `__cleaned_vN` sessionStorage key in the inline cleanup script.
 4. The visible build label `THE VAULT · vN` in `app.js`.
-Then grep for the old number — zero matches should remain. **Current version: v110.**
+Then grep for the old number — zero matches should remain. **Current version: v111.**
 
 ## Deploy
 - **Web:** commit + push to `main`; GitHub Pages auto-rebuilds.

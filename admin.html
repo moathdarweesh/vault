@@ -201,6 +201,26 @@
     opacity:0; transform:translateY(12px); transition:opacity .2s, transform .2s; pointer-events:none}
   .toast.show{opacity:1; transform:none}
 
+  /* CRUD modal + editable rows */
+  .adm-overlay{position:fixed;inset:0;background:rgba(0,0,0,.62);z-index:100;display:grid;place-items:center;padding:20px}
+  .adm-modal{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);width:100%;max-width:460px;max-height:88vh;overflow:auto}
+  .adm-modal-h{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:16px 18px;border-bottom:1px solid var(--line);font-weight:800;font-size:15px}
+  .adm-modal-h button{background:none;border:none;color:var(--dim);font-size:16px;cursor:pointer}
+  .adm-modal-b{padding:16px 18px}
+  .adm-modal-b label{margin-top:8px}
+  .adm-modal-f{display:flex;gap:10px;justify-content:flex-end;padding:14px 18px;border-top:1px solid var(--line)}
+  .adm-modal-f .abtn{padding:10px 18px}
+  .crud-list{display:flex;flex-direction:column;gap:8px}
+  .crud-row{display:flex;align-items:center;gap:10px;background:var(--surface);border:1px solid var(--line);border-radius:var(--radius-sm);padding:10px 14px;font-size:14px}
+  .crud-row .cr-name{font-weight:700;display:flex;align-items:center;gap:8px;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .crud-row .cr-meta{color:var(--mute);font-size:12px;margin-inline-start:auto;flex-shrink:0}
+  .crud-row .cr-act{display:flex;gap:6px;flex-shrink:0}
+  .cr-btn{background:var(--surface-2);border:1px solid var(--line);color:var(--dim);border-radius:8px;padding:5px 10px;font-size:12px;font-weight:700;cursor:pointer}
+  .cr-btn:hover{color:var(--text)} .cr-btn.del:hover{color:var(--red);border-color:var(--red)}
+  .subtabs{display:flex;gap:6px;margin-bottom:16px;flex-wrap:wrap}
+  .subtab{background:var(--surface);border:1px solid var(--line);color:var(--dim);border-radius:99px;padding:8px 16px;font-size:13px;font-weight:700;cursor:pointer}
+  .subtab.active{background:var(--accent-soft);color:var(--accent);border-color:transparent}
+
   @media (max-width:860px){
     .shell{flex-direction:column}
     .sidebar{width:auto; height:auto; position:sticky; top:0; z-index:30; flex-direction:row; align-items:center;
@@ -312,7 +332,7 @@
     var renderToken=0;   // bumped on every showCenter → guards stale async renders
 
     var exMap={}, meId=null, DATA=null, curCenter='dashboard';
-    var usersFilter='', usersSort={key:'sessions',dir:-1}, catalogQuery='';
+    var usersFilter='', usersSort={key:'sessions',dir:-1}, catalogQuery='', catalogTab='exercises';
     function exName(id){return exMap[id]?exMap[id].name:'—';}
     function exCat(id){return exMap[id]?exMap[id].category:'Other';}
 
@@ -320,9 +340,12 @@
       {id:'dashboard', ic:'📊', label:'لوحة القيادة', title:'لوحة القيادة', sub:'نظرة عامة على النشاط والبيانات'},
       {id:'users',     ic:'👥', label:'المستخدمون', title:'المستخدمون', sub:'عرض/بحث/فلترة + إدارة الأدوار والحالة'},
       {id:'analytics', ic:'📈', label:'التحليلات', title:'التحليلات', sub:'إحصاءات مجمّعة عبر كل المستخدمين'},
-      {id:'catalog',   ic:'🏋️', label:'الكتالوج', title:'الكتالوج', sub:'التمارين والكارديو المرجعية'},
+      {id:'catalog',   ic:'🏋️', label:'الكتالوج', title:'إدارة المحتوى', sub:'تمارين، أطعمة، وكارديو — إضافة/تعديل/حذف'},
+      {id:'presets',   ic:'📋', label:'الخطط الجاهزة', title:'الخطط الجاهزة', sub:'خطط يتصفّحها المستخدم ويتبنّاها'},
       {id:'feedback',  ic:'📮', label:'الاقتراحات', title:'صندوق الاقتراحات', sub:'ملاحظات المستخدمين'},
       {id:'admins',    ic:'🛡️', label:'الأدوار', title:'الأدوار والمشرفون', sub:'من له صلاحية، وتعيين الأدوار'},
+      {id:'audit',     ic:'🧾', label:'سجل العمليات', title:'سجل العمليات', sub:'كل إجراء إداري: من فعل ماذا ومتى'},
+      {id:'settings',  ic:'⚙️', label:'الإعدادات', title:'الإعدادات العامة', sub:'القيم الافتراضية وإعلان للمستخدمين'},
       {id:'releases',  ic:'🚀', label:'الإصدارات', title:'الإصدارات', sub:'حالة التطبيق ونشر التحديثات'}
     ];
 
@@ -406,8 +429,11 @@
       else if(id==='users') renderUsers(box);
       else if(id==='analytics') renderAnalytics(box);
       else if(id==='catalog') renderCatalog(box);
+      else if(id==='presets') renderPresets(box);
       else if(id==='feedback') renderFeedback(box);
       else if(id==='admins') renderAdmins(box);
+      else if(id==='audit') renderAudit(box);
+      else if(id==='settings') renderSettings(box);
       else if(id==='releases') renderReleases(box);
     }
     function headBtn(label,cls,fn){
@@ -419,7 +445,7 @@
     async function loadAll(){
       $('#center').innerHTML='<div class="center">جارٍ التحميل…</div>';
       var res=await Promise.all([
-        fetchAll(function(a,b){return sb.from('exercises').select('id,name,category,owner_id').range(a,b);}),
+        fetchAll(function(a,b){return sb.from('exercises').select('id,name,category,owner_id,deleted_at').range(a,b);}),
         fetchAll(function(a,b){return sb.from('profiles').select('user_id,username,created_at,last_seen').range(a,b);}),
         fetchAll(function(a,b){return sb.from('user_prefs').select('user_id,unit').range(a,b);}),
         fetchAll(function(a,b){return sb.from('user_flags').select('user_id,role,status,reason').range(a,b);}),
@@ -428,12 +454,17 @@
         fetchAll(function(a,b){return sb.from('food_logs').select('user_id').range(a,b);}),
         fetchAll(function(a,b){return sb.from('sleep_logs').select('user_id').range(a,b);}),
         fetchAll(function(a,b){return sb.from('cardio_logs').select('user_id').range(a,b);}),
-        fetchAll(function(a,b){return sb.from('cardio_types').select('id,label,owner_id').range(a,b);}),
-        fetchAll(function(a,b){return sb.from('feedback').select('id,user_id,username,message,context,status,created_at').range(a,b);})
+        fetchAll(function(a,b){return sb.from('cardio_types').select('id,label,owner_id,deleted_at').range(a,b);}),
+        fetchAll(function(a,b){return sb.from('feedback').select('id,user_id,username,message,context,status,created_at').range(a,b);}),
+        fetchAll(function(a,b){return sb.from('food_catalog').select('id,name,serving,calories,protein,carbs').range(a,b);}),
+        fetchAll(function(a,b){return sb.from('preset_plans').select('id,name,description,data,position').range(a,b);}),
+        fetchAll(function(a,b){return sb.from('app_config').select('default_unit,announcement_ar,announcement_en,announcement_active').range(a,b);}),
+        fetchAll(function(a,b){return sb.from('audit_log').select('id,actor,action,target,detail,created_at').order('id',{ascending:false}).range(a,b);})
       ]);
       var d=res.map(function(r){return r.error?[]:(r.data||[]);});
       var exercises=d[0], profiles=d[1], prefs=d[2], flags=d[3], sessions=d[4], sets=d[5],
           foods=d[6], sleeps=d[7], cardio=d[8], cardioTypes=d[9], feedback=d[10];
+      var foodCatalog=d[11], presets=d[12], appConfig=(d[13]&&d[13][0])||null, auditLog=d[14];
 
       exMap={}; exercises.forEach(function(e){exMap[e.id]={name:e.name,category:e.category,owner_id:e.owner_id};});
 
@@ -475,7 +506,9 @@
 
       DATA={
         usersById:U, usersList:list, cardioTypes:cardioTypes,
-        globalEx:exercises.filter(function(e){return !e.owner_id;}),
+        globalEx:exercises.filter(function(e){return !e.owner_id && !e.deleted_at;}),
+        foodCatalog:foodCatalog, appConfig:appConfig, auditLog:auditLog,
+        presets:presets.slice().sort(function(a,b){return (a.position-b.position)||(a.name||'').localeCompare(b.name||'');}),
         feedback:feedback.sort(function(a,b){return (b.created_at||'').localeCompare(a.created_at||'');}),
         totals:{ users:list.length, sessions:sessions.length, sets:sets.length,
           volume:Math.round(list.reduce(function(a,u){return a+u.volume;},0)),
@@ -553,22 +586,167 @@
         '</div>';
     }
 
+    // Generic CRUD modal: body html + onSave(overlay, close).
+    function admModal(title, bodyHtml, onSave){
+      var ov=document.createElement('div'); ov.className='adm-overlay';
+      ov.innerHTML='<div class="adm-modal"><div class="adm-modal-h"><span>'+esc(title)+'</span><button class="adm-x">✕</button></div>'+
+        '<div class="adm-modal-b">'+bodyHtml+'</div>'+
+        '<div class="adm-modal-f"><button class="abtn adm-cancel">إلغاء</button><button class="abtn pri adm-save">حفظ</button></div></div>';
+      document.body.appendChild(ov);
+      function close(){ if(ov.parentNode) ov.parentNode.removeChild(ov); }
+      ov.querySelector('.adm-x').onclick=close; ov.querySelector('.adm-cancel').onclick=close;
+      ov.addEventListener('click',function(e){ if(e.target===ov) close(); });
+      ov.querySelector('.adm-save').onclick=function(){ onSave(ov, close); };
+      var f=ov.querySelector('input,textarea,select'); if(f) setTimeout(function(){ try{f.focus();}catch(_){} },50);
+      return ov;
+    }
+    function crudRow(id, iconHtml, name, meta, canDelete){
+      return '<div class="crud-row" data-id="'+esc(id)+'"><span class="cr-name">'+iconHtml+name+'</span>'+
+        (meta?'<span class="cr-meta">'+meta+'</span>':'')+
+        '<span class="cr-act"><button class="cr-btn cr-edit">تعديل</button>'+
+        (canDelete!==false?'<button class="cr-btn del cr-del">حذف</button>':'')+'</span></div>';
+    }
+
     function renderCatalog(box){
-      var q=catalogQuery.trim().toLowerCase();
-      var ex=DATA.globalEx.filter(function(e){return !q || (e.name||'').toLowerCase().indexOf(q)>=0;});
-      var byCat={}; ex.forEach(function(e){(byCat[e.category]=byCat[e.category]||[]).push(e);});
-      var order=['Chest','Back','Legs','Shoulders','Arms','Core','Other'];
-      var groups=order.filter(function(c){return byCat[c];}).map(function(c){
-        return '<div class="cat-group"><h4><span class="dot" style="background:'+catColor(c)+'"></span>'+c+' <span class="count">('+byCat[c].length+')</span></h4>'+
-          '<div class="chips">'+byCat[c].map(function(e){return '<span class="chip"><span class="tag" style="background:'+catColor(c)+'"></span>'+esc(e.name)+'</span>';}).join('')+'</div></div>';
-      }).join('');
-      var cardio=DATA.cardioTypes.filter(function(c){return !c.owner_id;});
-      var cardioH=cardio.length? '<div class="chips">'+cardio.map(function(c){return '<span class="chip">🏃 '+esc(c.label)+'</span>';}).join('')+'</div>' : '<div class="empty-mini">—</div>';
-      box.innerHTML=
-        '<div class="searchbar"><input id="cat-search" type="search" placeholder="بحث في التمارين…" value="'+esc(catalogQuery)+'"></div>'+
-        (groups||'<div class="empty-mini">لا تمارين مطابقة.</div>')+
-        sec('أنواع الكارديو',cardioH);
-      var ci=$('#cat-search'); if(ci){ ci.addEventListener('input',function(){ catalogQuery=ci.value; var pos=ci.selectionStart; renderCatalog(box); var n=$('#cat-search'); n.focus(); try{n.setSelectionRange(pos,pos);}catch(_){} }); }
+      $('#head-actions').innerHTML='';
+      var add=catalogTab==='exercises'?'+ تمرين':catalogTab==='foods'?'+ طعام':'+ كارديو';
+      headBtn(add,'pri',function(){ catalogTab==='exercises'?openExerciseForm():catalogTab==='foods'?openFoodForm():openCardioForm(); });
+      headBtn('↻ تحديث','',async function(){ await loadAll(); showCenter('catalog'); });
+      var tabs=[{k:'exercises',l:'التمارين'},{k:'foods',l:'الأطعمة'},{k:'cardio',l:'الكارديو'}], body='';
+      if(catalogTab==='exercises'){
+        var q=catalogQuery.trim().toLowerCase();
+        var ex=DATA.globalEx.filter(function(e){return !q||(e.name||'').toLowerCase().indexOf(q)>=0;});
+        var byCat={}; ex.forEach(function(e){(byCat[e.category]=byCat[e.category]||[]).push(e);});
+        var order=['Chest','Back','Legs','Shoulders','Arms','Core','Other'];
+        body='<div class="searchbar"><input id="cat-search" type="search" placeholder="بحث في التمارين…" value="'+esc(catalogQuery)+'"></div>'+
+          (order.filter(function(c){return byCat[c];}).map(function(c){
+            return '<div class="cat-group"><h4><span class="dot" style="background:'+catColor(c)+'"></span>'+c+' <span class="count">('+byCat[c].length+')</span></h4><div class="crud-list">'+
+              byCat[c].map(function(e){return crudRow(e.id,'<span class="tag" style="width:8px;height:8px;border-radius:50%;background:'+catColor(c)+'"></span>',esc(e.name),'',true);}).join('')+'</div></div>';
+          }).join('') || '<div class="empty-mini">لا تمارين. أضف واحدًا بالزر أعلاه.</div>');
+      } else if(catalogTab==='foods'){
+        var foods=DATA.foodCatalog||[];
+        body=foods.length? '<div class="crud-list">'+foods.map(function(f){return crudRow(f.id,'🍎 ',esc(f.name),Math.round(+f.calories)+' سعرة',true);}).join('')+'</div>'
+          : '<div class="empty-mini">لا أطعمة في الكتالوج. أضف واحدًا ليظهر لكل المستخدمين.</div>';
+      } else {
+        var cardio=(DATA.cardioTypes||[]).filter(function(c){return !c.owner_id && !c.deleted_at;});
+        body=cardio.length? '<div class="crud-list">'+cardio.map(function(c){return crudRow(c.id,'🏃 ',esc(c.label),'',false);}).join('')+'</div>'
+          : '<div class="empty-mini">لا أنواع كارديو مخصّصة. أضف واحدًا.</div>';
+      }
+      box.innerHTML='<div class="subtabs">'+tabs.map(function(t){return '<button class="subtab'+(catalogTab===t.k?' active':'')+'" data-tab="'+t.k+'">'+t.l+'</button>';}).join('')+'</div>'+body;
+      Array.prototype.forEach.call(box.querySelectorAll('[data-tab]'),function(b){ b.addEventListener('click',function(){ catalogTab=b.getAttribute('data-tab'); showCenter('catalog'); }); });
+      var ci=$('#cat-search'); if(ci){ ci.addEventListener('input',function(){ catalogQuery=ci.value; var pos=ci.selectionStart; renderCatalog(box); var n=$('#cat-search'); if(n){n.focus(); try{n.setSelectionRange(pos,pos);}catch(_){}} }); }
+      Array.prototype.forEach.call(box.querySelectorAll('.crud-row'),function(row){
+        var id=row.getAttribute('data-id'), eb=row.querySelector('.cr-edit'), db=row.querySelector('.cr-del');
+        if(eb) eb.addEventListener('click',function(){ catalogTab==='exercises'?openExerciseForm(id):catalogTab==='foods'?openFoodForm(id):openCardioForm(id); });
+        if(db) db.addEventListener('click',function(){ catalogTab==='exercises'?delExercise(id):delFood(id); });
+      });
+    }
+
+    function openExerciseForm(id){
+      var ex=id?(DATA.globalEx.filter(function(e){return e.id===id;})[0]||{}):{};
+      var cats=['Chest','Back','Legs','Shoulders','Arms','Core','Other'];
+      var body='<label>الاسم</label><input id="ex-name" value="'+esc(ex.name||'')+'">'+
+        '<label>المجموعة العضلية</label><select class="big" id="ex-cat">'+cats.map(function(c){return '<option value="'+c+'"'+(ex.category===c?' selected':'')+'>'+c+'</option>';}).join('')+'</select>'+
+        '<label>معرّف الصورة (اختياري)</label><input id="ex-img" value="'+esc(ex.image_slug||'')+'" placeholder="free-exercise-db slug">';
+      admModal(id?'تعديل تمرين':'تمرين جديد', body, async function(ov,close){
+        var name=(ov.querySelector('#ex-name').value||'').trim(); if(!name){ toast('الاسم مطلوب'); return; }
+        var r=await sb.rpc('admin_upsert_exercise',{p_id:id||null,p_name:name,p_category:ov.querySelector('#ex-cat').value,p_image_slug:(ov.querySelector('#ex-img').value||'').trim()||null,p_machine_type:ex.machine_type||null});
+        if(r.error){ toast('تعذّر: '+r.error.message); return; }
+        close(); await loadAll(); showCenter('catalog'); toast('تم الحفظ');
+      });
+    }
+    async function delExercise(id){ if(!confirm('حذف هذا التمرين من الكتالوج العام؟'))return; var r=await sb.rpc('admin_delete_exercise',{p_id:id}); if(r.error){toast('تعذّر: '+r.error.message);return;} await loadAll(); showCenter('catalog'); toast('تم الحذف'); }
+
+    function openFoodForm(id){
+      var f=id?((DATA.foodCatalog||[]).filter(function(x){return x.id===id;})[0]||{}):{};
+      var body='<label>الاسم</label><input id="fd-name" value="'+esc(f.name||'')+'">'+
+        '<label>الحصة (اختياري)</label><input id="fd-serv" value="'+esc(f.serving||'')+'" placeholder="مثال: ١٠٠غ">'+
+        '<label>السعرات</label><input id="fd-cal" type="number" value="'+(f.calories!=null?+f.calories:'')+'">'+
+        '<label>بروتين (غ)</label><input id="fd-pro" type="number" value="'+(f.protein!=null?+f.protein:'')+'">'+
+        '<label>كربوهيدرات (غ)</label><input id="fd-carb" type="number" value="'+(f.carbs!=null?+f.carbs:'')+'">';
+      admModal(id?'تعديل طعام':'طعام جديد', body, async function(ov,close){
+        var name=(ov.querySelector('#fd-name').value||'').trim(); if(!name){ toast('الاسم مطلوب'); return; }
+        var num=function(s){ var n=parseFloat(ov.querySelector(s).value); return isNaN(n)?0:n; };
+        var r=await sb.rpc('admin_upsert_food',{p_id:id||null,p_name:name,p_serving:(ov.querySelector('#fd-serv').value||'').trim()||null,p_cal:num('#fd-cal'),p_pro:num('#fd-pro'),p_carb:num('#fd-carb')});
+        if(r.error){ toast('تعذّر: '+r.error.message); return; }
+        close(); await loadAll(); showCenter('catalog'); toast('تم الحفظ');
+      });
+    }
+    async function delFood(id){ if(!confirm('حذف هذا الطعام؟'))return; var r=await sb.rpc('admin_delete_food',{p_id:id}); if(r.error){toast('تعذّر: '+r.error.message);return;} await loadAll(); showCenter('catalog'); toast('تم الحذف'); }
+
+    function openCardioForm(id){
+      var c=id?((DATA.cardioTypes||[]).filter(function(x){return x.id===id;})[0]||{}):{};
+      var body='<label>الاسم</label><input id="cd-label" value="'+esc(c.label||'')+'">';
+      admModal(id?'تعديل نوع كارديو':'نوع كارديو جديد', body, async function(ov,close){
+        var label=(ov.querySelector('#cd-label').value||'').trim(); if(!label){ toast('الاسم مطلوب'); return; }
+        var r=await sb.rpc('admin_upsert_cardio',{p_id:id||null,p_label:label,p_icon:'heart'});
+        if(r.error){ toast('تعذّر: '+r.error.message); return; }
+        close(); await loadAll(); showCenter('catalog'); toast('تم الحفظ');
+      });
+    }
+
+    function renderPresets(box){
+      $('#head-actions').innerHTML='';
+      headBtn('+ خطة جاهزة','pri',function(){ openPresetForm(); });
+      headBtn('↻ تحديث','',async function(){ await loadAll(); showCenter('presets'); });
+      var p=DATA.presets||[];
+      box.innerHTML=p.length? '<div class="crud-list">'+p.map(function(x){
+        var days=(x.data&&x.data.days)?x.data.days.length:0;
+        return '<div class="crud-row" data-id="'+esc(x.id)+'"><span class="cr-name">📋 '+esc(x.name)+(x.description?' <span class="muted" style="font-weight:500;font-size:12px">— '+esc(x.description)+'</span>':'')+'</span>'+
+          '<span class="cr-meta">'+days+' يوم</span><span class="cr-act"><button class="cr-btn cr-edit">تعديل</button><button class="cr-btn del cr-del">حذف</button></span></div>';
+      }).join('')+'</div>' : '<div class="empty-mini">لا خطط جاهزة بعد. أضف واحدة ليتصفّحها المستخدمون ويتبنّوها.</div>';
+      Array.prototype.forEach.call(box.querySelectorAll('.crud-row'),function(row){
+        var id=row.getAttribute('data-id');
+        row.querySelector('.cr-edit').addEventListener('click',function(){ openPresetForm(id); });
+        row.querySelector('.cr-del').addEventListener('click',function(){ delPreset(id); });
+      });
+    }
+    function openPresetForm(id){
+      var p=id?((DATA.presets||[]).filter(function(x){return x.id===id;})[0]||{}):{};
+      var daysText=(p.data&&p.data.days)? p.data.days.map(function(d){return (d.name||'')+': '+((d.exercises||[]).join('، '));}).join('\n') : '';
+      var body='<label>اسم الخطة</label><input id="pr-name" value="'+esc(p.name||'')+'">'+
+        '<label>الوصف (اختياري)</label><input id="pr-desc" value="'+esc(p.description||'')+'">'+
+        '<label>الأيام — سطر لكل يوم: «اسم اليوم: تمرين، تمرين»</label>'+
+        '<textarea id="pr-days" rows="6" style="min-height:130px" placeholder="دفع: بنش برس، ضغط كتف&#10;سحب: عقلة، تجديف&#10;أرجل: سكوات، دفع الأرجل">'+esc(daysText)+'</textarea>';
+      admModal(id?'تعديل خطة':'خطة جاهزة جديدة', body, async function(ov,close){
+        var name=(ov.querySelector('#pr-name').value||'').trim(); if(!name){ toast('الاسم مطلوب'); return; }
+        var lines=(ov.querySelector('#pr-days').value||'').split('\n').map(function(l){return l.trim();}).filter(Boolean);
+        var days=lines.map(function(l){ var i=l.indexOf(':'); var nm=(i>=0?l.slice(0,i):l).trim(); var exs=(i>=0?l.slice(i+1).split(/[,،]/):[]).map(function(s){return s.trim();}).filter(Boolean); return {name:nm, exercises:exs}; });
+        var r=await sb.rpc('admin_upsert_preset',{p_id:id||null,p_name:name,p_desc:(ov.querySelector('#pr-desc').value||'').trim()||null,p_data:{days:days}});
+        if(r.error){ toast('تعذّر: '+r.error.message); return; }
+        close(); await loadAll(); showCenter('presets'); toast('تم الحفظ');
+      });
+    }
+    async function delPreset(id){ if(!confirm('حذف هذه الخطة؟'))return; var r=await sb.rpc('admin_delete_preset',{p_id:id}); if(r.error){toast('تعذّر: '+r.error.message);return;} await loadAll(); showCenter('presets'); toast('تم الحذف'); }
+
+    function renderAudit(box){
+      $('#head-actions').innerHTML='';
+      headBtn('↻ تحديث','',async function(){ await loadAll(); showCenter('audit'); });
+      var log=DATA.auditLog||[];
+      if(!log.length){ box.innerHTML='<div class="center">لا عمليات مسجّلة بعد.</div>'; return; }
+      var L={'role.set':'تغيير دور','status.set':'تغيير حالة','exercise.upsert':'حفظ تمرين','exercise.delete':'حذف تمرين','food.upsert':'حفظ طعام','food.delete':'حذف طعام','preset.upsert':'حفظ خطة','preset.delete':'حذف خطة','cardio.upsert':'حفظ كارديو','config.update':'تحديث الإعدادات'};
+      box.innerHTML='<div class="table-wrap"><div class="scroll-x"><table class="tbl"><thead><tr><th class="no-sort">العملية</th><th class="no-sort">التفاصيل</th><th class="no-sort">التاريخ</th></tr></thead><tbody>'+
+        log.map(function(e){ return '<tr style="cursor:default"><td>'+esc(L[e.action]||e.action)+'</td><td class="muted" style="direction:ltr;text-align:start">'+(e.detail?esc(JSON.stringify(e.detail)):'—')+'</td><td class="num muted">'+esc(String(e.created_at||'').replace('T',' ').slice(0,16))+'</td></tr>'; }).join('')+
+        '</tbody></table></div></div>';
+    }
+
+    function renderSettings(box){
+      $('#head-actions').innerHTML='';
+      var c=DATA.appConfig||{default_unit:'kg',announcement_ar:'',announcement_en:'',announcement_active:false};
+      var unit=c.default_unit||'kg';
+      box.innerHTML='<div class="panel" style="max-width:560px">'+
+        '<label>الوحدة الافتراضية للمستخدمين الجدد</label>'+
+        '<div class="stbtns" style="margin-bottom:16px"><button class="stbtn'+(unit==='kg'?' on-active':'')+'" data-unit="kg">kg</button><button class="stbtn'+(unit==='lb'?' on-active':'')+'" data-unit="lb">lb</button></div>'+
+        '<label>إعلان داخل التطبيق (عربي)</label><input id="cfg-ar" value="'+esc(c.announcement_ar||'')+'" placeholder="رسالة تظهر للمستخدمين">'+
+        '<label>إعلان داخل التطبيق (إنجليزي)</label><input id="cfg-en" value="'+esc(c.announcement_en||'')+'" placeholder="in-app announcement">'+
+        '<label style="display:flex;align-items:center;gap:9px;margin-top:12px;cursor:pointer"><input type="checkbox" id="cfg-active" style="width:auto;margin:0"'+(c.announcement_active?' checked':'')+'> تفعيل الإعلان</label>'+
+        '<button class="btn" id="cfg-save" style="margin-top:18px">حفظ الإعدادات</button></div>';
+      Array.prototype.forEach.call(box.querySelectorAll('[data-unit]'),function(b){ b.addEventListener('click',function(){ unit=b.getAttribute('data-unit'); Array.prototype.forEach.call(box.querySelectorAll('[data-unit]'),function(x){x.classList.toggle('on-active',x===b);}); }); });
+      box.querySelector('#cfg-save').addEventListener('click',async function(){
+        var r=await sb.rpc('admin_set_config',{p_unit:unit,p_ar:(box.querySelector('#cfg-ar').value||'').trim()||null,p_en:(box.querySelector('#cfg-en').value||'').trim()||null,p_active:box.querySelector('#cfg-active').checked});
+        if(r.error){ toast('تعذّر: '+r.error.message); return; }
+        await loadAll(); showCenter('settings'); toast('تم حفظ الإعدادات');
+      });
     }
 
     function renderFeedback(box){

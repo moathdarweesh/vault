@@ -5793,3 +5793,15 @@ body[dir="rtl"] .variation-select svg { transform: scaleX(-1); }
 }
 .update-banner-later:active,
 .update-banner-get:active { transform: scale(var(--press-scale, 0.97)); }
+
+/* --- Dismissible admin announcement banner (reuses the shell above) --- */
+.announcement-banner .update-banner-notes {
+  white-space: normal;
+  overflow: visible;
+  text-overflow: initial;
+  color: var(--text);
+  font-weight: 600;
+  font-size: var(--fs-body, 15px);
+}
+.announcement-banner .update-banner-main { flex: 1 1 auto; }
+.announcement-banner .update-banner-actions { margin-inline-start: var(--sp-2); }

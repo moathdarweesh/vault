@@ -363,6 +363,54 @@
     } catch (_) { return { role: 'user', status: 'active', reason: null, offline: true }; }
   }
 
+  // ---- global catalog (admin-managed content, public reads) ---------------
+  // Best-effort pull of admin-curated GLOBAL content the app should surface
+  // additively: the global exercise catalog (owner_id IS NULL), the shared
+  // food catalog, ready-made preset plans, and the single app_config row.
+  // These tables are readable by anon (RLS "public read"), so this works even
+  // when the user is logged out. ANY failure (offline, not configured, a
+  // table not existing yet) resolves that field to null — callers must treat
+  // every field as optional and never let a failure here block boot.
+  async function pullCatalog() {
+    const result = { exercises: null, foods: null, presets: null, config: null };
+    if (!configured()) return result;
+    try { if (ensureSdk) await ensureSdk(); } catch (_) {}
+    const c = sb();
+    if (!c) return result;
+    try {
+      const { data, error } = await c
+        .from('exercises')
+        .select('id,name,category,image_slug,machine_type')
+        .is('owner_id', null)
+        .is('deleted_at', null);
+      if (!error && Array.isArray(data)) result.exercises = data;
+    } catch (_) {}
+    try {
+      const { data, error } = await c
+        .from('food_catalog')
+        .select('id,name,serving,calories,protein,carbs')
+        .is('deleted_at', null);
+      if (!error && Array.isArray(data)) result.foods = data;
+    } catch (_) {}
+    try {
+      const { data, error } = await c
+        .from('preset_plans')
+        .select('id,name,description,data,position')
+        .is('deleted_at', null)
+        .order('position', { ascending: true });
+      if (!error && Array.isArray(data)) result.presets = data;
+    } catch (_) {}
+    try {
+      const { data, error } = await c
+        .from('app_config')
+        .select('default_unit,announcement_ar,announcement_en,announcement_active')
+        .limit(1)
+        .maybeSingle();
+      if (!error && data) result.config = data;
+    } catch (_) {}
+    return result;
+  }
+
   // ---- feedback / suggestions ---------------------------------------------
   // Insert the user's OWN feedback row (RLS enforces user_id = self). The
   // username is snapshotted so the admin inbox reads well even if it changes.
@@ -389,5 +437,6 @@
     getClient: sb, // exposed for the tables.js "mirror" projection (RLS-scoped)
     getUsername, checkUsername, setUsername,
     touchLastSeen, getMyFlags, submitFeedback,
+    pullCatalog,
   };
 })();
