@@ -177,17 +177,15 @@ begin
   if p_category not in ('Chest','Back','Legs','Shoulders','Arms','Core','Other') then
     raise exception 'invalid category';
   end if;
-  if p_id is null then
-    insert into public.exercises(owner_id, name, category, image_slug, machine_type)
-    values (null, p_name, p_category::public.exercise_category, p_image_slug, p_machine_type)
-    returning id into v_id;
-  else
-    update public.exercises
-       set name=p_name, category=p_category::public.exercise_category,
-           image_slug=p_image_slug, machine_type=p_machine_type, deleted_at=null
-     where id=p_id and owner_id is null;   -- globals only
-    v_id := p_id;
-  end if;
+  -- exercises.id has no default → generate it on create (mirrors admin_upsert_cardio);
+  -- on-conflict handles edits, and only ever touches globals (never a user's custom).
+  v_id := coalesce(p_id, gen_random_uuid());
+  insert into public.exercises(id, owner_id, name, category, image_slug, machine_type)
+  values (v_id, null, p_name, p_category::public.exercise_category, p_image_slug, p_machine_type)
+  on conflict (id) do update
+    set name=excluded.name, category=excluded.category,
+        image_slug=excluded.image_slug, machine_type=excluded.machine_type, deleted_at=null
+    where public.exercises.owner_id is null;   -- globals only
   perform public.audit('exercise.upsert', null, jsonb_build_object('id',v_id,'name',p_name,'category',p_category));
   return v_id;
 end; $$;
@@ -249,6 +247,13 @@ begin
     on conflict (user_id) do update set status = excluded.status, reason = excluded.reason, updated_by = excluded.updated_by;
   perform public.audit('status.set', target, jsonb_build_object('status',new_status,'reason',reason));
 end; $$;
+
+-- Re-issue grants for self-containment (CREATE OR REPLACE keeps the old ACL, but
+-- don't depend on v3 having run first for the defense-in-depth to hold).
+revoke all on function public.admin_set_role(uuid, text) from public, anon;
+grant execute on function public.admin_set_role(uuid, text) to authenticated;
+revoke all on function public.admin_set_status(uuid, text, text) from public, anon;
+grant execute on function public.admin_set_status(uuid, text, text) to authenticated;
 
 -- ---- verify (optional) ------------------------------------------------------
 -- select count(*) from public.food_catalog; select count(*) from public.preset_plans;
