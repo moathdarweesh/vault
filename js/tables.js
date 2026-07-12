@@ -236,13 +236,20 @@
           hc_key: orNull(s.hcKey),
         }));
 
+      // Plan is now a CONTINUOUS ROTATION (cycle + trainingDays + anchor), not a
+      // fixed weekly grid. The mirror's plan_days schema is still day-of-week
+      // keyed, so we materialize THIS WEEK (Sun..Sat) via workoutForDate — the
+      // single source of truth for "what's the workout on date D". Lossy (drops
+      // the rotation definition) and additive-only, so it can drift, but it
+      // keeps admin.html's per-user plan view populated. Analytics-only.
       const planDays = [];
       const planDayEx = [];
-      const plan = (b.plan && typeof b.plan === 'object') ? b.plan : {};
-      Object.keys(plan).forEach((dowKey) => {
-        const day = plan[dowKey];
-        const dow = Number(dowKey);
-        if (!day || !(dow >= 0 && dow <= 6)) return;
+      const weekStart = new Date(); weekStart.setHours(12, 0, 0, 0);
+      weekStart.setDate(weekStart.getDate() - weekStart.getDay()); // rewind to Sunday
+      for (let dow = 0; dow <= 6; dow++) {
+        const d = new Date(weekStart); d.setDate(weekStart.getDate() + dow);
+        const day = (DB.plan && DB.plan.workoutForDate) ? DB.plan.workoutForDate(d) : null;
+        if (!day) continue;
         planDays.push({ user_id: userId, day_of_week: dow, name: day.name || 'Workout' });
         (Array.isArray(day.exerciseIds) ? day.exerciseIds : []).forEach((localExId, pos) => {
           const exId = exIdMap[localExId];
@@ -255,7 +262,7 @@
             position: pos,
           });
         });
-      });
+      }
 
       const supplements = (b.supplements || [])
         .filter((s) => s && s.id)

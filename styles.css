@@ -3035,6 +3035,57 @@ body[dir="rtl"] .tool-card { text-align: right; align-items: flex-end; }
 .schedule-prev-workout { font-weight: 700; color: var(--accent); }
 .schedule-prev-row.rest .schedule-prev-workout { color: var(--text-mute); font-weight: 500; }
 
+/* ---- Rotation planner (continuous cycle editor) ---- */
+.rot-section { margin-bottom: var(--sp-6); }
+.rot-section-title {
+  font-size: var(--fs-eyebrow, 11px);
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-mute);
+  margin-bottom: var(--sp-3);
+}
+.rot-slots { display: flex; flex-direction: column; gap: 8px; }
+.rot-slot {
+  border: 1px solid var(--border);
+  background: var(--surface-2);
+  border-radius: var(--radius-md);
+  padding: 12px 12px 10px;
+}
+.rot-slot-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 9px;
+}
+.rot-slot-num {
+  flex-shrink: 0;
+  width: 24px; height: 24px;
+  display: flex; align-items: center; justify-content: center;
+  border-radius: var(--radius-sm);
+  background: var(--accent);
+  color: var(--accent-ink);
+  font-size: 12px; font-weight: 800;
+}
+.rot-slot-name {
+  font-size: var(--fs-body);
+  font-weight: 800;
+  color: var(--text);
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.rot-slot-meta {
+  flex-shrink: 0;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--text-mute);
+  margin-inline-start: auto;
+}
+.rot-slot-actions { flex-shrink: 0; display: flex; gap: 4px; }
+.rot-slot-ex { display: flex; flex-wrap: wrap; gap: 5px; }
+
 .planner-day:active {
   transform: scale(0.99);
   border-color: var(--border-hi);

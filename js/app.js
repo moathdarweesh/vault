@@ -699,6 +699,15 @@ const I18N = {
     schedule_title: 'Your training days',
     schedule_days_label: 'training days',
     schedule_hint: 'Tap the days you want to train. Rest days stay empty, and the workouts are arranged across your training days in order.',
+    training_days: 'Training days',
+    rotation_cycle: 'Workout cycle',
+    add_workout: 'Add workout',
+    rotation_preview: 'Next 7 days',
+    move_up: 'Move up',
+    move_down: 'Move down',
+    edit_workout: 'Edit workout',
+    workout_name_ph: 'Workout name (e.g. Push)',
+    remove_workout: 'Remove from cycle',
     workouts_label: 'workouts',
     tmpl_desc_ppl: 'Classic push / pull / legs split',
     tmpl_desc_upper_lower: 'Balanced upper / lower split',
@@ -1180,6 +1189,15 @@ const I18N = {
     schedule_title: 'أيام تمرينك',
     schedule_days_label: 'أيام تمرين',
     schedule_hint: 'اختر الأيام التي تريد التمرّن فيها؛ تبقى أيام الراحة فارغة، وتُوزَّع التمارين على أيام تمرينك بالترتيب.',
+    training_days: 'أيام التمرين',
+    rotation_cycle: 'دورة التمارين',
+    add_workout: 'إضافة تمرين',
+    rotation_preview: 'الأيام السبعة القادمة',
+    move_up: 'تحريك لأعلى',
+    move_down: 'تحريك لأسفل',
+    edit_workout: 'تعديل التمرين',
+    workout_name_ph: 'اسم التمرين (مثال: دفع)',
+    remove_workout: 'إزالة من الدورة',
     workouts_label: 'تمارين',
     tmpl_desc_ppl: 'تقسيمة كلاسيكية: دفع / سحب / أرجل',
     tmpl_desc_upper_lower: 'تقسيمة متوازنة: علوي / سفلي',
@@ -1947,8 +1965,7 @@ function renderHome(el) {
   // Hero "Today" card — the flagship element of the redesigned home.
   // Plan scheduled today → plan name + muscles + a bold Start CTA.
   // No plan → this week's set count as a large count-up numeral.
-  const todayDow = String(now.getDay());
-  const todayPlan = (DB.plan.get() || {})[todayDow];
+  const todayPlan = DB.plan.workoutForDate(now);   // continuous rotation → today's slot
   const exerciseById = Object.fromEntries(exercises.map((e) => [e.id, e]));
 
   let heroHtml = '';
@@ -2059,7 +2076,7 @@ function renderHome(el) {
 
     ${recentHtml}
 
-    <div style="text-align:center;opacity:.4;font-size:12px;margin:24px 0 8px;letter-spacing:.5px">THE VAULT · v111</div>
+    <div style="text-align:center;opacity:.4;font-size:12px;margin:24px 0 8px;letter-spacing:.5px">THE VAULT · v112</div>
   `;
 
   // Count-up the hero/stat numerals (sleep is stored ×10 for one decimal)
@@ -2074,7 +2091,7 @@ function renderHome(el) {
   // Recompute the day at click time so it stays correct if Home was left open
   // across midnight.
   $('#home-start-workout', el)?.addEventListener('click', () =>
-    navigate('session-day', { dow: new Date().getDay() })
+    navigate('session-day', { date: todayISO() })
   );
   if (typeof Health !== 'undefined') Health.bindHomeSection();
 }
@@ -2480,7 +2497,9 @@ function renderLibrary(el) {
 
 // Small chooser shown by the session-day "Add exercise" button: pick from the
 // library, or create a new custom exercise and drop it straight into this day.
-function openAddExerciseChooser(dow) {
+// Add an exercise to a rotation cycle SLOT (slotIdx). Two ways: pick from the
+// library (opens the slot editor) or create a brand-new custom exercise.
+function openAddExerciseChooser(slotIdx) {
   openModal(`
     <div class="modal-header">
       <div><div class="modal-title">${t('add_exercise')}</div></div>
@@ -2492,15 +2511,12 @@ function openAddExerciseChooser(dow) {
     </div>
   `);
   // Both replace this chooser via openModal — no explicit close needed.
-  $('#ch-from-lib').addEventListener('click', () => openDayEditorModal(dow));
+  $('#ch-from-lib').addEventListener('click', () => openSlotEditorModal(slotIdx));
   $('#ch-new-ex').addEventListener('click', () => {
     openNewExerciseModal(null, {
       onCreated: (ex) => {
         if (!ex || !ex.id) return;
-        const plan = DB.plan.get() || {};
-        const day = plan[String(dow)] || { name: '', exerciseIds: [] };
-        const ids = [...(day.exerciseIds || []), ex.id];
-        DB.plan.setDay(dow, { name: day.name || dayName(dow, true), exerciseIds: ids });
+        if (slotIdx != null && slotIdx >= 0) DB.plan.addExerciseToSlot(slotIdx, ex.id);
       },
     });
   });
@@ -4310,62 +4326,53 @@ function variationsHtmlForExercise(ex) {
 // PLANNER VIEW
 // ==========================================================================
 function renderPlanner(el) {
-  // Safety: clear any drag artifacts leaked by an interrupted drag. Ghosts and
-  // placeholders live on <body> and are normally removed only in finish(); an
-  // interrupted touch drag (a system gesture stealing the pointer) can leave
-  // them floating over the UI forever. Sweeping on every render guarantees a
-  // stale ghost disappears the next time the planner is opened.
-  document.querySelectorAll('.planner-ex-ghost, .planner-day-ghost, .planner-ex-placeholder')
-    .forEach((n) => n.remove());
-  document.body.classList.remove('planner-dragging');
-
-  const plan = DB.plan.get() || {};
+  const plan = DB.plan.get() || { mode: 'rotation', cycle: [], trainingDays: [], anchor: null };
+  const cycle = plan.cycle || [];
+  const trainingDays = plan.trainingDays || [];
   const exerciseById = Object.fromEntries(DB.exercises.list().map((e) => [e.id, e]));
-  const today = new Date().getDay();
-
-  // Display order: Sun, Mon, ... Sat
   const dayOrder = [0, 1, 2, 3, 4, 5, 6];
 
-  const hasAnyPlan = Object.values(plan).some((d) => d && d.exerciseIds && d.exerciseIds.length > 0);
+  // Training-day pills (which weekdays you train; the others are rest).
+  const daysHtml = dayOrder.map((d) =>
+    `<button type="button" class="schedule-day ${trainingDays.indexOf(d) !== -1 ? 'active' : ''}" data-td="${d}">${escapeHtml(dayName(d, false))}</button>`
+  ).join('');
 
-  // A single draggable exercise row inside a day.
-  const exRow = (ex, dow) => `
-    <div class="planner-ex-row" data-exid="${ex.id}" data-dow="${dow}">
-      <span class="planner-ex-grip" aria-label="drag">${icon('grip', 18)}</span>
-      <span class="planner-ex-cat" data-cat="${escapeHtml(ex.category)}"></span>
-      <span class="planner-ex-name">${escapeHtml(ex.name)}</span>
-      <button class="planner-ex-remove" data-remove="${ex.id}" data-rdow="${dow}" aria-label="${t('remove_from_day')}">${icon('close', 14)}</button>
-    </div>
-  `;
-
-  const dayCards = dayOrder.map((dow) => {
-    const day = plan[String(dow)];
-    const isToday = dow === today;
-    const exObjs = (day?.exerciseIds || []).map((id) => exerciseById[id]).filter(Boolean);
-    const exCount = exObjs.length;
-    const hasPlan = !!day && (exCount > 0 || !!(day.name && day.name.trim()));
-
-    const body = exCount > 0
-      ? `<div class="planner-ex-list" data-daylist="${dow}">${exObjs.map((ex) => exRow(ex, dow)).join('')}</div>`
-      : `<div class="planner-ex-list empty" data-daylist="${dow}"><div class="planner-empty-hint">${t('empty_day_drop')}</div></div>`;
-
-    return `
-      <div class="planner-day ${hasPlan ? 'has-plan' : ''} ${isToday ? 'today' : ''}" data-day="${dow}">
-        <div class="planner-day-head">
-          ${hasPlan ? `<span class="planner-day-grip" data-daygrip="${dow}" aria-label="${t('move_day')}">${icon('grip', 16)}</span>` : ''}
-          <button class="planner-day-open" data-day-open="${dow}">
-            <div class="planner-day-dot"></div>
-            <div class="planner-day-main">
-              <div class="planner-day-name">${escapeHtml(dayName(dow, true))}${isToday ? ' · ' + t('today').toUpperCase() : ''}</div>
-              <div class="planner-day-title ${hasPlan ? '' : 'empty'}">${escapeHtml(day?.name || t('rest_day'))}</div>
+  // The ordered CYCLE of workouts (Push → Pull → Legs …), rolled across days.
+  const slotsHtml = cycle.length
+    ? cycle.map((slot, i) => {
+        const exObjs = (slot.exerciseIds || []).map((id) => exerciseById[id]).filter(Boolean);
+        return `
+          <div class="rot-slot" data-slot="${i}">
+            <div class="rot-slot-head">
+              <span class="rot-slot-num num">${fmtNum(i + 1)}</span>
+              <span class="rot-slot-name">${escapeHtml(slot.name || 'Workout')}</span>
+              <span class="rot-slot-meta">${fmtNum(exObjs.length)} ${exObjs.length === 1 ? t('exercise') : t('exercises')}</span>
+              <span class="rot-slot-actions">
+                <button type="button" class="icon-btn icon-btn-tile" data-up="${i}" aria-label="${t('move_up')}" ${i === 0 ? 'disabled' : ''}>↑</button>
+                <button type="button" class="icon-btn icon-btn-tile" data-down="${i}" aria-label="${t('move_down')}" ${i === cycle.length - 1 ? 'disabled' : ''}>↓</button>
+                <button type="button" class="icon-btn icon-btn-tile" data-edit="${i}" aria-label="${t('edit_workout')}">${icon('edit', 16)}</button>
+              </span>
             </div>
-            ${exCount > 0 ? `<div class="planner-day-count num">${fmtNum(exCount)}</div>` : ''}
-          </button>
-          <button class="planner-day-add" data-day-add="${dow}" aria-label="${t('add')}">${icon('plus', 18)}</button>
-        </div>
-        ${body}
-      </div>
-    `;
+            <div class="rot-slot-ex">${
+              exObjs.length
+                ? exObjs.map((ex) => `<span class="today-plan-chip">${escapeHtml(ex.name)}</span>`).join('')
+                : `<span class="planner-empty-hint">${t('empty_day_drop')}</span>`
+            }</div>
+          </div>`;
+      }).join('')
+    : `<div class="planner-empty-hint" style="padding:16px 2px">${t('no_plan_today_sub')}</div>`;
+
+  // Rolling preview — the next 7 days computed from the REAL rotation.
+  const start = new Date(); start.setHours(12, 0, 0, 0);
+  const previewHtml = Array.from({ length: 7 }).map((_, i) => {
+    const d = new Date(start); d.setDate(start.getDate() + i);
+    const w = DB.plan.workoutForDate(d);
+    return `
+      <div class="schedule-prev-row ${w ? '' : 'rest'}">
+        <span class="schedule-prev-day">${escapeHtml(dayName(d.getDay(), true))}</span>
+        <span class="schedule-prev-arrow">${w ? '→' : ''}</span>
+        <span class="schedule-prev-workout">${w ? escapeHtml(w.name) : t('rest_day')}</span>
+      </div>`;
   }).join('');
 
   el.innerHTML = `
@@ -4380,275 +4387,60 @@ function renderPlanner(el) {
       <p class="page-subtitle">${t('planner_subtitle')}</p>
     </div>
 
-    <div style="display:flex;gap:8px;margin-bottom:14px">
+    <div style="display:flex;gap:8px;margin-bottom:16px">
       <button class="btn btn-primary" id="apply-template-btn" style="flex:1">${icon('plus', 16)} ${t('apply_template')}</button>
-      ${hasAnyPlan ? `<button class="btn btn-ghost" id="clear-plan-btn">${icon('trash', 16)}</button>` : ''}
+      ${cycle.length ? `<button class="btn btn-ghost" id="clear-plan-btn">${icon('trash', 16)}</button>` : ''}
     </div>
 
-    <div class="planner-list">${dayCards}</div>
+    <div class="rot-section">
+      <div class="rot-section-title">${t('training_days')}</div>
+      <div class="schedule-days">${daysHtml}</div>
+    </div>
+
+    <div class="rot-section">
+      <div class="rot-section-title">${t('rotation_cycle')}</div>
+      <div class="rot-slots">${slotsHtml}</div>
+      <button class="btn btn-ghost btn-block" id="add-slot-btn" style="margin-top:10px">${icon('plus', 16)} ${t('add_workout')}</button>
+    </div>
+
+    <div class="rot-section">
+      <div class="rot-section-title">${t('rotation_preview')}</div>
+      <div class="schedule-preview">${previewHtml}</div>
+    </div>
   `;
 
   $('#apply-template-btn', el)?.addEventListener('click', openTemplatesModal);
+  $('#add-slot-btn', el)?.addEventListener('click', () => openSlotEditorModal(null));
 
   $('#clear-plan-btn', el)?.addEventListener('click', () => {
     confirmDialog({
       title: t('clear_plan_q'),
       text: t('clear_plan_text'),
       confirmLabel: t('clear_plan'),
-      onConfirm: () => {
-        DB.plan.clearAll();
-        showToast(t('plan_cleared'));
-        renderPlanner(el);
-      },
+      onConfirm: () => { DB.plan.clearAll(); showToast(t('plan_cleared')); renderPlanner(el); },
     });
   });
 
-  // Tap ANYWHERE on a day card (not just the header) opens that day:
-  //   - if it has exercises → the workout-session page (exercises + sessions)
-  //   - if it's empty (rest day) → the editor so the user can add exercises
-  // Uses `click`, so a scroll gesture never triggers it (a moved touch cancels
-  // the click). The grips / X / + are excluded so they keep their own actions,
-  // and _suppressClick (set on drag-release) guards against a drag opening it.
-  // Attached once to the persistent view element — survives re-renders.
-  if (!el._plannerOpenInit) {
-    el._plannerOpenInit = true;
-    el.addEventListener('click', (e) => {
-      if (el._suppressClick) return;
-      if (e.target.closest('.planner-day-grip, .planner-ex-grip, [data-remove], [data-day-add]')) return;
-      const card = e.target.closest('.planner-day');
-      if (!card) return;
-      const dow = Number(card.dataset.day);
-      const day = (DB.plan.get() || {})[String(dow)];
-      if (day && day.exerciseIds && day.exerciseIds.length > 0) {
-        navigate('session-day', { dow });
-      } else {
-        openDayEditorModal(dow);
-      }
-    });
-  }
-
-  // Quick "+" on each day opens the picker straight for that day.
-  el.querySelectorAll('[data-day-add]').forEach((b) =>
-    b.addEventListener('click', (e) => {
-      e.stopPropagation();
-      openDayEditorModal(Number(b.dataset.dayAdd));
-    })
-  );
-
-  // Remove a single exercise from a day.
-  el.querySelectorAll('[data-remove]').forEach((b) =>
-    b.addEventListener('click', (e) => {
-      e.stopPropagation();
-      DB.plan.removeExercise(Number(b.dataset.rdow), b.dataset.remove);
+  // Toggle a training weekday.
+  el.querySelectorAll('[data-td]').forEach((b) =>
+    b.addEventListener('click', () => {
+      const d = Number(b.dataset.td);
+      const set = new Set(DB.plan.get().trainingDays || []);
+      if (set.has(d)) set.delete(d); else set.add(d);
+      DB.plan.setTrainingDays([...set]);
       renderPlanner(el);
     })
   );
-
-  setupPlannerDrag(el);
-}
-
-// Pointer-based drag-and-drop for the planner. Works with both mouse and
-// touch. Listeners are attached to the persistent view element once; they
-// re-query the live DOM on each event so they survive re-renders.
-function setupPlannerDrag(el) {
-  if (el._plannerDragInit) return;
-  el._plannerDragInit = true;
-
-  const scroller = el.closest('.main') || document.scrollingElement || document.documentElement;
-  let drag = null;
-  let scrollRAF = null;
-  let scrollDir = 0;
-
-  function stopAutoScroll() {
-    scrollDir = 0;
-    if (scrollRAF) { cancelAnimationFrame(scrollRAF); scrollRAF = null; }
-  }
-  function autoScrollTick() {
-    if (!drag || scrollDir === 0) { scrollRAF = null; return; }
-    scroller.scrollTop += scrollDir * 11;
-    scrollRAF = requestAnimationFrame(autoScrollTick);
-  }
-  function maybeAutoScroll(clientY) {
-    const r = scroller.getBoundingClientRect();
-    const edge = 72;
-    if (clientY < r.top + edge) scrollDir = -1;
-    else if (clientY > r.bottom - edge) scrollDir = 1;
-    else scrollDir = 0;
-    if (scrollDir !== 0 && !scrollRAF) scrollRAF = requestAnimationFrame(autoScrollTick);
-    if (scrollDir === 0) stopAutoScroll();
-  }
-
-  // Position the placeholder inside a target list and compute the insert index.
-  function positionPlaceholder(list, clientY) {
-    const rows = [...list.querySelectorAll('.planner-ex-row')].filter(
-      (r) => r !== drag.row && r.style.display !== 'none'
-    );
-    let before = null;
-    for (const r of rows) {
-      const rb = r.getBoundingClientRect();
-      if (clientY < rb.top + rb.height / 2) { before = r; break; }
-    }
-    if (before) {
-      list.insertBefore(drag.placeholder, before);
-    } else {
-      const hint = list.querySelector('.planner-empty-hint');
-      if (hint) list.insertBefore(drag.placeholder, hint);
-      else list.appendChild(drag.placeholder);
-    }
-    const seq = [...list.children].filter(
-      (n) => n === drag.placeholder ||
-        (n.classList.contains('planner-ex-row') && n !== drag.row && n.style.display !== 'none')
-    );
-    drag.targetIndex = seq.indexOf(drag.placeholder);
-  }
-
-  el.addEventListener('pointerdown', (e) => {
-    // A fresh pointer interaction clears any lingering post-drag click guard.
-    el._suppressClick = false;
-    // Whole-day drag (grip on the day header) — moves the entire day's plan.
-    const dayGrip = e.target.closest('.planner-day-grip');
-    if (dayGrip) {
-      const card = dayGrip.closest('.planner-day');
-      if (!card) return;
-      e.preventDefault();
-
-      const rect = card.getBoundingClientRect();
-      const ghost = card.cloneNode(true);
-      ghost.classList.add('planner-day-ghost');
-      ghost.style.width = rect.width + 'px';
-      ghost.style.left = rect.left + 'px';
-      ghost.style.top = rect.top + 'px';
-      document.body.appendChild(ghost);
-
-      drag = {
-        mode: 'day',
-        fromDow: dayGrip.dataset.daygrip,
-        card, ghost,
-        offsetX: e.clientX - rect.left,
-        offsetY: e.clientY - rect.top,
-        targetDow: null,
-      };
-
-      card.classList.add('day-drag-source');
-      document.body.classList.add('planner-dragging');
-      try { dayGrip.setPointerCapture(e.pointerId); } catch (_) {}
-      return;
-    }
-
-    // Single-exercise drag (grip on a row).
-    const grip = e.target.closest('.planner-ex-grip');
-    if (!grip) return;
-    const row = grip.closest('.planner-ex-row');
-    if (!row) return;
-    e.preventDefault();
-
-    const rect = row.getBoundingClientRect();
-    const ghost = row.cloneNode(true);
-    ghost.classList.add('planner-ex-ghost');
-    ghost.style.width = rect.width + 'px';
-    ghost.style.left = rect.left + 'px';
-    ghost.style.top = rect.top + 'px';
-    document.body.appendChild(ghost);
-
-    const ph = document.createElement('div');
-    ph.className = 'planner-ex-placeholder';
-
-    drag = {
-      mode: 'row',
-      exId: row.dataset.exid,
-      fromDow: row.dataset.dow,
-      row, ghost, placeholder: ph,
-      offsetX: e.clientX - rect.left,
-      offsetY: e.clientY - rect.top,
-      targetDow: row.dataset.dow,
-      targetIndex: null,
-    };
-
-    row.parentNode.insertBefore(ph, row.nextSibling);
-    row.style.display = 'none';
-    document.body.classList.add('planner-dragging');
-    try { grip.setPointerCapture(e.pointerId); } catch (_) {}
-  });
-
-  el.addEventListener('pointermove', (e) => {
-    if (!drag) return;
-    e.preventDefault();
-    drag.ghost.style.left = (e.clientX - drag.offsetX) + 'px';
-    drag.ghost.style.top = (e.clientY - drag.offsetY) + 'px';
-
-    const below = document.elementFromPoint(e.clientX, e.clientY);
-    const dayCard = below && below.closest('.planner-day');
-
-    if (drag.mode === 'day') {
-      // Highlight a different day as the swap target.
-      el.querySelectorAll('.planner-day.drop-target').forEach((d) => d.classList.remove('drop-target'));
-      if (dayCard && dayCard.dataset.day !== String(drag.fromDow)) {
-        drag.targetDow = dayCard.dataset.day;
-        dayCard.classList.add('drop-target');
-      } else {
-        drag.targetDow = null;
-      }
-    } else if (dayCard) {
-      const list = dayCard.querySelector('.planner-ex-list');
-      if (list) {
-        drag.targetDow = dayCard.dataset.day;
-        positionPlaceholder(list, e.clientY);
-        el.querySelectorAll('.planner-day.drop-target').forEach((d) => d.classList.remove('drop-target'));
-        dayCard.classList.add('drop-target');
-      }
-    }
-    maybeAutoScroll(e.clientY);
-  });
-
-  function finish() {
-    if (!drag) return;
-    // A real drag just ended — the browser fires a click right after pointerup;
-    // suppress it so releasing a drag over a card doesn't open that day.
-    el._suppressClick = true;
-    const mode = drag.mode;
-    const { fromDow, targetDow } = drag;
-    drag.ghost.remove();
-    document.body.classList.remove('planner-dragging');
-    el.querySelectorAll('.planner-day.drop-target').forEach((d) => d.classList.remove('drop-target'));
-    el.querySelectorAll('.planner-day.day-drag-source').forEach((d) => d.classList.remove('day-drag-source'));
-    stopAutoScroll();
-
-    if (mode === 'day') {
-      const valid = targetDow != null && String(targetDow) !== String(fromDow);
-      drag = null;
-      if (valid) {
-        DB.plan.swapDays(fromDow, targetDow);
-        showToast(t('day_moved'));
-        renderPlanner(el);
-      }
-      return;
-    }
-
-    // Single-exercise drag
-    const { exId, targetIndex } = drag;
-    if (drag.placeholder.parentNode) drag.placeholder.remove();
-    drag.row.style.display = '';
-    const crossDay = String(targetDow) !== String(fromDow);
-    const reordered = targetIndex != null;
-    drag = null;
-
-    if (targetDow != null && (crossDay || reordered)) {
-      DB.plan.moveExercise(fromDow, targetDow, exId, targetIndex);
-      if (crossDay) showToast(t('exercise_moved'));
-      renderPlanner(el);
-    }
-  }
-
-  el.addEventListener('pointerup', finish);
-  el.addEventListener('pointercancel', finish);
-  el.addEventListener('lostpointercapture', finish);
-  // Global fallbacks: an interrupted touch drag may never deliver pointerup /
-  // pointercancel to `el` (capture stolen by a system scroll/gesture, window
-  // blur, etc.). Catch it at the window level so the ghost is always cleaned
-  // up. finish() no-ops when no drag is active, so extra calls are harmless.
-  window.addEventListener('pointerup', finish);
-  window.addEventListener('pointercancel', finish);
-  window.addEventListener('blur', finish);
+  // Reorder / edit a cycle slot.
+  el.querySelectorAll('[data-up]').forEach((b) =>
+    b.addEventListener('click', () => { DB.plan.moveSlot(Number(b.dataset.up), Number(b.dataset.up) - 1); renderPlanner(el); })
+  );
+  el.querySelectorAll('[data-down]').forEach((b) =>
+    b.addEventListener('click', () => { DB.plan.moveSlot(Number(b.dataset.down), Number(b.dataset.down) + 1); renderPlanner(el); })
+  );
+  el.querySelectorAll('[data-edit]').forEach((b) =>
+    b.addEventListener('click', () => openSlotEditorModal(Number(b.dataset.edit)))
+  );
 }
 
 function openTemplatesModal() {
@@ -4729,17 +4521,25 @@ function openScheduleModal(tmpl) {
   function renderPreview() {
     const box = $('#schedule-preview');
     if (!box) return;
-    const byDow = {};
-    assignment().forEach(({ dow, workout }) => { byDow[dow] = workout; });
-    box.innerHTML = dayOrder.map((d) => {
-      const w = byDow[d];
-      return `
+    // Roll the cycle across the next 7 days from today (rest days skip) — shows
+    // the continuous rotation the way it will actually run.
+    const M = workouts.length;
+    const start = new Date(); start.setHours(12, 0, 0, 0);
+    let elapsed = 0;
+    const rows = [];
+    for (let i = 0; i < 7; i++) {
+      const d = new Date(start); d.setDate(start.getDate() + i);
+      const isTraining = training.has(d.getDay());
+      const w = (isTraining && M) ? workouts[elapsed % M] : null;
+      if (isTraining) elapsed++;
+      rows.push(`
         <div class="schedule-prev-row ${w ? '' : 'rest'}">
-          <span class="schedule-prev-day">${escapeHtml(dayName(d, true))}</span>
+          <span class="schedule-prev-day">${escapeHtml(dayName(d.getDay(), true))}</span>
           <span class="schedule-prev-arrow">${w ? '→' : ''}</span>
           <span class="schedule-prev-workout">${w ? escapeHtml(w.name) : t('rest_day')}</span>
-        </div>`;
-    }).join('');
+        </div>`);
+    }
+    box.innerHTML = rows.join('');
     const count = $('#schedule-count');
     if (count) count.textContent = fmtNum(training.size);
     const applyBtn = $('#schedule-apply');
@@ -4782,30 +4582,31 @@ function openScheduleModal(tmpl) {
   $('#schedule-apply').addEventListener('click', () => {
     if (training.size === 0) return;
     const byName = Object.fromEntries(DB.exercises.list().map((e) => [e.name, e]));
-    const map = {};
-    assignment().forEach(({ dow, workout }) => {
+    // Build the ordered CYCLE (Push, Pull, Legs…) — no longer pinned to weekdays.
+    const cycle = workouts.map((w) => {
       const ids = [];
-      workout.exercises.forEach((nm) => {
+      (w.exercises || []).forEach((nm) => {
         const ex = byName[nm];
-        if (ex) {
-          ids.push(ex.id);
-          if (!ex.inMyList) DB.exercises.setInMyList(ex.id, true);
-        }
+        if (ex) { ids.push(ex.id); if (!ex.inMyList) DB.exercises.setInMyList(ex.id, true); }
       });
-      map[String(dow)] = { name: workout.name, exerciseIds: ids };
+      return { name: w.name, exerciseIds: ids };
     });
-    DB.plan.applySchedule(map);
+    const trainingDays = dayOrder.filter((d) => training.has(d));
+    DB.plan.setRotation({ cycle, trainingDays, anchor: todayISO() });
     closeModal();
     showToast(t('template_applied'));
     renderView(currentView);
   });
 }
 
-function openDayEditorModal(dow) {
-  const plan = DB.plan.get() || {};
-  const day = plan[String(dow)] || { name: '', exerciseIds: [] };
-  let pickedIds = new Set(day.exerciseIds || []);
-  let dayLabel = day.name || '';
+// Edit ONE workout in the rotation cycle. slotIdx = number (edit cycle[i]) or
+// null/undefined (create a new workout appended to the cycle).
+function openSlotEditorModal(slotIdx) {
+  const cycle = (DB.plan.get() || {}).cycle || [];
+  const isNew = (slotIdx == null || slotIdx < 0 || !cycle[slotIdx]);
+  const slot = isNew ? { name: '', exerciseIds: [] } : cycle[slotIdx];
+  let pickedIds = new Set(slot.exerciseIds || []);
+  let dayLabel = slot.name || '';
   let pickerQuery = '';
   let pickerCategory = 'All';
 
@@ -4843,15 +4644,15 @@ function openDayEditorModal(dow) {
   openModal(`
     <div class="modal-header">
       <div>
-        <div class="modal-title">${escapeHtml(window.dayName ? window.dayName(dow, true) : '')}</div>
-        <div class="modal-subtitle">${t('edit_day')}</div>
+        <div class="modal-title">${escapeHtml(dayLabel || t('add_workout'))}</div>
+        <div class="modal-subtitle">${isNew ? t('add_workout') : t('edit_workout')}</div>
       </div>
       <button class="icon-btn icon-btn-tile" data-close>${icon('close', 18)}</button>
     </div>
 
     <div class="form-group">
       <label class="form-label">${t('name')}</label>
-      <input type="text" id="day-name" placeholder="${t('day_name_placeholder')}" value="${escapeHtml(dayLabel)}">
+      <input type="text" id="day-name" placeholder="${t('workout_name_ph')}" value="${escapeHtml(dayLabel)}">
     </div>
 
     <div class="form-group picker-group">
@@ -4865,17 +4666,13 @@ function openDayEditorModal(dow) {
     </div>
 
     <div class="form-actions sticky-actions">
-      <button type="button" class="btn btn-ghost day-rest-btn" id="day-clear-btn">${icon('trash', 14)} ${t('rest_day')}</button>
+      ${isNew ? '' : `<button type="button" class="btn btn-ghost day-rest-btn" id="day-clear-btn">${icon('trash', 14)} ${t('remove_workout')}</button>`}
       <button type="button" class="btn btn-primary" id="day-save-btn">${t('save')}</button>
     </div>
   `);
 
-  // Flex layout: only the exercise list scrolls; the Save / Rest bar stays pinned.
+  // Flex layout: only the exercise list scrolls; the Save bar stays pinned.
   document.querySelector('#modal-root .modal')?.classList.add('modal-day-editor');
-
-  // Set the modal title to the actual day name
-  const titleEl = document.querySelector('#modal-root .modal-title');
-  if (titleEl) titleEl.textContent = dayName(dow, true);
 
   renderPickerList();
 
@@ -4896,8 +4693,8 @@ function openDayEditorModal(dow) {
     })
   );
 
-  $('#day-clear-btn').addEventListener('click', () => {
-    DB.plan.clearDay(dow);
+  $('#day-clear-btn')?.addEventListener('click', () => {
+    if (!isNew) DB.plan.removeSlot(slotIdx);
     closeModal();
     showToast(t('day_cleared'));
     renderView(currentView);
@@ -4905,15 +4702,20 @@ function openDayEditorModal(dow) {
 
   $('#day-save-btn').addEventListener('click', () => {
     const ids = [...pickedIds];
-    if (ids.length === 0 && !dayLabel.trim()) {
-      DB.plan.clearDay(dow);
+    const name = dayLabel.trim() || 'Workout';
+    // Auto-add picked exercises to the user's Train list
+    ids.forEach((id) => {
+      const ex = DB.exercises.getById(id);
+      if (ex && !ex.inMyList) DB.exercises.setInMyList(id, true);
+    });
+    if (isNew) {
+      if (ids.length || dayLabel.trim()) {
+        DB.plan.addSlot(name);
+        DB.plan.setSlotExercises((DB.plan.get().cycle || []).length - 1, ids);
+      }
     } else {
-      DB.plan.setDay(dow, { name: dayLabel.trim() || 'Workout', exerciseIds: ids });
-      // Auto-add picked exercises to user's Train list
-      ids.forEach((id) => {
-        const ex = DB.exercises.getById(id);
-        if (ex && !ex.inMyList) DB.exercises.setInMyList(id, true);
-      });
+      DB.plan.setSlotName(slotIdx, name);
+      DB.plan.setSlotExercises(slotIdx, ids);
     }
     closeModal();
     showToast(t('day_saved'));
@@ -4930,9 +4732,13 @@ function openDayEditorModal(dow) {
 // any existing session for the same exercise+date so the card stays a
 // single source of truth for that day's training.
 function renderSessionDay(el) {
-  const dow = Number(viewContext.dow);
-  const plan = DB.plan.get() || {};
-  const day = plan[String(dow)];
+  // The DATE drives everything (continuous rotation): resolve the workout for the
+  // selected date + which cycle slot it is (for add/remove edits).
+  if (!viewContext.sdDate) viewContext.sdDate = viewContext.date || todayISO();
+  const sdDateObj = new Date(viewContext.sdDate + 'T12:00:00');
+  const dow = sdDateObj.getDay();   // header label = the selected date's weekday
+  const day = DB.plan.workoutForDate(sdDateObj);
+  const slotIdx = day ? ((DB.plan.get().cycle || []).indexOf(day)) : -1;
   const exerciseById = Object.fromEntries(DB.exercises.list().map((e) => [e.id, e]));
   const exObjs = (day?.exerciseIds || []).map((id) => exerciseById[id]).filter(Boolean);
 
@@ -4940,9 +4746,6 @@ function renderSessionDay(el) {
   // until the user navigates away.
   if (!viewContext.sdState) viewContext.sdState = {};
   const sdState = viewContext.sdState;
-
-  // Date stored on viewContext so the user's pick survives re-renders
-  if (!viewContext.sdDate) viewContext.sdDate = todayISO();
 
   // Modal-level unit (defaults to user's prefs unit, switchable per page)
   if (!viewContext.sdUnit) viewContext.sdUnit = (DB.prefs.get().unit) || 'kg';
@@ -5088,14 +4891,14 @@ function renderSessionDay(el) {
   // "Start Workout" → guided one-exercise-at-a-time mode. Carry the chosen date
   // and unit so the run logs against the same day/unit the user picked here.
   $('#sd-start-run', el)?.addEventListener('click', () =>
-    navigate('session-run', { dow, date: viewContext.sdDate, unit: viewContext.sdUnit })
+    navigate('session-run', { date: viewContext.sdDate, unit: viewContext.sdUnit })
   );
 
   // ----- Bindings -----
 
   // Add an exercise: offer two choices — pick from the library, or create a
   // brand-new custom exercise (which is then added straight to this day).
-  $('#sd-add-ex', el)?.addEventListener('click', () => openAddExerciseChooser(dow));
+  $('#sd-add-ex', el)?.addEventListener('click', () => openAddExerciseChooser(slotIdx));
 
   // Tap (or keyboard-activate) an exercise photo thumbnail to open it
   // full-screen. Made keyboard/SR reachable as a button.
@@ -5142,7 +4945,7 @@ function renderSessionDay(el) {
   el.querySelectorAll('[data-remove-ex]').forEach((b) =>
     b.addEventListener('click', () => {
       const exId = b.dataset.removeEx;
-      DB.plan.removeExercise(dow, exId);
+      DB.plan.removeExerciseFromSlot(slotIdx, exId);
       delete viewContext.sdState[exId];
       showToast(t('exercise_removed'));
       renderSessionDay(el);
@@ -5298,15 +5101,16 @@ function startRestTimer(seconds) {
 }
 
 function renderSessionRun(el) {
-  const dow = Number(viewContext.dow);
-  const plan = DB.plan.get() || {};
-  const day = plan[String(dow)];
+  // Resolve the workout by DATE (continuous rotation), like session-day.
+  if (!viewContext.runDate) viewContext.runDate = viewContext.date || todayISO();
+  const runDateObj = new Date(viewContext.runDate + 'T12:00:00');
+  const dow = runDateObj.getDay();   // header label = the date's weekday
+  const day = DB.plan.workoutForDate(runDateObj);
   const exerciseById = Object.fromEntries(DB.exercises.list().map((e) => [e.id, e]));
   const exObjs = (day?.exerciseIds || []).map((id) => exerciseById[id]).filter(Boolean);
   const totalEx = exObjs.length;
 
   // Persist run state across re-renders (until navigation replaces viewContext).
-  if (!viewContext.runDate) viewContext.runDate = viewContext.date || todayISO();
   if (!viewContext.runUnit) viewContext.runUnit = viewContext.unit || (DB.prefs.get().unit) || 'kg';
   if (viewContext.runIdx == null) viewContext.runIdx = 0;
   if (!viewContext.runState) viewContext.runState = {};

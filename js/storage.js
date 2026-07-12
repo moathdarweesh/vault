@@ -315,12 +315,61 @@ function defaultState() {
     cardioTypes: [], // user-defined custom cardio types (built-ins live in CARDIO_TYPES)
     foods: [],
     sleep: [],
-    plan: { '0': null, '1': null, '2': null, '3': null, '4': null, '5': null, '6': null },
+    // Workout plan — a CONTINUOUS ROTATION: an ordered cycle of workouts rolled
+    // across training days (never reset weekly). See migratePlan()/DB.plan.
+    plan: { mode: 'rotation', cycle: [], trainingDays: [], anchor: null },
     supplements: [],
     supplementLogs: {},
     foodLogs: {},
     health: { data: null, syncedAt: 0, hidden: [] },
   };
+}
+
+// Count training-weekday dates x with anchor <= x < D (date-only). Used to find
+// the rotation position: each elapsed training day advances one cycle slot.
+function trainingDaysBetween(anchorStr, D, trainingDays) {
+  const a = new Date(anchorStr + 'T00:00:00');
+  const a0 = new Date(a.getFullYear(), a.getMonth(), a.getDate());
+  const d0 = new Date(D.getFullYear(), D.getMonth(), D.getDate());
+  if (d0 <= a0) return 0;
+  let count = 0;
+  const cur = new Date(a0);
+  let guard = 0;
+  while (cur < d0 && guard++ < 4000) {
+    if (trainingDays.indexOf(cur.getDay()) !== -1) count++;
+    cur.setDate(cur.getDate() + 1);
+  }
+  return count;
+}
+
+// Convert a legacy day-of-week plan grid (or a missing/partial plan) into the
+// rotation model. Distinct workouts in Sun→Sat order (first occurrence wins)
+// become the cycle; the days that had a workout become the training days; the
+// anchor defaults to today. Idempotent for an already-rotation plan.
+function migratePlan(plan) {
+  if (plan && plan.mode === 'rotation') {
+    return {
+      mode: 'rotation',
+      cycle: (Array.isArray(plan.cycle) ? plan.cycle : []).map((s) => ({
+        name: (s && s.name) || 'Workout',
+        exerciseIds: Array.isArray(s && s.exerciseIds) ? s.exerciseIds.slice() : [],
+      })),
+      trainingDays: Array.isArray(plan.trainingDays) ? plan.trainingDays.slice() : [],
+      anchor: plan.anchor || todayISO(),
+    };
+  }
+  const grid = plan || {};
+  const cycle = [], trainingDays = [], seen = {};
+  for (let dow = 0; dow < 7; dow++) {
+    const day = grid[String(dow)];
+    if (day && Array.isArray(day.exerciseIds) && day.exerciseIds.length) {
+      trainingDays.push(dow);
+      const nm = day.name || 'Workout';
+      const key = nm.toLowerCase();
+      if (!seen[key]) { seen[key] = true; cycle.push({ name: nm, exerciseIds: day.exerciseIds.slice() }); }
+    }
+  }
+  return { mode: 'rotation', cycle, trainingDays, anchor: todayISO() };
 }
 
 function loadState() {
@@ -350,7 +399,7 @@ function loadState() {
     parsed.cardioTypes = parsed.cardioTypes || [];
     parsed.foods = parsed.foods || [];
     parsed.sleep = parsed.sleep || [];
-    parsed.plan = parsed.plan || { '0': null, '1': null, '2': null, '3': null, '4': null, '5': null, '6': null };
+    parsed.plan = migratePlan(parsed.plan);   // legacy dow-grid → continuous rotation
     parsed.supplements = parsed.supplements || [];
     parsed.supplementLogs = parsed.supplementLogs || {};
     parsed.foodLogs = parsed.foodLogs || {};
@@ -483,108 +532,80 @@ const DB = {
     setUnit(unit) { STATE.prefs.unit = unit === 'lb' ? 'lb' : 'kg'; save(); },
   },
 
-  // ----- Weekly plan (day-of-week 0=Sun..6=Sat) -----
+  // ----- Workout plan — CONTINUOUS ROTATION -----
+  // STATE.plan = { mode:'rotation', cycle:[{name,exerciseIds}], trainingDays:[dow], anchor:'YYYY-MM-DD' }.
+  // The workout for a date = cycle[(training days elapsed since anchor) mod cycle.length];
+  // rest days (weekday ∉ trainingDays) have no workout. The cycle rolls across weeks — never reset.
   plan: {
-    get() { return STATE.plan || {}; },
-    setDay(dayKey, dayObj) {
-      // dayObj: { name: string, exerciseIds: [], notes?: string } or null to clear
-      STATE.plan[String(dayKey)] = dayObj;
+    get() { return STATE.plan || { mode: 'rotation', cycle: [], trainingDays: [], anchor: null }; },
+
+    // THE single source of truth: what workout (or null=rest) falls on date D.
+    workoutForDate(D) {
+      const p = STATE.plan;
+      if (!p || p.mode !== 'rotation' || !Array.isArray(p.cycle) || !p.cycle.length) return null;
+      const td = Array.isArray(p.trainingDays) ? p.trainingDays : [];
+      if (td.indexOf(D.getDay()) === -1) return null;              // rest day
+      const anchor = p.anchor || todayISO();
+      const a = new Date(anchor + 'T00:00:00');
+      const a0 = new Date(a.getFullYear(), a.getMonth(), a.getDate());
+      const d0 = new Date(D.getFullYear(), D.getMonth(), D.getDate());
+      if (d0 < a0) return null;                                    // before the plan started
+      const elapsed = trainingDaysBetween(anchor, D, td);
+      const len = p.cycle.length;
+      return p.cycle[((elapsed % len) + len) % len];
+    },
+
+    // Replace the whole rotation (used by the schedule modal on template adopt).
+    setRotation({ cycle, trainingDays, anchor }) {
+      STATE.plan = {
+        mode: 'rotation',
+        cycle: (cycle || []).map((s) => ({ name: (s && s.name) || 'Workout', exerciseIds: Array.isArray(s && s.exerciseIds) ? s.exerciseIds.slice() : [] })),
+        trainingDays: (trainingDays || []).slice().sort((a, b) => a - b),
+        anchor: anchor || todayISO(),
+      };
       save();
     },
-    clearDay(dayKey) {
-      STATE.plan[String(dayKey)] = null;
+    setTrainingDays(days) {
+      STATE.plan.trainingDays = (days || []).slice().sort((a, b) => a - b);
+      if (!STATE.plan.anchor) STATE.plan.anchor = todayISO();
       save();
+    },
+    // ----- cycle-slot editing (planner) -----
+    addSlot(name) {
+      if (!Array.isArray(STATE.plan.cycle)) STATE.plan.cycle = [];
+      STATE.plan.cycle.push({ name: name || 'Workout', exerciseIds: [] });
+      if (!STATE.plan.anchor) STATE.plan.anchor = todayISO();
+      save();
+    },
+    removeSlot(i) {
+      if (Array.isArray(STATE.plan.cycle)) { STATE.plan.cycle.splice(i, 1); save(); }
+    },
+    moveSlot(from, to) {
+      const c = STATE.plan.cycle;
+      if (!Array.isArray(c) || from < 0 || from >= c.length) return;
+      to = Math.max(0, Math.min(to, c.length - 1));
+      const [it] = c.splice(from, 1);
+      c.splice(to, 0, it);
+      save();
+    },
+    setSlotName(i, name) {
+      const s = STATE.plan.cycle && STATE.plan.cycle[i];
+      if (s) { s.name = name || 'Workout'; save(); }
+    },
+    setSlotExercises(i, ids) {
+      const s = STATE.plan.cycle && STATE.plan.cycle[i];
+      if (s) { s.exerciseIds = (ids || []).slice(); save(); }
+    },
+    addExerciseToSlot(i, exId) {
+      const s = STATE.plan.cycle && STATE.plan.cycle[i];
+      if (s && s.exerciseIds.indexOf(exId) === -1) { s.exerciseIds.push(exId); save(); }
+    },
+    removeExerciseFromSlot(i, exId) {
+      const s = STATE.plan.cycle && STATE.plan.cycle[i];
+      if (s) { s.exerciseIds = s.exerciseIds.filter((id) => id !== exId); save(); }
     },
     clearAll() {
-      STATE.plan = { '0': null, '1': null, '2': null, '3': null, '4': null, '5': null, '6': null };
-      save();
-    },
-    applyTemplate(templateDays) {
-      // templateDays: array of { name, exerciseIds }, mapped to days starting Sunday
-      // Distribute over week with rest days. Heuristic:
-      // 3 days → Mon/Wed/Fri (1, 3, 5)
-      // 4 days → Mon/Tue/Thu/Fri (1, 2, 4, 5)
-      // 5 days → Mon-Fri (1, 2, 3, 4, 5)
-      // 6 days → Sun-Fri (0..5)
-      const n = templateDays.length;
-      let dayOrder;
-      if (n <= 3) dayOrder = [1, 3, 5];
-      else if (n === 4) dayOrder = [1, 2, 4, 5];
-      else if (n === 5) dayOrder = [1, 2, 3, 4, 5];
-      else if (n === 6) dayOrder = [0, 1, 2, 3, 4, 5];
-      else dayOrder = [0, 1, 2, 3, 4, 5, 6];
-
-      STATE.plan = { '0': null, '1': null, '2': null, '3': null, '4': null, '5': null, '6': null };
-      templateDays.slice(0, dayOrder.length).forEach((d, i) => {
-        STATE.plan[String(dayOrder[i])] = {
-          name: d.name,
-          exerciseIds: [...d.exerciseIds],
-        };
-      });
-      save();
-    },
-    // Apply an explicit day→workout schedule chosen by the user. `map` is
-    // { '0'..'6': { name, exerciseIds } | null }; any day not present (or null)
-    // becomes a rest day. Replaces the whole week in one write.
-    applySchedule(map) {
-      STATE.plan = { '0': null, '1': null, '2': null, '3': null, '4': null, '5': null, '6': null };
-      Object.keys(map || {}).forEach((dow) => {
-        const d = map[dow];
-        if (d && Array.isArray(d.exerciseIds)) {
-          STATE.plan[String(dow)] = { name: d.name || 'Workout', exerciseIds: [...d.exerciseIds] };
-        }
-      });
-      save();
-    },
-    // Move an exercise within a day (reorder) or to another day. Called by the
-    // planner's drag-and-drop. toIndex is the desired position in the target
-    // day's list (null = append). Source day keeps its name even if emptied.
-    moveExercise(fromKey, toKey, exId, toIndex) {
-      const from = STATE.plan[String(fromKey)];
-      if (!from || !Array.isArray(from.exerciseIds)) return;
-      const idx = from.exerciseIds.indexOf(exId);
-      if (idx === -1) return;
-
-      // Same day → just reorder
-      if (String(fromKey) === String(toKey)) {
-        from.exerciseIds.splice(idx, 1);
-        let at = (toIndex == null) ? from.exerciseIds.length : toIndex;
-        at = Math.max(0, Math.min(at, from.exerciseIds.length));
-        from.exerciseIds.splice(at, 0, exId);
-        save();
-        return;
-      }
-
-      // Cross-day move
-      from.exerciseIds.splice(idx, 1);
-      let to = STATE.plan[String(toKey)];
-      if (!to) {
-        to = { name: 'Workout', exerciseIds: [] };
-        STATE.plan[String(toKey)] = to;
-      }
-      if (!Array.isArray(to.exerciseIds)) to.exerciseIds = [];
-      if (!to.exerciseIds.includes(exId)) {
-        let at = (toIndex == null) ? to.exerciseIds.length : toIndex;
-        at = Math.max(0, Math.min(at, to.exerciseIds.length));
-        to.exerciseIds.splice(at, 0, exId);
-      }
-      save();
-    },
-    // Remove a single exercise from a day's plan.
-    removeExercise(dayKey, exId) {
-      const day = STATE.plan[String(dayKey)];
-      if (!day || !Array.isArray(day.exerciseIds)) return;
-      day.exerciseIds = day.exerciseIds.filter((id) => id !== exId);
-      save();
-    },
-    // Swap two whole days (name + all exercises). Used when dragging a day card
-    // onto another in the planner — moves a full day's plan in one motion.
-    swapDays(keyA, keyB) {
-      const a = String(keyA), b = String(keyB);
-      if (a === b) return;
-      const tmp = STATE.plan[a] || null;
-      STATE.plan[a] = STATE.plan[b] || null;
-      STATE.plan[b] = tmp;
+      STATE.plan = { mode: 'rotation', cycle: [], trainingDays: [], anchor: todayISO() };
       save();
     },
   },
