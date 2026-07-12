@@ -526,7 +526,8 @@
     function renderDashboard(box){
       $('#head-actions').innerHTML='';
       headBtn('↻ تحديث','',async function(){await loadAll(); showCenter('dashboard');});
-      headBtn('⬇️ تصدير الكل','pri',exportAll);
+      headBtn('💾 نسخة احتياطية','pri',exportBackup);
+      headBtn('⬇️ تصدير مختصر','',exportAll);
       var T=DATA.totals, A=DATA.analytics;
       var recent=A.recent.length? A.recent.map(function(r){
         return '<div class="row2"><span class="r-name"><span class="uname"><span class="av" style="width:26px;height:26px;font-size:11px">'+esc(initial(r.u))+'</span>'+nameHtml(r.u)+'</span></span>'+
@@ -938,6 +939,32 @@
       var blob=new Blob([JSON.stringify(payload,null,2)],{type:'application/json'});
       var a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download='vault-export.json'; a.click();
       setTimeout(function(){URL.revokeObjectURL(a.href);},1000); toast('تم تصدير البيانات');
+    }
+
+    // COMPLETE backup: every admin-readable table, all rows (paginated), as one
+    // timestamped JSON. Free, no credentials. Run before any risky DB operation.
+    var BACKUP_TABLES=['profiles','user_prefs','user_exercise_prefs','exercises','workout_sessions',
+      'workout_sets','cardio_types','cardio_logs','foods','food_logs','sleep_logs','plan_days',
+      'plan_day_exercises','supplements','supplement_logs','health_prefs','user_flags','feedback',
+      'audit_log','admins','food_catalog','preset_plans','app_config','vault_data'];
+    async function exportBackup(){
+      toast('جارٍ إنشاء النسخة الاحتياطية…');
+      var out={ backup:'THE VAULT full backup', schema:'v4', exported_at:new Date().toISOString(),
+        note:'يشمل كل الجداول المطبّعة (بصلاحية الأدمِن). vault_data يحتوي صفّك أنت فقط — لا يمكن للأدمِن قراءة مدوّنات المستخدمين الآخرين (RLS)، ومصدر حقيقتهم على أجهزتهم. السكيما نفسها في backend/*.sql بالمستودع.',
+        counts:{}, tables:{} }, errs=[];
+      for(var i=0;i<BACKUP_TABLES.length;i++){
+        var t=BACKUP_TABLES[i];
+        var r=await fetchAll((function(tbl){return function(a,b){return sb.from(tbl).select('*').range(a,b);};})(t));
+        if(r.error){ errs.push(t+': '+r.error.message); out.tables[t]=[]; out.counts[t]='error'; }
+        else { out.tables[t]=r.data||[]; out.counts[t]=(r.data||[]).length; }
+      }
+      if(errs.length) out.errors=errs;
+      var total=Object.keys(out.counts).reduce(function(s,k){return s+(typeof out.counts[k]==='number'?out.counts[k]:0);},0);
+      var name='vault-backup-'+new Date().toISOString().slice(0,19).replace(/[:T]/g,'-')+'.json';
+      var blob=new Blob([JSON.stringify(out,null,2)],{type:'application/json'});
+      var a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download=name; a.click();
+      setTimeout(function(){URL.revokeObjectURL(a.href);},2000);
+      toast('تمّت النسخة الاحتياطية · '+total+' صف'+(errs.length?(' ('+errs.length+' تعذّر)'):''));
     }
 
     /* ---------------- boot -------------------------------------------------- */
