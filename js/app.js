@@ -597,6 +597,7 @@ const I18N = {
     sync_now: 'Sync now',
     sync_now_sub: 'Pull the latest and push your changes',
     synced: 'Synced',
+    syncing: 'Syncing your data…',
     cloud_backup_kept: 'Your cloud backup was kept safe — the empty data did not sync.',
     logout: 'Log out',
     logout_sub: 'Stop syncing on this device',
@@ -1092,6 +1093,7 @@ const I18N = {
     sync_now: 'زامِن الآن',
     sync_now_sub: 'اسحب آخر التغييرات وارفع تعديلاتك',
     synced: 'تمت المزامنة',
+    syncing: 'جارٍ مزامنة بياناتك…',
     cloud_backup_kept: 'نسختك الاحتياطية في السحابة محفوظة — لم تُزامَن البيانات الفارغة.',
     logout: 'تسجيل الخروج',
     logout_sub: 'إيقاف المزامنة على هذا الجهاز',
@@ -2080,7 +2082,7 @@ function renderHome(el) {
 
     ${recentHtml}
 
-    <div style="text-align:center;opacity:.4;font-size:12px;margin:24px 0 8px;letter-spacing:.5px">THE VAULT · v113</div>
+    <div style="text-align:center;opacity:.4;font-size:12px;margin:24px 0 8px;letter-spacing:.5px">THE VAULT · v114</div>
   `;
 
   // Count-up the hero/stat numerals (sleep is stored ×10 for one decimal)
@@ -6265,14 +6267,22 @@ function translateAuthError(msg) {
 }
 
 async function afterLogin() {
-  const r = await Cloud.resolveOnLogin();
-  if (r === 'conflict') { showConflictDialog(); return; }
+  // Optimistic login: the credentials are valid, so reveal the app IMMEDIATELY
+  // and reconcile the cloud blob in the BACKGROUND. Login now costs just the
+  // auth round-trip — not auth + a full pull/push of the whole data blob. On a
+  // fresh device the local (empty) view shows briefly, then fills when the pull
+  // lands; on a device that already has data there is no visible change.
   hideAuthGate();
-  refreshAfterSync();
-  showToast(t('synced'));
-  ensureUsername();
+  showToast(t('syncing'));
+  ensureUsername();                                  // fire-and-forget
   if (Cloud.touchLastSeen) Cloud.touchLastSeen();
   enforceAccountStatus();
+  try {
+    const r = await Cloud.resolveOnLogin();
+    if (r === 'conflict') { showConflictDialog(); return; }
+    refreshAfterSync();
+    showToast(t('synced'));
+  } catch (_) { /* offline / transient — local stays authoritative, next sync retries */ }
 }
 
 function showConflictDialog() {
@@ -6653,6 +6663,11 @@ document.addEventListener('load', (e) => {
 }, true);
 
 (function init() {
+  // Kick off the (large) Supabase SDK download in parallel with the first paint,
+  // before anything awaits it — so the login gate / session check isn't blocked
+  // on a cold download. Fire-and-forget; bootCloud awaits the same promise.
+  try { if (window.Cloud && Cloud.ensureSdk && Cloud.configured && Cloud.configured()) Cloud.ensureSdk(); } catch (_) {}
+
   const prefs = DB.prefs.get();
   applyTheme(prefs.theme || 'dark');
   applyLang(prefs.lang || 'en');

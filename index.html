@@ -16,8 +16,15 @@
   <link rel="apple-touch-icon" href="icons/icon.svg">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <!-- Warm the Supabase connection (DNS + TLS) during page load so the first
+       auth/sync call on login isn't paying a ~1s cold-start penalty. -->
+  <link rel="preconnect" href="https://ilmusnuchqlpirywonzx.supabase.co" crossorigin>
+  <link rel="dns-prefetch" href="https://ilmusnuchqlpirywonzx.supabase.co">
+  <!-- Preload the (large) Supabase SDK so it's ready by the time the login gate
+       needs it, instead of blocking the gate on a cold download. -->
+  <link rel="preload" href="js/vendor/supabase.js" as="script">
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=Tajawal:wght@400;500;700;800;900&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="styles.css?v=113">
+  <link rel="stylesheet" href="styles.css?v=114">
 </head>
 <body class="theme-dark">
   <div class="app">
@@ -77,20 +84,20 @@
           await Promise.all(regs.map((r) => r.unregister()));
           const keys = await caches.keys();
           await Promise.all(keys.map((k) => caches.delete(k)));
-          if (!sessionStorage.getItem('__cleaned_v113')) {
-            sessionStorage.setItem('__cleaned_v113', '1');
+          if (!sessionStorage.getItem('__cleaned_v114')) {
+            sessionStorage.setItem('__cleaned_v114', '1');
             location.reload();
           }
         }
       }).catch(() => {});
     }
   </script>
-  <script src="js/cloud.js?v=113"></script>
-  <script src="js/storage.js?v=113"></script>
-  <script src="js/tables.js?v=113"></script>
-  <script src="js/app.js?v=113"></script>
-  <script src="js/health.js?v=113"></script>
-  <script src="js/foodai.js?v=113"></script>
-  <script src="js/update.js?v=113"></script>
+  <script src="js/cloud.js?v=114"></script>
+  <script src="js/storage.js?v=114"></script>
+  <script src="js/tables.js?v=114"></script>
+  <script src="js/app.js?v=114"></script>
+  <script src="js/health.js?v=114"></script>
+  <script src="js/foodai.js?v=114"></script>
+  <script src="js/update.js?v=114"></script>
 </body>
 </html>
