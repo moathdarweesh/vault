@@ -564,6 +564,8 @@ const I18N = {
     update_title: 'A new version is available',
     update_get: 'Download',
     update_later: 'Later',
+    web_update_title: 'A new version is ready',
+    web_update_action: 'Update',
     feedback_title: 'Send feedback',
     feedback_sub: 'Suggestions or issues — we read every one',
     feedback_ph: 'Your suggestion or feedback…',
@@ -1057,6 +1059,8 @@ const I18N = {
     update_title: 'يتوفّر إصدار جديد',
     update_get: 'تحميل',
     update_later: 'لاحقاً',
+    web_update_title: 'يتوفّر إصدار جديد',
+    web_update_action: 'تحديث',
     feedback_title: 'إرسال ملاحظة',
     feedback_sub: 'اقتراحات أو مشاكل — نقرأ كل رسالة',
     feedback_ph: 'اقتراحك أو ملاحظتك…',
@@ -2076,7 +2080,7 @@ function renderHome(el) {
 
     ${recentHtml}
 
-    <div style="text-align:center;opacity:.4;font-size:12px;margin:24px 0 8px;letter-spacing:.5px">THE VAULT · v112</div>
+    <div style="text-align:center;opacity:.4;font-size:12px;margin:24px 0 8px;letter-spacing:.5px">THE VAULT · v113</div>
   `;
 
   // Count-up the hero/stat numerals (sleep is stored ×10 for one decimal)
@@ -6560,10 +6564,15 @@ function showAnnouncementBanner(config) {
   ).trim();
   if (!text) return;
   if (document.getElementById('announcement-banner')) return;
+  // Dismissal is keyed on the announcement's identity — its updated_at stamp
+  // (fallback: the text). So editing OR re-saving it in the admin panel bumps
+  // updated_at and it shows again to everyone, even users who dismissed the
+  // previous one; an untouched announcement stays dismissed.
   const DISMISS_KEY = 'vault_announcement_dismissed';
+  const sig = String(config.updated_at || text);
   let dismissed = '';
   try { dismissed = localStorage.getItem(DISMISS_KEY) || ''; } catch (_) {}
-  if (dismissed === text) return;
+  if (dismissed === sig) return;
 
   const el = document.createElement('div');
   el.id = 'announcement-banner';
@@ -6601,7 +6610,7 @@ function showAnnouncementBanner(config) {
   } catch (_) {}
 
   el.querySelector('#announcement-dismiss').addEventListener('click', () => {
-    try { localStorage.setItem(DISMISS_KEY, text); } catch (_) {}
+    try { localStorage.setItem(DISMISS_KEY, sig); } catch (_) {}
     if (repositionObserver) { try { repositionObserver.disconnect(); } catch (_) {} }
     el.classList.remove('show');
     setTimeout(() => { if (el.parentNode) el.parentNode.removeChild(el); }, 300);
@@ -6650,4 +6659,14 @@ document.addEventListener('load', (e) => {
   navigate('home', {}, { fromPop: true }); // root entry — don't grow history
   bootCloud();
   bootCatalog(); // best-effort admin-content pull; works logged-out too
+
+  // When the app is re-foregrounded (common on the APK — Android keeps it warm),
+  // refresh without a full restart: pull admin content again (so a freshly
+  // activated announcement appears) and re-check for a newer web build (shows a
+  // tap-to-update banner). Both are best-effort and no-op when nothing changed.
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState !== 'visible') return;
+    try { bootCatalog(); } catch (_) {}
+    try { if (window.VaultUpdate && VaultUpdate.checkWeb) VaultUpdate.checkWeb(); } catch (_) {}
+  });
 })();

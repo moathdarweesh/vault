@@ -403,7 +403,7 @@
     try {
       const { data, error } = await c
         .from('app_config')
-        .select('default_unit,announcement_ar,announcement_en,announcement_active')
+        .select('default_unit,announcement_ar,announcement_en,announcement_active,updated_at')
         .limit(1)
         .maybeSingle();
       if (!error && data) result.config = data;
