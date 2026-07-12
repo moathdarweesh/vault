@@ -1,0 +1,45 @@
+-- ============================================================================
+-- ⛔ CONFIRMATION REQUIRED — DESTRUCTIVE. Do NOT auto-run. Human-run out-of-band.
+-- ============================================================================
+-- Surfaced by the Database department's security audit (finding I-1), 2026-07-11.
+--
+-- WHY: the one-time blob→normalized migration left a staging schema, migration_v2,
+-- holding COPIES of every user's custom-exercise rows and base64 image bytes
+-- (migration_v2.exercise_src, .image_uploads, .exercise_id_map, .run_log). These
+-- tables have NO row-level security, NO foreign key to auth.users (so they do NOT
+-- cascade on account deletion), sit in every backup, and survive GDPR/CCPA erasure.
+-- NOT an active breach (the migration_v2 schema is not in Project Settings → API →
+-- Exposed schemas, and anon/authenticated have no USAGE on it) — but it is a clear
+-- data-minimization gap. The data is redundant: the source of truth is each user's
+-- vault_data blob, and the applied normalized tables already hold the migrated rows.
+--
+--   object       : schema public? NO — schema `migration_v2` and its 4 tables
+--   statement    : drop schema migration_v2 cascade;
+--   environment  : PRODUCTION — Supabase project ilmusnuchqlpirywonzx (remote, protected)
+--   rows affected: every migrated user's custom-exercise + base64-image COPIES
+--                  (a redundant staging duplicate; the live app reads none of it)
+--   reversibility: recover ONLY from the pre-drop backup below. Functionally the
+--                  app loses nothing — nothing at runtime reads migration_v2.
+--
+-- The department does NOT apply this in-band on any channel (no backup + no
+-- staging/loopback dry-run environment exists for this solo remote-only project,
+-- so the dry-run requirement cannot be satisfied and is NOT waived). Run it
+-- yourself, out-of-band, ONLY after the two gates below.
+-- ============================================================================
+
+-- GATE 1 — VERIFIED BACKUP FIRST (required). Take a backup you can restore:
+--   • Supabase Dashboard → Database → Backups (or upgrade to a plan with PITR), OR
+--   • from a machine with psql:
+--       pg_dump "postgresql://postgres:[PW]@db.ilmusnuchqlpirywonzx.supabase.co:5432/postgres" \
+--         --schema=migration_v2 -Fc -f migration_v2_backup.dump
+--     (that dump alone lets you restore just this schema if ever needed.)
+
+-- GATE 2 — CONFIRM IT IS TRULY REDUNDANT (run these SELECTs first, read-only):
+--   select count(*) from migration_v2.exercise_src;     -- staging copy count
+--   select count(*) from migration_v2.image_uploads;    -- base64 image copies
+--   -- confirm the real data is present where the app expects it:
+--   select count(*) from public.exercises where owner_id is not null;  -- customs live
+--   -- (images also live inside each user's public.vault_data.data blob.)
+
+-- ONLY AFTER a verified backup + confirming redundancy, run:
+-- drop schema migration_v2 cascade;
