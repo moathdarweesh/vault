@@ -29,12 +29,17 @@ A fitness / workout-tracking **PWA**. Vanilla JS, **no build step**, bilingual *
 - No new dependencies, no build step. Free-first (the maintainer prioritizes free tools/services).
 
 ## CACHE WORKFLOW (mandatory every release that changes shipped files)
-Bump the version in **four** places in `index.html` + the label, or the change never reaches phones:
-1. `?v=N` on every `<script>` tag.
+Bump the version in **five** places, or the change never reaches phones:
+1. `?v=N` on every `<script>` tag in `index.html`.
 2. `?v=N` on the `<link rel="stylesheet" href="styles.css?v=N">`.
 3. The `__cleaned_vN` sessionStorage key in the inline cleanup script.
 4. The visible build label `THE VAULT · vN` in `app.js`.
-Then grep for the old number — zero matches should remain. **Current version: v111.**
+5. **`version.json` → `web: N`** — the auto-updater (`js/update.js`) reloads devices to this build. It MUST equal the `?v=N` above; if `web` is left behind, devices never update; if it is set ahead of the deployed `?v=N`, devices reload once per launch (guarded, not a brick) until fixed.
+Then grep for the old number — zero matches should remain. **Current version: v113.**
+
+### Auto-update delivery (since v113) — how updates actually reach devices
+The `?v=N` busting alone does NOT reach phones, because the **entry `index.html` itself** is HTTP-cached by GitHub Pages (`Cache-Control: max-age=600`) and the SPA/APK-WebView never re-fetches it while open. `js/update.js` fixes this: on boot it fetches `version.json` fresh (`no-store`), compares `web` to the page's own `?v=N` (parsed from the script src), and if newer **reloads the entry html with a `?u=<build>` cache-buster** → fresh index.html + fresh `?v=N` scripts. Runs on web AND inside the APK WebView. Four guards make a reload loop impossible (unknown-build no-op, `<=` no-op, url-already-`?u=`-targeted no-op, once-per-session `sessionStorage` guard). On resume it re-pulls admin content + shows a tap-to-update banner. **Bootstrap caveat:** a device only gains the auto-updater once it is already ON a build that has it (≥v113) — the first arrival of ≥v113 still relies on the 10-min HTTP cache expiring (or a manual hard-refresh / clear-cache). Every update after that is automatic within seconds of app open.
+- **Admin announcement** (`app_config.announcement_*`): shown by `showAnnouncementBanner`. Dismissal is keyed on the config's `updated_at`, so **editing or re-saving the announcement in the admin panel re-broadcasts it to everyone**, even users who dismissed the previous one. `pullCatalog` selects `updated_at`; `init()` re-runs `bootCatalog` on foreground so a freshly-activated announcement appears without a restart.
 
 ## Deploy
 - **Web:** commit + push to `main`; GitHub Pages auto-rebuilds.
