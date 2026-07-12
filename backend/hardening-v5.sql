@@ -22,7 +22,7 @@ create index if not exists feedback_user_idx on public.feedback (user_id);
 -- policy alone. Double-lock it exactly like the v2 tables: revoke the auto-grants
 -- from anon/public, re-grant only to authenticated. Policies are left untouched
 -- (they already apply to authenticated), so there is zero isolation risk.
-revoke all on public.vault_data from anon, public;
+revoke all on public.vault_data from anon, authenticated, public;
 grant select, insert, update, delete on public.vault_data to authenticated;
 
 -- ---- verify (optional) ------------------------------------------------------
