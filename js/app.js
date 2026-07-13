@@ -2082,7 +2082,7 @@ function renderHome(el) {
 
     ${recentHtml}
 
-    <div style="text-align:center;opacity:.4;font-size:12px;margin:24px 0 8px;letter-spacing:.5px">THE VAULT · v114</div>
+    <div style="text-align:center;opacity:.4;font-size:12px;margin:24px 0 8px;letter-spacing:.5px">THE VAULT · v115</div>
   `;
 
   // Count-up the hero/stat numerals (sleep is stored ×10 for one decimal)
@@ -6267,22 +6267,28 @@ function translateAuthError(msg) {
 }
 
 async function afterLogin() {
-  // Optimistic login: the credentials are valid, so reveal the app IMMEDIATELY
-  // and reconcile the cloud blob in the BACKGROUND. Login now costs just the
-  // auth round-trip — not auth + a full pull/push of the whole data blob. On a
-  // fresh device the local (empty) view shows briefly, then fills when the pull
-  // lands; on a device that already has data there is no visible change.
-  hideAuthGate();
-  showToast(t('syncing'));
+  // How we reveal the app after a valid sign-in depends on whether THIS device
+  // already holds the user's data:
+  //   • Device already has data  → reveal immediately, reconcile in background
+  //     (fast; there is no empty state to worry the user).
+  //   • Fresh / empty device     → KEEP the gate up until the cloud pull lands,
+  //     so the user sees their real data appear, NEVER a scary empty home that
+  //     could make them panic-sync. (Blocking here is the safe default; the
+  //     speed win only applies when it's risk-free.)
+  const hasLocal = !!(Cloud.localHasData && Cloud.localHasData());
+  if (hasLocal) { hideAuthGate(); showToast(t('syncing')); }
   ensureUsername();                                  // fire-and-forget
   if (Cloud.touchLastSeen) Cloud.touchLastSeen();
   enforceAccountStatus();
   try {
     const r = await Cloud.resolveOnLogin();
-    if (r === 'conflict') { showConflictDialog(); return; }
+    if (r === 'conflict') { hideAuthGate(); showConflictDialog(); return; }
+    hideAuthGate();
     refreshAfterSync();
     showToast(t('synced'));
-  } catch (_) { /* offline / transient — local stays authoritative, next sync retries */ }
+  } catch (_) {
+    hideAuthGate(); // never trap the user behind the gate on a transient error
+  }
 }
 
 function showConflictDialog() {

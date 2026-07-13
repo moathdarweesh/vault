@@ -434,6 +434,7 @@
     signUp, signIn, signOut, changePassword, resetPassword, onPasswordRecovery,
     pull, push, onLocalChange,
     resolveOnLogin, chooseCloud, chooseLocal, bootSync, applyRemote,
+    localHasData, // so the UI can tell an empty device from one that already has data
     getClient: sb, // exposed for the tables.js "mirror" projection (RLS-scoped)
     getUsername, checkUsername, setUsername,
     touchLastSeen, getMyFlags, submitFeedback,
