@@ -2,6 +2,11 @@
 // THE VAULT - Main App
 // ==========================================================================
 
+// Single source of truth for the shipped build. Used by the visible build
+// label AND the feedback version tag so they can never drift apart. Keep this
+// equal to the ?v=N cache markers (see CLAUDE.md "CACHE WORKFLOW").
+const VAULT_BUILD = 'v116';
+
 // ==========================================================================
 // Icons
 // ==========================================================================
@@ -2082,7 +2087,7 @@ function renderHome(el) {
 
     ${recentHtml}
 
-    <div style="text-align:center;opacity:.4;font-size:12px;margin:24px 0 8px;letter-spacing:.5px">THE VAULT · v115</div>
+    <div style="text-align:center;opacity:.4;font-size:12px;margin:24px 0 8px;letter-spacing:.5px">THE VAULT · ${VAULT_BUILD}</div>
   `;
 
   // Count-up the hero/stat numerals (sleep is stored ×10 for one decimal)
@@ -6355,7 +6360,7 @@ function showFeedback() {
     if (!window.Cloud || !Cloud.configured() || !Cloud.submitFeedback) { err(t('auth_err_network')); return; }
     err(''); btn.disabled = true; btn.textContent = t('auth_signing');
     try {
-      const res = await Cloud.submitFeedback(msg, 'v111');
+      const res = await Cloud.submitFeedback(msg, VAULT_BUILD);
       if (res && res.ok) { closeModal(); showToast(t('feedback_sent')); return; }
       err(res && res.error === 'offline' ? t('auth_err_network') : t('auth_err_generic'));
     } catch (_) { err(t('auth_err_generic')); }
