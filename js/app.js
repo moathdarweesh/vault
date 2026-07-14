@@ -5,7 +5,7 @@
 // Single source of truth for the shipped build. Used by the visible build
 // label AND the feedback version tag so they can never drift apart. Keep this
 // equal to the ?v=N cache markers (see CLAUDE.md "CACHE WORKFLOW").
-const VAULT_BUILD = 'v116';
+const VAULT_BUILD = 'v117';
 
 // ==========================================================================
 // Icons
@@ -4630,13 +4630,22 @@ function openSlotEditorModal(slotIdx) {
     if (pickerCategory !== 'All') list = list.filter((e) => e.category === pickerCategory);
     if (pickerQuery) list = list.filter((e) => e.name.toLowerCase().includes(pickerQuery.toLowerCase()));
 
-    container.innerHTML = list.map((ex) => `
+    container.innerHTML = list.map((ex) => {
+      const imgUrl = exerciseImgSrc(ex);
+      // Small square thumbnail: the real exercise photo (remote dataset or a
+      // custom image) sits on top of an initials fallback; if the photo fails
+      // to load it removes itself and the initials show through.
+      return `
       <button type="button" class="picker-row ${pickedIds.has(ex.id) ? 'picked' : ''}" data-pick="${ex.id}">
-        <span class="picker-row-cat" data-cat="${escapeHtml(ex.category)}"></span>
+        <span class="picker-row-thumb" data-cat="${escapeHtml(ex.category)}">
+          <span class="picker-row-thumb-fallback">${escapeHtml(initialsOf(ex.name))}</span>
+          ${imgUrl ? `<img src="${escapeHtml(imgUrl)}" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="this.remove()">` : ''}
+        </span>
         <span class="picker-row-name">${escapeHtml(ex.name)}</span>
         <span class="picker-row-check">${icon('check', 14)}</span>
       </button>
-    `).join('');
+    `;
+    }).join('');
 
     container.querySelectorAll('[data-pick]').forEach((b) =>
       b.addEventListener('click', () => {

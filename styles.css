@@ -3941,6 +3941,42 @@ body[dir="rtl"] .run-nav svg { transform: scaleX(-1); }
 .picker-row-cat[data-cat="Arms"]  { background: var(--cat-arms); }
 .picker-row-cat[data-cat="Core"]  { background: var(--cat-core); }
 
+/* Square exercise thumbnail in the workout picker — real photo when available,
+   initials fallback underneath, framed with a category-coloured ring. */
+.picker-row-thumb {
+  position: relative;
+  width: 40px;
+  height: 40px;
+  border-radius: 9px;
+  flex-shrink: 0;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--surface-3);
+  box-shadow: inset 0 0 0 1.5px var(--border-hi);
+}
+.picker-row-thumb[data-cat="Chest"]     { box-shadow: inset 0 0 0 1.5px var(--cat-chest); }
+.picker-row-thumb[data-cat="Back"]      { box-shadow: inset 0 0 0 1.5px var(--cat-back); }
+.picker-row-thumb[data-cat="Legs"]      { box-shadow: inset 0 0 0 1.5px var(--cat-legs); }
+.picker-row-thumb[data-cat="Shoulders"] { box-shadow: inset 0 0 0 1.5px var(--cat-shoulders); }
+.picker-row-thumb[data-cat="Arms"]      { box-shadow: inset 0 0 0 1.5px var(--cat-arms); }
+.picker-row-thumb[data-cat="Core"]      { box-shadow: inset 0 0 0 1.5px var(--cat-core); }
+.picker-row-thumb-fallback {
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: .3px;
+  color: var(--text-mute);
+}
+.picker-row-thumb img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  background: #fff;
+}
+
 .picker-row-name {
   flex: 1;
   font-size: 13px;
