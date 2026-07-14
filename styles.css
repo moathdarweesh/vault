@@ -766,6 +766,16 @@ img { display: block; max-width: 100%; }
   justify-content: space-around;
   align-items: stretch;
   z-index: 10;
+  transition: transform 0.2s ease, opacity 0.2s ease;
+}
+
+/* While the on-screen keyboard is open (body.keyboard-open is toggled by
+   setupKeyboardHandling), slide the bottom nav down out of the way so it can't
+   rise up on top of the field being edited. */
+body.keyboard-open .bottom-nav {
+  transform: translateY(140%);
+  opacity: 0;
+  pointer-events: none;
 }
 
 .nav-btn {

@@ -5,7 +5,7 @@
 // Single source of truth for the shipped build. Used by the visible build
 // label AND the feedback version tag so they can never drift apart. Keep this
 // equal to the ?v=N cache markers (see CLAUDE.md "CACHE WORKFLOW").
-const VAULT_BUILD = 'v117';
+const VAULT_BUILD = 'v118';
 
 // ==========================================================================
 // Icons
@@ -6682,6 +6682,49 @@ document.addEventListener('load', (e) => {
   if (e.target && e.target.tagName === 'IMG') e.target.classList.add('loaded');
 }, true);
 
+// ==========================================================================
+// Mobile keyboard handling. When the on-screen keyboard opens it shrinks the
+// (dynamic) viewport, which pulls the absolute bottom-nav up on top of the
+// field being edited and can leave the field hidden behind the keyboard. We
+// (1) flag `body.keyboard-open` so CSS slides the nav out of the way, and
+// (2) scroll the focused field into the visible area above the keyboard.
+// Detection compares the current viewport height to a remembered baseline —
+// this covers BOTH keyboard modes: browsers that shrink only the visual
+// viewport AND WebViews (the APK) that resize the whole window.
+// ==========================================================================
+function setupKeyboardHandling() {
+  const vp = window.visualViewport;
+  const curH = () => (vp ? vp.height : window.innerHeight);
+  let baseH = curH();
+
+  function evaluate() {
+    const h = curH();
+    if (h > baseH) baseH = h;         // grow the baseline (browser chrome hiding, etc.)
+    const open = (baseH - h) > 120;   // >120px shorter than the baseline ⇒ keyboard is up
+    document.body.classList.toggle('keyboard-open', open);
+  }
+  // Orientation swaps portrait/landscape height — recapture the baseline so the
+  // new (shorter, in landscape) height isn't mistaken for an open keyboard.
+  function resetBaseline() {
+    document.body.classList.remove('keyboard-open');
+    setTimeout(() => { baseH = curH(); evaluate(); }, 350);
+  }
+
+  if (vp) vp.addEventListener('resize', evaluate);
+  window.addEventListener('resize', evaluate);
+  window.addEventListener('orientationchange', resetBaseline);
+
+  // Keep the focused field visible above the keyboard. Wait for the keyboard to
+  // animate in and settle the viewport before scrolling so we land in the right spot.
+  document.addEventListener('focusin', (e) => {
+    const el = e.target;
+    if (!el || !el.matches || !el.matches('input, textarea, [contenteditable="true"]')) return;
+    setTimeout(() => {
+      try { el.scrollIntoView({ block: 'center', behavior: 'smooth' }); } catch (_) {}
+    }, 320);
+  });
+}
+
 (function init() {
   // Kick off the (large) Supabase SDK download in parallel with the first paint,
   // before anything awaits it — so the login gate / session check isn't blocked
@@ -6692,6 +6735,7 @@ document.addEventListener('load', (e) => {
   applyTheme(prefs.theme || 'dark');
   applyLang(prefs.lang || 'en');
   navigate('home', {}, { fromPop: true }); // root entry — don't grow history
+  setupKeyboardHandling(); // hide the nav + keep the focused field above the keyboard
   bootCloud();
   bootCatalog(); // best-effort admin-content pull; works logged-out too
 

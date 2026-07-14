@@ -24,7 +24,7 @@
        needs it, instead of blocking the gate on a cold download. -->
   <link rel="preload" href="js/vendor/supabase.js" as="script">
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=Tajawal:wght@400;500;700;800;900&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="styles.css?v=117">
+  <link rel="stylesheet" href="styles.css?v=118">
 </head>
 <body class="theme-dark">
   <div class="app">
@@ -84,20 +84,20 @@
           await Promise.all(regs.map((r) => r.unregister()));
           const keys = await caches.keys();
           await Promise.all(keys.map((k) => caches.delete(k)));
-          if (!sessionStorage.getItem('__cleaned_v117')) {
-            sessionStorage.setItem('__cleaned_v117', '1');
+          if (!sessionStorage.getItem('__cleaned_v118')) {
+            sessionStorage.setItem('__cleaned_v118', '1');
             location.reload();
           }
         }
       }).catch(() => {});
     }
   </script>
-  <script src="js/cloud.js?v=117"></script>
-  <script src="js/storage.js?v=117"></script>
-  <script src="js/tables.js?v=117"></script>
-  <script src="js/app.js?v=117"></script>
-  <script src="js/health.js?v=117"></script>
-  <script src="js/foodai.js?v=117"></script>
-  <script src="js/update.js?v=117"></script>
+  <script src="js/cloud.js?v=118"></script>
+  <script src="js/storage.js?v=118"></script>
+  <script src="js/tables.js?v=118"></script>
+  <script src="js/app.js?v=118"></script>
+  <script src="js/health.js?v=118"></script>
+  <script src="js/foodai.js?v=118"></script>
+  <script src="js/update.js?v=118"></script>
 </body>
 </html>
