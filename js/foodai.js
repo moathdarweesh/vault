@@ -381,15 +381,14 @@
       });
     }
     function refreshFoodLog() {
-      // Make the day's food log (with running calorie/macro totals) the screen
-      // behind the chat — so the moment the user closes it they SEE what they
-      // added, no matter whether they opened the chat from the Food tab or the
-      // log itself.
+      // Refresh whichever nutrition screen is behind the chat so the user sees
+      // what they added the moment they close it. The Food dashboard is the
+      // primary screen now; the per-day foodlog is the secondary history view.
       if (typeof viewContext !== 'undefined') viewContext.foodLog = { date: logDate };
-      if (typeof currentView !== 'undefined' && currentView === 'foodlog' && typeof renderView === 'function') {
-        renderView('foodlog');
+      if (typeof currentView !== 'undefined' && (currentView === 'foodlog' || currentView === 'food') && typeof renderView === 'function') {
+        renderView(currentView);
       } else if (typeof navigate === 'function') {
-        navigate('foodlog');
+        navigate('food');
       }
     }
     function markAdded(b) {

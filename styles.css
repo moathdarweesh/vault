@@ -4459,6 +4459,17 @@ body[dir="rtl"] .picker-row { text-align: right; }
 }
 .food-log-list { display: flex; flex-direction: column; gap: 8px; }
 
+/* Small inline text link (e.g. Food "Past days") — reads as a link, not a
+   heavy button; the global svg{width:100%} is pinned so the chevron stays small. */
+.link-btn {
+  display: inline-flex; align-items: center; gap: 3px; flex-shrink: 0;
+  background: none; border: none; cursor: pointer; padding: 6px 2px;
+  color: var(--text-mute); font: inherit; font-size: 12.5px; font-weight: 700;
+  appearance: none; -webkit-appearance: none; -webkit-tap-highlight-color: transparent;
+}
+.link-btn:active { color: var(--text); }
+.link-btn svg { width: 14px; height: 14px; flex-shrink: 0; }
+
 /* =========================================================================
    SLEEP STAGES (from Health Connect)
    ========================================================================= */

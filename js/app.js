@@ -5,7 +5,7 @@
 // Single source of truth for the shipped build. Used by the visible build
 // label AND the feedback version tag so they can never drift apart. Keep this
 // equal to the ?v=N cache markers (see CLAUDE.md "CACHE WORKFLOW").
-const VAULT_BUILD = 'v132';
+const VAULT_BUILD = 'v133';
 
 // ==========================================================================
 // Icons
@@ -860,6 +860,7 @@ const I18N = {
 
     // Food log
     food_log_title: 'Daily Food',
+    food_history: 'Past days',
     food_log_subtitle: 'Log foods from your reference list.',
     today_totals: 'Today',
     add_food_log: 'Add Food',
@@ -1391,6 +1392,7 @@ const I18N = {
     delete_supplement_text: 'المكمّل وسجله كله بينحذف.',
 
     food_log_title: 'الأكل اليومي',
+    food_history: 'أيام سابقة',
     food_log_subtitle: 'سجّل أكلك من قائمتك المرجعية.',
     today_totals: 'اليوم',
     add_food_log: 'أضف أكل',
@@ -2077,9 +2079,10 @@ function renderHome(el) {
   // No plan → this week's set count as a large count-up numeral.
   const todayPlan = DB.plan.workoutForDate(now);   // continuous rotation → today's slot
   const exerciseById = Object.fromEntries(exercises.map((e) => [e.id, e]));
+  const hasPlanToday = !!(todayPlan && todayPlan.exerciseIds && todayPlan.exerciseIds.length > 0);
 
   let heroHtml = '';
-  if (todayPlan && todayPlan.exerciseIds && todayPlan.exerciseIds.length > 0) {
+  if (hasPlanToday) {
     const exObjs = todayPlan.exerciseIds.map((id) => exerciseById[id]).filter(Boolean);
     const muscles = groupMusclesFromExercises(exObjs);
     const sideRow = (label, keys, sideClass) => keys.length === 0 ? '' : `
@@ -2158,17 +2161,21 @@ function renderHome(el) {
 
     <div class="section-title">${t('tools_section')}</div>
     <div class="tool-rail">
-      <button class="tool-pod" data-goto="planner">
+      ${hasPlanToday ? `<button class="tool-pod" data-goto="planner">
         <div class="tool-pod-icon">${icon('calendar', 18)}</div>
         <div class="tool-pod-label">${t('plan_card')}</div>
-      </button>
-      <button class="tool-pod" data-goto="calendar">
-        <div class="tool-pod-icon">${icon('chart', 18)}</div>
-        <div class="tool-pod-label">${t('calendar_card')}</div>
-      </button>
+      </button>` : ''}
       <button class="tool-pod" data-goto="personal-records">
         <div class="tool-pod-icon" aria-hidden="true">${icon('trophy', 18)}</div>
         <div class="tool-pod-label">${t('pr_card')}</div>
+      </button>
+      <button class="tool-pod" data-goto="compare">
+        <div class="tool-pod-icon">${icon('arrowUp', 18)}</div>
+        <div class="tool-pod-label">${t('compare_card')}</div>
+      </button>
+      <button class="tool-pod" data-goto="supplements">
+        <div class="tool-pod-icon">${icon('droplet', 18)}</div>
+        <div class="tool-pod-label">${t('supplements_card')}</div>
       </button>
     </div>
 
@@ -2488,11 +2495,9 @@ function renderWorkouts(el) {
       // Truly empty: show empty-state CTA to browse library
       grid.innerHTML = `
         <div class="empty">
-          <div class="empty-icon">${icon('dumbbell', 52)}</div>
           <div class="empty-title">${t('train_empty_title')}</div>
           <div class="empty-text">${t('train_empty_text')}</div>
           <div style="display:flex;gap:8px;justify-content:center;margin-top:18px;flex-wrap:wrap">
-            <button class="btn btn-accent" data-library-pick>${icon('plus', 16)} ${t('add_from_library')}</button>
             <button class="btn btn-ghost" id="add-exercise-btn">${icon('plus', 16)} ${t('add_custom')}</button>
           </div>
         </div>
@@ -2559,7 +2564,6 @@ function renderLibrary(el) {
       <div class="detail-top">
         <button class="back-btn" data-pick-done aria-label="${escapeHtml(t('done'))}">${icon('back', 20)}</button>
         <div class="detail-top-title">${t('add_from_library')}</div>
-        <button class="btn btn-primary" data-pick-done style="height:36px;padding:0 14px;font-size:13px">${t('done')}</button>
       </div>
     `
     : `
@@ -3605,8 +3609,13 @@ function renderFood(el) {
   el.innerHTML = `
     ${vaultBar()}
     <div class="page-header">
-      <h1 class="page-title">${t('food')}</h1>
-      <p class="page-subtitle">${escapeHtml(formatDate(date))}</p>
+      <div class="row-between">
+        <div>
+          <h1 class="page-title">${t('food')}</h1>
+          <p class="page-subtitle">${escapeHtml(formatDate(date))}</p>
+        </div>
+        <button class="link-btn" data-goto="foodlog">${t('food_history')} ${icon('chevronRight', 14)}</button>
+      </div>
     </div>
     <div id="nutri-host">${nutritionDashboardHtml(date)}</div>
     <button class="food-fab" id="food-fab" aria-label="${escapeHtml(t('add'))}">${icon('plus', 22)}</button>
@@ -6632,7 +6641,7 @@ function renderFoodLog(el) {
 
   el.innerHTML = `
     <div class="detail-top">
-      <button class="back-btn" data-goto="home">${icon('back', 20)}</button>
+      <button class="back-btn" data-goto="food">${icon('back', 20)}</button>
       <div class="detail-top-title">${t('food_log_title')}</div>
     </div>
 
