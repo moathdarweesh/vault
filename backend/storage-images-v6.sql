@@ -8,8 +8,10 @@
 -- every uploaded image an independent, durable home that survives a blob wipe.
 --
 -- MODEL: the base64 stays in the blob for display (instant + works offline in
--- the gym). Storage holds the durable BACKUP copy, and exercises.image_path
--- records where it lives so a mirror-based recovery can restore it.
+-- the gym). Storage holds the durable BACKUP copy, and the EXISTING
+-- user_exercise_prefs.custom_image_path records where it lives so a
+-- mirror-based recovery can restore it. This file therefore creates a bucket
+-- and its policies and ALTERS NO TABLE.
 --
 -- SAFETY: additive only. No DROP/DELETE/TRUNCATE of data. The `drop policy if
 -- exists` lines are idempotency guards for the policies this file creates, not
@@ -17,15 +19,13 @@
 --
 -- Reviewed by db-security-auditor 2026-07-17: no Critical, cross-user
 -- isolation sound and fail-closed on crafted names — CONDITIONAL on the
--- STEP 0 pre-flight below. Findings M-1 (path-shape pin) and L-1 (initplan
--- form) are applied. Open follow-ups, tracked but NOT blocking this file:
+-- STEP 0 pre-flight below. Findings M-1 (path-shape pin), L-1 (initplan form)
+-- and M-2 (use the designated column, see section 3) are applied. Open
+-- follow-up, tracked but NOT blocking this file:
 --   H-3  storage.objects has no FK to auth.users → images are not erased when
 --        an account is deleted. Needs a server-side list(uid)+remove() sweep
---        in a delete-account routine before that feature ships.
---   M-2  user_exercise_prefs.custom_image_path (schema-v2.sql:150) was the
---        originally designated pointer and is already populated. This file
---        adds exercises.image_path instead (it is what the mirror upserts).
---        Two sources of truth for one fact — pick one deliberately.
+--        in a delete-account routine before that feature ships. (No
+--        delete-account flow exists today, so nothing is leaking yet.)
 -- ===========================================================================
 
 
@@ -136,14 +136,25 @@ create policy "exercise_images_owner_delete"
   );
 
 -- ---------------------------------------------------------------------------
--- 3) Where the durable copy lives, recorded on the mirrored exercise row so a
---    recovery from the mirror can restore the image (the whole point of this
---    migration). Nullable + additive: existing rows are untouched, no rewrite.
+-- 3) NO SCHEMA CHANGE NEEDED.
+--    The pointer column already exists and is already the designated one:
+--    public.user_exercise_prefs.custom_image_path — schema-v2.sql states
+--    "exercise-images  <- user_exercise_prefs.custom_image_path
+--     objects: '<uid>/<exercise_id>.jpg'", which is exactly the bucket name and
+--    path convention created above. migrate-blob-to-v2.sql STEP D (applied)
+--    already populates it.
+--
+--    An earlier draft of this file added public.exercises.image_path instead.
+--    That was dropped: it duplicated an existing field (two sources of truth
+--    that would drift), and it sat on `exercises` — the one table whose SELECT
+--    is not purely owner-scoped (globals are readable by every authenticated
+--    user), whereas user_exercise_prefs is owner-only. Using the designated
+--    column also means this migration alters NO table at all.
+--
+--    js/tables.js writes custom_image_path in a SEPARATE upsert batch from the
+--    in_my_list rows, so a blob row with no path can never send NULL and blank
+--    a pointer already stored on the server.
 -- ---------------------------------------------------------------------------
-alter table public.exercises add column if not exists image_path text;
-
-comment on column public.exercises.image_path is
-  'Storage path of the durable copy of a custom exercise image: {owner_id}/{exercise_id}.jpg in the private exercise-images bucket. NULL for global/catalog exercises and for customs whose image has not been backed up yet.';
 
 -- ---------------------------------------------------------------------------
 -- 4) Verification (read-only — run after applying).
@@ -155,5 +166,3 @@ comment on column public.exercises.image_path is
 --   from storage.buckets where id = 'exercise-images';
 -- select policyname, cmd, qual, with_check from pg_policies
 --   where schemaname = 'storage' and tablename = 'objects' order by policyname;
--- select column_name, data_type from information_schema.columns
---   where table_schema = 'public' and table_name = 'exercises' and column_name = 'image_path';

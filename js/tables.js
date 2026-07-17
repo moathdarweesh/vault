@@ -111,7 +111,8 @@
       const localFoodIds = new Set((b.foods || []).map((f) => f && f.id).filter(Boolean));
 
       const customExercises = [];
-      const userExPrefs = [];
+      const userExPrefs = [];     // in_my_list only — NEVER carries the image column
+      const userExPrefsImg = [];  // rows that actually have an image pointer
       exList.forEach((ex) => {
         if (!ex || !ex.id) return;
         if (ex.isCustom) {
@@ -124,19 +125,36 @@
             category: ex.category || 'Other',
             image_slug: orNull(ex.imageSlug),
             machine_type: orNull(ex.machineType),
-            // Where the durable copy of the user's uploaded image lives. This
-            // is the field whose absence made the images unrecoverable when the
-            // blob was once wiped — without it a mirror restore brings back the
-            // exercise but not its picture.
-            image_path: orNull(ex.imagePath),
           });
         } else {
           const gid = nameToGlobal[String(ex.name || '').toLowerCase()] || null;
           exIdMap[ex.id] = gid;          // may be null if not in catalog
         }
-        if (ex.inMyList) {
-          const sid = exIdMap[ex.id];
-          if (sid) userExPrefs.push({ user_id: userId, exercise_id: sid, in_my_list: true });
+        // Pointer to the durable copy of the user's uploaded image. This is the
+        // field whose absence made the images unrecoverable when the blob was
+        // once wiped: a mirror restore brought back the exercise but not its
+        // picture. user_exercise_prefs.custom_image_path is the schema's
+        // DESIGNATED home for it (schema-v2.sql: "exercise-images <-
+        // user_exercise_prefs.custom_image_path"), and unlike `exercises` that
+        // table is purely owner-scoped.
+        //
+        // Split into two batches on purpose. An upsert writes every column in
+        // its payload, so sending custom_image_path: null for a blob row that
+        // has no path yet would NULL OUT a pointer already stored on the server
+        // — the exact blind-overwrite that destroyed the images in the first
+        // place. Rows without a path simply never mention the column.
+        const sid = exIdMap[ex.id];
+        if (sid) {
+          if (ex.imagePath) {
+            userExPrefsImg.push({
+              user_id: userId,
+              exercise_id: sid,
+              in_my_list: !!ex.inMyList,
+              custom_image_path: ex.imagePath,
+            });
+          } else if (ex.inMyList) {
+            userExPrefs.push({ user_id: userId, exercise_id: sid, in_my_list: true });
+          }
         }
       });
 
@@ -299,6 +317,9 @@
         ['cardio_types', customCardioTypes, 'id'],
         ['foods', foods, 'id'],
         ['user_exercise_prefs', userExPrefs, 'user_id,exercise_id'],
+        // Separate step: same table, but this payload carries custom_image_path.
+        // Keeping it apart is what stops a null from clobbering a stored pointer.
+        ['user_exercise_prefs', userExPrefsImg, 'user_id,exercise_id'],
         ['workout_sessions', sessions, 'id'],
         ['workout_sets', sets, 'id'],
         ['cardio_logs', cardioLogs, 'id'],
