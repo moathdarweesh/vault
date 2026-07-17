@@ -1398,12 +1398,20 @@ function inRangeISO(iso, start, end) {
   return d >= start && d < end;
 }
 
+// Localised hour/minute abbreviations. Arabic: س = ساعة, د = دقيقة. English: h/m.
+// (Slicing a translated word like "الدقائق" to 3 chars produced garbage "الد",
+//  so durations use these fixed abbreviations instead.)
+function durUnits() {
+  const ar = !!(STATE && STATE.prefs && STATE.prefs.lang === 'ar');
+  return ar ? { h: 'س', m: 'د' } : { h: 'h', m: 'm' };
+}
 function formatDuration(minutes) {
   const h = Math.floor(minutes / 60);
   const m = minutes % 60;
-  if (h === 0) return m + 'm';
-  if (m === 0) return h + 'h';
-  return h + 'h ' + m + 'm';
+  const u = durUnits();
+  if (h === 0) return m + u.m;
+  if (m === 0) return h + u.h;
+  return h + u.h + ' ' + m + u.m;
 }
 
 function formatTime12(hhmm) {

@@ -5,7 +5,7 @@
 // Single source of truth for the shipped build. Used by the visible build
 // label AND the feedback version tag so they can never drift apart. Keep this
 // equal to the ?v=N cache markers (see CLAUDE.md "CACHE WORKFLOW").
-const VAULT_BUILD = 'v133';
+const VAULT_BUILD = 'v134';
 
 // ==========================================================================
 // Icons
@@ -487,6 +487,7 @@ const I18N = {
     duration_min: 'Duration (min)',
     calories: 'Calories',
     sessions_w: 'Sessions', minutes: 'Minutes',
+    unit_hr: 'h', unit_min: 'min',
     enter_duration: 'Enter a duration',
     delete_cardio_q: 'Delete cardio session?',
     delete_cardio_text: 'This session will be removed from your history.',
@@ -1030,6 +1031,7 @@ const I18N = {
     duration_min: 'المدة (دقيقة)',
     calories: 'السعرات',
     sessions_w: 'الجلسات', minutes: 'الدقائق',
+    unit_hr: 'س', unit_min: 'د',
     enter_duration: 'أدخل المدة',
     delete_cardio_q: 'حذف جلسة الكارديو؟',
     delete_cardio_text: 'ستُحذف هذه الجلسة من سجلك.',
@@ -2138,11 +2140,11 @@ function renderHome(el) {
         <div class="stat-cell-label">${t('sessions_label')}</div>
       </button>
       <button class="stat-cell" data-goto="cardio">
-        <div class="stat-cell-value num"><span class="anim" data-count="${cardioMinutes}">0</span><span class="unit">${t('minutes').slice(0, 3).toLowerCase()}</span></div>
+        <div class="stat-cell-value num"><span class="anim" data-count="${cardioMinutes}">0</span><span class="unit">${t('unit_min')}</span></div>
         <div class="stat-cell-label">${t('cardio')}</div>
       </button>
       <button class="stat-cell" data-goto="sleep">
-        <div class="stat-cell-value num">${sleepHours != null ? `<span class="anim" data-count="${Math.round(parseFloat(sleepHours) * 10)}" data-fixed="1">0</span><span class="unit">h</span>` : '—'}</div>
+        <div class="stat-cell-value num">${sleepHours != null ? `<span class="anim" data-count="${Math.round(parseFloat(sleepHours) * 10)}" data-fixed="1">0</span><span class="unit">${t('unit_hr')}</span>` : '—'}</div>
         <div class="stat-cell-label">${t('last_sleep')}</div>
       </button>
     </div>

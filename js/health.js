@@ -30,7 +30,7 @@
     const last = sleep.reduce((a, b) => (new Date(a.end) > new Date(b.end) ? a : b));
     const h = Math.floor(last.minutes / 60);
     const m = last.minutes % 60;
-    return `${h}<span class="health-card-unit">h</span> ${m}<span class="health-card-unit">m</span>`;
+    return `${h}<span class="health-card-unit">${tr('unit_hr')}</span> ${m}<span class="health-card-unit">${tr('unit_min')}</span>`;
   }
 
   // Single source of truth for every metric: how to read it, label, icon, color.
