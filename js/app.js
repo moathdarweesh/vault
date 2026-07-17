@@ -5,7 +5,7 @@
 // Single source of truth for the shipped build. Used by the visible build
 // label AND the feedback version tag so they can never drift apart. Keep this
 // equal to the ?v=N cache markers (see CLAUDE.md "CACHE WORKFLOW").
-const VAULT_BUILD = 'v128';
+const VAULT_BUILD = 'v129';
 
 // ==========================================================================
 // Icons
@@ -522,6 +522,7 @@ const I18N = {
     saved_new: 'Add a new saved food', saved_empty: 'No saved foods yet',
     calc_title: 'Calorie calculator', calc_sub: 'Mifflin-St Jeor — the gold standard',
     calc_mode_calc: 'Calculate', calc_mode_manual: 'Enter manually',
+    calc_use_manual: 'Or enter the numbers manually', calc_use_calc: 'Use the calculator instead',
     calc_sex: 'Sex', calc_male: 'Male', calc_female: 'Female',
     calc_age: 'Age', calc_height: 'Height (cm)', calc_weight: 'Weight (kg)',
     calc_activity: 'Activity', calc_goal: 'Goal',
@@ -1058,6 +1059,7 @@ const I18N = {
     saved_new: 'أضف طعاماً محفوظاً جديداً', saved_empty: 'لا يوجد أكل محفوظ بعد',
     calc_title: 'حاسبة السعرات', calc_sub: 'معادلة Mifflin-St Jeor — المعيار الأدق',
     calc_mode_calc: 'احسب', calc_mode_manual: 'إدخال يدوي',
+    calc_use_manual: 'أو أدخِل الأرقام يدوياً', calc_use_calc: 'استخدِم الحاسبة بدلاً من ذلك',
     calc_sex: 'الجنس', calc_male: 'ذكر', calc_female: 'أنثى',
     calc_age: 'العمر', calc_height: 'الطول (سم)', calc_weight: 'الوزن (كغ)',
     calc_activity: 'النشاط', calc_goal: 'الهدف',
@@ -3824,11 +3826,6 @@ function openCalculatorModal(onSave) {
       <button class="icon-btn icon-btn-tile" data-close>${icon('close', 18)}</button>
     </div>
 
-    <div class="calc-modewrap">
-      <button class="calc-modebtn ${!manual ? 'active' : ''}" data-mode="calc">${t('calc_mode_calc')}</button>
-      <button class="calc-modebtn ${manual ? 'active' : ''}" data-mode="manual">${t('calc_mode_manual')}</button>
-    </div>
-
     <div id="calc-body"></div>
   `);
 
@@ -3856,6 +3853,7 @@ function openCalculatorModal(onSave) {
         ${seg('goal', goals.map((g) => ({ v: g, label: t('goal_' + g) })), p.goal)}</div>
       <div class="calc-preview" id="calc-preview"></div>
       <button class="btn btn-primary btn-block" id="calc-save">${t('save')}</button>
+      <button type="button" class="calc-switch" id="to-manual">${t('calc_use_manual')}</button>
     `;
   }
 
@@ -3872,6 +3870,7 @@ function openCalculatorModal(onSave) {
           <input type="number" inputmode="numeric" id="m-fat" min="0" value="${curTargets.fat || ''}" placeholder="60"></div>
       </div>
       <button class="btn btn-primary btn-block" id="calc-save-manual">${t('save')}</button>
+      <button type="button" class="calc-switch" id="to-calc">${t('calc_use_calc')}</button>
     `;
   }
 
@@ -3919,6 +3918,7 @@ function openCalculatorModal(onSave) {
       closeModal(); showToast(t('saved'));
       if (typeof onSave === 'function') onSave();
     });
+    body.querySelector('#to-manual')?.addEventListener('click', () => { manual = true; draw(); });
   }
 
   function renderManualForm() {
@@ -3935,14 +3935,10 @@ function openCalculatorModal(onSave) {
       closeModal(); showToast(t('saved'));
       if (typeof onSave === 'function') onSave();
     });
+    body.querySelector('#to-calc')?.addEventListener('click', () => { manual = false; draw(); });
   }
 
   const draw = () => { manual ? renderManualForm() : renderCalcForm(); };
-  overlay.querySelectorAll('[data-mode]').forEach((b) => b.addEventListener('click', () => {
-    manual = b.dataset.mode === 'manual';
-    overlay.querySelectorAll('.calc-modebtn').forEach((x) => x.classList.toggle('active', x === b));
-    draw();
-  }));
   draw();
 }
 
