@@ -1290,6 +1290,8 @@ input[type="date"], input[type="time"] { color-scheme: dark; }
   width: 100%;
 }
 
+/* Now a <button> (tap a muscle → its full session history), so the UA button
+   chrome is stripped and a pressed affordance added. */
 .heat-cell {
   aspect-ratio: 1.6 / 1;
   border-radius: 10px;
@@ -1303,7 +1305,102 @@ input[type="date"], input[type="time"] { color-scheme: dark; }
   transition: transform 0.15s;
   min-width: 0;
   overflow: hidden;
+  appearance: none;
+  -webkit-appearance: none;
+  border: none;
+  width: 100%;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
 }
+.heat-cell:active { transform: scale(0.95); }
+
+/* =========================================================================
+   MUSCLE SESSION HISTORY (tap a heatmap cell)
+   ========================================================================= */
+.ms-list { padding: 0 16px 24px; }
+.ms-group { margin-bottom: 22px; }
+.ms-date {
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-mute);
+  margin: 0 2px 8px;
+}
+.ms-card {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  width: 100%;
+  text-align: start;
+  padding: 12px;
+  margin-bottom: 8px;
+  border-radius: var(--radius);
+  background: var(--card-bg);
+  border: var(--card-border);
+  appearance: none;
+  -webkit-appearance: none;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+  transition: transform 0.15s;
+  -webkit-tap-highlight-color: transparent;
+}
+.ms-card:active { transform: scale(0.985); }
+
+.ms-thumb {
+  position: relative;
+  width: 46px;
+  height: 46px;
+  border-radius: 10px;
+  flex-shrink: 0;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--surface-3);
+  box-shadow: inset 0 0 0 1.5px var(--border-hi);
+}
+.ms-thumb[data-cat="Chest"]     { box-shadow: inset 0 0 0 1.5px var(--cat-chest); }
+.ms-thumb[data-cat="Back"]      { box-shadow: inset 0 0 0 1.5px var(--cat-back); }
+.ms-thumb[data-cat="Legs"]      { box-shadow: inset 0 0 0 1.5px var(--cat-legs); }
+.ms-thumb[data-cat="Shoulders"] { box-shadow: inset 0 0 0 1.5px var(--cat-shoulders); }
+.ms-thumb[data-cat="Arms"]      { box-shadow: inset 0 0 0 1.5px var(--cat-arms); }
+.ms-thumb[data-cat="Core"]      { box-shadow: inset 0 0 0 1.5px var(--cat-core); }
+.ms-thumb-fallback { font-size: 13px; font-weight: 800; color: var(--text-mute); }
+.ms-thumb img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  background: #fff;
+}
+
+.ms-main { display: flex; flex-direction: column; gap: 4px; min-width: 0; flex: 1; }
+.ms-name {
+  font-size: 14px;
+  font-weight: 800;
+  color: var(--text);
+  line-height: 1.25;
+}
+.ms-meta { font-size: 11px; font-weight: 600; color: var(--text-mute); }
+.ms-sets { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 3px; }
+.ms-set {
+  display: inline-flex;
+  align-items: center;
+  gap: 1px;
+  padding: 3px 8px;
+  border-radius: 999px;
+  background: var(--surface-3);
+  border: 1px solid var(--border);
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--text-dim);
+}
+.ms-x { opacity: 0.5; margin: 0 1px; }
 
 .heat-cell-name {
   font-size: 10px;
@@ -1595,11 +1692,16 @@ body[dir="rtl"] .bento-card-content { text-align: right; }
   font-weight: 800;
   letter-spacing: -0.01em;
   color: #ffffff;
-  line-height: 1.2;
+  line-height: 1.25;
   z-index: 4;
-  white-space: nowrap;
+  /* Wrap to a second line instead of truncating. Long exercise names ("Cable
+     Crossover", "تشست برس ماشين") were being cut to "كييل كروس أ…", which reads
+     worse than simply using the space the card already has. */
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
   overflow: hidden;
-  text-overflow: ellipsis;
+  text-align: start;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.35);
 }
 

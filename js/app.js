@@ -5,7 +5,7 @@
 // Single source of truth for the shipped build. Used by the visible build
 // label AND the feedback version tag so they can never drift apart. Keep this
 // equal to the ?v=N cache markers (see CLAUDE.md "CACHE WORKFLOW").
-const VAULT_BUILD = 'v121';
+const VAULT_BUILD = 'v122';
 
 // ==========================================================================
 // Icons
@@ -852,6 +852,14 @@ const I18N = {
     max_weight_per_session: 'Max weight per session',
     no_chart_data: 'Log 2+ sets to see your progress chart.',
 
+    // Muscle session history (tap a heatmap cell)
+    // NOTE: a separate key from `sets` on purpose — the Arabic `sets` is the
+    // definite "المجموعات", which reads wrong after a numeral ("3 المجموعات").
+    ms_sets_label: 'sets',
+    ms_sessions_logged: 'sessions logged',
+    ms_empty_title: 'No sessions yet',
+    ms_empty_text: 'Log a workout for this muscle group and it will show up here.',
+
     // Tools cards on home
     tools_section: 'Tools',
     plan_card: 'Weekly Plan',
@@ -1336,6 +1344,11 @@ const I18N = {
     max_weight_per_session: 'أقصى وزن لكل جلسة',
     no_chart_data: 'سجّل مجموعتين أو أكثر لعرض رسم تقدّمك.',
 
+    ms_sets_label: 'مجموعات',
+    ms_sessions_logged: 'جلسة مسجّلة',
+    ms_empty_title: 'لا توجد جلسات بعد',
+    ms_empty_text: 'سجّل تمريناً لهذه العضلة وسيظهر هنا.',
+
     tools_section: 'أدوات',
     plan_card: 'الخطة الأسبوعية',
     plan_card_sub: 'اليوم والجدول',
@@ -1682,6 +1695,7 @@ function renderView(view) {
     case 'session-day': renderSessionDay(el); break;
     case 'session-run': renderSessionRun(el); break;
     case 'personal-records': renderPersonalRecords(el); break;
+    case 'muscle-sessions': renderMuscleSessions(el); break;
   }
   // Give every icon-only back button an accessible name, in one place.
   el.querySelectorAll('.back-btn:not([aria-label])').forEach((b) => b.setAttribute('aria-label', t('back')));
@@ -1913,11 +1927,12 @@ function renderHome(el) {
     if (count >= 3) lvl = 2;
     if (count >= 5) lvl = 3;
     if (count >= 8) lvl = 4;
+    // A real <button>: tapping a muscle opens its full session history.
     return `
-      <div class="heat-cell lvl-${lvl}">
+      <button class="heat-cell lvl-${lvl}" data-muscle="${escapeHtml(cat)}" aria-label="${escapeHtml(categoryLabel(cat))}">
         <div class="heat-cell-name">${escapeHtml(categoryLabel(cat))}</div>
         <div class="heat-cell-count num">${count}</div>
-      </div>
+      </button>
     `;
   }).join('');
 
@@ -2091,6 +2106,10 @@ function renderHome(el) {
   // across midnight.
   $('#home-start-workout', el)?.addEventListener('click', () =>
     navigate('session-day', { date: todayISO() })
+  );
+  // Tap a muscle in the focus heatmap → its full session history.
+  el.querySelectorAll('[data-muscle]').forEach((b) =>
+    b.addEventListener('click', () => navigate('muscle-sessions', { muscleCat: b.dataset.muscle }))
   );
   if (typeof Health !== 'undefined') Health.bindHomeSection();
 }
@@ -6601,6 +6620,73 @@ async function populateAccount(el) {
 // ==========================================================================
 // PERSONAL RECORDS VIEW
 // ==========================================================================
+// Every logged session for ONE muscle group, newest first, grouped by day.
+// Reached by tapping a cell in the home muscle-focus heatmap: the cell shows a
+// 7-day count, this shows the whole history behind it (the user asked for ALL
+// the sessions, not just the ones inside the heatmap's window).
+function renderMuscleSessions(el) {
+  const cat = viewContext.muscleCat || 'Chest';
+  const exById = Object.fromEntries(DB.exercises.list().map((e) => [e.id, e]));
+  const sessions = DB.sessions.listAll()
+    .filter((s) => { const ex = exById[s.exerciseId]; return ex && ex.category === cat; })
+    .sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : 0));
+
+  const lang = DB.prefs.get().lang || 'en';
+  const byDate = {};
+  sessions.forEach((s) => { (byDate[s.date] = byDate[s.date] || []).push(s); });
+
+  const groupsHtml = Object.keys(byDate).map((date) => {
+    const label = new Date(date + 'T00:00:00').toLocaleDateString(
+      lang === 'ar' ? 'ar-u-nu-latn' : 'en-US',
+      { weekday: 'long', day: 'numeric', month: 'long' }
+    );
+    const cards = byDate[date].map((s) => {
+      const ex = exById[s.exerciseId];
+      const sets = (s.sets || []).filter((x) => x && (x.reps || x.weight));
+      const best = sets.reduce((m, x) => Math.max(m, x.weight || 0), 0);
+      const url = exerciseImgSrc(ex);
+      const chips = sets.map((x) =>
+        `<span class="ms-set"><span class="num">${fmtNum(x.reps || 0)}</span><span class="ms-x">×</span><span class="num">${fmtWeight(x.weight || 0)}</span></span>`
+      ).join('');
+      return `
+        <button class="ms-card" data-open-ex="${ex.id}">
+          <span class="ms-thumb" data-cat="${escapeHtml(ex.category)}">
+            <span class="ms-thumb-fallback">${escapeHtml(initialsOf(exDisplayName(ex)))}</span>
+            ${url ? `<img src="${escapeHtml(url)}" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="this.remove()">` : ''}
+          </span>
+          <span class="ms-main">
+            <span class="ms-name">${escapeHtml(exDisplayName(ex))}</span>
+            <span class="ms-meta">${fmtNum(sets.length)} ${escapeHtml(t('ms_sets_label'))}${best > 0 ? ` · ${escapeHtml(t('pr_max_weight'))} ${fmtWeight(best)}${unitLabel()}` : ''}</span>
+            ${chips ? `<span class="ms-sets">${chips}</span>` : ''}
+          </span>
+        </button>
+      `;
+    }).join('');
+    return `<div class="ms-group"><div class="ms-date">${escapeHtml(label)}</div>${cards}</div>`;
+  }).join('');
+
+  el.innerHTML = `
+    <div class="detail-top">
+      <button class="back-btn" data-goto="home" aria-label="${t('back')}">${icon('back', 20)}</button>
+      <div class="detail-top-title">${escapeHtml(categoryLabel(cat))}</div>
+    </div>
+
+    <div class="page-header">
+      <div class="page-eyebrow">${t('muscle_focus')}</div>
+      <h1 class="page-title">${escapeHtml(categoryLabel(cat))}</h1>
+      <p class="page-subtitle"><span class="num">${fmtNum(sessions.length)}</span> ${escapeHtml(t('ms_sessions_logged'))}</p>
+    </div>
+
+    ${sessions.length === 0
+      ? emptyState({ iconName: 'dumbbell', title: t('ms_empty_title'), text: t('ms_empty_text') })
+      : `<div class="ms-list">${groupsHtml}</div>`}
+  `;
+
+  el.querySelectorAll('[data-open-ex]').forEach((b) =>
+    b.addEventListener('click', () => navigate('exercise-detail', { exerciseId: b.dataset.openEx }))
+  );
+}
+
 function renderPersonalRecords(el) {
   const exercises = DB.exercises.list();
 
