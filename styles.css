@@ -4545,22 +4545,30 @@ body[dir="rtl"] .picker-row { text-align: right; }
 .coach-body { min-height: 60px; }
 .coach-text { font-size: 14px; line-height: 1.7; color: var(--text); }
 
-/* Floating add button — compact rounded RECTANGLE with an icon + label
-   (not a large circle). */
+/* Floating add button — compact icon-only rounded RECTANGLE (not a circle). */
 .food-fab {
   position: absolute; inset-inline-end: 16px;
   bottom: calc(var(--nav-h) + var(--safe-b) + 16px);
-  height: 44px; padding: 0 16px 0 13px; border-radius: 13px; z-index: 20;
-  display: inline-flex; align-items: center; gap: 6px;
+  width: 54px; height: 46px; border-radius: 14px; z-index: 20;
+  display: inline-flex; align-items: center; justify-content: center;
   background: var(--accent); color: var(--accent-ink); border: none;
-  font: inherit; font-size: 14px; font-weight: 800;
   box-shadow: 0 6px 18px rgba(0, 0, 0, 0.35), 0 0 0 1px rgba(255,255,255,0.06);
   cursor: pointer; appearance: none; -webkit-appearance: none;
   transition: transform 0.15s; -webkit-tap-highlight-color: transparent;
 }
-.food-fab:active { transform: scale(0.95); }
-.food-fab svg { flex-shrink: 0; }
-body[dir="rtl"] .food-fab { padding: 0 13px 0 16px; }
+.food-fab:active { transform: scale(0.94); }
+/* The global `svg{width:100%}` would otherwise blow this up — pin it. */
+.food-fab svg { width: 22px; height: 22px; flex-shrink: 0; }
+
+/* Keep the dashboard's boxed icons at a sane size (the global svg{width:100%}
+   would otherwise make them fill their whole container). */
+.nutri-setup-icon svg { width: 26px; height: 26px; }
+.nutri-edit svg { width: 16px; height: 16px; }
+
+/* Icon-less compact empty state for the food log. */
+.nutri-empty { text-align: center; padding: 26px 16px; }
+.nutri-empty-title { font-size: 15px; font-weight: 800; color: var(--text); }
+.nutri-empty-text { font-size: 13px; color: var(--text-mute); margin-top: 5px; }
 
 /* =========================================================================
    ADD SHEET (animated bottom sheet)

@@ -5,7 +5,7 @@
 // Single source of truth for the shipped build. Used by the visible build
 // label AND the feedback version tag so they can never drift apart. Keep this
 // equal to the ?v=N cache markers (see CLAUDE.md "CACHE WORKFLOW").
-const VAULT_BUILD = 'v127';
+const VAULT_BUILD = 'v128';
 
 // ==========================================================================
 // Icons
@@ -3599,7 +3599,7 @@ function renderFood(el) {
       <p class="page-subtitle">${escapeHtml(formatDate(date))}</p>
     </div>
     <div id="nutri-host">${nutritionDashboardHtml(date)}</div>
-    <button class="food-fab" id="food-fab">${icon('plus', 18)}<span>${t('add')}</span></button>
+    <button class="food-fab" id="food-fab" aria-label="${escapeHtml(t('add'))}">${icon('plus', 22)}</button>
   `;
 
   const rerender = () => { const h = $('#nutri-host', el); if (h) h.innerHTML = nutritionDashboardHtml(date); };
@@ -3647,7 +3647,6 @@ function nutritionDashboardHtml(date) {
           <div class="nutri-setup-title">${t('nutri_setup_title')}</div>
           <div class="nutri-setup-text">${t('nutri_setup_text')}</div>
         </div>
-        ${icon('chevronRight', 20)}
       </button>
       ${todayLogHtml(entries)}
     `;
@@ -3706,7 +3705,6 @@ function nutritionDashboardHtml(date) {
         <div class="cta-card-title">${t('coach_title')}</div>
         <div class="cta-card-sub">${t('coach_sub')}</div>
       </div>
-      ${icon('chevronRight', 18)}
     </button>
 
     ${todayLogHtml(entries)}
@@ -3715,8 +3713,12 @@ function nutritionDashboardHtml(date) {
 
 function todayLogHtml(entries) {
   if (!entries.length) {
+    // Compact, icon-less empty state (the big empty-state graphic was removed).
     return `<div class="section-title" style="margin:22px 0 10px">${t('nutri_today')}</div>` +
-      emptyState({ iconName: 'apple', title: t('nutri_empty_title'), text: t('nutri_empty_text') });
+      `<div class="nutri-empty">
+         <div class="nutri-empty-title">${t('nutri_empty_title')}</div>
+         <div class="nutri-empty-text">${t('nutri_empty_text')}</div>
+       </div>`;
   }
   const rows = entries.map((e) => {
     const m = e.servings || 1;
