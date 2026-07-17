@@ -4581,30 +4581,31 @@ body[dir="rtl"] .food-fab { padding: 0 13px 0 16px; }
   transition: transform 0.3s cubic-bezier(0.22, 1, 0.36, 1);
 }
 .sheet-overlay.open .add-sheet { transform: translateY(0); }
-.add-sheet-title { font-size: 17px; font-weight: 800; text-align: center; margin: 4px 0 14px; }
-.add-methods { display: flex; flex-direction: column; gap: 8px; }
-.add-method {
-  display: flex; align-items: center; gap: 14px; width: 100%;
-  padding: 14px; border-radius: var(--radius);
+.add-sheet-title { font-size: 17px; font-weight: 800; text-align: center; margin: 4px 0 16px; }
+/* Consistent square tiles in a 3-column grid. */
+.add-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+.add-tile {
+  aspect-ratio: 1 / 1;
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px;
+  padding: 10px; border-radius: 16px;
   background: var(--surface-2); border: 1px solid var(--border);
-  color: var(--text); text-align: start; cursor: pointer;
+  color: var(--text); cursor: pointer; text-align: center;
   appearance: none; -webkit-appearance: none; font: inherit;
   transition: transform 0.12s, background 0.15s; -webkit-tap-highlight-color: transparent;
 }
-.add-method:active { transform: scale(0.98); background: var(--surface-3); }
-.add-method-icon {
-  width: 44px; height: 44px; border-radius: 12px; flex-shrink: 0;
+.add-tile:active { transform: scale(0.96); background: var(--surface-3); }
+.add-tile-icon {
+  width: 50px; height: 50px; border-radius: 15px; flex-shrink: 0;
   display: flex; align-items: center; justify-content: center;
   background: var(--surface-hi); color: var(--text);
 }
-.add-method-icon.voice { background: rgba(239, 68, 68, 0.18); color: #f87171; }
-.add-method-icon.chat { background: var(--accent-soft); color: var(--accent); }
-.add-method-icon.photo { background: rgba(96, 165, 250, 0.18); color: #60a5fa; }
-.add-method-icon.saved { background: rgba(52, 211, 153, 0.18); color: #34d399; }
-.add-method-icon.manual { background: rgba(251, 191, 36, 0.16); color: #fbbf24; }
-.add-method-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
-.add-method-title { font-size: 15px; font-weight: 800; }
-.add-method-sub { font-size: 12px; color: var(--text-mute); }
+.add-tile-icon svg { width: 24px; height: 24px; }
+.add-tile-icon.voice { background: rgba(239, 68, 68, 0.18); color: #f87171; }
+.add-tile-icon.chat { background: var(--accent-soft); color: var(--accent); }
+.add-tile-icon.photo { background: rgba(96, 165, 250, 0.18); color: #60a5fa; }
+.add-tile-icon.saved { background: rgba(52, 211, 153, 0.18); color: #34d399; }
+.add-tile-icon.manual { background: rgba(251, 191, 36, 0.16); color: #fbbf24; }
+.add-tile-title { font-size: 12.5px; font-weight: 700; line-height: 1.2; }
 
 /* =========================================================================
    CALCULATOR MODAL

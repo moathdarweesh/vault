@@ -5,7 +5,7 @@
 // Single source of truth for the shipped build. Used by the visible build
 // label AND the feedback version tag so they can never drift apart. Keep this
 // equal to the ?v=N cache markers (see CLAUDE.md "CACHE WORKFLOW").
-const VAULT_BUILD = 'v126';
+const VAULT_BUILD = 'v127';
 
 // ==========================================================================
 // Icons
@@ -3619,6 +3619,17 @@ function renderFood(el) {
     const del = e.target.closest('[data-del-food]');
     if (del) { DB.foodLogs.remove(date, del.dataset.delFood); showToast(t('deleted')); rerender(); return; }
   });
+
+  // The calorie goal is MANDATORY: if none is set, open the calculator straight
+  // away when the Food page is shown. The short delay lets the view settle and
+  // avoids opening if the user immediately navigates elsewhere.
+  if (!DB.nutrition.hasTargets()) {
+    setTimeout(() => {
+      if (currentView === 'food' && !DB.nutrition.hasTargets() && !$('#modal-root').innerHTML.trim()) {
+        openCalculatorModal(rerender);
+      }
+    }, 250);
+  }
 }
 
 // The rings + remaining + today's list. Re-rendered on its own after any change.
@@ -3749,25 +3760,22 @@ function openAddSheet(date, onChange) {
   const overlay = document.createElement('div');
   overlay.id = 'add-sheet-overlay';
   overlay.className = 'sheet-overlay';
-  const row = (m) => `
-    <button class="add-method" data-method="${m.k}">
-      <span class="add-method-icon ${m.k}">${icon(m.icon, 22)}</span>
-      <span class="add-method-main">
-        <span class="add-method-title">${m.title}</span>
-        <span class="add-method-sub">${m.sub}</span>
-      </span>
-      ${icon('chevronRight', 18)}
+  // A grid of consistent square tiles — one icon + label per tile.
+  const tile = (m) => `
+    <button class="add-tile" data-method="${m.k}">
+      <span class="add-tile-icon ${m.k}">${icon(m.icon, 24)}</span>
+      <span class="add-tile-title">${m.title}</span>
     </button>`;
   overlay.innerHTML = `
     <div class="add-sheet" role="dialog" aria-modal="true">
       <div class="sheet-handle"></div>
       <div class="add-sheet-title">${t('add_sheet_title')}</div>
-      <div class="add-methods">
-        ${row({ k: 'voice', icon: 'mic', title: t('add_voice'), sub: t('add_voice_sub') })}
-        ${row({ k: 'chat', icon: 'zap', title: t('add_chat'), sub: t('add_chat_sub') })}
-        ${row({ k: 'photo', icon: 'camera', title: t('add_photo'), sub: t('add_photo_sub') })}
-        ${row({ k: 'saved', icon: 'utensils', title: t('add_saved'), sub: t('add_saved_sub') })}
-        ${row({ k: 'manual', icon: 'edit', title: t('add_manual'), sub: t('add_manual_sub') })}
+      <div class="add-grid">
+        ${tile({ k: 'voice', icon: 'mic', title: t('add_voice') })}
+        ${tile({ k: 'chat', icon: 'zap', title: t('add_chat') })}
+        ${tile({ k: 'photo', icon: 'camera', title: t('add_photo') })}
+        ${tile({ k: 'saved', icon: 'utensils', title: t('add_saved') })}
+        ${tile({ k: 'manual', icon: 'edit', title: t('add_manual') })}
       </div>
     </div>`;
   app.appendChild(overlay);
