@@ -5,7 +5,7 @@
 // Single source of truth for the shipped build. Used by the visible build
 // label AND the feedback version tag so they can never drift apart. Keep this
 // equal to the ?v=N cache markers (see CLAUDE.md "CACHE WORKFLOW").
-const VAULT_BUILD = 'v129';
+const VAULT_BUILD = 'v130';
 
 // ==========================================================================
 // Icons
@@ -513,6 +513,7 @@ const I18N = {
     coach_sub: 'What to eat to hit your remaining macros',
     coach_thinking: 'Thinking…',
     coach_unavailable: 'Coach is unavailable right now.',
+    coach_goal_met: "You've hit your goal for today 🎉",
     add_sheet_title: 'Add food',
     add_voice: 'Voice', add_voice_sub: 'Say what you ate',
     add_chat: 'Chat', add_chat_sub: 'Type it — AI finds the calories',
@@ -1050,6 +1051,7 @@ const I18N = {
     coach_sub: 'ماذا تأكل لتكمّل المتبقّي من ماكروزك',
     coach_thinking: 'أفكّر…',
     coach_unavailable: 'المدرّب غير متاح حالياً.',
+    coach_goal_met: 'أكملت هدفك لهذا اليوم 🎉',
     add_sheet_title: 'إضافة أكل',
     add_voice: 'صوت', add_voice_sub: 'قُل ما أكلته',
     add_chat: 'محادثة', add_chat_sub: 'اكتبه — والذكاء يحسب السعرات',
@@ -2987,8 +2989,6 @@ function renderExerciseDetail(el, exerciseId) {
 
     ${chartHtmlForExercise(exerciseId)}
 
-    ${variationsHtmlForExercise(ex)}
-
     <div class="row-between mb-16">
       <div class="section-title" style="margin:0">${t('history')}</div>
       <button class="btn btn-primary" id="add-session-btn">${icon('plus', 16)} ${t('log_session')}</button>
@@ -3595,7 +3595,7 @@ function renderFood(el) {
   const date = todayISO();
 
   el.innerHTML = `
-    ${vaultBar({ action: icon('plus', 20), actionLabel: t('add') })}
+    ${vaultBar()}
     <div class="page-header">
       <h1 class="page-title">${t('food')}</h1>
       <p class="page-subtitle">${escapeHtml(formatDate(date))}</p>
@@ -3606,8 +3606,7 @@ function renderFood(el) {
 
   const rerender = () => { const h = $('#nutri-host', el); if (h) h.innerHTML = nutritionDashboardHtml(date); };
 
-  // Top-bar "+" and the floating FAB both open the add sheet.
-  bindVaultAction(() => openAddSheet(date, rerender));
+  // A single add button: the floating FAB (the top-bar action was a duplicate).
   $('#food-fab', el)?.addEventListener('click', () => openAddSheet(date, rerender));
 
   const host = $('#nutri-host', el);
@@ -4063,9 +4062,18 @@ function openCoach(date) {
   const prompt = (lang === 'ar'
     ? `أنا أتتبع سعراتي. باقي لي اليوم: ${left.calories} سعرة، ${left.protein}غ بروتين، ${left.carbs}غ كارب، ${left.fat}غ دهون. اقترح ٣ وجبات أو سناكات واقعية تناسب المتبقي تقريباً، كل واحدة بسطر واحد مع سعراتها التقريبية. بالعربي، بدون مقدمة.`
     : `I track my macros. Remaining today: ${left.calories} kcal, ${left.protein}g protein, ${left.carbs}g carbs, ${left.fat}g fat. Suggest 3 realistic meals or snacks that fit the remainder, each on one line with approx calories. No preamble.`);
+  // Already at / over the goal → no point asking the AI for "0 calories" of food.
+  if (left.calories <= 50) { body.innerHTML = `<div class="coach-done">${t('coach_goal_met')}</div>`; return; }
   if (!window.FoodAI || !FoodAI.ask) { body.innerHTML = `<div class="ai-err">${t('coach_unavailable')}</div>`; return; }
   FoodAI.ask(prompt)
-    .then((txt) => { body.innerHTML = `<div class="coach-text">${escapeHtml(txt).replace(/\n/g, '<br>')}</div>`; })
+    .then((txt) => {
+      // A blank reply usually means the AI backend isn't reachable yet (e.g. the
+      // Worker hasn't been redeployed) — show a clear message, never an empty box.
+      const clean = String(txt || '').trim();
+      body.innerHTML = clean
+        ? `<div class="coach-text">${escapeHtml(clean).replace(/\n/g, '<br>')}</div>`
+        : `<div class="ai-err">${t('coach_unavailable')}</div>`;
+    })
     .catch((e) => { body.innerHTML = `<div class="ai-err">${escapeHtml((e && e.message) || t('ai_error'))}</div>`; });
 }
 

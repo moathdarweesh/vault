@@ -4544,6 +4544,7 @@ body[dir="rtl"] .picker-row { text-align: right; }
 }
 .coach-body { min-height: 60px; }
 .coach-text { font-size: 14px; line-height: 1.7; color: var(--text); }
+.coach-done { font-size: 15px; font-weight: 700; color: var(--text); text-align: center; padding: 18px 8px; }
 
 /* Floating add button — compact icon-only rounded RECTANGLE (not a circle). */
 .food-fab {
