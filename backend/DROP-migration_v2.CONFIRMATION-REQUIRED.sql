@@ -1,3 +1,25 @@
+-- ###########################################################################
+-- ##  🛑 BLOCKED — DO NOT RUN. Blocker raised 2026-07-17.                   ##
+-- ##                                                                        ##
+-- ##  GATE 2 of this script is FALSIFIED. Its justification for dropping    ##
+-- ##  the schema — "(images also live inside each user's public.vault_data  ##
+-- ##  .data blob.)" — IS NO LONGER TRUE.                                    ##
+-- ##                                                                        ##
+-- ##  The owner's vault_data blob was OVERWRITTEN by an empty local state:  ##
+-- ##  every base64 custom-exercise image in it was destroyed, and the       ##
+-- ##  mirror tables never carried images, so they could not be recovered    ##
+-- ##  from there either. migration_v2.image_uploads.base64_data staged the  ##
+-- ##  RAW base64 of every migrated image and may now be THE LAST SURVIVING  ##
+-- ##  COPY. Running this DROP would destroy it permanently.                 ##
+-- ##                                                                        ##
+-- ##  REQUIRED BEFORE THIS MAY EVER RUN (read-only):                        ##
+-- ##    select count(*), count(base64_data) from migration_v2.image_uploads;##
+-- ##  If bytes are present, RESTORE them first (see storage-images-v6.sql). ##
+-- ##  Only once the images provably live elsewhere may the data-min         ##
+-- ##  argument below be acted on. The PII concern remains valid — it is the ##
+-- ##  SEQUENCING that changed: recover first, then minimise.                ##
+-- ###########################################################################
+
 -- ============================================================================
 -- ⛔ CONFIRMATION REQUIRED — DESTRUCTIVE. Do NOT auto-run. Human-run out-of-band.
 -- ============================================================================

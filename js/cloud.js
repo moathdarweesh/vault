@@ -468,8 +468,14 @@
     if (!c || !s || !exerciseId) return null;
     const blob = dataUrlToBlob(dataUrl);
     if (!blob) return null;
-    const ext = blob.type === 'image/png' ? 'png' : blob.type === 'image/webp' ? 'webp' : 'jpg';
-    const path = `${s.user.id}/${exerciseId}.${ext}`;
+    // ONE stable key per exercise, always `.jpg`: the app only ever encodes
+    // JPEG (resizeImageToDataUrl → canvas.toDataURL('image/jpeg')), and a fixed
+    // extension means `upsert` REPLACES the previous image. Deriving the
+    // extension from the mime type instead would strand the old object under a
+    // different key the moment an image changed type — orphaned forever,
+    // referenced by nothing and missed by any `{uid}/` cleanup sweep. The
+    // bucket validates the real contentType below, not this extension.
+    const path = `${s.user.id}/${exerciseId}.jpg`;
     try {
       const { error } = await c.storage.from(IMAGE_BUCKET)
         .upload(path, blob, { upsert: true, contentType: blob.type });
