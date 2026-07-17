@@ -5,7 +5,7 @@
 // Single source of truth for the shipped build. Used by the visible build
 // label AND the feedback version tag so they can never drift apart. Keep this
 // equal to the ?v=N cache markers (see CLAUDE.md "CACHE WORKFLOW").
-const VAULT_BUILD = 'v123';
+const VAULT_BUILD = 'v124';
 
 // ==========================================================================
 // Icons
@@ -45,6 +45,7 @@ const ICONS = {
   utensils: '<path d="M3 2v7c0 1.1.9 2 2 2h4a2 2 0 0 0 2-2V2"/><path d="M7 2v20"/><path d="M21 15V2v0a5 5 0 0 0-5 5v6c0 1.1.9 2 2 2h3Zm0 0v7"/>',
   trophy: '<path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6"/><path d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18"/><path d="M4 22h16"/><path d="M10 14.66V17c0 .55-.47.98-.97 1.21C7.85 18.75 7 20.24 7 22"/><path d="M14 14.66V17c0 .55.47.98.97 1.21C16.15 18.75 17 20.24 17 22"/><path d="M18 2H6v7a6 6 0 0 0 12 0V2Z"/>',
   zap: '<polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>',
+  mic: '<path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="22"/>',
   settings: '<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>',
   globe: '<circle cx="12" cy="12" r="10"/><line x1="2" x2="22" y1="12" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/>',
   palette: '<circle cx="13.5" cy="6.5" r=".5"/><circle cx="17.5" cy="10.5" r=".5"/><circle cx="8.5" cy="7.5" r=".5"/><circle cx="6.5" cy="12.5" r=".5"/><path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10c.926 0 1.648-.746 1.648-1.688 0-.437-.18-.835-.437-1.125-.29-.289-.438-.652-.438-1.125a1.64 1.64 0 0 1 1.668-1.668h1.996c3.051 0 5.555-2.503 5.555-5.554C21.965 6.012 17.461 2 12 2z"/>',
@@ -499,6 +500,38 @@ const I18N = {
 
     // Food
     food_subtitle: 'Your personal reference of foods and their macros.',
+    // Nutrition dashboard
+    nutri_setup_title: 'Set your daily goal',
+    nutri_setup_text: 'Calculate your calories & macros to start tracking.',
+    nutri_left: 'left',
+    nutri_over: 'over',
+    nutri_calories: 'Calories',
+    nutri_today: "Today's food",
+    nutri_empty_title: 'Nothing logged yet',
+    nutri_empty_text: 'Tap + to add what you ate today.',
+    coach_title: 'AI Coach',
+    coach_sub: 'What to eat to hit your remaining macros',
+    coach_thinking: 'Thinking…',
+    coach_unavailable: 'Coach is unavailable right now.',
+    add_sheet_title: 'Add food',
+    add_voice: 'Voice', add_voice_sub: 'Say what you ate',
+    add_chat: 'Chat', add_chat_sub: 'Type it — AI finds the calories',
+    add_photo: 'Photo', add_photo_sub: 'Snap your meal',
+    add_saved: 'Saved food', add_saved_sub: 'Pick from your foods',
+    add_manual: 'Manual', add_manual_sub: 'Enter the numbers yourself',
+    saved_new: 'Add a new saved food', saved_empty: 'No saved foods yet',
+    calc_title: 'Calorie calculator', calc_sub: 'Mifflin-St Jeor — the gold standard',
+    calc_mode_calc: 'Calculate', calc_mode_manual: 'Enter manually',
+    calc_sex: 'Sex', calc_male: 'Male', calc_female: 'Female',
+    calc_age: 'Age', calc_height: 'Height (cm)', calc_weight: 'Weight (kg)',
+    calc_activity: 'Activity', calc_goal: 'Goal',
+    activity_sedentary: 'Sedentary', activity_light: 'Light', activity_moderate: 'Moderate', activity_active: 'Active', activity_very_active: 'Very active',
+    goal_cut: 'Cut', goal_maintain: 'Maintain', goal_bulk: 'Bulk',
+    calc_tdee: 'Maintenance', calc_bmr: 'BMR', calc_fill_hint: 'Fill in age, height and weight.',
+    manual_food_title: 'Add food', manual_food_ph: 'e.g. Chicken & rice',
+    voice_tap: 'Tap to speak', voice_listening: 'Listening… tap to stop',
+    voice_processing: 'Understanding…', voice_denied: 'Microphone access denied.',
+    voice_unsupported: 'Voice needs the latest app build.',
     no_foods_yet: 'No foods yet',
     no_foods_text: 'Build your personal reference of foods you eat regularly.',
     no_matches_simple: 'No matches',
@@ -1003,6 +1036,38 @@ const I18N = {
     enter_name: 'أدخل اسماً',
 
     food_subtitle: 'مرجعك الشخصي للأكل ومعدلاته الغذائية.',
+    // لوحة التغذية
+    nutri_setup_title: 'حدّد هدفك اليومي',
+    nutri_setup_text: 'احسب سعراتك وماكروزك لتبدأ المتابعة.',
+    nutri_left: 'متبقّي',
+    nutri_over: 'زيادة',
+    nutri_calories: 'السعرات',
+    nutri_today: 'أكل اليوم',
+    nutri_empty_title: 'لم تُسجّل شيئاً بعد',
+    nutri_empty_text: 'اضغط + لإضافة ما أكلته اليوم.',
+    coach_title: 'المدرّب الذكي',
+    coach_sub: 'ماذا تأكل لتكمّل المتبقّي من ماكروزك',
+    coach_thinking: 'أفكّر…',
+    coach_unavailable: 'المدرّب غير متاح حالياً.',
+    add_sheet_title: 'إضافة أكل',
+    add_voice: 'صوت', add_voice_sub: 'قُل ما أكلته',
+    add_chat: 'محادثة', add_chat_sub: 'اكتبه — والذكاء يحسب السعرات',
+    add_photo: 'صورة', add_photo_sub: 'صوّر وجبتك',
+    add_saved: 'أكل محفوظ', add_saved_sub: 'اختر من أطعمتك',
+    add_manual: 'يدوي', add_manual_sub: 'أدخل الأرقام بنفسك',
+    saved_new: 'أضف طعاماً محفوظاً جديداً', saved_empty: 'لا يوجد أكل محفوظ بعد',
+    calc_title: 'حاسبة السعرات', calc_sub: 'معادلة Mifflin-St Jeor — المعيار الأدق',
+    calc_mode_calc: 'احسب', calc_mode_manual: 'إدخال يدوي',
+    calc_sex: 'الجنس', calc_male: 'ذكر', calc_female: 'أنثى',
+    calc_age: 'العمر', calc_height: 'الطول (سم)', calc_weight: 'الوزن (كغ)',
+    calc_activity: 'النشاط', calc_goal: 'الهدف',
+    activity_sedentary: 'خامل', activity_light: 'خفيف', activity_moderate: 'متوسط', activity_active: 'نشِط', activity_very_active: 'نشِط جداً',
+    goal_cut: 'تنشيف', goal_maintain: 'ثبات', goal_bulk: 'تضخيم',
+    calc_tdee: 'الثبات', calc_bmr: 'الأيض الأساسي', calc_fill_hint: 'أدخل العمر والطول والوزن.',
+    manual_food_title: 'إضافة أكل', manual_food_ph: 'مثال: دجاج ورز',
+    voice_tap: 'اضغط لتتكلّم', voice_listening: 'أستمع… اضغط للإيقاف',
+    voice_processing: 'أفهم كلامك…', voice_denied: 'رُفض الوصول للميكروفون.',
+    voice_unsupported: 'الصوت يحتاج آخر نسخة من التطبيق.',
     no_foods_yet: 'لا يوجد أكل بعد',
     no_foods_text: 'أنشئ قائمتك المرجعية بالأطعمة التي تتناولها عادةً.',
     no_matches_simple: 'لا نتائج',
@@ -3512,89 +3577,576 @@ function mountFoodAiBar() {
   app.appendChild(bar);
 }
 
+// The Food tab is now a DAILY NUTRITION DASHBOARD: today's targets, what's been
+// eaten, and — the thing the user asked to see front and centre — what's still
+// LEFT for the day. One "+" button (bottom-right) opens an animated sheet with
+// every way to log food (voice, chat, photo, saved, manual). The old food
+// "reference library" lives on as the "saved food" add-method.
 function renderFood(el) {
-  // The shell (bar/header/toolbar/AI bar) is rendered once; the list re-renders
-  // on its own so typing in search doesn't rebuild the whole view every
-  // keystroke (and doesn't churn the floating AI bar).
-  function foodListHtml() {
-    const list = DB.foods.list();
-    const query = (viewContext.foodQuery || '').toLowerCase();
-    const filtered = query ? list.filter((f) => f.name.toLowerCase().includes(query)) : list;
-    if (filtered.length === 0) {
-      return emptyState({
-        iconName: 'apple',
-        title: list.length === 0 ? t('no_foods_yet') : t('no_matches_simple'),
-        text: list.length === 0 ? t('no_foods_text') : t('no_matches_text'),
-      });
-    }
-    return `<div class="data-list">${filtered.map((f) => `
-      <div class="data-row">
-        <div class="data-icon food">${icon('utensils', 20)}</div>
-        <div class="data-main">
-          <div class="data-title">
-            ${escapeHtml(f.name)}
-            ${f.serving ? `<span style="color:var(--text-mute);font-weight:500;font-size:12px">· ${escapeHtml(f.serving)}</span>` : ''}
-          </div>
-          <div class="macro-row">
-            <span class="macro-chip"><span class="num">${f.calories}</span><span class="macro-label">${t('cal')}</span></span>
-            <span class="macro-chip"><span class="num">${f.protein}</span>g<span class="macro-label">${t('protein_label')}</span></span>
-            <span class="macro-chip"><span class="num">${f.carbs}</span>g<span class="macro-label">${t('carbs_label')}</span></span>
-          </div>
-        </div>
-        <div class="data-actions">
-          <button class="icon-btn" data-edit-food="${f.id}" aria-label="${escapeHtml(t('edit'))}">${icon('edit', 15)}</button>
-          <button class="icon-btn danger" data-delete-food="${f.id}" aria-label="${escapeHtml(t('delete'))}">${icon('trash', 15)}</button>
-        </div>
-      </div>`).join('')}</div>`;
-  }
+  const date = todayISO();
 
   el.innerHTML = `
     ${vaultBar({ action: icon('plus', 20), actionLabel: t('add') })}
-
     <div class="page-header">
       <h1 class="page-title">${t('food')}</h1>
-      <p class="page-subtitle">${t('food_subtitle')}</p>
+      <p class="page-subtitle">${escapeHtml(formatDate(date))}</p>
     </div>
-
-    <div class="toolbar" style="display:flex;gap:10px;margin-bottom:14px">
-      <div class="search-wrap">
-        ${icon('search', 18)}
-        <input type="search" id="food-search" placeholder="${t('search_foods')}" value="${escapeHtml(viewContext.foodQuery || '')}">
-      </div>
-      <button class="btn btn-primary" id="add-food-btn">${icon('plus', 16)} ${t('add')}</button>
-    </div>
-
-    <div id="food-list-host">${foodListHtml()}</div>
+    <div id="nutri-host">${nutritionDashboardHtml(date)}</div>
+    <button class="food-fab" id="food-fab" aria-label="${escapeHtml(t('add'))}">${icon('plus', 26)}</button>
   `;
 
-  const host = $('#food-list-host', el);
-  const updateList = () => { if (host) host.innerHTML = foodListHtml(); };
+  const rerender = () => { const h = $('#nutri-host', el); if (h) h.innerHTML = nutritionDashboardHtml(date); };
 
-  bindVaultAction(() => openFoodLibraryModal());
-  mountFoodAiBar();
+  // Top-bar "+" and the floating FAB both open the add sheet.
+  bindVaultAction(() => openAddSheet(date, rerender));
+  $('#food-fab', el)?.addEventListener('click', () => openAddSheet(date, rerender));
 
-  // Debounced search updates only the list container (keeps input focus).
-  let searchTimer = null;
-  $('#food-search', el).addEventListener('input', (e) => {
-    viewContext.foodQuery = e.target.value;
-    clearTimeout(searchTimer);
-    searchTimer = setTimeout(updateList, 150);
-  });
-  $('#add-food-btn', el).addEventListener('click', () => openFoodLibraryModal());
-
-  // One delegated listener handles edit/delete for every row.
+  const host = $('#nutri-host', el);
   host?.addEventListener('click', (e) => {
-    const editBtn = e.target.closest('[data-edit-food]');
-    if (editBtn) { openFoodModal(editBtn.dataset.editFood); return; }
-    const delBtn = e.target.closest('[data-delete-food]');
-    if (delBtn) {
-      confirmDialog({
-        title: t('delete_food_q'),
-        text: t('delete_food_text'),
-        onConfirm: () => { DB.foods.remove(delBtn.dataset.deleteFood); showToast(t('deleted')); updateList(); },
-      });
-    }
+    const setup = e.target.closest('[data-setup-goal]');
+    if (setup) { openCalculatorModal(rerender); return; }
+    const edit = e.target.closest('[data-edit-goal]');
+    if (edit) { openCalculatorModal(rerender); return; }
+    const coach = e.target.closest('[data-coach]');
+    if (coach) { openCoach(date); return; }
+    const del = e.target.closest('[data-del-food]');
+    if (del) { DB.foodLogs.remove(date, del.dataset.delFood); showToast(t('deleted')); rerender(); return; }
   });
+}
+
+// The rings + remaining + today's list. Re-rendered on its own after any change.
+function nutritionDashboardHtml(date) {
+  const nut = DB.nutrition;
+  const consumed = DB.foodLogs.totalsForDate(date);
+  const entries = DB.foodLogs.listForDate(date);
+
+  // Not set up yet → invite the user to build a target.
+  if (!nut.hasTargets()) {
+    return `
+      <button class="nutri-setup" data-setup-goal>
+        <div class="nutri-setup-icon">${icon('zap', 26)}</div>
+        <div class="nutri-setup-main">
+          <div class="nutri-setup-title">${t('nutri_setup_title')}</div>
+          <div class="nutri-setup-text">${t('nutri_setup_text')}</div>
+        </div>
+        ${icon('chevronRight', 20)}
+      </button>
+      ${todayLogHtml(entries)}
+    `;
+  }
+
+  const tgt = nut.get().targets;
+  const calLeft = Math.round(tgt.calories - consumed.calories);
+  const calPct = tgt.calories > 0 ? Math.min(100, (consumed.calories / tgt.calories) * 100) : 0;
+  const over = calLeft < 0;
+
+  // Calorie ring (SVG). r=54 → circumference ≈ 339.29.
+  const C = 339.29;
+  const dash = C * (calPct / 100);
+
+  const macroBar = (key, label, cls) => {
+    const c = Math.round(consumed[key] * 10) / 10;
+    const g = tgt[key] || 0;
+    const left = Math.round((g - c) * 10) / 10;
+    const pct = g > 0 ? Math.min(100, (c / g) * 100) : 0;
+    return `
+      <div class="macro-track">
+        <div class="macro-track-head">
+          <span class="macro-track-name ${cls}">${label}</span>
+          <span class="macro-track-nums"><span class="num">${fmtNum(c)}</span> / <span class="num">${fmtNum(g)}</span>g</span>
+        </div>
+        <div class="macro-track-bar"><span class="macro-track-fill ${cls}" style="width:${pct}%"></span></div>
+        <div class="macro-track-left">${left >= 0 ? `${t('nutri_left')} <span class="num">${fmtNum(left)}</span>g` : `<span class="over">${t('nutri_over')} <span class="num">${fmtNum(-left)}</span>g</span>`}</div>
+      </div>`;
+  };
+
+  return `
+    <div class="nutri-hero">
+      <button class="nutri-edit" data-edit-goal aria-label="${escapeHtml(t('edit'))}">${icon('edit', 16)}</button>
+      <div class="cal-ring-wrap">
+        <svg class="cal-ring" viewBox="0 0 120 120">
+          <circle class="cal-ring-bg" cx="60" cy="60" r="54"/>
+          <circle class="cal-ring-fg ${over ? 'over' : ''}" cx="60" cy="60" r="54"
+            stroke-dasharray="${dash.toFixed(1)} ${C.toFixed(1)}" transform="rotate(-90 60 60)"/>
+        </svg>
+        <div class="cal-ring-center">
+          <div class="cal-ring-num num ${over ? 'over' : ''}">${fmtNum(Math.abs(calLeft))}</div>
+          <div class="cal-ring-label">${over ? t('nutri_over') : t('nutri_left')}</div>
+          <div class="cal-ring-sub"><span class="num">${fmtNum(Math.round(consumed.calories))}</span> / <span class="num">${fmtNum(tgt.calories)}</span> ${t('cal')}</div>
+        </div>
+      </div>
+      <div class="macro-tracks">
+        ${macroBar('protein', t('protein_label'), 'pro')}
+        ${macroBar('carbs', t('carbs_label'), 'carb')}
+        ${macroBar('fat', t('fat_label'), 'fat')}
+      </div>
+    </div>
+
+    <button class="nutri-coach" data-coach>
+      <div class="cta-card-icon">${icon('zap', 18)}</div>
+      <div style="flex:1;min-width:0;text-align:start">
+        <div class="cta-card-title">${t('coach_title')}</div>
+        <div class="cta-card-sub">${t('coach_sub')}</div>
+      </div>
+      ${icon('chevronRight', 18)}
+    </button>
+
+    ${todayLogHtml(entries)}
+  `;
+}
+
+function todayLogHtml(entries) {
+  if (!entries.length) {
+    return `<div class="section-title" style="margin:22px 0 10px">${t('nutri_today')}</div>` +
+      emptyState({ iconName: 'apple', title: t('nutri_empty_title'), text: t('nutri_empty_text') });
+  }
+  const rows = entries.map((e) => {
+    const m = e.servings || 1;
+    return `
+      <div class="food-log-row" data-food-row="${e.id}">
+        <div class="food-log-main">
+          <div class="food-log-name">${escapeHtml(e.name)}${m !== 1 ? `<span class="food-log-x num"> × ${fmtNum(m)}</span>` : ''}</div>
+          <div class="food-log-meta">
+            <span><span class="num">${fmtNum(Math.round(e.calories * m))}</span> ${t('cal')}</span>
+            <span class="dot-sep"></span>
+            <span><span class="num">${fmtNum(Math.round(e.protein * m * 10) / 10)}</span>g ${t('protein_label')}</span>
+            <span class="dot-sep"></span>
+            <span><span class="num">${fmtNum(Math.round(e.carbs * m * 10) / 10)}</span>g ${t('carbs_label')}</span>
+            ${e.fat ? `<span class="dot-sep"></span><span><span class="num">${fmtNum(Math.round(e.fat * m * 10) / 10)}</span>g ${t('fat_label')}</span>` : ''}
+          </div>
+        </div>
+        <button class="icon-btn danger" data-del-food="${e.id}" aria-label="${escapeHtml(t('delete'))}">${icon('trash', 15)}</button>
+      </div>`;
+  }).join('');
+  return `<div class="section-title" style="margin:22px 0 10px">${t('nutri_today')}</div><div class="food-log-list">${rows}</div>`;
+}
+
+// Shared: log AI/voice/photo items to today and refresh the dashboard.
+function logNutritionItems(date, items, onDone) {
+  (items || []).forEach((it) => DB.foodLogs.add(date, {
+    name: it.name, servings: 1,
+    calories: it.calories, protein: it.protein, carbs: it.carbs, fat: it.fat,
+    source: it.source || 'ai',
+  }));
+  if (typeof onDone === 'function') onDone();
+}
+
+// ===========================================================================
+// Add sheet — one "+" opens an animated bottom sheet with every add method.
+// ===========================================================================
+function openAddSheet(date, onChange) {
+  const app = document.querySelector('.app');
+  if (!app) return;
+  document.getElementById('add-sheet-overlay')?.remove();
+
+  const overlay = document.createElement('div');
+  overlay.id = 'add-sheet-overlay';
+  overlay.className = 'sheet-overlay';
+  const row = (m) => `
+    <button class="add-method" data-method="${m.k}">
+      <span class="add-method-icon ${m.k}">${icon(m.icon, 22)}</span>
+      <span class="add-method-main">
+        <span class="add-method-title">${m.title}</span>
+        <span class="add-method-sub">${m.sub}</span>
+      </span>
+      ${icon('chevronRight', 18)}
+    </button>`;
+  overlay.innerHTML = `
+    <div class="add-sheet" role="dialog" aria-modal="true">
+      <div class="sheet-handle"></div>
+      <div class="add-sheet-title">${t('add_sheet_title')}</div>
+      <div class="add-methods">
+        ${row({ k: 'voice', icon: 'mic', title: t('add_voice'), sub: t('add_voice_sub') })}
+        ${row({ k: 'chat', icon: 'zap', title: t('add_chat'), sub: t('add_chat_sub') })}
+        ${row({ k: 'photo', icon: 'camera', title: t('add_photo'), sub: t('add_photo_sub') })}
+        ${row({ k: 'saved', icon: 'utensils', title: t('add_saved'), sub: t('add_saved_sub') })}
+        ${row({ k: 'manual', icon: 'edit', title: t('add_manual'), sub: t('add_manual_sub') })}
+      </div>
+    </div>`;
+  app.appendChild(overlay);
+  // Next frame → add .open so the sheet transitions up smoothly.
+  requestAnimationFrame(() => overlay.classList.add('open'));
+
+  const close = (cb) => {
+    overlay.classList.remove('open');
+    setTimeout(() => { overlay.remove(); if (typeof cb === 'function') cb(); }, 260);
+  };
+  overlay.addEventListener('click', (e) => {
+    if (e.target === overlay) { close(); return; }
+    const btn = e.target.closest('[data-method]');
+    if (!btn) return;
+    const method = btn.dataset.method;
+    close(() => {
+      if (method === 'voice') openVoiceCapture(date, onChange);
+      else if (method === 'chat') FoodAI.open(date);
+      else if (method === 'photo') FoodAI.openPhoto ? FoodAI.openPhoto(date) : FoodAI.open(date);
+      else if (method === 'saved') openSavedFoodPicker(date, onChange);
+      else if (method === 'manual') openManualFoodEntry(date, onChange);
+    });
+  });
+}
+
+// ===========================================================================
+// Calorie / macro calculator (Mifflin-St Jeor). Live preview as the user edits.
+// ===========================================================================
+function openCalculatorModal(onSave) {
+  const nut = DB.nutrition;
+  const p = Object.assign({}, nut.get().profile);
+  let manual = nut.get().mode === 'manual';
+  const curTargets = nut.get().targets;
+
+  const activities = ['sedentary', 'light', 'moderate', 'active', 'very_active'];
+  const goals = ['cut', 'maintain', 'bulk'];
+
+  const overlay = openModal(`
+    <div class="modal-header">
+      <div>
+        <div class="modal-title">${t('calc_title')}</div>
+        <div class="modal-subtitle">${t('calc_sub')}</div>
+      </div>
+      <button class="icon-btn icon-btn-tile" data-close>${icon('close', 18)}</button>
+    </div>
+
+    <div class="calc-modewrap">
+      <button class="calc-modebtn ${!manual ? 'active' : ''}" data-mode="calc">${t('calc_mode_calc')}</button>
+      <button class="calc-modebtn ${manual ? 'active' : ''}" data-mode="manual">${t('calc_mode_manual')}</button>
+    </div>
+
+    <div id="calc-body"></div>
+  `);
+
+  const body = overlay.querySelector('#calc-body');
+
+  function calcFormHtml() {
+    const seg = (name, opts, cur) => `
+      <div class="seg" data-seg="${name}">
+        ${opts.map((o) => `<button type="button" class="seg-btn ${cur === o.v ? 'active' : ''}" data-val="${o.v}">${o.label}</button>`).join('')}
+      </div>`;
+    return `
+      <div class="form-group"><label class="form-label">${t('calc_sex')}</label>
+        ${seg('sex', [{ v: 'male', label: t('calc_male') }, { v: 'female', label: t('calc_female') }], p.sex)}</div>
+      <div class="calc-grid">
+        <div class="form-group"><label class="form-label">${t('calc_age')}</label>
+          <input type="number" inputmode="numeric" id="c-age" min="10" max="100" value="${p.age || ''}" placeholder="25"></div>
+        <div class="form-group"><label class="form-label">${t('calc_height')}</label>
+          <input type="number" inputmode="numeric" id="c-height" min="100" max="230" value="${p.heightCm || ''}" placeholder="175"></div>
+        <div class="form-group"><label class="form-label">${t('calc_weight')}</label>
+          <input type="number" inputmode="decimal" id="c-weight" min="30" max="300" value="${p.weightKg || ''}" placeholder="75"></div>
+      </div>
+      <div class="form-group"><label class="form-label">${t('calc_activity')}</label>
+        ${seg('activity', activities.map((a) => ({ v: a, label: t('activity_' + a) })), p.activity)}</div>
+      <div class="form-group"><label class="form-label">${t('calc_goal')}</label>
+        ${seg('goal', goals.map((g) => ({ v: g, label: t('goal_' + g) })), p.goal)}</div>
+      <div class="calc-preview" id="calc-preview"></div>
+      <button class="btn btn-primary btn-block" id="calc-save">${t('save')}</button>
+    `;
+  }
+
+  function manualFormHtml() {
+    return `
+      <div class="calc-grid calc-grid-2">
+        <div class="form-group"><label class="form-label">${t('calories')}</label>
+          <input type="number" inputmode="numeric" id="m-cal" min="0" value="${curTargets.calories || ''}" placeholder="2200"></div>
+        <div class="form-group"><label class="form-label">${t('protein_label')} (g)</label>
+          <input type="number" inputmode="numeric" id="m-pro" min="0" value="${curTargets.protein || ''}" placeholder="160"></div>
+        <div class="form-group"><label class="form-label">${t('carbs_label')} (g)</label>
+          <input type="number" inputmode="numeric" id="m-carb" min="0" value="${curTargets.carbs || ''}" placeholder="220"></div>
+        <div class="form-group"><label class="form-label">${t('fat_label')} (g)</label>
+          <input type="number" inputmode="numeric" id="m-fat" min="0" value="${curTargets.fat || ''}" placeholder="60"></div>
+      </div>
+      <button class="btn btn-primary btn-block" id="calc-save-manual">${t('save')}</button>
+    `;
+  }
+
+  function previewHtml() {
+    const c = DB.nutrition.compute(p);
+    if (!c) return `<div class="calc-preview-hint">${t('calc_fill_hint')}</div>`;
+    const cell = (v, unit, label) => `<div class="calc-cell"><div class="calc-cell-v num">${fmtNum(v)}<span>${unit}</span></div><div class="calc-cell-l">${label}</div></div>`;
+    return `
+      <div class="calc-preview-grid">
+        ${cell(c.calories, t('cal'), t('nutri_calories'))}
+        ${cell(c.protein, 'g', t('protein_label'))}
+        ${cell(c.carbs, 'g', t('carbs_label'))}
+        ${cell(c.fat, 'g', t('fat_label'))}
+      </div>
+      <div class="calc-preview-hint">${t('calc_tdee')}: <span class="num">${fmtNum(c.tdee)}</span> ${t('cal')} · ${t('calc_bmr')}: <span class="num">${fmtNum(c.bmr)}</span></div>
+    `;
+  }
+
+  function renderCalcForm() {
+    body.innerHTML = calcFormHtml();
+    const prev = body.querySelector('#calc-preview');
+    const refresh = () => { if (prev) prev.innerHTML = previewHtml(); };
+    refresh();
+    body.querySelectorAll('[data-seg]').forEach((seg) => {
+      seg.addEventListener('click', (e) => {
+        const b = e.target.closest('.seg-btn'); if (!b) return;
+        seg.querySelectorAll('.seg-btn').forEach((x) => x.classList.remove('active'));
+        b.classList.add('active');
+        p[seg.dataset.seg] = b.dataset.val;
+        refresh();
+      });
+    });
+    ['c-age', 'c-height', 'c-weight'].forEach((id) => {
+      const inp = body.querySelector('#' + id);
+      inp?.addEventListener('input', () => {
+        if (id === 'c-age') p.age = Number(inp.value) || null;
+        if (id === 'c-height') p.heightCm = Number(inp.value) || null;
+        if (id === 'c-weight') p.weightKg = Number(inp.value) || null;
+        refresh();
+      });
+    });
+    body.querySelector('#calc-save')?.addEventListener('click', () => {
+      if (!DB.nutrition.compute(p)) { showToast(t('calc_fill_hint')); return; }
+      DB.nutrition.setProfile(p);
+      closeModal(); showToast(t('saved'));
+      if (typeof onSave === 'function') onSave();
+    });
+  }
+
+  function renderManualForm() {
+    body.innerHTML = manualFormHtml();
+    body.querySelector('#calc-save-manual')?.addEventListener('click', () => {
+      const cal = Number(body.querySelector('#m-cal').value) || 0;
+      if (cal <= 0) { showToast(t('calc_fill_hint')); return; }
+      DB.nutrition.setTargets({
+        calories: cal,
+        protein: Number(body.querySelector('#m-pro').value) || 0,
+        carbs: Number(body.querySelector('#m-carb').value) || 0,
+        fat: Number(body.querySelector('#m-fat').value) || 0,
+      });
+      closeModal(); showToast(t('saved'));
+      if (typeof onSave === 'function') onSave();
+    });
+  }
+
+  const draw = () => { manual ? renderManualForm() : renderCalcForm(); };
+  overlay.querySelectorAll('[data-mode]').forEach((b) => b.addEventListener('click', () => {
+    manual = b.dataset.mode === 'manual';
+    overlay.querySelectorAll('.calc-modebtn').forEach((x) => x.classList.toggle('active', x === b));
+    draw();
+  }));
+  draw();
+}
+
+// ===========================================================================
+// Manual quick-add: name + macros straight into today's log.
+// ===========================================================================
+function openManualFoodEntry(date, onSave) {
+  const overlay = openModal(`
+    <div class="modal-header">
+      <div class="modal-title">${t('manual_food_title')}</div>
+      <button class="icon-btn icon-btn-tile" data-close>${icon('close', 18)}</button>
+    </div>
+    <div class="form-group"><label class="form-label">${t('name')}</label>
+      <input type="text" id="mf-name" placeholder="${t('manual_food_ph')}" autofocus></div>
+    <div class="calc-grid calc-grid-2">
+      <div class="form-group"><label class="form-label">${t('calories')}</label>
+        <input type="number" inputmode="numeric" id="mf-cal" min="0" placeholder="250"></div>
+      <div class="form-group"><label class="form-label">${t('protein_label')} (g)</label>
+        <input type="number" inputmode="decimal" id="mf-pro" min="0" placeholder="20"></div>
+      <div class="form-group"><label class="form-label">${t('carbs_label')} (g)</label>
+        <input type="number" inputmode="decimal" id="mf-carb" min="0" placeholder="30"></div>
+      <div class="form-group"><label class="form-label">${t('fat_label')} (g)</label>
+        <input type="number" inputmode="decimal" id="mf-fat" min="0" placeholder="8"></div>
+    </div>
+    <button class="btn btn-primary btn-block" id="mf-save">${icon('plus', 15)} ${t('ai_add_to_log')}</button>
+  `);
+  overlay.querySelector('#mf-save').addEventListener('click', () => {
+    const name = (overlay.querySelector('#mf-name').value || '').trim();
+    if (!name) { showToast(t('enter_name')); return; }
+    DB.foodLogs.add(date, {
+      name, servings: 1,
+      calories: Number(overlay.querySelector('#mf-cal').value) || 0,
+      protein: Number(overlay.querySelector('#mf-pro').value) || 0,
+      carbs: Number(overlay.querySelector('#mf-carb').value) || 0,
+      fat: Number(overlay.querySelector('#mf-fat').value) || 0,
+      source: 'manual',
+    });
+    closeModal(); showToast(t('ai_added'));
+    if (typeof onSave === 'function') onSave();
+  });
+}
+
+// ===========================================================================
+// Saved-food picker — the old "reference library" as an add-method. Search
+// your saved foods + presets, tap to log to today. Long-press-free: tap = add.
+// ===========================================================================
+function openSavedFoodPicker(date, onSave) {
+  let query = '';
+  const overlay = openModal(`
+    <div class="modal-header">
+      <div class="modal-title">${t('add_saved')}</div>
+      <button class="icon-btn icon-btn-tile" data-close>${icon('close', 18)}</button>
+    </div>
+    <div class="search-wrap" style="margin-bottom:10px">
+      ${icon('search', 18)}
+      <input type="search" id="sf-search" placeholder="${t('search_foods')}">
+    </div>
+    <div class="picker-list" id="sf-list"></div>
+    <button class="btn btn-ghost btn-block" id="sf-new" style="margin-top:10px">${icon('plus', 15)} ${t('saved_new')}</button>
+  `);
+  const listEl = overlay.querySelector('#sf-list');
+
+  function draw() {
+    const q = query.toLowerCase();
+    const saved = DB.foods.list().map((f) => ({ name: f.name, calories: f.calories, protein: f.protein, carbs: f.carbs, fat: f.fat || 0, saved: true }));
+    const list = q ? saved.filter((f) => f.name.toLowerCase().includes(q)) : saved;
+    if (!list.length) {
+      listEl.innerHTML = `<div class="calc-preview-hint" style="text-align:center;padding:18px">${DB.foods.list().length ? t('no_matches_simple') : t('saved_empty')}</div>`;
+      return;
+    }
+    listEl.innerHTML = list.map((f, i) => `
+      <button type="button" class="picker-row" data-add-saved="${i}">
+        <span class="picker-row-cat" style="background:var(--cat-arms)"></span>
+        <span class="picker-row-name">${escapeHtml(f.name)}
+          <span style="color:var(--text-mute);font-weight:600;font-size:11px"> · <span class="num">${fmtNum(f.calories)}</span> ${t('cal')}</span>
+        </span>
+        <span class="picker-row-check">${icon('plus', 14)}</span>
+      </button>`).join('');
+    listEl.querySelectorAll('[data-add-saved]').forEach((b) => b.addEventListener('click', () => {
+      const f = list[Number(b.dataset.addSaved)];
+      DB.foodLogs.add(date, { name: f.name, servings: 1, calories: f.calories, protein: f.protein, carbs: f.carbs, fat: f.fat, source: 'saved' });
+      showToast(t('ai_added'));
+      b.querySelector('.picker-row-check').innerHTML = icon('check', 14);
+      b.classList.add('picked');
+      if (typeof onSave === 'function') onSave();
+    }));
+  }
+  overlay.querySelector('#sf-search').addEventListener('input', (e) => { query = e.target.value; draw(); });
+  overlay.querySelector('#sf-new').addEventListener('click', () => { closeModal(); openFoodLibraryModal(); });
+  draw();
+}
+
+// ===========================================================================
+// AI coach — reads what's LEFT for the day and suggests what to eat to hit it.
+// Reuses the FoodAI text model; no new backend.
+// ===========================================================================
+function openCoach(date) {
+  const tgt = DB.nutrition.get().targets;
+  const c = DB.foodLogs.totalsForDate(date);
+  const left = {
+    calories: Math.max(0, Math.round(tgt.calories - c.calories)),
+    protein: Math.max(0, Math.round(tgt.protein - c.protein)),
+    carbs: Math.max(0, Math.round(tgt.carbs - c.carbs)),
+    fat: Math.max(0, Math.round(tgt.fat - c.fat)),
+  };
+  const lang = DB.prefs.get().lang || 'en';
+  const overlay = openModal(`
+    <div class="modal-header">
+      <div>
+        <div class="modal-title">${t('coach_title')}</div>
+        <div class="modal-subtitle">${t('coach_sub')}</div>
+      </div>
+      <button class="icon-btn icon-btn-tile" data-close>${icon('close', 18)}</button>
+    </div>
+    <div class="coach-remaining">
+      <span>${t('nutri_left')}: <b class="num">${fmtNum(left.calories)}</b> ${t('cal')}</span>
+      <span><b class="num">${fmtNum(left.protein)}</b>g ${t('protein_label')}</span>
+    </div>
+    <div id="coach-body" class="coach-body"><div class="ai-dots">${t('coach_thinking')}</div></div>
+  `);
+  const body = overlay.querySelector('#coach-body');
+  const prompt = (lang === 'ar'
+    ? `أنا أتتبع سعراتي. باقي لي اليوم: ${left.calories} سعرة، ${left.protein}غ بروتين، ${left.carbs}غ كارب، ${left.fat}غ دهون. اقترح ٣ وجبات أو سناكات واقعية تناسب المتبقي تقريباً، كل واحدة بسطر واحد مع سعراتها التقريبية. بالعربي، بدون مقدمة.`
+    : `I track my macros. Remaining today: ${left.calories} kcal, ${left.protein}g protein, ${left.carbs}g carbs, ${left.fat}g fat. Suggest 3 realistic meals or snacks that fit the remainder, each on one line with approx calories. No preamble.`);
+  if (!window.FoodAI || !FoodAI.ask) { body.innerHTML = `<div class="ai-err">${t('coach_unavailable')}</div>`; return; }
+  FoodAI.ask(prompt)
+    .then((txt) => { body.innerHTML = `<div class="coach-text">${escapeHtml(txt).replace(/\n/g, '<br>')}</div>`; })
+    .catch((e) => { body.innerHTML = `<div class="ai-err">${escapeHtml((e && e.message) || t('ai_error'))}</div>`; });
+}
+
+// ===========================================================================
+// Voice capture — record, transcribe + analyse via FoodAI, add to today's log.
+// getUserMedia works in a browser and in an Android WebView that has been
+// granted RECORD_AUDIO (needs the newer APK). Every failure is caught and shown.
+// ===========================================================================
+function openVoiceCapture(date, onSave) {
+  const overlay = openModal(`
+    <div class="modal-header">
+      <div class="modal-title">${t('add_voice')}</div>
+      <button class="icon-btn icon-btn-tile" data-close>${icon('close', 18)}</button>
+    </div>
+    <div class="voice-stage" id="voice-stage">
+      <button class="voice-mic" id="voice-mic" aria-label="${escapeHtml(t('voice_tap'))}">${icon('mic', 34)}</button>
+      <div class="voice-status" id="voice-status">${t('voice_tap')}</div>
+    </div>
+    <div class="ai-results" id="voice-results"></div>
+  `);
+  const micBtn = overlay.querySelector('#voice-mic');
+  const status = overlay.querySelector('#voice-status');
+  const results = overlay.querySelector('#voice-results');
+  let recorder = null, chunks = [], stream = null, recording = false;
+
+  const setStatus = (s) => { if (status) status.textContent = s; };
+
+  async function start() {
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+      setStatus(t('voice_unsupported')); return;
+    }
+    try {
+      stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    } catch (_) { setStatus(t('voice_denied')); return; }
+    chunks = [];
+    const mime = MediaRecorder.isTypeSupported('audio/webm') ? 'audio/webm'
+      : (MediaRecorder.isTypeSupported('audio/mp4') ? 'audio/mp4' : '');
+    recorder = new MediaRecorder(stream, mime ? { mimeType: mime } : undefined);
+    recorder.ondataavailable = (e) => { if (e.data && e.data.size) chunks.push(e.data); };
+    recorder.onstop = onStop;
+    recorder.start();
+    recording = true;
+    micBtn.classList.add('recording');
+    setStatus(t('voice_listening'));
+  }
+
+  function stop() {
+    if (recorder && recording) { recording = false; recorder.stop(); }
+    if (stream) stream.getTracks().forEach((tk) => tk.stop());
+    micBtn.classList.remove('recording');
+  }
+
+  async function onStop() {
+    setStatus(t('voice_processing'));
+    const blob = new Blob(chunks, { type: (recorder && recorder.mimeType) || 'audio/webm' });
+    if (!blob.size) { setStatus(t('voice_tap')); return; }
+    try {
+      const dataUrl = await new Promise((res, rej) => {
+        const r = new FileReader(); r.onload = () => res(r.result); r.onerror = rej; r.readAsDataURL(blob);
+      });
+      const b64 = String(dataUrl).split(',')[1];
+      const mimeType = String(dataUrl).slice(5, String(dataUrl).indexOf(';'));
+      if (!window.FoodAI || !FoodAI.analyzeAudio) throw new Error(t('voice_unsupported'));
+      const { items, transcript } = await FoodAI.analyzeAudio({ mimeType, data: b64 });
+      if (transcript) setStatus('“' + transcript + '”'); else setStatus(t('voice_tap'));
+      if (!items || !items.length) { results.innerHTML = `<div class="ai-decline">${t('ai_not_food')}</div>`; return; }
+      renderVoiceResults(items);
+    } catch (e) {
+      setStatus((e && e.message) || t('ai_error'));
+    }
+  }
+
+  function renderVoiceResults(items) {
+    results.innerHTML = items.map((it, i) => `
+      <div class="ai-card" data-vr="${i}">
+        <div class="ai-card-name">${escapeHtml(it.name)}</div>
+        <div class="ai-macros">
+          <span class="ai-macro cal"><b class="num">${fmtNum(it.calories)}</b>${t('cal')}</span>
+          <span class="ai-macro pro"><b class="num">${fmtNum(it.protein)}</b>g ${t('protein_label')}</span>
+          <span class="ai-macro carb"><b class="num">${fmtNum(it.carbs)}</b>g ${t('carbs_label')}</span>
+          <span class="ai-macro fat"><b class="num">${fmtNum(it.fat)}</b>g ${t('fat_label')}</span>
+        </div>
+      </div>`).join('') +
+      `<button class="btn btn-primary btn-block" id="voice-addall">${icon('plus', 15)} ${t('ai_add_all')} (${fmtNum(items.length)})</button>`;
+    results.querySelector('#voice-addall').addEventListener('click', () => {
+      logNutritionItems(date, items.map((it) => Object.assign({}, it, { source: 'voice' })), onSave);
+      showToast(t('ai_added'));
+      closeModal();
+    });
+  }
+
+  micBtn.addEventListener('click', () => { recording ? stop() : start(); });
+  // Stop the mic if the modal is dismissed mid-recording.
+  overlay.addEventListener('click', (e) => { if (e.target.closest('[data-close]')) stop(); });
 }
 
 // Split a serving string ("١٠٠غ", "3 حبات", "1 slice") into a numeric amount

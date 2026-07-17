@@ -63,17 +63,43 @@ function json(obj, status, requestOrigin) {
   });
 }
 
-// Call one Gemini model. Returns { ok, items } on success, or
-// { rateLimited: true } on 429, or { error } on any other failure.
-// `image` is an optional { mimeType, data(base64) } for photo analysis.
-async function callModel(model, key, text, image) {
-  const parts = [{ text: text || (image ? 'Identify the food in this photo.' : '') }];
-  if (image && image.data) parts.push({ inline_data: { mime_type: image.mimeType || 'image/jpeg', data: image.data } });
+function clampItems(rawItems) {
+  const clamp = (v, max) => Math.min(max, Math.max(0, Math.round(Number(v) || 0)));
+  return (Array.isArray(rawItems) ? rawItems : []).map((it) => ({
+    name: String((it && it.name) || '').trim().slice(0, 80).replace(/[<>]/g, ''),
+    calories: clamp(it && it.calories, 10000),
+    protein: clamp(it && it.protein, 2000),
+    carbs: clamp(it && it.carbs, 2000),
+    fat: clamp(it && it.fat, 2000),
+  })).filter((it) =>
+    it.name && it.name.toUpperCase() !== 'NOT_FOOD' &&
+    (it.calories > 0 || it.protein > 0 || it.carbs > 0 || it.fat > 0)
+  );
+}
+
+// Call one Gemini model. `req` = { text, image, audio, prompt, mode }.
+//   - mode 'chat' → free-form text answer, returns { ok, reply }.
+//   - audio present → voice: transcribe + extract, returns { ok, transcript, items }.
+//   - otherwise → food/photo, returns { ok, items }.
+// Returns { rateLimited: true } on 429/404, or { error } on any other failure.
+async function callModel(model, key, req) {
+  const chat = req.mode === 'chat';
+  const isAudio = !!(req.audio && req.audio.data);
+  const isImage = !!(req.image && req.image.data);
+
+  const parts = [{ text: req.prompt || req.text || (isImage ? 'Identify the food in this photo.' : '') }];
+  if (isImage) parts.push({ inline_data: { mime_type: req.image.mimeType || 'image/jpeg', data: req.image.data } });
+  if (isAudio) parts.push({ inline_data: { mime_type: req.audio.mimeType || 'audio/webm', data: req.audio.data } });
+
   const body = {
-    systemInstruction: { parts: [{ text: SYSTEM }] },
     contents: [{ parts }],
-    generationConfig: { responseMimeType: 'application/json', temperature: 0 },
+    generationConfig: chat
+      ? { temperature: 0.4 }
+      : { responseMimeType: 'application/json', temperature: 0 },
   };
+  // Food/photo use the strict JSON SYSTEM prompt; audio + chat carry their own
+  // instruction in `prompt`, so they don't get the food-only system prompt.
+  if (!chat && !isAudio) body.systemInstruction = { parts: [{ text: SYSTEM }] };
 
   let res;
   try {
@@ -85,12 +111,9 @@ async function callModel(model, key, text, image) {
     return { error: 'upstream fetch failed' };
   }
 
-  // 429 = quota for this model. 404 = model name not available. Either way,
-  // let the caller try the next model in the list.
   if (res.status === 429 || res.status === 404) return { rateLimited: true };
 
   if (!res.ok) {
-    // Log server-side for debugging but don't leak provider internals to the client.
     let msg = 'HTTP ' + res.status;
     try { const e = await res.json(); msg = (e.error && e.error.message) || msg; } catch (_) {}
     console.error('[gemini-worker] upstream error:', msg);
@@ -103,24 +126,18 @@ async function callModel(model, key, text, image) {
     data.candidates[0].content.parts[0] && data.candidates[0].content.parts[0].text;
   if (!partText) return { error: 'no result' };
 
+  // Chat mode: return the raw text answer (capped), no JSON parsing.
+  if (chat) return { ok: true, reply: String(partText).slice(0, 1200) };
+
   const cleaned = String(partText).trim().replace(/^```(?:json)?/i, '').replace(/```$/, '').trim();
   let obj;
   try { obj = JSON.parse(cleaned); } catch (_) { return { error: 'parse error' }; }
 
-  // Clamp macros to a sane range so a hallucinated/injected huge value
-  // (e.g. calories: 999999999) can't corrupt the user's stats.
-  const clamp = (v, max) => Math.min(max, Math.max(0, Math.round(Number(v) || 0)));
-  const rawItems = Array.isArray(obj.items) ? obj.items : [];
-  const items = rawItems.map((it) => ({
-    name: String((it && it.name) || '').trim().slice(0, 80).replace(/[<>]/g, ''),
-    calories: clamp(it && it.calories, 10000),
-    protein: clamp(it && it.protein, 2000),
-    carbs: clamp(it && it.carbs, 2000),
-    fat: clamp(it && it.fat, 2000),
-  })).filter((it) =>
-    it.name && it.name.toUpperCase() !== 'NOT_FOOD' &&
-    (it.calories > 0 || it.protein > 0 || it.carbs > 0 || it.fat > 0)
-  );
+  const items = clampItems(obj.items);
+  if (isAudio) {
+    const transcript = String(obj.transcript || '').slice(0, 300).replace(/[<>]/g, '');
+    return { ok: true, transcript, items };
+  }
   return { ok: true, items };
 }
 
@@ -133,33 +150,54 @@ export default {
     if (request.method !== 'POST') return json({ error: 'method not allowed' }, 405, origin);
 
     const OK_MIME = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
-    const MAX_IMG = 1400000; // ~1MB decoded — plenty for a 1024px JPEG
+    const OK_AUDIO = ['audio/webm', 'audio/mp4', 'audio/mpeg', 'audio/ogg', 'audio/wav', 'audio/aac', 'audio/m4a', 'audio/3gpp'];
+    const MAX_IMG = 1400000;   // ~1MB decoded — plenty for a 1024px JPEG
+    const MAX_AUDIO = 8000000; // ~6MB decoded — a short voice clip is far smaller
 
     let text = '';
     let image = null;
+    let audio = null;
+    let prompt = '';
+    let mode = '';
     try {
       const body = await request.json();
       text = String(body.text || '').slice(0, 500);
+      prompt = String(body.prompt || '').slice(0, 1200);
+      mode = body.mode === 'chat' ? 'chat' : '';
       if (body.image && body.image.data) {
         const data = String(body.image.data);
-        // Reject oversize images here, before forwarding to Gemini (returns 413).
         if (data.length > MAX_IMG) return json({ error: 'image too large' }, 413, origin);
         let mime = String(body.image.mimeType || 'image/jpeg').toLowerCase();
         if (OK_MIME.indexOf(mime) === -1) mime = 'image/jpeg';
         image = { mimeType: mime, data };
       }
+      if (body.audio && body.audio.data) {
+        const data = String(body.audio.data);
+        if (data.length > MAX_AUDIO) return json({ error: 'audio too large' }, 413, origin);
+        let mime = String(body.audio.mimeType || 'audio/webm').toLowerCase();
+        // Normalise codec-suffixed types (e.g. "audio/webm;codecs=opus").
+        mime = mime.split(';')[0].trim();
+        if (OK_AUDIO.indexOf(mime) === -1) mime = 'audio/webm';
+        audio = { mimeType: mime, data };
+      }
     } catch (_) { /* ignore */ }
-    if (!text.trim() && !image) return json({ error: 'no input' }, 400, origin);
+    if (!text.trim() && !image && !audio) return json({ error: 'no input' }, 400, origin);
 
     const key = env.GEMINI_KEY;
     if (!key) return json({ error: 'server misconfigured' }, 500, origin);
+
+    const req = { text, image, audio, prompt, mode };
 
     // Try each model until one answers. Track whether failures were all quota.
     let lastError = null;
     let allRateLimited = true;
     for (const model of MODELS) {
-      const r = await callModel(model, key, text, image);
-      if (r.ok) return json({ items: r.items }, 200, origin);
+      const r = await callModel(model, key, req);
+      if (r.ok) {
+        if (mode === 'chat') return json({ reply: r.reply }, 200, origin);
+        if (audio) return json({ transcript: r.transcript, items: r.items }, 200, origin);
+        return json({ items: r.items }, 200, origin);
+      }
       if (r.rateLimited) { lastError = 'rate_limited'; continue; }
       allRateLimited = false;
       lastError = r.error;

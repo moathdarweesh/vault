@@ -426,5 +426,91 @@
     }
   }
 
-  window.FoodAI = { open, analyze, analyzeImage, getKey, setKey, hasKey };
+  // ---- free-form ask (AI coach) -------------------------------------------
+  // Plain text in → plain text out. Used by the nutrition coach to suggest
+  // meals that fit the day's remaining macros. Bypasses the JSON food parser.
+  async function ask(prompt) {
+    if (useProxy()) {
+      const res = await fetch(PROXY_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text: String(prompt || ''), mode: 'chat' }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        if (res.status === 429) throw new Error(tr('ai_rate_limit'));
+        throw new Error((data && data.error) || ('HTTP ' + res.status));
+      }
+      // Worker may answer as {reply} (chat mode) or fall back to the items shape.
+      if (data && typeof data.reply === 'string') return data.reply.trim();
+      if (data && Array.isArray(data.items)) {
+        return data.items.map((i) => `• ${i.name} — ${i.calories} ${tr('cal')}`).join('\n');
+      }
+      throw new Error(tr('ai_no_result'));
+    }
+    const key = getKey();
+    if (!key) throw new Error(tr('ai_need_key'));
+    const body = { contents: [{ parts: [{ text: String(prompt) }] }], generationConfig: { temperature: 0.4 } };
+    const res = await fetch(endpoint(key), { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const data = await res.json();
+    const txt = data && data.candidates && data.candidates[0] && data.candidates[0].content &&
+      data.candidates[0].content.parts && data.candidates[0].content.parts[0] && data.candidates[0].content.parts[0].text;
+    if (!txt) throw new Error(tr('ai_no_result'));
+    return String(txt).trim();
+  }
+
+  // Open the chat straight on the photo picker (used by the add-sheet "photo").
+  function openPhoto(dateForLog) {
+    open(dateForLog);
+    setTimeout(() => { const b = document.getElementById('ai-photo'); if (b) b.click(); }, 120);
+  }
+
+  // ---- voice → food --------------------------------------------------------
+  // `audio` = { mimeType, data(base64) }. Gemini transcribes AND extracts the
+  // foods in one call. The proxy forwards the audio; the direct-key path sends
+  // it inline. Returns { items, transcript }.
+  const VOICE_PROMPT = [
+    'The user SPOKE this audio to log what they ate. Transcribe it, then list every food/drink mentioned.',
+    'Output JSON only: {"transcript":"<what was said>","items":[{"name","calories","protein","carbs","fat"}]}.',
+    'name in the user\'s language; calories kcal; protein/carbs/fat grams for the stated (or one typical) portion.',
+    'If no food was said, items = [].',
+  ].join(' ');
+
+  async function analyzeAudio(audio) {
+    if (!audio || !audio.data) throw new Error(tr('ai_error'));
+    if (useProxy()) {
+      const res = await fetch(PROXY_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ audio: audio, prompt: VOICE_PROMPT }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        if (res.status === 429) throw new Error(tr('ai_rate_limit'));
+        throw new Error((data && data.error) || ('HTTP ' + res.status));
+      }
+      return { items: toItems(data).items, transcript: (data && data.transcript) || '' };
+    }
+    const key = getKey();
+    if (!key) throw new Error(tr('ai_need_key'));
+    const body = {
+      contents: [{ parts: [
+        { text: VOICE_PROMPT },
+        { inline_data: { mime_type: audio.mimeType, data: audio.data } },
+      ] }],
+      generationConfig: { responseMimeType: 'application/json', temperature: 0 },
+    };
+    const res = await fetch(endpoint(key), { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const data = await res.json();
+    const partText = data && data.candidates && data.candidates[0] && data.candidates[0].content &&
+      data.candidates[0].content.parts && data.candidates[0].content.parts[0] && data.candidates[0].content.parts[0].text;
+    if (!partText) throw new Error(tr('ai_no_result'));
+    const cleaned = String(partText).trim().replace(/^```(?:json)?/i, '').replace(/```$/, '').trim();
+    const parsed = JSON.parse(cleaned);
+    return { items: toItems(parsed).items, transcript: parsed.transcript || '' };
+  }
+
+  window.FoodAI = { open, openPhoto, analyze, analyzeImage, analyzeAudio, ask, getKey, setKey, hasKey };
 })();

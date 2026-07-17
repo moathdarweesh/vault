@@ -321,7 +321,27 @@ function defaultState() {
     supplements: [],
     supplementLogs: {},
     foodLogs: {},
+    // Nutrition targets. `mode:'off'` → the Food page shows the "set up your
+    // goal" prompt. When set, `targets` holds the daily goals the dashboard
+    // counts down from; `profile` remembers the calculator inputs so the user
+    // can re-open and tweak. All computed by DB.nutrition (Mifflin-St Jeor).
+    nutrition: defaultNutrition(),
     health: { data: null, syncedAt: 0, hidden: [] },
+  };
+}
+
+function defaultNutrition() {
+  return {
+    mode: 'off',                 // 'off' | 'calc' | 'manual'
+    profile: {
+      sex: 'male',               // 'male' | 'female'
+      age: null,
+      heightCm: null,
+      weightKg: null,
+      activity: 'moderate',      // sedentary|light|moderate|active|very_active
+      goal: 'maintain',          // cut | maintain | bulk
+    },
+    targets: { calories: 0, protein: 0, carbs: 0, fat: 0 },
   };
 }
 
@@ -403,6 +423,15 @@ function loadState() {
     parsed.supplements = parsed.supplements || [];
     parsed.supplementLogs = parsed.supplementLogs || {};
     parsed.foodLogs = parsed.foodLogs || {};
+    // Nutrition targets (added later) — backfill for existing users.
+    if (!parsed.nutrition || typeof parsed.nutrition !== 'object') {
+      parsed.nutrition = defaultNutrition();
+    } else {
+      const dn = defaultNutrition();
+      parsed.nutrition.mode = parsed.nutrition.mode || 'off';
+      parsed.nutrition.profile = Object.assign(dn.profile, parsed.nutrition.profile || {});
+      parsed.nutrition.targets = Object.assign(dn.targets, parsed.nutrition.targets || {});
+    }
     parsed.health = parsed.health || { data: null, syncedAt: 0, hidden: [] };
     if (!Array.isArray(parsed.health.hidden)) parsed.health.hidden = [];
 
@@ -794,6 +823,69 @@ const DB = {
           count: m.count,
         }));
     },
+  },
+
+  // ===== Nutrition targets / calorie calculator =====
+  // Numbers come from the Mifflin-St Jeor equation (the current evidence-based
+  // standard), NOT from an AI guess — deterministic and accurate. AI is used
+  // for LOGGING (chat/photo/voice) and coaching, not for the target maths.
+  nutrition: {
+    // Activity multipliers applied to BMR to get TDEE (maintenance calories).
+    ACTIVITY: { sedentary: 1.2, light: 1.375, moderate: 1.55, active: 1.725, very_active: 1.9 },
+    // Calorie adjustment + protein target (g per kg bodyweight) per goal.
+    GOAL: {
+      cut:      { kcal: 0.80, protein: 2.2 },
+      maintain: { kcal: 1.00, protein: 2.0 },
+      bulk:     { kcal: 1.10, protein: 1.8 },
+    },
+    get() { return STATE.nutrition || defaultNutrition(); },
+    hasTargets() {
+      const n = this.get();
+      return n.mode !== 'off' && n.targets && n.targets.calories > 0;
+    },
+    // Pure calculator — returns the computed targets for a profile without
+    // saving, so the UI can preview live as the user edits the form.
+    compute(profile) {
+      const p = profile || {};
+      const kg = Number(p.weightKg) || 0;
+      const cm = Number(p.heightCm) || 0;
+      const age = Number(p.age) || 0;
+      if (kg <= 0 || cm <= 0 || age <= 0) return null;
+      // Mifflin-St Jeor BMR
+      let bmr = 10 * kg + 6.25 * cm - 5 * age + (p.sex === 'female' ? -161 : 5);
+      const tdee = bmr * (this.ACTIVITY[p.activity] || 1.55);
+      const g = this.GOAL[p.goal] || this.GOAL.maintain;
+      const calories = Math.round(tdee * g.kcal);
+      const protein = Math.round(kg * g.protein);          // g/kg bodyweight
+      const fat = Math.round((calories * 0.25) / 9);        // 25% of kcal
+      const carbs = Math.max(0, Math.round((calories - protein * 4 - fat * 9) / 4));
+      return { calories, protein, carbs, fat, bmr: Math.round(bmr), tdee: Math.round(tdee) };
+    },
+    // Save the calculator profile and store the computed targets.
+    setProfile(profile) {
+      const n = this.get();
+      n.profile = Object.assign({}, n.profile, profile);
+      const c = this.compute(n.profile);
+      if (c) { n.targets = { calories: c.calories, protein: c.protein, carbs: c.carbs, fat: c.fat }; n.mode = 'calc'; }
+      STATE.nutrition = n;
+      save();
+      return n;
+    },
+    // Manual override — the user types the four numbers directly.
+    setTargets(targets) {
+      const n = this.get();
+      n.targets = {
+        calories: Math.max(0, Math.round(Number(targets.calories) || 0)),
+        protein: Math.max(0, Math.round(Number(targets.protein) || 0)),
+        carbs: Math.max(0, Math.round(Number(targets.carbs) || 0)),
+        fat: Math.max(0, Math.round(Number(targets.fat) || 0)),
+      };
+      n.mode = 'manual';
+      STATE.nutrition = n;
+      save();
+      return n;
+    },
+    clear() { STATE.nutrition = defaultNutrition(); save(); },
   },
 
   // ----- Bulk export / import (for backup) -----
@@ -1248,16 +1340,23 @@ function todayISO() {
   return d.toISOString().slice(0, 10);
 }
 
+// Localise dates to the UI language. 'ar-u-nu-latn' gives Arabic month names
+// with LATIN digits, matching the app's number convention (fmtNum) and the
+// home screen. Falls back to en-US.
+function dateLocale() {
+  try { return (STATE && STATE.prefs && STATE.prefs.lang === 'ar') ? 'ar-u-nu-latn' : 'en-US'; }
+  catch (_) { return 'en-US'; }
+}
 function formatDate(iso) {
   if (!iso) return '';
   const d = new Date(iso + 'T00:00:00');
-  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+  return d.toLocaleDateString(dateLocale(), { month: 'short', day: 'numeric', year: 'numeric' });
 }
 
 function formatDateShort(iso) {
   if (!iso) return '';
   const d = new Date(iso + 'T00:00:00');
-  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+  return d.toLocaleDateString(dateLocale(), { month: 'short', day: 'numeric' });
 }
 
 function daysAgo(iso) {
