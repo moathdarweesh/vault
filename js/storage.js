@@ -1291,10 +1291,18 @@ const DB = {
     importFromHealth(sessions) {
       if (!Array.isArray(sessions) || !sessions.length) return 0;
       const pad = (n) => String(n).padStart(2, '0');
-      const seen = new Set(STATE.sleep.map((s) => s.hcKey).filter(Boolean));
-      let added = 0;
+      const byKey = {};
+      STATE.sleep.forEach((s) => { if (s.hcKey) byKey[s.hcKey] = s; });
+      let added = 0, changed = false;
       sessions.forEach((s) => {
-        if (!s || !s.start || !s.end || seen.has(s.start)) return;
+        if (!s || !s.start || !s.end) return;
+        const existing = byKey[s.start];
+        if (existing) {
+          // Already imported — but backfill sleep stages onto it if this newer
+          // read carries them (e.g. after the stages-capable app build).
+          if (s.stages && !existing.stages) { existing.stages = s.stages; changed = true; }
+          return;
+        }
         const start = new Date(s.start);
         const end = new Date(s.end);
         if (isNaN(start.getTime()) || isNaN(end.getTime())) return;
@@ -1305,14 +1313,15 @@ const DB = {
           sleepTime: pad(start.getHours()) + ':' + pad(start.getMinutes()),
           wakeTime: pad(end.getHours()) + ':' + pad(end.getMinutes()),
           durationMinutes: s.minutes != null ? s.minutes : Math.round((end - start) / 60000),
+          stages: s.stages || null,   // { deep, light, rem, awake } minutes, or null
           source: 'health',
           hcKey: s.start,
           createdAt: new Date().toISOString(),
         });
-        seen.add(s.start);
+        byKey[s.start] = true;
         added++;
       });
-      if (added) save();
+      if (added || changed) save();
       return added;
     },
   },

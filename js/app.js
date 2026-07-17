@@ -5,7 +5,7 @@
 // Single source of truth for the shipped build. Used by the visible build
 // label AND the feedback version tag so they can never drift apart. Keep this
 // equal to the ?v=N cache markers (see CLAUDE.md "CACHE WORKFLOW").
-const VAULT_BUILD = 'v131';
+const VAULT_BUILD = 'v132';
 
 // ==========================================================================
 // Icons
@@ -656,6 +656,9 @@ const I18N = {
     // Sleep
     sleep_subtitle: 'Track when you sleep and wake up.',
     no_sleep_logged: 'No sleep logged',
+    sleep_stages: 'Sleep stages', sleep_deep: 'Deep', sleep_light: 'Light', sleep_rem: 'REM', sleep_awake: 'Awake',
+    sleep_efficiency: 'Sleep efficiency',
+    sleep_q_excellent: 'Excellent', sleep_q_good: 'Good', sleep_q_fair: 'Fair',
     no_sleep_text: 'Tap "Log" to record your first night of sleep.',
     nights_log: 'Log', nights_logged: 'Logged',
     last_night: 'Last Night', avg_7d: '7-Day Avg',
@@ -1193,6 +1196,9 @@ const I18N = {
 
     sleep_subtitle: 'تتبّع متى تنام ومتى تصحى.',
     no_sleep_logged: 'لا يوجد نوم مسجّل',
+    sleep_stages: 'مراحل النوم', sleep_deep: 'عميق', sleep_light: 'خفيف', sleep_rem: 'حركة العين (REM)', sleep_awake: 'استيقاظ',
+    sleep_efficiency: 'كفاءة النوم',
+    sleep_q_excellent: 'ممتاز', sleep_q_good: 'جيد', sleep_q_fair: 'متوسط',
     no_sleep_text: 'اضغط "سجّل" لتسجيل أول ليلة نوم.',
     nights_log: 'سجّل', nights_logged: 'مسجلة',
     last_night: 'آخر ليلة', avg_7d: 'متوسط 7 أيام',
@@ -4388,6 +4394,56 @@ function openFoodLibraryModal() {
 // ==========================================================================
 // SLEEP
 // ==========================================================================
+// Derive a simple quality read from Health Connect sleep stages. Health Connect
+// has no native "quality score", so this is computed from sleep efficiency (time
+// asleep vs in bed) and the share of restorative deep+REM sleep.
+function sleepQuality(stages) {
+  if (!stages) return null;
+  const deep = stages.deep || 0, light = stages.light || 0, rem = stages.rem || 0, awake = stages.awake || 0;
+  const asleep = deep + light + rem;
+  if (asleep <= 0) return null;
+  const inBed = asleep + awake;
+  const efficiency = inBed > 0 ? asleep / inBed : 1;
+  const deepRem = (deep + rem) / asleep;
+  let key = 'fair';
+  if (efficiency >= 0.9 && deepRem >= 0.4) key = 'excellent';
+  else if (efficiency >= 0.85 && deepRem >= 0.28) key = 'good';
+  return { key, efficiency: Math.round(efficiency * 100) };
+}
+
+// Segmented sleep-stage bar (+ legend + quality, unless compact). Renders
+// nothing when the entry has no stage data (e.g. a manual entry, or a source
+// app that doesn't record stages).
+function sleepStagesHtml(entry, opts) {
+  const s = entry && entry.stages;
+  if (!s) return '';
+  const deep = s.deep || 0, light = s.light || 0, rem = s.rem || 0, awake = s.awake || 0;
+  const total = deep + light + rem + awake;
+  if (total <= 0) return '';
+  const seg = (v, cls) => (v > 0 ? `<span class="sl-seg ${cls}" style="width:${(v / total * 100)}%"></span>` : '');
+  const bar = `<div class="sl-bar">${seg(deep, 'deep')}${seg(rem, 'rem')}${seg(light, 'light')}${seg(awake, 'awake')}</div>`;
+  if (opts && opts.compact) return `<div class="sl-bar-wrap">${bar}</div>`;
+  const q = sleepQuality(s);
+  const leg = (v, cls, label) => (v > 0
+    ? `<div class="sl-leg-item"><span class="sl-dot ${cls}"></span><span class="sl-leg-label">${label}</span><span class="sl-leg-val num">${formatDuration(v)}</span></div>`
+    : '');
+  return `
+    <div class="sleep-detail">
+      <div class="sleep-detail-head">
+        <div class="sleep-detail-title">${t('sleep_stages')}</div>
+        ${q ? `<span class="sleep-quality q-${q.key}">${t('sleep_q_' + q.key)}</span>` : ''}
+      </div>
+      ${bar}
+      <div class="sl-legend">
+        ${leg(deep, 'deep', t('sleep_deep'))}
+        ${leg(rem, 'rem', t('sleep_rem'))}
+        ${leg(light, 'light', t('sleep_light'))}
+        ${leg(awake, 'awake', t('sleep_awake'))}
+      </div>
+      ${q ? `<div class="sleep-eff">${t('sleep_efficiency')}: <span class="num">${q.efficiency}%</span></div>` : ''}
+    </div>`;
+}
+
 function renderSleep(el) {
   const list = DB.sleep.list();
   const last7 = list.slice(0, 7);
@@ -4406,6 +4462,7 @@ function renderSleep(el) {
           <span>→</span>
           <span class="num">${formatTime12(s.wakeTime)}</span>
         </div>
+        ${sleepStagesHtml(s, { compact: true })}
       </div>
       <div class="data-value num">${formatDuration(s.durationMinutes)}</div>
       <div class="data-actions">
@@ -4438,6 +4495,8 @@ function renderSleep(el) {
         <div class="stat-box-value num">${list.length}</div>
       </div>
     </div>
+
+    ${latest && latest.stages ? sleepStagesHtml(latest) : ''}
 
     <div class="row-between mb-16">
       <div class="section-title" style="margin:0">${t('history')}</div>

@@ -216,6 +216,23 @@ class HealthConnectPlugin : Plugin() {
                             o.put("start", s.startTime.toString())
                             o.put("end", s.endTime.toString())
                             o.put("minutes", Duration.between(s.startTime, s.endTime).toMinutes())
+                            // Per-stage minutes — only present when the source app
+                            // (watch / sleep tracker) actually records sleep stages.
+                            if (s.stages.isNotEmpty()) {
+                                val mins = HashMap<Int, Long>()
+                                for (st in s.stages) {
+                                    mins[st.stage] = (mins[st.stage] ?: 0L) +
+                                        Duration.between(st.startTime, st.endTime).toMinutes()
+                                }
+                                val stg = JSObject()
+                                stg.put("deep", mins[SleepSessionRecord.STAGE_TYPE_DEEP] ?: 0L)
+                                stg.put("light", mins[SleepSessionRecord.STAGE_TYPE_LIGHT] ?: 0L)
+                                stg.put("rem", mins[SleepSessionRecord.STAGE_TYPE_REM] ?: 0L)
+                                stg.put("awake",
+                                    (mins[SleepSessionRecord.STAGE_TYPE_AWAKE] ?: 0L) +
+                                    (mins[SleepSessionRecord.STAGE_TYPE_AWAKE_IN_BED] ?: 0L))
+                                o.put("stages", stg)
+                            }
                             arr.put(o)
                         }
                         out.put("sleep", arr)
