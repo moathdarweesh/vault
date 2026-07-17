@@ -66,6 +66,12 @@
 
     <uses-permission android:name="android.permission.INTERNET" />
 
+    <!-- Voice food logging: the WebView's getUserMedia needs mic access.
+         Capacitor's WebChromeClient maps the web audio-capture request to this
+         runtime permission and grants it, so declaring it here is enough. -->
+    <uses-permission android:name="android.permission.RECORD_AUDIO" />
+    <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />
+
     <!-- Health Connect read permissions -->
     <uses-permission android:name="android.permission.health.READ_STEPS" />
     <uses-permission android:name="android.permission.health.READ_HEART_RATE" />
