@@ -5,7 +5,7 @@
 // Single source of truth for the shipped build. Used by the visible build
 // label AND the feedback version tag so they can never drift apart. Keep this
 // equal to the ?v=N cache markers (see CLAUDE.md "CACHE WORKFLOW").
-const VAULT_BUILD = 'v135';
+const VAULT_BUILD = 'v136';
 
 // ==========================================================================
 // Icons
@@ -692,6 +692,8 @@ const I18N = {
     settings_title: 'Settings',
     settings_subtitle: 'Customize language, theme, and manage your data.',
     language: 'Language',
+    translate_ex_title: 'Exercise names', translate_ex_sub: 'Show built-in exercise names transliterated in Arabic, or keep them in English.',
+    translate_ex_on: 'Arabic', translate_ex_off: 'English',
     theme: 'Theme',
     data: 'Data',
     theme_dark: 'Dark Vault', theme_dark_sub: 'Teal on black',
@@ -1234,6 +1236,8 @@ const I18N = {
     settings_title: 'الإعدادات',
     settings_subtitle: 'خصّص اللغة والمظهر وأدر بياناتك.',
     language: 'اللغة',
+    translate_ex_title: 'أسماء التمارين', translate_ex_sub: 'اعرض أسماء التمارين الجاهزة معرّبة، أو أبقِها بالإنجليزية.',
+    translate_ex_on: 'عربي', translate_ex_off: 'إنجليزي',
     theme: 'المظهر',
     data: 'البيانات',
     theme_dark: 'Dark Vault', theme_dark_sub: 'تركواز على أسود',
@@ -2303,7 +2307,9 @@ function exDisplayName(ex) {
   if (!ex) return '';
   const raw = ex.name || '';
   if (ex.isCustom) return raw;                       // the user named it — leave it alone
-  if (((DB.prefs.get().lang) || 'en') !== 'ar') return raw;
+  const prefs = DB.prefs.get();
+  if ((prefs.lang || 'en') !== 'ar') return raw;
+  if (prefs.translateExercises === false) return raw; // user turned exercise-name translation off
   return EXERCISE_NAME_AR[raw] || raw;
 }
 
@@ -4874,6 +4880,16 @@ function renderSettings(el) {
       </div>
     </div>
 
+    ${currentLang === 'ar' ? `
+    <div class="settings-section">
+      <div class="section-title">${t('translate_ex_title')}</div>
+      <p class="settings-hint">${t('translate_ex_sub')}</p>
+      <div class="lang-toggle">
+        <button class="lang-option ${prefs.translateExercises !== false ? 'active' : ''}" data-translate-ex="1">${t('translate_ex_on')}</button>
+        <button class="lang-option ${prefs.translateExercises === false ? 'active' : ''}" data-translate-ex="0">${t('translate_ex_off')}</button>
+      </div>
+    </div>` : ''}
+
     <div class="settings-section">
       <div class="section-title">${t('theme')}</div>
       <div class="theme-grid">${themeCards}</div>
@@ -4937,6 +4953,15 @@ function renderSettings(el) {
 
   // Account (cloud sync) — populated async since the session check is async.
   if (window.Cloud && Cloud.configured()) populateAccount(el);
+
+  // Exercise-name translation toggle (Arabic only)
+  el.querySelectorAll('[data-translate-ex]').forEach((b) =>
+    b.addEventListener('click', () => {
+      DB.prefs.setTranslateExercises(b.dataset.translateEx === '1');
+      renderSettings(el);
+      showToast(t('saved'));
+    })
+  );
 
   // Language buttons
   el.querySelectorAll('[data-lang]').forEach((b) =>

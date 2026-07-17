@@ -285,6 +285,7 @@ function defaultState() {
       lang: 'en',
       theme: 'dark',
       unit: 'kg',
+      translateExercises: true,   // Arabic UI: transliterate built-in exercise names
     },
     exercises: [
       ...SEED_EXERCISES.map((e) => ({
@@ -560,6 +561,7 @@ const DB = {
     setLang(lang) { STATE.prefs.lang = lang; save(); },
     setTheme(theme) { STATE.prefs.theme = theme; save(); },
     setUnit(unit) { STATE.prefs.unit = unit === 'lb' ? 'lb' : 'kg'; save(); },
+    setTranslateExercises(on) { STATE.prefs.translateExercises = !!on; save(); },
   },
 
   // ----- Workout plan — CONTINUOUS ROTATION -----

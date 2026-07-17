@@ -4458,6 +4458,7 @@ body[dir="rtl"] .picker-row { text-align: right; }
   gap: 10px;
 }
 .food-log-list { display: flex; flex-direction: column; gap: 8px; }
+.settings-hint { font-size: 12.5px; color: var(--text-mute); margin: -4px 0 10px; line-height: 1.5; }
 
 /* Small inline text link (e.g. Food "Past days") — reads as a link, not a
    heavy button; the global svg{width:100%} is pinned so the chevron stays small. */
