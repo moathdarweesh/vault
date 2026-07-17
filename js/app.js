@@ -5,7 +5,7 @@
 // Single source of truth for the shipped build. Used by the visible build
 // label AND the feedback version tag so they can never drift apart. Keep this
 // equal to the ?v=N cache markers (see CLAUDE.md "CACHE WORKFLOW").
-const VAULT_BUILD = 'v125';
+const VAULT_BUILD = 'v126';
 
 // ==========================================================================
 // Icons
@@ -3599,7 +3599,7 @@ function renderFood(el) {
       <p class="page-subtitle">${escapeHtml(formatDate(date))}</p>
     </div>
     <div id="nutri-host">${nutritionDashboardHtml(date)}</div>
-    <button class="food-fab" id="food-fab" aria-label="${escapeHtml(t('add'))}">${icon('plus', 26)}</button>
+    <button class="food-fab" id="food-fab">${icon('plus', 18)}<span>${t('add')}</span></button>
   `;
 
   const rerender = () => { const h = $('#nutri-host', el); if (h) h.innerHTML = nutritionDashboardHtml(date); };

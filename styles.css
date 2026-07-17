@@ -4545,18 +4545,22 @@ body[dir="rtl"] .picker-row { text-align: right; }
 .coach-body { min-height: 60px; }
 .coach-text { font-size: 14px; line-height: 1.7; color: var(--text); }
 
-/* Floating + button */
+/* Floating add button — compact rounded RECTANGLE with an icon + label
+   (not a large circle). */
 .food-fab {
-  position: absolute; inset-inline-end: 18px;
-  bottom: calc(var(--nav-h) + var(--safe-b) + 18px);
-  width: 60px; height: 60px; border-radius: 50%; z-index: 20;
-  display: flex; align-items: center; justify-content: center;
+  position: absolute; inset-inline-end: 16px;
+  bottom: calc(var(--nav-h) + var(--safe-b) + 16px);
+  height: 44px; padding: 0 16px 0 13px; border-radius: 13px; z-index: 20;
+  display: inline-flex; align-items: center; gap: 6px;
   background: var(--accent); color: var(--accent-ink); border: none;
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(255,255,255,0.06);
+  font: inherit; font-size: 14px; font-weight: 800;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.35), 0 0 0 1px rgba(255,255,255,0.06);
   cursor: pointer; appearance: none; -webkit-appearance: none;
   transition: transform 0.15s; -webkit-tap-highlight-color: transparent;
 }
-.food-fab:active { transform: scale(0.92); }
+.food-fab:active { transform: scale(0.95); }
+.food-fab svg { flex-shrink: 0; }
+body[dir="rtl"] .food-fab { padding: 0 13px 0 16px; }
 
 /* =========================================================================
    ADD SHEET (animated bottom sheet)
