@@ -5,7 +5,7 @@
 // Single source of truth for the shipped build. Used by the visible build
 // label AND the feedback version tag so they can never drift apart. Keep this
 // equal to the ?v=N cache markers (see CLAUDE.md "CACHE WORKFLOW").
-const VAULT_BUILD = 'v130';
+const VAULT_BUILD = 'v131';
 
 // ==========================================================================
 // Icons
@@ -1810,10 +1810,12 @@ document.addEventListener('keydown', (e) => {
 // ==========================================================================
 // Helpers shared
 // ==========================================================================
-function emptyState({ iconName = 'dumbbell', title, text }) {
+// Compact, icon-less empty state (the large graphic was dropped app-wide for a
+// cleaner look). iconName is kept in the signature for call-site compatibility
+// but is no longer rendered.
+function emptyState({ iconName, title, text }) {
   return `
     <div class="empty">
-      <div class="empty-icon">${icon(iconName, 52)}</div>
       <div class="empty-title">${escapeHtml(title)}</div>
       <div class="empty-text">${escapeHtml(text)}</div>
     </div>
@@ -3249,7 +3251,7 @@ function renderCardio(el) {
   }).join('');
 
   el.innerHTML = `
-    ${vaultBar({ action: icon('plus', 20), actionLabel: t('add') })}
+    ${vaultBar()}
 
     <div class="page-header">
       <div class="page-eyebrow">${t('this_week')} · ${weekItems.length}</div>
@@ -3283,7 +3285,7 @@ function renderCardio(el) {
     }
   `;
 
-  bindVaultAction(() => openCardioModal());
+  // Single add button: the labeled "Log" button (the top-bar + was a duplicate).
   $('#add-cardio-btn', el).addEventListener('click', () => openCardioModal());
   el.querySelectorAll('[data-edit-cardio]').forEach((b) =>
     b.addEventListener('click', () => openCardioModal(b.dataset.editCardio))
@@ -4414,7 +4416,7 @@ function renderSleep(el) {
   `).join('');
 
   el.innerHTML = `
-    ${vaultBar({ action: icon('plus', 20), actionLabel: t('add') })}
+    ${vaultBar()}
 
     <div class="page-header">
       <div class="page-eyebrow">${t('nights_log')} · ${list.length}</div>
@@ -4448,7 +4450,7 @@ function renderSleep(el) {
     }
   `;
 
-  bindVaultAction(() => openSleepModal());
+  // Single add button: the labeled "Log" button (the top-bar + was a duplicate).
   $('#add-sleep-btn', el).addEventListener('click', () => openSleepModal());
   el.querySelectorAll('[data-edit-sleep]').forEach((b) =>
     b.addEventListener('click', () => openSleepModal(b.dataset.editSleep))
