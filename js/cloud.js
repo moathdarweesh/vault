@@ -429,6 +429,72 @@
     } catch (e) { return { error: (e && e.message) || 'error' }; }
   }
 
+  // ---- exercise image backup (Storage) -------------------------------------
+  // Custom exercise images live as base64 in the blob so they render instantly
+  // and keep working offline (the gym has no signal). A durable copy is ALSO
+  // kept in the PRIVATE `exercise-images` bucket, because the blob is a single
+  // mutable row with no history: when an empty local state once overwrote it,
+  // every uploaded image was destroyed and the mirror never held them, so they
+  // were unrecoverable. Everything here is best-effort — a failure leaves the
+  // local base64 untouched, so trying to back an image up can never lose it.
+  const IMAGE_BUCKET = 'exercise-images';
+
+  function dataUrlToBlob(dataUrl) {
+    const m = /^data:(image\/[a-z+]+);base64,([A-Za-z0-9+/=]+)$/i.exec(String(dataUrl || ''));
+    if (!m) return null;
+    try {
+      const bin = atob(m[2]);
+      const arr = new Uint8Array(bin.length);
+      for (let i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i);
+      return new Blob([arr], { type: m[1] });
+    } catch (_) { return null; }
+  }
+
+  function blobToDataUrl(blob) {
+    return new Promise((resolve) => {
+      const r = new FileReader();
+      r.onload = () => resolve(r.result);
+      r.onerror = () => resolve(null);
+      r.readAsDataURL(blob);
+    });
+  }
+
+  // Upload (or replace) the durable copy; returns its storage path, else null.
+  // The path always starts with the user's own id — the bucket's RLS requires
+  // the first segment to equal auth.uid(), so a user can only write in their
+  // own folder and can never read or clobber anyone else's image.
+  async function backupExerciseImage(exerciseId, dataUrl) {
+    const c = sb(); const s = await getSession();
+    if (!c || !s || !exerciseId) return null;
+    const blob = dataUrlToBlob(dataUrl);
+    if (!blob) return null;
+    const ext = blob.type === 'image/png' ? 'png' : blob.type === 'image/webp' ? 'webp' : 'jpg';
+    const path = `${s.user.id}/${exerciseId}.${ext}`;
+    try {
+      const { error } = await c.storage.from(IMAGE_BUCKET)
+        .upload(path, blob, { upsert: true, contentType: blob.type });
+      return error ? null : path;
+    } catch (_) { return null; }
+  }
+
+  // Pull a backed-up image back down as a data URL — used to heal an exercise
+  // whose base64 was lost with the blob but whose durable copy survived.
+  async function restoreExerciseImage(path) {
+    const c = sb(); const s = await getSession();
+    if (!c || !s || !path) return null;
+    try {
+      const { data, error } = await c.storage.from(IMAGE_BUCKET).download(path);
+      if (error || !data) return null;
+      return await blobToDataUrl(data);
+    } catch (_) { return null; }
+  }
+
+  async function removeExerciseImage(path) {
+    const c = sb(); const s = await getSession();
+    if (!c || !s || !path) return;
+    try { await c.storage.from(IMAGE_BUCKET).remove([path]); } catch (_) {}
+  }
+
   window.Cloud = {
     configured, ensureSdk, getSession, currentEmail,
     signUp, signIn, signOut, changePassword, resetPassword, onPasswordRecovery,
@@ -439,5 +505,6 @@
     getUsername, checkUsername, setUsername,
     touchLastSeen, getMyFlags, submitFeedback,
     pullCatalog,
+    backupExerciseImage, restoreExerciseImage, removeExerciseImage,
   };
 })();

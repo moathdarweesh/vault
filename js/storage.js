@@ -416,6 +416,7 @@ function loadState() {
     parsed.exercises.forEach((ex) => {
       if (ex.imageSlug === undefined) { ex.imageSlug = null; migrated = true; }
       if (ex.customImage === undefined) { ex.customImage = null; migrated = true; }
+      if (ex.imagePath === undefined) { ex.imagePath = null; migrated = true; }
       if (ex.machineType === undefined) { ex.machineType = null; migrated = true; }
 
       const seed = seedByName[ex.name];
@@ -839,13 +840,16 @@ const DB = {
     getById(id) {
       return STATE.exercises.find((e) => e.id === id);
     },
-    add({ name, category, customImage }) {
+    add({ name, category, customImage, imagePath }) {
       const ex = {
         id: uid(),
         name: name.trim(),
         category: category || 'Other',
         imageSlug: null,
         customImage: customImage || null,
+        // Storage path of the durable backup copy of customImage (set once the
+        // upload lands — see Cloud.backupExerciseImage / syncExerciseImages).
+        imagePath: imagePath || null,
         isCustom: true,
         inMyList: true,
         createdAt: new Date().toISOString(),
@@ -860,6 +864,7 @@ const DB = {
       if (data.name != null) ex.name = data.name.trim();
       if (data.category != null) ex.category = data.category;
       if (data.customImage !== undefined) ex.customImage = data.customImage;
+      if (data.imagePath !== undefined) ex.imagePath = data.imagePath;
       save();
       return ex;
     },

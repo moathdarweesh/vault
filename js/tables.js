@@ -124,6 +124,11 @@
             category: ex.category || 'Other',
             image_slug: orNull(ex.imageSlug),
             machine_type: orNull(ex.machineType),
+            // Where the durable copy of the user's uploaded image lives. This
+            // is the field whose absence made the images unrecoverable when the
+            // blob was once wiped — without it a mirror restore brings back the
+            // exercise but not its picture.
+            image_path: orNull(ex.imagePath),
           });
         } else {
           const gid = nameToGlobal[String(ex.name || '').toLowerCase()] || null;

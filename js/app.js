@@ -5,7 +5,7 @@
 // Single source of truth for the shipped build. Used by the visible build
 // label AND the feedback version tag so they can never drift apart. Keep this
 // equal to the ?v=N cache markers (see CLAUDE.md "CACHE WORKFLOW").
-const VAULT_BUILD = 'v119';
+const VAULT_BUILD = 'v120';
 
 // ==========================================================================
 // Icons
@@ -2216,6 +2216,42 @@ function exerciseImgSrc(ex) {
   return '';
 }
 
+// Back up a custom exercise's image to its durable cloud copy. Fire-and-forget:
+// the base64 is already saved locally, so a failure here costs nothing and the
+// login pass (syncExerciseImages) retries it.
+function backupExerciseImageFor(exerciseId, dataUrl) {
+  if (!exerciseId || !dataUrl) return;
+  if (!/^data:image\//i.test(String(dataUrl))) return; // nothing new to upload
+  if (!window.Cloud || !Cloud.backupExerciseImage) return;
+  Cloud.backupExerciseImage(exerciseId, dataUrl)
+    .then((path) => { if (path) DB.exercises.update(exerciseId, { imagePath: path }); })
+    .catch(() => {});
+}
+
+// Reconcile custom exercise images against their durable copies. Runs after
+// login/sync and does two jobs:
+//   1. uploads any custom image that has no backup yet (covers every image
+//      that existed before this feature shipped), and
+//   2. HEALS an exercise whose base64 was lost with the blob but whose backup
+//      survived — the exact failure that once wiped every image.
+// Best-effort and silent; never blocks the UI.
+async function syncExerciseImages() {
+  if (!window.Cloud || !Cloud.backupExerciseImage) return;
+  let healed = 0;
+  for (const ex of DB.exercises.list().filter((e) => e.isCustom)) {
+    try {
+      if (ex.customImage && !ex.imagePath) {
+        const path = await Cloud.backupExerciseImage(ex.id, ex.customImage);
+        if (path) DB.exercises.update(ex.id, { imagePath: path });
+      } else if (!ex.customImage && ex.imagePath) {
+        const dataUrl = await Cloud.restoreExerciseImage(ex.imagePath);
+        if (dataUrl) { DB.exercises.update(ex.id, { customImage: dataUrl }); healed++; }
+      }
+    } catch (_) {}
+  }
+  if (healed) { try { renderView(currentView); } catch (_) {} }
+}
+
 function bentoCardHtml(ex, i, { showPR = true, toggle = null } = {}) {
   const isWide = i % 5 === 0;
   const stats = DB.sessions.bestStats(ex.id);
@@ -2727,9 +2763,11 @@ function openNewExerciseModal(exerciseId = null, opts = {}) {
     if (!name) { showToast(t('enter_name')); return; }
     if (existing) {
       DB.exercises.update(existing.id, { name, category, customImage: pickedImage });
+      backupExerciseImageFor(existing.id, pickedImage); // durable copy, best-effort
       showToast(t('updated'));
     } else {
       const created = DB.exercises.add({ name, category, customImage: pickedImage });
+      backupExerciseImageFor(created.id, pickedImage); // durable copy, best-effort
       if (typeof opts.onCreated === 'function') opts.onCreated(created);
       showToast(t('exercise_added'));
     }
@@ -6391,6 +6429,7 @@ async function afterLogin() {
     hideAuthGate();
     refreshAfterSync();
     showToast(t('synced'));
+    syncExerciseImages(); // back up / heal custom images, best-effort
   } catch (_) {
     hideAuthGate(); // never trap the user behind the gate on a transient error
   }
@@ -6627,6 +6666,7 @@ async function bootCloud() {
   ensureUsername(); // enforce a handle for already-logged-in users too
   if (Cloud.touchLastSeen) Cloud.touchLastSeen();  // fire-and-forget activity stamp
   enforceAccountStatus();                          // block disabled/banned accounts
+  syncExerciseImages();                            // back up / heal custom images
 }
 
 // ==========================================================================
