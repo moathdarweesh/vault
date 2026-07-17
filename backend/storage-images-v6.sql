@@ -13,9 +13,19 @@
 -- mirror-based recovery can restore it. This file therefore creates a bucket
 -- and its policies and ALTERS NO TABLE.
 --
+-- STATUS: ✅ APPLIED + VERIFIED on the live project (ilmusnuchqlpirywonzx),
+-- 2026-07-17. Post-apply check returned: bucket_created=1, public=false,
+-- file_size_limit=5242880, allowed_mime_types={image/jpeg,image/png,image/webp},
+-- policies_created=4, unscoped_leaks=0. The STEP 0 pre-flight ran first and
+-- came back clean (rls_enabled=true, total_policies=0, no unscoped policy), so
+-- the auditor's conditional "not exploitable" verdict is now unconditional.
+-- These are the FIRST policies on storage.objects; no `avatars` bucket exists.
+--
 -- SAFETY: additive only. No DROP/DELETE/TRUNCATE of data. The `drop policy if
 -- exists` lines are idempotency guards for the policies this file creates, not
--- destructive operations. Safe to re-run.
+-- destructive operations. Safe to re-run. (Supabase's SQL editor does warn
+-- "destructive operations" on those four guards — benign, and they were
+-- provable no-ops here since no policy existed yet.)
 --
 -- Reviewed by db-security-auditor 2026-07-17: no Critical, cross-user
 -- isolation sound and fail-closed on crafted names — CONDITIONAL on the

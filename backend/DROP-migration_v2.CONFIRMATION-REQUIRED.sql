@@ -1,5 +1,23 @@
 -- ###########################################################################
--- ##  🛑 BLOCKED — DO NOT RUN. Blocker raised 2026-07-17.                   ##
+-- ##  ℹ️  MOOT — VERIFIED 2026-07-17: the migration_v2 schema NO LONGER     ##
+-- ##  EXISTS on the live project. Checked directly:                         ##
+-- ##    information_schema.schemata where schema_name='migration_v2'  -> 0  ##
+-- ##    information_schema.tables  where table_schema='migration_v2'  -> 0  ##
+-- ##  This script has nothing left to drop. The PII data-minimisation goal  ##
+-- ##  it existed for is already satisfied. Keep for history; do not run.    ##
+-- ##                                                                        ##
+-- ##  It also settles the blocker below: migration_v2.image_uploads.        ##
+-- ##  base64_data was the last hope for the owner's lost custom-exercise    ##
+-- ##  images, and it is gone. Combined with storage.buckets being EMPTY at  ##
+-- ##  the time of checking (so the STEP I upload never ran) and the blob    ##
+-- ##  having been overwritten, ALL THREE copies were confirmed destroyed.   ##
+-- ##  The images are unrecoverable. storage-images-v6.sql now prevents a    ##
+-- ##  recurrence for every image uploaded from here on.                     ##
+-- ###########################################################################
+
+-- ###########################################################################
+-- ##  🛑 BLOCKED — DO NOT RUN. Blocker raised 2026-07-17. (Superseded by    ##
+-- ##  the MOOT note above — kept for the reasoning.)                        ##
 -- ##                                                                        ##
 -- ##  GATE 2 of this script is FALSIFIED. Its justification for dropping    ##
 -- ##  the schema — "(images also live inside each user's public.vault_data  ##
