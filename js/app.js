@@ -5,7 +5,7 @@
 // Single source of truth for the shipped build. Used by the visible build
 // label AND the feedback version tag so they can never drift apart. Keep this
 // equal to the ?v=N cache markers (see CLAUDE.md "CACHE WORKFLOW").
-const VAULT_BUILD = 'v134';
+const VAULT_BUILD = 'v135';
 
 // ==========================================================================
 // Icons
@@ -432,6 +432,8 @@ const I18N = {
     new_exercise: 'New Exercise',
     new_exercise_sub: 'Add a custom exercise to your library.',
     add_custom: 'Add a custom one',
+    my_exercises: 'My exercises', my_exercises_sub: 'Your custom exercises — edit or delete any.',
+    ce_empty_title: 'No custom exercises yet', ce_empty_text: 'Tap "Add a custom one" to create your own exercise with a name, category and photo.',
     no_exercises_cat: 'No exercises in this category',
     no_exercises_cat_hint: 'Try a different filter or add a custom exercise.',
     no_matches: 'No matches found',
@@ -978,6 +980,8 @@ const I18N = {
     new_exercise: 'تمرين جديد',
     new_exercise_sub: 'أضف تمريناً مخصصاً لمكتبتك.',
     add_custom: 'أضف تمرينك الخاص',
+    my_exercises: 'تماريني الخاصة', my_exercises_sub: 'التمارين التي أنشأتها — عدّل أو احذف أياً منها.',
+    ce_empty_title: 'لا توجد تمارين خاصة بعد', ce_empty_text: 'اضغط "أضف تمرينك الخاص" لإنشاء تمرين باسم وتصنيف وصورة.',
     no_exercises_cat: 'لا توجد تمارين في هذه الفئة',
     no_exercises_cat_hint: 'جرّب فلتر مختلف أو أضف تمريناً مخصصاً.',
     no_matches: 'لا توجد نتائج',
@@ -1782,6 +1786,7 @@ function renderView(view) {
     case 'session-run': renderSessionRun(el); break;
     case 'personal-records': renderPersonalRecords(el); break;
     case 'muscle-sessions': renderMuscleSessions(el); break;
+    case 'custom-exercises': renderCustomExercises(el); break;
   }
   // Give every icon-only back button an accessible name, in one place.
   el.querySelectorAll('.back-btn:not([aria-label])').forEach((b) => b.setAttribute('aria-label', t('back')));
@@ -2448,9 +2453,14 @@ function renderWorkouts(el) {
     ${vaultBar({ action: icon('chart', 20), actionLabel: t('library_title') })}
 
     <div class="page-header">
-      <div class="page-eyebrow">${t('library')} · ${fmtNum(myList.length)}</div>
-      <h1 class="page-title">${t('train')}</h1>
-      <p class="page-subtitle">${t('train_subtitle')}</p>
+      <div class="row-between">
+        <div>
+          <div class="page-eyebrow">${t('library')} · ${fmtNum(myList.length)}</div>
+          <h1 class="page-title">${t('train')}</h1>
+          <p class="page-subtitle">${t('train_subtitle')}</p>
+        </div>
+        <button class="link-btn" data-goto="custom-exercises">${t('my_exercises')} ${icon('chevronRight', 14)}</button>
+      </div>
     </div>
 
     <div class="toolbar" style="display:flex;gap:10px;margin-bottom:14px">
@@ -7282,6 +7292,66 @@ async function populateAccount(el) {
 // ==========================================================================
 // PERSONAL RECORDS VIEW
 // ==========================================================================
+// Manage the exercises the user created themselves: list all custom exercises,
+// add a new one, edit any (name / category / image), or delete. Add + edit reuse
+// openNewExerciseModal (which re-renders currentView on save, so this refreshes).
+function renderCustomExercises(el) {
+  const customs = DB.exercises.list()
+    .filter((e) => e.isCustom)
+    .sort((a, b) => exDisplayName(a).localeCompare(exDisplayName(b)));
+
+  const rows = customs.map((ex) => {
+    const url = exerciseImgSrc(ex);
+    return `
+      <div class="data-row">
+        <span class="ms-thumb" data-cat="${escapeHtml(ex.category)}">
+          <span class="ms-thumb-fallback">${escapeHtml(initialsOf(exDisplayName(ex)))}</span>
+          ${url ? `<img src="${escapeHtml(url)}" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="this.remove()">` : ''}
+        </span>
+        <div class="data-main">
+          <div class="data-title">${escapeHtml(exDisplayName(ex))}</div>
+          <div class="data-meta">${escapeHtml(categoryLabel(ex.category))}</div>
+        </div>
+        <div class="data-actions">
+          <button class="icon-btn" data-edit-custom="${ex.id}" aria-label="${escapeHtml(t('edit'))}">${icon('edit', 15)}</button>
+          <button class="icon-btn danger" data-del-custom="${ex.id}" aria-label="${escapeHtml(t('delete'))}">${icon('trash', 15)}</button>
+        </div>
+      </div>`;
+  }).join('');
+
+  el.innerHTML = `
+    <div class="detail-top">
+      <button class="back-btn" data-goto="workouts">${icon('back', 20)}</button>
+      <div class="detail-top-title">${t('my_exercises')}</div>
+    </div>
+
+    <div class="page-header">
+      <div class="row-between">
+        <div>
+          <h1 class="page-title">${t('my_exercises')}</h1>
+          <p class="page-subtitle">${t('my_exercises_sub')}</p>
+        </div>
+        <button class="btn btn-primary" id="ce-add">${icon('plus', 16)} ${t('add_custom')}</button>
+      </div>
+    </div>
+
+    ${customs.length === 0
+      ? emptyState({ title: t('ce_empty_title'), text: t('ce_empty_text') })
+      : `<div class="data-list">${rows}</div>`}
+  `;
+
+  $('#ce-add', el)?.addEventListener('click', () => openNewExerciseModal(null));
+  el.querySelectorAll('[data-edit-custom]').forEach((b) =>
+    b.addEventListener('click', () => openNewExerciseModal(b.dataset.editCustom)));
+  el.querySelectorAll('[data-del-custom]').forEach((b) =>
+    b.addEventListener('click', () => confirmDialog({
+      title: t('delete_exercise_q'),
+      text: t('delete_exercise_text'),
+      confirmLabel: t('delete'),
+      onConfirm: () => { DB.exercises.remove(b.dataset.delCustom); showToast(t('deleted')); renderView('custom-exercises'); },
+    })));
+}
+
 // Every logged session for ONE muscle group, newest first, grouped by day.
 // Reached by tapping a cell in the home muscle-focus heatmap: the cell shows a
 // 7-day count, this shows the whole history behind it (the user asked for ALL
