@@ -5,7 +5,7 @@
 // Single source of truth for the shipped build. Used by the visible build
 // label AND the feedback version tag so they can never drift apart. Keep this
 // equal to the ?v=N cache markers (see CLAUDE.md "CACHE WORKFLOW").
-const VAULT_BUILD = 'v118';
+const VAULT_BUILD = 'v119';
 
 // ==========================================================================
 // Icons
@@ -2067,21 +2067,9 @@ function renderHome(el) {
         <div class="tool-pod-icon">${icon('chart', 18)}</div>
         <div class="tool-pod-label">${t('calendar_card')}</div>
       </button>
-      <button class="tool-pod" data-goto="supplements">
-        <div class="tool-pod-icon">${icon('zap', 18)}</div>
-        <div class="tool-pod-label">${t('supplements_card')}</div>
-      </button>
-      <button class="tool-pod" data-goto="foodlog">
-        <div class="tool-pod-icon">${icon('utensils', 18)}</div>
-        <div class="tool-pod-label">${t('food_log_card')}</div>
-      </button>
       <button class="tool-pod" data-goto="personal-records">
         <div class="tool-pod-icon" aria-hidden="true">${icon('trophy', 18)}</div>
         <div class="tool-pod-label">${t('pr_card')}</div>
-      </button>
-      <button class="tool-pod" data-goto="compare">
-        <div class="tool-pod-icon">${icon('arrowUp', 18)}</div>
-        <div class="tool-pod-label">${t('compare_card')}</div>
       </button>
     </div>
 
@@ -2108,6 +2096,109 @@ function renderHome(el) {
 }
 
 // ==========================================================================
+// Exercise display names
+// Built-in exercises are STORED with their English name (that name is the key
+// the cloud/mirror and the image catalogue match on, so it must never change).
+// For display only, Arabic shows a transliteration of the same name.
+// Exercises the user created themselves are NEVER re-labelled — they chose that
+// name, so `isCustom` is returned verbatim in both languages. Anything missing
+// from the map falls back to the English name.
+// ==========================================================================
+const EXERCISE_NAME_AR = {
+  'Squat': 'سكوات',
+  'Bench Press': 'بنش برس',
+  'Deadlift': 'ديدليفت',
+  'Incline Bench Press': 'إنكلاين بنش برس',
+  'Dumbbell Press': 'دمبل برس',
+  'Dumbbell Fly': 'دمبل فلاي',
+  'Push Up': 'بوش أب',
+  'Barbell Row': 'باربل رو',
+  'Pull Up': 'بول أب',
+  'Dumbbell Row': 'دمبل رو',
+  'Front Squat': 'فرونت سكوات',
+  'Romanian Deadlift': 'رومانيان ديدليفت',
+  'Lunges': 'لانجز',
+  'Calf Raise': 'كالف رايز',
+  'Overhead Press': 'أوفرهيد برس',
+  'Lateral Raise': 'لاترال رايز',
+  'Front Raise': 'فرونت رايز',
+  'Rear Delt Fly': 'ريّر دلت فلاي',
+  'Shrugs': 'شرَجز',
+  'Barbell Curl': 'باربل كيرل',
+  'EZ Bar Curl': 'إي زد بار كيرل',
+  'Dumbbell Curl': 'دمبل كيرل',
+  'Incline Dumbbell Curl': 'إنكلاين دمبل كيرل',
+  'Hammer Curl': 'هامر كيرل',
+  'Concentration Curl': 'كونسنتريشن كيرل',
+  'Spider Curl': 'سبايدر كيرل',
+  'Reverse Curl': 'ريفيرس كيرل',
+  'Chin-Up': 'تشين أب',
+  'Tricep Pushdown': 'ترايسبس بوش داون',
+  'Tricep Extension': 'ترايسبس إكستنشن',
+  'Dips': 'ديبس',
+  'Plank': 'بلانك',
+  'Crunches': 'كرانشز',
+  'Leg Raise': 'ليج رايز',
+  'Russian Twist': 'رشن تويست',
+  'Chest Press Machine': 'تشست برس ماشين',
+  'Incline Chest Press Machine': 'إنكلاين تشست برس ماشين',
+  'Pec Deck Machine': 'بيك ديك ماشين',
+  'Cable Crossover': 'كيبل كروس أوفر',
+  'Smith Machine Bench Press': 'سميث بنش برس',
+  'Shoulder Press Machine': 'شولدر برس ماشين',
+  'Smith Machine Shoulder Press': 'سميث شولدر برس',
+  'Lateral Raise Machine': 'لاترال رايز ماشين',
+  'Cable Lateral Raise': 'كيبل لاترال رايز',
+  'Rear Delt Fly Machine': 'ريّر دلت فلاي ماشين',
+  'Face Pull': 'فيس بول',
+  'Cable Upright Row': 'كيبل أب رايت رو',
+  'Cable Shrug': 'كيبل شرَج',
+  'Lat Pulldown Machine': 'لات بول داون ماشين',
+  'Seated Row Machine': 'سيتد رو ماشين',
+  'T-Bar Row Machine': 'تي بار رو ماشين',
+  'Iso-Lateral Row': 'أيزو لاترال رو',
+  'Assisted Pull-Up Machine': 'أسستد بول أب ماشين',
+  'Back Extension': 'باك إكستنشن',
+  'Leg Press Machine': 'ليج برس ماشين',
+  'Hack Squat Machine': 'هاك سكوات ماشين',
+  'Smith Machine Squat': 'سميث سكوات',
+  'Leg Extension Machine': 'ليج إكستنشن ماشين',
+  'Leg Curl Machine': 'ليج كيرل ماشين',
+  'Seated Leg Curl': 'سيتد ليج كيرل',
+  'Hip Abductor Machine': 'هيب أبدكتر ماشين',
+  'Hip Adductor Machine': 'هيب أدكتر ماشين',
+  'Hip Thrust Machine': 'هيب ثرست ماشين',
+  'Calf Raise Machine': 'كالف رايز ماشين',
+  'Seated Calf Raise': 'سيتد كالف رايز',
+  'Preacher Curl Machine': 'بريتشر كيرل ماشين',
+  'Cable Curl': 'كيبل كيرل',
+  'Triceps Dip Machine': 'ترايسبس ديب ماشين',
+  'Assisted Dip Machine': 'أسستد ديب ماشين',
+  'Cable Triceps Pushdown': 'كيبل ترايسبس بوش داون',
+  'Overhead Cable Triceps': 'أوفرهيد كيبل ترايسبس',
+  'Ab Crunch Machine': 'آب كرانش ماشين',
+  'Cable Crunch': 'كيبل كرانش',
+};
+
+// The name to SHOW for an exercise. Never use this for storage, sync, or the
+// image catalogue — those key off the raw `ex.name`.
+function exDisplayName(ex) {
+  if (!ex) return '';
+  const raw = ex.name || '';
+  if (ex.isCustom) return raw;                       // the user named it — leave it alone
+  if (((DB.prefs.get().lang) || 'en') !== 'ar') return raw;
+  return EXERCISE_NAME_AR[raw] || raw;
+}
+
+// Search should find an exercise by whichever name the user can see, so match
+// the raw English name AND the displayed (possibly Arabic) one.
+function exMatchesQuery(ex, q) {
+  const s = String(q || '').toLowerCase();
+  if (!s) return true;
+  return (ex.name || '').toLowerCase().includes(s) || exDisplayName(ex).toLowerCase().includes(s);
+}
+
+// ==========================================================================
 // Exercise card helpers
 // ==========================================================================
 function exerciseImgSrc(ex) {
@@ -2130,7 +2221,7 @@ function bentoCardHtml(ex, i, { showPR = true, toggle = null } = {}) {
   const stats = DB.sessions.bestStats(ex.id);
   const machineSvg = ex.machineType ? machineSvgFor(ex.machineType) : '';
   const url = exerciseImgSrc(ex);
-  const initials = escapeHtml(initialsOf(ex.name));
+  const initials = escapeHtml(initialsOf(exDisplayName(ex)));
 
   let metaText;
   if (stats.totalSets > 0) {
@@ -2178,7 +2269,7 @@ function bentoCardHtml(ex, i, { showPR = true, toggle = null } = {}) {
   return `
     <button class="bento-card ${isWide ? 'wide' : ''} ${addedClass}" data-exercise="${ex.id}">
       ${bgHtml}
-      <div class="bento-card-name-tag" title="${escapeHtml(ex.name)}">${escapeHtml(ex.name)}</div>
+      <div class="bento-card-name-tag" title="${escapeHtml(exDisplayName(ex))}">${escapeHtml(exDisplayName(ex))}</div>
       ${toggleBtn}
       ${!toggleBtn ? prBadge : ''}
       ${addedBadge}
@@ -2237,7 +2328,7 @@ function renderWorkouts(el) {
 
     let filtered = mine;
     if (f !== 'All') filtered = filtered.filter((e) => e.category === f);
-    if (q) filtered = filtered.filter((e) => e.name.toLowerCase().includes(q));
+    if (q) filtered = filtered.filter((e) => exMatchesQuery(e, q));
 
     // Keep cards as an ARRAY so the "add" card can be spliced after the first
     // card without string-searching for '</button>' (which would break the day
@@ -2389,7 +2480,7 @@ function renderLibrary(el) {
 
     let filtered = DB.exercises.list();
     if (f !== 'All') filtered = filtered.filter((x) => x.category === f);
-    if (q) filtered = filtered.filter((x) => x.name.toLowerCase().includes(q));
+    if (q) filtered = filtered.filter((x) => exMatchesQuery(x, q));
 
     // Group filtered exercises by category, in EXERCISE_CATEGORIES order
     const grouped = {};
@@ -2673,11 +2764,11 @@ function renderExerciseDetail(el, exerciseId) {
     ? `
       <div class="detail-hero-wrap">
         <div class="detail-hero">
-          <img src="${escapeHtml(imageUrl)}" alt="${escapeHtml(ex.name)}" referrerpolicy="no-referrer"
+          <img src="${escapeHtml(imageUrl)}" alt="${escapeHtml(exDisplayName(ex))}" referrerpolicy="no-referrer"
                onerror="this.closest('.detail-hero').classList.add('empty'); this.remove();">
         </div>
         <div class="detail-hero-overlay">
-          <div class="detail-hero-name">${escapeHtml(ex.name)}</div>
+          <div class="detail-hero-name">${escapeHtml(exDisplayName(ex))}</div>
           <div class="detail-hero-cat pill cat-${escapeHtml(ex.category)}">${escapeHtml(categoryLabel(ex.category))}</div>
         </div>
       </div>
@@ -2686,7 +2777,7 @@ function renderExerciseDetail(el, exerciseId) {
       <div class="detail-hero-wrap">
         <div class="detail-hero empty">${ex.isCustom ? t('custom_exercise_label') : escapeHtml(categoryLabel(ex.category).toUpperCase())}</div>
         <div class="detail-hero-overlay">
-          <div class="detail-hero-name">${escapeHtml(ex.name)}</div>
+          <div class="detail-hero-name">${escapeHtml(exDisplayName(ex))}</div>
           <div class="detail-hero-cat pill cat-${escapeHtml(ex.category)}">${escapeHtml(categoryLabel(ex.category))}</div>
         </div>
       </div>
@@ -2736,7 +2827,7 @@ function renderExerciseDetail(el, exerciseId) {
   el.innerHTML = `
     <div class="detail-top">
       <button class="back-btn" data-back>${icon('back', 20)}</button>
-      <div class="detail-top-title">${escapeHtml(ex.name)}</div>
+      <div class="detail-top-title">${escapeHtml(exDisplayName(ex))}</div>
       ${ex.isCustom ? `<button class="icon-btn icon-btn-tile danger" id="delete-exercise-btn">${icon('trash', 16)}</button>` : ''}
     </div>
 
@@ -2908,7 +2999,7 @@ function openSessionModal(exerciseId, sessionId = null) {
     <div class="modal-header">
       <div>
         <div class="modal-title">${existing ? t('edit_session') : t('log_session')}</div>
-        <div class="modal-subtitle">${escapeHtml(ex.name)}</div>
+        <div class="modal-subtitle">${escapeHtml(exDisplayName(ex))}</div>
       </div>
       <button class="icon-btn icon-btn-tile" data-close>${icon('close', 18)}</button>
     </div>
@@ -3871,7 +3962,7 @@ function renderCompareWorkouts() {
 
     return `
       <button class="compare-card" data-goto-exercise="${ex.id}">
-        <div class="compare-card-title">${escapeHtml(ex.name)}</div>
+        <div class="compare-card-title">${escapeHtml(exDisplayName(ex))}</div>
         <div class="compare-weeks">
           <div class="compare-week">
             <div class="compare-week-label">${t('last_week_label')}</div>
@@ -4366,7 +4457,7 @@ function renderPlanner(el) {
             </div>
             <div class="rot-slot-ex">${
               exObjs.length
-                ? exObjs.map((ex) => `<span class="today-plan-chip">${escapeHtml(ex.name)}</span>`).join('')
+                ? exObjs.map((ex) => `<span class="today-plan-chip">${escapeHtml(exDisplayName(ex))}</span>`).join('')
                 : `<span class="planner-empty-hint">${t('empty_day_drop')}</span>`
             }</div>
           </div>`;
@@ -4628,7 +4719,7 @@ function openSlotEditorModal(slotIdx) {
     if (!container) return;
     let list = allExercises;
     if (pickerCategory !== 'All') list = list.filter((e) => e.category === pickerCategory);
-    if (pickerQuery) list = list.filter((e) => e.name.toLowerCase().includes(pickerQuery.toLowerCase()));
+    if (pickerQuery) list = list.filter((e) => exMatchesQuery(e, pickerQuery));
 
     container.innerHTML = list.map((ex) => {
       const imgUrl = exerciseImgSrc(ex);
@@ -4638,10 +4729,10 @@ function openSlotEditorModal(slotIdx) {
       return `
       <button type="button" class="picker-row ${pickedIds.has(ex.id) ? 'picked' : ''}" data-pick="${ex.id}">
         <span class="picker-row-thumb" data-cat="${escapeHtml(ex.category)}">
-          <span class="picker-row-thumb-fallback">${escapeHtml(initialsOf(ex.name))}</span>
+          <span class="picker-row-thumb-fallback">${escapeHtml(initialsOf(exDisplayName(ex)))}</span>
           ${imgUrl ? `<img src="${escapeHtml(imgUrl)}" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="this.remove()">` : ''}
         </span>
-        <span class="picker-row-name">${escapeHtml(ex.name)}</span>
+        <span class="picker-row-name">${escapeHtml(exDisplayName(ex))}</span>
         <span class="picker-row-check">${icon('check', 14)}</span>
       </button>
     `;
@@ -4827,7 +4918,7 @@ function renderSessionDay(el) {
     } else if (url) {
       bgHtml = `<div class="sd-thumb sd-thumb-zoom" data-thumb-src="${escapeHtml(url)}" style="background-image:url('${escapeHtml(url)}')"></div>`;
     } else {
-      bgHtml = `<div class="sd-thumb fallback">${escapeHtml(initialsOf(ex.name))}</div>`;
+      bgHtml = `<div class="sd-thumb fallback">${escapeHtml(initialsOf(exDisplayName(ex)))}</div>`;
     }
 
     const setsRows = st.sets.map((s, i) => {
@@ -4847,7 +4938,7 @@ function renderSessionDay(el) {
         <div class="sd-card-head">
           ${bgHtml}
           <div class="sd-card-main">
-            <div class="sd-card-name">${escapeHtml(ex.name)}</div>
+            <div class="sd-card-name">${escapeHtml(exDisplayName(ex))}</div>
           </div>
           ${isLogged ? `<div class="sd-status-pill">${icon('check', 12)} ${t('logged')}</div>` : ''}
           <button type="button" class="icon-btn danger sd-remove-ex" data-remove-ex="${ex.id}" aria-label="${escapeHtml(t('remove_from_day'))}">${icon('trash', 15)}</button>
@@ -5227,7 +5318,7 @@ function renderSessionRun(el) {
         .join('  ·  ');
       return `
         <div class="run-sum-ex">
-          <div class="run-sum-name">${escapeHtml(ex.name)}</div>
+          <div class="run-sum-name">${escapeHtml(exDisplayName(ex))}</div>
           <div class="run-sum-sets num">${setsStr} <span class="run-sum-unit">${viewContext.runUnit.toUpperCase()}</span></div>
         </div>`;
     }).join('');
@@ -5289,7 +5380,7 @@ function renderSessionRun(el) {
   } else if (url) {
     mediaHtml = `<div class="run-ex-media sd-thumb-zoom" data-thumb-src="${escapeHtml(url)}" style="background-image:url('${escapeHtml(url)}')"></div>`;
   } else {
-    mediaHtml = `<div class="run-ex-media fallback">${escapeHtml(initialsOf(ex.name))}</div>`;
+    mediaHtml = `<div class="run-ex-media fallback">${escapeHtml(initialsOf(exDisplayName(ex)))}</div>`;
   }
 
   const setsRows = st.sets.map((s, i) => {
@@ -5316,7 +5407,7 @@ function renderSessionRun(el) {
 
     <div class="run-ex">
       ${mediaHtml}
-      <h1 class="run-ex-name">${escapeHtml(ex.name)}</h1>
+      <h1 class="run-ex-name">${escapeHtml(exDisplayName(ex))}</h1>
       ${lastPerfLine(ex.id)}
     </div>
 
@@ -6490,7 +6581,7 @@ function renderPersonalRecords(el) {
     <div class="data-row pr-row">
       <div class="data-icon custom" aria-hidden="true">${icon('trophy', 20)}</div>
       <div class="data-main">
-        <div class="data-title">${escapeHtml(ex.name)}</div>
+        <div class="data-title">${escapeHtml(exDisplayName(ex))}</div>
         <div class="data-meta pr-stats">
           <span>${escapeHtml(t('pr_max_weight'))}: <span class="num">${fmtWeight(snap.maxWeight)}${unitLabel()}</span></span>
           <span class="dot-sep"></span>
