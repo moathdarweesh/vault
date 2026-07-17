@@ -5,7 +5,7 @@
 // Single source of truth for the shipped build. Used by the visible build
 // label AND the feedback version tag so they can never drift apart. Keep this
 // equal to the ?v=N cache markers (see CLAUDE.md "CACHE WORKFLOW").
-const VAULT_BUILD = 'v124';
+const VAULT_BUILD = 'v125';
 
 // ==========================================================================
 // Icons
@@ -1654,6 +1654,9 @@ function navigate(view, context = {}, opts = {}) {
   // navigation so it never lingers over other views (renderFood re-mounts it).
   if (typeof unmountFoodAiBar === 'function') unmountFoodAiBar();
   document.querySelector('.img-lightbox')?.remove();
+  // The food add-sheet lives on `.app` (not #modal-root) — clear it too so it
+  // never lingers over another view after a nav.
+  document.getElementById('add-sheet-overlay')?.remove();
   // Tear down the guided-workout rest timer so it never lingers over other views.
   if (typeof clearRestTimer === 'function') clearRestTimer();
 
@@ -1687,6 +1690,10 @@ function goBack() {
   // so dismiss it first — otherwise "back" would navigate underneath it.
   const lb = document.querySelector('.img-lightbox');
   if (lb) { lb.remove(); return true; }
+  // The food add-sheet lives on `.app`, not #modal-root — close it first so
+  // "back" dismisses the sheet instead of popping the view (or exiting the app).
+  const addSheet = document.getElementById('add-sheet-overlay');
+  if (addSheet) { addSheet.remove(); return true; }
   if ($('#modal-root') && $('#modal-root').innerHTML.trim()) { closeModal(); return true; }
   if (document.getElementById('auth-gate')) return true; // don't slip behind login
   if (navStack.length > 1) {
@@ -4117,6 +4124,7 @@ function openVoiceCapture(date, onSave) {
       const mimeType = String(dataUrl).slice(5, String(dataUrl).indexOf(';'));
       if (!window.FoodAI || !FoodAI.analyzeAudio) throw new Error(t('voice_unsupported'));
       const { items, transcript } = await FoodAI.analyzeAudio({ mimeType, data: b64 });
+      if (!document.body.contains(overlay)) return; // modal was closed mid-request
       if (transcript) setStatus('“' + transcript + '”'); else setStatus(t('voice_tap'));
       if (!items || !items.length) { results.innerHTML = `<div class="ai-decline">${t('ai_not_food')}</div>`; return; }
       renderVoiceResults(items);
@@ -4145,8 +4153,17 @@ function openVoiceCapture(date, onSave) {
   }
 
   micBtn.addEventListener('click', () => { recording ? stop() : start(); });
-  // Stop the mic if the modal is dismissed mid-recording.
-  overlay.addEventListener('click', (e) => { if (e.target.closest('[data-close]')) stop(); });
+  // Stop the mic when the modal is dismissed by ANY path — the X button,
+  // a backdrop tap, or the Escape key all clear #modal-root, so watch for the
+  // overlay leaving the DOM and release the microphone then. (A click-only
+  // listener missed backdrop/Escape, leaving the mic live — a privacy leak.)
+  const modalRoot = document.getElementById('modal-root');
+  if (modalRoot) {
+    const mo = new MutationObserver(() => {
+      if (!document.body.contains(overlay)) { stop(); mo.disconnect(); }
+    });
+    mo.observe(modalRoot, { childList: true, subtree: true });
+  }
 }
 
 // Split a serving string ("١٠٠غ", "3 حبات", "1 slice") into a numeric amount
@@ -4208,9 +4225,15 @@ function openFoodModal(foodId = null) {
       </div>
     </div>
 
-    <div class="form-group">
-      <label class="form-label">${t('carbs_g')}</label>
-      <input type="number" inputmode="decimal" id="food-carb" step="0.1" min="0" value="${existing ? existing.carbs : ''}" placeholder="0">
+    <div class="form-row">
+      <div class="form-group">
+        <label class="form-label">${t('carbs_g')}</label>
+        <input type="number" inputmode="decimal" id="food-carb" step="0.1" min="0" value="${existing ? existing.carbs : ''}" placeholder="0">
+      </div>
+      <div class="form-group">
+        <label class="form-label">${t('fat_label')} (g)</label>
+        <input type="number" inputmode="decimal" id="food-fat" step="0.1" min="0" value="${existing ? (existing.fat || '') : ''}" placeholder="0">
+      </div>
     </div>
 
     <div class="form-actions">
@@ -4236,12 +4259,13 @@ function openFoodModal(foodId = null) {
     const calories = Number($('#food-cal').value);
     const protein = Number($('#food-pro').value);
     const carbs = Number($('#food-carb').value);
+    const fat = Number($('#food-fat').value);
     if (!name) { showToast(t('enter_name')); return; }
     if (existing) {
-      DB.foods.update(existing.id, { name, serving, calories, protein, carbs });
+      DB.foods.update(existing.id, { name, serving, calories, protein, carbs, fat });
       showToast(t('updated'));
     } else {
-      DB.foods.add({ name, serving, calories, protein, carbs });
+      DB.foods.add({ name, serving, calories, protein, carbs, fat });
       showToast(t('saved'));
     }
     closeModal();

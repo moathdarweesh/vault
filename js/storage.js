@@ -1214,7 +1214,7 @@ const DB = {
     list() {
       return [...STATE.foods].sort((a, b) => a.name.localeCompare(b.name));
     },
-    add({ name, serving, calories, protein, carbs }) {
+    add({ name, serving, calories, protein, carbs, fat }) {
       const food = {
         id: uid(),
         name: name.trim(),
@@ -1222,6 +1222,7 @@ const DB = {
         calories: Number(calories) || 0,
         protein: Number(protein) || 0,
         carbs: Number(carbs) || 0,
+        fat: Number(fat) || 0,
         createdAt: new Date().toISOString(),
       };
       STATE.foods.push(food);
@@ -1237,6 +1238,7 @@ const DB = {
         calories: data.calories != null ? Number(data.calories) : f.calories,
         protein: data.protein != null ? Number(data.protein) : f.protein,
         carbs: data.carbs != null ? Number(data.carbs) : f.carbs,
+        fat: data.fat != null ? Number(data.fat) : (f.fat || 0),
       });
       save();
       return f;
