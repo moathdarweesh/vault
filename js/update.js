@@ -122,7 +122,24 @@
   }
   function openLink(url) {
     if (!url) return;
-    try { window.open(url, '_blank'); } catch (_) { try { location.href = url; } catch (__) {} }
+    // Must trigger a MAIN-FRAME navigation (not window.open, which the Capacitor
+    // WebView ignores). Capacitor's shouldOverrideUrlLoading then hands any URL on
+    // a DIFFERENT host than the app to the phone's external browser via an Intent,
+    // where the OS download manager fetches the APK — so apk.url MUST be cross-
+    // origin (e.g. raw.githubusercontent.com), never the app's own Pages host, or
+    // the WebView would try to render the binary in-place and nothing happens.
+    // Runs inside the "download" tap, so it counts as a user gesture. On the plain
+    // web this just points the tab at the file, which the browser downloads.
+    try {
+      var a = document.createElement('a');
+      a.href = url;
+      a.rel = 'noopener';
+      (document.body || document.documentElement).appendChild(a);
+      a.click();
+      if (a.parentNode) a.parentNode.removeChild(a);
+    } catch (_) {
+      try { location.href = url; } catch (__) {}
+    }
   }
   function showApkBanner(apk) {
     if (document.getElementById('update-banner')) return;
