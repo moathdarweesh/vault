@@ -223,7 +223,7 @@ const MACHINE_SEED = [
   { name: 'Seated Row Machine',           category: 'Back',      machineType: 'seated_row',          imageSlug: 'Seated_Cable_Rows' },
   { name: 'T-Bar Row Machine',            category: 'Back',      machineType: 't_bar_row',           imageSlug: 'T-Bar_Row_with_Handle' },
   { name: 'Iso-Lateral Row',              category: 'Back',      machineType: 't_bar_row',           imageSlug: 'Leverage_Iso_Row' },
-  { name: 'Assisted Pull-Up Machine',     category: 'Back',      machineType: 'assisted_pullup',     imageSlug: 'Machine_Assisted_Chin-Up' },
+  { name: 'Assisted Pull-Up Machine',     category: 'Back',      machineType: 'assisted_pullup',     imageSlug: 'Band_Assisted_Pull-Up' },
   { name: 'Back Extension',               category: 'Back',      machineType: 'back_extension',      imageSlug: 'Hyperextensions_With_No_Hyperextension_Bench' },
   // ---- Legs ----
   { name: 'Leg Press Machine',            category: 'Legs',      machineType: 'leg_press',           imageSlug: 'Leg_Press' },
