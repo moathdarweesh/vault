@@ -5,7 +5,7 @@
 // Single source of truth for the shipped build. Used by the visible build
 // label AND the feedback version tag so they can never drift apart. Keep this
 // equal to the ?v=N cache markers (see CLAUDE.md "CACHE WORKFLOW").
-const VAULT_BUILD = 'v153';
+const VAULT_BUILD = 'v154';
 
 // ==========================================================================
 // Icons
@@ -2494,7 +2494,6 @@ function renderWorkouts(el) {
     ${vaultBar()}
 
     <div class="page-header">
-      <div class="page-eyebrow">${t('exercises_count')} · ${fmtNum(all.length)}</div>
       <h1 class="page-title">${t('train')}</h1>
       <p class="page-subtitle">${t('train_subtitle')}</p>
     </div>
@@ -6680,20 +6679,6 @@ function renderFoodLog(el) {
   }
   const items = entries.map(foodRowHtml).join('');
 
-  // Quick-add rail: most-logged foods, minus ones already on this day.
-  const frequent = DB.foodLogs.frequent(6, ctx.date);
-  const quickAddHtml = frequent.length === 0 ? '' : `
-    <div class="section-title" style="margin:18px 0 10px">${t('quick_add')}</div>
-    <div class="quick-add-rail" id="quick-add-rail">
-      ${frequent.map((f, i) => `
-        <button class="quick-add-chip" data-quick-idx="${i}">
-          <span class="quick-add-name">${escapeHtml(f.name)}</span>
-          <span class="quick-add-cal num">${fmtNum(Math.round(f.calories * (f.servings || 1)))} ${t('cal')}</span>
-        </button>
-      `).join('')}
-    </div>
-  `;
-
   el.innerHTML = `
     <div class="detail-top">
       <button class="back-btn" data-goto="food">${icon('back', 20)}</button>
@@ -6729,8 +6714,6 @@ function renderFoodLog(el) {
         <div class="macro-total-value num">${fmtNum(Math.round((totals.fat || 0) * 10) / 10)}<span class="macro-total-unit">g</span></div>
       </div>
     </div>
-
-    ${quickAddHtml}
 
     <div class="row-between mb-16">
       <div class="section-title" style="margin:0">${t('food_log_title')}</div>
@@ -6772,27 +6755,6 @@ function renderFoodLog(el) {
     set('.macro-total.carb .macro-total-value', fmtNum(Math.round(tt.carbs * 10) / 10));
     set('.macro-total.fat .macro-total-value', fmtNum(Math.round((tt.fat || 0) * 10) / 10));
   }
-
-  // Quick-add: one tap re-logs a frequent food with its last-used serving, and
-  // appends a single row + updates totals — no full view re-render (no flash).
-  $('#quick-add-rail', el)?.addEventListener('click', (e) => {
-    const chip = e.target.closest('[data-quick-idx]');
-    if (!chip) return;
-    const src = frequent[Number(chip.dataset.quickIdx)];
-    if (!src) return;
-    const entry = DB.foodLogs.add(ctx.date, {
-      foodId: src.foodId, name: src.name, servings: src.servings,
-      calories: src.calories, protein: src.protein, carbs: src.carbs, fat: src.fat,
-      source: 'quick',
-    });
-    // Drop the empty-state placeholder if this is the first row of the day.
-    const list = $('#food-log-list', el);
-    if (list.querySelector('.empty')) list.innerHTML = '';
-    list.insertAdjacentHTML('beforeend', foodRowHtml(entry));
-    refreshTotals();
-    chip.remove(); // it's now on today's list — stop suggesting it
-    showToast(t('food_added'));
-  });
 
   // Delegated delete — append/remove keep working without rebinding.
   $('#food-log-list', el).addEventListener('click', (e) => {
