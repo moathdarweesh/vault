@@ -5,7 +5,7 @@
 // Single source of truth for the shipped build. Used by the visible build
 // label AND the feedback version tag so they can never drift apart. Keep this
 // equal to the ?v=N cache markers (see CLAUDE.md "CACHE WORKFLOW").
-const VAULT_BUILD = 'v145';
+const VAULT_BUILD = 'v146';
 
 // ==========================================================================
 // Icons
@@ -536,7 +536,8 @@ const I18N = {
     calc_tdee: 'Maintenance', calc_bmr: 'BMR', calc_fill_hint: 'Fill in age, height and weight.',
     manual_food_title: 'Add food', manual_food_ph: 'e.g. Chicken & rice',
     voice_tap: 'Tap to speak', voice_listening: 'Listening… tap to stop',
-    voice_processing: 'Understanding…', voice_denied: 'Microphone access denied.',
+    voice_processing: 'Understanding…', voice_denied: 'Microphone blocked. Allow mic access for the app, then tap again.',
+    voice_no_mic: 'No microphone found.',
     voice_unsupported: 'Voice needs the latest app build.',
     no_foods_yet: 'No foods yet',
     no_foods_text: 'Build your personal reference of foods you eat regularly.',
@@ -1084,7 +1085,8 @@ const I18N = {
     calc_tdee: 'الثبات', calc_bmr: 'الأيض الأساسي', calc_fill_hint: 'أدخل العمر والطول والوزن.',
     manual_food_title: 'إضافة أكل', manual_food_ph: 'مثال: دجاج ورز',
     voice_tap: 'اضغط لتتكلّم', voice_listening: 'أستمع… اضغط للإيقاف',
-    voice_processing: 'أفهم كلامك…', voice_denied: 'رُفض الوصول للميكروفون.',
+    voice_processing: 'أفهم كلامك…', voice_denied: 'الميكروفون محجوب. اسمح للتطبيق بالوصول للميكروفون ثم اضغط مجدداً.',
+    voice_no_mic: 'لا يوجد ميكروفون.',
     voice_unsupported: 'الصوت يحتاج آخر نسخة من التطبيق.',
     no_foods_yet: 'لا يوجد أكل بعد',
     no_foods_text: 'أنشئ قائمتك المرجعية بالأطعمة التي تتناولها عادةً.',
@@ -4165,7 +4167,15 @@ function openVoiceCapture(date, onSave) {
     }
     try {
       stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-    } catch (_) { setStatus(t('voice_denied')); return; }
+    } catch (err) {
+      // Distinguish "no mic hardware" from "permission blocked" so the message
+      // is honest. In the in-app preview the mic is sandbox-blocked → this shows
+      // the "allow access" hint; on the real device the OS prompt appears first.
+      const name = err && err.name;
+      setStatus((name === 'NotFoundError' || name === 'DevicesNotFoundError')
+        ? t('voice_no_mic') : t('voice_denied'));
+      return;
+    }
     chunks = [];
     const mime = MediaRecorder.isTypeSupported('audio/webm') ? 'audio/webm'
       : (MediaRecorder.isTypeSupported('audio/mp4') ? 'audio/mp4' : '');
