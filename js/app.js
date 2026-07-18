@@ -5,7 +5,7 @@
 // Single source of truth for the shipped build. Used by the visible build
 // label AND the feedback version tag so they can never drift apart. Keep this
 // equal to the ?v=N cache markers (see CLAUDE.md "CACHE WORKFLOW").
-const VAULT_BUILD = 'v149';
+const VAULT_BUILD = 'v150';
 
 // ==========================================================================
 // Icons
@@ -1939,16 +1939,18 @@ function computeStreak() {
   if (activeDates.size === 0) return 0;
 
   let streak = 0;
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  const todayIso = today.toISOString().slice(0, 10);
-  const d = new Date(today);
-  if (!activeDates.has(todayIso)) d.setDate(d.getDate() - 1);
+  // Anchor and step entirely in LOCAL calendar-date space (todayISO / addDaysISO)
+  // so it matches how activeDates is keyed (session/cardio .date are stored via
+  // todayISO()). Using new Date().toISOString() here converted local-midnight to
+  // UTC, shifting the anchor a day back in any timezone east of UTC (owner is
+  // UTC+3), which made today's workout never match and undercounted the streak.
+  let iso = todayISO();
+  // If today has no activity yet, the streak is still alive counting from yesterday.
+  if (!activeDates.has(iso)) iso = addDaysISO(iso, -1);
 
-  while (true) {
-    const iso = d.toISOString().slice(0, 10);
-    if (activeDates.has(iso)) { streak += 1; d.setDate(d.getDate() - 1); }
-    else break;
+  while (activeDates.has(iso)) {
+    streak += 1;
+    iso = addDaysISO(iso, -1);
   }
   return streak;
 }
@@ -5061,7 +5063,7 @@ function renderSettings(el) {
     const blob = new Blob([json], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
-    const stamp = new Date().toISOString().slice(0, 10);
+    const stamp = todayISO();  // local date — toISOString() would name the file with yesterday's date after ~21:00 in UTC+3
     a.href = url;
     a.download = `vault-backup-${stamp}.json`;
     document.body.appendChild(a);
