@@ -5,7 +5,7 @@
 // Single source of truth for the shipped build. Used by the visible build
 // label AND the feedback version tag so they can never drift apart. Keep this
 // equal to the ?v=N cache markers (see CLAUDE.md "CACHE WORKFLOW").
-const VAULT_BUILD = 'v151';
+const VAULT_BUILD = 'v152';
 
 // ==========================================================================
 // Icons
@@ -3681,8 +3681,6 @@ function renderFood(el) {
     if (edit) { openCalculatorModal(rerender); return; }
     const coach = e.target.closest('[data-coach]');
     if (coach) { openCoach(date); return; }
-    const del = e.target.closest('[data-del-food]');
-    if (del) { DB.foodLogs.remove(date, del.dataset.delFood); showToast(t('deleted')); rerender(); return; }
   });
 
   // The calorie goal is MANDATORY: if none is set, open the calculator straight
@@ -3701,7 +3699,6 @@ function renderFood(el) {
 function nutritionDashboardHtml(date) {
   const nut = DB.nutrition;
   const consumed = DB.foodLogs.totalsForDate(date);
-  const entries = DB.foodLogs.listForDate(date);
 
   // Not set up yet → invite the user to build a target.
   if (!nut.hasTargets()) {
@@ -3713,7 +3710,6 @@ function nutritionDashboardHtml(date) {
           <div class="nutri-setup-text">${t('nutri_setup_text')}</div>
         </div>
       </button>
-      ${todayLogHtml(entries)}
     `;
   }
 
@@ -3771,39 +3767,7 @@ function nutritionDashboardHtml(date) {
         <div class="cta-card-sub">${t('coach_sub')}</div>
       </div>
     </button>
-
-    ${todayLogHtml(entries)}
   `;
-}
-
-function todayLogHtml(entries) {
-  if (!entries.length) {
-    // Compact, icon-less empty state (the big empty-state graphic was removed).
-    return `<div class="section-title" style="margin:22px 0 10px">${t('nutri_today')}</div>` +
-      `<div class="nutri-empty">
-         <div class="nutri-empty-title">${t('nutri_empty_title')}</div>
-         <div class="nutri-empty-text">${t('nutri_empty_text')}</div>
-       </div>`;
-  }
-  const rows = entries.map((e) => {
-    const m = e.servings || 1;
-    return `
-      <div class="food-log-row" data-food-row="${e.id}">
-        <div class="food-log-main">
-          <div class="food-log-name">${escapeHtml(e.name)}${m !== 1 ? `<span class="food-log-x num"> × ${fmtNum(m)}</span>` : ''}</div>
-          <div class="food-log-meta">
-            <span><span class="num">${fmtNum(Math.round(e.calories * m))}</span> ${t('cal')}</span>
-            <span class="dot-sep"></span>
-            <span><span class="num">${fmtNum(Math.round(e.protein * m * 10) / 10)}</span>g ${t('protein_label')}</span>
-            <span class="dot-sep"></span>
-            <span><span class="num">${fmtNum(Math.round(e.carbs * m * 10) / 10)}</span>g ${t('carbs_label')}</span>
-            ${e.fat ? `<span class="dot-sep"></span><span><span class="num">${fmtNum(Math.round(e.fat * m * 10) / 10)}</span>g ${t('fat_label')}</span>` : ''}
-          </div>
-        </div>
-        <button class="icon-btn danger" data-del-food="${e.id}" aria-label="${escapeHtml(t('delete'))}">${icon('trash', 15)}</button>
-      </div>`;
-  }).join('');
-  return `<div class="section-title" style="margin:22px 0 10px">${t('nutri_today')}</div><div class="food-log-list">${rows}</div>`;
 }
 
 // Shared: log AI/voice/photo items to today and refresh the dashboard.
