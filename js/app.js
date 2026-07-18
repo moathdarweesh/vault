@@ -5,7 +5,7 @@
 // Single source of truth for the shipped build. Used by the visible build
 // label AND the feedback version tag so they can never drift apart. Keep this
 // equal to the ?v=N cache markers (see CLAUDE.md "CACHE WORKFLOW").
-const VAULT_BUILD = 'v137';
+const VAULT_BUILD = 'v138';
 
 // ==========================================================================
 // Icons
@@ -4800,36 +4800,60 @@ function renderCompareSleep() {
 // ==========================================================================
 // SETTINGS
 // ==========================================================================
-function renderSettings(el) {
-  const prefs = DB.prefs.get();
-  const currentTheme = prefs.theme || 'dark';
-  const currentLang = prefs.lang || 'en';
-
-  const themeCards = [
-    { id: 'dark', name: t('theme_dark'), sub: t('theme_dark_sub'), cls: 'theme-preview-dark', dots: ['#5b8def', '#000000', '#a3a3a3'] },
-    { id: 'light', name: t('theme_light'), sub: t('theme_light_sub'), cls: 'theme-preview-light', dots: ['#0d9488', '#f6f8fa', '#475569'] },
-    { id: 'forest', name: t('theme_forest'), sub: t('theme_forest_sub'), cls: 'theme-preview-forest', dots: ['#86efac', '#173727', '#4ade80'] },
-    { id: 'ocean', name: t('theme_ocean'), sub: t('theme_ocean_sub'), cls: 'theme-preview-ocean', dots: ['#38bdf8', '#112439', '#22d3ee'] },
-    { id: 'sand', name: t('theme_sand'), sub: t('theme_sand_sub'), cls: 'theme-preview-sand', dots: ['#c2410c', '#fbf6ee', '#3d2c18'] },
-    { id: 'mocha', name: t('theme_mocha'), sub: t('theme_mocha_sub'), cls: 'theme-preview-mocha', dots: ['#e7c8a0', '#322620', '#d2ad7d'] },
-    { id: 'olive', name: t('theme_olive'), sub: t('theme_olive_sub'), cls: 'theme-preview-olive', dots: ['#bef264', '#272c19', '#a3e635'] },
-    { id: 'aurora', name: t('theme_aurora'), sub: t('theme_aurora_sub'), cls: 'theme-preview-aurora', dots: ['#ec4899', '#8b5cf6', '#22d3ee'] },
-    { id: 'sunset', name: t('theme_sunset'), sub: t('theme_sunset_sub'), cls: 'theme-preview-sunset', dots: ['#fb923c', '#be185d', '#fef3e7'] },
-    { id: 'nebula', name: t('theme_nebula'), sub: t('theme_nebula_sub'), cls: 'theme-preview-nebula', dots: ['#a855f7', '#6366f1', '#22d3ee'] },
-    { id: 'slate', name: t('theme_slate'), sub: t('theme_slate_sub'), cls: 'theme-preview-slate', dots: ['#d4a373', '#2c2c30', '#a3e635'] },
-    { id: 'frost', name: t('theme_frost'), sub: t('theme_frost_sub'), cls: 'theme-preview-frost', dots: ['#475569', '#eef2f7', '#0891b2'] },
-    { id: 'dusk', name: t('theme_dusk'), sub: t('theme_dusk_sub'), cls: 'theme-preview-dusk', dots: ['#d9a5b2', '#322638', '#a3a3ff'] },
-  ].map((tm) => `
+// Colour themes. Names come from t('theme_<id>'); dots are the preview swatches.
+const THEME_LIST = [
+  { id: 'dark', cls: 'theme-preview-dark', dots: ['#5b8def', '#000000', '#a3a3a3'] },
+  { id: 'light', cls: 'theme-preview-light', dots: ['#0d9488', '#f6f8fa', '#475569'] },
+  { id: 'forest', cls: 'theme-preview-forest', dots: ['#86efac', '#173727', '#4ade80'] },
+  { id: 'ocean', cls: 'theme-preview-ocean', dots: ['#38bdf8', '#112439', '#22d3ee'] },
+  { id: 'sand', cls: 'theme-preview-sand', dots: ['#c2410c', '#fbf6ee', '#3d2c18'] },
+  { id: 'mocha', cls: 'theme-preview-mocha', dots: ['#e7c8a0', '#322620', '#d2ad7d'] },
+  { id: 'olive', cls: 'theme-preview-olive', dots: ['#bef264', '#272c19', '#a3e635'] },
+  { id: 'aurora', cls: 'theme-preview-aurora', dots: ['#ec4899', '#8b5cf6', '#22d3ee'] },
+  { id: 'sunset', cls: 'theme-preview-sunset', dots: ['#fb923c', '#be185d', '#fef3e7'] },
+  { id: 'nebula', cls: 'theme-preview-nebula', dots: ['#a855f7', '#6366f1', '#22d3ee'] },
+  { id: 'slate', cls: 'theme-preview-slate', dots: ['#d4a373', '#2c2c30', '#a3e635'] },
+  { id: 'frost', cls: 'theme-preview-frost', dots: ['#475569', '#eef2f7', '#0891b2'] },
+  { id: 'dusk', cls: 'theme-preview-dusk', dots: ['#d9a5b2', '#322638', '#a3a3ff'] },
+];
+function themeDotsHtml(dots) {
+  return dots.map((c) => `<span class="theme-preview-dot" style="background:${c}"></span>`).join('');
+}
+function themeGridHtml(currentTheme) {
+  return THEME_LIST.map((tm) => `
     <button class="theme-card ${currentTheme === tm.id ? 'active' : ''}" data-theme="${tm.id}">
       <div class="theme-preview ${tm.cls}">
-        <div class="theme-preview-name">${escapeHtml(tm.name)}</div>
-        <div class="theme-preview-dots">
-          ${tm.dots.map((c) => `<span class="theme-preview-dot" style="background:${c}"></span>`).join('')}
-        </div>
+        <div class="theme-preview-name">${escapeHtml(t('theme_' + tm.id))}</div>
+        <div class="theme-preview-dots">${themeDotsHtml(tm.dots)}</div>
       </div>
       ${currentTheme === tm.id ? `<div class="theme-check">${icon('check', 12)}</div>` : ''}
     </button>
   `).join('');
+}
+// The theme grid opens in a modal from the compact "Theme" settings row, so the
+// 13 themes no longer sprawl down the settings page.
+function openThemePicker() {
+  const overlay = openModal(`
+    <div class="modal-header">
+      <div class="modal-title">${t('theme')}</div>
+      <button class="icon-btn icon-btn-tile" data-close>${icon('close', 18)}</button>
+    </div>
+    <div class="theme-grid">${themeGridHtml(DB.prefs.get().theme || 'dark')}</div>
+  `);
+  overlay.querySelectorAll('[data-theme]').forEach((b) =>
+    b.addEventListener('click', () => {
+      DB.prefs.setTheme(b.dataset.theme);
+      applyTheme(b.dataset.theme);
+      closeModal();
+      if (currentView === 'settings') renderView('settings'); // refresh the row's name/dots
+    }));
+}
+
+function renderSettings(el) {
+  const prefs = DB.prefs.get();
+  const currentTheme = prefs.theme || 'dark';
+  const currentLang = prefs.lang || 'en';
+  const currentThemeObj = THEME_LIST.find((tm) => tm.id === currentTheme) || THEME_LIST[0];
 
   el.innerHTML = `
     <div class="detail-top">
@@ -4876,7 +4900,13 @@ function renderSettings(el) {
 
     <div class="settings-section">
       <div class="section-title">${t('theme')}</div>
-      <div class="theme-grid">${themeCards}</div>
+      <button class="settings-picker-row" id="theme-row">
+        <span class="settings-picker-label">${escapeHtml(t('theme_' + currentThemeObj.id))}</span>
+        <span class="settings-picker-right">
+          <span class="theme-preview-dots">${themeDotsHtml(currentThemeObj.dots)}</span>
+          ${icon('chevronRight', 18)}
+        </span>
+      </button>
     </div>
 
     <div class="settings-section">
@@ -4956,24 +4986,8 @@ function renderSettings(el) {
     })
   );
 
-  // Theme cards — apply live (body class swap) and move the active state /
-  // checkmark in place, no full settings re-render (keeps scroll position).
-  el.querySelectorAll('[data-theme]').forEach((b) =>
-    b.addEventListener('click', () => {
-      DB.prefs.setTheme(b.dataset.theme);
-      applyTheme(b.dataset.theme);
-      el.querySelectorAll('[data-theme]').forEach((card) => {
-        const on = card === b;
-        card.classList.toggle('active', on);
-        const existing = card.querySelector('.theme-check');
-        if (on && !existing) {
-          card.insertAdjacentHTML('beforeend', `<div class="theme-check">${icon('check', 12)}</div>`);
-        } else if (!on && existing) {
-          existing.remove();
-        }
-      });
-    })
-  );
+  // Theme row → open the theme picker modal (grid lives there now).
+  $('#theme-row', el)?.addEventListener('click', openThemePicker);
 
   // Unit toggle
   el.querySelectorAll('[data-unit]').forEach((b) =>

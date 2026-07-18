@@ -5203,6 +5203,20 @@ body[dir="rtl"] .variation-select svg { transform: scaleX(-1); }
   gap: 10px;
 }
 
+/* Compact "Theme" row in Settings — opens the theme grid in a modal. */
+.settings-picker-row {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  width: 100%; padding: 14px 16px; border-radius: var(--radius);
+  background: var(--surface-2); border: 1px solid var(--border);
+  color: var(--text); font: inherit; cursor: pointer;
+  appearance: none; -webkit-appearance: none; -webkit-tap-highlight-color: transparent;
+  transition: transform 0.12s, background 0.15s;
+}
+.settings-picker-row:active { transform: scale(0.99); background: var(--surface-3); }
+.settings-picker-label { font-size: 15px; font-weight: 700; }
+.settings-picker-right { display: inline-flex; align-items: center; gap: 10px; color: var(--text-mute); }
+.settings-picker-right .theme-preview-dots { display: inline-flex; gap: 4px; }
+
 .theme-card {
   border-radius: var(--radius);
   overflow: hidden;
