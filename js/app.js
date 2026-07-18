@@ -5,7 +5,7 @@
 // Single source of truth for the shipped build. Used by the visible build
 // label AND the feedback version tag so they can never drift apart. Keep this
 // equal to the ?v=N cache markers (see CLAUDE.md "CACHE WORKFLOW").
-const VAULT_BUILD = 'v136';
+const VAULT_BUILD = 'v137';
 
 // ==========================================================================
 // Icons
@@ -427,6 +427,7 @@ const I18N = {
     // Train / Workouts
     train: 'Train', cardio_title: 'Cardio', food: 'Food', sleep: 'Sleep', compare: 'Compare', settings: 'Settings',
     library: 'Library',
+    exercises_count: 'All exercises',
     train_subtitle: 'Tap an exercise to log a session or view your history.',
     search_exercises: 'Search exercises…',
     new_exercise: 'New Exercise',
@@ -977,6 +978,7 @@ const I18N = {
 
     train: 'التمارين', cardio_title: 'الكارديو', food: 'الأكل', sleep: 'النوم', compare: 'المقارنة', settings: 'الإعدادات',
     library: 'المكتبة',
+    exercises_count: 'كل التمارين',
     train_subtitle: 'اضغط على تمرين لتسجيل جلسة جديدة أو مشاهدة السجل.',
     search_exercises: 'ابحث عن تمرين…',
     new_exercise: 'تمرين جديد',
@@ -2445,7 +2447,6 @@ function bentoCardHtml(ex, i, { showPR = true, toggle = null } = {}) {
 // ==========================================================================
 function renderWorkouts(el) {
   const all = DB.exercises.list();
-  const myList = all.filter((e) => e.inMyList);
   const query = viewContext.workoutQuery || '';
   const filter = viewContext.workoutFilter || 'All';
 
@@ -2453,15 +2454,17 @@ function renderWorkouts(el) {
     .map((f) => `<button class="filter-pill ${f === filter ? 'active' : ''}" data-filter="${f}">${escapeHtml(categoryLabel(f))}</button>`)
     .join('');
 
-  // Shell renders ONCE — search box and filter bar survive list updates, so
-  // the keyboard never loses focus and no cursor-restore hack is needed.
+  // ONE exercises screen: every exercise (built-in + custom) is browsable here,
+  // searchable + category-filterable; tap any → its history / PRs / progress /
+  // logging. The old separate "Library" (browse) and "My List" (inMyList) split
+  // is gone — this IS the library. Custom management lives one tap away.
   el.innerHTML = `
-    ${vaultBar({ action: icon('chart', 20), actionLabel: t('library_title') })}
+    ${vaultBar()}
 
     <div class="page-header">
       <div class="row-between">
         <div>
-          <div class="page-eyebrow">${t('library')} · ${fmtNum(myList.length)}</div>
+          <div class="page-eyebrow">${t('exercises_count')} · ${fmtNum(all.length)}</div>
           <h1 class="page-title">${t('train')}</h1>
           <p class="page-subtitle">${t('train_subtitle')}</p>
         </div>
@@ -2474,10 +2477,10 @@ function renderWorkouts(el) {
         ${icon('search', 18)}
         <input type="search" id="workout-search" placeholder="${t('search_exercises')}" value="${escapeHtml(query)}">
       </div>
-      <button class="btn btn-accent train-add-btn" data-library-pick aria-label="${escapeHtml(t('add_from_library'))}">${icon('plus', 18)} <span>${t('add_from_library')}</span></button>
+      <button class="btn btn-accent train-add-btn" id="train-new-ex" aria-label="${escapeHtml(t('new_exercise'))}">${icon('plus', 18)} <span>${t('new_exercise')}</span></button>
     </div>
 
-    ${myList.length > 0 ? `<div class="filter-bar">${filterPills}</div>` : ''}
+    <div class="filter-bar">${filterPills}</div>
 
     <div id="workout-grid"></div>
   `;
@@ -2488,9 +2491,7 @@ function renderWorkouts(el) {
     if (!grid) return;
     const q = (viewContext.workoutQuery || '').toLowerCase();
     const f = viewContext.workoutFilter || 'All';
-    const mine = DB.exercises.list().filter((e) => e.inMyList);
-
-    let filtered = mine;
+    let filtered = DB.exercises.list();
     if (f !== 'All') filtered = filtered.filter((e) => e.category === f);
     if (q) filtered = filtered.filter((e) => exMatchesQuery(e, q));
 
@@ -2509,18 +2510,7 @@ function renderWorkouts(el) {
       </button>
     `;
 
-    if (filtered.length === 0 && mine.length === 0) {
-      // Truly empty: show empty-state CTA to browse library
-      grid.innerHTML = `
-        <div class="empty">
-          <div class="empty-title">${t('train_empty_title')}</div>
-          <div class="empty-text">${t('train_empty_text')}</div>
-          <div style="display:flex;gap:8px;justify-content:center;margin-top:18px;flex-wrap:wrap">
-            <button class="btn btn-ghost" id="add-exercise-btn">${icon('plus', 16)} ${t('add_custom')}</button>
-          </div>
-        </div>
-      `;
-    } else if (filtered.length === 0) {
+    if (filtered.length === 0) {
       grid.innerHTML = emptyState({ iconName: 'search', title: t('no_matches'), text: t('no_matches_hint') });
     } else {
       cards.splice(1, 0, addCard); // after the first (wide) card
@@ -2529,8 +2519,8 @@ function renderWorkouts(el) {
   }
   updateWorkoutGrid();
 
-  // Vault top action → open Library
-  bindVaultAction(() => navigate('library'));
+  // "+ New exercise" (toolbar) → create a custom exercise.
+  $('#train-new-ex', el)?.addEventListener('click', () => openNewExerciseModal(null));
 
   // Debounced search → grid-only update (was a full view re-render per keystroke)
   let searchTimer = null;
@@ -2552,15 +2542,9 @@ function renderWorkouts(el) {
   // attached once — no re-binding per keystroke.
   $('#workout-grid', el).addEventListener('click', (e) => {
     if (e.target.closest('#add-exercise-btn')) { openNewExerciseModal(); return; }
-    if (e.target.closest('[data-library-pick]')) { navigate('library', { libraryPickMode: true }); return; }
     const card = e.target.closest('[data-exercise]');
     if (card) navigate('exercise-detail', { exerciseId: card.dataset.exercise });
   });
-
-  // The toolbar's "Add from Library" button lives outside the grid.
-  el.querySelectorAll('.toolbar [data-library-pick]').forEach((b) =>
-    b.addEventListener('click', () => navigate('library', { libraryPickMode: true }))
-  );
 }
 
 // ==========================================================================
