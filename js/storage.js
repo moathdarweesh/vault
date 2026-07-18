@@ -61,11 +61,18 @@ const SEED_EXERCISES = [
   // Machines live in MACHINE_SEED below (each with a clean blueprint + photo).
 ];
 
-const EXERCISE_IMAGE_BASE = 'https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises';
+// Exercise photos are BUNDLED inside the app under assets/ex/<slug>.jpg, so the
+// library renders from our own origin — no dependency on the external image host,
+// and the browser caches them for offline use. Any slug that isn't bundled (e.g.
+// an admin-catalog extra added later) still falls back to the remote source so it
+// isn't left blank. BUNDLED_EX_SLUGS is derived from the seed catalogs below.
+const EXERCISE_IMAGE_LOCAL = 'assets/ex';
+const EXERCISE_IMAGE_REMOTE = 'https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises';
 
 function exerciseImageUrl(imageSlug) {
   if (!imageSlug) return '';
-  return `${EXERCISE_IMAGE_BASE}/${imageSlug}/0.jpg`;
+  if (BUNDLED_EX_SLUGS.has(imageSlug)) return `${EXERCISE_IMAGE_LOCAL}/${imageSlug}.jpg`;
+  return `${EXERCISE_IMAGE_REMOTE}/${imageSlug}/0.jpg`;
 }
 
 // ==========================================================================
@@ -260,6 +267,14 @@ const MACHINE_OLD_NAMES = new Set([
   'Preacher Curl', 'Ab Crunch Machine',
 ]);
 const MACHINE_NEW_NAMES = new Set(MACHINE_SEED.map((m) => m.name));
+
+// Every image slug whose photo ships inside the app (downloaded into assets/ex/).
+// exerciseImageUrl() serves these from the local folder and everything else from
+// the remote host. Keep in sync: a new seed with a new imageSlug must also have
+// its jpg bundled under assets/ex/.
+const BUNDLED_EX_SLUGS = new Set(
+  [...SEED_EXERCISES, ...MACHINE_SEED].map((e) => e.imageSlug).filter(Boolean)
+);
 
 const EXERCISE_CATEGORIES = ['Chest', 'Back', 'Legs', 'Shoulders', 'Arms', 'Core', 'Other'];
 
