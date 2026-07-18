@@ -342,10 +342,23 @@
     }
   }
 
-  // Debounced trigger, called from cloud.js on every local change.
-  function scheduleProject(delay) {
-    clearTimeout(timer);
-    timer = setTimeout(() => { projectAll().catch(() => {}); }, delay || 2500);
+  // Throttled trigger, called from cloud.js on every local change. The mirror is
+  // ANALYTICS-ONLY and one-way, and each projection re-upserts the user's whole
+  // history across 16 tables — so at scale it is the biggest write amplifier. We
+  // cap it to at most one projection per MIN_INTERVAL with a guaranteed trailing
+  // run, instead of a resettable debounce that could either fire every burst or
+  // (with a long debounce) never fire during a long logging session. Freshness of
+  // admin analytics is traded for a ~15x cut in mirror writes — an easy trade.
+  let lastRun = 0;
+  const MIN_INTERVAL = 30000;
+  function scheduleProject() {
+    if (timer) return; // a projection is already pending — don't reset it
+    const wait = Math.max(2500, MIN_INTERVAL - (Date.now() - lastRun));
+    timer = setTimeout(() => {
+      timer = null;
+      lastRun = Date.now();
+      projectAll().catch(() => {});
+    }, wait);
   }
 
   window.Tables = { projectAll, scheduleProject };
