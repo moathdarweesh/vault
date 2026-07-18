@@ -2011,6 +2011,12 @@ body[dir="rtl"] .bento-card.wide .bento-card-name-tag { left: 14px; }
   padding: 14px 12px;
   text-align: center;
 }
+/* Exercise-detail carries 4 stat boxes (adds Est. 1RM) → 2×2 on the same grid. */
+.stat-row-4 { grid-template-columns: repeat(2, 1fr); }
+/* A stat box can be a button (the 1RM box links to Personal Records). */
+button.stat-box { font: inherit; color: inherit; cursor: pointer; -webkit-appearance: none; appearance: none; width: 100%; }
+/* The planner preview rows are now buttons (tap → that day's session). */
+button.schedule-prev-row { width: 100%; font: inherit; color: inherit; text-align: start; cursor: pointer; border: none; -webkit-appearance: none; }
 
 .stat-box-label {
   font-size: 10px;

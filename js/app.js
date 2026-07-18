@@ -5,7 +5,7 @@
 // Single source of truth for the shipped build. Used by the visible build
 // label AND the feedback version tag so they can never drift apart. Keep this
 // equal to the ?v=N cache markers (see CLAUDE.md "CACHE WORKFLOW").
-const VAULT_BUILD = 'v159';
+const VAULT_BUILD = 'v160';
 
 // ==========================================================================
 // Icons
@@ -2969,6 +2969,7 @@ function renderExerciseDetail(el, exerciseId) {
 
   const sessions = DB.sessions.listByExercise(exerciseId);
   const stats = DB.sessions.bestStats(exerciseId);
+  const best1rm = DB.sessions.bestOneRM(exerciseId); // Est. 1RM (kg), 0 if none
 
   let prSessionId = null;
   let prWeight = 0;
@@ -3051,7 +3052,7 @@ function renderExerciseDetail(el, exerciseId) {
 
     ${heroHtml}
 
-    <div class="stat-row">
+    <div class="stat-row stat-row-4">
       <div class="stat-box">
         <div class="stat-box-label">${t('max_weight')}</div>
         <div class="stat-box-value ${stats.maxWeight === 0 ? 'none' : 'accent'} num">
@@ -3070,6 +3071,12 @@ function renderExerciseDetail(el, exerciseId) {
           ${stats.totalSets > 0 ? fmtNum(stats.totalSets) : '—'}
         </div>
       </div>
+      <button class="stat-box" data-goto="personal-records" aria-label="${escapeHtml(t('pr_card'))}">
+        <div class="stat-box-label">${t('pr_est_orm')}</div>
+        <div class="stat-box-value ${best1rm === 0 ? 'none' : 'accent'} num">
+          ${best1rm > 0 ? fmtWeight(best1rm) : '—'}<span class="stat-box-unit">${best1rm > 0 ? unitLabel() : ''}</span>
+        </div>
+      </button>
     </div>
 
     ${chartHtmlForExercise(exerciseId)}
@@ -5270,13 +5277,14 @@ function renderPlanner(el) {
   const start = new Date(); start.setHours(12, 0, 0, 0);
   const previewHtml = Array.from({ length: 7 }).map((_, i) => {
     const d = new Date(start); d.setDate(start.getDate() + i);
+    const iso = addDaysISO(todayISO(), i);
     const w = DB.plan.workoutForDate(d);
     return `
-      <div class="schedule-prev-row ${w ? '' : 'rest'}">
+      <button type="button" class="schedule-prev-row ${w ? '' : 'rest'}" data-day-iso="${iso}">
         <span class="schedule-prev-day">${escapeHtml(dayName(d.getDay(), true))}</span>
         <span class="schedule-prev-arrow">${w ? '→' : ''}</span>
         <span class="schedule-prev-workout">${w ? escapeHtml(w.name) : t('rest_day')}</span>
-      </div>`;
+      </button>`;
   }).join('');
 
   el.innerHTML = `
@@ -5314,6 +5322,11 @@ function renderPlanner(el) {
 
   $('#apply-template-btn', el)?.addEventListener('click', openTemplatesModal);
   $('#add-slot-btn', el)?.addEventListener('click', () => openSlotEditorModal(null));
+  // Tap a day in the rolling preview → open/log that day's session.
+  el.querySelector('.schedule-preview')?.addEventListener('click', (e) => {
+    const row = e.target.closest('[data-day-iso]');
+    if (row) navigate('session-day', { date: row.dataset.dayIso });
+  });
 
   $('#clear-plan-btn', el)?.addEventListener('click', () => {
     confirmDialog({
@@ -5498,7 +5511,9 @@ function openScheduleModal(tmpl) {
     DB.plan.setRotation({ cycle, trainingDays, anchor: todayISO() });
     closeModal();
     showToast(t('template_applied'));
-    renderView(currentView);
+    // Land on the Planner — the one place that owns the training-days + preview,
+    // so the just-applied rotation is reviewed/edited there (not re-shown twice).
+    navigate('planner');
   });
 }
 
@@ -6399,9 +6414,11 @@ function renderCalendar(el) {
   });
 
   // Delegated — cells are rebuilt on month nav, one listener survives.
+  // Tapping a day opens that day's session (view / edit / log) instead of a
+  // read-only popup — the calendar is no longer a dead end.
   $('#calendar-grid', el).addEventListener('click', (e) => {
     const cell = e.target.closest('[data-day-iso]');
-    if (cell) openCalendarDayModal(cell.dataset.dayIso);
+    if (cell) navigate('session-day', { date: cell.dataset.dayIso });
   });
 }
 
