@@ -4734,6 +4734,9 @@ body[dir="rtl"] .picker-row { text-align: right; }
   background: var(--surface-3); color: var(--text); border: 1px solid var(--border-hi);
   appearance: none; -webkit-appearance: none; transition: transform 0.15s;
 }
+/* The global `svg{width:100%}` would blow the mic up to fill the whole circle
+   (~97%) — pin it so the glyph sits clearly smaller than the circle. */
+.voice-mic svg { width: 24px; height: 24px; }
 .voice-mic:active { transform: scale(0.94); }
 .voice-mic.recording { background: #ef4444; color: #fff; border-color: #ef4444; animation: voice-pulse 1.4s ease-in-out infinite; }
 @keyframes voice-pulse { 0%, 100% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.5); } 50% { box-shadow: 0 0 0 13px rgba(239, 68, 68, 0); } }
