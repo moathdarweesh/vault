@@ -5,7 +5,7 @@
 // Single source of truth for the shipped build. Used by the visible build
 // label AND the feedback version tag so they can never drift apart. Keep this
 // equal to the ?v=N cache markers (see CLAUDE.md "CACHE WORKFLOW").
-const VAULT_BUILD = 'v139';
+const VAULT_BUILD = 'v140';
 
 // ==========================================================================
 // Icons
@@ -4901,8 +4901,8 @@ function renderSettings(el) {
     <div class="settings-section">
       <div class="section-title"${(window.Cloud && Cloud.configured()) ? '' : ' style="margin-top:0"'}>${t('language')}</div>
       <div class="lang-toggle">
-        <button class="lang-option ${currentLang === 'en' ? 'active' : ''}" data-lang="en">English</button>
         <button class="lang-option ${currentLang === 'ar' ? 'active' : ''}" data-lang="ar">العربية</button>
+        <button class="lang-option ${currentLang === 'en' ? 'active' : ''}" data-lang="en">English</button>
       </div>
     </div>
 
