@@ -472,7 +472,8 @@
   const VOICE_PROMPT = [
     'The user SPOKE this audio to log what they ate. Transcribe it, then list every food/drink mentioned.',
     'Output JSON only: {"transcript":"<what was said>","items":[{"name","calories","protein","carbs","fat"}]}.',
-    'name in the user\'s language; calories kcal; protein/carbs/fat grams for the stated (or one typical) portion.',
+    'For each item, first ESTIMATE its portion weight in grams (use the amount said if any; otherwise infer a realistic portion), then base calories+macros on that weight — never 0 for a real food.',
+    'name in the user\'s language INCLUDING the estimated portion, e.g. "دجاج مشوي ~150غ"; calories kcal; protein/carbs/fat grams for that portion.',
     'If no food was said, items = [].',
   ].join(' ');
 
