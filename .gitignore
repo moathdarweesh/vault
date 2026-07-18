@@ -23,3 +23,6 @@ android/app/release/
 *.keystore
 *.pfx
 *.p12
+
+# Distribution APK hosted on GitHub Pages (Drive-free install)
+!download/THE-VAULT.apk
