@@ -5,7 +5,7 @@
 // Single source of truth for the shipped build. Used by the visible build
 // label AND the feedback version tag so they can never drift apart. Keep this
 // equal to the ?v=N cache markers (see CLAUDE.md "CACHE WORKFLOW").
-const VAULT_BUILD = 'v142';
+const VAULT_BUILD = 'v143';
 
 // ==========================================================================
 // Icons
@@ -433,7 +433,7 @@ const I18N = {
     new_exercise: 'New Exercise',
     new_exercise_sub: 'Add a custom exercise to your library.',
     add_custom: 'Add a custom one',
-    my_exercises: 'My exercises', my_exercises_short: 'My exercises', my_exercises_sub: 'Your custom exercises — edit or delete any.',
+    my_exercises: 'My exercises', my_exercises_short: 'My exercises', my_exercises_sub: 'The exercises you created.',
     ce_empty_title: 'No custom exercises yet', ce_empty_text: 'Tap "Add a custom one" to create your own exercise with a name, category and photo.',
     no_exercises_cat: 'No exercises in this category',
     no_exercises_cat_hint: 'Try a different filter or add a custom exercise.',
@@ -984,7 +984,7 @@ const I18N = {
     new_exercise: 'تمرين جديد',
     new_exercise_sub: 'أضف تمريناً مخصصاً لمكتبتك.',
     add_custom: 'أضف تمرينك الخاص',
-    my_exercises: 'تماريني الخاصة', my_exercises_short: 'تماريني', my_exercises_sub: 'التمارين التي أنشأتها — عدّل أو احذف أياً منها.',
+    my_exercises: 'تماريني الخاصة', my_exercises_short: 'تماريني', my_exercises_sub: 'التمارين التي أنشأتها.',
     ce_empty_title: 'لا توجد تمارين خاصة بعد', ce_empty_text: 'اضغط "أضف تمرينك الخاص" لإنشاء تمرين باسم وتصنيف وصورة.',
     no_exercises_cat: 'لا توجد تمارين في هذه الفئة',
     no_exercises_cat_hint: 'جرّب فلتر مختلف أو أضف تمريناً مخصصاً.',
