@@ -5,7 +5,7 @@
 // Single source of truth for the shipped build. Used by the visible build
 // label AND the feedback version tag so they can never drift apart. Keep this
 // equal to the ?v=N cache markers (see CLAUDE.md "CACHE WORKFLOW").
-const VAULT_BUILD = 'v143';
+const VAULT_BUILD = 'v144';
 
 // ==========================================================================
 // Icons
@@ -7366,7 +7366,6 @@ function renderCustomExercises(el) {
       <div class="row-between">
         <div>
           <h1 class="page-title">${t('my_exercises_short')}</h1>
-          <p class="page-subtitle">${t('my_exercises_sub')}</p>
         </div>
         <button class="btn btn-primary" id="ce-add">${icon('plus', 16)} ${t('add_custom')}</button>
       </div>
