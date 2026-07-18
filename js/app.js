@@ -5,7 +5,7 @@
 // Single source of truth for the shipped build. Used by the visible build
 // label AND the feedback version tag so they can never drift apart. Keep this
 // equal to the ?v=N cache markers (see CLAUDE.md "CACHE WORKFLOW").
-const VAULT_BUILD = 'v138';
+const VAULT_BUILD = 'v139';
 
 // ==========================================================================
 // Icons
@@ -433,7 +433,7 @@ const I18N = {
     new_exercise: 'New Exercise',
     new_exercise_sub: 'Add a custom exercise to your library.',
     add_custom: 'Add a custom one',
-    my_exercises: 'My exercises', my_exercises_sub: 'Your custom exercises — edit or delete any.',
+    my_exercises: 'My exercises', my_exercises_short: 'My exercises', my_exercises_sub: 'Your custom exercises — edit or delete any.',
     ce_empty_title: 'No custom exercises yet', ce_empty_text: 'Tap "Add a custom one" to create your own exercise with a name, category and photo.',
     no_exercises_cat: 'No exercises in this category',
     no_exercises_cat_hint: 'Try a different filter or add a custom exercise.',
@@ -984,7 +984,7 @@ const I18N = {
     new_exercise: 'تمرين جديد',
     new_exercise_sub: 'أضف تمريناً مخصصاً لمكتبتك.',
     add_custom: 'أضف تمرينك الخاص',
-    my_exercises: 'تماريني الخاصة', my_exercises_sub: 'التمارين التي أنشأتها — عدّل أو احذف أياً منها.',
+    my_exercises: 'تماريني الخاصة', my_exercises_short: 'تماريني', my_exercises_sub: 'التمارين التي أنشأتها — عدّل أو احذف أياً منها.',
     ce_empty_title: 'لا توجد تمارين خاصة بعد', ce_empty_text: 'اضغط "أضف تمرينك الخاص" لإنشاء تمرين باسم وتصنيف وصورة.',
     no_exercises_cat: 'لا توجد تمارين في هذه الفئة',
     no_exercises_cat_hint: 'جرّب فلتر مختلف أو أضف تمريناً مخصصاً.',
@@ -2449,6 +2449,7 @@ function renderWorkouts(el) {
   const all = DB.exercises.list();
   const query = viewContext.workoutQuery || '';
   const filter = viewContext.workoutFilter || 'All';
+  const searchOpen = !!viewContext.workoutSearchOpen;
 
   const filterPills = ['All', ...EXERCISE_CATEGORIES]
     .map((f) => `<button class="filter-pill ${f === filter ? 'active' : ''}" data-filter="${f}">${escapeHtml(categoryLabel(f))}</button>`)
@@ -2468,16 +2469,21 @@ function renderWorkouts(el) {
           <h1 class="page-title">${t('train')}</h1>
           <p class="page-subtitle">${t('train_subtitle')}</p>
         </div>
-        <button class="link-btn" data-goto="custom-exercises">${t('my_exercises')} ${icon('chevronRight', 14)}</button>
+        <button class="btn btn-ghost btn-compact" data-goto="custom-exercises">${t('my_exercises_short')}</button>
       </div>
     </div>
 
     <div class="toolbar" style="display:flex;gap:10px;margin-bottom:14px">
-      <div class="search-wrap">
-        ${icon('search', 18)}
-        <input type="search" id="workout-search" placeholder="${t('search_exercises')}" value="${escapeHtml(query)}">
-      </div>
-      <button class="btn btn-accent train-add-btn" id="train-new-ex" aria-label="${escapeHtml(t('new_exercise'))}">${icon('plus', 18)} <span>${t('new_exercise')}</span></button>
+      ${searchOpen ? `
+        <div class="search-wrap" style="flex:1">
+          ${icon('search', 18)}
+          <input type="search" id="workout-search" placeholder="${t('search_exercises')}" value="${escapeHtml(query)}">
+        </div>
+        <button class="icon-square" id="workout-search-close" aria-label="${escapeHtml(t('cancel'))}">${icon('close', 20)}</button>
+      ` : `
+        <button class="btn btn-accent train-add-btn" id="train-new-ex" aria-label="${escapeHtml(t('new_exercise'))}" style="flex:1">${icon('plus', 18)} <span>${t('new_exercise')}</span></button>
+        <button class="icon-square" id="workout-search-open" aria-label="${escapeHtml(t('search_exercises'))}">${icon('search', 20)}</button>
+      `}
     </div>
 
     <div class="filter-bar">${filterPills}</div>
@@ -2521,6 +2527,18 @@ function renderWorkouts(el) {
 
   // "+ New exercise" (toolbar) → create a custom exercise.
   $('#train-new-ex', el)?.addEventListener('click', () => openNewExerciseModal(null));
+
+  // Compact square search: tap the magnifier to expand the search field, X to collapse.
+  $('#workout-search-open', el)?.addEventListener('click', () => {
+    viewContext.workoutSearchOpen = true;
+    renderView('workouts');
+    setTimeout(() => $('#workout-search')?.focus(), 30);
+  });
+  $('#workout-search-close', el)?.addEventListener('click', () => {
+    viewContext.workoutSearchOpen = false;
+    viewContext.workoutQuery = '';
+    renderView('workouts');
+  });
 
   // Debounced search → grid-only update (was a full view re-render per keystroke)
   let searchTimer = null;

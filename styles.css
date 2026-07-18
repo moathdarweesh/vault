@@ -961,6 +961,20 @@ body.theme-nebula .home-center-icon { box-shadow: 0 8px 28px rgba(168, 85, 247, 
 }
 .btn-ghost:active { background: var(--surface-3); transform: scale(0.97); }
 
+/* Compact rectangular button (e.g. the "My exercises" header button). */
+.btn-compact { height: 34px; min-height: 0; padding: 0 14px; font-size: 13px; flex-shrink: 0; }
+
+/* Square icon-only button (e.g. the collapsed search on the Exercises page). */
+.icon-square {
+  width: 48px; height: 48px; flex-shrink: 0; border-radius: var(--radius-sm);
+  display: flex; align-items: center; justify-content: center;
+  background: var(--surface-2); border: 1px solid var(--border);
+  color: var(--text); cursor: pointer;
+  appearance: none; -webkit-appearance: none; -webkit-tap-highlight-color: transparent;
+  transition: transform 0.12s, background 0.15s;
+}
+.icon-square:active { transform: scale(0.94); background: var(--surface-3); }
+
 .btn-danger {
   background: var(--red-bg);
   color: var(--red);
