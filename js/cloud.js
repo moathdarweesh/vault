@@ -157,6 +157,13 @@
   const markLinked = (uid) => { try { localStorage.setItem(linkedKey(uid), '1'); } catch (_) {} };
   const isDirty = (uid) => { try { return !!localStorage.getItem(dirtyKey(uid)); } catch (_) { return false; } };
   const setDirty = (uid, v) => { try { v ? localStorage.setItem(dirtyKey(uid), '1') : localStorage.removeItem(dirtyKey(uid)); } catch (_) {} };
+  // Optimistic-concurrency base version (the vault_data.version we last saw). Only
+  // set once the server actually returns a numeric version (i.e. after the
+  // vault-data-version.sql migration); until then it stays null and push() falls
+  // back to the previous last-writer-wins upsert.
+  const verKey = (uid) => 'vault_ver_' + uid;
+  const getVersion = (uid) => { try { const v = localStorage.getItem(verKey(uid)); return v == null ? null : Number(v); } catch (_) { return null; } };
+  const setVersion = (uid, v) => { try { if (typeof v === 'number' && isFinite(v)) localStorage.setItem(verKey(uid), String(v)); } catch (_) {} };
 
   // Compare two ISO timestamps by real time, NOT string order — Supabase returns
   // `+00:00` microsecond timestamps while the client writes `...Z` ms timestamps,
@@ -177,10 +184,16 @@
   async function pull() {
     const c = sb(); const s = await getSession();
     if (!c || !s) return undefined;
-    const { data, error } = await c.from(TABLE).select('data, updated_at').eq('user_id', s.user.id).maybeSingle();
+    // select('*') so we also pick up `version` when it exists, without naming a
+    // column that may not exist yet (which would error pre-migration).
+    const { data, error } = await c.from(TABLE).select('*').eq('user_id', s.user.id).maybeSingle();
     if (error) throw new Error(error.message);
     if (!data) return null;
-    return { data: data.data || null, updatedAt: data.updated_at || '' };
+    return {
+      data: data.data || null,
+      updatedAt: data.updated_at || '',
+      version: (typeof data.version === 'number' ? data.version : null),
+    };
   }
   async function push(opts) {
     const force = !!(opts && opts.force);
@@ -227,13 +240,44 @@
       });
     }
     const iso = new Date().toISOString();
-    const { error } = await c.from(TABLE).upsert(
-      { user_id: s.user.id, data: payload, updated_at: iso },
+    const uid = s.user.id;
+    const known = getVersion(uid);
+    // OPTIMISTIC CONCURRENCY: when we know the base version, write CONDITIONALLY on
+    // the row still being at it (atomic integer compare — no timestamp-format
+    // fragility). A real conflict (another device advanced the row) is DETECTED and
+    // NOT clobbered: we keep our edits local (dirty stays set) and let the next
+    // bootSync resolve it. Any error or unknown version falls through to the plain
+    // upsert below, so this path is never worse than the old last-writer-wins.
+    if (!force && known != null) {
+      try {
+        const { data: updated, error: updErr } = await c.from(TABLE)
+          .update({ data: payload, updated_at: iso })
+          .eq('user_id', uid).eq('version', known)
+          .select('*');
+        if (!updErr) {
+          if (updated && updated.length) {
+            if (typeof updated[0].version === 'number') setVersion(uid, updated[0].version);
+            setStamp(uid, iso); setDirty(uid, false); return;
+          }
+          // 0 rows matched: the remote moved ahead (conflict) or the row is gone.
+          const { data: cur, error: curErr } = await c.from(TABLE)
+            .select('*').eq('user_id', uid).maybeSingle();
+          if (!curErr && cur) {
+            try { if (typeof window !== 'undefined') window.dispatchEvent(new CustomEvent('vault:push-conflict')); } catch (_) {}
+            return 'conflict'; // do NOT overwrite the newer remote
+          }
+          // no row exists → fall through to the insert path below
+        }
+      } catch (_) { /* fall through to the safe upsert */ }
+    }
+    const { data: up, error } = await c.from(TABLE).upsert(
+      { user_id: uid, data: payload, updated_at: iso },
       { onConflict: 'user_id' }
-    );
+    ).select('*');
     if (error) throw new Error(error.message);
-    setStamp(s.user.id, iso);
-    setDirty(s.user.id, false); // our local edits are now safely in the cloud
+    if (up && up[0] && typeof up[0].version === 'number') setVersion(uid, up[0].version);
+    setStamp(uid, iso);
+    setDirty(uid, false); // our local edits are now safely in the cloud
   }
 
   // Debounced push fired by storage.js save() after any local change.
@@ -276,7 +320,7 @@
     if (remote === null || !remoteHasData(remote)) { await push(); markLinked(uid); return 'pushed'; }
     // Cloud has data AND this device has its own data, first time → ask the user.
     if (!isLinked(uid) && localHasData()) return 'conflict';
-    if (applyRemote(remote)) { setStamp(uid, remote.updatedAt); setDirty(uid, false); markLinked(uid); return 'pulled'; }
+    if (applyRemote(remote)) { setStamp(uid, remote.updatedAt); setVersion(uid, remote.version); setDirty(uid, false); markLinked(uid); return "pulled"; }
     await push(); markLinked(uid); return 'pushed';
   }
   // Conflict resolution choices (first link only).
@@ -285,7 +329,7 @@
     let remote;
     try { remote = await pull(); } catch (_) { return; }
     // Only commit to "cloud wins" if the cloud actually had data to apply.
-    if (applyRemote(remote)) { setStamp(s.user.id, remote.updatedAt); setDirty(s.user.id, false); markLinked(s.user.id); }
+    if (applyRemote(remote)) { setStamp(s.user.id, remote.updatedAt); setVersion(s.user.id, remote.version); setDirty(s.user.id, false); markLinked(s.user.id); }
     else { await push(); markLinked(s.user.id); } // cloud was empty → keep local
   }
   async function chooseLocal() {
@@ -309,7 +353,7 @@
     const remoteNewer = newer(remote.updatedAt, getStamp(uid));
     if (remoteNewer && isDirty(uid)) return 'conflict'; // both changed → ask
     if (remoteNewer) {
-      if (applyRemote(remote)) { setStamp(uid, remote.updatedAt); setDirty(uid, false); markLinked(uid); return 'pulled'; }
+      if (applyRemote(remote)) { setStamp(uid, remote.updatedAt); setVersion(uid, remote.version); setDirty(uid, false); markLinked(uid); return "pulled"; }
       return 'offline';
     }
     await push().catch(() => {}); markLinked(uid); return 'pushed';
