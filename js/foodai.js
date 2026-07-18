@@ -66,6 +66,20 @@
   ].join(' ');
 
   const useProxy = () => !!PROXY_URL;
+  // Attach the signed-in user's Supabase access token so the Worker can require an
+  // authenticated caller (blocks anonymous quota/cost abuse). Best-effort: logged
+  // out or pre-token we omit it, and the Worker is designed to fall open on any
+  // verification uncertainty so this can never break AI for a real user.
+  async function authHeaders() {
+    const h = { 'Content-Type': 'application/json' };
+    try {
+      if (window.Cloud && Cloud.getSession) {
+        const s = await Cloud.getSession();
+        if (s && s.access_token) h['Authorization'] = 'Bearer ' + s.access_token;
+      }
+    } catch (_) {}
+    return h;
+  }
   // Ready to chat = either a backend proxy is configured, or the user saved a key.
   const ready = () => useProxy() || hasKey();
 
@@ -76,7 +90,7 @@
     if (image) payload.image = image;
     const res = await fetch(PROXY_URL, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: await authHeaders(),
       body: JSON.stringify(payload),
     });
     const data = await res.json().catch(() => ({}));
@@ -432,7 +446,7 @@
     if (useProxy()) {
       const res = await fetch(PROXY_URL, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: await authHeaders(),
         body: JSON.stringify({ text: String(prompt || ''), mode: 'chat' }),
       });
       const data = await res.json().catch(() => ({}));
@@ -482,7 +496,7 @@
     if (useProxy()) {
       const res = await fetch(PROXY_URL, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: await authHeaders(),
         body: JSON.stringify({ audio: audio, prompt: VOICE_PROMPT }),
       });
       const data = await res.json().catch(() => ({}));

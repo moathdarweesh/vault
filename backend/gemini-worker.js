@@ -143,6 +143,33 @@ async function callModel(model, key, req) {
   return { ok: true, items };
 }
 
+// Supabase (public values — the anon key is safe to ship) used only to VALIDATE a
+// caller's access token. CORS is not access control: a scripted non-browser caller
+// with any Origin still reaches the Worker, so without this one actor can drain the
+// shared Gemini quota / rack up cost. We require an authenticated caller.
+const SUPABASE_URL = 'https://ilmusnuchqlpirywonzx.supabase.co';
+const SUPABASE_ANON = 'sb_publishable_ZBR2VENMP2O_K2YTMePCsw_NfLC9FSI';
+
+// Validate the caller's Supabase JWT by asking Supabase who it belongs to.
+// FAIL-SAFE: a MISSING token is rejected (blocks anonymous abuse), and an
+// explicitly INVALID token (401/403) is rejected — but ANY other outcome (network
+// error, unexpected status) FALLS OPEN and allows the request, so a transient
+// Supabase hiccup can never take AI down for real users.
+async function callerAllowed(request) {
+  const auth = request.headers.get('Authorization') || '';
+  const token = auth.startsWith('Bearer ') ? auth.slice(7).trim() : '';
+  if (!token) return false;                     // no token → block (anonymous)
+  try {
+    const r = await fetch(SUPABASE_URL + '/auth/v1/user', {
+      headers: { Authorization: 'Bearer ' + token, apikey: SUPABASE_ANON },
+    });
+    if (r.status === 401 || r.status === 403) return false; // confirmed invalid
+    return true;                                // 200 valid, or anything else → allow
+  } catch (_) {
+    return true;                               // verification unreachable → fail open
+  }
+}
+
 export default {
   async fetch(request, env) {
     const origin = request.headers.get('Origin') || '';
@@ -150,6 +177,9 @@ export default {
     // Preflight: reflect allowed origin.
     if (request.method === 'OPTIONS') return new Response(null, { headers: corsHeaders(origin) });
     if (request.method !== 'POST') return json({ error: 'method not allowed' }, 405, origin);
+
+    // Require an authenticated caller (see callerAllowed — fail-safe).
+    if (!(await callerAllowed(request))) return json({ error: 'unauthorized' }, 401, origin);
 
     const OK_MIME = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
     const OK_AUDIO = ['audio/webm', 'audio/mp4', 'audio/mpeg', 'audio/ogg', 'audio/wav', 'audio/aac', 'audio/m4a', 'audio/3gpp'];
