@@ -1906,7 +1906,12 @@ body[dir="rtl"] .bento-card.wide .bento-card-name-tag { left: 14px; }
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  /* Hidden until the big <h1 class="page-title"> scrolls out of view, so the
+     same title never shows twice at the top of a page (see syncDetailTopTitle). */
+  opacity: 0;
+  transition: opacity var(--dur) var(--ease);
 }
+.detail-top.show-title .detail-top-title { opacity: 1; }
 
 .detail-hero-wrap {
   margin: 0 -16px 18px;

@@ -5,7 +5,7 @@
 // Single source of truth for the shipped build. Used by the visible build
 // label AND the feedback version tag so they can never drift apart. Keep this
 // equal to the ?v=N cache markers (see CLAUDE.md "CACHE WORKFLOW").
-const VAULT_BUILD = 'v144';
+const VAULT_BUILD = 'v145';
 
 // ==========================================================================
 // Icons
@@ -1752,6 +1752,28 @@ window.addEventListener('vault:push-blocked', () => {
   });
 })();
 
+// iOS-style large-title behaviour: the sticky top bar shows its small title only
+// AFTER the big <h1 class="page-title"> has scrolled out of view — so at the top
+// of the page you never see the same title twice (big header + bar). Pages that
+// have a bar but NO page-title (e.g. exercise-detail hero) keep the bar title
+// always visible, since it's their only title.
+function syncDetailTopTitle() {
+  const view = document.querySelector('.view.active');
+  const bar = view && view.querySelector('.detail-top');
+  const barTitle = bar && bar.querySelector('.detail-top-title');
+  if (!barTitle) return;
+  const pageTitle = view.querySelector('.page-title');
+  // Only collapse the bar title when it's REDUNDANT with the big page title
+  // (same text). Pages whose bar shows something different (e.g. session-day's
+  // weekday vs the workout name) — or that have no page title at all — keep the
+  // bar title always visible.
+  const redundant = pageTitle && pageTitle.textContent.trim() === barTitle.textContent.trim();
+  if (!redundant) { bar.classList.add('show-title'); return; }
+  const main = document.querySelector('.main');
+  const threshold = (main ? main.getBoundingClientRect().top : 0) + 44; // bar height
+  bar.classList.toggle('show-title', pageTitle.getBoundingClientRect().bottom <= threshold);
+}
+
 // Auto-hide the detail header (any bar with a back button): tuck it away while
 // scrolling down, slide it back smoothly when scrolling up. One listener on the
 // scroll container drives whichever view is active.
@@ -1767,6 +1789,7 @@ window.addEventListener('vault:push-blocked', () => {
       bar.classList.toggle('tuck', tuck);
       bar.inert = tuck;                                       // keep the hidden back button out of the tab order / AT
     }
+    syncDetailTopTitle();
     lastY = y <= 0 ? 0 : y;
   }, { passive: true });
 })();
@@ -1796,6 +1819,8 @@ function renderView(view) {
   }
   // Give every icon-only back button an accessible name, in one place.
   el.querySelectorAll('.back-btn:not([aria-label])').forEach((b) => b.setAttribute('aria-label', t('back')));
+  // Set the sticky bar title's initial visibility for this freshly-rendered view.
+  requestAnimationFrame(syncDetailTopTitle);
 }
 
 $('#bottom-nav').addEventListener('click', (e) => {
