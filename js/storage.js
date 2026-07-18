@@ -1353,6 +1353,19 @@ function todayISO() {
   return d.toISOString().slice(0, 10);
 }
 
+// Add (or subtract) whole days to a 'YYYY-MM-DD' string and return the result in
+// the SAME calendar (local) — never via toISOString(), whose UTC conversion rolls
+// a local-midnight date back a day in any timezone east of UTC (e.g. UTC+3),
+// which made the day steppers skip/stick.
+function addDaysISO(iso, delta) {
+  const d = new Date(iso + 'T00:00:00');
+  d.setDate(d.getDate() + delta);
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
+
 // Localise dates to the UI language. 'ar-u-nu-latn' gives Arabic month names
 // with LATIN digits, matching the app's number convention (fmtNum) and the
 // home screen. Falls back to en-US.
@@ -1430,6 +1443,7 @@ window.EXERCISE_CATEGORIES = EXERCISE_CATEGORIES;
 window.CARDIO_TYPES = CARDIO_TYPES;
 window.CARDIO_ICON_OPTIONS = CARDIO_ICON_OPTIONS;
 window.todayISO = todayISO;
+window.addDaysISO = addDaysISO;
 window.formatDate = formatDate;
 window.formatDateShort = formatDateShort;
 window.daysAgo = daysAgo;

@@ -5,7 +5,7 @@
 // Single source of truth for the shipped build. Used by the visible build
 // label AND the feedback version tag so they can never drift apart. Keep this
 // equal to the ?v=N cache markers (see CLAUDE.md "CACHE WORKFLOW").
-const VAULT_BUILD = 'v146';
+const VAULT_BUILD = 'v147';
 
 // ==========================================================================
 // Icons
@@ -4149,7 +4149,7 @@ function openVoiceCapture(date, onSave) {
       <button class="icon-btn icon-btn-tile" data-close>${icon('close', 18)}</button>
     </div>
     <div class="voice-stage" id="voice-stage">
-      <button class="voice-mic" id="voice-mic" aria-label="${escapeHtml(t('voice_tap'))}">${icon('mic', 34)}</button>
+      <button class="voice-mic" id="voice-mic" aria-label="${escapeHtml(t('voice_tap'))}">${icon('mic', 26)}</button>
       <div class="voice-status" id="voice-status">${t('voice_tap')}</div>
     </div>
     <div class="ai-results" id="voice-results"></div>
@@ -6735,9 +6735,9 @@ function renderFoodLog(el) {
     </div>
 
     <div class="day-nav">
-      <button class="calendar-nav-btn" id="day-prev" aria-label="${t('prev_day')}">${icon('back', 18)}</button>
+      <button class="calendar-nav-btn" id="day-prev" aria-label="${t('prev_day')}">${icon('chevronRight', 18)}</button>
       <div class="day-nav-label">${escapeHtml(dayLabel)}</div>
-      <button class="calendar-nav-btn" id="day-next" aria-label="${t('next_day')}" ${isToday ? 'disabled style="opacity:0.4"' : ''}>${icon('chevronRight', 18)}</button>
+      <button class="calendar-nav-btn" id="day-next" aria-label="${t('next_day')}" ${isToday ? 'disabled style="opacity:0.4"' : ''}>${icon('back', 18)}</button>
     </div>
 
     <div class="macro-totals">
@@ -6778,16 +6778,12 @@ function renderFoodLog(el) {
   `;
 
   $('#day-prev', el).addEventListener('click', () => {
-    const d = new Date(ctx.date + 'T00:00:00');
-    d.setDate(d.getDate() - 1);
-    ctx.date = d.toISOString().slice(0, 10);
+    ctx.date = addDaysISO(ctx.date, -1);
     renderFoodLog(el);
   });
   $('#day-next', el).addEventListener('click', () => {
     if (isToday) return;
-    const d = new Date(ctx.date + 'T00:00:00');
-    d.setDate(d.getDate() + 1);
-    ctx.date = d.toISOString().slice(0, 10);
+    ctx.date = addDaysISO(ctx.date, 1);
     renderFoodLog(el);
   });
 
