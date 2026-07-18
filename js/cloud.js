@@ -203,9 +203,32 @@
         return 'blocked';
       }
     }
+    // Strip base64 custom-exercise images from the UPLOADED payload — but only for
+    // images that already have a durable bucket copy (imagePath is set ONLY after a
+    // successful backup, so its presence guarantees the image is safe in the
+    // exercise-images bucket). The base64 STAYS in localStorage (offline render is
+    // untouched); on another device the pulled blob carries imagePath and
+    // syncExerciseImages() rehydrates the base64 from the bucket. This cuts the
+    // synced payload by an order of magnitude without losing any image: an
+    // un-backed-up image keeps its base64 in the upload, so it is never dropped
+    // before the bucket has it.
+    let payload = blob;
+    if (blob && Array.isArray(blob.exercises) &&
+        blob.exercises.some((e) => e && e.customImage && e.imagePath)) {
+      payload = Object.assign({}, blob, {
+        exercises: blob.exercises.map((e) => {
+          if (e && e.customImage && e.imagePath) {
+            const copy = Object.assign({}, e);
+            delete copy.customImage;
+            return copy;
+          }
+          return e;
+        }),
+      });
+    }
     const iso = new Date().toISOString();
     const { error } = await c.from(TABLE).upsert(
-      { user_id: s.user.id, data: blob, updated_at: iso },
+      { user_id: s.user.id, data: payload, updated_at: iso },
       { onConflict: 'user_id' }
     );
     if (error) throw new Error(error.message);
