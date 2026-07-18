@@ -5,7 +5,7 @@
 // Single source of truth for the shipped build. Used by the visible build
 // label AND the feedback version tag so they can never drift apart. Keep this
 // equal to the ?v=N cache markers (see CLAUDE.md "CACHE WORKFLOW").
-const VAULT_BUILD = 'v158';
+const VAULT_BUILD = 'v159';
 
 // ==========================================================================
 // Icons
@@ -796,7 +796,7 @@ const I18N = {
     today_plan: "Today's Plan",
     no_plan_today: 'Rest day',
     no_plan_today_sub: 'No exercises scheduled for today.',
-    start_workout: 'Start Workout',
+    start_workout: 'Start Workout', guided_mode: 'Guided mode',
     today_workout: "Today's workout", start_today_workout: "Start today's workout",
     first_workout_title: 'Ready to train?', first_workout_sub: 'Log your first workout to get started.',
     start_first_workout: 'Start your first workout',
@@ -857,7 +857,7 @@ const I18N = {
     workouts_day: 'Workouts', cardio_day: 'Cardio', sleep_day: 'Sleep',
 
     // Supplements
-    supplements_title: 'Supplements',
+    supplements_title: 'Supplements', todays_doses: "Today's doses",
     supplements_subtitle: 'Track daily doses and keep your streaks.',
     new_supplement: 'New Supplement',
     edit_supplement: 'Edit Supplement',
@@ -1344,7 +1344,7 @@ const I18N = {
     today_plan: 'خطة اليوم',
     no_plan_today: 'يوم راحة',
     no_plan_today_sub: 'لا توجد تمارين مجدولة اليوم.',
-    start_workout: 'ابدأ التمرين',
+    start_workout: 'ابدأ التمرين', guided_mode: 'الوضع الموجّه',
     today_workout: 'تمرين اليوم', start_today_workout: 'ابدأ تمرين اليوم',
     first_workout_title: 'جاهز للتمرين؟', first_workout_sub: 'سجّل أول تمرين لتبدأ.',
     start_first_workout: 'ابدأ أول تمرين',
@@ -1401,7 +1401,7 @@ const I18N = {
     no_activity_day: 'لا يوجد نشاط في هذا اليوم',
     workouts_day: 'تمارين', cardio_day: 'كارديو', sleep_day: 'نوم',
 
-    supplements_title: 'المكمّلات',
+    supplements_title: 'المكمّلات', todays_doses: 'جرعات اليوم',
     supplements_subtitle: 'تتبّع جرعاتك اليومية وحافظ على سلسلتك.',
     new_supplement: 'مكمّل جديد',
     edit_supplement: 'تعديل المكمّل',
@@ -5788,7 +5788,7 @@ function renderSessionDay(el) {
     </div>
 
     ${totalEx > 0
-      ? `<button type="button" class="sd-start-run" id="sd-start-run">${icon('dumbbell', 20)}<span>${t('start_workout')}</span></button>`
+      ? `<button type="button" class="sd-start-run" id="sd-start-run">${icon('run', 16)}<span>${t('guided_mode')}</span></button>`
       : ''
     }
 
@@ -6531,7 +6531,7 @@ function renderSupplements(el) {
     </div>
 
     <div class="row-between mb-16">
-      <div class="section-title" style="margin:0">${t('supplements_title')}</div>
+      <div class="section-title" style="margin:0">${t('todays_doses')}</div>
       <div style="display:flex;gap:8px">
         ${list.length > 0 ? `<button class="btn btn-ghost" id="take-all-btn" ${anyUntaken ? '' : 'disabled style="opacity:.5"'}>${icon('check', 16)} ${t('take_all')}</button>` : ''}
         <button class="btn btn-primary" id="add-supp-btn">${icon('plus', 16)} ${t('new_supplement')}</button>
