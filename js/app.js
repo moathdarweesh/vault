@@ -5,7 +5,7 @@
 // Single source of truth for the shipped build. Used by the visible build
 // label AND the feedback version tag so they can never drift apart. Keep this
 // equal to the ?v=N cache markers (see CLAUDE.md "CACHE WORKFLOW").
-const VAULT_BUILD = 'v157';
+const VAULT_BUILD = 'v158';
 
 // ==========================================================================
 // Icons
@@ -45,6 +45,9 @@ const ICONS = {
   utensils: '<path d="M3 2v7c0 1.1.9 2 2 2h4a2 2 0 0 0 2-2V2"/><path d="M7 2v20"/><path d="M21 15V2v0a5 5 0 0 0-5 5v6c0 1.1.9 2 2 2h3Zm0 0v7"/>',
   trophy: '<path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6"/><path d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18"/><path d="M4 22h16"/><path d="M10 14.66V17c0 .55-.47.98-.97 1.21C7.85 18.75 7 20.24 7 22"/><path d="M14 14.66V17c0 .55.47.98.97 1.21C16.15 18.75 17 20.24 17 22"/><path d="M18 2H6v7a6 6 0 0 0 12 0V2Z"/>',
   zap: '<polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>',
+  target: '<circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/>',
+  message: '<path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/>',
+  columns: '<rect x="4" y="4" width="6" height="16" rx="1"/><rect x="14" y="9" width="6" height="11" rx="1"/>',
   mic: '<path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="22"/>',
   settings: '<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>',
   globe: '<circle cx="12" cy="12" r="10"/><line x1="2" x2="22" y1="12" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/>',
@@ -788,8 +791,8 @@ const I18N = {
     image_hint: 'Pick a photo from your device. Stored locally.',
 
     // Planner
-    planner_title: 'Weekly Plan',
-    planner_subtitle: 'Set what you train each day of the week.',
+    planner_title: 'Workout Rotation',
+    planner_subtitle: 'Your rolling workout cycle across training days.',
     today_plan: "Today's Plan",
     no_plan_today: 'Rest day',
     no_plan_today_sub: 'No exercises scheduled for today.',
@@ -870,8 +873,8 @@ const I18N = {
     delete_supplement_text: 'This supplement and its history will be removed.',
 
     // Food log
-    food_log_title: 'Daily Food',
-    food_history: 'Past days',
+    food_log_title: 'Daily Food', logged_items: 'Items',
+    food_history: 'Food log',
     food_log_subtitle: 'Log foods from your reference list.',
     today_totals: 'Today',
     add_food_log: 'Add Food',
@@ -912,7 +915,7 @@ const I18N = {
 
     // Tools cards on home
     tools_section: 'Tools',
-    plan_card: 'Weekly Plan',
+    plan_card: 'Rotation',
     plan_card_sub: 'Today & schedule',
     calendar_card: 'Calendar',
     calendar_card_sub: 'Activity history',
@@ -1336,8 +1339,8 @@ const I18N = {
     remove_image: 'إزالة',
     image_hint: 'اختر صورة من جهازك. تُحفظ محلياً.',
 
-    planner_title: 'الخطة الأسبوعية',
-    planner_subtitle: 'حدّد تمرين كل يوم في الأسبوع.',
+    planner_title: 'دورة التمرين',
+    planner_subtitle: 'دورتك المتجددة عبر أيام التمرين.',
     today_plan: 'خطة اليوم',
     no_plan_today: 'يوم راحة',
     no_plan_today_sub: 'لا توجد تمارين مجدولة اليوم.',
@@ -1413,8 +1416,8 @@ const I18N = {
     delete_supplement_q: 'حذف المكمّل؟',
     delete_supplement_text: 'المكمّل وسجله كله بينحذف.',
 
-    food_log_title: 'الأكل اليومي',
-    food_history: 'أيام سابقة',
+    food_log_title: 'الأكل اليومي', logged_items: 'الأصناف',
+    food_history: 'سجل الأكل',
     food_log_subtitle: 'سجّل أكلك من قائمتك المرجعية.',
     today_totals: 'اليوم',
     add_food_log: 'أضف أكل',
@@ -1449,7 +1452,7 @@ const I18N = {
     ms_empty_text: 'سجّل تمريناً لهذه العضلة وسيظهر هنا.',
 
     tools_section: 'أدوات',
-    plan_card: 'الخطة الأسبوعية',
+    plan_card: 'دورة التمرين',
     plan_card_sub: 'اليوم والجدول',
     calendar_card: 'التقويم',
     calendar_card_sub: 'سجل النشاط',
@@ -1700,7 +1703,7 @@ function navigate(view, context = {}, opts = {}) {
     home: 'home', workouts: 'workouts', library: 'workouts', 'exercise-detail': 'workouts',
     cardio: 'cardio', food: 'food', sleep: 'sleep',
     compare: 'home', settings: 'home',
-    planner: 'home', calendar: 'home', supplements: 'home', foodlog: 'home',
+    planner: 'home', calendar: 'home', supplements: 'home', foodlog: 'food',
     'personal-records': 'home',
   };
   const highlightView = navMap[view] || view;
@@ -2235,7 +2238,7 @@ function renderHome(el) {
         <div class="tool-pod-label">${t('pr_card')}</div>
       </button>
       <button class="tool-pod" data-goto="compare">
-        <div class="tool-pod-icon">${icon('arrowUp', 18)}</div>
+        <div class="tool-pod-icon">${icon('columns', 18)}</div>
         <div class="tool-pod-label">${t('compare_card')}</div>
       </button>
       <button class="tool-pod" data-goto="supplements">
@@ -3042,7 +3045,8 @@ function renderExerciseDetail(el, exerciseId) {
     <div class="detail-top">
       <button class="back-btn" data-back>${icon('back', 20)}</button>
       <div class="detail-top-title">${escapeHtml(exDisplayName(ex))}</div>
-      ${ex.isCustom ? `<button class="icon-btn icon-btn-tile danger" id="delete-exercise-btn">${icon('trash', 16)}</button>` : ''}
+      ${ex.isCustom ? `<button class="icon-btn icon-btn-tile" id="edit-exercise-btn" aria-label="${escapeHtml(t('edit'))}">${icon('edit', 16)}</button>
+      <button class="icon-btn icon-btn-tile danger" id="delete-exercise-btn">${icon('trash', 16)}</button>` : ''}
     </div>
 
     ${heroHtml}
@@ -3103,6 +3107,10 @@ function renderExerciseDetail(el, exerciseId) {
       });
     })
   );
+
+  // Edit a custom exercise from its own detail page (was reachable only from the
+  // separate "تماريني" screen) — edit + delete now live together.
+  $('#edit-exercise-btn', el)?.addEventListener('click', () => openNewExerciseModal(exerciseId));
 
   const delBtn = $('#delete-exercise-btn', el);
   if (delBtn) {
@@ -3333,7 +3341,7 @@ function renderCardio(el) {
     ${vaultBar()}
 
     <div class="page-header">
-      <div class="page-eyebrow">${t('this_week')} · ${weekItems.length}</div>
+      <div class="page-eyebrow">${t('this_week')}</div>
       <h1 class="page-title">${t('cardio')}</h1>
       <p class="page-subtitle">${t('cardio_subtitle')}</p>
     </div>
@@ -3726,7 +3734,7 @@ function nutritionDashboardHtml(date) {
   if (!nut.hasTargets()) {
     return `
       <button class="nutri-setup" data-setup-goal>
-        <div class="nutri-setup-icon">${icon('zap', 26)}</div>
+        <div class="nutri-setup-icon">${icon('target', 26)}</div>
         <div class="nutri-setup-main">
           <div class="nutri-setup-title">${t('nutri_setup_title')}</div>
           <div class="nutri-setup-text">${t('nutri_setup_text')}</div>
@@ -3825,7 +3833,7 @@ function openAddSheet(date, onChange) {
       <div class="add-sheet-title">${t('add_sheet_title')}</div>
       <div class="add-grid">
         ${tile({ k: 'voice', icon: 'mic', title: t('add_voice') })}
-        ${tile({ k: 'chat', icon: 'zap', title: t('add_chat') })}
+        ${tile({ k: 'chat', icon: 'message', title: t('add_chat') })}
         ${tile({ k: 'photo', icon: 'camera', title: t('add_photo') })}
         ${tile({ k: 'saved', icon: 'utensils', title: t('add_saved') })}
         ${tile({ k: 'manual', icon: 'edit', title: t('add_manual') })}
@@ -4529,7 +4537,7 @@ function renderSleep(el) {
     ${vaultBar()}
 
     <div class="page-header">
-      <div class="page-eyebrow">${t('nights_log')} · ${list.length}</div>
+      <div class="page-eyebrow">${t('nights_logged_t')}</div>
       <h1 class="page-title">${t('sleep')}</h1>
       <p class="page-subtitle">${t('sleep_subtitle')}</p>
     </div>
@@ -5278,7 +5286,6 @@ function renderPlanner(el) {
     </div>
 
     <div class="page-header">
-      <div class="page-eyebrow">${t('library')}</div>
       <h1 class="page-title">${t('planner_title')}</h1>
       <p class="page-subtitle">${t('planner_subtitle')}</p>
     </div>
@@ -6350,7 +6357,6 @@ function renderCalendar(el) {
     </div>
 
     <div class="page-header">
-      <div class="page-eyebrow">${t('library')}</div>
       <h1 class="page-title">${t('calendar_title')}</h1>
       <p class="page-subtitle">${t('calendar_subtitle')}</p>
     </div>
@@ -6708,11 +6714,6 @@ function renderFoodLog(el) {
       <div class="detail-top-title">${t('food_log_title')}</div>
     </div>
 
-    <div class="page-header">
-      <h1 class="page-title">${t('food_log_title')}</h1>
-      <p class="page-subtitle">${t('food_log_subtitle')}</p>
-    </div>
-
     <div class="day-nav">
       <button class="calendar-nav-btn" id="day-prev" aria-label="${t('prev_day')}">${icon('chevronRight', 18)}</button>
       <div class="day-nav-label">${escapeHtml(dayLabel)}</div>
@@ -6739,11 +6740,8 @@ function renderFoodLog(el) {
     </div>
 
     <div class="row-between mb-16">
-      <div class="section-title" style="margin:0">${t('food_log_title')}</div>
-      <div style="display:flex;gap:8px">
-        <button class="btn btn-ghost" id="ai-food-btn">${icon('zap', 16)} ${t('ai_chat_btn')}</button>
-        <button class="btn btn-primary" id="add-foodlog-btn">${icon('plus', 16)} ${t('add_food_log')}</button>
-      </div>
+      <div class="section-title" style="margin:0">${t('logged_items')}</div>
+      <button class="btn btn-primary" id="add-foodlog-btn">${icon('plus', 16)} ${t('add_food_log')}</button>
     </div>
 
     <div class="data-list" id="food-log-list" style="gap:6px">
@@ -6764,10 +6762,9 @@ function renderFoodLog(el) {
     renderFoodLog(el);
   });
 
-  $('#add-foodlog-btn', el).addEventListener('click', () => openFoodPickerModal(ctx.date));
-  $('#ai-food-btn', el)?.addEventListener('click', () => {
-    if (window.FoodAI) window.FoodAI.open(ctx.date);
-  });
+  // One add entry point: the same 5-method sheet used by the Food dashboard FAB,
+  // logging to the day shown here (unifies the old separate 'AI' + 'Add Food').
+  $('#add-foodlog-btn', el).addEventListener('click', () => openAddSheet(ctx.date, () => renderFoodLog(el)));
 
   // Refresh only the macro-totals block from current DB state.
   function refreshTotals() {
