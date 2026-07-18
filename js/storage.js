@@ -920,10 +920,40 @@ const DB = {
     if ('supplements' in data && !Array.isArray(data.supplements)) return false;
     return true;
   },
+  // Reject a blob whose entity IDs are not the safe charset our uid() produces.
+  // IDs are interpolated into HTML `data-*` attributes across the render layer, so
+  // an id like `"><img onerror=...>` from a hand-crafted import/backup would be an
+  // attribute-breakout XSS. App-generated ids are always [A-Za-z0-9_-]; anything
+  // else can only come from a tampered file, so we refuse the whole import.
+  _idsSafe(data) {
+    const ID = /^[A-Za-z0-9_-]{1,64}$/;
+    const ok = (v) => v == null || (typeof v === 'string' && ID.test(v));
+    const listOk = (arr, keys) => !Array.isArray(arr) || arr.every((r) => !r || keys.every((k) => ok(r[k])));
+    if (!listOk(data.exercises, ['id'])) return false;
+    if (!listOk(data.sessions, ['id', 'exerciseId'])) return false;
+    if (!listOk(data.cardio, ['id', 'type'])) return false;
+    if (!listOk(data.cardioTypes, ['id'])) return false;
+    if (!listOk(data.sleep, ['id'])) return false;
+    if (!listOk(data.foods, ['id'])) return false;
+    if (!listOk(data.supplements, ['id'])) return false;
+    const fl = data.foodLogs;
+    if (fl && typeof fl === 'object' && !Array.isArray(fl)) {
+      for (const d of Object.keys(fl)) if (!listOk(fl[d], ['id', 'foodId'])) return false;
+    }
+    const sl = data.supplementLogs;
+    if (sl && typeof sl === 'object' && !Array.isArray(sl)) {
+      for (const d of Object.keys(sl)) {
+        const day = sl[d];
+        if (day && typeof day === 'object') for (const sid of Object.keys(day)) if (!ok(sid)) return false;
+      }
+    }
+    return true;
+  },
   importJSON(json) {
     try {
       const data = JSON.parse(json);
       if (!this._validateBlob(data)) return false;
+      if (!this._idsSafe(data)) return false;   // block attribute-breakout XSS via tampered ids
       STATE = data;
       save();
       return true;

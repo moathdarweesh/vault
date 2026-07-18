@@ -5,7 +5,7 @@
 // Single source of truth for the shipped build. Used by the visible build
 // label AND the feedback version tag so they can never drift apart. Keep this
 // equal to the ?v=N cache markers (see CLAUDE.md "CACHE WORKFLOW").
-const VAULT_BUILD = 'v160';
+const VAULT_BUILD = 'v161';
 
 // ==========================================================================
 // Icons
@@ -2456,7 +2456,7 @@ function bentoCardHtml(ex, i, { showPR = true, toggle = null } = {}) {
   // early and spills the rest of the card (badges + content footer) out as
   // siblings. The span keeps the DOM intact; clicks/keys are delegated.
   const toggleBtn = toggle
-    ? `<span class="bento-toggle ${toggle.added ? 'added' : ''}" data-toggle-ex="${ex.id}" role="button" tabindex="0" aria-label="${escapeHtml(toggle.added ? t('remove_image') : t('add_to_train'))}">${icon(toggle.added ? 'check' : 'plus', 16)}</span>`
+    ? `<span class="bento-toggle ${toggle.added ? 'added' : ''}" data-toggle-ex="${escapeHtml(ex.id)}" role="button" tabindex="0" aria-label="${escapeHtml(toggle.added ? t('remove_image') : t('add_to_train'))}">${icon(toggle.added ? 'check' : 'plus', 16)}</span>`
     : '';
 
   // When the card is part of a list with a toggle (Library), mark cards that
@@ -2483,7 +2483,7 @@ function bentoCardHtml(ex, i, { showPR = true, toggle = null } = {}) {
   }
 
   return `
-    <button class="bento-card ${isWide ? 'wide' : ''} ${addedClass}" data-exercise="${ex.id}">
+    <button class="bento-card ${isWide ? 'wide' : ''} ${addedClass}" data-exercise="${escapeHtml(ex.id)}">
       ${bgHtml}
       <div class="bento-card-name-tag" title="${escapeHtml(exDisplayName(ex))}">${escapeHtml(exDisplayName(ex))}</div>
       ${toggleBtn}
@@ -3035,8 +3035,8 @@ function renderExerciseDetail(el, exerciseId) {
         </div>
         ${setsHtml}
         <div class="session-actions">
-          <button class="icon-btn" data-edit-session="${s.id}">${icon('edit', 16)}</button>
-          <button class="icon-btn danger" data-delete-session="${s.id}">${icon('trash', 16)}</button>
+          <button class="icon-btn" data-edit-session="${escapeHtml(s.id)}">${icon('edit', 16)}</button>
+          <button class="icon-btn danger" data-delete-session="${escapeHtml(s.id)}">${icon('trash', 16)}</button>
         </div>
       </div>
     `;
@@ -3337,8 +3337,8 @@ function renderCardio(el) {
           </div>
         </div>
         <div class="data-actions">
-          <button class="icon-btn" data-edit-cardio="${c.id}">${icon('edit', 15)}</button>
-          <button class="icon-btn danger" data-delete-cardio="${c.id}">${icon('trash', 15)}</button>
+          <button class="icon-btn" data-edit-cardio="${escapeHtml(c.id)}">${icon('edit', 15)}</button>
+          <button class="icon-btn danger" data-delete-cardio="${escapeHtml(c.id)}">${icon('trash', 15)}</button>
         </div>
       </div>
     `;
@@ -3409,7 +3409,7 @@ function openCardioModal(cardioId = null) {
       const label = tt.isCustom ? tt.label : t(tt.id);
       const ic = tt.iconName || 'heart';
       return `
-        <button type="button" class="type-option ${tt.id === selectedType ? 'active' : ''}" data-type="${tt.id}">
+        <button type="button" class="type-option ${tt.id === selectedType ? 'active' : ''}" data-type="${escapeHtml(tt.id)}">
           ${icon(ic, 22)}
           <div class="type-option-label">${escapeHtml(label)}</div>
         </button>
@@ -4534,8 +4534,8 @@ function renderSleep(el) {
       </div>
       <div class="data-value num">${formatDuration(s.durationMinutes)}</div>
       <div class="data-actions">
-        <button class="icon-btn" data-edit-sleep="${s.id}">${icon('edit', 15)}</button>
-        <button class="icon-btn danger" data-delete-sleep="${s.id}">${icon('trash', 15)}</button>
+        <button class="icon-btn" data-edit-sleep="${escapeHtml(s.id)}">${icon('edit', 15)}</button>
+        <button class="icon-btn danger" data-delete-sleep="${escapeHtml(s.id)}">${icon('trash', 15)}</button>
       </div>
     </div>
   `).join('');
@@ -4737,7 +4737,7 @@ function renderCompareWorkouts() {
     if (thisBest === 0 && lastBest === 0) return null;
 
     return `
-      <button class="compare-card" data-goto-exercise="${ex.id}">
+      <button class="compare-card" data-goto-exercise="${escapeHtml(ex.id)}">
         <div class="compare-card-title">${escapeHtml(exDisplayName(ex))}</div>
         <div class="compare-weeks">
           <div class="compare-week">
@@ -5222,7 +5222,7 @@ function variationsHtmlForExercise(ex) {
     <div class="variation-row">
       <span class="variation-cat-dot" data-cat="${escapeHtml(alt.category)}"></span>
       <span class="variation-name">${escapeHtml(alt.name)}</span>
-      <button type="button" class="variation-select" data-goto-alt="${alt.id}" aria-label="${escapeHtml(t('select'))}">${t('select')} ${icon('chevronRight', 14)}</button>
+      <button type="button" class="variation-select" data-goto-alt="${escapeHtml(alt.id)}" aria-label="${escapeHtml(t('select'))}">${t('select')} ${icon('chevronRight', 14)}</button>
     </div>
   `).join('');
 
@@ -5543,7 +5543,7 @@ function openSlotEditorModal(slotIdx) {
       // custom image) sits on top of an initials fallback; if the photo fails
       // to load it removes itself and the initials show through.
       return `
-      <button type="button" class="picker-row ${pickedIds.has(ex.id) ? 'picked' : ''}" data-pick="${ex.id}">
+      <button type="button" class="picker-row ${pickedIds.has(ex.id) ? 'picked' : ''}" data-pick="${escapeHtml(ex.id)}">
         <span class="picker-row-thumb" data-cat="${escapeHtml(ex.category)}">
           <span class="picker-row-thumb-fallback">${escapeHtml(initialsOf(exDisplayName(ex)))}</span>
           ${imgUrl ? `<img src="${escapeHtml(imgUrl)}" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="this.remove()">` : ''}
@@ -5740,7 +5740,7 @@ function renderSessionDay(el) {
     const setsRows = st.sets.map((s, i) => {
       const wDisplay = (s.weight === '' || s.weight == null) ? '' : modalConvertForDisplay(Number(s.weight));
       return `
-        <div class="sd-set-row" data-ex="${ex.id}" data-set="${i}">
+        <div class="sd-set-row" data-ex="${escapeHtml(ex.id)}" data-set="${i}">
           <div class="sd-set-n num">${i + 1}</div>
           <input type="number" inputmode="numeric" step="1" min="0" placeholder="0" value="${s.reps || ''}" data-field="reps" aria-label="${t('reps')}">
           <input type="number" inputmode="decimal" step="0.5" min="0" placeholder="0" value="${wDisplay || ''}" data-field="weight" aria-label="${viewContext.sdUnit}">
@@ -5750,7 +5750,7 @@ function renderSessionDay(el) {
     }).join('');
 
     return `
-      <div class="sd-card ${isLogged ? 'logged' : ''}" data-ex-card="${ex.id}">
+      <div class="sd-card ${isLogged ? 'logged' : ''}" data-ex-card="${escapeHtml(ex.id)}">
         <div class="sd-card-head">
           ${bgHtml}
           <div class="sd-card-main">
@@ -5766,11 +5766,11 @@ function renderSessionDay(el) {
           <div>${viewContext.sdUnit.toUpperCase()}</div>
           <div></div>
         </div>
-        <div class="sd-sets" data-ex-sets="${ex.id}">${setsRows}</div>
+        <div class="sd-sets" data-ex-sets="${escapeHtml(ex.id)}">${setsRows}</div>
 
         <div class="sd-card-actions">
-          <button type="button" class="btn btn-ghost sd-add-set-btn" data-add-set="${ex.id}">${icon('plus', 14)} ${t('add_set')}</button>
-          <button type="button" class="btn btn-primary sd-save-btn${showSave ? '' : ' sd-hidden'}" data-save-ex="${ex.id}">${isLogged ? t('update') : t('save')}</button>
+          <button type="button" class="btn btn-ghost sd-add-set-btn" data-add-set="${escapeHtml(ex.id)}">${icon('plus', 14)} ${t('add_set')}</button>
+          <button type="button" class="btn btn-primary sd-save-btn${showSave ? '' : ' sd-hidden'}" data-save-ex="${escapeHtml(ex.id)}">${isLogged ? t('update') : t('save')}</button>
         </div>
       </div>
     `;
@@ -6719,7 +6719,7 @@ function renderFoodLog(el) {
             ${e.fat ? `<span class="dot-sep"></span><span><span class="num">${fmtNum(Math.round(e.fat * m * 10) / 10)}</span>g ${t('fat_label')}</span>` : ''}
           </div>
         </div>
-        <button class="icon-btn danger" data-del-food="${e.id}">${icon('trash', 15)}</button>
+        <button class="icon-btn danger" data-del-food="${escapeHtml(e.id)}">${icon('trash', 15)}</button>
       </div>
     `;
   }
