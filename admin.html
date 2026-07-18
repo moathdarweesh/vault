@@ -449,22 +449,22 @@
         fetchAll(function(a,b){return sb.from('profiles').select('user_id,username,created_at,last_seen').range(a,b);}),
         fetchAll(function(a,b){return sb.from('user_prefs').select('user_id,unit').range(a,b);}),
         fetchAll(function(a,b){return sb.from('user_flags').select('user_id,role,status,reason').range(a,b);}),
-        fetchAll(function(a,b){return sb.from('workout_sessions').select('id,user_id,exercise_id,performed_on').range(a,b);}),
-        fetchAll(function(a,b){return sb.from('workout_sets').select('session_id,reps,weight').range(a,b);}),
-        fetchAll(function(a,b){return sb.from('food_logs').select('user_id').range(a,b);}),
-        fetchAll(function(a,b){return sb.from('sleep_logs').select('user_id').range(a,b);}),
-        fetchAll(function(a,b){return sb.from('cardio_logs').select('user_id').range(a,b);}),
         fetchAll(function(a,b){return sb.from('cardio_types').select('id,label,owner_id,deleted_at').range(a,b);}),
         fetchAll(function(a,b){return sb.from('feedback').select('id,user_id,username,message,context,status,created_at').range(a,b);}),
         fetchAll(function(a,b){return sb.from('food_catalog').select('id,name,serving,calories,protein,carbs').range(a,b);}),
         fetchAll(function(a,b){return sb.from('preset_plans').select('id,name,description,data,position').range(a,b);}),
         fetchAll(function(a,b){return sb.from('app_config').select('default_unit,announcement_ar,announcement_en,announcement_active').range(a,b);}),
-        fetchAll(function(a,b){return sb.from('audit_log').select('id,actor,action,target,detail,created_at').order('id',{ascending:false}).range(a,b);})
+        fetchAll(function(a,b){return sb.from('audit_log').select('id,actor,action,target,detail,created_at').order('id',{ascending:false}).range(a,b);}),
+        // The heavy per-user activity aggregation runs in Postgres (is_admin RPCs)
+        // instead of downloading millions of rows into the browser — see backend/
+        // admin-scale-rpc.sql. These return a per-user rollup + a small analytics JSON.
+        sb.rpc('admin_user_stats'),
+        sb.rpc('admin_activity')
       ]);
       var d=res.map(function(r){return r.error?[]:(r.data||[]);});
-      var exercises=d[0], profiles=d[1], prefs=d[2], flags=d[3], sessions=d[4], sets=d[5],
-          foods=d[6], sleeps=d[7], cardio=d[8], cardioTypes=d[9], feedback=d[10];
-      var foodCatalog=d[11], presets=d[12], appConfig=(d[13]&&d[13][0])||null, auditLog=d[14];
+      var exercises=d[0], profiles=d[1], prefs=d[2], flags=d[3], cardioTypes=d[4], feedback=d[5];
+      var foodCatalog=d[6], presets=d[7], appConfig=(d[8]&&d[8][0])||null, auditLog=d[9];
+      var userStats=d[10]||[], activity=(res[11]&&!res[11].error&&res[11].data)||{};
 
       exMap={}; exercises.forEach(function(e){exMap[e.id]={name:e.name,category:e.category,owner_id:e.owner_id};});
 
@@ -474,13 +474,12 @@
       profiles.forEach(function(p){var u=ensure(p.user_id); if(u){u.username=p.username; u.joined=p.created_at; u.last_seen=p.last_seen;}});
       prefs.forEach(function(p){var u=ensure(p.user_id); if(u)u.unit=p.unit||'kg';});
       flags.forEach(function(f){var u=ensure(f.user_id); if(u){u.role=f.role||'user'; u.status=f.status||'active'; u.reason=f.reason;}});
-      var sUser={}, sEx={};
-      sessions.forEach(function(s){var u=ensure(s.user_id); sUser[s.id]=s.user_id; sEx[s.id]=s.exercise_id; if(u){u.sessions++; if(!u.last||s.performed_on>u.last)u.last=s.performed_on;}});
-      sets.forEach(function(st){var uid=sUser[st.session_id]; if(uid&&U[uid]){U[uid].sets++; U[uid].volume+=(st.reps||0)*(+st.weight||0);}});
-      exercises.forEach(function(e){ if(e.owner_id){var u=ensure(e.owner_id); if(u)u.custom++;} });
-      foods.forEach(function(f){var u=ensure(f.user_id); if(u)u.foods++;});
-      sleeps.forEach(function(s){var u=ensure(s.user_id); if(u)u.sleeps++;});
-      cardio.forEach(function(c){var u=ensure(c.user_id); if(u)u.cardio++;});
+      // Per-user activity rollup now comes from the DB (admin_user_stats RPC).
+      userStats.forEach(function(r){ var u=ensure(r.user_id); if(u){
+        u.sessions=+r.sessions||0; u.sets=+r.sets||0; u.volume=+r.volume||0;
+        u.foods=+r.foods||0; u.sleeps=+r.sleeps||0; u.cardio=+r.cardio||0;
+        u.custom=+r.custom||0; if(r.last_session)u.last=r.last_session;
+      }});
 
       var list=Object.keys(U).map(function(k){return U[k];});
       // analytics
@@ -489,20 +488,15 @@
       function lastActive(u){ var a=u.last_seen?new Date(u.last_seen).getTime():0; var b=u.last?new Date(u.last+'T00:00:00').getTime():0; return Math.max(a,b); }
       var active7=list.filter(function(u){return (now-lastActive(u))/86400000<=7 && lastActive(u)>0;}).length;
       var new7=list.filter(function(u){return withinDays(u.joined,7);}).length;
-      var sessToday=sessions.filter(function(s){return withinDays(s.performed_on,1);}).length;
-      var sessWeek=sessions.filter(function(s){return withinDays(s.performed_on,7);}).length;
+      var sessToday=+activity.sess_today||0;
+      var sessWeek=+activity.sess_week||0;
       var everActive=list.filter(function(u){return lastActive(u)>0;});
       var churn=everActive.length? Math.round(everActive.filter(function(u){return (now-lastActive(u))/86400000>30;}).length/everActive.length*100):0;
-      // top exercises by session count
-      var exCount={}; sessions.forEach(function(s){ if(s.exercise_id) exCount[s.exercise_id]=(exCount[s.exercise_id]||0)+1; });
-      var topEx=Object.keys(exCount).map(function(id){return {name:exName(id),cat:exCat(id),n:exCount[id]};}).sort(function(a,b){return b.n-a.n;}).slice(0,8);
-      // category distribution
-      var catDist={}; sessions.forEach(function(s){var c=exCat(s.exercise_id); catDist[c]=(catDist[c]||0)+1;});
-      // unit split
+      // top exercises / category distribution / recent activity — from admin_activity RPC
+      var topEx=(activity.top_ex||[]).map(function(t){return {name:t.name,cat:t.cat,n:+t.n||0};});
+      var catDist=activity.cat_dist||{};
       var unitSplit={kg:0,lb:0}; list.forEach(function(u){ unitSplit[u.unit==='lb'?'lb':'kg']++; });
-      // recent activity
-      var recent=sessions.slice().sort(function(a,b){return (b.performed_on||'').localeCompare(a.performed_on||'');}).slice(0,12)
-        .map(function(s){ var u=U[s.user_id]||{id:s.user_id}; return {u:u, ex:exName(s.exercise_id), cat:exCat(s.exercise_id), date:s.performed_on}; });
+      var recent=(activity.recent||[]).map(function(r){ var u=U[r.user_id]||{id:r.user_id}; return {u:u, ex:r.ex, cat:r.cat, date:r.date}; });
 
       DATA={
         usersById:U, usersList:list, cardioTypes:cardioTypes,
@@ -510,10 +504,14 @@
         foodCatalog:foodCatalog, appConfig:appConfig, auditLog:auditLog,
         presets:presets.slice().sort(function(a,b){return (a.position-b.position)||(a.name||'').localeCompare(b.name||'');}),
         feedback:feedback.sort(function(a,b){return (b.created_at||'').localeCompare(a.created_at||'');}),
-        totals:{ users:list.length, sessions:sessions.length, sets:sets.length,
+        totals:{ users:list.length,
+          sessions:list.reduce(function(a,u){return a+u.sessions;},0),
+          sets:list.reduce(function(a,u){return a+u.sets;},0),
           volume:Math.round(list.reduce(function(a,u){return a+u.volume;},0)),
-          custom:exercises.filter(function(e){return e.owner_id;}).length,
-          foods:foods.length, sleeps:sleeps.length, cardio:cardio.length,
+          custom:list.reduce(function(a,u){return a+u.custom;},0),
+          foods:list.reduce(function(a,u){return a+u.foods;},0),
+          sleeps:list.reduce(function(a,u){return a+u.sleeps;},0),
+          cardio:list.reduce(function(a,u){return a+u.cardio;},0),
           named:list.filter(function(u){return u.username;}).length,
           admins:list.filter(function(u){return u.role==='admin';}).length },
         analytics:{ active7:active7, new7:new7, sessToday:sessToday, sessWeek:sessWeek, churn:churn,
