@@ -5,7 +5,7 @@
 // Single source of truth for the shipped build. Used by the visible build
 // label AND the feedback version tag so they can never drift apart. Keep this
 // equal to the ?v=N cache markers (see CLAUDE.md "CACHE WORKFLOW").
-const VAULT_BUILD = 'v140';
+const VAULT_BUILD = 'v141';
 
 // ==========================================================================
 // Icons
@@ -2463,26 +2463,22 @@ function renderWorkouts(el) {
     ${vaultBar()}
 
     <div class="page-header">
-      <div class="row-between">
-        <div>
-          <div class="page-eyebrow">${t('exercises_count')} · ${fmtNum(all.length)}</div>
-          <h1 class="page-title">${t('train')}</h1>
-          <p class="page-subtitle">${t('train_subtitle')}</p>
-        </div>
-        <button class="btn btn-ghost btn-compact" data-goto="custom-exercises">${t('my_exercises_short')}</button>
-      </div>
+      <div class="page-eyebrow">${t('exercises_count')} · ${fmtNum(all.length)}</div>
+      <h1 class="page-title">${t('train')}</h1>
+      <p class="page-subtitle">${t('train_subtitle')}</p>
     </div>
 
-    <div class="toolbar" style="display:flex;gap:10px;margin-bottom:14px">
+    <div class="exq-toolbar">
       ${searchOpen ? `
         <div class="search-wrap" style="flex:1">
           ${icon('search', 18)}
           <input type="search" id="workout-search" placeholder="${t('search_exercises')}" value="${escapeHtml(query)}">
         </div>
-        <button class="icon-square" id="workout-search-close" aria-label="${escapeHtml(t('cancel'))}">${icon('close', 20)}</button>
+        <button class="icon-square" id="workout-search-close" aria-label="${escapeHtml(t('cancel'))}">${icon('close', 18)}</button>
       ` : `
-        <button class="btn btn-accent train-add-btn" id="train-new-ex" aria-label="${escapeHtml(t('new_exercise'))}" style="flex:1">${icon('plus', 18)} <span>${t('new_exercise')}</span></button>
-        <button class="icon-square" id="workout-search-open" aria-label="${escapeHtml(t('search_exercises'))}">${icon('search', 20)}</button>
+        <button class="btn btn-ghost" data-goto="custom-exercises">${t('my_exercises_short')}</button>
+        <button class="btn btn-accent train-add-btn" id="train-new-ex" aria-label="${escapeHtml(t('new_exercise'))}" style="flex:1">${icon('plus', 16)} <span>${t('new_exercise')}</span></button>
+        <button class="icon-square" id="workout-search-open" aria-label="${escapeHtml(t('search_exercises'))}">${icon('search', 18)}</button>
       `}
     </div>
 
