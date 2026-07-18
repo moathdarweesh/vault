@@ -536,7 +536,8 @@ const I18N = {
     calc_tdee: 'Maintenance', calc_bmr: 'BMR', calc_fill_hint: 'Fill in age, height and weight.',
     manual_food_title: 'Add food', manual_food_ph: 'e.g. Chicken & rice',
     voice_tap: 'Tap to speak', voice_listening: 'Listening… tap to stop',
-    voice_processing: 'Understanding…', voice_denied: 'Microphone blocked. Allow mic access for the app, then tap again.',
+    voice_processing: 'Understanding…', voice_denied: 'Microphone blocked. Allow it when the system asks, then tap again.',
+    voice_denied_web: 'Microphone blocked for this site. Enable it in your browser settings, then tap again.',
     voice_no_mic: 'No microphone found.',
     voice_unsupported: 'Voice needs the latest app build.',
     no_foods_yet: 'No foods yet',
@@ -1085,7 +1086,8 @@ const I18N = {
     calc_tdee: 'الثبات', calc_bmr: 'الأيض الأساسي', calc_fill_hint: 'أدخل العمر والطول والوزن.',
     manual_food_title: 'إضافة أكل', manual_food_ph: 'مثال: دجاج ورز',
     voice_tap: 'اضغط لتتكلّم', voice_listening: 'أستمع… اضغط للإيقاف',
-    voice_processing: 'أفهم كلامك…', voice_denied: 'الميكروفون محجوب. اسمح للتطبيق بالوصول للميكروفون ثم اضغط مجدداً.',
+    voice_processing: 'أفهم كلامك…', voice_denied: 'الميكروفون محجوب. اسمح به عند طلب النظام ثم اضغط مجدداً.',
+    voice_denied_web: 'الميكروفون محجوب لهذا الموقع. فعّله من إعدادات المتصفح ثم اضغط مجدداً.',
     voice_no_mic: 'لا يوجد ميكروفون.',
     voice_unsupported: 'الصوت يحتاج آخر نسخة من التطبيق.',
     no_foods_yet: 'لا يوجد أكل بعد',
@@ -4170,12 +4172,15 @@ function openVoiceCapture(date, onSave) {
     try {
       stream = await navigator.mediaDevices.getUserMedia({ audio: true });
     } catch (err) {
-      // Distinguish "no mic hardware" from "permission blocked" so the message
-      // is honest. In the in-app preview the mic is sandbox-blocked → this shows
-      // the "allow access" hint; on the real device the OS prompt appears first.
+      // Give an honest, context-correct message. No mic hardware → say so. Else
+      // it's a permission block, and the fix differs by platform: the installed
+      // APP gets Android's own system prompt (allow it), while the BROWSER/PWA
+      // controls the mic through the browser's own site settings.
       const name = err && err.name;
+      const isNative = !!(window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform());
       setStatus((name === 'NotFoundError' || name === 'DevicesNotFoundError')
-        ? t('voice_no_mic') : t('voice_denied'));
+        ? t('voice_no_mic')
+        : (isNative ? t('voice_denied') : t('voice_denied_web')));
       return;
     }
     chunks = [];
