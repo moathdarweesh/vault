@@ -5,7 +5,7 @@
 // Single source of truth for the shipped build. Used by the visible build
 // label AND the feedback version tag so they can never drift apart. Keep this
 // equal to the ?v=N cache markers (see CLAUDE.md "CACHE WORKFLOW").
-const VAULT_BUILD = 'v156';
+const VAULT_BUILD = 'v157';
 
 // ==========================================================================
 // Icons
@@ -794,6 +794,9 @@ const I18N = {
     no_plan_today: 'Rest day',
     no_plan_today_sub: 'No exercises scheduled for today.',
     start_workout: 'Start Workout',
+    today_workout: "Today's workout", start_today_workout: "Start today's workout",
+    first_workout_title: 'Ready to train?', first_workout_sub: 'Log your first workout to get started.',
+    start_first_workout: 'Start your first workout',
     exercise_word: 'Exercise',
     of_word: 'of',
     last_time: 'Last time',
@@ -1339,6 +1342,9 @@ const I18N = {
     no_plan_today: 'يوم راحة',
     no_plan_today_sub: 'لا توجد تمارين مجدولة اليوم.',
     start_workout: 'ابدأ التمرين',
+    today_workout: 'تمرين اليوم', start_today_workout: 'ابدأ تمرين اليوم',
+    first_workout_title: 'جاهز للتمرين؟', first_workout_sub: 'سجّل أول تمرين لتبدأ.',
+    start_first_workout: 'ابدأ أول تمرين',
     exercise_word: 'تمرين',
     of_word: 'من',
     last_time: 'آخر مرة',
@@ -2031,6 +2037,8 @@ function renderHome(el) {
   const sleepSub = lastSleep ? daysAgoLocalized(lastSleep.date) : t('no_data');
 
   const streak = computeStreak();
+  // First-run / empty signal — used to suppress the "wall of zeros" on Home.
+  const hasAnyActivity = allSessions.length > 0 || allCardio.length > 0 || !!lastSleep;
 
   const hour = now.getHours();
   const greeting = hour < 12 ? t('greet_morning') : hour < 18 ? t('greet_afternoon') : t('greet_evening');
@@ -2050,6 +2058,7 @@ function renderHome(el) {
     }
   });
 
+  const heatTotal = EXERCISE_CATEGORIES.reduce((sum, c) => sum + (catCounts[c] || 0), 0);
   const heatCells = EXERCISE_CATEGORIES.filter((c) => c !== 'Other').map((cat) => {
     const count = catCounts[cat] || 0;
     let lvl = 0;
@@ -2147,16 +2156,28 @@ function renderHome(el) {
           ${sideRow(t('anterior'), muscles.anterior, 'anterior')}
           ${sideRow(t('posterior'), muscles.posterior, 'posterior')}
         </div>
-        <div class="hero-cta">${icon('dumbbell', 18)}<span>${t('start_workout')}</span></div>
+        <div class="hero-cta">${icon('dumbbell', 18)}<span>${t('today_workout')}</span></div>
       </button>
     `;
-  } else {
+  } else if (weekSetsCount > 0) {
+    // Active this week but no plan today → keep the week count, but the CTA opens
+    // today's session directly (session-day handles an empty/rest day itself).
     heroHtml = `
-      <button class="hero-card" data-goto="planner">
+      <button class="hero-card" id="home-start-workout">
         <div class="hero-eyebrow">${t('this_week')} · ${escapeHtml(dayName(now.getDay(), true))}</div>
         <div class="hero-numeral num anim" data-count="${weekSetsCount}">0</div>
         <div class="hero-meta">${t('sessions_this_week')}</div>
-        <div class="hero-cta ghost"><span>${t('no_plan_today_sub')}</span></div>
+        <div class="hero-cta">${icon('dumbbell', 18)}<span>${t('today_workout')}</span></div>
+      </button>
+    `;
+  } else {
+    // First run / inactive: no wall of zeros — one inviting CTA straight into today.
+    heroHtml = `
+      <button class="hero-card hero-first" id="home-start-workout">
+        <div class="hero-eyebrow">${escapeHtml(dayName(now.getDay(), true))}</div>
+        <div class="hero-first-title">${t('first_workout_title')}</div>
+        <div class="hero-first-sub">${t('first_workout_sub')}</div>
+        <div class="hero-cta">${icon('dumbbell', 18)}<span>${t('start_first_workout')}</span></div>
       </button>
     `;
   }
@@ -2169,14 +2190,14 @@ function renderHome(el) {
         <div class="home-hello">${escapeHtml(dayLabel)}</div>
         <div class="home-hero">${greeting}.</div>
       </div>
-      <button class="streak-chip" data-goto="calendar" aria-label="${escapeHtml(streakLabel)}">
+      ${streak > 0 ? `<button class="streak-chip" data-goto="calendar" aria-label="${escapeHtml(streakLabel)}">
         ${icon('flame', 16)}<span class="num">${streak}</span><span class="streak-chip-unit">${streakUnit}</span>
-      </button>
+      </button>` : ''}
     </div>
 
     ${heroHtml}
 
-    <div class="stat-strip">
+    ${hasAnyActivity ? `<div class="stat-strip">
       <button class="stat-cell" data-goto="workouts">
         <div class="stat-cell-value num"><span class="anim" data-count="${weekWorkoutDays}">0</span></div>
         <div class="stat-cell-label">${t('sessions_label')}</div>
@@ -2189,11 +2210,11 @@ function renderHome(el) {
         <div class="stat-cell-value num">${sleepHours != null ? `<span class="anim" data-count="${Math.round(parseFloat(sleepHours) * 10)}" data-fixed="1">0</span><span class="unit">${t('unit_hr')}</span>` : '—'}</div>
         <div class="stat-cell-label">${t('last_sleep')}</div>
       </button>
-    </div>
+    </div>` : ''}
 
     ${typeof Health !== 'undefined' ? Health.homeSectionHtml() : ''}
 
-    <div class="muscle-heatmap">
+    ${heatTotal > 0 ? `<div class="muscle-heatmap">
       <div class="heatmap-head">
         <div>
           <div class="heatmap-title">${t('muscle_focus')}</div>
@@ -2201,14 +2222,14 @@ function renderHome(el) {
         </div>
       </div>
       <div class="heatmap-grid band">${heatCells}</div>
-    </div>
+    </div>` : ''}
 
     <div class="section-title">${t('tools_section')}</div>
     <div class="tool-rail">
-      ${hasPlanToday ? `<button class="tool-pod" data-goto="planner">
+      <button class="tool-pod" data-goto="planner">
         <div class="tool-pod-icon">${icon('calendar', 18)}</div>
         <div class="tool-pod-label">${t('plan_card')}</div>
-      </button>` : ''}
+      </button>
       <button class="tool-pod" data-goto="personal-records">
         <div class="tool-pod-icon" aria-hidden="true">${icon('trophy', 18)}</div>
         <div class="tool-pod-label">${t('pr_card')}</div>
@@ -2498,6 +2519,8 @@ function renderWorkouts(el) {
       <p class="page-subtitle">${t('train_subtitle')}</p>
     </div>
 
+    <button class="btn btn-accent btn-block train-start-today" id="train-start-today">${icon('dumbbell', 18)} <span>${t('start_today_workout')}</span></button>
+
     <div class="exq-toolbar">
       ${searchOpen ? `
         <div class="search-wrap" style="flex:1">
@@ -2506,8 +2529,7 @@ function renderWorkouts(el) {
         </div>
         <button class="icon-square" id="workout-search-close" aria-label="${escapeHtml(t('cancel'))}">${icon('close', 18)}</button>
       ` : `
-        <button class="btn btn-ghost" data-goto="custom-exercises">${t('my_exercises_short')}</button>
-        <button class="btn btn-accent train-add-btn" id="train-new-ex" aria-label="${escapeHtml(t('new_exercise'))}" style="flex:1">${icon('plus', 16)} <span>${t('new_exercise')}</span></button>
+        <button class="btn btn-ghost" data-goto="custom-exercises" style="flex:1">${t('my_exercises_short')}</button>
         <button class="icon-square" id="workout-search-open" aria-label="${escapeHtml(t('search_exercises'))}">${icon('search', 18)}</button>
       `}
     </div>
@@ -2551,8 +2573,9 @@ function renderWorkouts(el) {
   }
   updateWorkoutGrid();
 
-  // "+ New exercise" (toolbar) → create a custom exercise.
-  $('#train-new-ex', el)?.addEventListener('click', () => openNewExerciseModal(null));
+  // Primary action: start logging today's workout (session-day handles an empty
+  // day itself, so this works even before any plan is built).
+  $('#train-start-today', el)?.addEventListener('click', () => navigate('session-day', { date: todayISO() }));
 
   // Compact square search: tap the magnifier to expand the search field, X to collapse.
   $('#workout-search-open', el)?.addEventListener('click', () => {

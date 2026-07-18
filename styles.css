@@ -5940,6 +5940,11 @@ body[dir="rtl"] .variation-select svg { transform: scaleX(-1); }
   position: relative;
 }
 .hero-cta svg { width: 18px; height: 18px; }
+/* First-run hero: an inviting title + subtitle instead of a wall of zeros. */
+.hero-first-title { font-size: var(--fs-title); font-weight: var(--fw-display); letter-spacing: var(--tracking-tight); line-height: 1.15; margin: var(--sp-2) 0 var(--sp-1); position: relative; }
+.hero-first-sub { font-size: var(--fs-sub); color: var(--text-mute); position: relative; }
+/* Primary "start today's workout" button at the top of the Train tab. */
+.train-start-today { height: 48px; margin-bottom: var(--card-gap, 12px); font-size: var(--fs-body); }
 .hero-cta.ghost {
   background: var(--surface-3);
   color: var(--text-mute);
