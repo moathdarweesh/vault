@@ -371,35 +371,61 @@
   // when the user is logged out. ANY failure (offline, not configured, a
   // table not existing yet) resolves that field to null — callers must treat
   // every field as optional and never let a failure here block boot.
+  const CATALOG_CACHE_KEY = 'vault_catalog_cache';
+  const CATALOG_TTL = 30 * 60 * 1000; // 30 min
+
   async function pullCatalog() {
     const result = { exercises: null, foods: null, presets: null, config: null };
     if (!configured()) return result;
     try { if (ensureSdk) await ensureSdk(); } catch (_) {}
     const c = sb();
     if (!c) return result;
-    try {
-      const { data, error } = await c
-        .from('exercises')
-        .select('id,name,category,image_slug,machine_type')
-        .is('owner_id', null)
-        .is('deleted_at', null);
-      if (!error && Array.isArray(data)) result.exercises = data;
-    } catch (_) {}
-    try {
-      const { data, error } = await c
-        .from('food_catalog')
-        .select('id,name,serving,calories,protein,carbs')
-        .is('deleted_at', null);
-      if (!error && Array.isArray(data)) result.foods = data;
-    } catch (_) {}
-    try {
-      const { data, error } = await c
-        .from('preset_plans')
-        .select('id,name,description,data,position')
-        .is('deleted_at', null)
-        .order('position', { ascending: true });
-      if (!error && Array.isArray(data)) result.presets = data;
-    } catch (_) {}
+
+    // The three HEAVY, rarely-changing catalog tables (global exercises, foods,
+    // presets) are served from a short localStorage cache so 10k cold-loads AND
+    // every app foreground (bootCatalog re-runs) don't each re-read three full
+    // tables from Postgres. `config` (the announcement) is ALWAYS fetched fresh
+    // below so admin broadcasts still appear promptly.
+    let cached = null;
+    try { cached = JSON.parse(localStorage.getItem(CATALOG_CACHE_KEY) || 'null'); } catch (_) {}
+    if (cached && cached.t && (Date.now() - cached.t) < CATALOG_TTL) {
+      result.exercises = cached.exercises || null;
+      result.foods = cached.foods || null;
+      result.presets = cached.presets || null;
+    } else {
+      try {
+        const { data, error } = await c
+          .from('exercises')
+          .select('id,name,category,image_slug,machine_type')
+          .is('owner_id', null)
+          .is('deleted_at', null);
+        if (!error && Array.isArray(data)) result.exercises = data;
+      } catch (_) {}
+      try {
+        const { data, error } = await c
+          .from('food_catalog')
+          .select('id,name,serving,calories,protein,carbs')
+          .is('deleted_at', null);
+        if (!error && Array.isArray(data)) result.foods = data;
+      } catch (_) {}
+      try {
+        const { data, error } = await c
+          .from('preset_plans')
+          .select('id,name,description,data,position')
+          .is('deleted_at', null)
+          .order('position', { ascending: true });
+        if (!error && Array.isArray(data)) result.presets = data;
+      } catch (_) {}
+      // Only cache a successful fetch of the primary table — never cache a
+      // transient total failure (which would starve the app for 30 min).
+      if (result.exercises !== null) {
+        try {
+          localStorage.setItem(CATALOG_CACHE_KEY, JSON.stringify({
+            t: Date.now(), exercises: result.exercises, foods: result.foods, presets: result.presets,
+          }));
+        } catch (_) {}
+      }
+    }
     try {
       const { data, error } = await c
         .from('app_config')
