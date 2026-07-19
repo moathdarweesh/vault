@@ -5,7 +5,7 @@
 // Single source of truth for the shipped build. Used by the visible build
 // label AND the feedback version tag so they can never drift apart. Keep this
 // equal to the ?v=N cache markers (see CLAUDE.md "CACHE WORKFLOW").
-const VAULT_BUILD = 'v166';
+const VAULT_BUILD = 'v167';
 
 // ==========================================================================
 // Icons

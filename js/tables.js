@@ -334,6 +334,30 @@
         const r = await upsert(client, table, rows, onConflict);
         summary[table] = r.error ? ('ERR: ' + r.error) : r.count;
       }
+
+      // RECONCILE — remove rows the user DELETED locally so the mirror REFLECTS the
+      // blob instead of drifting. The mirror used to only ever upsert, so a deleted
+      // session/food lived on forever as a ghost row — which now matters because
+      // admin.html reads these tables (via the aggregate RPCs), so ghosts inflate
+      // its numbers. Best-effort + RLS-scoped (can only touch the signed-in user's
+      // own rows). workout_sets are removed via ON DELETE CASCADE from their
+      // session. Skipped when the id set is huge to avoid an oversized delete query
+      // (a miss just leaves the ghosts for the next pass — never data loss, since
+      // the blob is the source of truth and these tables are analytics-only).
+      const reconcile = async (table, ids) => {
+        if (ids.length > 2000) return;
+        try {
+          let q = client.from(table).delete().eq('user_id', userId);
+          if (ids.length) q = q.not('id', 'in', '(' + ids.join(',') + ')');
+          const { error } = await q;
+          if (error) summary['reconcile:' + table] = 'ERR: ' + error.message;
+        } catch (_) {}
+      };
+      await reconcile('workout_sessions', sessions.map((s) => s.id)); // sets cascade
+      await reconcile('cardio_logs', cardioLogs.map((c) => c.id));
+      await reconcile('food_logs', foodLogs.map((f) => f.id));
+      await reconcile('sleep_logs', sleepLogs.map((s) => s.id));
+
       return { ok: true, userId, summary };
     } catch (e) {
       return { error: (e && e.message) || String(e), summary };
