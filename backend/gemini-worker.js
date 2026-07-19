@@ -54,7 +54,10 @@ function corsHeaders(requestOrigin) {
   return {
     'Access-Control-Allow-Origin': origin,
     'Access-Control-Allow-Methods': 'POST, OPTIONS',
-    'Access-Control-Allow-Headers': 'Content-Type',
+    // Authorization is REQUIRED here: the client sends a Supabase bearer token,
+    // and a cross-origin request carrying Authorization triggers a CORS preflight
+    // that fails (browser shows "Failed to fetch") unless the header is allowed.
+    'Access-Control-Allow-Headers': 'Content-Type, Authorization',
   };
 }
 
