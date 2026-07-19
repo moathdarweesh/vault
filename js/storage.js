@@ -337,6 +337,7 @@ function defaultState() {
     supplements: [],
     supplementLogs: {},
     foodLogs: {},
+    water: {}, // per-day water intake in ml, keyed by YYYY-MM-DD
     // Nutrition targets. `mode:'off'` → the Food page shows the "set up your
     // goal" prompt. When set, `targets` holds the daily goals the dashboard
     // counts down from; `profile` remembers the calculator inputs so the user
@@ -439,6 +440,7 @@ function loadState() {
     parsed.supplements = parsed.supplements || [];
     parsed.supplementLogs = parsed.supplementLogs || {};
     parsed.foodLogs = parsed.foodLogs || {};
+    parsed.water = parsed.water || {};
     // Nutrition targets (added later) — backfill for existing users.
     if (!parsed.nutrition || typeof parsed.nutrition !== 'object') {
       parsed.nutrition = defaultNutrition();
@@ -839,6 +841,20 @@ const DB = {
           source: m.entry.source || null,
           count: m.count,
         }));
+    },
+  },
+
+  // ===== Water intake (per-day ml) =====
+  water: {
+    GOAL_ML: 2500, // default daily goal
+    CUP_ML: 250,   // one cup / glass
+    get(date) { return Math.max(0, (STATE.water && STATE.water[date]) || 0); },
+    goal() { return this.GOAL_ML; },
+    add(date, ml) {
+      if (!STATE.water) STATE.water = {};
+      STATE.water[date] = Math.max(0, this.get(date) + (Number(ml) || 0));
+      save();
+      return STATE.water[date];
     },
   },
 

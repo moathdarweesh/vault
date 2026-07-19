@@ -5,7 +5,7 @@
 // Single source of truth for the shipped build. Used by the visible build
 // label AND the feedback version tag so they can never drift apart. Keep this
 // equal to the ?v=N cache markers (see CLAUDE.md "CACHE WORKFLOW").
-const VAULT_BUILD = 'v168';
+const VAULT_BUILD = 'v169';
 
 // ==========================================================================
 // Icons
@@ -527,6 +527,7 @@ const I18N = {
     add_chat: 'Chat', add_chat_sub: 'Type it — AI finds the calories',
     add_photo: 'Photo', add_photo_sub: 'Snap your meal',
     add_barcode: 'Barcode', bc_amount: 'Amount', unit_g: 'g',
+    water: 'Water', unit_ml: 'ml', water_undo: 'Remove a cup',
     barcode_hint: 'Point the camera at a barcode',
     barcode_looking: 'Looking it up…',
     barcode_not_found: 'Not found — try Photo or Manual.',
@@ -1086,6 +1087,7 @@ const I18N = {
     add_chat: 'محادثة', add_chat_sub: 'اكتبه — والذكاء يحسب السعرات',
     add_photo: 'صورة', add_photo_sub: 'صوّر وجبتك',
     add_barcode: 'باركود', bc_amount: 'الكمية', unit_g: 'غ',
+    water: 'الماء', unit_ml: 'مل', water_undo: 'إزالة كوب',
     barcode_hint: 'وجّه الكاميرا نحو الباركود',
     barcode_looking: 'أبحث عنه…',
     barcode_not_found: 'غير موجود — جرّب الصورة أو اليدوي.',
@@ -3731,6 +3733,12 @@ function renderFood(el) {
     if (edit) { openCalculatorModal(rerender); return; }
     const coach = e.target.closest('[data-coach]');
     if (coach) { openCoach(date); return; }
+    const water = e.target.closest('[data-add-water]');
+    if (water) {
+      DB.water.add(date, parseInt(water.getAttribute('data-add-water'), 10) || 0);
+      rerender();
+      return;
+    }
   });
 
   // The calorie goal is MANDATORY: if none is set, open the calculator straight
@@ -3762,6 +3770,23 @@ function nutritionDashboardHtml(date) {
       </button>
     `;
   }
+
+  const waterMl = DB.water.get(date);
+  const waterGoal = DB.water.goal();
+  const waterPct = waterGoal > 0 ? Math.min(100, (waterMl / waterGoal) * 100) : 0;
+  const waterCard = `
+    <div class="water-card">
+      <div class="water-head">
+        <div class="water-title">${icon('droplet', 17)} <span>${t('water')}</span></div>
+        <div class="water-nums"><span class="num">${fmtNum(waterMl)}</span> / <span class="num">${fmtNum(waterGoal)}</span> ${t('unit_ml')}</div>
+      </div>
+      <div class="water-bar"><span class="water-fill" style="width:${waterPct}%"></span></div>
+      <div class="water-actions">
+        <button class="water-cup" data-add-water="250">+<span class="num">250</span></button>
+        <button class="water-cup" data-add-water="500">+<span class="num">500</span></button>
+        <button class="water-cup water-cup-minus" data-add-water="-250" aria-label="${escapeHtml(t('water_undo'))}">${icon('minus', 16)}</button>
+      </div>
+    </div>`;
 
   const tgt = nut.get().targets;
   const calLeft = Math.round(tgt.calories - consumed.calories);
@@ -3809,6 +3834,8 @@ function nutritionDashboardHtml(date) {
         ${macroBar('fat', t('fat_label'), 'fat')}
       </div>
     </div>
+
+    ${waterCard}
 
     <button class="nutri-coach" data-coach>
       <div class="cta-card-icon">${icon('zap', 18)}</div>

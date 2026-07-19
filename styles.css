@@ -4608,6 +4608,28 @@ body[dir="rtl"] .picker-row { text-align: right; }
 .macro-track-left { font-size: 11px; color: var(--text-mute); margin-top: 4px; font-weight: 600; }
 .macro-track-left .over { color: var(--danger, #ef4444); }
 
+/* Water intake card */
+.water-card {
+  margin-top: 12px; padding: 14px;
+  border-radius: var(--radius); background: var(--surface-2); border: 1px solid var(--border);
+}
+.water-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 10px; }
+.water-title { display: flex; align-items: center; gap: 7px; font-size: 14px; font-weight: 700; color: var(--text); }
+.water-title svg { color: #38bdf8; }
+.water-nums { font-size: 13px; color: var(--text-dim); font-weight: 600; white-space: nowrap; }
+.water-bar { height: 8px; border-radius: 999px; background: var(--surface-3); overflow: hidden; }
+.water-fill { display: block; height: 100%; border-radius: 999px; background: linear-gradient(90deg, #0ea5e9, #38bdf8); transition: width 0.5s cubic-bezier(0.22, 1, 0.36, 1); }
+.water-actions { display: flex; gap: 8px; margin-top: 12px; }
+.water-cup {
+  flex: 1; padding: 10px 8px; border-radius: var(--radius-sm);
+  background: var(--surface-3); border: 1px solid var(--border); color: var(--text);
+  font: inherit; font-size: 14px; font-weight: 700; cursor: pointer;
+  appearance: none; -webkit-appearance: none; -webkit-tap-highlight-color: transparent;
+  transition: transform 0.12s, background 0.15s;
+}
+.water-cup:active { transform: scale(0.96); }
+.water-cup-minus { flex: 0 0 46px; color: var(--text-dim); display: flex; align-items: center; justify-content: center; }
+
 /* Coach CTA */
 .nutri-coach {
   display: flex; align-items: center; gap: 12px; width: 100%;
