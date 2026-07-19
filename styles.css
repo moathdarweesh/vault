@@ -4462,6 +4462,17 @@ body[dir="rtl"] .picker-row { text-align: right; }
   border: 1px solid var(--border-hi); color: var(--text-mute);
 }
 .ai-macro b { color: var(--text); margin-inline-end: 2px; }
+/* Portion stepper on an AI result card — adjust the estimate before logging */
+.ai-portion { display: flex; align-items: center; gap: 10px; align-self: flex-start; }
+.ai-portion-btn {
+  width: 34px; height: 34px; border-radius: 10px; cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  background: var(--surface-1); border: 1px solid var(--border-hi); color: var(--text);
+  appearance: none; -webkit-appearance: none; -webkit-tap-highlight-color: transparent;
+  transition: transform 0.12s;
+}
+.ai-portion-btn:active { transform: scale(0.92); }
+.ai-portion-val { min-width: 40px; text-align: center; font-size: 15px; font-weight: 800; color: var(--text); }
 .ai-macro.cal b { color: var(--cat-arms); }
 .ai-macro.pro b { color: var(--cat-legs); }
 .ai-macro.carb b { color: var(--cat-back); }

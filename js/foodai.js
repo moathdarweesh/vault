@@ -240,17 +240,41 @@
 
   function resultCardHtml(r, id) {
     return `
-      <div class="ai-card" data-result="${id}">
+      <div class="ai-card" data-result="${id}" data-mult="1"
+        data-bcal="${r.calories}" data-bpro="${r.protein}" data-bcarb="${r.carbs}" data-bfat="${r.fat}">
         <div class="ai-card-name">${esc(r.name)}</div>
+        <div class="ai-portion">
+          <button type="button" class="ai-portion-btn" data-step="-1" aria-label="${tr('portion_less')}">${ic('minus', 16)}</button>
+          <span class="ai-portion-val"><span class="num">1</span>×</span>
+          <button type="button" class="ai-portion-btn" data-step="1" aria-label="${tr('portion_more')}">${ic('plus', 16)}</button>
+        </div>
         <div class="ai-macros">
-          <span class="ai-macro cal"><b class="num">${fmtNum(r.calories)}</b>${tr('cal')}</span>
-          <span class="ai-macro pro"><b class="num">${fmtNum(r.protein)}</b>g ${tr('protein_label')}</span>
-          <span class="ai-macro carb"><b class="num">${fmtNum(r.carbs)}</b>g ${tr('carbs_label')}</span>
-          <span class="ai-macro fat"><b class="num">${fmtNum(r.fat)}</b>g ${tr('fat_label')}</span>
+          <span class="ai-macro cal"><b class="num" data-m="cal">${fmtNum(r.calories)}</b>${tr('cal')}</span>
+          <span class="ai-macro pro"><b class="num" data-m="pro">${fmtNum(r.protein)}</b>g ${tr('protein_label')}</span>
+          <span class="ai-macro carb"><b class="num" data-m="carb">${fmtNum(r.carbs)}</b>g ${tr('carbs_label')}</span>
+          <span class="ai-macro fat"><b class="num" data-m="fat">${fmtNum(r.fat)}</b>g ${tr('fat_label')}</span>
         </div>
         <button class="btn btn-primary btn-block ai-add" data-add="${id}">${ic('plus', 15)} ${tr('ai_add_to_log')}</button>
       </div>`;
   }
+
+  // Recompute one card's shown macros from its base × the current multiplier.
+  // Shared by the chat + photo result cards. The base (1×) macros live in the
+  // card's data-* so the estimate is never lost as the user adjusts the portion.
+  function applyPortion(card) {
+    const mult = parseFloat(card.dataset.mult) || 1;
+    const set = (k, base, dec) => {
+      const n = card.querySelector('[data-m="' + k + '"]');
+      if (n) n.textContent = fmtNum(dec ? Math.round(base * mult * 10) / 10 : Math.round(base * mult));
+    };
+    set('cal', +card.dataset.bcal, false);
+    set('pro', +card.dataset.bpro, true);
+    set('carb', +card.dataset.bcarb, true);
+    set('fat', +card.dataset.bfat, true);
+    const v = card.querySelector('.ai-portion-val .num');
+    if (v) v.textContent = fmtNum(mult);
+  }
+  function cardMult(card) { return card ? (parseFloat(card.dataset.mult) || 1) : 1; }
 
   function keyPanelHtml() {
     return `
@@ -352,6 +376,24 @@
         input.addEventListener('keydown', (e) => { if (e.key === 'Enter') run(); });
         input.focus();
 
+        // Portion stepper (delegated once) — +/- adjusts the card's multiplier
+        // in 0.25 steps and live-recomputes its macros before the user commits.
+        const resultsBox = document.getElementById('ai-results');
+        if (resultsBox && !resultsBox.dataset.portionBound) {
+          resultsBox.dataset.portionBound = '1';
+          resultsBox.addEventListener('click', (e) => {
+            const btn = e.target.closest('.ai-portion-btn');
+            if (!btn) return;
+            const card = btn.closest('.ai-card');
+            if (!card) return;
+            const step = parseInt(btn.dataset.step, 10) || 0;
+            let mult = (parseFloat(card.dataset.mult) || 1) + step * 0.25;
+            mult = Math.max(0.25, Math.min(20, Math.round(mult * 100) / 100));
+            card.dataset.mult = mult;
+            applyPortion(card);
+          });
+        }
+
         // Photo → calories
         const photoBtn = document.getElementById('ai-photo');
         const fileInput = document.getElementById('ai-file');
@@ -386,10 +428,13 @@
       bindAdds();
     }
 
-    function logItem(it) {
+    function logItem(it, mult) {
       if (!it || typeof DB === 'undefined') return;
+      // Store the AI's estimate as the per-serving base and the chosen portion
+      // as `servings`, so totals (macros × servings) count the adjusted amount
+      // and the food-log row shows the "× N" the user picked.
       DB.foodLogs.add(logDate, {
-        name: it.name, servings: 1,
+        name: it.name, servings: mult || 1,
         calories: it.calories, protein: it.protein, carbs: it.carbs, fat: it.fat,
         source: 'ai',
       });
@@ -416,23 +461,23 @@
         if (b.dataset.bound) return;
         b.dataset.bound = '1';
         b.addEventListener('click', () => {
-          logItem(results[b.dataset.add]);
+          logItem(results[b.dataset.add], cardMult(b.closest('.ai-card')));
           showToast(tr('ai_added'));
           markAdded(b);
           refreshFoodLog();
         });
       });
-      // Add every item from one message
+      // Add every item from one message — each at its own card's chosen portion.
       document.querySelectorAll('#ai-results [data-addall]').forEach((b) => {
         if (b.dataset.bound) return;
         b.dataset.bound = '1';
         b.addEventListener('click', () => {
-          const items = groups[b.dataset.addall] || [];
-          items.forEach(logItem);
+          (document.querySelectorAll(`#ai-results [data-add^="${b.dataset.addall}-"]`) || []).forEach((addBtn) => {
+            logItem(results[addBtn.dataset.add], cardMult(addBtn.closest('.ai-card')));
+            markAdded(addBtn);
+          });
           showToast(tr('ai_added'));
           markAdded(b);
-          // disable the per-item buttons in this group too
-          (document.querySelectorAll(`#ai-results [data-add^="${b.dataset.addall}-"]`) || []).forEach(markAdded);
           refreshFoodLog();
         });
       });

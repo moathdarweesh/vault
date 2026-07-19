@@ -5,7 +5,7 @@
 // Single source of truth for the shipped build. Used by the visible build
 // label AND the feedback version tag so they can never drift apart. Keep this
 // equal to the ?v=N cache markers (see CLAUDE.md "CACHE WORKFLOW").
-const VAULT_BUILD = 'v170';
+const VAULT_BUILD = 'v171';
 
 // ==========================================================================
 // Icons
@@ -531,6 +531,7 @@ const I18N = {
     bodyweight: 'Weight', weight_add_first: 'Log your weight', weight_trend: 'Weight trend',
     weight_need_more: 'Log at least 2 days to see your trend', weight_placeholder: 'Today’s weight',
     weight_empty_hint: 'Log your weight regularly to track your progress',
+    portion_less: 'Smaller portion', portion_more: 'Larger portion',
     barcode_hint: 'Point the camera at a barcode',
     barcode_looking: 'Looking it up…',
     barcode_not_found: 'Not found — try Photo or Manual.',
@@ -1094,6 +1095,7 @@ const I18N = {
     bodyweight: 'الوزن', weight_add_first: 'سجّل وزنك', weight_trend: 'منحنى الوزن',
     weight_need_more: 'سجّل يومين على الأقل لرؤية المنحنى', weight_placeholder: 'وزن اليوم',
     weight_empty_hint: 'سجّل وزنك بانتظام لمتابعة تقدّمك',
+    portion_less: 'كمية أقل', portion_more: 'كمية أكثر',
     barcode_hint: 'وجّه الكاميرا نحو الباركود',
     barcode_looking: 'أبحث عنه…',
     barcode_not_found: 'غير موجود — جرّب الصورة أو اليدوي.',
@@ -4013,7 +4015,7 @@ function nutritionDashboardHtml(date) {
 // Shared: log AI/voice/photo items to today and refresh the dashboard.
 function logNutritionItems(date, items, onDone) {
   (items || []).forEach((it) => DB.foodLogs.add(date, {
-    name: it.name, servings: 1,
+    name: it.name, servings: it.servings || 1,
     calories: it.calories, protein: it.protein, carbs: it.carbs, fat: it.fat,
     source: it.source || 'ai',
   }));
@@ -4560,18 +4562,54 @@ function openVoiceCapture(date, onSave) {
 
   function renderVoiceResults(items) {
     results.innerHTML = items.map((it, i) => `
-      <div class="ai-card" data-vr="${i}">
+      <div class="ai-card" data-vr="${i}" data-mult="1"
+        data-bcal="${it.calories}" data-bpro="${it.protein}" data-bcarb="${it.carbs}" data-bfat="${it.fat}">
         <div class="ai-card-name">${escapeHtml(it.name)}</div>
+        <div class="ai-portion">
+          <button type="button" class="ai-portion-btn" data-step="-1" aria-label="${escapeHtml(t('portion_less'))}">${icon('minus', 16)}</button>
+          <span class="ai-portion-val"><span class="num">1</span>×</span>
+          <button type="button" class="ai-portion-btn" data-step="1" aria-label="${escapeHtml(t('portion_more'))}">${icon('plus', 16)}</button>
+        </div>
         <div class="ai-macros">
-          <span class="ai-macro cal"><b class="num">${fmtNum(it.calories)}</b>${t('cal')}</span>
-          <span class="ai-macro pro"><b class="num">${fmtNum(it.protein)}</b>g ${t('protein_label')}</span>
-          <span class="ai-macro carb"><b class="num">${fmtNum(it.carbs)}</b>g ${t('carbs_label')}</span>
-          <span class="ai-macro fat"><b class="num">${fmtNum(it.fat)}</b>g ${t('fat_label')}</span>
+          <span class="ai-macro cal"><b class="num" data-m="cal">${fmtNum(it.calories)}</b>${t('cal')}</span>
+          <span class="ai-macro pro"><b class="num" data-m="pro">${fmtNum(it.protein)}</b>g ${t('protein_label')}</span>
+          <span class="ai-macro carb"><b class="num" data-m="carb">${fmtNum(it.carbs)}</b>g ${t('carbs_label')}</span>
+          <span class="ai-macro fat"><b class="num" data-m="fat">${fmtNum(it.fat)}</b>g ${t('fat_label')}</span>
         </div>
       </div>`).join('') +
       `<button class="btn btn-primary btn-block" id="voice-addall">${icon('plus', 15)} ${t('ai_add_all')} (${fmtNum(items.length)})</button>`;
+
+    const applyPortion = (card) => {
+      const mult = parseFloat(card.dataset.mult) || 1;
+      const set = (k, base, dec) => {
+        const n = card.querySelector('[data-m="' + k + '"]');
+        if (n) n.textContent = fmtNum(dec ? Math.round(base * mult * 10) / 10 : Math.round(base * mult));
+      };
+      set('cal', +card.dataset.bcal, false);
+      set('pro', +card.dataset.bpro, true);
+      set('carb', +card.dataset.bcarb, true);
+      set('fat', +card.dataset.bfat, true);
+      const v = card.querySelector('.ai-portion-val .num');
+      if (v) v.textContent = fmtNum(mult);
+    };
+    results.addEventListener('click', (e) => {
+      const btn = e.target.closest('.ai-portion-btn');
+      if (!btn) return;
+      const card = btn.closest('.ai-card');
+      if (!card) return;
+      let mult = (parseFloat(card.dataset.mult) || 1) + (parseInt(btn.dataset.step, 10) || 0) * 0.25;
+      mult = Math.max(0.25, Math.min(20, Math.round(mult * 100) / 100));
+      card.dataset.mult = mult;
+      applyPortion(card);
+    });
+
     results.querySelector('#voice-addall').addEventListener('click', () => {
-      logNutritionItems(date, items.map((it) => Object.assign({}, it, { source: 'voice' })), onSave);
+      const scaled = items.map((it, i) => {
+        const card = results.querySelector(`.ai-card[data-vr="${i}"]`);
+        const mult = card ? (parseFloat(card.dataset.mult) || 1) : 1;
+        return Object.assign({}, it, { source: 'voice', servings: mult });
+      });
+      logNutritionItems(date, scaled, onSave);
       showToast(t('ai_added'));
       closeModal();
     });
