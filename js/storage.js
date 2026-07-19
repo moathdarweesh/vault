@@ -338,6 +338,7 @@ function defaultState() {
     supplementLogs: {},
     foodLogs: {},
     water: {}, // per-day water intake in ml, keyed by YYYY-MM-DD
+    bodyweight: [], // [{ date:'YYYY-MM-DD', kg }] — one entry per day
     // Nutrition targets. `mode:'off'` → the Food page shows the "set up your
     // goal" prompt. When set, `targets` holds the daily goals the dashboard
     // counts down from; `profile` remembers the calculator inputs so the user
@@ -441,6 +442,7 @@ function loadState() {
     parsed.supplementLogs = parsed.supplementLogs || {};
     parsed.foodLogs = parsed.foodLogs || {};
     parsed.water = parsed.water || {};
+    parsed.bodyweight = Array.isArray(parsed.bodyweight) ? parsed.bodyweight : [];
     // Nutrition targets (added later) — backfill for existing users.
     if (!parsed.nutrition || typeof parsed.nutrition !== 'object') {
       parsed.nutrition = defaultNutrition();
@@ -841,6 +843,32 @@ const DB = {
           source: m.entry.source || null,
           count: m.count,
         }));
+    },
+  },
+
+  // ===== Body weight log — one entry per day, kg canonical =====
+  bodyweight: {
+    list() {
+      return (STATE.bodyweight || []).slice().sort((a, b) => a.date.localeCompare(b.date));
+    },
+    latest() {
+      const l = this.list();
+      return l.length ? l[l.length - 1] : null;
+    },
+    // Upsert today's (or any date's) weight. Same date overwrites — one point/day.
+    log(date, kg) {
+      const v = Math.round((Number(kg) || 0) * 10) / 10;
+      if (v <= 0) return;
+      if (!STATE.bodyweight) STATE.bodyweight = [];
+      const existing = STATE.bodyweight.find((e) => e.date === date);
+      if (existing) existing.kg = v;
+      else STATE.bodyweight.push({ date, kg: v });
+      save();
+    },
+    remove(date) {
+      if (!STATE.bodyweight) return;
+      STATE.bodyweight = STATE.bodyweight.filter((e) => e.date !== date);
+      save();
     },
   },
 

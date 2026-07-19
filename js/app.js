@@ -5,7 +5,7 @@
 // Single source of truth for the shipped build. Used by the visible build
 // label AND the feedback version tag so they can never drift apart. Keep this
 // equal to the ?v=N cache markers (see CLAUDE.md "CACHE WORKFLOW").
-const VAULT_BUILD = 'v169';
+const VAULT_BUILD = 'v170';
 
 // ==========================================================================
 // Icons
@@ -528,6 +528,9 @@ const I18N = {
     add_photo: 'Photo', add_photo_sub: 'Snap your meal',
     add_barcode: 'Barcode', bc_amount: 'Amount', unit_g: 'g',
     water: 'Water', unit_ml: 'ml', water_undo: 'Remove a cup',
+    bodyweight: 'Weight', weight_add_first: 'Log your weight', weight_trend: 'Weight trend',
+    weight_need_more: 'Log at least 2 days to see your trend', weight_placeholder: 'Today’s weight',
+    weight_empty_hint: 'Log your weight regularly to track your progress',
     barcode_hint: 'Point the camera at a barcode',
     barcode_looking: 'Looking it up…',
     barcode_not_found: 'Not found — try Photo or Manual.',
@@ -1088,6 +1091,9 @@ const I18N = {
     add_photo: 'صورة', add_photo_sub: 'صوّر وجبتك',
     add_barcode: 'باركود', bc_amount: 'الكمية', unit_g: 'غ',
     water: 'الماء', unit_ml: 'مل', water_undo: 'إزالة كوب',
+    bodyweight: 'الوزن', weight_add_first: 'سجّل وزنك', weight_trend: 'منحنى الوزن',
+    weight_need_more: 'سجّل يومين على الأقل لرؤية المنحنى', weight_placeholder: 'وزن اليوم',
+    weight_empty_hint: 'سجّل وزنك بانتظام لمتابعة تقدّمك',
     barcode_hint: 'وجّه الكاميرا نحو الباركود',
     barcode_looking: 'أبحث عنه…',
     barcode_not_found: 'غير موجود — جرّب الصورة أو اليدوي.',
@@ -2230,6 +2236,8 @@ function renderHome(el) {
       </button>
     </div>` : ''}
 
+    ${weightCardHtml()}
+
     ${typeof Health !== 'undefined' ? Health.homeSectionHtml() : ''}
 
     ${heatTotal > 0 ? `<div class="muscle-heatmap">
@@ -2286,6 +2294,161 @@ function renderHome(el) {
     b.addEventListener('click', () => navigate('muscle-sessions', { muscleCat: b.dataset.muscle }))
   );
   if (typeof Health !== 'undefined') Health.bindHomeSection();
+  $('#home-weight', el)?.addEventListener('click', () => openWeightSheet());
+}
+
+// ==========================================================================
+// Body-weight tracking — a per-day weight log with a trend chart. A signature
+// feature of every serious nutrition/fitness app. Fully local (DB.bodyweight),
+// kg-canonical, shown in the user's chosen unit.
+// ==========================================================================
+function weightSparkline(entries) {
+  if (!entries || entries.length < 2) return '';
+  const vals = entries.map((e) => e.kg);
+  const min = Math.min(...vals), max = Math.max(...vals);
+  const span = (max - min) || 1;
+  const W = 64, H = 28, P = 3;
+  const stepX = (W - P * 2) / (entries.length - 1);
+  const coords = entries.map((e, i) => ({
+    x: P + i * stepX,
+    y: P + (H - P * 2) * (1 - (e.kg - min) / span),
+  }));
+  const d = coords.map((c, i) => (i === 0 ? `M ${c.x.toFixed(1)} ${c.y.toFixed(1)}` : `L ${c.x.toFixed(1)} ${c.y.toFixed(1)}`)).join(' ');
+  const last = coords[coords.length - 1];
+  return `<svg viewBox="0 0 ${W} ${H}" class="weight-spark-svg" preserveAspectRatio="none" aria-hidden="true">
+    <path d="${d}" fill="none" stroke="var(--accent)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+    <circle cx="${last.x.toFixed(1)}" cy="${last.y.toFixed(1)}" r="2.5" fill="var(--accent)"/>
+  </svg>`;
+}
+
+function weightCardHtml() {
+  const entries = DB.bodyweight.list();
+  const latest = entries.length ? entries[entries.length - 1] : null;
+  let deltaHtml = '';
+  if (entries.length >= 2) {
+    const dKg = latest.kg - entries[entries.length - 2].kg;
+    if (dKg !== 0) {
+      const dir = dKg > 0 ? 'up' : 'down';
+      const sign = dKg > 0 ? '+' : '−';
+      deltaHtml = `<span class="weight-delta ${dir}">${sign}${fmtNum(convertWeightForDisplay(Math.abs(dKg)))} ${unitLabel()}</span>`;
+    }
+  }
+  const spark = weightSparkline(entries.slice(-12));
+  return `
+    <button class="weight-card" id="home-weight">
+      <div class="weight-card-icon">${icon('chart', 18)}</div>
+      <div class="weight-card-main">
+        <div class="weight-card-label">${t('bodyweight')}</div>
+        <div class="weight-card-value">
+          ${latest
+            ? `<span class="num">${fmtWeight(latest.kg)}</span><span class="weight-card-unit">${unitLabel()}</span>${deltaHtml}`
+            : `<span class="weight-card-empty">${t('weight_add_first')}</span>`}
+        </div>
+      </div>
+      ${spark ? `<div class="weight-card-spark">${spark}</div>` : `<div class="weight-card-add">${icon('plus', 18)}</div>`}
+    </button>`;
+}
+
+// The full trend chart shown inside the weight sheet. Reuses the .chart-card
+// SVG line pattern used by the exercise-progress chart.
+function weightTrendChartHtml(entries) {
+  const pts = entries.slice(-30).map((e) => ({ value: convertWeightForDisplay(e.kg), date: e.date }));
+  if (pts.length < 2) {
+    return `<div class="chart-card">
+      <div class="chart-head">
+        <div class="chart-title">${t('weight_trend')}</div>
+        ${pts.length ? `<div class="chart-latest num">${fmtNum(pts[0].value)} ${unitLabel()}</div>` : ''}
+      </div>
+      <div class="chart-empty">${t('weight_need_more')}</div>
+    </div>`;
+  }
+  const W = 300, H = 110, PAD_X = 12, PAD_Y = 14;
+  const vals = pts.map((p) => p.value);
+  const min = Math.min(...vals), max = Math.max(...vals);
+  const span = (max - min) || 1;
+  const stepX = (W - PAD_X * 2) / (pts.length - 1);
+  const coords = pts.map((p, i) => ({
+    x: PAD_X + i * stepX,
+    y: PAD_Y + (H - PAD_Y * 2) * (1 - (p.value - min) / span),
+  }));
+  const pathD = coords.map((c, i) => (i === 0 ? `M ${c.x.toFixed(1)} ${c.y.toFixed(1)}` : `L ${c.x.toFixed(1)} ${c.y.toFixed(1)}`)).join(' ');
+  const areaD = pathD + ` L ${coords[coords.length - 1].x.toFixed(1)} ${H - PAD_Y} L ${coords[0].x.toFixed(1)} ${H - PAD_Y} Z`;
+  const last = coords[coords.length - 1];
+  const totalDelta = pts[pts.length - 1].value - pts[0].value;
+  const dCls = totalDelta > 0 ? 'up' : (totalDelta < 0 ? 'down' : 'flat');
+  const dSign = totalDelta > 0 ? '+' : (totalDelta < 0 ? '−' : '');
+  return `
+    <div class="chart-card">
+      <div class="chart-head">
+        <div class="chart-title">${t('weight_trend')}</div>
+        <div class="chart-latest num">${fmtNum(pts[pts.length - 1].value)} ${unitLabel()}</div>
+      </div>
+      <svg class="chart-svg" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none">
+        <defs><linearGradient id="weight-grad" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stop-color="var(--accent)" stop-opacity="0.4"/>
+          <stop offset="100%" stop-color="var(--accent)" stop-opacity="0"/>
+        </linearGradient></defs>
+        <path d="${areaD}" fill="url(#weight-grad)"/>
+        <path d="${pathD}" fill="none" stroke="var(--accent)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+        <circle cx="${last.x.toFixed(1)}" cy="${last.y.toFixed(1)}" r="3" fill="var(--accent)"/>
+      </svg>
+      <div class="chart-foot">
+        <span>${escapeHtml(formatDate(pts[0].date))}</span>
+        ${totalDelta !== 0 ? `<span class="weight-delta ${dCls}">${dSign}${fmtNum(Math.abs(totalDelta))} ${unitLabel()}</span>` : ''}
+        <span>${escapeHtml(formatDate(pts[pts.length - 1].date))}</span>
+      </div>
+    </div>`;
+}
+
+function openWeightSheet() {
+  const body = () => {
+    const entries = DB.bodyweight.list();
+    const latest = entries.length ? entries[entries.length - 1] : null;
+    const prefill = latest ? convertWeightForDisplay(latest.kg) : '';
+    const history = entries.slice().reverse().slice(0, 40).map((e) => `
+      <div class="weight-row">
+        <span class="weight-row-date">${escapeHtml(formatDate(e.date))}</span>
+        <span class="weight-row-val"><span class="num">${fmtWeight(e.kg)}</span> ${unitLabel()}</span>
+        <button class="weight-row-del" data-del-weight="${escapeHtml(e.date)}" aria-label="${escapeHtml(t('delete'))}">${icon('trash', 15)}</button>
+      </div>`).join('');
+    return `
+      ${weightTrendChartHtml(entries)}
+      <div class="weight-log-row">
+        <input id="weight-input" class="weight-input" type="number" inputmode="decimal" step="0.1" min="0"
+          placeholder="${escapeHtml(t('weight_placeholder'))}" value="${prefill}" aria-label="${escapeHtml(t('bodyweight'))}" />
+        <span class="weight-input-unit">${unitLabel()}</span>
+        <button class="btn btn-primary" id="weight-save">${t('save')}</button>
+      </div>
+      ${entries.length ? `<div class="weight-history">${history}</div>` : `<div class="weight-empty-hint">${t('weight_empty_hint')}</div>`}
+    `;
+  };
+  const overlay = openModal(`
+    <div class="modal-header">
+      <div class="modal-title">${t('bodyweight')}</div>
+      <button class="icon-btn icon-btn-tile" data-close>${icon('close', 18)}</button>
+    </div>
+    <div id="weight-sheet-body">${body()}</div>
+  `);
+  const host = overlay.querySelector('#weight-sheet-body');
+  const bind = () => {
+    const saveBtn = overlay.querySelector('#weight-save');
+    const input = overlay.querySelector('#weight-input');
+    const doSave = () => {
+      const val = parseFloat(input.value);
+      if (!val || val <= 0) { input.focus(); return; }
+      DB.bodyweight.log(todayISO(), convertWeightToStorage(val));
+      host.innerHTML = body(); bind();
+    };
+    saveBtn?.addEventListener('click', doSave);
+    input?.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); doSave(); } });
+    host.querySelectorAll('[data-del-weight]').forEach((b) =>
+      b.addEventListener('click', () => {
+        DB.bodyweight.remove(b.getAttribute('data-del-weight'));
+        host.innerHTML = body(); bind();
+      })
+    );
+  };
+  bind();
 }
 
 // ==========================================================================
