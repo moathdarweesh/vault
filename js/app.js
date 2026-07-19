@@ -5,7 +5,7 @@
 // Single source of truth for the shipped build. Used by the visible build
 // label AND the feedback version tag so they can never drift apart. Keep this
 // equal to the ?v=N cache markers (see CLAUDE.md "CACHE WORKFLOW").
-const VAULT_BUILD = 'v171';
+const VAULT_BUILD = 'v172';
 
 // ==========================================================================
 // Icons
@@ -532,6 +532,13 @@ const I18N = {
     weight_need_more: 'Log at least 2 days to see your trend', weight_placeholder: 'Today’s weight',
     weight_empty_hint: 'Log your weight regularly to track your progress',
     portion_less: 'Smaller portion', portion_more: 'Larger portion',
+    onb_welcome_title: 'Welcome to THE VAULT', onb_welcome_sub: 'Your workouts and nutrition, in one place.',
+    onb_feat_workouts: 'Plan & log every workout', onb_feat_ai: 'AI calories — photo, voice, or barcode',
+    onb_feat_progress: 'Track weight, streaks & progress', onb_start: 'Get started',
+    onb_unit_title: 'Choose your units', onb_unit_sub: 'You can change this later in Settings.',
+    onb_unit_metric: 'kilograms', onb_unit_imperial: 'pounds',
+    onb_goal_title: 'Set your calorie goal', onb_goal_sub: 'A quick calculator builds your daily targets. You can skip and set it later.',
+    onb_set_goal: 'Set my goal', onb_skip: 'Skip for now',
     barcode_hint: 'Point the camera at a barcode',
     barcode_looking: 'Looking it up…',
     barcode_not_found: 'Not found — try Photo or Manual.',
@@ -1096,6 +1103,13 @@ const I18N = {
     weight_need_more: 'سجّل يومين على الأقل لرؤية المنحنى', weight_placeholder: 'وزن اليوم',
     weight_empty_hint: 'سجّل وزنك بانتظام لمتابعة تقدّمك',
     portion_less: 'كمية أقل', portion_more: 'كمية أكثر',
+    onb_welcome_title: 'مرحباً بك في THE VAULT', onb_welcome_sub: 'تمارينك وتغذيتك في مكان واحد.',
+    onb_feat_workouts: 'خطّط وسجّل كل تمرين', onb_feat_ai: 'سعرات بالذكاء الاصطناعي — صورة أو صوت أو باركود',
+    onb_feat_progress: 'تابع الوزن والإنجاز والتقدّم', onb_start: 'لنبدأ',
+    onb_unit_title: 'اختر وحدة القياس', onb_unit_sub: 'يمكنك تغييرها لاحقاً من الإعدادات.',
+    onb_unit_metric: 'كيلوغرام', onb_unit_imperial: 'رطل',
+    onb_goal_title: 'حدّد هدف السعرات', onb_goal_sub: 'حاسبة سريعة تبني أهدافك اليومية. يمكنك التخطّي وضبطها لاحقاً.',
+    onb_set_goal: 'حدّد هدفي', onb_skip: 'التخطّي الآن',
     barcode_hint: 'وجّه الكاميرا نحو الباركود',
     barcode_looking: 'أبحث عنه…',
     barcode_not_found: 'غير موجود — جرّب الصورة أو اليدوي.',
@@ -8084,6 +8098,90 @@ function setupKeyboardHandling() {
   });
 }
 
+// ==========================================================================
+// FIRST-RUN ONBOARDING
+// A short, elegant welcome shown ONCE to brand-new installs (empty state).
+// Existing users are silently marked onboarded so they never see it. Ends by
+// handing off to the real calorie calculator — no duplicated goal logic.
+// ==========================================================================
+function showOnboarding() {
+  if (document.getElementById('onboard-gate')) return;
+  let step = 0;
+  const gate = document.createElement('div');
+  gate.id = 'onboard-gate';
+  gate.className = 'auth-gate onboard-gate';
+  document.body.appendChild(gate);
+
+  const finish = (openGoal) => {
+    DB.prefs.setOnboarded();
+    gate.remove();
+    // Reflect any language/unit change picked during onboarding.
+    if (typeof renderView === 'function' && typeof currentView !== 'undefined' && currentView) {
+      try { renderView(currentView); } catch (_) {}
+    }
+    if (openGoal && !DB.nutrition.hasTargets()) {
+      openCalculatorModal(() => {
+        if (typeof renderView === 'function' && currentView) { try { renderView(currentView); } catch (_) {} }
+      });
+    }
+  };
+
+  const render = () => {
+    const lang = DB.prefs.get().lang || 'en';
+    const unit = DB.prefs.get().unit || 'kg';
+    const dots = [0, 1, 2].map((i) => `<span class="onb-dot ${i === step ? 'active' : ''}"></span>`).join('');
+    let inner = '';
+    if (step === 0) {
+      inner = `
+        <div class="onb-lang">
+          <button type="button" class="onb-lang-btn ${lang === 'ar' ? 'active' : ''}" data-lang="ar">ع</button>
+          <button type="button" class="onb-lang-btn ${lang === 'en' ? 'active' : ''}" data-lang="en">EN</button>
+        </div>
+        <div class="onb-logo">${icon('vault', 38)}</div>
+        <div class="onb-title">${t('onb_welcome_title')}</div>
+        <div class="onb-sub">${t('onb_welcome_sub')}</div>
+        <div class="onb-feats">
+          <div class="onb-feat">${icon('dumbbell', 18)}<span>${t('onb_feat_workouts')}</span></div>
+          <div class="onb-feat">${icon('zap', 18)}<span>${t('onb_feat_ai')}</span></div>
+          <div class="onb-feat">${icon('chart', 18)}<span>${t('onb_feat_progress')}</span></div>
+        </div>
+        <button type="button" class="btn btn-primary btn-block" data-next>${t('onb_start')}</button>`;
+    } else if (step === 1) {
+      inner = `
+        <div class="onb-logo">${icon('settings', 34)}</div>
+        <div class="onb-title">${t('onb_unit_title')}</div>
+        <div class="onb-sub">${t('onb_unit_sub')}</div>
+        <div class="onb-units">
+          <button type="button" class="onb-unit ${unit === 'kg' ? 'active' : ''}" data-unit="kg"><b>${t('kg_label')}</b><span>${t('onb_unit_metric')}</span></button>
+          <button type="button" class="onb-unit ${unit === 'lb' ? 'active' : ''}" data-unit="lb"><b>${t('lb_label')}</b><span>${t('onb_unit_imperial')}</span></button>
+        </div>
+        <button type="button" class="btn btn-primary btn-block" data-next>${t('next')}</button>`;
+    } else {
+      inner = `
+        <div class="onb-logo">${icon('target', 34)}</div>
+        <div class="onb-title">${t('onb_goal_title')}</div>
+        <div class="onb-sub">${t('onb_goal_sub')}</div>
+        <button type="button" class="btn btn-primary btn-block" data-goal>${t('onb_set_goal')}</button>
+        <button type="button" class="btn btn-ghost btn-block" data-skip>${t('onb_skip')}</button>`;
+    }
+    gate.innerHTML = `<div class="auth-card onb-card">${inner}<div class="onb-dots">${dots}</div></div>`;
+
+    gate.querySelectorAll('[data-lang]').forEach((b) => b.addEventListener('click', () => {
+      DB.prefs.setLang(b.dataset.lang);
+      if (typeof applyLang === 'function') applyLang(b.dataset.lang);
+      render();
+    }));
+    gate.querySelectorAll('[data-unit]').forEach((b) => b.addEventListener('click', () => {
+      DB.prefs.setUnit(b.dataset.unit);
+      render();
+    }));
+    gate.querySelector('[data-next]')?.addEventListener('click', () => { step += 1; render(); });
+    gate.querySelector('[data-goal]')?.addEventListener('click', () => finish(true));
+    gate.querySelector('[data-skip]')?.addEventListener('click', () => finish(false));
+  };
+  render();
+}
+
 (function init() {
   // Kick off the (large) Supabase SDK download in parallel with the first paint,
   // before anything awaits it — so the login gate / session check isn't blocked
@@ -8095,6 +8193,20 @@ function setupKeyboardHandling() {
   applyLang(prefs.lang || 'en');
   navigate('home', {}, { fromPop: true }); // root entry — don't grow history
   setupKeyboardHandling(); // hide the nav + keep the focused field above the keyboard
+
+  // First-run welcome — brand-new installs only. Existing users (any real
+  // history) are silently marked onboarded so an update never re-shows it.
+  if (!DB.prefs.onboarded()) {
+    const st = DB.getAll();
+    const hasHistory = (st.sessions && st.sessions.length)
+      || (st.cardio && st.cardio.length)
+      || (st.foodLogs && Object.keys(st.foodLogs).length)
+      || (st.bodyweight && st.bodyweight.length)
+      || DB.nutrition.hasTargets();
+    if (hasHistory) DB.prefs.setOnboarded();
+    else { try { showOnboarding(); } catch (_) {} }
+  }
+
   bootCloud();
   bootCatalog(); // best-effort admin-content pull; works logged-out too
 

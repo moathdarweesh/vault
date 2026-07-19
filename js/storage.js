@@ -581,6 +581,9 @@ const DB = {
     setTheme(theme) { STATE.prefs.theme = theme; save(); },
     setUnit(unit) { STATE.prefs.unit = unit === 'lb' ? 'lb' : 'kg'; save(); },
     setTranslateExercises(on) { STATE.prefs.translateExercises = !!on; save(); },
+    // First-run welcome flow: true once the user has seen (or skipped) it.
+    onboarded() { return !!(STATE.prefs && STATE.prefs.onboarded); },
+    setOnboarded() { STATE.prefs.onboarded = true; save(); },
   },
 
   // ----- Workout plan — CONTINUOUS ROTATION -----
