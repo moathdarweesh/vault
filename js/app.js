@@ -5,7 +5,7 @@
 // Single source of truth for the shipped build. Used by the visible build
 // label AND the feedback version tag so they can never drift apart. Keep this
 // equal to the ?v=N cache markers (see CLAUDE.md "CACHE WORKFLOW").
-const VAULT_BUILD = 'v167';
+const VAULT_BUILD = 'v168';
 
 // ==========================================================================
 // Icons
@@ -58,6 +58,7 @@ const ICONS = {
   info: '<circle cx="12" cy="12" r="10"/><line x1="12" x2="12" y1="16" y2="12"/><line x1="12" x2="12.01" y1="8" y2="8"/>',
   backspace: '<path d="M20 5H9l-7 7 7 7h11a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2Z"/><line x1="18" y1="9" x2="12" y2="15"/><line x1="12" y1="9" x2="18" y2="15"/>',
   camera: '<path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3z"/><circle cx="12" cy="13" r="3.2"/>',
+  barcode: '<path d="M3 5v14M7 5v14M11 5v14M15 5v14M19 5v14M21 5v14"/>',
 };
 
 function icon(name, size = 20) {
@@ -525,6 +526,12 @@ const I18N = {
     add_voice: 'Voice', add_voice_sub: 'Say what you ate',
     add_chat: 'Chat', add_chat_sub: 'Type it — AI finds the calories',
     add_photo: 'Photo', add_photo_sub: 'Snap your meal',
+    add_barcode: 'Barcode', bc_amount: 'Amount', unit_g: 'g',
+    barcode_hint: 'Point the camera at a barcode',
+    barcode_looking: 'Looking it up…',
+    barcode_not_found: 'Not found — try Photo or Manual.',
+    barcode_unsupported: 'Barcode scanning needs the app or a newer browser.',
+    barcode_cam_denied: 'Camera blocked. Allow it, then try again.',
     add_saved: 'Saved food', add_saved_sub: 'Pick from your foods',
     add_manual: 'Manual', add_manual_sub: 'Enter the numbers yourself',
     saved_new: 'Add a new saved food', saved_empty: 'No saved foods yet',
@@ -1078,6 +1085,12 @@ const I18N = {
     add_voice: 'صوت', add_voice_sub: 'قُل ما أكلته',
     add_chat: 'محادثة', add_chat_sub: 'اكتبه — والذكاء يحسب السعرات',
     add_photo: 'صورة', add_photo_sub: 'صوّر وجبتك',
+    add_barcode: 'باركود', bc_amount: 'الكمية', unit_g: 'غ',
+    barcode_hint: 'وجّه الكاميرا نحو الباركود',
+    barcode_looking: 'أبحث عنه…',
+    barcode_not_found: 'غير موجود — جرّب الصورة أو اليدوي.',
+    barcode_unsupported: 'مسح الباركود يحتاج التطبيق أو متصفّحاً أحدث.',
+    barcode_cam_denied: 'الكاميرا محجوبة. اسمح بها ثم أعد المحاولة.',
     add_saved: 'أكل محفوظ', add_saved_sub: 'اختر من أطعمتك',
     add_manual: 'يدوي', add_manual_sub: 'أدخل الأرقام بنفسك',
     saved_new: 'أضف طعاماً محفوظاً جديداً', saved_empty: 'لا يوجد أكل محفوظ بعد',
@@ -3818,6 +3831,136 @@ function logNutritionItems(date, items, onDone) {
 }
 
 // ===========================================================================
+// Barcode scanner — native BarcodeDetector + Open Food Facts (free, no key, no
+// dependency). Scan a packaged food → exact per-100g nutrition → pick grams →
+// log. The standout "scan and done" flow. Degrades cleanly on a browser without
+// BarcodeDetector / camera access (a clear message → use Photo or Manual).
+// ===========================================================================
+function openBarcodeScanner(date, onSave) {
+  const supported = (typeof window !== 'undefined') && ('BarcodeDetector' in window)
+    && navigator.mediaDevices && navigator.mediaDevices.getUserMedia;
+  const overlay = openModal(`
+    <div class="modal-header">
+      <div class="modal-title">${t('add_barcode')}</div>
+      <button class="icon-btn icon-btn-tile" data-close>${icon('close', 18)}</button>
+    </div>
+    <div class="barcode-stage" id="bc-stage">
+      <video id="bc-video" playsinline muted></video>
+      <div class="barcode-frame"></div>
+    </div>
+    <div class="voice-status" id="bc-status">${supported ? t('barcode_hint') : t('barcode_unsupported')}</div>
+    <div class="ai-results" id="bc-result"></div>
+  `);
+  const status = overlay.querySelector('#bc-status');
+  const result = overlay.querySelector('#bc-result');
+  const stage = overlay.querySelector('#bc-stage');
+  const video = overlay.querySelector('#bc-video');
+  let stream = null, scanning = true, detector = null;
+
+  const stop = () => {
+    scanning = false;
+    if (stream) { try { stream.getTracks().forEach((tk) => tk.stop()); } catch (_) {} stream = null; }
+  };
+  // Release the camera on ANY dismissal (X / backdrop / Escape) — same guard as voice.
+  const modalRoot = document.getElementById('modal-root');
+  if (modalRoot) {
+    const mo = new MutationObserver(() => { if (!document.body.contains(overlay)) { stop(); mo.disconnect(); } });
+    mo.observe(modalRoot, { childList: true, subtree: true });
+  }
+  if (!supported) { if (stage) stage.style.display = 'none'; return; }
+
+  try { detector = new BarcodeDetector({ formats: ['ean_13', 'ean_8', 'upc_a', 'upc_e', 'code_128'] }); }
+  catch (_) { try { detector = new BarcodeDetector(); } catch (__) { detector = null; } }
+  if (!detector) { status.textContent = t('barcode_unsupported'); if (stage) stage.style.display = 'none'; return; }
+
+  async function scanLoop() {
+    if (!scanning || !document.body.contains(overlay)) return;
+    try {
+      const codes = await detector.detect(video);
+      if (codes && codes.length && codes[0].rawValue) { onCode(String(codes[0].rawValue)); return; }
+    } catch (_) {}
+    requestAnimationFrame(scanLoop);
+  }
+
+  async function onCode(code) {
+    scanning = false;                 // stop scanning; keep the camera until we know the result
+    status.textContent = t('barcode_looking');
+    let product = null;
+    try {
+      const res = await fetch('https://world.openfoodfacts.org/api/v2/product/' +
+        encodeURIComponent(code) + '.json?fields=product_name,nutriments');
+      const data = await res.json();
+      product = data && data.product;
+    } catch (_) {}
+    if (!document.body.contains(overlay)) return;
+    const n = product && product.nutriments;
+    const kcal100 = n && (n['energy-kcal_100g'] != null ? +n['energy-kcal_100g'] : null);
+    if (!product || !n || kcal100 == null) {
+      status.textContent = t('barcode_not_found');
+      scanning = true; requestAnimationFrame(scanLoop);   // resume scanning for another try
+      return;
+    }
+    stop();                           // got a hit → release the camera
+    if (stage) stage.style.display = 'none';
+    showResult(product, n);
+  }
+
+  function showResult(product, n) {
+    const name = String(product.product_name || t('add_barcode')).slice(0, 80);
+    const per100 = {
+      cal: Math.round(+n['energy-kcal_100g'] || 0),
+      pro: Math.round((+n['proteins_100g'] || 0) * 10) / 10,
+      carb: Math.round((+n['carbohydrates_100g'] || 0) * 10) / 10,
+      fat: Math.round((+n['fat_100g'] || 0) * 10) / 10,
+    };
+    status.textContent = '';
+    result.innerHTML = `
+      <div class="bc-card">
+        <div class="bc-name">${escapeHtml(name)}</div>
+        <div class="bc-amount-row">
+          <label class="form-label" for="bc-grams">${t('bc_amount')}</label>
+          <input type="number" inputmode="numeric" id="bc-grams" value="100" min="1" step="10">
+          <span class="bc-unit">${t('unit_g')}</span>
+        </div>
+        <div class="ai-macros" id="bc-macros"></div>
+        <button class="btn btn-primary btn-block" id="bc-add">${icon('plus', 15)} ${t('ai_add_all')}</button>
+      </div>`;
+    const gramsInput = result.querySelector('#bc-grams');
+    const macrosEl = result.querySelector('#bc-macros');
+    const scaled = () => {
+      const g = Math.max(1, parseInt(gramsInput.value, 10) || 100);
+      const f = g / 100;
+      return {
+        name: name + ' ~' + fmtNum(g) + t('unit_g'),
+        calories: Math.round(per100.cal * f),
+        protein: Math.round(per100.pro * f * 10) / 10,
+        carbs: Math.round(per100.carb * f * 10) / 10,
+        fat: Math.round(per100.fat * f * 10) / 10,
+      };
+    };
+    const renderMacros = () => {
+      const s = scaled();
+      macrosEl.innerHTML =
+        `<span class="ai-macro cal"><b class="num">${fmtNum(s.calories)}</b>${t('cal')}</span>` +
+        `<span class="ai-macro pro"><b class="num">${fmtNum(s.protein)}</b>g ${t('protein_label')}</span>` +
+        `<span class="ai-macro carb"><b class="num">${fmtNum(s.carbs)}</b>g ${t('carbs_label')}</span>` +
+        `<span class="ai-macro fat"><b class="num">${fmtNum(s.fat)}</b>g ${t('fat_label')}</span>`;
+    };
+    renderMacros();
+    gramsInput.addEventListener('input', renderMacros);
+    result.querySelector('#bc-add').addEventListener('click', () => {
+      logNutritionItems(date, [Object.assign(scaled(), { source: 'barcode' })], onSave);
+      showToast(t('ai_added'));
+      closeModal();
+    });
+  }
+
+  navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } })
+    .then((s) => { stream = s; video.srcObject = s; video.play().catch(() => {}); requestAnimationFrame(scanLoop); })
+    .catch(() => { status.textContent = t('barcode_cam_denied'); if (stage) stage.style.display = 'none'; });
+}
+
+// ===========================================================================
 // Add sheet — one "+" opens an animated bottom sheet with every add method.
 // ===========================================================================
 function openAddSheet(date, onChange) {
@@ -3842,6 +3985,7 @@ function openAddSheet(date, onChange) {
         ${tile({ k: 'voice', icon: 'mic', title: t('add_voice') })}
         ${tile({ k: 'chat', icon: 'message', title: t('add_chat') })}
         ${tile({ k: 'photo', icon: 'camera', title: t('add_photo') })}
+        ${tile({ k: 'barcode', icon: 'barcode', title: t('add_barcode') })}
         ${tile({ k: 'saved', icon: 'utensils', title: t('add_saved') })}
         ${tile({ k: 'manual', icon: 'edit', title: t('add_manual') })}
       </div>
@@ -3863,6 +4007,7 @@ function openAddSheet(date, onChange) {
       if (method === 'voice') openVoiceCapture(date, onChange);
       else if (method === 'chat') FoodAI.open(date);
       else if (method === 'photo') FoodAI.openPhoto ? FoodAI.openPhoto(date) : FoodAI.open(date);
+      else if (method === 'barcode') openBarcodeScanner(date, onChange);
       else if (method === 'saved') openSavedFoodPicker(date, onChange);
       else if (method === 'manual') openManualFoodEntry(date, onChange);
     });
