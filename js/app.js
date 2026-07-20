@@ -5,7 +5,7 @@
 // Single source of truth for the shipped build. Used by the visible build
 // label AND the feedback version tag so they can never drift apart. Keep this
 // equal to the ?v=N cache markers (see CLAUDE.md "CACHE WORKFLOW").
-const VAULT_BUILD = 'v175';
+const VAULT_BUILD = 'v176';
 
 // ==========================================================================
 // Icons
@@ -5911,9 +5911,9 @@ function openScheduleModal(tmpl) {
     DB.plan.setRotation({ cycle, trainingDays, anchor: todayISO() });
     closeModal();
     showToast(t('template_applied'));
-    // Land on the Planner — the one place that owns the training-days + preview,
-    // so the just-applied rotation is reviewed/edited there (not re-shown twice).
-    navigate('planner');
+    // A single decisive "apply" → save and return to Home, where the new plan
+    // shows on the hero. (Don't strand the user in a sub-screen.)
+    navigate('home');
   });
 }
 
