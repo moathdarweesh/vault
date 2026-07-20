@@ -5,7 +5,7 @@
 // Single source of truth for the shipped build. Used by the visible build
 // label AND the feedback version tag so they can never drift apart. Keep this
 // equal to the ?v=N cache markers (see CLAUDE.md "CACHE WORKFLOW").
-const VAULT_BUILD = 'v177';
+const VAULT_BUILD = 'v178';
 
 // ==========================================================================
 // Icons
@@ -549,6 +549,11 @@ const I18N = {
     barcode_not_found: 'Not found — try Photo or Manual.',
     barcode_unsupported: 'Barcode scanning needs the app or a newer browser.',
     barcode_cam_denied: 'Camera blocked. Allow it, then try again.',
+    barcode_manual_hint: 'Type the barcode number below',
+    barcode_number_ph: 'Barcode number',
+    barcode_lookup: 'Look up',
+    barcode_invalid: 'Enter a valid barcode number',
+    barcode_cam_denied_manual: 'Camera blocked — type the barcode number instead.',
     add_saved: 'Saved food', add_saved_sub: 'Pick from your foods',
     add_manual: 'Manual', add_manual_sub: 'Enter the numbers yourself',
     saved_new: 'Add a new saved food', saved_empty: 'No saved foods yet',
@@ -1121,6 +1126,11 @@ const I18N = {
     barcode_not_found: 'غير موجود — جرّب الصورة أو اليدوي.',
     barcode_unsupported: 'مسح الباركود يحتاج التطبيق أو متصفّحاً أحدث.',
     barcode_cam_denied: 'الكاميرا محجوبة. اسمح بها ثم أعد المحاولة.',
+    barcode_manual_hint: 'اكتب رقم الباركود في الأسفل',
+    barcode_number_ph: 'رقم الباركود',
+    barcode_lookup: 'بحث',
+    barcode_invalid: 'أدخل رقم باركود صحيح',
+    barcode_cam_denied_manual: 'الكاميرا محجوبة — اكتب رقم الباركود بدلاً من ذلك.',
     add_saved: 'أكل محفوظ', add_saved_sub: 'اختر من أطعمتك',
     add_manual: 'يدوي', add_manual_sub: 'أدخل الأرقام بنفسك',
     saved_new: 'أضف طعاماً محفوظاً جديداً', saved_empty: 'لا يوجد أكل محفوظ بعد',
@@ -4058,25 +4068,36 @@ function logNutritionItems(date, items, onDone) {
 // BarcodeDetector / camera access (a clear message → use Photo or Manual).
 // ===========================================================================
 function openBarcodeScanner(date, onSave) {
-  const supported = (typeof window !== 'undefined') && ('BarcodeDetector' in window)
-    && navigator.mediaDevices && navigator.mediaDevices.getUserMedia;
+  // Live camera scanning needs the native BarcodeDetector API — present on
+  // Android (Chrome/WebView) but NOT on desktop or iOS. So the camera scan is a
+  // best-effort enhancement; the ALWAYS-available path is typing the barcode
+  // number and looking it up. Both feed the same Open Food Facts lookup.
+  const hasDetector = (typeof window !== 'undefined') && ('BarcodeDetector' in window);
+  const hasCamera = !!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia);
+  let liveScan = hasDetector && hasCamera;
+
   const overlay = openModal(`
     <div class="modal-header">
       <div class="modal-title">${t('add_barcode')}</div>
       <button class="icon-btn icon-btn-tile" data-close>${icon('close', 18)}</button>
     </div>
-    <div class="barcode-stage" id="bc-stage">
+    <div class="barcode-stage" id="bc-stage"${liveScan ? '' : ' style="display:none"'}>
       <video id="bc-video" playsinline muted></video>
       <div class="barcode-frame"></div>
     </div>
-    <div class="voice-status" id="bc-status">${supported ? t('barcode_hint') : t('barcode_unsupported')}</div>
+    <div class="voice-status" id="bc-status">${liveScan ? t('barcode_hint') : t('barcode_manual_hint')}</div>
+    <div class="bc-manual">
+      <input type="text" inputmode="numeric" id="bc-manual-input" autocomplete="off"
+        placeholder="${escapeHtml(t('barcode_number_ph'))}">
+      <button type="button" class="btn btn-primary" id="bc-manual-go">${t('barcode_lookup')}</button>
+    </div>
     <div class="ai-results" id="bc-result"></div>
   `);
   const status = overlay.querySelector('#bc-status');
   const result = overlay.querySelector('#bc-result');
   const stage = overlay.querySelector('#bc-stage');
   const video = overlay.querySelector('#bc-video');
-  let stream = null, scanning = true, detector = null;
+  let stream = null, scanning = liveScan, detector = null;
 
   const stop = () => {
     scanning = false;
@@ -4088,22 +4109,18 @@ function openBarcodeScanner(date, onSave) {
     const mo = new MutationObserver(() => { if (!document.body.contains(overlay)) { stop(); mo.disconnect(); } });
     mo.observe(modalRoot, { childList: true, subtree: true });
   }
-  if (!supported) { if (stage) stage.style.display = 'none'; return; }
-
-  try { detector = new BarcodeDetector({ formats: ['ean_13', 'ean_8', 'upc_a', 'upc_e', 'code_128'] }); }
-  catch (_) { try { detector = new BarcodeDetector(); } catch (__) { detector = null; } }
-  if (!detector) { status.textContent = t('barcode_unsupported'); if (stage) stage.style.display = 'none'; return; }
 
   async function scanLoop() {
-    if (!scanning || !document.body.contains(overlay)) return;
+    if (!scanning || !detector || !document.body.contains(overlay)) return;
     try {
       const codes = await detector.detect(video);
-      if (codes && codes.length && codes[0].rawValue) { onCode(String(codes[0].rawValue)); return; }
+      if (codes && codes.length && codes[0].rawValue) { onCode(String(codes[0].rawValue), false); return; }
     } catch (_) {}
     requestAnimationFrame(scanLoop);
   }
 
-  async function onCode(code) {
+  // Shared lookup for BOTH the live scan and the manual number entry.
+  async function onCode(code, fromManual) {
     scanning = false;                 // stop scanning; keep the camera until we know the result
     status.textContent = t('barcode_looking');
     let product = null;
@@ -4118,13 +4135,27 @@ function openBarcodeScanner(date, onSave) {
     const kcal100 = n && (n['energy-kcal_100g'] != null ? +n['energy-kcal_100g'] : null);
     if (!product || !n || kcal100 == null) {
       status.textContent = t('barcode_not_found');
-      scanning = true; requestAnimationFrame(scanLoop);   // resume scanning for another try
+      // Live camera → resume scanning for another try. Manual → just wait for a
+      // new number (nothing to resume).
+      if (!fromManual && liveScan && detector) { scanning = true; requestAnimationFrame(scanLoop); }
       return;
     }
     stop();                           // got a hit → release the camera
     if (stage) stage.style.display = 'none';
     showResult(product, n);
   }
+
+  // Manual number entry — always available, and the ONLY path where live
+  // scanning isn't supported / the camera is denied.
+  const manualInput = overlay.querySelector('#bc-manual-input');
+  const manualGo = overlay.querySelector('#bc-manual-go');
+  const doManual = () => {
+    const code = String(manualInput.value || '').replace(/\D/g, '');
+    if (code.length < 6) { status.textContent = t('barcode_invalid'); manualInput.focus(); return; }
+    onCode(code, true);
+  };
+  manualGo.addEventListener('click', doManual);
+  manualInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); doManual(); } });
 
   function showResult(product, n) {
     const name = String(product.product_name || t('add_barcode')).slice(0, 80);
@@ -4176,9 +4207,27 @@ function openBarcodeScanner(date, onSave) {
     });
   }
 
-  navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } })
-    .then((s) => { stream = s; video.srcObject = s; video.play().catch(() => {}); requestAnimationFrame(scanLoop); })
-    .catch(() => { status.textContent = t('barcode_cam_denied'); if (stage) stage.style.display = 'none'; });
+  // Live camera scan — only when BarcodeDetector is available. Otherwise the
+  // manual number entry above is the path.
+  if (liveScan) {
+    try { detector = new BarcodeDetector({ formats: ['ean_13', 'ean_8', 'upc_a', 'upc_e', 'code_128'] }); }
+    catch (_) { try { detector = new BarcodeDetector(); } catch (__) { detector = null; } }
+  }
+  if (liveScan && detector) {
+    navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } })
+      .then((s) => { stream = s; video.srcObject = s; video.play().catch(() => {}); scanning = true; requestAnimationFrame(scanLoop); })
+      .catch(() => {
+        // Camera denied/unavailable → fall back to manual entry, don't dead-end.
+        liveScan = false; scanning = false;
+        status.textContent = t('barcode_cam_denied_manual');
+        if (stage) stage.style.display = 'none';
+      });
+  } else {
+    // No live scan (no BarcodeDetector) → manual only. Focus the number field.
+    liveScan = false; scanning = false;
+    if (stage) stage.style.display = 'none';
+    setTimeout(() => { try { manualInput.focus(); } catch (_) {} }, 100);
+  }
 }
 
 // ===========================================================================
