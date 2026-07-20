@@ -5,7 +5,7 @@
 // Single source of truth for the shipped build. Used by the visible build
 // label AND the feedback version tag so they can never drift apart. Keep this
 // equal to the ?v=N cache markers (see CLAUDE.md "CACHE WORKFLOW").
-const VAULT_BUILD = 'v176';
+const VAULT_BUILD = 'v177';
 
 // ==========================================================================
 // Icons
@@ -840,6 +840,7 @@ const I18N = {
     total_volume: 'Total Volume',
     back_to_workout: 'Back to workout',
     no_sets_to_save: 'Log at least one set first',
+    exit_no_save: 'Exit',
     edit_day: 'Edit Day',
     logged: 'Logged',
     logged_today: 'logged for this day',
@@ -1406,6 +1407,7 @@ const I18N = {
     total_volume: 'إجمالي الحِمل',
     back_to_workout: 'العودة للتمرين',
     no_sets_to_save: 'سجّل مجموعة واحدة على الأقل',
+    exit_no_save: 'خروج',
     edit_day: 'تعديل اليوم',
     logged: 'مُسجَّل',
     logged_today: 'مُسجَّل لهذا اليوم',
@@ -6559,7 +6561,7 @@ function renderSessionRun(el) {
              </div>
            </div>`
       }
-      <button type="button" class="btn btn-primary btn-block" data-run-save style="margin-top:16px">${icon('check', 16)} ${t('save_session')}</button>
+      <button type="button" class="btn btn-primary btn-block" data-run-save style="margin-top:16px">${nothing ? `${icon('back', 16)} ${t('exit_no_save')}` : `${icon('check', 16)} ${t('save_session')}`}</button>
     `;
 
     $('[data-run-back]', el)?.addEventListener('click', () => {
@@ -6569,7 +6571,11 @@ function renderSessionRun(el) {
     $('[data-run-save]', el)?.addEventListener('click', () => {
       let saved = 0;
       exObjs.forEach((ex) => { if (commitExercise(ex.id)) saved += 1; });
-      if (saved === 0) { showToast(t('no_sets_to_save')); return; }
+      // Nothing logged → there's nothing to save; don't trap the user with a
+      // nag. Just leave the empty session and return Home (a direct navigate,
+      // not goBack — goBack early-returns on any open modal/gate and could
+      // otherwise leave the user stuck on the summary).
+      if (saved === 0) { navigate('home'); return; }
       // Force the underlying session-day screens to re-init from the DB so the
       // freshly-logged sessions show as "logged" when we return.
       navStack.forEach((entry) => {
