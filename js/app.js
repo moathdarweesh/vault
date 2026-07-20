@@ -5,7 +5,7 @@
 // Single source of truth for the shipped build. Used by the visible build
 // label AND the feedback version tag so they can never drift apart. Keep this
 // equal to the ?v=N cache markers (see CLAUDE.md "CACHE WORKFLOW").
-const VAULT_BUILD = 'v174';
+const VAULT_BUILD = 'v175';
 
 // ==========================================================================
 // Icons
@@ -59,6 +59,11 @@ const ICONS = {
   backspace: '<path d="M20 5H9l-7 7 7 7h11a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2Z"/><line x1="18" y1="9" x2="12" y2="15"/><line x1="12" y1="9" x2="18" y2="15"/>',
   camera: '<path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3z"/><circle cx="12" cy="13" r="3.2"/>',
   barcode: '<path d="M3 5v14M7 5v14M11 5v14M15 5v14M19 5v14M21 5v14"/>',
+  // Design-panel additions (v175): clearer, meaning-fit glyphs.
+  play: '<polygon points="8 5 8 19 19 12"/>',                              // "start" — Guided Mode
+  pill: '<path d="m10.5 20.5 10-10a4.95 4.95 0 1 0-7-7l-10 10a4.95 4.95 0 1 0 7 7Z"/><path d="m8.5 8.5 7 7"/>', // supplements (not a droplet)
+  trendLine: '<polyline points="3 17 8 10 12 14 16 6 21 11"/>',           // a value over time (direction-neutral) — weight
+  sparkle: '<polygon points="12 3 15 9 21 12 15 15 12 21 9 15 3 12 9 9"/>', // AI-assisted (not lightning)
 };
 
 function icon(name, size = 20) {
@@ -2286,7 +2291,7 @@ function renderHome(el) {
         <div class="tool-pod-label">${t('compare_card')}</div>
       </button>
       <button class="tool-pod" data-goto="supplements">
-        <div class="tool-pod-icon">${icon('droplet', 18)}</div>
+        <div class="tool-pod-icon">${icon('pill', 18)}</div>
         <div class="tool-pod-label">${t('supplements_card')}</div>
       </button>
     </div>
@@ -2360,7 +2365,7 @@ function weightCardHtml() {
   const spark = weightSparkline(entries.slice(-12));
   return `
     <button class="weight-card" id="home-weight">
-      <div class="weight-card-icon">${icon('chart', 18)}</div>
+      <div class="weight-card-icon">${icon('trendLine', 18)}</div>
       <div class="weight-card-main">
         <div class="weight-card-label">${t('bodyweight')}</div>
         <div class="weight-card-value">
@@ -3871,7 +3876,7 @@ function mountFoodAiBar() {
   bar.className = 'cta-card cta-floating';
   bar.id = 'food-ai-cta';
   bar.innerHTML = `
-    <div class="cta-card-icon">${icon('zap', 20)}</div>
+    <div class="cta-card-icon">${icon('sparkle', 20)}</div>
     <div style="flex:1;min-width:0">
       <div class="cta-card-title">${t('ai_chat_title')}</div>
       <div class="cta-card-sub">${t('ai_chat_sub')}</div>
@@ -4025,7 +4030,7 @@ function nutritionDashboardHtml(date) {
     ${waterCard}
 
     <button class="nutri-coach" data-coach>
-      <div class="cta-card-icon">${icon('zap', 18)}</div>
+      <div class="cta-card-icon">${icon('sparkle', 18)}</div>
       <div style="flex:1;min-width:0;text-align:start">
         <div class="cta-card-title">${t('coach_title')}</div>
         <div class="cta-card-sub">${t('coach_sub')}</div>
@@ -6198,7 +6203,7 @@ function renderSessionDay(el) {
     </div>
 
     ${totalEx > 0
-      ? `<button type="button" class="sd-start-run" id="sd-start-run">${icon('run', 16)}<span>${t('guided_mode')}</span></button>`
+      ? `<button type="button" class="sd-start-run" id="sd-start-run">${icon('play', 16)}<span>${t('guided_mode')}</span></button>`
       : ''
     }
 
@@ -6952,7 +6957,7 @@ function renderSupplements(el) {
 
     <div class="data-list" id="supp-list">
       ${list.length === 0
-        ? emptyState({ iconName: 'zap', title: t('no_supplements'), text: t('no_supplements_text') })
+        ? emptyState({ iconName: 'pill', title: t('no_supplements'), text: t('no_supplements_text') })
         : list.map(suppRowHtml).join('')
       }
     </div>
@@ -8155,7 +8160,7 @@ function showOnboarding() {
         <div class="onb-sub">${t('onb_welcome_sub')}</div>
         <div class="onb-feats">
           <div class="onb-feat">${icon('dumbbell', 20)}<span>${t('onb_feat_workouts')}</span></div>
-          <div class="onb-feat">${icon('zap', 20)}<span>${t('onb_feat_ai')}</span></div>
+          <div class="onb-feat">${icon('sparkle', 20)}<span>${t('onb_feat_ai')}</span></div>
           <div class="onb-feat">${icon('chart', 20)}<span>${t('onb_feat_progress')}</span></div>
         </div>
         <button type="button" class="btn btn-primary btn-block" data-next>${t('onb_start')}</button>`;
