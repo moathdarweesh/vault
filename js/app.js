@@ -5,7 +5,7 @@
 // Single source of truth for the shipped build. Used by the visible build
 // label AND the feedback version tag so they can never drift apart. Keep this
 // equal to the ?v=N cache markers (see CLAUDE.md "CACHE WORKFLOW").
-const VAULT_BUILD = 'v173';
+const VAULT_BUILD = 'v174';
 
 // ==========================================================================
 // Icons
@@ -2173,6 +2173,11 @@ function renderHome(el) {
   const todayPlan = DB.plan.workoutForDate(now);   // continuous rotation → today's slot
   const exerciseById = Object.fromEntries(exercises.map((e) => [e.id, e]));
   const hasPlanToday = !!(todayPlan && todayPlan.exerciseIds && todayPlan.exerciseIds.length > 0);
+  // Any plan at all (a non-empty rotation cycle)? Distinct from "a workout today"
+  // — a plan can exist but land on a rest day. When there is NO plan, the Start
+  // CTA sends the user to build/pick one instead of into an empty session.
+  const planState = DB.plan.get();
+  const hasAnyPlan = !!(planState && Array.isArray(planState.cycle) && planState.cycle.length > 0);
 
   let heroHtml = '';
   if (hasPlanToday) {
@@ -2302,9 +2307,12 @@ function renderHome(el) {
   // "Start Workout" hero card → straight into today's session logging.
   // Recompute the day at click time so it stays correct if Home was left open
   // across midnight.
-  $('#home-start-workout', el)?.addEventListener('click', () =>
-    navigate('session-day', { date: todayISO() })
-  );
+  $('#home-start-workout', el)?.addEventListener('click', () => {
+    // No plan set up yet → open the plan/schedules screen so the user picks a
+    // ready-made plan or builds one, instead of landing in an empty session.
+    if (!hasAnyPlan) { navigate('planner'); return; }
+    navigate('session-day', { date: todayISO() });
+  });
   // Tap a muscle in the focus heatmap → its full session history.
   el.querySelectorAll('[data-muscle]').forEach((b) =>
     b.addEventListener('click', () => navigate('muscle-sessions', { muscleCat: b.dataset.muscle }))
