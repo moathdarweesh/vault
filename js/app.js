@@ -5,7 +5,7 @@
 // Single source of truth for the shipped build. Used by the visible build
 // label AND the feedback version tag so they can never drift apart. Keep this
 // equal to the ?v=N cache markers (see CLAUDE.md "CACHE WORKFLOW").
-const VAULT_BUILD = 'v172';
+const VAULT_BUILD = 'v173';
 
 // ==========================================================================
 // Icons
@@ -8129,26 +8129,31 @@ function showOnboarding() {
   const render = () => {
     const lang = DB.prefs.get().lang || 'en';
     const unit = DB.prefs.get().unit || 'kg';
-    const dots = [0, 1, 2].map((i) => `<span class="onb-dot ${i === step ? 'active' : ''}"></span>`).join('');
+    const dots = [0, 1, 2, 3].map((i) => `<span class="onb-dot ${i === step ? 'active' : ''}"></span>`).join('');
     let inner = '';
     if (step === 0) {
+      // Language first — the user hasn't picked one yet, so the title is bilingual.
       inner = `
-        <div class="onb-lang">
-          <button type="button" class="onb-lang-btn ${lang === 'ar' ? 'active' : ''}" data-lang="ar">ع</button>
-          <button type="button" class="onb-lang-btn ${lang === 'en' ? 'active' : ''}" data-lang="en">EN</button>
-        </div>
-        <div class="onb-logo">${icon('vault', 38)}</div>
+        <div class="onb-logo">${icon('vault', 32)}</div>
+        <div class="onb-title">اختر لغتك<br>Choose your language</div>
+        <div class="onb-langs">
+          <button type="button" class="onb-lang-opt ${lang === 'ar' ? 'active' : ''}" data-setlang="ar"><b>العربية</b><span>Arabic</span></button>
+          <button type="button" class="onb-lang-opt ${lang === 'en' ? 'active' : ''}" data-setlang="en"><b>English</b><span>الإنجليزية</span></button>
+        </div>`;
+    } else if (step === 1) {
+      inner = `
+        <div class="onb-logo">${icon('vault', 32)}</div>
         <div class="onb-title">${t('onb_welcome_title')}</div>
         <div class="onb-sub">${t('onb_welcome_sub')}</div>
         <div class="onb-feats">
-          <div class="onb-feat">${icon('dumbbell', 18)}<span>${t('onb_feat_workouts')}</span></div>
-          <div class="onb-feat">${icon('zap', 18)}<span>${t('onb_feat_ai')}</span></div>
-          <div class="onb-feat">${icon('chart', 18)}<span>${t('onb_feat_progress')}</span></div>
+          <div class="onb-feat">${icon('dumbbell', 20)}<span>${t('onb_feat_workouts')}</span></div>
+          <div class="onb-feat">${icon('zap', 20)}<span>${t('onb_feat_ai')}</span></div>
+          <div class="onb-feat">${icon('chart', 20)}<span>${t('onb_feat_progress')}</span></div>
         </div>
         <button type="button" class="btn btn-primary btn-block" data-next>${t('onb_start')}</button>`;
-    } else if (step === 1) {
+    } else if (step === 2) {
       inner = `
-        <div class="onb-logo">${icon('settings', 34)}</div>
+        <div class="onb-logo">${icon('settings', 32)}</div>
         <div class="onb-title">${t('onb_unit_title')}</div>
         <div class="onb-sub">${t('onb_unit_sub')}</div>
         <div class="onb-units">
@@ -8158,7 +8163,7 @@ function showOnboarding() {
         <button type="button" class="btn btn-primary btn-block" data-next>${t('next')}</button>`;
     } else {
       inner = `
-        <div class="onb-logo">${icon('target', 34)}</div>
+        <div class="onb-logo">${icon('target', 32)}</div>
         <div class="onb-title">${t('onb_goal_title')}</div>
         <div class="onb-sub">${t('onb_goal_sub')}</div>
         <button type="button" class="btn btn-primary btn-block" data-goal>${t('onb_set_goal')}</button>
@@ -8166,9 +8171,11 @@ function showOnboarding() {
     }
     gate.innerHTML = `<div class="auth-card onb-card">${inner}<div class="onb-dots">${dots}</div></div>`;
 
-    gate.querySelectorAll('[data-lang]').forEach((b) => b.addEventListener('click', () => {
-      DB.prefs.setLang(b.dataset.lang);
-      if (typeof applyLang === 'function') applyLang(b.dataset.lang);
+    // Language slide → set + apply + advance to Welcome.
+    gate.querySelectorAll('[data-setlang]').forEach((b) => b.addEventListener('click', () => {
+      DB.prefs.setLang(b.dataset.setlang);
+      if (typeof applyLang === 'function') applyLang(b.dataset.setlang);
+      step = 1;
       render();
     }));
     gate.querySelectorAll('[data-unit]').forEach((b) => b.addEventListener('click', () => {
