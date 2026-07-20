@@ -5,7 +5,7 @@
 // Single source of truth for the shipped build. Used by the visible build
 // label AND the feedback version tag so they can never drift apart. Keep this
 // equal to the ?v=N cache markers (see CLAUDE.md "CACHE WORKFLOW").
-const VAULT_BUILD = 'v178';
+const VAULT_BUILD = 'v179';
 
 // ==========================================================================
 // Icons
@@ -549,6 +549,7 @@ const I18N = {
     barcode_not_found: 'Not found — try Photo or Manual.',
     barcode_unsupported: 'Barcode scanning needs the app or a newer browser.',
     barcode_cam_denied: 'Camera blocked. Allow it, then try again.',
+    barcode_loading: 'Starting the scanner…',
     barcode_manual_hint: 'Type the barcode number below',
     barcode_number_ph: 'Barcode number',
     barcode_lookup: 'Look up',
@@ -1126,6 +1127,7 @@ const I18N = {
     barcode_not_found: 'غير موجود — جرّب الصورة أو اليدوي.',
     barcode_unsupported: 'مسح الباركود يحتاج التطبيق أو متصفّحاً أحدث.',
     barcode_cam_denied: 'الكاميرا محجوبة. اسمح بها ثم أعد المحاولة.',
+    barcode_loading: 'جارٍ تشغيل الماسح…',
     barcode_manual_hint: 'اكتب رقم الباركود في الأسفل',
     barcode_number_ph: 'رقم الباركود',
     barcode_lookup: 'بحث',
@@ -4061,31 +4063,50 @@ function logNutritionItems(date, items, onDone) {
   if (typeof onDone === 'function') onDone();
 }
 
+// Lazy-load the vendored ZXing decoder (~330KB) only when the scanner actually
+// needs it — i.e. a browser without the native BarcodeDetector. Cached after the
+// first load. Keeps the app's initial payload lean.
+let _zxingPromise = null;
+function loadBarcodeLib() {
+  if (typeof window !== 'undefined' && window.ZXing) return Promise.resolve(window.ZXing);
+  if (_zxingPromise) return _zxingPromise;
+  _zxingPromise = new Promise((resolve, reject) => {
+    const s = document.createElement('script');
+    s.src = 'js/vendor/zxing.min.js?v=' + VAULT_BUILD;
+    s.async = true;
+    s.onload = () => (window.ZXing ? resolve(window.ZXing) : reject(new Error('zxing missing')));
+    s.onerror = () => { _zxingPromise = null; reject(new Error('zxing load failed')); };
+    document.head.appendChild(s);
+  });
+  return _zxingPromise;
+}
+
 // ===========================================================================
-// Barcode scanner — native BarcodeDetector + Open Food Facts (free, no key, no
-// dependency). Scan a packaged food → exact per-100g nutrition → pick grams →
-// log. The standout "scan and done" flow. Degrades cleanly on a browser without
-// BarcodeDetector / camera access (a clear message → use Photo or Manual).
+// Barcode scanner — CAMERA scan + Open Food Facts (free, no key). Two decode
+// engines: the native BarcodeDetector (fast, Android) when present, else the
+// vendored ZXing decoder (any browser with a camera). Manual number entry is
+// always shown as a fallback. Scan a packaged food → per-100g nutrition → pick
+// grams → log.
 // ===========================================================================
 function openBarcodeScanner(date, onSave) {
-  // Live camera scanning needs the native BarcodeDetector API — present on
-  // Android (Chrome/WebView) but NOT on desktop or iOS. So the camera scan is a
-  // best-effort enhancement; the ALWAYS-available path is typing the barcode
-  // number and looking it up. Both feed the same Open Food Facts lookup.
+  // Camera scanning works via the native BarcodeDetector (Android) OR the
+  // vendored ZXing decoder (any browser) — so it's offered whenever a camera is
+  // available. Manual number entry is always shown as a fallback. Both paths
+  // feed the same Open Food Facts lookup.
   const hasDetector = (typeof window !== 'undefined') && ('BarcodeDetector' in window);
   const hasCamera = !!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia);
-  let liveScan = hasDetector && hasCamera;
+  const canScan = hasCamera;
 
   const overlay = openModal(`
     <div class="modal-header">
       <div class="modal-title">${t('add_barcode')}</div>
       <button class="icon-btn icon-btn-tile" data-close>${icon('close', 18)}</button>
     </div>
-    <div class="barcode-stage" id="bc-stage"${liveScan ? '' : ' style="display:none"'}>
+    <div class="barcode-stage" id="bc-stage"${canScan ? '' : ' style="display:none"'}>
       <video id="bc-video" playsinline muted></video>
       <div class="barcode-frame"></div>
     </div>
-    <div class="voice-status" id="bc-status">${liveScan ? t('barcode_hint') : t('barcode_manual_hint')}</div>
+    <div class="voice-status" id="bc-status">${canScan ? t('barcode_hint') : t('barcode_manual_hint')}</div>
     <div class="bc-manual">
       <input type="text" inputmode="numeric" id="bc-manual-input" autocomplete="off"
         placeholder="${escapeHtml(t('barcode_number_ph'))}">
@@ -4097,10 +4118,12 @@ function openBarcodeScanner(date, onSave) {
   const result = overlay.querySelector('#bc-result');
   const stage = overlay.querySelector('#bc-stage');
   const video = overlay.querySelector('#bc-video');
-  let stream = null, scanning = liveScan, detector = null;
+  let stream = null, scanning = false, detector = null, zxingReader = null;
+  const triedUnknown = new Set();   // codes Open Food Facts didn't recognise — don't re-hit them
 
   const stop = () => {
     scanning = false;
+    if (zxingReader) { try { zxingReader.reset(); } catch (_) {} zxingReader = null; }
     if (stream) { try { stream.getTracks().forEach((tk) => tk.stop()); } catch (_) {} stream = null; }
   };
   // Release the camera on ANY dismissal (X / backdrop / Escape) — same guard as voice.
@@ -4109,19 +4132,17 @@ function openBarcodeScanner(date, onSave) {
     const mo = new MutationObserver(() => { if (!document.body.contains(overlay)) { stop(); mo.disconnect(); } });
     mo.observe(modalRoot, { childList: true, subtree: true });
   }
+  const failToManual = (denied) => {
+    stop();
+    if (stage) stage.style.display = 'none';
+    status.textContent = denied ? t('barcode_cam_denied_manual') : t('barcode_manual_hint');
+    setTimeout(() => { try { overlay.querySelector('#bc-manual-input').focus(); } catch (_) {} }, 80);
+  };
 
-  async function scanLoop() {
-    if (!scanning || !detector || !document.body.contains(overlay)) return;
-    try {
-      const codes = await detector.detect(video);
-      if (codes && codes.length && codes[0].rawValue) { onCode(String(codes[0].rawValue), false); return; }
-    } catch (_) {}
-    requestAnimationFrame(scanLoop);
-  }
-
-  // Shared lookup for BOTH the live scan and the manual number entry.
-  async function onCode(code, fromManual) {
-    scanning = false;                 // stop scanning; keep the camera until we know the result
+  // Look up ONE code on Open Food Facts. Returns true when a product with
+  // calories was found and shown (scanning then stops); false otherwise.
+  async function lookup(code) {
+    scanning = false;                 // pause processing while we query
     status.textContent = t('barcode_looking');
     let product = null;
     try {
@@ -4130,29 +4151,40 @@ function openBarcodeScanner(date, onSave) {
       const data = await res.json();
       product = data && data.product;
     } catch (_) {}
-    if (!document.body.contains(overlay)) return;
+    if (!document.body.contains(overlay)) return true;
     const n = product && product.nutriments;
     const kcal100 = n && (n['energy-kcal_100g'] != null ? +n['energy-kcal_100g'] : null);
-    if (!product || !n || kcal100 == null) {
-      status.textContent = t('barcode_not_found');
-      // Live camera → resume scanning for another try. Manual → just wait for a
-      // new number (nothing to resume).
-      if (!fromManual && liveScan && detector) { scanning = true; requestAnimationFrame(scanLoop); }
-      return;
-    }
+    if (!product || !n || kcal100 == null) { status.textContent = t('barcode_not_found'); return false; }
     stop();                           // got a hit → release the camera
     if (stage) stage.style.display = 'none';
     showResult(product, n);
+    return true;
   }
 
-  // Manual number entry — always available, and the ONLY path where live
-  // scanning isn't supported / the camera is denied.
+  // Native BarcodeDetector loop (Android). On an unknown code it's remembered
+  // and scanning continues for a different one.
+  async function scanLoopNative() {
+    if (!scanning || !detector || !document.body.contains(overlay)) return;
+    try {
+      const codes = await detector.detect(video);
+      const code = codes && codes.length && codes[0].rawValue ? String(codes[0].rawValue) : '';
+      if (code && !triedUnknown.has(code)) {
+        if (await lookup(code)) return;
+        triedUnknown.add(code);
+        scanning = true;
+      }
+    } catch (_) {}
+    requestAnimationFrame(scanLoopNative);
+  }
+
+  // Manual number entry — always available; the fallback when camera scanning
+  // isn't supported or the camera is denied.
   const manualInput = overlay.querySelector('#bc-manual-input');
   const manualGo = overlay.querySelector('#bc-manual-go');
   const doManual = () => {
     const code = String(manualInput.value || '').replace(/\D/g, '');
     if (code.length < 6) { status.textContent = t('barcode_invalid'); manualInput.focus(); return; }
-    onCode(code, true);
+    lookup(code);
   };
   manualGo.addEventListener('click', doManual);
   manualInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); doManual(); } });
@@ -4207,27 +4239,37 @@ function openBarcodeScanner(date, onSave) {
     });
   }
 
-  // Live camera scan — only when BarcodeDetector is available. Otherwise the
-  // manual number entry above is the path.
-  if (liveScan) {
+  // ----- pick a camera engine -----
+  if (!hasCamera) { failToManual(false); return; }   // no camera at all → manual only
+
+  // Engine A: native BarcodeDetector (fast) when the browser has it.
+  if (hasDetector) {
     try { detector = new BarcodeDetector({ formats: ['ean_13', 'ean_8', 'upc_a', 'upc_e', 'code_128'] }); }
     catch (_) { try { detector = new BarcodeDetector(); } catch (__) { detector = null; } }
   }
-  if (liveScan && detector) {
+  if (detector) {
     navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } })
-      .then((s) => { stream = s; video.srcObject = s; video.play().catch(() => {}); scanning = true; requestAnimationFrame(scanLoop); })
-      .catch(() => {
-        // Camera denied/unavailable → fall back to manual entry, don't dead-end.
-        liveScan = false; scanning = false;
-        status.textContent = t('barcode_cam_denied_manual');
-        if (stage) stage.style.display = 'none';
-      });
-  } else {
-    // No live scan (no BarcodeDetector) → manual only. Focus the number field.
-    liveScan = false; scanning = false;
-    if (stage) stage.style.display = 'none';
-    setTimeout(() => { try { manualInput.focus(); } catch (_) {} }, 100);
+      .then((s) => { stream = s; video.srcObject = s; video.play().catch(() => {}); scanning = true; requestAnimationFrame(scanLoopNative); })
+      .catch(() => failToManual(true));
+    return;
   }
+
+  // Engine B: ZXing decoder (works in any browser with a camera). Lazy-loaded.
+  status.textContent = t('barcode_loading');
+  loadBarcodeLib().then((ZX) => {
+    if (!document.body.contains(overlay)) return;
+    zxingReader = new ZX.BrowserMultiFormatReader();
+    scanning = true;
+    status.textContent = t('barcode_hint');
+    return zxingReader.decodeFromConstraints({ video: { facingMode: 'environment' } }, video, async (res2) => {
+      if (!scanning || !res2 || typeof res2.getText !== 'function') return;   // no barcode in this frame
+      const code = String(res2.getText());
+      if (triedUnknown.has(code)) return;
+      if (await lookup(code)) return;   // found → shown + stopped
+      triedUnknown.add(code);           // unknown → skip it, keep scanning
+      scanning = true;
+    });
+  }).catch(() => failToManual(true));
 }
 
 // ===========================================================================
