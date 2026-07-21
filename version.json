@@ -1,11 +1,11 @@
 {
   "_comment": "Update manifest. `web` is the latest web build — it MUST equal the ?v=N in index.html on every release; js/update.js reads it fresh (no-store) and reloads the entry html so web/CSS/JS updates reach all devices without a reinstall. `apk` only triggers the in-app 'download new APK' banner when apk.build here is GREATER than the versionCode installed on the device. To release a NEW APK: bump android/app/build.gradle versionCode, build, upload to Drive, then set apk.build to that number + apk.url to the new Drive share link + notes, and push.",
-  "web": 180,
+  "web": 181,
   "apk": {
-    "build": 5,
-    "version": "1.4",
+    "build": 6,
+    "version": "1.5",
     "url": "https://raw.githubusercontent.com/moathdarweesh/vault/main/download/THE-VAULT.apk",
-    "notes_ar": "مسح الباركود بالكاميرا وتصوير الأكل: صار يظهر طلب إذن الكاميرا من النظام. ثبّت هذا التحديث لتفعيل الكاميرا داخل التطبيق.",
-    "notes_en": "Camera barcode scanning + food photo: the system camera prompt now appears. Install this update to enable the camera inside the app."
+    "notes_ar": "كاميرا لمسح الباركود وتصوير الأكل + إصلاح تزاحم الشاشة عند ظهور الكيبورد. ثبّت هذا التحديث لتفعيل الكاميرا.",
+    "notes_en": "Camera barcode + food photo scanning, plus a fix for the layout getting cramped when the keyboard opens. Install to enable the camera."
   }
 }

@@ -778,6 +778,14 @@ body.keyboard-open .bottom-nav {
   pointer-events: none;
 }
 
+/* While the keyboard is open, shrink the fixed full-screen shells to the VISIBLE
+   area (above the keyboard) so content, modals and gates sit above it instead of
+   being crammed/hidden behind it. --vvh = visual-viewport height (set in JS). */
+body.keyboard-open .app { height: var(--vvh, 100dvh); }
+body.keyboard-open .modal-overlay,
+body.keyboard-open .auth-gate,
+body.keyboard-open .sheet-overlay { height: var(--vvh, 100%); bottom: auto; }
+
 .nav-btn {
   flex: 1;
   display: flex;

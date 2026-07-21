@@ -5,7 +5,7 @@
 // Single source of truth for the shipped build. Used by the visible build
 // label AND the feedback version tag so they can never drift apart. Keep this
 // equal to the ?v=N cache markers (see CLAUDE.md "CACHE WORKFLOW").
-const VAULT_BUILD = 'v180';
+const VAULT_BUILD = 'v181';
 
 // ==========================================================================
 // Icons
@@ -8206,13 +8206,21 @@ function setupKeyboardHandling() {
   const vp = window.visualViewport;
   const curH = () => (vp ? vp.height : window.innerHeight);
   let baseH = curH();
+  const root = document.documentElement;
 
+  // Publish the VISIBLE viewport height so the CSS can shrink the app shell,
+  // modals and gates to the area ABOVE the keyboard (only while it's open) —
+  // otherwise `dvh` stays full-height in browsers and content/modals hide behind
+  // the keyboard, which reads as everything getting crammed.
   function evaluate() {
-    const h = curH();
+    const h = curH() || window.innerHeight;
+    if (!h) return;                   // not laid out yet — don't publish a 0 height
     if (h > baseH) baseH = h;         // grow the baseline (browser chrome hiding, etc.)
     const open = (baseH - h) > 120;   // >120px shorter than the baseline ⇒ keyboard is up
+    root.style.setProperty('--vvh', h + 'px');
     document.body.classList.toggle('keyboard-open', open);
   }
+  evaluate();
   // Orientation swaps portrait/landscape height — recapture the baseline so the
   // new (shorter, in landscape) height isn't mistaken for an open keyboard.
   function resetBaseline() {
