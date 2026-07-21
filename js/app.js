@@ -5,7 +5,7 @@
 // Single source of truth for the shipped build. Used by the visible build
 // label AND the feedback version tag so they can never drift apart. Keep this
 // equal to the ?v=N cache markers (see CLAUDE.md "CACHE WORKFLOW").
-const VAULT_BUILD = 'v179';
+const VAULT_BUILD = 'v180';
 
 // ==========================================================================
 // Icons
@@ -6545,22 +6545,23 @@ function renderSessionRun(el) {
     return Number(value);
   }
 
-  // Lazily init per-exercise sets: resume today's logged session, else pre-fill
-  // from the last session's numbers (as targets), else one empty row.
+  // Lazily init per-exercise sets. A FRESH log starts with EMPTY inputs and last
+  // session's numbers as a ghost placeholder (`ph*`) — so there's nothing to
+  // delete, tapping ✓ fills them in ("same as last time"), and an exercise you
+  // don't touch logs nothing. Re-opening today's already-logged session shows
+  // its real values for editing.
   function runInit(exId) {
     if (viewContext.runState[exId]) return viewContext.runState[exId];
     const today = DB.sessions.listByExercise(exId).find((s) => s.date === viewContext.runDate);
     const last = DB.sessions.lastForExercise(exId);
     let sets, savedId = null;
     if (today) {
-      // Prefill values from today's logged session, but the "done" check is a
-      // live in-session action — always start unchecked when entering the run.
-      sets = today.sets.map((s) => ({ reps: s.reps, weight: s.weight, done: false }));
+      sets = today.sets.map((s) => ({ reps: s.reps, weight: s.weight, done: false, phReps: s.reps, phWeight: s.weight }));
       savedId = today.id;
     } else if (last) {
-      sets = last.sets.map((s) => ({ reps: s.reps, weight: s.weight, done: false }));
+      sets = last.sets.map((s) => ({ reps: '', weight: '', done: false, phReps: s.reps, phWeight: s.weight }));
     } else {
-      sets = [{ reps: '', weight: '', done: false }];
+      sets = [{ reps: '', weight: '', done: false, phReps: '', phWeight: '' }];
     }
     viewContext.runState[exId] = { sets, savedSessionId: savedId };
     return viewContext.runState[exId];
@@ -6698,11 +6699,16 @@ function renderSessionRun(el) {
 
   const setsRows = st.sets.map((s, i) => {
     const wDisplay = (s.weight === '' || s.weight == null) ? '' : convDisplay(Number(s.weight));
+    const repsVal = (s.reps === '' || s.reps == null) ? '' : s.reps;
+    // Ghost hint = last time's numbers (raw digits — a <input type=number>
+    // placeholder must not carry localized digits). Fallback to 0.
+    const phReps = (s.phReps === '' || s.phReps == null) ? '0' : String(s.phReps);
+    const phW = (s.phWeight === '' || s.phWeight == null) ? '0' : String(convDisplay(Number(s.phWeight)));
     return `
       <div class="run-set-row${s.done ? ' done' : ''}" data-set="${i}">
         <div class="run-set-n num">${i + 1}</div>
-        <input type="number" inputmode="numeric" step="1" min="0" placeholder="0" value="${s.reps || ''}" data-field="reps" aria-label="${t('reps')}">
-        <input type="number" inputmode="decimal" step="0.5" min="0" placeholder="0" value="${wDisplay || ''}" data-field="weight" aria-label="${viewContext.runUnit}">
+        <input type="number" inputmode="numeric" step="1" min="0" placeholder="${phReps}" value="${repsVal}" data-field="reps" aria-label="${t('reps')}">
+        <input type="number" inputmode="decimal" step="0.5" min="0" placeholder="${phW}" value="${wDisplay || ''}" data-field="weight" aria-label="${viewContext.runUnit}">
         <button type="button" class="run-set-done${s.done ? ' done' : ''}" data-done aria-label="${escapeHtml(t('mark_set_done'))}" aria-pressed="${!!s.done}">${icon('check', 16)}</button>
       </div>`;
   }).join('');
@@ -6751,10 +6757,12 @@ function renderSessionRun(el) {
     });
   });
 
-  // Set inputs → write to state as the user types.
+  // Set inputs → write to state as the user types. Tapping an input selects its
+  // content so a new number REPLACES the old one (no manual deleting).
   el.querySelectorAll('.run-set-row').forEach((row) => {
     const i = Number(row.dataset.set);
     row.querySelectorAll('input').forEach((inp) => {
+      inp.addEventListener('focus', () => { try { inp.select(); } catch (_) {} });
       inp.addEventListener('input', () => {
         const v = inp.value;
         if (inp.dataset.field === 'weight') {
@@ -6764,21 +6772,40 @@ function renderSessionRun(el) {
         }
       });
     });
-    // ✓ Done → mark the set complete and start the rest timer.
+    // ✓ Done → mark the set complete + start the rest timer. If the row is still
+    // empty, fill it from the "last time" ghost — one tap = "same as last time".
     row.querySelector('[data-done]')?.addEventListener('click', () => {
-      st.sets[i].done = !st.sets[i].done;
-      row.classList.toggle('done', st.sets[i].done);
-      row.querySelector('[data-done]').classList.toggle('done', st.sets[i].done);
-      row.querySelector('[data-done]').setAttribute('aria-pressed', String(st.sets[i].done));
-      if (st.sets[i].done) startRestTimer(REST_DEFAULT_SEC);
-      else clearRestTimer();
+      const set = st.sets[i];
+      set.done = !set.done;
+      if (set.done) {
+        if ((set.reps === '' || set.reps == null) && set.phReps !== '' && set.phReps != null) {
+          set.reps = Number(set.phReps);
+          const r = row.querySelector('[data-field="reps"]'); if (r) r.value = String(set.reps);
+        }
+        if ((set.weight === '' || set.weight == null) && set.phWeight !== '' && set.phWeight != null) {
+          set.weight = set.phWeight;
+          const w = row.querySelector('[data-field="weight"]'); if (w) w.value = String(convDisplay(Number(set.weight)));
+        }
+        startRestTimer(REST_DEFAULT_SEC);
+      } else {
+        clearRestTimer();
+      }
+      row.classList.toggle('done', set.done);
+      row.querySelector('[data-done]').classList.toggle('done', set.done);
+      row.querySelector('[data-done]').setAttribute('aria-pressed', String(set.done));
     });
   });
 
   $('[data-addset]', el)?.addEventListener('click', () => {
-    const last = st.sets[st.sets.length - 1];
-    const keep = (v) => (v !== '' && v != null ? v : '');
-    st.sets.push({ reps: keep(last?.reps), weight: keep(last?.weight), done: false });
+    const prev = st.sets[st.sets.length - 1];
+    const hint = (v, ph) => (v !== '' && v != null ? v : (ph != null ? ph : ''));
+    // New set starts EMPTY, hinting the previous set (its typed value, else its
+    // own ghost) so ✓ still means "same again" without anything to delete.
+    st.sets.push({
+      reps: '', weight: '', done: false,
+      phReps: prev ? hint(prev.reps, prev.phReps) : '',
+      phWeight: prev ? hint(prev.weight, prev.phWeight) : '',
+    });
     renderSessionRun(el);
   });
 
