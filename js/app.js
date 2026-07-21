@@ -5,7 +5,7 @@
 // Single source of truth for the shipped build. Used by the visible build
 // label AND the feedback version tag so they can never drift apart. Keep this
 // equal to the ?v=N cache markers (see CLAUDE.md "CACHE WORKFLOW").
-const VAULT_BUILD = 'v183';
+const VAULT_BUILD = 'v184';
 
 // ==========================================================================
 // Icons
@@ -7891,7 +7891,16 @@ async function populateAccount(el) {
     $('#logout-btn', el)?.addEventListener('click', () => {
       confirmDialog({
         title: t('logout'), text: t('logout_confirm'), confirmLabel: t('logout'),
-        onConfirm: async () => { await Cloud.signOut(); try { Cloud.clearLocalUserData(); } catch (_) {} location.reload(); },
+        onConfirm: async () => {
+          // Push local data to the cloud FIRST, and only clear this device if it
+          // is safely uploaded — otherwise logging out could lose unsynced
+          // sessions. If the push fails/offline, keep the local data intact.
+          let safe = false;
+          try { const r = await Cloud.push(); safe = (r !== 'blocked' && r !== 'conflict'); } catch (_) { safe = false; }
+          try { await Cloud.signOut(); } catch (_) {}
+          if (safe) { try { Cloud.clearLocalUserData(); } catch (_) {} }
+          location.reload();
+        },
       });
     });
   } else {

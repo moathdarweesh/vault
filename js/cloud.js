@@ -162,7 +162,14 @@
   const getStamp = (uid) => { try { return localStorage.getItem(stampKey(uid)) || ''; } catch (_) { return ''; } };
   const setStamp = (uid, iso) => { try { localStorage.setItem(stampKey(uid), iso || ''); } catch (_) {} };
   const isLinked = (uid) => { try { return !!localStorage.getItem(linkedKey(uid)); } catch (_) { return false; } };
-  const markLinked = (uid) => { try { localStorage.setItem(linkedKey(uid), '1'); } catch (_) {} };
+  // Remember the last linked user id so onLocalChange can flag unsynced edits as
+  // "dirty" EVEN when getSession() is momentarily null (SDK still loading on boot,
+  // or an offline-expired token). Without this a workout logged in that window was
+  // never marked dirty and got silently overwritten by the next bootSync pull.
+  const LAST_UID_KEY = 'vault_last_uid';
+  const setLastUid = (uid) => { try { if (uid) localStorage.setItem(LAST_UID_KEY, uid); } catch (_) {} };
+  const getLastUid = () => { try { return localStorage.getItem(LAST_UID_KEY) || ''; } catch (_) { return ''; } };
+  const markLinked = (uid) => { try { localStorage.setItem(linkedKey(uid), '1'); setLastUid(uid); } catch (_) {} };
   const isDirty = (uid) => { try { return !!localStorage.getItem(dirtyKey(uid)); } catch (_) { return false; } };
   const setDirty = (uid, v) => { try { v ? localStorage.setItem(dirtyKey(uid), '1') : localStorage.removeItem(dirtyKey(uid)); } catch (_) {} };
   // Optimistic-concurrency base version (the vault_data.version we last saw). Only
@@ -293,8 +300,14 @@
   let syncing = false; // suppress pushes while we are restoring from cloud
   async function onLocalChange() {
     if (syncing) return;
-    const s = await getSession(); if (!s) return; // only sync when logged in
-    setDirty(s.user.id, true); // mark unpushed local changes (persists offline)
+    // Mark unpushed changes DIRTY FIRST, using the last-linked uid — BEFORE any
+    // await. If getSession() is momentarily null (SDK still loading on boot, or an
+    // offline-expired token), the change is still flagged, so the next bootSync
+    // returns 'conflict' instead of silently pulling an older cloud blob over it.
+    const lastUid = getLastUid();
+    if (lastUid) setDirty(lastUid, true);
+    const s = await getSession(); if (!s) return; // only push when logged in
+    setDirty(s.user.id, true); // (same uid in the normal case)
     clearTimeout(pushTimer);
     pushTimer = setTimeout(() => { push().catch(() => {}); }, 1200);
     // Also project the change into the normalized tables (best-effort mirror).
@@ -609,6 +622,7 @@
     try {
       localStorage.removeItem('gym_tracker_v1');
       localStorage.removeItem(CATALOG_CACHE_KEY);
+      localStorage.removeItem(LAST_UID_KEY);
       Object.keys(localStorage).forEach((k) => {
         if (/^vault_(synced|linked|dirty|ver)_/.test(k)) localStorage.removeItem(k);
       });
