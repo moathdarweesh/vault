@@ -89,7 +89,16 @@
         (b.foodLogs && Object.keys(b.foodLogs).length) ||
         (b.supplements && b.supplements.length) ||
         (b.supplementLogs && Object.keys(b.supplementLogs).length) ||
-        (b.exercises && b.exercises.some((e) => e && e.isCustom))
+        (b.exercises && b.exercises.some((e) => e && e.isCustom)) ||
+        // Standalone tracking that isn't sessions/food — a device whose ONLY
+        // content is these must NOT be treated as "empty" (else its plan / weight
+        // / water / nutrition goal gets silently overwritten on first login and
+        // never syncs up). Matches the new Weight/Water features.
+        (b.bodyweight && b.bodyweight.length) ||
+        (b.water && Object.keys(b.water).length) ||
+        (b.cardioTypes && b.cardioTypes.length) ||
+        (b.plan && Array.isArray(b.plan.cycle) && b.plan.cycle.length) ||
+        (b.nutrition && b.nutrition.targets && b.nutrition.targets.calories)
       );
     } catch (_) { return false; }
   }
