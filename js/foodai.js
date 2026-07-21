@@ -20,6 +20,17 @@
   const ic = (n, s) => (typeof icon === 'function' ? icon(n, s || 20) : '');
   const esc = (s) => (typeof escapeHtml === 'function' ? escapeHtml(s) : String(s));
 
+  // A dropped connection surfaces as TypeError('Failed to fetch'/'Load failed').
+  // Show the localized network message instead of the raw browser string; keep
+  // already-localized errors (rate limit, etc.) as-is.
+  function friendlyErr(e) {
+    const m = (e && e.message) || '';
+    if ((e && e.name === 'TypeError') || /failed to fetch|load failed|networkerror|network request/i.test(m)) {
+      return tr('auth_err_network');
+    }
+    return m || tr('ai_error');
+  }
+
   const KEY_STORE = 'gemini_api_key';
   const getKey = () => { try { return localStorage.getItem(KEY_STORE) || ''; } catch (_) { return ''; } };
   const setKey = (v) => { try { localStorage.setItem(KEY_STORE, (v || '').trim()); } catch (_) {} };
@@ -369,7 +380,7 @@
             showResult(id, qHtml, items, box);
           } catch (e) {
             const p = document.getElementById(id + '-p');
-            if (p) p.innerHTML = qHtml + `<span class="ai-err">${esc((e && e.message) || tr('ai_error'))}</span>`;
+            if (p) p.innerHTML = qHtml + `<span class="ai-err">${esc(friendlyErr(e))}</span>`;
           }
         };
         send.addEventListener('click', run);
@@ -420,7 +431,7 @@
               showResult(id, qHtml, items, box);
             } catch (e) {
               const p = document.getElementById(id + '-p');
-              if (p) p.innerHTML = qHtml + `<span class="ai-err">${esc((e && e.message) || tr('ai_error'))}</span>`;
+              if (p) p.innerHTML = qHtml + `<span class="ai-err">${esc(friendlyErr(e))}</span>`;
             }
           });
         }

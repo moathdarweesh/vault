@@ -594,6 +594,44 @@
     try { await c.storage.from(IMAGE_BUCKET).remove([path]); } catch (_) {}
   }
 
+  // Wipe this device's local copy + per-user sync bookkeeping. Used on logout
+  // (so a shared device doesn't leak the previous user's blob) and after account
+  // deletion. A synced user restores from the cloud on next sign-in.
+  function clearLocalUserData() {
+    try {
+      localStorage.removeItem('gym_tracker_v1');
+      localStorage.removeItem(CATALOG_CACHE_KEY);
+      Object.keys(localStorage).forEach((k) => {
+        if (/^vault_(synced|linked|dirty|ver)_/.test(k)) localStorage.removeItem(k);
+      });
+    } catch (_) {}
+  }
+
+  // GDPR / Play right-to-erasure. Sweeps the user's Storage objects (no DB
+  // cascade covers the bucket), then the delete_own_account() RPC removes the
+  // auth user + every row keyed to their uid (cascades), then we sign out and
+  // wipe local. Throws on any hard failure so the UI can report it.
+  async function deleteAccount() {
+    const c = sb();
+    if (!c) throw new Error('offline');
+    const s = await getSession();
+    const uid = s && s.user && s.user.id;
+    if (!uid) throw new Error('not signed in');
+    // 1) Sweep the user's own image objects (owner RLS; best-effort).
+    try {
+      const { data: files } = await c.storage.from(IMAGE_BUCKET).list(uid, { limit: 1000 });
+      if (files && files.length) {
+        await c.storage.from(IMAGE_BUCKET).remove(files.map((f) => uid + '/' + f.name));
+      }
+    } catch (_) { /* best-effort — the account delete is what matters */ }
+    // 2) Delete the account + all data (cascades) via the definer RPC.
+    const { error } = await c.rpc('delete_own_account');
+    if (error) throw new Error(error.message || 'delete failed');
+    // 3) End the session + clear the device.
+    try { await c.auth.signOut(); } catch (_) {}
+    clearLocalUserData();
+  }
+
   window.Cloud = {
     configured, ensureSdk, getSession, currentEmail,
     signUp, signIn, signOut, changePassword, resetPassword, onPasswordRecovery,
@@ -605,5 +643,6 @@
     touchLastSeen, getMyFlags, submitFeedback,
     pullCatalog,
     backupExerciseImage, restoreExerciseImage, removeExerciseImage,
+    deleteAccount, clearLocalUserData,
   };
 })();

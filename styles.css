@@ -5920,6 +5920,14 @@ body[dir="rtl"] .variation-select svg { transform: scaleX(-1); }
   padding: 8px;
   cursor: pointer;
 }
+.auth-legal {
+  display: block;
+  text-align: center;
+  margin-top: 6px;
+  color: var(--text-faint);
+  font-size: 12px;
+  text-decoration: underline;
+}
 
 /* Personal Records */
 /* .pr-row: override .data-row's center alignment so the trophy icon top-aligns when the meta line wraps */

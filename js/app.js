@@ -5,7 +5,7 @@
 // Single source of truth for the shipped build. Used by the visible build
 // label AND the feedback version tag so they can never drift apart. Keep this
 // equal to the ?v=N cache markers (see CLAUDE.md "CACHE WORKFLOW").
-const VAULT_BUILD = 'v181';
+const VAULT_BUILD = 'v182';
 
 // ==========================================================================
 // Icons
@@ -679,8 +679,15 @@ const I18N = {
     syncing: 'Syncing your data…',
     cloud_backup_kept: 'Your cloud backup was kept safe — the empty data did not sync.',
     logout: 'Log out',
-    logout_sub: 'Stop syncing on this device',
-    logout_confirm: 'Your data stays on this device. Sign in again anytime to resume syncing.',
+    logout_sub: 'Sign out and clear this device',
+    logout_confirm: 'You will be signed out and this device cleared. Your data is safe in your account — sign in again to restore it.',
+    delete_account: 'Delete account',
+    delete_account_sub: 'Permanently erase your account and all data',
+    delete_account_confirm: 'This permanently deletes your account and ALL your data — workouts, nutrition, health, images — from every device and the cloud. This cannot be undone.',
+    deleting_account: 'Deleting your account…',
+    privacy_policy: 'Privacy Policy & Terms',
+    privacy_policy_sub: 'How your data is used',
+    about_title: 'About',
     change_password: 'Change password',
     change_password_sub: 'Set a new password for this account',
     change_password_new: 'New password',
@@ -1257,8 +1264,15 @@ const I18N = {
     syncing: 'جارٍ مزامنة بياناتك…',
     cloud_backup_kept: 'نسختك الاحتياطية في السحابة محفوظة — لم تُزامَن البيانات الفارغة.',
     logout: 'تسجيل الخروج',
-    logout_sub: 'إيقاف المزامنة على هذا الجهاز',
-    logout_confirm: 'بياناتك تبقى على هذا الجهاز. سجّل دخول مجدداً في أي وقت لاستئناف المزامنة.',
+    logout_sub: 'خروج ومسح هذا الجهاز',
+    logout_confirm: 'سيتم تسجيل خروجك ومسح هذا الجهاز. بياناتك محفوظة في حسابك — سجّل الدخول مجدداً لاستعادتها.',
+    delete_account: 'حذف الحساب',
+    delete_account_sub: 'محو حسابك وكل بياناتك نهائياً',
+    delete_account_confirm: 'سيُحذف حسابك وكل بياناتك نهائياً — التمارين والتغذية والصحة والصور — من كل الأجهزة والسحابة. لا يمكن التراجع.',
+    deleting_account: 'جارٍ حذف حسابك…',
+    privacy_policy: 'سياسة الخصوصية والشروط',
+    privacy_policy_sub: 'كيف تُستخدم بياناتك',
+    about_title: 'حول التطبيق',
     change_password: 'تغيير كلمة السر',
     change_password_sub: 'عيّن كلمة سر جديدة لهذا الحساب',
     change_password_new: 'كلمة السر الجديدة',
@@ -5513,6 +5527,17 @@ function renderSettings(el) {
         </div>
       </button>
     </div>
+
+    <div class="settings-section">
+      <div class="section-title">${t('about_title')}</div>
+      <a class="settings-action-row" href="privacy.html?lang=${(DB.prefs.get().lang) || 'en'}" target="_blank" rel="noopener">
+        <div class="settings-action-icon">${icon('info', 18)}</div>
+        <div class="settings-action-main">
+          <div class="settings-action-title">${t('privacy_policy')}</div>
+          <div class="settings-action-sub">${t('privacy_policy_sub')}</div>
+        </div>
+      </a>
+    </div>
   `;
 
   // Account (cloud sync) — populated async since the session check is async.
@@ -7501,6 +7526,7 @@ function showAuthGate(mode) {
       <button class="btn btn-primary btn-block" id="auth-submit">${up ? t('auth_signup') : t('auth_signin')}</button>
       ${up ? '' : `<button class="auth-toggle" id="auth-forgot">${t('auth_forgot')}</button>`}
       <button class="auth-skip" id="auth-skip">${t('auth_skip')}</button>
+      <a class="auth-legal" href="privacy.html?lang=${(DB.prefs.get().lang) || 'en'}" target="_blank" rel="noopener">${t('privacy_policy')}</a>
     </div>`;
   document.body.appendChild(gate);
 
@@ -7822,8 +7848,28 @@ async function populateAccount(el) {
           <div class="settings-action-title">${t('logout')}</div>
           <div class="settings-action-sub">${t('logout_sub')}</div>
         </div>
+      </button>
+      <button class="settings-action-row" id="delete-account-btn" style="color:var(--red)">
+        <div class="settings-action-icon" style="background:var(--red-bg);color:var(--red)">${icon('trash', 18)}</div>
+        <div class="settings-action-main">
+          <div class="settings-action-title">${t('delete_account')}</div>
+          <div class="settings-action-sub">${t('delete_account_sub')}</div>
+        </div>
       </button>`;
     $('#change-pw-btn', el)?.addEventListener('click', showChangePassword);
+    $('#delete-account-btn', el)?.addEventListener('click', () => {
+      confirmDialog({
+        title: t('delete_account'), text: t('delete_account_confirm'),
+        confirmLabel: t('delete_account'), variant: 'danger',
+        onConfirm: async () => {
+          showToast(t('deleting_account'));
+          try {
+            await Cloud.deleteAccount();
+            location.reload();   // fresh, empty state → auth gate
+          } catch (e) { showToast((e && e.message) || t('ai_error')); }
+        },
+      });
+    });
     $('#sync-now-btn', el)?.addEventListener('click', async () => {
       showToast(t('auth_signing'));
       try {
@@ -7835,7 +7881,7 @@ async function populateAccount(el) {
     $('#logout-btn', el)?.addEventListener('click', () => {
       confirmDialog({
         title: t('logout'), text: t('logout_confirm'), confirmLabel: t('logout'),
-        onConfirm: async () => { await Cloud.signOut(); showAuthGate('in'); },
+        onConfirm: async () => { await Cloud.signOut(); try { Cloud.clearLocalUserData(); } catch (_) {} location.reload(); },
       });
     });
   } else {

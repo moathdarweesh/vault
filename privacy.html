@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>THE VAULT — سياسة الخصوصية والشروط / Privacy & Terms</title>
+<style>
+  :root { --bg:#0a1920; --card:#0f2129; --line:#1e3a44; --text:#e8f1f2; --dim:#9fb4bb; --accent:#4a9eff; }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--bg); color:var(--text); font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Arial,sans-serif; line-height:1.75; }
+  .wrap { max-width:760px; margin:0 auto; padding:28px 20px 80px; }
+  header { display:flex; align-items:center; justify-content:space-between; gap:12px; margin-bottom:24px; flex-wrap:wrap; }
+  .brand { font-weight:900; letter-spacing:.25em; color:var(--accent); font-size:16px; }
+  .langs button { background:var(--card); color:var(--dim); border:1px solid var(--line); border-radius:999px; padding:6px 14px; font-weight:800; cursor:pointer; font-size:13px; }
+  .langs button.active { background:var(--accent); border-color:var(--accent); color:#fff; }
+  h1 { font-size:26px; margin:.2em 0; }
+  h2 { font-size:18px; margin:1.6em 0 .4em; color:var(--accent); }
+  p, li { color:var(--text); }
+  .dim { color:var(--dim); font-size:14px; }
+  a { color:var(--accent); }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:14px; padding:18px 20px; margin:14px 0; }
+  ul { padding-inline-start:20px; }
+  .sec { display:none; }
+  .sec.active { display:block; }
+  hr { border:0; border-top:1px solid var(--line); margin:34px 0; }
+  .updated { font-size:13px; color:var(--dim); }
+  code { background:#0b1a20; padding:1px 6px; border-radius:6px; font-size:13px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <span class="brand">THE VAULT</span>
+    <div class="langs">
+      <button id="btn-ar" class="active" onclick="setLang('ar')">العربية</button>
+      <button id="btn-en" onclick="setLang('en')">English</button>
+    </div>
+  </header>
+
+  <!-- ================= ARABIC ================= -->
+  <section id="ar" class="sec active">
+    <h1>سياسة الخصوصية</h1>
+    <p class="updated">آخر تحديث: يوليو 2026</p>
+    <p>تطبيق <b>THE VAULT</b> لتتبّع التمارين والتغذية يحترم خصوصيتك. توضّح هذه السياسة البيانات التي نجمعها وكيف نستخدمها.</p>
+
+    <h2>البيانات التي نجمعها</h2>
+    <ul>
+      <li><b>الحساب:</b> بريدك الإلكتروني وكلمة مرور مُشفّرة (عند إنشاء حساب لمزامنة بياناتك).</li>
+      <li><b>بيانات اللياقة والتغذية:</b> التمارين والمجموعات والكارديو والنوم والوزن والماء والمكمّلات وسجلّات الطعام التي تُدخلها.</li>
+      <li><b>مدخلات الذكاء الاصطناعي:</b> نص أو صورة أو تسجيل صوتي للطعام ترسله لتقدير السعرات.</li>
+      <li><b>بيانات Health Connect (اختياري):</b> إن ربطت التطبيق بها — الخطوات ونبض القلب والأكسجين والنوم والسعرات — تُقرأ لعرضها فقط.</li>
+    </ul>
+
+    <h2>أين تُخزَّن</h2>
+    <ul>
+      <li><b>على جهازك</b> دائماً (تخزين محلي) — يعمل التطبيق دون اتصال.</li>
+      <li><b>في حسابك السحابي</b> على Supabase عند تسجيل الدخول، لمزامنة بياناتك بين أجهزتك ونسخها احتياطياً. بياناتك معزولة عن غيرك عبر سياسات أمان على مستوى الصف (RLS).</li>
+    </ul>
+
+    <h2>الذكاء الاصطناعي (تقدير السعرات)</h2>
+    <p>لتقدير السعرات، يُرسَل وصف/صورة/صوت الطعام إلى <b>Google Gemini</b> عبر خادم وسيط (Cloudflare) يحمل المفتاح بأمان. تُستخدم هذه المدخلات لإرجاع التقدير فقط، وتخضع لشروط واجهة Google. لا نبيع بياناتك ولا نستخدمها للإعلانات.</p>
+
+    <h2>المشاركة</h2>
+    <p>لا نبيع بياناتك الشخصية. نشاركها فقط مع مزوّدي الخدمة اللازمين لتشغيل التطبيق: Supabase (التخزين/الحساب)، Google Gemini و Cloudflare (تقدير السعرات).</p>
+
+    <h2>حقوقك</h2>
+    <ul>
+      <li><b>الاطّلاع والتصدير:</b> يمكنك تصدير كل بياناتك من داخل التطبيق (الإعدادات).</li>
+      <li><b>الحذف:</b> يمكنك حذف حسابك وكل بياناتك من الإعدادات ← «حذف الحساب»، أو بمراسلتنا.</li>
+    </ul>
+
+    <h2>الأمان</h2>
+    <p>البيانات مُشفّرة أثناء النقل (HTTPS)، ومعزولة لكل مستخدم. لا يُخزَّن أي مفتاح حسّاس داخل التطبيق.</p>
+
+    <h2>الأطفال</h2>
+    <p>التطبيق غير موجّه لمن هم دون 13 عاماً.</p>
+
+    <h2>التواصل</h2>
+    <p>لأي استفسار أو طلب حذف: <a href="mailto:darweeshmahmoud1980@gmail.com">darweeshmahmoud1980@gmail.com</a></p>
+
+    <hr>
+
+    <h1>شروط الاستخدام</h1>
+    <p>باستخدامك THE VAULT فإنك توافق على ما يلي:</p>
+    <ul>
+      <li>التطبيق أداة لتتبّع اللياقة والتغذية، <b>وليس نصيحة طبية</b>. استشر مختصاً قبل أي برنامج تمارين أو حِمية.</li>
+      <li>تقديرات السعرات تقريبية وقد تحتوي أخطاء — راجعها وعدّلها.</li>
+      <li>أنت مسؤول عن دقّة ما تُدخله وعن الحفاظ على بيانات دخولك.</li>
+      <li>يُقدَّم التطبيق «كما هو» دون ضمانات، ونسعى للحفاظ على بياناتك لكن ننصح بالاحتفاظ بنسخة عبر التصدير.</li>
+      <li>قد نحدّث هذه الشروط، وسيظهر تاريخ التحديث أعلى الصفحة.</li>
+    </ul>
+  </section>
+
+  <!-- ================= ENGLISH ================= -->
+  <section id="en" class="sec" dir="ltr" style="text-align:left">
+    <h1>Privacy Policy</h1>
+    <p class="updated">Last updated: July 2026</p>
+    <p><b>THE VAULT</b> workout & nutrition tracker respects your privacy. This policy explains what we collect and how we use it.</p>
+
+    <h2>What we collect</h2>
+    <ul>
+      <li><b>Account:</b> your email and an encrypted password (when you create an account to sync).</li>
+      <li><b>Fitness & nutrition data:</b> workouts, sets, cardio, sleep, body weight, water, supplements and food logs you enter.</li>
+      <li><b>AI inputs:</b> food text, photos or voice you submit for calorie estimation.</li>
+      <li><b>Health Connect (optional):</b> if you connect it — steps, heart rate, oxygen, sleep, calories — read only to display.</li>
+    </ul>
+
+    <h2>Where it's stored</h2>
+    <ul>
+      <li><b>On your device</b> at all times (local storage) — the app works offline.</li>
+      <li><b>In your cloud account</b> on Supabase when signed in, to sync across your devices and back it up. Your data is isolated from other users by row-level security (RLS).</li>
+    </ul>
+
+    <h2>AI (calorie estimation)</h2>
+    <p>To estimate calories, your food description/photo/voice is sent to <b>Google Gemini</b> through a proxy server (Cloudflare) that holds the key securely. These inputs are used only to return the estimate, under Google's API terms. We do not sell your data or use it for ads.</p>
+
+    <h2>Sharing</h2>
+    <p>We do not sell your personal data. We share it only with the service providers needed to run the app: Supabase (storage/account), Google Gemini and Cloudflare (calorie estimation).</p>
+
+    <h2>Your rights</h2>
+    <ul>
+      <li><b>Access & export:</b> export all your data from inside the app (Settings).</li>
+      <li><b>Deletion:</b> delete your account and all data from Settings → “Delete account”, or by contacting us.</li>
+    </ul>
+
+    <h2>Security</h2>
+    <p>Data is encrypted in transit (HTTPS) and isolated per user. No sensitive key is stored inside the app.</p>
+
+    <h2>Children</h2>
+    <p>The app is not directed to anyone under 13.</p>
+
+    <h2>Contact</h2>
+    <p>For any question or deletion request: <a href="mailto:darweeshmahmoud1980@gmail.com">darweeshmahmoud1980@gmail.com</a></p>
+
+    <hr>
+
+    <h1>Terms of Use</h1>
+    <p>By using THE VAULT you agree that:</p>
+    <ul>
+      <li>The app is a fitness/nutrition tracking tool, <b>not medical advice</b>. Consult a professional before any exercise or diet program.</li>
+      <li>Calorie estimates are approximate and may contain errors — review and adjust them.</li>
+      <li>You are responsible for the accuracy of what you enter and for safeguarding your login.</li>
+      <li>The app is provided “as is” without warranty; we work to protect your data but recommend keeping an export backup.</li>
+      <li>We may update these terms; the update date appears at the top.</li>
+    </ul>
+  </section>
+</div>
+
+<script>
+  function setLang(l) {
+    document.getElementById('ar').classList.toggle('active', l === 'ar');
+    document.getElementById('en').classList.toggle('active', l === 'en');
+    document.getElementById('btn-ar').classList.toggle('active', l === 'ar');
+    document.getElementById('btn-en').classList.toggle('active', l === 'en');
+    document.documentElement.lang = l;
+    document.documentElement.dir = l === 'ar' ? 'rtl' : 'ltr';
+  }
+  // Honor ?lang=en / ?lang=ar (the app links with the user's current language).
+  try {
+    var p = new URLSearchParams(location.search).get('lang');
+    if (p === 'en' || p === 'ar') setLang(p);
+  } catch (e) {}
+</script>
+</body>
+</html>
