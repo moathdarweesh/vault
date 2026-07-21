@@ -21,8 +21,11 @@ class PermissionsRationaleActivity : Activity() {
                 append("THE VAULT reads the following from Health Connect only to show your ")
                 append("fitness stats inside the app:\n\n")
                 append("• Steps\n• Heart rate\n• Blood oxygen (SpO₂)\n• Sleep\n\n")
-                append("This data stays on your device and is never uploaded or shared with anyone. ")
-                append("You can revoke access at any time from the Health Connect settings.")
+                append("This data is used to show your stats in the app. If you sign in to sync, ")
+                append("health data saved into the app (such as sleep) is stored in your private ")
+                append("cloud account so it backs up across your devices. It is never sold or ")
+                append("shared with third parties for advertising. See our Privacy Policy for ")
+                append("details. You can revoke access at any time from the Health Connect settings.")
             }
         }
         setContentView(ScrollView(this).apply { addView(text) })

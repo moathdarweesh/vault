@@ -126,8 +126,16 @@
     try { await c.auth.signOut(); } catch (_) {}
   }
   // Change the signed-in user's password.
-  async function changePassword(newPassword) {
+  async function changePassword(newPassword, currentPassword) {
     const c = sb(); if (!c) return { error: 'not_configured' };
+    // Require re-authentication with the CURRENT password so a briefly-unlocked
+    // or shared logged-in device can't silently change it and lock the owner out.
+    try {
+      const email = await currentEmail();
+      if (!email || !currentPassword) return { error: 'reauth_failed' };
+      const { error: reauthErr } = await c.auth.signInWithPassword({ email, password: currentPassword });
+      if (reauthErr) return { error: 'reauth_failed' };
+    } catch (_) { return { error: 'reauth_failed' }; }
     const { error } = await c.auth.updateUser({ password: newPassword });
     if (error) return { error: error.message };
     return { ok: true };

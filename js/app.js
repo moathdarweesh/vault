@@ -5,7 +5,7 @@
 // Single source of truth for the shipped build. Used by the visible build
 // label AND the feedback version tag so they can never drift apart. Keep this
 // equal to the ?v=N cache markers (see CLAUDE.md "CACHE WORKFLOW").
-const VAULT_BUILD = 'v182';
+const VAULT_BUILD = 'v183';
 
 // ==========================================================================
 // Icons
@@ -690,6 +690,9 @@ const I18N = {
     about_title: 'About',
     change_password: 'Change password',
     change_password_sub: 'Set a new password for this account',
+    change_password_current: 'Current password',
+    change_password_current_req: 'Enter your current password',
+    change_password_wrong_current: 'Current password is incorrect',
     change_password_new: 'New password',
     change_password_confirm: 'Confirm new password',
     change_password_mismatch: 'Passwords do not match',
@@ -1275,6 +1278,9 @@ const I18N = {
     about_title: 'حول التطبيق',
     change_password: 'تغيير كلمة السر',
     change_password_sub: 'عيّن كلمة سر جديدة لهذا الحساب',
+    change_password_current: 'كلمة السر الحالية',
+    change_password_current_req: 'أدخل كلمة السر الحالية',
+    change_password_wrong_current: 'كلمة السر الحالية غير صحيحة',
     change_password_new: 'كلمة السر الجديدة',
     change_password_confirm: 'تأكيد كلمة السر الجديدة',
     change_password_mismatch: 'كلمتا السر غير متطابقتين',
@@ -7734,6 +7740,7 @@ function showChangePassword() {
       <div class="modal-title">${t('change_password')}</div>
       <button class="icon-btn icon-btn-tile" data-close>${icon('close', 18)}</button>
     </div>
+    <input type="password" id="cpw-current" class="auth-input" placeholder="${t('change_password_current')}" autocomplete="current-password">
     <input type="password" id="cpw-new" class="auth-input" placeholder="${t('change_password_new')}" autocomplete="new-password">
     <input type="password" id="cpw-confirm" class="auth-input" placeholder="${t('change_password_confirm')}" autocomplete="new-password">
     <div class="auth-err" id="cpw-err"></div>
@@ -7742,13 +7749,16 @@ function showChangePassword() {
   const err = (m) => { const e = overlay.querySelector('#cpw-err'); if (e) e.textContent = m || ''; };
   const btn = overlay.querySelector('#cpw-save');
   btn.addEventListener('click', async () => {
+    const cur = overlay.querySelector('#cpw-current').value || '';
     const pw = overlay.querySelector('#cpw-new').value || '';
     const pw2 = overlay.querySelector('#cpw-confirm').value || '';
+    if (!cur) { err(t('change_password_current_req')); return; }
     if (pw.length < 6) { err(t('auth_pw_short')); return; }
     if (pw !== pw2) { err(t('change_password_mismatch')); return; }
     err(''); btn.disabled = true; btn.textContent = t('auth_signing');
     try {
-      const res = await Cloud.changePassword(pw);
+      const res = await Cloud.changePassword(pw, cur);
+      if (res.error === 'reauth_failed') { err(t('change_password_wrong_current')); btn.disabled = false; btn.textContent = t('save'); return; }
       if (res.error) { err(translateAuthError(res.error)); btn.disabled = false; btn.textContent = t('save'); return; }
       closeModal();
       showToast(t('change_password_done'));
