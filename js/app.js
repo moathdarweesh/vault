@@ -5,7 +5,7 @@
 // Single source of truth for the shipped build. Used by the visible build
 // label AND the feedback version tag so they can never drift apart. Keep this
 // equal to the ?v=N cache markers (see CLAUDE.md "CACHE WORKFLOW").
-const VAULT_BUILD = 'v186';
+const VAULT_BUILD = 'v187';
 
 // ==========================================================================
 // Icons
@@ -874,6 +874,8 @@ const I18N = {
     plan_cleared: 'Plan cleared',
     day_saved: 'Day saved',
     day_cleared: 'Day cleared',
+    set_deleted: 'Set deleted',
+    undo: 'Undo',
     drag_to_move: 'Hold ⠿ and drag to move exercises between days',
     empty_day_drop: 'Rest day — tap + or drag an exercise here',
     exercise_moved: 'Exercise moved',
@@ -1458,6 +1460,8 @@ const I18N = {
     plan_cleared: 'تم مسح الخطة',
     day_saved: 'تم حفظ اليوم',
     day_cleared: 'تم مسح اليوم',
+    set_deleted: 'تم حذف المجموعة',
+    undo: 'تراجع',
     drag_to_move: 'امسك ⠿ واسحب لنقل التمارين بين الأيام',
     empty_day_drop: 'يوم راحة — اضغط + أو اسحب تمرين لهون',
     exercise_moved: 'تم نقل التمرين',
@@ -1674,12 +1678,59 @@ function resizeImageToDataUrl(file, maxSize = 800, quality = 0.78) {
 }
 
 let toastTimeout = null;
-function showToast(msg) {
+// Fully tear the toast down: hide it, drop the interactive state, cancel the
+// timer, and remove any pause/resume listeners left by an action toast. Safe to
+// call anytime (navigation, view change, before showing a new toast).
+function hideToast() {
   const tEl = $('#toast');
-  tEl.textContent = msg;
-  tEl.classList.add('show');
+  if (!tEl) return;
   clearTimeout(toastTimeout);
-  toastTimeout = setTimeout(() => tEl.classList.remove('show'), 1800);
+  tEl.classList.remove('show');
+  tEl.classList.remove('has-action');
+  if (tEl.__toastCleanup) { try { tEl.__toastCleanup(); } catch (_) {} tEl.__toastCleanup = null; }
+}
+// Plain text toast, OR — when `opts.actionLabel`/`opts.onAction` are given — a
+// toast with a tappable action (e.g. "Undo"). The action toast is interactive
+// only while shown (pointer-events are scoped to `.show` in CSS, and it fully
+// tears down on hide) so a dismissed toast can never become an invisible
+// tap-blocker. It also pauses its auto-hide while hovered/focused (WCAG 2.2.1).
+function showToast(msg, opts) {
+  const tEl = $('#toast');
+  hideToast();   // clean any prior (action) toast + listeners first
+  if (opts && opts.actionLabel && typeof opts.onAction === 'function') {
+    tEl.classList.add('has-action');
+    tEl.innerHTML = `<span class="toast-msg"></span><button type="button" class="toast-action"></button>`;
+    tEl.querySelector('.toast-msg').textContent = msg;
+    const btn = tEl.querySelector('.toast-action');
+    btn.textContent = opts.actionLabel;
+    const dur = opts.duration || 5000;
+    let spent = false;
+    const arm = () => { clearTimeout(toastTimeout); toastTimeout = setTimeout(() => { spent = true; hideToast(); }, dur); };
+    const pause = () => { if (!spent) clearTimeout(toastTimeout); };
+    const resume = () => { if (!spent) arm(); };
+    btn.addEventListener('click', () => {
+      if (spent) return;
+      spent = true;
+      hideToast();
+      try { opts.onAction(); } catch (_) {}
+    });
+    tEl.addEventListener('mouseenter', pause);
+    tEl.addEventListener('mouseleave', resume);
+    tEl.addEventListener('focusin', pause);
+    tEl.addEventListener('focusout', resume);
+    tEl.__toastCleanup = () => {
+      tEl.removeEventListener('mouseenter', pause);
+      tEl.removeEventListener('mouseleave', resume);
+      tEl.removeEventListener('focusin', pause);
+      tEl.removeEventListener('focusout', resume);
+    };
+    tEl.classList.add('show');
+    arm();
+  } else {
+    tEl.textContent = msg;
+    tEl.classList.add('show');
+    toastTimeout = setTimeout(() => tEl.classList.remove('show'), 1800);
+  }
 }
 
 // ==========================================================================
@@ -1774,6 +1825,9 @@ function navigate(view, context = {}, opts = {}) {
   document.getElementById('add-sheet-overlay')?.remove();
   // Tear down the guided-workout rest timer so it never lingers over other views.
   if (typeof clearRestTimer === 'function') clearRestTimer();
+  // Dismiss any lingering toast (e.g. an "Undo set" action toast) — its action
+  // is scoped to the view it was raised from, so leaving cancels it.
+  if (typeof hideToast === 'function') hideToast();
 
   $$('.view').forEach((v) => v.classList.toggle('active', v.dataset.view === view));
 
@@ -6569,6 +6623,7 @@ let __restAudioCtx = null;   // created/unlocked on the "done" tap (a user gestu
 function clearRestTimer() {
   if (__restTimer) { clearInterval(__restTimer.id); __restTimer = null; }
   document.querySelector('.rest-timer')?.remove();
+  document.body.classList.remove('rest-active');
 }
 // A short two-tone beep (a simple alarm — not music) when the rest ends. Uses
 // the AudioContext unlocked during the "done" tap, so mobile autoplay policy
@@ -6614,6 +6669,9 @@ function startRestTimer(seconds) {
     <button type="button" class="rest-timer-skip" data-rest-skip>${t('skip')}</button>
   `;
   app.appendChild(bar);
+  // Reserve extra scroll space at the bottom so the guided-mode Next/Prev nav
+  // can clear above the floating timer instead of hiding under it.
+  document.body.classList.add('rest-active');
   const countEl = bar.querySelector('.rest-timer-count');
   const id = setInterval(() => {
     remaining -= 1;
@@ -6821,10 +6879,10 @@ function renderSessionRun(el) {
     const phW = (s.phWeight === '' || s.phWeight == null) ? '0' : String(convDisplay(Number(s.phWeight)));
     return `
       <div class="run-set-row${s.done ? ' done' : ''}" data-set="${i}">
+        <button type="button" class="run-set-done${s.done ? ' done' : ''}" data-done aria-label="${escapeHtml(t('mark_set_done'))}" aria-pressed="${!!s.done}">${icon('check', 16)}</button>
         <div class="run-set-n num">${i + 1}</div>
         <input type="number" inputmode="numeric" step="1" min="0" placeholder="${phReps}" value="${repsVal}" data-field="reps" aria-label="${t('reps')}">
         <input type="number" inputmode="decimal" step="0.5" min="0" placeholder="${phW}" value="${wDisplay || ''}" data-field="weight" aria-label="${viewContext.runUnit}">
-        <button type="button" class="run-set-done${s.done ? ' done' : ''}" data-done aria-label="${escapeHtml(t('mark_set_done'))}" aria-pressed="${!!s.done}">${icon('check', 16)}</button>
         <button type="button" class="run-set-del${st.sets.length > 1 ? '' : ' is-hidden'}" data-del-set aria-label="${escapeHtml(t('delete'))}"${st.sets.length > 1 ? '' : ' tabindex="-1" aria-hidden="true"'}>${icon('trash', 14)}</button>
       </div>`;
   }).join('');
@@ -6847,10 +6905,11 @@ function renderSessionRun(el) {
     </div>
 
     <div class="run-sets-head">
+      <div class="run-head-done">${t('done_col')}</div>
       <div>${t('set_n')}</div>
       <div>${t('reps')}</div>
       <div>${viewContext.runUnit.toUpperCase()}</div>
-      <div class="run-head-done">${t('done_col')}</div>
+      <div></div>
     </div>
     <div class="run-sets">${setsRows}</div>
     <button type="button" class="btn btn-ghost run-addset" data-addset>${icon('plus', 14)} ${t('add_set')}</button>
@@ -6910,11 +6969,23 @@ function renderSessionRun(el) {
       row.querySelector('[data-done]').classList.toggle('done', set.done);
       row.querySelector('[data-done]').setAttribute('aria-pressed', String(set.done));
     });
-    // Delete this set (only shown when more than one set exists).
+    // Delete this set (only shown when more than one set exists). Offer an Undo
+    // so an accidental tap is instantly recoverable — the removed set is put
+    // back at its original position.
     row.querySelector('[data-del-set]')?.addEventListener('click', () => {
       if (st.sets.length <= 1) return;
+      const removed = st.sets[i];
+      const removedAt = i;
       st.sets.splice(i, 1);
       renderSessionRun(el);
+      showToast(t('set_deleted'), {
+        actionLabel: t('undo'),
+        onAction: () => {
+          const at = Math.min(removedAt, st.sets.length);
+          st.sets.splice(at, 0, removed);
+          renderSessionRun(el);
+        },
+      });
     });
   });
 
@@ -6933,6 +7004,9 @@ function renderSessionRun(el) {
 
   $('[data-prev]', el)?.addEventListener('click', () => {
     if (idx === 0) return;
+    // Leaving this exercise ends its "Undo set" window — the toast restores into
+    // THIS exercise's state, so it must not linger onto another exercise.
+    hideToast();
     // Keep the rest timer running when moving between exercises (it lives on
     // .app and survives the re-render) — the user asked for it not to reset.
     commitExercise(ex.id);
@@ -6941,6 +7015,7 @@ function renderSessionRun(el) {
   });
 
   $('[data-next]', el)?.addEventListener('click', () => {
+    hideToast();   // end this exercise's Undo window before moving on
     // Keep the rest timer running when moving to the NEXT exercise (don't reset
     // on navigate); only tear it down when the workout is actually finished.
     commitExercise(ex.id);

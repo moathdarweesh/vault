@@ -689,6 +689,9 @@ img { display: block; max-width: 100%; }
   scrollbar-width: none;
 }
 .main::-webkit-scrollbar { display: none; }
+/* While the floating rest timer is up, add bottom room so the guided-mode
+   Next/Prev buttons can scroll clear of it instead of being hidden underneath. */
+body.rest-active .main { padding-bottom: calc(var(--nav-h) + var(--safe-b) + 104px); }
 
 .view {
   display: none;
@@ -2962,7 +2965,10 @@ body[dir="rtl"] .w-unit { margin-left: 0; margin-right: 2px; }
   font-size: 13px;
   font-weight: 700;
   opacity: 0;
-  transition: all 0.25s cubic-bezier(0.22, 1, 0.36, 1);
+  /* Animate only fade + slide — NOT `bottom`, so the rest-timer reposition
+     (body.rest-active .toast) snaps into place instead of sliding across the
+     timer. */
+  transition: opacity 0.25s cubic-bezier(0.22, 1, 0.36, 1), transform 0.25s cubic-bezier(0.22, 1, 0.36, 1);
   pointer-events: none;
   z-index: 200;
   box-shadow: 0 12px 32px rgba(0, 0, 0, 0.5);
@@ -2975,6 +2981,38 @@ body[dir="rtl"] .w-unit { margin-left: 0; margin-right: 2px; }
   opacity: 1;
   transform: translateX(-50%) translateY(0);
 }
+
+/* Toast with a tappable action (e.g. Undo) — lays the message + button side by
+   side. Pointer events are enabled ONLY while `.show` is present, so a hidden
+   (faded-out) action toast can never linger as an invisible tap-blocker. */
+.toast.has-action {
+  display: inline-flex;
+  align-items: center;
+  gap: 14px;
+  padding-right: 8px;
+  padding-left: 8px;
+}
+.toast.has-action.show { pointer-events: auto; }
+/* When the floating rest timer is up, lift the toast clear above it so the two
+   never overlap (they otherwise share the same bottom anchor). The timer bar is
+   ~70px tall sitting 16px above the nav, so ~120px clears it plus the toast's
+   own slide-in. */
+body.rest-active .toast { bottom: calc(var(--nav-h) + var(--safe-b) + 120px); }
+.toast .toast-msg { padding-inline-start: 10px; }
+.toast-action {
+  flex-shrink: 0;
+  background: transparent;
+  border: none;
+  color: var(--accent);
+  font-weight: 900;
+  font-size: 13px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  padding: 6px 10px;
+  border-radius: 999px;
+  cursor: pointer;
+}
+.toast-action:active { transform: scale(var(--press-scale)); opacity: 0.7; }
 
 /* =========================================================================
    TOOLS SECTION (cards on Home for Plan/Calendar/Supplements/Food Log)
@@ -3845,7 +3883,7 @@ body[dir="rtl"] .planner-day-head { text-align: right; }
 
 .run-sets-head {
   display: grid;
-  grid-template-columns: 30px 1fr 1fr 46px 34px;
+  grid-template-columns: 46px 30px 1fr 1fr 34px;
   gap: 8px;
   margin-bottom: 6px;
   font-size: 10px;
@@ -3855,13 +3893,11 @@ body[dir="rtl"] .planner-day-head { text-align: right; }
   letter-spacing: 0.12em;
   padding: 0 4px;
 }
-.run-sets-head div:nth-child(2),
-.run-sets-head div:nth-child(3),
-.run-sets-head .run-head-done { text-align: center; }
+.run-sets-head div { text-align: center; }
 .run-sets { display: flex; flex-direction: column; gap: 8px; }
 .run-set-row {
   display: grid;
-  grid-template-columns: 30px 1fr 1fr 46px 34px;
+  grid-template-columns: 46px 30px 1fr 1fr 34px;
   gap: 8px;
   align-items: center;
 }
