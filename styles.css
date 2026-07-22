@@ -3845,7 +3845,7 @@ body[dir="rtl"] .planner-day-head { text-align: right; }
 
 .run-sets-head {
   display: grid;
-  grid-template-columns: 34px 1fr 1fr 46px;
+  grid-template-columns: 30px 1fr 1fr 46px 34px;
   gap: 8px;
   margin-bottom: 6px;
   font-size: 10px;
@@ -3861,10 +3861,25 @@ body[dir="rtl"] .planner-day-head { text-align: right; }
 .run-sets { display: flex; flex-direction: column; gap: 8px; }
 .run-set-row {
   display: grid;
-  grid-template-columns: 34px 1fr 1fr 46px;
+  grid-template-columns: 30px 1fr 1fr 46px 34px;
   gap: 8px;
   align-items: center;
 }
+.run-set-del {
+  width: 34px;
+  height: 46px;
+  border: none;
+  background: transparent;
+  color: var(--text-dim);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 10px;
+  cursor: pointer;
+}
+.run-set-del svg { width: 16px; height: 16px; }
+.run-set-del:active { transform: scale(var(--press-scale)); color: var(--danger, #e5484d); }
+.run-set-del.is-hidden { visibility: hidden; pointer-events: none; }
 .run-set-n {
   font-weight: 900;
   color: var(--text-dim);
@@ -4017,6 +4032,46 @@ body[dir="rtl"] .run-nav svg { transform: scaleX(-1); }
   overflow-y: auto;
   padding-right: 2px;
 }
+
+/* Ordered list of chosen exercises inside the day editor — sets the training
+   order (guided mode walks it top-to-bottom). ↑/↓ reorder, × removes. */
+.chosen-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-height: 22vh;
+  overflow-y: auto;
+  padding-right: 2px;
+}
+.chosen-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+}
+.chosen-num {
+  flex-shrink: 0;
+  min-width: 20px;
+  text-align: center;
+  font-weight: 900;
+  color: var(--accent);
+  font-variant-numeric: tabular-nums;
+}
+.chosen-name {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-weight: 700;
+  font-size: 14px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.chosen-actions { flex-shrink: 0; display: flex; gap: 4px; }
+.chosen-del { color: var(--text-dim); }
+.chosen-del:active { color: var(--danger, #e5484d); }
 
 /* Day editor: fixed header/name/search + a big scrolling exercise list + a
    pinned action bar (Save / Rest always reachable without scrolling past the

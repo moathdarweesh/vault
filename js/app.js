@@ -5,7 +5,7 @@
 // Single source of truth for the shipped build. Used by the visible build
 // label AND the feedback version tag so they can never drift apart. Keep this
 // equal to the ?v=N cache markers (see CLAUDE.md "CACHE WORKFLOW").
-const VAULT_BUILD = 'v185';
+const VAULT_BUILD = 'v186';
 
 // ==========================================================================
 // Icons
@@ -802,6 +802,7 @@ const I18N = {
     rotation_preview: 'Next 7 days',
     move_up: 'Move up',
     move_down: 'Move down',
+    exercise_order: 'Exercise order',
     edit_workout: 'Edit workout',
     workout_name_ph: 'Workout name (e.g. Push)',
     remove_workout: 'Remove from cycle',
@@ -1387,6 +1388,7 @@ const I18N = {
     rotation_preview: 'الأيام السبعة القادمة',
     move_up: 'تحريك لأعلى',
     move_down: 'تحريك لأسفل',
+    exercise_order: 'ترتيب التمارين',
     edit_workout: 'تعديل التمرين',
     workout_name_ph: 'اسم التمرين (مثال: دفع)',
     remove_workout: 'إزالة من الدورة',
@@ -6047,12 +6049,16 @@ function openSlotEditorModal(slotIdx) {
   const cycle = (DB.plan.get() || {}).cycle || [];
   const isNew = (slotIdx == null || slotIdx < 0 || !cycle[slotIdx]);
   const slot = isNew ? { name: '', exerciseIds: [] } : cycle[slotIdx];
-  let pickedIds = new Set(slot.exerciseIds || []);
+  // Ordered list of picked exercise ids — the order IS the exercise order the
+  // user will train in (guided mode walks it top-to-bottom), so it's reorderable.
+  let pickedOrder = [...(slot.exerciseIds || [])];
+  const hasPick = (id) => pickedOrder.indexOf(id) !== -1;
   let dayLabel = slot.name || '';
   let pickerQuery = '';
   let pickerCategory = 'All';
 
   const allExercises = DB.exercises.list();
+  const exById = Object.fromEntries(allExercises.map((e) => [e.id, e]));
 
   function renderPickerList() {
     const container = $('#picker-list');
@@ -6067,7 +6073,7 @@ function openSlotEditorModal(slotIdx) {
       // custom image) sits on top of an initials fallback; if the photo fails
       // to load it removes itself and the initials show through.
       return `
-      <button type="button" class="picker-row ${pickedIds.has(ex.id) ? 'picked' : ''}" data-pick="${escapeHtml(ex.id)}">
+      <button type="button" class="picker-row ${hasPick(ex.id) ? 'picked' : ''}" data-pick="${escapeHtml(ex.id)}">
         <span class="picker-row-thumb" data-cat="${escapeHtml(ex.category)}">
           <span class="picker-row-thumb-fallback">${escapeHtml(initialsOf(exDisplayName(ex)))}</span>
           ${imgUrl ? `<img src="${escapeHtml(imgUrl)}" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="this.remove()">` : ''}
@@ -6081,9 +6087,57 @@ function openSlotEditorModal(slotIdx) {
     container.querySelectorAll('[data-pick]').forEach((b) =>
       b.addEventListener('click', () => {
         const id = b.dataset.pick;
-        if (pickedIds.has(id)) pickedIds.delete(id);
-        else pickedIds.add(id);
+        const at = pickedOrder.indexOf(id);
+        if (at !== -1) pickedOrder.splice(at, 1);   // unpick
+        else pickedOrder.push(id);                  // pick → appended to the end
         b.classList.toggle('picked');
+        renderChosenList();
+      })
+    );
+  }
+
+  // The ordered list of chosen exercises, with ↑/↓ reorder + remove. This is
+  // what sets the training order for the day (used as-is by guided mode).
+  function renderChosenList() {
+    const wrap = $('#chosen-wrap');
+    if (!wrap) return;
+    if (!pickedOrder.length) { wrap.innerHTML = ''; return; }
+    const rows = pickedOrder.map((id, i) => {
+      const ex = exById[id];
+      const nm = ex ? exDisplayName(ex) : id;
+      return `
+        <div class="chosen-row" data-chosen="${escapeHtml(id)}">
+          <span class="chosen-num num">${fmtNum(i + 1)}</span>
+          <span class="chosen-name">${escapeHtml(nm)}</span>
+          <span class="chosen-actions">
+            <button type="button" class="icon-btn icon-btn-tile" data-ord-up="${i}" aria-label="${t('move_up')}" ${i === 0 ? 'disabled' : ''}>↑</button>
+            <button type="button" class="icon-btn icon-btn-tile" data-ord-down="${i}" aria-label="${t('move_down')}" ${i === pickedOrder.length - 1 ? 'disabled' : ''}>↓</button>
+            <button type="button" class="icon-btn icon-btn-tile chosen-del" data-ord-del="${escapeHtml(id)}" aria-label="${t('delete')}">${icon('close', 15)}</button>
+          </span>
+        </div>`;
+    }).join('');
+    wrap.innerHTML = `
+      <label class="form-label">${t('exercise_order')}</label>
+      <div class="chosen-list">${rows}</div>`;
+
+    wrap.querySelectorAll('[data-ord-up]').forEach((b) =>
+      b.addEventListener('click', () => {
+        const i = Number(b.dataset.ordUp);
+        if (i > 0) { const tmp = pickedOrder[i - 1]; pickedOrder[i - 1] = pickedOrder[i]; pickedOrder[i] = tmp; renderChosenList(); }
+      })
+    );
+    wrap.querySelectorAll('[data-ord-down]').forEach((b) =>
+      b.addEventListener('click', () => {
+        const i = Number(b.dataset.ordDown);
+        if (i < pickedOrder.length - 1) { const tmp = pickedOrder[i + 1]; pickedOrder[i + 1] = pickedOrder[i]; pickedOrder[i] = tmp; renderChosenList(); }
+      })
+    );
+    wrap.querySelectorAll('[data-ord-del]').forEach((b) =>
+      b.addEventListener('click', () => {
+        const at = pickedOrder.indexOf(b.dataset.ordDel);
+        if (at !== -1) pickedOrder.splice(at, 1);
+        renderChosenList();
+        renderPickerList();   // reflect the unpick in the picker below
       })
     );
   }
@@ -6106,6 +6160,8 @@ function openSlotEditorModal(slotIdx) {
       <input type="text" id="day-name" placeholder="${t('workout_name_ph')}" value="${escapeHtml(dayLabel)}">
     </div>
 
+    <div class="form-group" id="chosen-wrap"></div>
+
     <div class="form-group picker-group">
       <label class="form-label">${t('pick_exercises')}</label>
       <div class="search-wrap" style="margin-bottom:8px">
@@ -6126,6 +6182,7 @@ function openSlotEditorModal(slotIdx) {
   document.querySelector('#modal-root .modal')?.classList.add('modal-day-editor');
 
   renderPickerList();
+  renderChosenList();
 
   $('#day-name').addEventListener('input', (e) => { dayLabel = e.target.value; });
 
@@ -6152,7 +6209,7 @@ function openSlotEditorModal(slotIdx) {
   });
 
   $('#day-save-btn').addEventListener('click', () => {
-    const ids = [...pickedIds];
+    const ids = [...pickedOrder];   // preserve the user's chosen order
     const name = dayLabel.trim() || 'Workout';
     // Auto-add picked exercises to the user's Train list
     ids.forEach((id) => {
@@ -6508,14 +6565,40 @@ const REST_DEFAULT_SEC = 90;
 // so a view transform can't break its fixed positioning) and survives view
 // re-renders. navigate() calls clearRestTimer() to tear it down.
 let __restTimer = null;
+let __restAudioCtx = null;   // created/unlocked on the "done" tap (a user gesture)
 function clearRestTimer() {
   if (__restTimer) { clearInterval(__restTimer.id); __restTimer = null; }
   document.querySelector('.rest-timer')?.remove();
+}
+// A short two-tone beep (a simple alarm — not music) when the rest ends. Uses
+// the AudioContext unlocked during the "done" tap, so mobile autoplay policy
+// doesn't mute it.
+function playRestBeep() {
+  try {
+    const ctx = __restAudioCtx;
+    if (!ctx) return;
+    const tone = (at, freq) => {
+      const o = ctx.createOscillator();
+      const g = ctx.createGain();
+      o.type = 'sine'; o.frequency.value = freq;
+      g.gain.setValueAtTime(0.0001, ctx.currentTime + at);
+      g.gain.exponentialRampToValueAtTime(0.35, ctx.currentTime + at + 0.02);
+      g.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + at + 0.22);
+      o.connect(g); g.connect(ctx.destination);
+      o.start(ctx.currentTime + at); o.stop(ctx.currentTime + at + 0.25);
+    };
+    tone(0, 880); tone(0.28, 880);
+  } catch (_) {}
 }
 function startRestTimer(seconds) {
   clearRestTimer();
   const app = document.querySelector('.app');
   if (!app) return;
+  // Unlock audio while we're inside the user's tap gesture so the end-beep can play.
+  try {
+    const AC = window.AudioContext || window.webkitAudioContext;
+    if (AC) { if (!__restAudioCtx) __restAudioCtx = new AC(); if (__restAudioCtx.state === 'suspended') __restAudioCtx.resume(); }
+  } catch (_) {}
   let remaining = Math.max(1, Math.round(seconds));
   const fmt = (s) => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
   const bar = document.createElement('div');
@@ -6536,7 +6619,8 @@ function startRestTimer(seconds) {
     remaining -= 1;
     if (remaining <= 0) {
       clearRestTimer();
-      try { if (navigator.vibrate) navigator.vibrate([120, 60, 120]); } catch (_) {}
+      try { if (navigator.vibrate) navigator.vibrate([200, 100, 200]); } catch (_) {}
+      playRestBeep();
       return;
     }
     countEl.textContent = fmt(remaining);
@@ -6741,6 +6825,7 @@ function renderSessionRun(el) {
         <input type="number" inputmode="numeric" step="1" min="0" placeholder="${phReps}" value="${repsVal}" data-field="reps" aria-label="${t('reps')}">
         <input type="number" inputmode="decimal" step="0.5" min="0" placeholder="${phW}" value="${wDisplay || ''}" data-field="weight" aria-label="${viewContext.runUnit}">
         <button type="button" class="run-set-done${s.done ? ' done' : ''}" data-done aria-label="${escapeHtml(t('mark_set_done'))}" aria-pressed="${!!s.done}">${icon('check', 16)}</button>
+        <button type="button" class="run-set-del${st.sets.length > 1 ? '' : ' is-hidden'}" data-del-set aria-label="${escapeHtml(t('delete'))}"${st.sets.length > 1 ? '' : ' tabindex="-1" aria-hidden="true"'}>${icon('trash', 14)}</button>
       </div>`;
   }).join('');
 
@@ -6825,6 +6910,12 @@ function renderSessionRun(el) {
       row.querySelector('[data-done]').classList.toggle('done', set.done);
       row.querySelector('[data-done]').setAttribute('aria-pressed', String(set.done));
     });
+    // Delete this set (only shown when more than one set exists).
+    row.querySelector('[data-del-set]')?.addEventListener('click', () => {
+      if (st.sets.length <= 1) return;
+      st.sets.splice(i, 1);
+      renderSessionRun(el);
+    });
   });
 
   $('[data-addset]', el)?.addEventListener('click', () => {
@@ -6842,16 +6933,19 @@ function renderSessionRun(el) {
 
   $('[data-prev]', el)?.addEventListener('click', () => {
     if (idx === 0) return;
-    clearRestTimer();
+    // Keep the rest timer running when moving between exercises (it lives on
+    // .app and survives the re-render) — the user asked for it not to reset.
     commitExercise(ex.id);
     viewContext.runIdx = idx - 1;
     renderSessionRun(el);
   });
 
   $('[data-next]', el)?.addEventListener('click', () => {
-    clearRestTimer();
+    // Keep the rest timer running when moving to the NEXT exercise (don't reset
+    // on navigate); only tear it down when the workout is actually finished.
     commitExercise(ex.id);
     if (isLast) {
+      clearRestTimer();
       viewContext.runView = 'summary';
     } else {
       viewContext.runIdx = idx + 1;
