@@ -5,7 +5,7 @@
 // Single source of truth for the shipped build. Used by the visible build
 // label AND the feedback version tag so they can never drift apart. Keep this
 // equal to the ?v=N cache markers (see CLAUDE.md "CACHE WORKFLOW").
-const VAULT_BUILD = 'v187';
+const VAULT_BUILD = 'v188';
 
 // ==========================================================================
 // Icons
@@ -421,7 +421,7 @@ const I18N = {
     streak_one_day: '1 day', streak_days: 'days',
     streak_active: 'Active streak — keep it going!',
     streak_start: 'Log a session to start your streak',
-    workouts: 'Workouts', volume: 'Volume', cardio: 'Cardio', last_sleep: 'Last sleep',
+    workouts: 'Workouts', volume: 'Volume', cardio: 'Cardio', last_sleep: 'Last sleep', sleep_today: "Today's sleep",
     sessions_label: 'Sessions',
     sessions_this_week: 'sets this week',
     total_this_week: 'total this week',
@@ -1016,7 +1016,7 @@ const I18N = {
     streak_days: 'يوم',
     streak_active: 'سلسلة نشطة — واصل!',
     streak_start: 'سجّل جلسة لبدء سلسلتك',
-    workouts: 'التمارين', volume: 'الحجم', cardio: 'الكارديو', last_sleep: 'آخر نوم',
+    workouts: 'التمارين', volume: 'الحجم', cardio: 'الكارديو', last_sleep: 'آخر نوم', sleep_today: 'نوم اليوم',
     sessions_label: 'الجلسات',
     sessions_this_week: 'مجموعة هذا الأسبوع',
     total_this_week: 'مجموع هذا الأسبوع',
@@ -2168,8 +2168,12 @@ function renderHome(el) {
   const cardioMinutes = weekCardio.reduce((sum, c) => sum + c.duration, 0);
 
   const lastSleep = DB.sleep.latest();
-  const sleepHours = lastSleep ? (lastSleep.durationMinutes / 60).toFixed(1) : null;
-  const sleepSub = lastSleep ? daysAgoLocalized(lastSleep.date) : t('no_data');
+  // Home shows TODAY's TOTAL sleep (sum of every entry dated today — night +
+  // any naps), formatted as "Xh Ym" — not one session shown as a confusing
+  // decimal like "5.8".
+  const sleepTodayMin = DB.sleep.list()
+    .filter((s) => s.date === todayISO())
+    .reduce((sum, s) => sum + (s.durationMinutes || 0), 0);
 
   const streak = computeStreak();
   // First-run / empty signal — used to suppress the "wall of zeros" on Home.
@@ -2347,8 +2351,8 @@ function renderHome(el) {
         <div class="stat-cell-label">${t('cardio')}</div>
       </button>
       <button class="stat-cell" data-goto="sleep">
-        <div class="stat-cell-value num">${sleepHours != null ? `<span class="anim" data-count="${Math.round(parseFloat(sleepHours) * 10)}" data-fixed="1">0</span><span class="unit">${t('unit_hr')}</span>` : '—'}</div>
-        <div class="stat-cell-label">${t('last_sleep')}</div>
+        <div class="stat-cell-value num">${sleepTodayMin > 0 ? escapeHtml(formatDuration(sleepTodayMin)) : '—'}</div>
+        <div class="stat-cell-label">${t('sleep_today')}</div>
       </button>
     </div>` : ''}
 
@@ -6879,11 +6883,11 @@ function renderSessionRun(el) {
     const phW = (s.phWeight === '' || s.phWeight == null) ? '0' : String(convDisplay(Number(s.phWeight)));
     return `
       <div class="run-set-row${s.done ? ' done' : ''}" data-set="${i}">
-        <button type="button" class="run-set-done${s.done ? ' done' : ''}" data-done aria-label="${escapeHtml(t('mark_set_done'))}" aria-pressed="${!!s.done}">${icon('check', 16)}</button>
+        <button type="button" class="run-set-del${st.sets.length > 1 ? '' : ' is-hidden'}" data-del-set aria-label="${escapeHtml(t('delete'))}"${st.sets.length > 1 ? '' : ' tabindex="-1" aria-hidden="true"'}>${icon('trash', 14)}</button>
         <div class="run-set-n num">${i + 1}</div>
         <input type="number" inputmode="numeric" step="1" min="0" placeholder="${phReps}" value="${repsVal}" data-field="reps" aria-label="${t('reps')}">
         <input type="number" inputmode="decimal" step="0.5" min="0" placeholder="${phW}" value="${wDisplay || ''}" data-field="weight" aria-label="${viewContext.runUnit}">
-        <button type="button" class="run-set-del${st.sets.length > 1 ? '' : ' is-hidden'}" data-del-set aria-label="${escapeHtml(t('delete'))}"${st.sets.length > 1 ? '' : ' tabindex="-1" aria-hidden="true"'}>${icon('trash', 14)}</button>
+        <button type="button" class="run-set-done${s.done ? ' done' : ''}" data-done aria-label="${escapeHtml(t('mark_set_done'))}" aria-pressed="${!!s.done}">${icon('check', 16)}</button>
       </div>`;
   }).join('');
 
@@ -6905,11 +6909,11 @@ function renderSessionRun(el) {
     </div>
 
     <div class="run-sets-head">
-      <div class="run-head-done">${t('done_col')}</div>
+      <div></div>
       <div>${t('set_n')}</div>
       <div>${t('reps')}</div>
       <div>${viewContext.runUnit.toUpperCase()}</div>
-      <div></div>
+      <div class="run-head-done">${t('done_col')}</div>
     </div>
     <div class="run-sets">${setsRows}</div>
     <button type="button" class="btn btn-ghost run-addset" data-addset>${icon('plus', 14)} ${t('add_set')}</button>
