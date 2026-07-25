@@ -4,6 +4,7 @@ A fitness / workout-tracking **PWA**. Vanilla JS, **no build step**, bilingual *
 
 - **Live:** https://moathdarweesh.github.io/vault/ (GitHub Pages, branch `main`)
 - **Repo:** github.com/moathdarweesh/vault
+- **`AUTOMATION.md`** — the maintainer's own Arabic quick-reference for everything that runs automatically (the three `.githooks/` scripts, `npm run release`, the graph rebuild) and everything that does **not** (Worker redeploy, SQL, APK). Keep it in sync when you change any of that.
 
 ## Stack & key files
 - `index.html` — markup, script wiring, and the cache-version markers.
