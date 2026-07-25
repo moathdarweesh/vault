@@ -200,3 +200,12 @@ else:
     subprocess.Popen(_cmd, start_new_session=True, **_kw)
 "
 # graphify-hook-end
+
+# --- vault: cross-file link pass -------------------------------------------
+# graphify's AST cannot see this app's wiring (zero imports; the files talk via
+# window.* globals), so its rebuild leaves the graph in disconnected islands.
+# graph-link.sh waits for that rebuild to land, then adds the real cross-file
+# edges. Backgrounded: never delays a commit.
+if [ -f scripts/graph-link.sh ]; then
+    sh scripts/graph-link.sh >/dev/null 2>&1 &
+fi
