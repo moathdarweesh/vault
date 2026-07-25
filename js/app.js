@@ -12,7 +12,7 @@
 // build. The literal below is the fallback (file://, or a stripped query) and is
 // still bumped by `npm run release` — see CLAUDE.md "CACHE WORKFLOW".
 const VAULT_BUILD = (() => {
-  const FALLBACK = 'v189';
+  const FALLBACK = 'v190';
   try {
     const src = (document.currentScript && document.currentScript.src) || '';
     const m = src.match(/[?&]v=(\d+)/);
@@ -1956,6 +1956,32 @@ window.addEventListener('popstate', () => {
 // backup is intact instead of leaving the divergence silent.
 window.addEventListener('vault:push-blocked', () => {
   try { showToast(t('cloud_backup_kept')); } catch (_) {}
+});
+
+// GLOBAL ERROR VISIBILITY.
+//
+// The app has ~77 empty `catch (_) {}` blocks and shipped for 189 builds with no
+// error handler at all — and because every device loads the same live URL, a bad
+// push reaches everyone at once with no signal back. These two listeners catch
+// what escapes to the top level and hand it to Cloud.reportError (fire-and-forget,
+// self-rate-limited, only for signed-in users, no user content).
+//
+// They deliberately do NOT show the user anything: an error toast on every stray
+// rejection would be worse than the silence it replaces.
+window.addEventListener('error', (e) => {
+  try {
+    if (!window.Cloud || !Cloud.reportError) return;
+    const msg = (e && (e.message || (e.error && e.error.message))) || 'unknown error';
+    Cloud.reportError('error', msg, e && e.filename, e && e.lineno);
+  } catch (_) {}
+});
+window.addEventListener('unhandledrejection', (e) => {
+  try {
+    if (!window.Cloud || !Cloud.reportError) return;
+    const r = e && e.reason;
+    const msg = (r && (r.message || String(r))) || 'unhandled rejection';
+    Cloud.reportError('unhandledrejection', msg, null, null);
+  } catch (_) {}
 });
 
 // Download the whole store as a JSON backup. Extracted from the Settings button

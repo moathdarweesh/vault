@@ -28,14 +28,31 @@ A fitness / workout-tracking **PWA**. Vanilla JS, **no build step**, bilingual *
 - **Escape untrusted data** rendered into `innerHTML` with `escapeHtml()` — exercise/food names, and anything from cloud sync / imported backups / AI responses are untrusted.
 - No new dependencies, no build step. Free-first (the maintainer prioritizes free tools/services).
 
-## CACHE WORKFLOW (mandatory every release that changes shipped files)
-Bump the version in **five** places, or the change never reaches phones:
-1. `?v=N` on every `<script>` tag in `index.html`.
-2. `?v=N` on the `<link rel="stylesheet" href="styles.css?v=N">`.
-3. The `__cleaned_vN` sessionStorage key in the inline cleanup script.
-4. The visible build label `THE VAULT · vN` in `app.js`.
-5. **`version.json` → `web: N`** — the auto-updater (`js/update.js`) reloads devices to this build. It MUST equal the `?v=N` above; if `web` is left behind, devices never update; if it is set ahead of the deployed `?v=N`, devices reload once per launch (guarded, not a brick) until fixed.
-Then grep for the old number — zero matches should remain. **Current version: v172.** (The `app.js` build label and the feedback version tag both read the single `VAULT_BUILD` const at the top of `app.js` — bump that one const, not two literals.)
+## CACHE WORKFLOW — now automated. **Do not bump by hand.**
+
+```bash
+npm run release          # bump every marker + verify, then commit all files together
+```
+
+**Current version: v190.**
+
+`scripts/release.js` rewrites all **13** markers and then re-reads them from disk to confirm; it exits non-zero if any disagree. The markers are `?v=N` in `index.html` (×11, including the `js/vendor/supabase.js` preload), the `__cleaned_vN` sessionStorage keys, the `FALLBACK` literal in `app.js`, and `version.json` → `web`.
+
+- `VAULT_BUILD` is **derived at runtime** from `app.js`'s own `?v=N`, so the visible label and the bug-report tag always describe the bundle the browser actually loaded. The `FALLBACK` literal is only for `file://`.
+- `js/cloud.js` derives the same marker to cache-bust `js/vendor/supabase.js` — it must match the preload in `index.html` or the preload is wasted.
+- **Never** verify with a bare `/v\d+/` scan: it matches SVG path data (`<path d="M4 9v6">`) in `index.html` and hundreds of times in `ICONS`. Only the anchored forms are safe.
+
+A **pre-commit hook** (`.githooks/pre-commit` → `scripts/check-release.js`) refuses any commit that stages shipped code while `index.html`'s `?v=N` still equals HEAD's. Enable once with `npm run hooks`; bypass a genuine docs-only commit with `SKIP_RELEASE_CHECK=1`.
+
+Why the hook and not just a self-consistency check: the failure that actually happened here (`ea6c74e`, "v150") was a commit that edited `js/app.js` and nothing else, *after* the v150 markers were already consumed. Every marker still agreed — they were simply stale, so the change reached nobody.
+
+**Keep the `__cleaned_vN` service-worker cleanup block.** It looks like dead ritual (nothing has registered a service worker in ~150 builds), but it is what unregisters an ancient SW on a device that has not opened the app since the pre-v109 bundled APK. Deleting it would strand exactly those users on a permanently cached build with no way to reach them.
+
+### Rollback
+Every device loads the same live URL, so a bad push reaches everyone at once.
+1. `git revert <bad-sha>` (do **not** force-push — the auto-updater compares numbers, so going *backwards* in `version.json` leaves devices ahead and they will not downgrade).
+2. `npm run release` to move **forward** to a new build containing the revert.
+3. Push, then watch `client_errors` (see below) to confirm the error rate drops.
 
 ### Standout nutrition/tracking features (v168–v172)
 - **Barcode scan** (v168): native `BarcodeDetector` + Open Food Facts (free, no key). `openBarcodeScanner()` in app.js; editable grams → live macros → log.
@@ -73,6 +90,21 @@ The app is going multi-user. Alongside the legacy `vault_data` blob (still the l
 - **DB-department audit (2026-07-11)** — full read-only review by db-architect + normalization-auditor + db-security-auditor + db-index-optimizer. Verdict: **professional (A-/B+); no Critical; no client-reachable isolation break; every table BCNF or justified; indexes ahead of the workload.** Fixes surfaced: `backend/hardening-v5.sql` (additive — `feedback_user_idx` + `vault_data` grant double-lock; **ready to apply, not yet applied**); `backend/DROP-migration_v2.CONFIRMATION-REQUIRED.sql` (**destructive** — the leftover `migration_v2` staging schema holds unminimized cross-user PII; NOT reachable but a data-min gap; human runs out-of-band after a backup). Roadmap/optional: consolidate `admins`↔`user_flags.role`; decompose `health_prefs.hidden text[]`→`health_hidden` before analytics; `loadAll()` → aggregate RPC as users grow; hard RLS ban.
 - **Custom exercise images — durable backup** (`backend/storage-images-v6.sql`, **APPLIED + VERIFIED live 2026-07-17**; v120–v123): user-uploaded images (`customImage`) used to live ONLY as base64 inside the `vault_data` blob. The blob is a single mutable row with no history, so when an empty local state once overwrote it every image was destroyed — and the mirror never carried them, so a mirror restore brought back the exercise but not its picture (**this actually happened to the owner; the images were unrecoverable**). Now: the base64 STAYS in the blob (instant render + works offline in the gym — do not "optimise" this away), and a durable copy is ALSO uploaded to the **private** `exercise-images` bucket at `{auth.uid()}/{exercise_id}.jpg` (owner-only RLS on `storage.objects`, 5 MB cap, image mime allowlist — **keep `image/svg+xml` OUT of that allowlist permanently: it is what rejects an active-content SVG from a poisoned imported backup**). The pointer goes in the **existing** `user_exercise_prefs.custom_image_path` (schema-v2's designated field for exactly this bucket) — so the migration alters no table. `tables.js` writes it in a **separate upsert batch** from the `in_my_list` rows: an upsert writes every column in its payload, so a blob row with no path must never send `custom_image_path: null` and blank a pointer already on the server — that blind overwrite is the same bug class that destroyed the images. Client: `Cloud.backupExerciseImage/restoreExerciseImage/removeExerciseImage` (cloud.js), `backupExerciseImageFor()` on save + `syncExerciseImages()` after login/bootSync (app.js) which backfills any un-backed-up image AND heals an exercise whose base64 was lost but whose backup survived. **All best-effort** — every failure path leaves the local base64 untouched, so backing up can never lose an image, and the app works unchanged if the bucket is missing.
 - Still pending: app doesn't READ from the new normalized tables yet (mirror is one-way + additive-only — see the tables.js note); social features deferred.
+
+## Hardening pass (v189–v190) — invariants added by the 2026-07-25 codebase review
+
+Full findings + verification in `CODEBASE_REVIEW.md`. The load-bearing rules:
+
+- **`saveLocal()` vs `save()` (`js/storage.js`).** `save()` flags the blob dirty for cloud sync; `saveLocal()` does not. **Housekeeping writes must use `saveLocal()`** — the Health Connect cache, the global-catalog merge, the onboarding flag. They run *before* `bootSync`'s pull resolves, and flagging them dirty manufactured a false `'conflict'` whose "Keep this device" branch force-pushes over a **newer** cloud blob (skipping both the empty-blob guard and the version compare). If you add a write that the device re-derives for itself, it belongs in `saveLocal()`.
+- **READ-ONLY mode.** If the stored blob fails to parse, `loadState()` no longer overwrites it with `defaultState()`. It quarantines a copy at `gym_tracker_v1__corrupt`, sets `STATE_LOAD_FAILED`, and `writeStore()` refuses every write until a *deliberate* replacement (cloud pull / restore / reset) clears it via `reloadState()`. Never "fix" this by writing defaults.
+- **`push()` returns `'ok'` on success** — and only on success. `'nosession'`, `'blocked'`, `'conflict'`, or a throw all mean the data did **not** upload. Any caller gating a destructive action (logout clearing the device) must test `=== 'ok'`, never "not an error string".
+- **`applyRemote()` propagates `importRaw()`'s failure.** A failed pull must not advance the sync stamp or clear the dirty flag.
+- **Mirror reconcile is gated on `blobLooksReal`** (`js/tables.js`). An empty id list makes the delete unbounded, so it only runs when the blob demonstrably holds user data.
+- **Dates: always `todayISO()` / `addDaysISO()`, never `toISOString()`** for calendar days. `toISOString()` returns the previous day for every UTC+ user — this bug class has now appeared three times.
+- **Error visibility.** `Cloud.reportError()` + `window.onerror`/`unhandledrejection` write to `client_errors` (`backend/client-errors-v9.sql`): signed-in users only, no user content, per-session dedupe, DB-side rate cap of 20/hour, 30-day retention via `admin_prune_client_errors()`. The reporter must never throw and never block.
+- **Accessibility invariants.** All 13 themes pass WCAG AA on `--text-dim`; `--text-ghost` (new) is for input placeholders — `--text-faint` stays for decorative dots/bars, so do not "unify" them. Pinch-zoom is enabled, which means **inputs must stay ≥16px** or iOS focus-zoom returns.
+- **Worker auth** (`backend/gemini-worker.js`) fails **closed** on any 4xx and open only on 5xx/network error, plus a per-caller rate limit. Requires a manual Cloudflare redeploy.
+- **Pending SQL (written, not yet applied):** `backend/client-errors-v9.sql`, `backend/hardening-v8.sql` (revoke PUBLIC execute + pin `search_path`), `backend/ban-rls-v10.sql` (extend the ban to the mirror tables, storage and profiles). Also still pending from the earlier audit: `backend/hardening-v5.sql`.
 
 ## Feature factory
 This machine has a `/feature-factory` skill (24 specialist subagents, tailored to THE VAULT) that builds a feature end-to-end. See the maintainer's Claude memory for the roster.

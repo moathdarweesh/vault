@@ -18,6 +18,17 @@
   const configured = () =>
     /^https:\/\/.+\.supabase\.co/.test(SUPABASE_URL) && SUPABASE_ANON_KEY.length > 30;
 
+  // This file's own ?v=N, captured at load time (document.currentScript is only
+  // valid during synchronous execution, so it cannot be read later from inside a
+  // function). Used to cache-bust the vendored SDK below.
+  const SELF_V = (() => {
+    try {
+      const src = (document.currentScript && document.currentScript.src) || '';
+      const m = src.match(/[?&]v=(\d+)/);
+      return m ? '?v=' + m[1] : '';
+    } catch (_) { return ''; }
+  })();
+
   // The Supabase SDK (~200KB) is loaded ON DEMAND — only when an account is
   // actually configured/used — so it never slows down app startup otherwise.
   let sdkPromise = null;
@@ -27,7 +38,12 @@
     if (sdkPromise) return sdkPromise;
     sdkPromise = new Promise((resolve) => {
       const s = document.createElement('script');
-      s.src = 'js/vendor/supabase.js';
+      // Carry the build marker. This was the ONE shipped file with no ?v=N, so a
+      // device that cached it kept the old SDK indefinitely — a vendored-library
+      // update (including a security fix) could never reach it. Derived from this
+      // file's own marker so it always matches index.html's preload, which would
+      // otherwise be wasted on a different URL.
+      s.src = 'js/vendor/supabase.js' + SELF_V;
       s.onload = () => resolve(true);
       // On failure, clear the cached promise so a later call can retry instead
       // of being stuck with a permanent "false".
@@ -587,6 +603,42 @@
   // ---- feedback / suggestions ---------------------------------------------
   // Insert the user's OWN feedback row (RLS enforces user_id = self). The
   // username is snapshotted so the admin inbox reads well even if it changes.
+  // ---- client error reporting ---------------------------------------------
+  // Fire-and-forget crash reporting (backend/client-errors-v9.sql).
+  //
+  // Rules this MUST obey, because it runs on the error path:
+  //   * never throw — a reporter that crashes while reporting a crash is worse
+  //     than no reporter at all;
+  //   * never block the UI (no await at the call site);
+  //   * never load the SDK just to report — if Supabase isn't already up, drop it;
+  //   * send NO user content. Only the app's own message/stack location.
+  // Dedupe identical messages within a session so a render loop can't spam.
+  const __sentErrors = new Set();
+  function reportError(kind, msg, src, line) {
+    try {
+      const m = String(msg || '').slice(0, 500);
+      if (!m) return;
+      const key = kind + '|' + m + '|' + (src || '') + '|' + (line || '');
+      if (__sentErrors.has(key)) return;
+      if (__sentErrors.size > 50) return;      // hard per-session ceiling
+      __sentErrors.add(key);
+      const c = client;                        // only if the SDK is ALREADY loaded
+      if (!c) return;
+      getSession().then((s) => {
+        if (!s) return;                        // anonymous errors are not collected
+        c.from('client_errors').insert({
+          user_id: s.user.id,
+          build: (typeof VAULT_BUILD !== 'undefined' ? VAULT_BUILD : 'unknown').slice(0, 16),
+          kind: kind,
+          msg: m,
+          src: src ? String(src).slice(0, 300) : null,
+          line: (typeof line === 'number' && isFinite(line)) ? line : null,
+          ua: (navigator.userAgent || '').slice(0, 200),
+        }).then(() => {}, () => {});           // swallow both outcomes
+      }, () => {});
+    } catch (_) { /* reporting must never surface an error of its own */ }
+  }
+
   async function submitFeedback(message, context) {
     const c = sb(); const s = await getSession();
     if (!c || !s) return { error: 'offline' };
@@ -737,7 +789,7 @@
     localHasData, // so the UI can tell an empty device from one that already has data
     getClient: sb, // exposed for the tables.js "mirror" projection (RLS-scoped)
     getUsername, checkUsername, setUsername,
-    touchLastSeen, getMyFlags, submitFeedback,
+    touchLastSeen, getMyFlags, submitFeedback, reportError,
     pullCatalog,
     backupExerciseImage, restoreExerciseImage, removeExerciseImage,
     deleteAccount, clearLocalUserData,
