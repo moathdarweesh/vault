@@ -12,7 +12,7 @@
 // build. The literal below is the fallback (file://, or a stripped query) and is
 // still bumped by `npm run release` — see CLAUDE.md "CACHE WORKFLOW".
 const VAULT_BUILD = (() => {
-  const FALLBACK = 'v193';
+  const FALLBACK = 'v194';
   try {
     const src = (document.currentScript && document.currentScript.src) || '';
     const m = src.match(/[?&]v=(\d+)/);
@@ -7894,6 +7894,22 @@ function hideAuthGate() {
   if (g) g.remove();
 }
 
+// Is the app running on the maintainer's own machine (dev server) rather than
+// for real users? The account gate is mandatory in production, but during
+// development it has to be possible to reach the app without signing in on every
+// cleared install.
+//
+// Hostname is the ONLY signal used, deliberately. A flag in localStorage or a URL
+// parameter would be settable by anyone on the live site — this cannot be, because
+// moathdarweesh.github.io is not localhost. The button below is not merely hidden
+// on production: it is never rendered into the DOM at all.
+function isDevHost() {
+  try {
+    const h = location.hostname;
+    return h === 'localhost' || h === '127.0.0.1' || h === '[::1]' || h === '';
+  } catch (_) { return false; }
+}
+
 function showAuthGate(mode) {
   authMode = mode || 'in';
   hideAuthGate();
@@ -7915,6 +7931,7 @@ function showAuthGate(mode) {
       <button class="btn btn-primary btn-block" id="auth-submit">${up ? t('auth_signup') : t('auth_signin')}</button>
       ${up ? '' : `<button class="auth-toggle" id="auth-forgot">${t('auth_forgot')}</button>`}
       <a class="auth-legal" href="privacy.html?lang=${(DB.prefs.get().lang) || 'en'}" target="_blank" rel="noopener">${t('privacy_policy')}</a>
+      ${isDevHost() ? `<button class="auth-dev-skip" id="auth-dev-skip">skip (dev only)</button>` : ''}
     </div>`;
   document.body.appendChild(gate);
 
@@ -7956,9 +7973,12 @@ function showAuthGate(mode) {
   gate.querySelectorAll('.auth-seg-btn').forEach((b) =>
     b.addEventListener('click', () => { if (b.dataset.mode !== authMode) showAuthGate(b.dataset.mode); })
   );
-  // No skip button any more: an account is REQUIRED (see bootCloud). The gate is
-  // the app's front door, so nothing here dismisses it except a successful
-  // sign-in/sign-up.
+  // No skip button in production: an account is REQUIRED (see bootCloud), and
+  // nothing dismisses the gate except a successful sign-in/sign-up. The dev-only
+  // escape below exists solely so the app is testable on localhost; isDevHost()
+  // means it is never rendered on the live site.
+  const devSkip = document.getElementById('auth-dev-skip');
+  if (devSkip) devSkip.addEventListener('click', () => { hideAuthGate(); });
   const forgot = document.getElementById('auth-forgot');
   if (forgot) forgot.addEventListener('click', () => showForgotPassword(document.getElementById('auth-email').value));
 }

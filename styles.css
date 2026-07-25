@@ -6051,7 +6051,22 @@ body[dir="rtl"] .variation-select svg { transform: scaleX(-1); }
   padding: 16px 8px 6px;
   cursor: pointer;
 }
-/* .auth-skip removed: an account is now required, so the gate has no skip. */
+/* .auth-skip removed: an account is now required, so the gate has no skip.
+   .auth-dev-skip is its localhost-only replacement — deliberately plain and
+   unbranded so it can never be mistaken for a real product affordance. It is not
+   rendered at all off localhost (see isDevHost in app.js). */
+.auth-dev-skip {
+  background: none;
+  border: 1px dashed var(--border);
+  border-radius: 8px;
+  color: var(--text-faint);
+  font-family: inherit;
+  font-size: 11px;
+  padding: 6px 10px;
+  margin-top: 14px;
+  opacity: 0.6;
+  cursor: pointer;
+}
 .auth-legal {
   display: block;
   text-align: center;
