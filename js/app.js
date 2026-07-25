@@ -12,7 +12,7 @@
 // build. The literal below is the fallback (file://, or a stripped query) and is
 // still bumped by `npm run release` — see CLAUDE.md "CACHE WORKFLOW".
 const VAULT_BUILD = (() => {
-  const FALLBACK = 'v194';
+  const FALLBACK = 'v195';
   try {
     const src = (document.currentScript && document.currentScript.src) || '';
     const m = src.match(/[?&]v=(\d+)/);
@@ -8715,13 +8715,30 @@ function setupKeyboardHandling() {
   // modals and gates to the area ABOVE the keyboard (only while it's open) —
   // otherwise `dvh` stays full-height in browsers and content/modals hide behind
   // the keyboard, which reads as everything getting crammed.
+  // A keyboard cannot be open while nothing is focused. Requiring this SECOND
+  // signal is what stops the height check from getting stuck.
+  const typing = () => {
+    const el = document.activeElement;
+    return !!(el && el.matches && el.matches('input, textarea, [contenteditable="true"]'));
+  };
+
   function evaluate() {
     const h = curH() || window.innerHeight;
     if (!h) return;                   // not laid out yet — don't publish a 0 height
     if (h > baseH) baseH = h;         // grow the baseline (browser chrome hiding, etc.)
-    const open = (baseH - h) > 120;   // >120px shorter than the baseline ⇒ keyboard is up
+    const shrunk = (baseH - h) > 120; // >120px shorter than the baseline
+    // BUG THIS FIXES: the baseline only ever grew, so ANY genuine viewport shrink
+    // — rotating, the browser chrome reappearing, a resized window — was read as
+    // "keyboard is up" FOREVER, and the bottom nav stayed hidden (opacity 0,
+    // pushed off-screen) until a reload. The nav vanishing with no keyboard in
+    // sight is exactly that.
+    const open = shrunk && typing();
     root.style.setProperty('--vvh', h + 'px');
     document.body.classList.toggle('keyboard-open', open);
+    // With no field focused, whatever height we are at IS the true baseline.
+    // Re-anchoring here lets the baseline SHRINK again, so the app can never get
+    // stuck believing a keyboard it cannot see is still open.
+    if (!typing()) baseH = h;
   }
   evaluate();
   // Orientation swaps portrait/landscape height — recapture the baseline so the
@@ -8734,6 +8751,11 @@ function setupKeyboardHandling() {
   if (vp) vp.addEventListener('resize', evaluate);
   window.addEventListener('resize', evaluate);
   window.addEventListener('orientationchange', resetBaseline);
+  // Re-check when focus enters or leaves a field. Blur is the reliable moment the
+  // keyboard is dismissed — on some browsers no resize event follows it, which
+  // would otherwise leave the nav hidden after closing a modal you typed in.
+  document.addEventListener('focusin', () => setTimeout(evaluate, 60));
+  document.addEventListener('focusout', () => setTimeout(evaluate, 60));
 
   // Keep the focused field visible above the keyboard. Wait for the keyboard to
   // animate in and settle the viewport before scrolling so we land in the right spot.
