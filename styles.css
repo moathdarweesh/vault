@@ -627,6 +627,12 @@ body[dir="rtl"] .cta-card-chev svg {
   transform: scaleX(-1);
 }
 
+/* Generic marker for a directional chevron/back glyph that sits in a spot where
+   the container class also hosts a non-directional icon on other renders (so a
+   blanket container-class rule would flip the wrong thing sometimes). Apply
+   `.dir-icon` directly to whichever element wraps ONLY the directional glyph. */
+body[dir="rtl"] .dir-icon svg { transform: scaleX(-1); }
+
 body[dir="rtl"] .sets-row-reps,
 body[dir="rtl"] .sets-row-weight {
   justify-content: flex-start;
@@ -1281,7 +1287,7 @@ input[type="date"], input[type="time"] { color-scheme: dark; }
   background: var(--accent-soft);
 }
 
-.stat-tile-icon svg { width: 15px; height: 15px; }
+.stat-tile-icon svg { width: 16px; height: 16px; }
 
 .stat-tile-value {
   font-size: 28px;
@@ -1569,6 +1575,11 @@ input[type="date"], input[type="time"] { color-scheme: dark; }
   flex-shrink: 0;
 }
 .recent-item-icon svg { width: 16px; height: 16px; }
+/* Higher specificity than `.data-icon svg` (a later, equally-specific rule
+   used for its category-color modifiers) — without this, cascade SOURCE ORDER
+   let the 20px data-icon size win over the intended 16px here, rendering the
+   recent-activity row icon too big for its smaller 36px tile. */
+.recent-item-icon.data-icon svg { width: 16px; height: 16px; }
 
 .recent-item-main {
   flex: 1;
@@ -1854,7 +1865,7 @@ body[dir="rtl"] .bento-card.wide .bento-card-name-tag { left: 14px; }
   align-items: center;
   gap: 4px;
 }
-.bento-pr svg { width: 10px; height: 10px; }
+.bento-pr svg { width: 16px; height: 16px; }
 
 /* Fallback (no image) */
 .bento-card-bg.fallback {
@@ -1894,7 +1905,7 @@ body[dir="rtl"] .bento-card.wide .bento-card-name-tag { left: 14px; }
   padding: 16px;
 }
 
-.bento-add svg { width: 26px; height: 26px; }
+.bento-add svg { width: 24px; height: 24px; }
 
 .bento-add-title {
   font-size: 13px;
@@ -2324,7 +2335,7 @@ body[dir="rtl"] .w-unit { margin-left: 0; margin-right: 2px; }
   width: 32px;
   height: 32px;
 }
-.data-actions .icon-btn svg { width: 15px; height: 15px; }
+.data-actions .icon-btn svg { width: 16px; height: 16px; }
 
 /* Macro pills (food) */
 .macro-row {
@@ -2435,7 +2446,7 @@ body[dir="rtl"] .w-unit { margin-left: 0; margin-right: 2px; }
   border: none;
   color: #fff;
 }
-.img-lightbox-close svg { width: 22px; height: 22px; }
+.img-lightbox-close svg { width: 20px; height: 20px; }
 
 /* =========================================================================
    MODAL / SHEETS
@@ -2814,7 +2825,7 @@ body[dir="rtl"] .w-unit { margin-left: 0; margin-right: 2px; }
   transition: all 0.15s;
 }
 
-.type-option svg { width: 22px; height: 22px; color: var(--text-mute); }
+.type-option svg { width: 20px; height: 20px; color: var(--text-mute); }
 
 .type-option.active {
   border-color: var(--accent-line);
@@ -2929,7 +2940,7 @@ body[dir="rtl"] .w-unit { margin-left: 0; margin-right: 2px; }
   letter-spacing: -0.01em;
 }
 
-.compare-delta svg { width: 14px; height: 14px; }
+.compare-delta svg { width: 16px; height: 16px; }
 
 .compare-delta.up   { background: var(--up-bg); color: var(--up); }
 .compare-delta.down { background: var(--down-bg); color: var(--down); }
@@ -3713,7 +3724,7 @@ body[dir="rtl"] .planner-day-head { text-align: right; }
   letter-spacing: 0.06em;
   text-transform: uppercase;
 }
-.sd-status-pill svg { width: 12px; height: 12px; }
+.sd-status-pill svg { width: 16px; height: 16px; }
 
 .sd-sets-head {
   display: grid;
@@ -3783,7 +3794,7 @@ body[dir="rtl"] .planner-day-head { text-align: right; }
 .sd-set-remove:hover,
 .sd-set-remove:active { background: var(--red-bg); color: var(--red); border-color: var(--red); }
 .sd-set-remove:active { transform: scale(var(--press-scale)); }
-.sd-set-remove svg { width: 14px; height: 14px; }
+.sd-set-remove svg { width: 16px; height: 16px; }
 
 .sd-card-actions {
   display: flex;
@@ -3979,7 +3990,11 @@ body[dir="rtl"] .planner-day-head { text-align: right; }
 .run-nav { display: flex; gap: 10px; margin-top: 22px; }
 .run-nav .btn { flex: 1; height: 52px; font-size: 15px; font-weight: 800; }
 .run-prev:disabled { opacity: 0.4; pointer-events: none; }
-body[dir="rtl"] .run-nav svg { transform: scaleX(-1); }
+/* NOT a blanket `.run-nav svg` flip: run-next shows a checkmark (non-directional,
+   "Finish") on the last exercise and a chevron (directional, "Next") otherwise —
+   a container-wide flip was mirroring the checkmark too. Both directional
+   glyphs (run-prev's back arrow, run-next's chevron-only branch) are wrapped in
+   `.dir-icon` at the call site instead; see the generic rule above. */
 /* Month/day steppers are DIRECTIONAL: in RTL "previous" sits on the right, so the
    arrows must mirror like .back-btn does. Without this the calendar's prev/next
    pointed the wrong way in Arabic. */
@@ -4046,7 +4061,7 @@ body[dir="rtl"] .calendar-nav-btn svg { transform: scaleX(-1); }
   letter-spacing: 0.1em;
   color: var(--text-dim);
 }
-.rest-timer-label svg { width: 14px; height: 14px; }
+.rest-timer-label svg { width: 16px; height: 16px; }
 .rest-timer-count {
   font-size: 24px;
   font-weight: 900;
@@ -4178,7 +4193,7 @@ body[dir="rtl"] .calendar-nav-btn svg { transform: scaleX(-1); }
 .sticky-actions #day-save-btn { flex: 1.6; }
 /* Rest-day is a quiet secondary action, not a scary red button. */
 .day-rest-btn { flex: 1; color: var(--text-mute); }
-.day-rest-btn svg { width: 15px; height: 15px; }
+.day-rest-btn svg { width: 16px; height: 16px; }
 .picker-list::-webkit-scrollbar { width: 4px; }
 .picker-list::-webkit-scrollbar-thumb { background: var(--border-hi); border-radius: 2px; }
 
@@ -4274,7 +4289,7 @@ body[dir="rtl"] .calendar-nav-btn svg { transform: scaleX(-1); }
   border-color: var(--accent);
   color: var(--accent-ink);
 }
-.picker-row-check svg { width: 14px; height: 14px; }
+.picker-row-check svg { width: 16px; height: 16px; }
 
 body[dir="rtl"] .picker-row { text-align: right; }
 
@@ -4443,7 +4458,7 @@ body[dir="rtl"] .picker-row { text-align: right; }
   align-items: center;
   gap: 4px;
 }
-.supp-streak svg { width: 12px; height: 12px; }
+.supp-streak svg { width: 16px; height: 16px; }
 
 .supp-toggle {
   width: 44px;
@@ -4458,6 +4473,10 @@ body[dir="rtl"] .picker-row { text-align: right; }
   flex-shrink: 0;
   transition: all 0.18s;
 }
+/* Was missing entirely — the base `svg{width:100%}` was inflating the check/plus
+   glyph to fill the whole 44px circle with zero padding. Same ratio as the
+   other "mark done" toggle, .run-set-done. */
+.supp-toggle svg { width: 18px; height: 18px; }
 
 .supp-toggle.taken {
   background: var(--accent);
@@ -4640,7 +4659,7 @@ body[dir="rtl"] .picker-row { text-align: right; }
   appearance: none; -webkit-appearance: none; -webkit-tap-highlight-color: transparent;
 }
 .link-btn:active { color: var(--text); }
-.link-btn svg { width: 14px; height: 14px; flex-shrink: 0; }
+.link-btn svg { width: 16px; height: 16px; flex-shrink: 0; }
 
 /* =========================================================================
    SLEEP STAGES (from Health Connect)
@@ -4850,7 +4869,7 @@ body[dir="rtl"] .picker-row { text-align: right; }
 
 /* Keep the dashboard's boxed icons at a sane size (the global svg{width:100%}
    would otherwise make them fill their whole container). */
-.nutri-setup-icon svg { width: 26px; height: 26px; }
+.nutri-setup-icon svg { width: 24px; height: 24px; }
 .nutri-edit svg { width: 16px; height: 16px; }
 
 /* Icon-less compact empty state for the food log. */
@@ -5105,7 +5124,7 @@ body[dir="rtl"] .picker-row { text-align: right; }
   position: relative;
 }
 
-.image-preview svg { width: 22px; height: 22px; }
+.image-preview svg { width: 24px; height: 24px; }
 
 .image-preview img {
   width: 100%;
@@ -5233,6 +5252,10 @@ body[dir="rtl"] .lib-section-count {
   justify-content: center;
   flex-shrink: 0;
 }
+/* Was missing entirely — the base `svg{width:100%}` was inflating this icon to
+   fill the whole 38px box with no breathing room. Same 38px-box → 18px-icon
+   ratio as .icon-btn/.weight-card-icon elsewhere. */
+.pick-banner-icon svg { width: 18px; height: 18px; }
 
 .pick-banner-main {
   flex: 1;
@@ -5424,7 +5447,7 @@ body[dir="rtl"] .bento-card.wide .bento-added-stripe { left: 14px; }
 }
 .variation-select:hover { background: var(--accent); color: var(--accent-ink); }
 .variation-select:active { transform: scale(0.96); }
-.variation-select svg { width: 14px; height: 14px; }
+.variation-select svg { width: 16px; height: 16px; }
 body[dir="rtl"] .variation-select svg { transform: scaleX(-1); }
 
 .bento-card.wide .bento-toggle {
@@ -5622,7 +5645,7 @@ body[dir="rtl"] .variation-select svg { transform: scaleX(-1); }
   z-index: 2;
 }
 
-.theme-check svg { width: 12px; height: 12px; }
+.theme-check svg { width: 16px; height: 16px; }
 
 .settings-action-row {
   background: var(--surface-1);
@@ -5701,7 +5724,7 @@ body[dir="rtl"] .variation-select svg { transform: scaleX(-1); }
   border: 1px solid var(--accent-line);
   vertical-align: middle;
 }
-.src-badge svg { width: 11px; height: 11px; }
+.src-badge svg { width: 16px; height: 16px; }
 
 /* ---- Health Connect modal ---- */
 .health-msg {
@@ -5924,11 +5947,11 @@ body[dir="rtl"] .variation-select svg { transform: scaleX(-1); }
 
 /* Icon-size fixes for v168–v172 components — the base `svg{width:100%}` inflates
    any icon whose container doesn't set an explicit size (these were oversized). */
-.water-title svg { width: 17px; height: 17px; }
+.water-title svg { width: 16px; height: 16px; }
 .water-cup-minus svg { width: 16px; height: 16px; }
 .weight-card-icon svg { width: 18px; height: 18px; }
 .weight-card-add svg { width: 18px; height: 18px; }
-.weight-row-del svg { width: 15px; height: 15px; }
+.weight-row-del svg { width: 16px; height: 16px; }
 .ai-portion-btn svg { width: 16px; height: 16px; }
 .auth-logo {
   width: 64px;
@@ -6511,7 +6534,7 @@ body[dir="rtl"] .variation-select svg { transform: scaleX(-1); }
   color: var(--accent);
   opacity: 0;
 }
-.food-lib-chip .flc-check svg { width: 14px; height: 14px; }
+.food-lib-chip .flc-check svg { width: 16px; height: 16px; }
 .food-lib-chip.added {
   border-color: var(--accent-line);
   background: var(--accent-soft);
