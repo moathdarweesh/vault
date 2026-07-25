@@ -646,7 +646,16 @@ const DB = {
   // ----- User preferences -----
   prefs: {
     get() { return STATE.prefs || { lang: 'en', theme: 'dark', unit: 'kg' }; },
-    setLang(lang) { STATE.prefs.lang = lang; save(); },
+    // Setting the language is ALSO the record that the user chose one. `lang`
+    // alone cannot carry that: it defaults to 'en', so a fresh install is
+    // indistinguishable from someone who deliberately picked English — and the
+    // first-run language screen would then either never show or show twice.
+    setLang(lang) { STATE.prefs.lang = lang; STATE.prefs.langPicked = true; save(); },
+    // Has the user explicitly chosen a language yet? Drives the language screen
+    // that must come BEFORE the mandatory account gate, so an Arabic speaker is
+    // not asked to sign up through an English form.
+    langPicked() { return !!(STATE.prefs && STATE.prefs.langPicked); },
+    setLangPicked() { STATE.prefs.langPicked = true; saveLocal(); },
     setTheme(theme) { STATE.prefs.theme = theme; save(); },
     setUnit(unit) { STATE.prefs.unit = unit === 'lb' ? 'lb' : 'kg'; save(); },
     setTranslateExercises(on) { STATE.prefs.translateExercises = !!on; save(); },

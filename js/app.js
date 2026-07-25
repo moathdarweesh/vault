@@ -12,7 +12,7 @@
 // build. The literal below is the fallback (file://, or a stripped query) and is
 // still bumped by `npm run release` — see CLAUDE.md "CACHE WORKFLOW".
 const VAULT_BUILD = (() => {
-  const FALLBACK = 'v192';
+  const FALLBACK = 'v193';
   try {
     const src = (document.currentScript && document.currentScript.src) || '';
     const m = src.match(/[?&]v=(\d+)/);
@@ -8488,6 +8488,9 @@ function renderPersonalRecords(el) {
 
 async function bootCloud() {
   if (!window.Cloud || !Cloud.configured()) return; // not set up → local-only
+  // Ask for a language BEFORE the account gate. The gate is mandatory now, so it
+  // would otherwise be an unskippable English form for an Arabic-speaking user.
+  try { await showLangGate(); } catch (_) {}
   await Cloud.ensureSdk(); // load the Supabase SDK on demand
   // Opened from a password-reset link → let the user set a new password.
   Cloud.onPasswordRecovery(() => showChangePassword());
@@ -8729,9 +8732,44 @@ function setupKeyboardHandling() {
 // Existing users are silently marked onboarded so they never see it. Ends by
 // handing off to the real calorie calculator — no duplicated goal logic.
 // ==========================================================================
+// Language FIRST — shown before the (mandatory) account gate on a brand-new
+// install. Without this an Arabic speaker's very first screen is an English
+// sign-up form, which is now unskippable. Resolves once a language is chosen.
+function showLangGate() {
+  return new Promise((resolve) => {
+    if (DB.prefs.langPicked() || document.getElementById('lang-gate')) { resolve(); return; }
+    const gate = document.createElement('div');
+    gate.id = 'lang-gate';
+    gate.className = 'auth-gate onboard-gate';
+    // Bilingual by necessity: we do not yet know which language to address them in.
+    gate.innerHTML = `
+      <div class="auth-card onb-card">
+        <div class="onb-logo">${icon('vault', 32)}</div>
+        <div class="onb-title">اختر لغتك<br>Choose your language</div>
+        <div class="onb-langs">
+          <button type="button" class="onb-lang-opt" data-pick="ar"><b>العربية</b><span>Arabic</span></button>
+          <button type="button" class="onb-lang-opt" data-pick="en"><b>English</b><span>الإنجليزية</span></button>
+        </div>
+      </div>`;
+    document.body.appendChild(gate);
+    gate.querySelectorAll('[data-pick]').forEach((b) =>
+      b.addEventListener('click', () => {
+        DB.prefs.setLang(b.dataset.pick);
+        applyLang(b.dataset.pick);
+        gate.remove();
+        try { renderView(currentView); } catch (_) {}
+        resolve();
+      })
+    );
+  });
+}
+
 function showOnboarding() {
   if (document.getElementById('onboard-gate')) return;
-  let step = 0;
+  // Start past the language step when the language gate already asked. Keeping
+  // step 0 reachable means a user who picked a language 3 seconds ago is asked
+  // again — the duplicate question that made the old flow feel broken.
+  let step = DB.prefs.langPicked() ? 1 : 0;
   const gate = document.createElement('div');
   gate.id = 'onboard-gate';
   gate.className = 'auth-gate onboard-gate';
@@ -8838,6 +8876,12 @@ function showOnboarding() {
     if (hasHistory) DB.prefs.setOnboarded();
     else { try { showOnboarding(); } catch (_) {} }
   }
+
+  // Backfill for everyone who was already using the app before the language
+  // screen existed: they have a language (whether they set it or not) and must
+  // never be interrupted by a first-run question on an update. Only a genuinely
+  // fresh install — no history, not onboarded — is left unflagged.
+  if (!DB.prefs.langPicked() && DB.prefs.onboarded()) DB.prefs.setLangPicked();
 
   bootCloud();
   bootCatalog(); // best-effort admin-content pull; works logged-out too
