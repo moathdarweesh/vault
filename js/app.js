@@ -12,7 +12,7 @@
 // build. The literal below is the fallback (file://, or a stripped query) and is
 // still bumped by `npm run release` — see CLAUDE.md "CACHE WORKFLOW".
 const VAULT_BUILD = (() => {
-  const FALLBACK = 'v195';
+  const FALLBACK = 'v196';
   try {
     const src = (document.currentScript && document.currentScript.src) || '';
     const m = src.match(/[?&]v=(\d+)/);
@@ -6323,7 +6323,10 @@ function openSlotEditorModal(slotIdx) {
         if (at !== -1) pickedOrder.splice(at, 1);   // unpick
         else pickedOrder.push(id);                  // pick → appended to the end
         b.classList.toggle('picked');
-        renderChosenList();
+        // Live count in the sheet header — the chosen list itself is on the
+        // previous screen, so this is the only feedback that a tap registered.
+        const c = document.getElementById('picker-count');
+        if (c) c.textContent = fmtNum(pickedOrder.length);
       })
     );
   }
@@ -6342,8 +6345,8 @@ function openSlotEditorModal(slotIdx) {
           <span class="chosen-num num">${fmtNum(i + 1)}</span>
           <span class="chosen-name">${escapeHtml(nm)}</span>
           <span class="chosen-actions">
-            <button type="button" class="icon-btn icon-btn-tile" data-ord-up="${i}" aria-label="${t('move_up')}" ${i === 0 ? 'disabled' : ''}>↑</button>
-            <button type="button" class="icon-btn icon-btn-tile" data-ord-down="${i}" aria-label="${t('move_down')}" ${i === pickedOrder.length - 1 ? 'disabled' : ''}>↓</button>
+            <button type="button" class="icon-btn icon-btn-tile" data-ord-up="${i}" aria-label="${t('move_up')}" ${i === 0 ? 'disabled' : ''}>${icon('arrowUp', 18)}</button>
+            <button type="button" class="icon-btn icon-btn-tile" data-ord-down="${i}" aria-label="${t('move_down')}" ${i === pickedOrder.length - 1 ? 'disabled' : ''}>${icon('arrowDown', 18)}</button>
             <button type="button" class="icon-btn icon-btn-tile chosen-del" data-ord-del="${escapeHtml(id)}" aria-label="${t('delete')}">${icon('close', 18)}</button>
           </span>
         </div>`;
@@ -6374,73 +6377,95 @@ function openSlotEditorModal(slotIdx) {
     );
   }
 
-  const catPills = ['All', ...EXERCISE_CATEGORIES]
-    .map((f) => `<button type="button" class="filter-pill ${f === pickerCategory ? 'active' : ''}" data-pick-cat="${f}">${escapeHtml(t('cat_' + f, f))}</button>`)
-    .join('');
+  // ---- the exercise picker, as its OWN bottom sheet -------------------------
+  //
+  // It used to be a section crammed into the bottom of this same modal. That
+  // forced THREE nested scroll areas (modal / chosen list / picker list) inside a
+  // modal that could not itself scroll — a ~4,600px list squeezed into ~140px,
+  // which is why the sheet felt stuck, rows collided with the action bar, and the
+  // "remove" button ended up hidden behind exercise thumbnails.
+  //
+  // As a separate sheet each screen owns one scroll axis and the standard .modal
+  // slide-up animation is reused, so it matches every other sheet in the app.
+  function openPickerSheet() {
+    const catPills = ['All', ...EXERCISE_CATEGORIES]
+      .map((f) => `<button type="button" class="filter-pill ${f === pickerCategory ? 'active' : ''}" data-pick-cat="${escapeHtml(f)}">${escapeHtml(t('cat_' + f, f))}</button>`)
+      .join('');
 
-  openModal(`
-    <div class="modal-header">
-      <div>
-        <div class="modal-title">${escapeHtml(dayLabel || t('add_workout'))}</div>
-        <div class="modal-subtitle">${isNew ? t('add_workout') : t('edit_workout')}</div>
+    openModal(`
+      <div class="modal-header">
+        <div>
+          <div class="modal-title">${t('pick_exercises')}</div>
+          <div class="modal-subtitle" id="picker-count">${fmtNum(pickedOrder.length)}</div>
+        </div>
+        <button class="icon-btn icon-btn-tile" id="picker-back" aria-label="${escapeHtml(t('back'))}">${icon('close', 18)}</button>
       </div>
-      <button class="icon-btn icon-btn-tile" data-close>${icon('close', 18)}</button>
-    </div>
-
-    <div class="form-group">
-      <label class="form-label">${t('name')}</label>
-      <input type="text" id="day-name" placeholder="${t('workout_name_ph')}" value="${escapeHtml(dayLabel)}">
-    </div>
-
-    <div class="form-group" id="chosen-wrap"></div>
-
-    <div class="form-group picker-group">
-      <label class="form-label">${t('pick_exercises')}</label>
       <div class="search-wrap" style="margin-bottom:8px">
         ${icon('search', 18)}
         <input type="search" id="picker-search" placeholder="${t('search_exercises')}">
       </div>
       <div class="filter-bar" style="margin: 0 0 10px">${catPills}</div>
       <div class="picker-list" id="picker-list"></div>
-    </div>
+      <div class="form-actions sticky-actions">
+        <button type="button" class="btn btn-primary btn-block" id="picker-done">${t('done')}</button>
+      </div>
+    `);
 
-    <div class="form-actions sticky-actions">
-      ${isNew ? '' : `<button type="button" class="btn btn-ghost day-rest-btn" id="day-clear-btn">${icon('trash', 16)} ${t('remove_workout')}</button>`}
-      <button type="button" class="btn btn-primary" id="day-save-btn">${t('save')}</button>
-    </div>
-  `);
-
-  // Flex layout: only the exercise list scrolls; the Save bar stays pinned.
-  document.querySelector('#modal-root .modal')?.classList.add('modal-day-editor');
-
-  renderPickerList();
-  renderChosenList();
-
-  $('#day-name').addEventListener('input', (e) => { dayLabel = e.target.value; });
-
-  $('#picker-search').addEventListener('input', (e) => {
-    pickerQuery = e.target.value;
     renderPickerList();
-  });
+    $('#picker-search').addEventListener('input', (e) => { pickerQuery = e.target.value; renderPickerList(); });
+    document.querySelectorAll('[data-pick-cat]').forEach((b) =>
+      b.addEventListener('click', () => {
+        pickerCategory = b.dataset.pickCat;
+        document.querySelectorAll('[data-pick-cat]').forEach((x) =>
+          x.classList.toggle('active', x.dataset.pickCat === pickerCategory));
+        renderPickerList();
+      })
+    );
+    // Both paths return to the editor rather than closing outright — the user is
+    // mid-edit and has unsaved name/order changes held in this closure.
+    const back = () => openEditor();
+    $('#picker-back').addEventListener('click', back);
+    $('#picker-done').addEventListener('click', back);
+  }
 
-  document.querySelectorAll('[data-pick-cat]').forEach((b) =>
-    b.addEventListener('click', () => {
-      pickerCategory = b.dataset.pickCat;
-      document.querySelectorAll('[data-pick-cat]').forEach((x) =>
-        x.classList.toggle('active', x.dataset.pickCat === pickerCategory)
-      );
-      renderPickerList();
-    })
-  );
+  function openEditor() {
+    openModal(`
+      <div class="modal-header">
+        <div>
+          <div class="modal-title">${escapeHtml(dayLabel || t('add_workout'))}</div>
+          <div class="modal-subtitle">${isNew ? t('add_workout') : t('edit_workout')}</div>
+        </div>
+        <button class="icon-btn icon-btn-tile" data-close aria-label="${escapeHtml(t('close'))}">${icon('close', 18)}</button>
+      </div>
 
-  $('#day-clear-btn')?.addEventListener('click', () => {
-    if (!isNew) DB.plan.removeSlot(slotIdx);
-    closeModal();
-    showToast(t('day_cleared'));
-    renderView(currentView);
-  });
+      <div class="form-group">
+        <label class="form-label">${t('name')}</label>
+        <input type="text" id="day-name" placeholder="${t('workout_name_ph')}" value="${escapeHtml(dayLabel)}">
+      </div>
 
-  $('#day-save-btn').addEventListener('click', () => {
+      <div class="form-group" id="chosen-wrap"></div>
+
+      <button type="button" class="btn btn-ghost btn-block" id="open-picker">${icon('plus', 16)} ${t('pick_exercises')}</button>
+
+      <div class="form-actions sticky-actions">
+        ${isNew ? '' : `<button type="button" class="btn btn-ghost day-rest-btn" id="day-clear-btn">${icon('trash', 16)} ${t('remove_workout')}</button>`}
+        <button type="button" class="btn btn-primary" id="day-save-btn">${t('save')}</button>
+      </div>
+    `);
+
+    renderChosenList();
+    $('#day-name').addEventListener('input', (e) => { dayLabel = e.target.value; });
+    $('#open-picker').addEventListener('click', openPickerSheet);
+    $('#day-clear-btn')?.addEventListener('click', () => {
+      if (!isNew) DB.plan.removeSlot(slotIdx);
+      closeModal();
+      showToast(t('day_cleared'));
+      renderView(currentView);
+    });
+    $('#day-save-btn').addEventListener('click', onSave);
+  }
+
+  function onSave() {
     const ids = [...pickedOrder];   // preserve the user's chosen order
     const name = dayLabel.trim() || 'Workout';
     // Auto-add picked exercises to the user's Train list
@@ -6460,7 +6485,9 @@ function openSlotEditorModal(slotIdx) {
     closeModal();
     showToast(t('day_saved'));
     renderView(currentView);
-  });
+  }
+
+  openEditor();
 }
 
 // ==========================================================================
