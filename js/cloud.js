@@ -69,6 +69,14 @@
       let parsed;
       try { parsed = JSON.parse(raw); } catch (_) { return false; }
       if (!validateBlob(parsed)) return false;
+      // Apply the SAME id-charset check the file-import path uses. Entity ids are
+      // interpolated into data-* attributes all over the render layer, so an id
+      // like `"><img onerror=...>` is an attribute-breakout XSS. A cloud blob is
+      // not automatically trustworthy: it is whatever some device uploaded, and a
+      // tampered export can be restored to the account and then synced down here.
+      try {
+        if (typeof DB !== 'undefined' && DB._idsSafe && !DB._idsSafe(parsed)) return false;
+      } catch (_) { return false; }
       localStorage.setItem(STORE_KEY, raw);
       if (typeof DB !== 'undefined' && DB.reload) DB.reload();
       return true;
@@ -219,10 +227,28 @@
       version: (typeof data.version === 'number' ? data.version : null),
     };
   }
+  // Clear the "unpushed local changes" flag ONLY if the bytes we just uploaded are
+  // still the current bytes. A push is asynchronous: the user can log a set while
+  // it is in flight. Unconditionally clearing the flag afterwards marks that newer
+  // edit as already-synced, so it is never pushed — and a later pull silently
+  // overwrites it. If the store moved on, we leave the flag set and the debounced
+  // push picks it up.
+  function clearDirtyIfUnchanged(uid, uploadedRaw) {
+    try {
+      if (exportRaw() !== uploadedRaw) return;   // changed mid-flight → stay dirty
+    } catch (_) { return; }                      // can't tell → assume dirty (safe)
+    setDirty(uid, false);
+  }
+
   async function push(opts) {
     const force = !!(opts && opts.force);
     const c = sb(); const s = await getSession();
-    if (!c || !s) return;
+    // NOT a success: there is no session (signed out, or the token could not be
+    // refreshed — e.g. offline past expiry). Callers that gate a DESTRUCTIVE
+    // action on "did this upload?" MUST treat this as a failure, or they will
+    // discard local data that was never sent. The fire-and-forget callers below
+    // ignore the return value, so naming it is safe.
+    if (!c || !s) return 'nosession';
     const raw = exportRaw();
     let blob; try { blob = JSON.parse(raw || '{}'); } catch (_) { blob = {}; }
     // SAFETY GUARD (data-loss protection): never SILENTLY overwrite a cloud backup
@@ -281,7 +307,7 @@
         if (!updErr) {
           if (updated && updated.length) {
             if (typeof updated[0].version === 'number') setVersion(uid, updated[0].version);
-            setStamp(uid, iso); setDirty(uid, false); return;
+            setStamp(uid, iso); clearDirtyIfUnchanged(uid, raw); return 'ok';
           }
           // 0 rows matched: the remote moved ahead (conflict) or the row is gone.
           const { data: cur, error: curErr } = await c.from(TABLE)
@@ -301,7 +327,8 @@
     if (error) throw new Error(error.message);
     if (up && up[0] && typeof up[0].version === 'number') setVersion(uid, up[0].version);
     setStamp(uid, iso);
-    setDirty(uid, false); // our local edits are now safely in the cloud
+    clearDirtyIfUnchanged(uid, raw); // only if nothing changed while we uploaded
+    return 'ok';          // the ONLY success value — callers gate on this explicitly
   }
 
   // Debounced push fired by storage.js save() after any local change.
@@ -329,9 +356,15 @@
     if (!remoteHasData(remote)) return false;
     syncing = true;
     clearTimeout(pushTimer);            // cancel any pending echo push
-    importRaw(JSON.stringify(remote.data));
+    // PROPAGATE the import result. importRaw() returns false when the remote blob
+    // fails to parse or fails shape validation — and this used to discard that,
+    // so a FAILED pull was reported as a success. Callers then advanced the sync
+    // stamp and CLEARED the dirty flag, marking local edits as "safely synced"
+    // when nothing had been applied at all: silent divergence, and the next boot
+    // would not even retry the pull.
+    const applied = importRaw(JSON.stringify(remote.data));
     syncing = false;
-    return true;
+    return applied;
   }
 
   // Called right after a successful sign-in / sign-up. Decides what to do with
@@ -346,12 +379,17 @@
     let remote;
     try { remote = await pull(); } catch (_) { return 'offline'; }
     if (remote === undefined) return 'offline';
+    const pushed = async () => {
+      let r; try { r = await push(); } catch (_) { r = 'error'; }
+      if (r !== 'ok') return 'offline';   // don't claim success for a failed push
+      markLinked(uid); return 'pushed';
+    };
     // Cloud empty (no row, or a row with no data) → seed it from this device.
-    if (remote === null || !remoteHasData(remote)) { await push(); markLinked(uid); return 'pushed'; }
+    if (remote === null || !remoteHasData(remote)) return pushed();
     // Cloud has data AND this device has its own data, first time → ask the user.
     if (!isLinked(uid) && localHasData()) return 'conflict';
     if (applyRemote(remote)) { setStamp(uid, remote.updatedAt); setVersion(uid, remote.version); setDirty(uid, false); markLinked(uid); return "pulled"; }
-    await push(); markLinked(uid); return 'pushed';
+    return pushed();
   }
   // Conflict resolution choices (first link only).
   async function chooseCloud() {
@@ -379,14 +417,26 @@
     let remote;
     try { remote = await pull(); } catch (_) { return 'offline'; }
     if (remote === undefined) return 'offline';
-    if (remote === null || !remoteHasData(remote)) { await push().catch(() => {}); markLinked(uid); return 'pushed'; }
+    // Report the REAL push outcome: this used to swallow every failure and return
+    // 'pushed' regardless, so the UI said "Synced" after a push that was blocked,
+    // conflicted, or never ran. 'offline' is an already-handled honest status.
+    const pushed = async () => {
+      let r; try { r = await push(); } catch (_) { r = 'error'; }
+      if (r !== 'ok') return 'offline';
+      markLinked(uid); return 'pushed';
+    };
+    if (remote === null || !remoteHasData(remote)) return pushed();
     const remoteNewer = newer(remote.updatedAt, getStamp(uid));
-    if (remoteNewer && isDirty(uid)) return 'conflict'; // both changed → ask
-    if (remoteNewer) {
+    // RECOVERY: this device has no user data but the cloud does. Timestamps alone
+    // would never trigger a pull here (a local reset/corrupt-load leaves a recent
+    // stamp), stranding the device empty next to a full backup. Pull it back.
+    const localEmpty = !localHasData();
+    if (remoteNewer && isDirty(uid) && !localEmpty) return 'conflict'; // both changed → ask
+    if (remoteNewer || localEmpty) {
       if (applyRemote(remote)) { setStamp(uid, remote.updatedAt); setVersion(uid, remote.version); setDirty(uid, false); markLinked(uid); return "pulled"; }
       return 'offline';
     }
-    await push().catch(() => {}); markLinked(uid); return 'pushed';
+    return pushed();
   }
 
   // ---- username (public unique handle) ------------------------------------
@@ -648,13 +698,29 @@
     const s = await getSession();
     const uid = s && s.user && s.user.id;
     if (!uid) throw new Error('not signed in');
-    // 1) Sweep the user's own image objects (owner RLS; best-effort).
-    try {
-      const { data: files } = await c.storage.from(IMAGE_BUCKET).list(uid, { limit: 1000 });
-      if (files && files.length) {
-        await c.storage.from(IMAGE_BUCKET).remove(files.map((f) => uid + '/' + f.name));
-      }
-    } catch (_) { /* best-effort — the account delete is what matters */ }
+    // 1) Sweep the user's own image objects (owner RLS).
+    //
+    // NOT best-effort any more. Storage objects are NOT covered by the account
+    // cascade, so swallowing a failure here deletes the account while leaving the
+    // user's photos sitting in the bucket — with the row that pointed at them
+    // gone, nothing will ever clean them up, and the user was told their data was
+    // erased. We retry once, then ABORT: the account still exists at this point,
+    // so aborting is recoverable (the user simply tries again) whereas proceeding
+    // is not.
+    let sweepErr = null;
+    for (let attempt = 0; attempt < 2; attempt++) {
+      try {
+        const { data: files, error: listErr } = await c.storage.from(IMAGE_BUCKET).list(uid, { limit: 1000 });
+        if (listErr) throw new Error(listErr.message);
+        if (files && files.length) {
+          const { error: rmErr } = await c.storage.from(IMAGE_BUCKET).remove(files.map((f) => uid + '/' + f.name));
+          if (rmErr) throw new Error(rmErr.message);
+        }
+        sweepErr = null;
+        break;
+      } catch (e) { sweepErr = e; }
+    }
+    if (sweepErr) throw new Error('could not remove your stored images — nothing was deleted, please try again');
     // 2) Delete the account + all data (cascades) via the definer RPC.
     const { error } = await c.rpc('delete_own_account');
     if (error) throw new Error(error.message || 'delete failed');

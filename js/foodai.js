@@ -484,6 +484,11 @@
         b.dataset.bound = '1';
         b.addEventListener('click', () => {
           (document.querySelectorAll(`#ai-results [data-add^="${b.dataset.addall}-"]`) || []).forEach((addBtn) => {
+            // Skip anything the user already added individually. markAdded()
+            // disables the per-item button, so `disabled` is the added marker —
+            // without this check, "Add all" logged those items a SECOND time and
+            // silently double-counted the day's calories.
+            if (addBtn.disabled) return;
             logItem(results[addBtn.dataset.add], cardMult(addBtn.closest('.ai-card')));
             markAdded(addBtn);
           });

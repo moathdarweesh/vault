@@ -7,7 +7,10 @@
     "dev": "node dev-server.js",
     "build:www": "node scripts/build-www.js",
     "sync": "npm run build:www && cap sync",
-    "android": "npm run build:www && cap sync android && cap open android"
+    "android": "npm run build:www && cap sync android && cap open android",
+    "release": "node scripts/release.js",
+    "release:check": "node scripts/release.js --check",
+    "hooks": "git config core.hooksPath .githooks"
   },
   "dependencies": {
     "@capacitor/android": "^8.4.1",

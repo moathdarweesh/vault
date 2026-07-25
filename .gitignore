@@ -26,3 +26,6 @@ android/app/release/
 
 # Distribution APK hosted on GitHub Pages (Drive-free install)
 !download/THE-VAULT.apk
+
+# Generated knowledge-graph output (14MB: graph.json/html + wiki). Regenerate with /graphify.
+graphify-out/

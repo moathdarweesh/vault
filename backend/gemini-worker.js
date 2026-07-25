@@ -154,23 +154,60 @@ const SUPABASE_URL = 'https://ilmusnuchqlpirywonzx.supabase.co';
 const SUPABASE_ANON = 'sb_publishable_ZBR2VENMP2O_K2YTMePCsw_NfLC9FSI';
 
 // Validate the caller's Supabase JWT by asking Supabase who it belongs to.
-// FAIL-SAFE: a MISSING token is rejected (blocks anonymous abuse), and an
-// explicitly INVALID token (401/403) is rejected — but ANY other outcome (network
-// error, unexpected status) FALLS OPEN and allows the request, so a transient
-// Supabase hiccup can never take AI down for real users.
+//
+// FAIL-SAFE, but no longer fail-OPEN on everything:
+//   - missing token                  → block (anonymous abuse)
+//   - ANY 4xx (401/403/400/422/429…) → block. Previously only 401/403 blocked and
+//     every other status fell through to "allow", so any 4xx Supabase might return
+//     for a malformed/garbage token silently authorised the caller.
+//   - 5xx or a network error         → allow. This is the case the fail-open was
+//     written for: a genuine Supabase outage must not take AI down for real users.
+//
+// Returns { allowed, userId } — the id is what the rate limiter below keys on, so
+// one authenticated account cannot drain the shared Gemini quota for everyone.
 async function callerAllowed(request) {
   const auth = request.headers.get('Authorization') || '';
   const token = auth.startsWith('Bearer ') ? auth.slice(7).trim() : '';
-  if (!token) return false;                     // no token → block (anonymous)
+  if (!token) return { allowed: false, userId: null };
   try {
     const r = await fetch(SUPABASE_URL + '/auth/v1/user', {
       headers: { Authorization: 'Bearer ' + token, apikey: SUPABASE_ANON },
     });
-    if (r.status === 401 || r.status === 403) return false; // confirmed invalid
-    return true;                                // 200 valid, or anything else → allow
+    if (r.status >= 400 && r.status < 500) return { allowed: false, userId: null };
+    if (r.ok) {
+      let userId = null;
+      try { const u = await r.json(); userId = (u && u.id) || null; } catch (_) {}
+      return { allowed: true, userId };
+    }
+    // 5xx → Supabase is unwell, not the caller. Allow, but rate limit by token so
+    // an outage window still cannot be used as an unlimited relay.
+    return { allowed: true, userId: 'tok:' + token.slice(-24) };
   } catch (_) {
-    return true;                               // verification unreachable → fail open
+    return { allowed: true, userId: 'tok:' + token.slice(-24) };  // unreachable → allow
   }
+}
+
+// Per-caller rate limit. Best-effort and dependency-free: the counter lives in the
+// Worker isolate, so it is per-PoP and resets on cold start — it will not stop a
+// determined distributed attacker, but it does stop the realistic case (one
+// account, scripted, looping) from draining the shared Gemini quota, and it costs
+// nothing and needs no KV binding or extra service.
+const RATE_MAX = 30;              // requests per window per caller
+const RATE_WINDOW_MS = 60 * 1000; // 1 minute
+const rateBuckets = new Map();
+function rateLimited(userId) {
+  if (!userId) return false;
+  const now = Date.now();
+  const b = rateBuckets.get(userId);
+  if (!b || now - b.start >= RATE_WINDOW_MS) {
+    rateBuckets.set(userId, { start: now, n: 1 });
+    if (rateBuckets.size > 5000) {   // bound memory on a long-lived isolate
+      for (const [k, v] of rateBuckets) if (now - v.start >= RATE_WINDOW_MS) rateBuckets.delete(k);
+    }
+    return false;
+  }
+  b.n += 1;
+  return b.n > RATE_MAX;
 }
 
 export default {
@@ -181,8 +218,11 @@ export default {
     if (request.method === 'OPTIONS') return new Response(null, { headers: corsHeaders(origin) });
     if (request.method !== 'POST') return json({ error: 'method not allowed' }, 405, origin);
 
-    // Require an authenticated caller (see callerAllowed — fail-safe).
-    if (!(await callerAllowed(request))) return json({ error: 'unauthorized' }, 401, origin);
+    // Require an authenticated caller (see callerAllowed — fail-safe), then cap
+    // how fast that caller may spend the shared Gemini quota.
+    const caller = await callerAllowed(request);
+    if (!caller.allowed) return json({ error: 'unauthorized' }, 401, origin);
+    if (rateLimited(caller.userId)) return json({ error: 'rate limited' }, 429, origin);
 
     const OK_MIME = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
     const OK_AUDIO = ['audio/webm', 'audio/mp4', 'audio/mpeg', 'audio/ogg', 'audio/wav', 'audio/aac', 'audio/m4a', 'audio/3gpp'];

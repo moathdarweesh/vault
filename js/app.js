@@ -2,10 +2,23 @@
 // THE VAULT - Main App
 // ==========================================================================
 
-// Single source of truth for the shipped build. Used by the visible build
-// label AND the feedback version tag so they can never drift apart. Keep this
-// equal to the ?v=N cache markers (see CLAUDE.md "CACHE WORKFLOW").
-const VAULT_BUILD = 'v188';
+// Single source of truth for the shipped build. Used by the visible build label
+// AND the feedback version tag so they can never drift apart.
+//
+// Derived from THIS script's own ?v=N when possible, so the label reports the
+// build the browser actually LOADED rather than a literal that a missed bump can
+// leave stale. That matters for bug reports: a user on a cached older bundle used
+// to report the version the source *claims*, sending you hunting in the wrong
+// build. The literal below is the fallback (file://, or a stripped query) and is
+// still bumped by `npm run release` — see CLAUDE.md "CACHE WORKFLOW".
+const VAULT_BUILD = (() => {
+  const FALLBACK = 'v189';
+  try {
+    const src = (document.currentScript && document.currentScript.src) || '';
+    const m = src.match(/[?&]v=(\d+)/);
+    return m ? 'v' + m[1] : FALLBACK;
+  } catch (_) { return FALLBACK; }
+})();
 
 // ==========================================================================
 // Icons
@@ -756,6 +769,10 @@ const I18N = {
     theme_frost: 'Frost', theme_frost_sub: 'Cool sky',
     theme_dusk: 'Dusk', theme_dusk_sub: 'Muted plum',
     export_data: 'Export Data', export_data_sub: 'Download a JSON backup',
+    storage_error_title: 'Your data could not be saved',
+    storage_full_text: 'This device has run out of storage space, so new entries are NOT being saved. Export a backup now, then free up space (removing custom exercise photos helps most — they are already backed up to your account).',
+    storage_write_failed_text: 'Writing to this device failed, so new entries are NOT being saved. Export a backup now to be safe.',
+    storage_unreadable_text: 'The data stored on this device could not be read, so the app is running in read-only mode to protect it. Nothing has been deleted. Sign in to restore from your account, or contact support before making changes.',
     import_data: 'Import Data', import_data_sub: 'Restore from a JSON backup',
     health_section: 'Health Connect',
     health_connect: 'Sync from Health Connect',
@@ -802,6 +819,8 @@ const I18N = {
     rotation_preview: 'Next 7 days',
     move_up: 'Move up',
     move_down: 'Move down',
+    prev_month: 'Previous month',
+    next_month: 'Next month',
     exercise_order: 'Exercise order',
     edit_workout: 'Edit workout',
     workout_name_ph: 'Workout name (e.g. Push)',
@@ -1344,6 +1363,10 @@ const I18N = {
     theme_frost: 'Frost', theme_frost_sub: 'سماء باردة',
     theme_dusk: 'Dusk', theme_dusk_sub: 'برقوقي هادئ',
     export_data: 'تصدير البيانات', export_data_sub: 'تنزيل نسخة JSON احتياطية',
+    storage_error_title: 'تعذّر حفظ بياناتك',
+    storage_full_text: 'نفدت مساحة التخزين في هذا الجهاز، لذلك لا يتم حفظ الإدخالات الجديدة. صدّر نسخة احتياطية الآن، ثم فرّغ بعض المساحة (حذف صور التمارين المخصّصة هو الأجدى — فهي محفوظة أصلاً في حسابك).',
+    storage_write_failed_text: 'فشلت الكتابة على هذا الجهاز، لذلك لا يتم حفظ الإدخالات الجديدة. صدّر نسخة احتياطية الآن للأمان.',
+    storage_unreadable_text: 'تعذّرت قراءة البيانات المخزّنة على هذا الجهاز، لذلك يعمل التطبيق بوضع القراءة فقط لحمايتها. لم يُحذف أي شيء. سجّل الدخول لاستعادة بياناتك من حسابك، أو تواصل مع الدعم قبل إجراء أي تعديل.',
     import_data: 'استيراد البيانات', import_data_sub: 'استرجاع من نسخة JSON',
     health_section: 'هيلث كونيكت',
     health_connect: 'مزامنة من Health Connect',
@@ -1390,6 +1413,8 @@ const I18N = {
     rotation_preview: 'الأيام السبعة القادمة',
     move_up: 'تحريك لأعلى',
     move_down: 'تحريك لأسفل',
+    prev_month: 'الشهر السابق',
+    next_month: 'الشهر التالي',
     exercise_order: 'ترتيب التمارين',
     edit_workout: 'تعديل التمرين',
     workout_name_ph: 'اسم التمرين (مثال: دفع)',
@@ -1755,13 +1780,45 @@ function openModal(innerHtml, { variant = 'sheet' } = {}) {
     if (!el.getAttribute('aria-label')) el.setAttribute('aria-label', t('close'));
     el.addEventListener('click', () => closeModal());
   });
+  // Remember what had focus so we can hand it back on close — otherwise closing a
+  // dialog drops focus to <body> and a keyboard/screen-reader user is dumped at
+  // the top of the page, losing their place in the list they were working through.
+  __modalReturnFocus = (document.activeElement instanceof HTMLElement) ? document.activeElement : null;
+
   // Move focus into the dialog so keyboard/SR users start inside it (unless a
   // field inside will self-focus via autofocus).
   if (!overlay.querySelector('[autofocus]')) overlay.querySelector('.modal, .confirm-dialog')?.focus();
+
+  // FOCUS TRAP: keep Tab inside the dialog. Without this, tabbing past the last
+  // control walks into the page BEHIND the modal — which is still fully
+  // interactive — so a keyboard user can silently operate the obscured screen.
+  const FOCUSABLE = 'a[href],button:not([disabled]),input:not([disabled]),select:not([disabled]),textarea:not([disabled]),[tabindex]:not([tabindex="-1"])';
+  __modalKeydown = (e) => {
+    if (e.key === 'Escape') { e.preventDefault(); closeModal(); return; }
+    if (e.key !== 'Tab') return;
+    const items = [...overlay.querySelectorAll(FOCUSABLE)].filter((n) => n.offsetParent !== null);
+    if (!items.length) return;
+    const first = items[0], last = items[items.length - 1];
+    if (e.shiftKey && (document.activeElement === first || !overlay.contains(document.activeElement))) {
+      e.preventDefault(); last.focus();
+    } else if (!e.shiftKey && document.activeElement === last) {
+      e.preventDefault(); first.focus();
+    }
+  };
+  document.addEventListener('keydown', __modalKeydown, true);
   return overlay;
 }
 
-function closeModal() { $('#modal-root').innerHTML = ''; }
+let __modalReturnFocus = null;
+let __modalKeydown = null;
+
+function closeModal() {
+  if (__modalKeydown) { document.removeEventListener('keydown', __modalKeydown, true); __modalKeydown = null; }
+  $('#modal-root').innerHTML = '';
+  // Hand focus back to whatever opened the dialog.
+  try { if (__modalReturnFocus && document.contains(__modalReturnFocus)) __modalReturnFocus.focus(); } catch (_) {}
+  __modalReturnFocus = null;
+}
 
 function confirmDialog({ title, text, onConfirm, confirmLabel, variant = 'danger' }) {
   if (!confirmLabel) confirmLabel = t('delete');
@@ -1846,8 +1903,22 @@ function navigate(view, context = {}, opts = {}) {
 
   // Record the step for the back button — unless we got here BY going back.
   if (!opts.fromPop) {
-    navStack.push({ view, context });
-    try { history.pushState({ depth: navStack.length }, ''); } catch (_) {}
+    // Don't stack a duplicate of the screen we're already on. Tapping the bottom
+    // nav re-navigates with an EMPTY context, so tab-hopping (Train → Food → Home
+    // → Food …) used to push an entry every time — turning the Android hardware
+    // back button into a dozens-of-presses walk before the app would exit, and
+    // pinning every visited view's context (including whole session runState
+    // objects) in memory for the life of the process.
+    const top = navStack[navStack.length - 1];
+    const isDupRoot = top && top.view === view && Object.keys(context || {}).length === 0
+      && Object.keys(top.context || {}).length === 0;
+    if (!isDupRoot) {
+      navStack.push({ view, context });
+      // Hard cap: a pathological session can't grow this without bound. Keep the
+      // root entry so goBack() can still reach home.
+      if (navStack.length > 40) navStack.splice(1, navStack.length - 40);
+      try { history.pushState({ depth: navStack.length }, ''); } catch (_) {}
+    }
   }
 }
 
@@ -1885,6 +1956,59 @@ window.addEventListener('popstate', () => {
 // backup is intact instead of leaving the divergence silent.
 window.addEventListener('vault:push-blocked', () => {
   try { showToast(t('cloud_backup_kept')); } catch (_) {}
+});
+
+// Download the whole store as a JSON backup. Extracted from the Settings button
+// so the storage-failure dialog can offer it too — that is the one moment the
+// user most needs a copy off this device.
+function exportBackupFile() {
+  const json = DB.exportJSON();
+  const blob = new Blob([json], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  const stamp = todayISO();  // local date — toISOString() would name the file with yesterday's date after ~21:00 in UTC+3
+  a.href = url;
+  a.download = `vault-backup-${stamp}.json`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+  showToast(t('export_data'));
+}
+
+// A write to localStorage failed — storage full, or the store is unreadable and
+// we are deliberately running READ-ONLY. Either way the user MUST be told: the
+// silent version of this looks like a working app that saves nothing, and every
+// set logged afterwards is lost on reload.
+let __storageAlerted = false;
+window.addEventListener('vault:save-failed', (e) => {
+  if (__storageAlerted) return;      // one alert per session, not one per keystroke
+  __storageAlerted = true;
+  const quota = !!(e && e.detail && e.detail.quota);
+  try {
+    confirmDialog({
+      title: t('storage_error_title'),
+      text: quota ? t('storage_full_text') : t('storage_write_failed_text'),
+      confirmLabel: t('export_data'),
+      variant: 'danger',
+      onConfirm: () => { try { exportBackupFile(); } catch (_) {} },
+    });
+  } catch (_) {
+    try { showToast(t('storage_error_title')); } catch (__) {}
+  }
+});
+window.addEventListener('vault:load-failed', () => {
+  if (__storageAlerted) return;
+  __storageAlerted = true;
+  try {
+    confirmDialog({
+      title: t('storage_error_title'),
+      text: t('storage_unreadable_text'),
+      confirmLabel: t('close'),
+      variant: 'danger',
+      onConfirm: () => {},
+    });
+  } catch (_) {}
 });
 
 // Android hardware back button via the @capacitor/app plugin → same goBack(),
@@ -2701,9 +2825,22 @@ function exerciseImgSrc(ex) {
 // the base64 is already saved locally, so a failure here costs nothing and the
 // login pass (syncExerciseImages) retries it.
 function backupExerciseImageFor(exerciseId, dataUrl) {
-  if (!exerciseId || !dataUrl) return;
-  if (!/^data:image\//i.test(String(dataUrl))) return; // nothing new to upload
+  if (!exerciseId) return;
   if (!window.Cloud || !Cloud.backupExerciseImage) return;
+  // REMOVAL: the user cleared the photo. Clearing only the local base64 is not
+  // enough — syncExerciseImages() treats "no customImage but an imagePath" as a
+  // LOST image and restores it from the bucket, so the deleted photo reappears on
+  // the next boot. Drop the pointer (and the stored object) so the delete sticks.
+  if (!dataUrl) {
+    const ex = DB.exercises.getById(exerciseId);
+    if (!ex || !ex.imagePath) return;
+    DB.exercises.update(exerciseId, { imagePath: null });
+    try {
+      if (Cloud.removeExerciseImage) Cloud.removeExerciseImage(ex.imagePath).catch(() => {});
+    } catch (_) {}
+    return;
+  }
+  if (!/^data:image\//i.test(String(dataUrl))) return; // nothing new to upload
   Cloud.backupExerciseImage(exerciseId, dataUrl)
     .then((path) => { if (path) DB.exercises.update(exerciseId, { imagePath: path }); })
     .catch(() => {});
@@ -2941,7 +3078,7 @@ function renderLibrary(el) {
     `
     : `
       <div class="detail-top">
-        <button class="back-btn" data-goto="workouts">${icon('back', 20)}</button>
+        <button class="back-btn" data-goto="workouts" aria-label="${escapeHtml(t('back'))}">${icon('back', 20)}</button>
         <div class="detail-top-title">${t('library_title')}</div>
       </div>
     `;
@@ -3336,8 +3473,8 @@ function renderExerciseDetail(el, exerciseId) {
         </div>
         ${setsHtml}
         <div class="session-actions">
-          <button class="icon-btn" data-edit-session="${escapeHtml(s.id)}">${icon('edit', 16)}</button>
-          <button class="icon-btn danger" data-delete-session="${escapeHtml(s.id)}">${icon('trash', 16)}</button>
+          <button class="icon-btn" data-edit-session="${escapeHtml(s.id)}" aria-label="${escapeHtml(t('edit'))}">${icon('edit', 16)}</button>
+          <button class="icon-btn danger" data-delete-session="${escapeHtml(s.id)}" aria-label="${escapeHtml(t('delete'))}">${icon('trash', 16)}</button>
         </div>
       </div>
     `;
@@ -3345,10 +3482,10 @@ function renderExerciseDetail(el, exerciseId) {
 
   el.innerHTML = `
     <div class="detail-top">
-      <button class="back-btn" data-back>${icon('back', 20)}</button>
+      <button class="back-btn" data-back aria-label="${escapeHtml(t('back'))}">${icon('back', 20)}</button>
       <div class="detail-top-title">${escapeHtml(exDisplayName(ex))}</div>
       ${ex.isCustom ? `<button class="icon-btn icon-btn-tile" id="edit-exercise-btn" aria-label="${escapeHtml(t('edit'))}">${icon('edit', 16)}</button>
-      <button class="icon-btn icon-btn-tile danger" id="delete-exercise-btn">${icon('trash', 16)}</button>` : ''}
+      <button class="icon-btn icon-btn-tile danger" id="delete-exercise-btn" aria-label="${escapeHtml(t('delete'))}">${icon('trash', 16)}</button>` : ''}
     </div>
 
     ${heroHtml}
@@ -3475,7 +3612,7 @@ function openSessionModal(exerciseId, sessionId = null) {
         <div class="set-edit-n num">${i + 1}</div>
         <input type="number" inputmode="numeric" step="1" min="0" placeholder="0" value="${s.reps || ''}" data-field="reps">
         <input type="number" inputmode="decimal" step="0.5" min="0" placeholder="0" value="${wDisplay || ''}" data-field="weight">
-        <button type="button" class="set-remove" data-remove-set="${i}">${icon('close', 16)}</button>
+        <button type="button" class="set-remove" data-remove-set="${i}" aria-label="${escapeHtml(t('delete'))}">${icon('close', 16)}</button>
       </div>
       `;
     }).join('');
@@ -3638,8 +3775,8 @@ function renderCardio(el) {
           </div>
         </div>
         <div class="data-actions">
-          <button class="icon-btn" data-edit-cardio="${escapeHtml(c.id)}">${icon('edit', 15)}</button>
-          <button class="icon-btn danger" data-delete-cardio="${escapeHtml(c.id)}">${icon('trash', 15)}</button>
+          <button class="icon-btn" data-edit-cardio="${escapeHtml(c.id)}" aria-label="${escapeHtml(t('edit'))}">${icon('edit', 15)}</button>
+          <button class="icon-btn danger" data-delete-cardio="${escapeHtml(c.id)}" aria-label="${escapeHtml(t('delete'))}">${icon('trash', 15)}</button>
         </div>
       </div>
     `;
@@ -3818,7 +3955,7 @@ function openNewCardioTypeModal(onCreated) {
           <div class="modal-title">${t('new_cardio_type')}</div>
           <div class="modal-subtitle">${t('new_cardio_type_sub')}</div>
         </div>
-        <button class="icon-btn icon-btn-tile" data-cardio-type-cancel>${icon('close', 18)}</button>
+        <button class="icon-btn icon-btn-tile" data-cardio-type-cancel aria-label="${escapeHtml(t('cancel'))}">${icon('close', 18)}</button>
       </div>
 
       <div class="form-group">
@@ -4792,16 +4929,24 @@ function openVoiceCapture(date, onSave) {
       const v = card.querySelector('.ai-portion-val .num');
       if (v) v.textContent = fmtNum(mult);
     };
-    results.addEventListener('click', (e) => {
-      const btn = e.target.closest('.ai-portion-btn');
-      if (!btn) return;
-      const card = btn.closest('.ai-card');
-      if (!card) return;
-      let mult = (parseFloat(card.dataset.mult) || 1) + (parseInt(btn.dataset.step, 10) || 0) * 0.25;
-      mult = Math.max(0.25, Math.min(20, Math.round(mult * 100) / 100));
-      card.dataset.mult = mult;
-      applyPortion(card);
-    });
+    // Bind the portion delegate ONCE. `results` (#voice-results) is a persistent
+    // node — only its innerHTML is replaced — so re-recording used to stack a
+    // second, third… listener on the same element, and one tap on +/− then moved
+    // the portion by 0.25 × (number of recordings). It reads only DOM state, so a
+    // single delegated listener serves every re-render.
+    if (!results.dataset.portionBound) {
+      results.dataset.portionBound = '1';
+      results.addEventListener('click', (e) => {
+        const btn = e.target.closest('.ai-portion-btn');
+        if (!btn) return;
+        const card = btn.closest('.ai-card');
+        if (!card) return;
+        let mult = (parseFloat(card.dataset.mult) || 1) + (parseInt(btn.dataset.step, 10) || 0) * 0.25;
+        mult = Math.max(0.25, Math.min(20, Math.round(mult * 100) / 100));
+        card.dataset.mult = mult;
+        applyPortion(card);
+      });
+    }
 
     results.querySelector('#voice-addall').addEventListener('click', () => {
       const scaled = items.map((it, i) => {
@@ -5107,8 +5252,8 @@ function renderSleep(el) {
       </div>
       <div class="data-value num">${formatDuration(s.durationMinutes)}</div>
       <div class="data-actions">
-        <button class="icon-btn" data-edit-sleep="${escapeHtml(s.id)}">${icon('edit', 15)}</button>
-        <button class="icon-btn danger" data-delete-sleep="${escapeHtml(s.id)}">${icon('trash', 15)}</button>
+        <button class="icon-btn" data-edit-sleep="${escapeHtml(s.id)}" aria-label="${escapeHtml(t('edit'))}">${icon('edit', 15)}</button>
+        <button class="icon-btn danger" data-delete-sleep="${escapeHtml(s.id)}" aria-label="${escapeHtml(t('delete'))}">${icon('trash', 15)}</button>
       </div>
     </div>
   `).join('');
@@ -5262,7 +5407,7 @@ function renderCompare(el) {
 
   el.innerHTML = `
     <div class="detail-top">
-      <button class="back-btn" data-goto="home">${icon('back', 20)}</button>
+      <button class="back-btn" data-goto="home" aria-label="${escapeHtml(t('back'))}">${icon('back', 20)}</button>
       <div class="detail-top-title">${t('compare_title')}</div>
     </div>
 
@@ -5487,7 +5632,7 @@ function renderSettings(el) {
 
   el.innerHTML = `
     <div class="detail-top">
-      <button class="back-btn" data-goto="home">${icon('back', 20)}</button>
+      <button class="back-btn" data-goto="home" aria-label="${escapeHtml(t('back'))}">${icon('back', 20)}</button>
       <div class="detail-top-title">${t('settings_title')}</div>
     </div>
 
@@ -5648,20 +5793,7 @@ function renderSettings(el) {
   $('#feedback-btn', el)?.addEventListener('click', showFeedback);
 
   // Export
-  $('#export-btn', el).addEventListener('click', () => {
-    const json = DB.exportJSON();
-    const blob = new Blob([json], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    const stamp = todayISO();  // local date — toISOString() would name the file with yesterday's date after ~21:00 in UTC+3
-    a.href = url;
-    a.download = `vault-backup-${stamp}.json`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
-    showToast(t('export_data'));
-  });
+  $('#export-btn', el).addEventListener('click', () => { exportBackupFile(); });
 
   // Import
   $('#import-btn', el).addEventListener('click', () => {
@@ -5873,7 +6005,7 @@ function renderPlanner(el) {
 
   el.innerHTML = `
     <div class="detail-top">
-      <button class="back-btn" data-goto="home">${icon('back', 20)}</button>
+      <button class="back-btn" data-goto="home" aria-label="${escapeHtml(t('back'))}">${icon('back', 20)}</button>
       <div class="detail-top-title">${t('planner_title')}</div>
     </div>
 
@@ -5884,7 +6016,7 @@ function renderPlanner(el) {
 
     <div style="display:flex;gap:8px;margin-bottom:16px">
       <button class="btn btn-primary" id="apply-template-btn" style="flex:1">${icon('plus', 16)} ${t('apply_template')}</button>
-      ${cycle.length ? `<button class="btn btn-ghost" id="clear-plan-btn">${icon('trash', 16)}</button>` : ''}
+      ${cycle.length ? `<button class="btn btn-ghost" id="clear-plan-btn" aria-label="${escapeHtml(t('clear_plan'))}">${icon('trash', 16)}</button>` : ''}
     </div>
 
     <div class="rot-section">
@@ -6383,7 +6515,7 @@ function renderSessionDay(el) {
           <div class="sd-set-n num">${i + 1}</div>
           <input type="number" inputmode="numeric" step="1" min="0" placeholder="0" value="${s.reps || ''}" data-field="reps" aria-label="${t('reps')}">
           <input type="number" inputmode="decimal" step="0.5" min="0" placeholder="0" value="${wDisplay || ''}" data-field="weight" aria-label="${viewContext.sdUnit}">
-          <button type="button" class="sd-set-remove" data-remove-set>${icon('close', 14)}</button>
+          <button type="button" class="sd-set-remove" data-remove-set aria-label="${escapeHtml(t('delete'))}">${icon('close', 14)}</button>
         </div>
       `;
     }).join('');
@@ -6625,7 +6757,12 @@ const REST_DEFAULT_SEC = 90;
 let __restTimer = null;
 let __restAudioCtx = null;   // created/unlocked on the "done" tap (a user gesture)
 function clearRestTimer() {
-  if (__restTimer) { clearInterval(__restTimer.id); __restTimer = null; }
+  if (__restTimer) {
+    clearInterval(__restTimer.id);
+    // Drop the wake listener too — otherwise every rest period leaves one behind.
+    if (__restTimer.onWake) document.removeEventListener('visibilitychange', __restTimer.onWake);
+    __restTimer = null;
+  }
   document.querySelector('.rest-timer')?.remove();
   document.body.classList.remove('rest-active');
 }
@@ -6658,8 +6795,16 @@ function startRestTimer(seconds) {
     const AC = window.AudioContext || window.webkitAudioContext;
     if (AC) { if (!__restAudioCtx) __restAudioCtx = new AC(); if (__restAudioCtx.state === 'suspended') __restAudioCtx.resume(); }
   } catch (_) {}
-  let remaining = Math.max(1, Math.round(seconds));
+  // WALL-CLOCK anchored. This used to decrement a counter once per setInterval
+  // tick, but a phone that locks or backgrounds the tab throttles/suspends timers
+  // — so the rest countdown effectively PAUSED in your pocket and you came back
+  // to "1:12 remaining" after resting three minutes. Deriving `remaining` from a
+  // real end timestamp makes the display correct the instant the screen wakes,
+  // and lets us fire the end-of-rest alert immediately on resume.
+  let endAt = Date.now() + Math.max(1, Math.round(seconds)) * 1000;
+  const left = () => Math.max(0, Math.round((endAt - Date.now()) / 1000));
   const fmt = (s) => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
+  let remaining = left();
   const bar = document.createElement('div');
   bar.className = 'rest-timer';
   bar.setAttribute('role', 'timer');
@@ -6677,22 +6822,27 @@ function startRestTimer(seconds) {
   // can clear above the floating timer instead of hiding under it.
   document.body.classList.add('rest-active');
   const countEl = bar.querySelector('.rest-timer-count');
-  const id = setInterval(() => {
-    remaining -= 1;
-    if (remaining <= 0) {
-      clearRestTimer();
-      try { if (navigator.vibrate) navigator.vibrate([200, 100, 200]); } catch (_) {}
-      playRestBeep();
-      return;
-    }
+  const finish = () => {
+    clearRestTimer();
+    try { if (navigator.vibrate) navigator.vibrate([200, 100, 200]); } catch (_) {}
+    playRestBeep();
+  };
+  const tick = () => {
+    remaining = left();
+    if (remaining <= 0) { finish(); return; }
     countEl.textContent = fmt(remaining);
-  }, 1000);
-  __restTimer = { id };
+  };
+  const id = setInterval(tick, 250);   // re-derive often so a wake looks instant
+  // Recompute the moment the screen comes back, so a rest that expired while the
+  // phone was locked reports done immediately instead of on the next tick.
+  const onWake = () => { if (document.visibilityState === 'visible') tick(); };
+  document.addEventListener('visibilitychange', onWake);
+  __restTimer = { id, onWake };
   bar.querySelector('[data-rest-minus]').addEventListener('click', () => {
-    remaining = Math.max(1, remaining - 15); countEl.textContent = fmt(remaining);
+    endAt = Math.max(Date.now() + 1000, endAt - 15000); tick();
   });
   bar.querySelector('[data-rest-plus]').addEventListener('click', () => {
-    remaining += 15; countEl.textContent = fmt(remaining);
+    endAt += 15000; tick();
   });
   bar.querySelector('[data-rest-skip]').addEventListener('click', () => clearRestTimer());
 }
@@ -6759,12 +6909,24 @@ function renderSessionRun(el) {
       const existing = DB.sessions.listByExercise(exId).find((s) => s.date === viewContext.runDate);
       if (existing) existingId = existing.id;
     }
+    // Snapshot the personal best BEFORE writing — the other two logging paths
+    // (openSessionModal, renderSessionDay) both do this, but guided mode never
+    // did, so a PR set here was stored yet never celebrated. Must be taken before
+    // the write, or the new set is already inside the "previous" best.
+    const prior = DB.sessions.prSnapshot(exId);
     if (existingId && DB.sessions.update(existingId, { date: viewContext.runDate, sets: cleaned })) {
       st.savedSessionId = existingId;
     } else {
       const created = DB.sessions.add({ exerciseId: exId, date: viewContext.runDate, sets: cleaned });
       st.savedSessionId = created.id;
     }
+    // Stash rather than toast: a mid-workout toast would fight the rest-timer bar
+    // (and [data-next] dismisses toasts on the way out). The summary screen shows
+    // it once the workout is done.
+    try {
+      const msg = checkPR(exId, prior, cleaned);
+      if (msg) st.prMsg = msg;
+    } catch (_) {}
     return true;
   }
 
@@ -6803,10 +6965,13 @@ function renderSessionRun(el) {
       const setsStr = done
         .map((s) => `${fmtNum(s.reps)}×${fmtNum(convDisplay(s.weight))}`)
         .join('  ·  ');
+      // Any personal best set during this run (stashed by commitExercise).
+      const pr = st.prMsg ? `<div class="run-sum-pr">${escapeHtml(st.prMsg)}</div>` : '';
       return `
         <div class="run-sum-ex">
           <div class="run-sum-name">${escapeHtml(exDisplayName(ex))}</div>
           <div class="run-sum-sets num">${setsStr} <span class="run-sum-unit">${viewContext.runUnit.toUpperCase()}</span></div>
+          ${pr}
         </div>`;
     }).join('');
 
@@ -7095,7 +7260,7 @@ function renderCalendar(el) {
 
   el.innerHTML = `
     <div class="detail-top">
-      <button class="back-btn" data-goto="home">${icon('back', 20)}</button>
+      <button class="back-btn" data-goto="home" aria-label="${escapeHtml(t('back'))}">${icon('back', 20)}</button>
       <div class="detail-top-title">${t('calendar_title')}</div>
     </div>
 
@@ -7105,9 +7270,9 @@ function renderCalendar(el) {
     </div>
 
     <div class="calendar-head">
-      <button class="calendar-nav-btn" id="cal-prev">${icon('back', 18)}</button>
+      <button class="calendar-nav-btn" id="cal-prev" aria-label="${escapeHtml(t('prev_month'))}">${icon('back', 18)}</button>
       <div class="calendar-month-label" id="cal-month-label">${escapeHtml(monthLabel)}</div>
-      <button class="calendar-nav-btn" id="cal-next">${icon('chevronRight', 18)}</button>
+      <button class="calendar-nav-btn" id="cal-next" aria-label="${escapeHtml(t('next_month'))}">${icon('chevronRight', 18)}</button>
     </div>
 
     <div class="calendar-dow-row">${dowLabels}</div>
@@ -7255,7 +7420,7 @@ function renderSupplements(el) {
           ${icon(taken ? 'check' : 'plus', 22)}
         </button>
         <div class="data-actions">
-          <button class="icon-btn" data-edit-supp="${s.id}">${icon('edit', 15)}</button>
+          <button class="icon-btn" data-edit-supp="${s.id}" aria-label="${escapeHtml(t('edit'))}">${icon('edit', 15)}</button>
         </div>
       </div>
     `;
@@ -7265,7 +7430,7 @@ function renderSupplements(el) {
 
   el.innerHTML = `
     <div class="detail-top">
-      <button class="back-btn" data-goto="home">${icon('back', 20)}</button>
+      <button class="back-btn" data-goto="home" aria-label="${escapeHtml(t('back'))}">${icon('back', 20)}</button>
       <div class="detail-top-title">${t('supplements_title')}</div>
     </div>
 
@@ -7369,7 +7534,7 @@ function openSupplementModal(id = null) {
     </div>
 
     <div class="form-actions">
-      ${existing ? `<button type="button" class="btn btn-danger" id="supp-delete">${icon('trash', 14)}</button>` : ''}
+      ${existing ? `<button type="button" class="btn btn-danger" id="supp-delete" aria-label="${escapeHtml(t('delete'))}">${icon('trash', 14)}</button>` : ''}
       <button type="button" class="btn btn-ghost" data-close>${t('cancel')}</button>
       <button type="button" class="btn btn-primary" id="supp-save">${existing ? t('update') : t('save')}</button>
     </div>
@@ -7447,7 +7612,7 @@ function renderFoodLog(el) {
             ${e.fat ? `<span class="dot-sep"></span><span><span class="num">${fmtNum(Math.round(e.fat * m * 10) / 10)}</span>g ${t('fat_label')}</span>` : ''}
           </div>
         </div>
-        <button class="icon-btn danger" data-del-food="${escapeHtml(e.id)}">${icon('trash', 15)}</button>
+        <button class="icon-btn danger" data-del-food="${escapeHtml(e.id)}" aria-label="${escapeHtml(t('delete'))}">${icon('trash', 15)}</button>
       </div>
     `;
   }
@@ -7455,14 +7620,17 @@ function renderFoodLog(el) {
 
   el.innerHTML = `
     <div class="detail-top">
-      <button class="back-btn" data-goto="food">${icon('back', 20)}</button>
+      <button class="back-btn" data-goto="food" aria-label="${escapeHtml(t('back'))}">${icon('back', 20)}</button>
       <div class="detail-top-title">${t('food_log_title')}</div>
     </div>
 
     <div class="day-nav">
-      <button class="calendar-nav-btn" id="day-prev" aria-label="${t('prev_day')}">${icon('chevronRight', 18)}</button>
+      <!-- prev = back(◀), next = chevronRight(▶). These were swapped, so in
+           English the "previous day" button pointed forwards. RTL is handled in
+           CSS (body[dir="rtl"] .calendar-nav-btn svg), not by swapping icons. -->
+      <button class="calendar-nav-btn" id="day-prev" aria-label="${t('prev_day')}">${icon('back', 18)}</button>
       <div class="day-nav-label">${escapeHtml(dayLabel)}</div>
-      <button class="calendar-nav-btn" id="day-next" aria-label="${t('next_day')}" ${isToday ? 'disabled style="opacity:0.4"' : ''}>${icon('back', 18)}</button>
+      <button class="calendar-nav-btn" id="day-next" aria-label="${t('next_day')}" ${isToday ? 'disabled style="opacity:0.4"' : ''}>${icon('chevronRight', 18)}</button>
     </div>
 
     <div class="macro-totals">
@@ -8056,9 +8224,14 @@ async function populateAccount(el) {
     $('#sync-now-btn', el)?.addEventListener('click', async () => {
       showToast(t('auth_signing'));
       try {
+        // Report what ACTUALLY happened. This used to say "Synced" for every
+        // outcome — including a failed/offline push and an unresolved conflict —
+        // so the user was told their data was safe when it was still only local.
         const r = await Cloud.bootSync();
-        if (r === 'pulled') refreshAfterSync();
-        showToast(t('synced'));
+        if (r === 'pulled') { refreshAfterSync(); showToast(t('synced')); }
+        else if (r === 'pushed') showToast(t('synced'));
+        else if (r === 'conflict') showConflictDialog();
+        else showToast(t('auth_err_network'));   // 'offline' / anything else
       } catch (_) { showToast(t('auth_err_network')); }
     });
     $('#logout-btn', el)?.addEventListener('click', () => {
@@ -8068,8 +8241,12 @@ async function populateAccount(el) {
           // Push local data to the cloud FIRST, and only clear this device if it
           // is safely uploaded — otherwise logging out could lose unsynced
           // sessions. If the push fails/offline, keep the local data intact.
+          // FAIL CLOSED: only the explicit 'ok' from push() means "this device's
+          // data is in the cloud". Anything else — 'nosession' (offline/expired
+          // token), 'blocked', 'conflict', or a throw — means the local data was
+          // NOT uploaded, so we must keep it rather than clear it.
           let safe = false;
-          try { const r = await Cloud.push(); safe = (r !== 'blocked' && r !== 'conflict'); } catch (_) { safe = false; }
+          try { safe = (await Cloud.push()) === 'ok'; } catch (_) { safe = false; }
           try { await Cloud.signOut(); } catch (_) {}
           if (safe) { try { Cloud.clearLocalUserData(); } catch (_) {} }
           location.reload();
@@ -8121,7 +8298,7 @@ function renderCustomExercises(el) {
 
   el.innerHTML = `
     <div class="detail-top">
-      <button class="back-btn" data-goto="workouts">${icon('back', 20)}</button>
+      <button class="back-btn" data-goto="workouts" aria-label="${escapeHtml(t('back'))}">${icon('back', 20)}</button>
       <div class="detail-top-title">${t('my_exercises_short')}</div>
     </div>
 
@@ -8604,9 +8781,25 @@ function showOnboarding() {
   // refresh without a full restart: pull admin content again (so a freshly
   // activated announcement appears) and re-check for a newer web build (shows a
   // tap-to-update banner). Both are best-effort and no-op when nothing changed.
+  // Views that derive their date from "now" at RENDER time. If the app sits open
+  // across midnight (the common case: left open overnight, opened at the gym next
+  // morning) they keep showing — and logging to — YESTERDAY until something forces
+  // a re-render. Views with a user-CHOSEN date (session-day, session-run) are
+  // deliberately excluded: their date is an explicit choice, not "today".
+  const DATE_DERIVED_VIEWS = ['home', 'food', 'foodlog'];
+  let __lastActiveDay = todayISO();
+
   document.addEventListener('visibilitychange', () => {
     if (document.visibilityState !== 'visible') return;
     try { bootCatalog(); } catch (_) {}
     try { if (window.VaultUpdate && VaultUpdate.checkWeb) VaultUpdate.checkWeb(); } catch (_) {}
+    // Re-resolve the calendar day on every foreground.
+    try {
+      const now = todayISO();
+      if (now !== __lastActiveDay) {
+        __lastActiveDay = now;
+        if (DATE_DERIVED_VIEWS.indexOf(currentView) !== -1) renderView(currentView);
+      }
+    } catch (_) {}
   });
 })();

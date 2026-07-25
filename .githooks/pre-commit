@@ -1,0 +1,5 @@
+#!/bin/sh
+# Refuse a commit that ships app code without bumping the cache-busting version.
+# Enable with:  git config core.hooksPath .githooks
+# Bypass once:  SKIP_RELEASE_CHECK=1 git commit ...
+node scripts/check-release.js || exit 1

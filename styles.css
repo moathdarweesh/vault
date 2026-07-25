@@ -26,6 +26,7 @@
   --text-mute:   #a3a3a3;
   --text-dim:    #8c8c8c;
   --text-faint:  #7a7a7a;
+  --text-ghost:  #7e7e7e;
 
   --accent:      #5b8def;
   --accent-2:    #3f6fd1;
@@ -153,8 +154,9 @@ body.theme-light {
 
   --text:        #0f172a;
   --text-mute:   #475569;
-  --text-dim:    #94a3b8;
+  --text-dim:    #656f7d;
   --text-faint:  #cbd5e1;
+  --text-ghost:  #6a6f75;
 
   --accent:      #0d9488;
   --accent-2:    #0f766e;
@@ -192,8 +194,9 @@ body.theme-forest {
 
   --text:        #e6f3ea;
   --text-mute:   #92ae9b;
-  --text-dim:    #5e7e69;
+  --text-dim:    #88a090;
   --text-faint:  #3a533f;
+  --text-ghost:  #8f9d92;
 
   --accent:      #86efac;
   --accent-2:    #4ade80;
@@ -227,8 +230,9 @@ body.theme-ocean {
 
   --text:        #e8f1f9;
   --text-mute:   #97aabe;
-  --text-dim:    #647994;
+  --text-dim:    #8898ad;
   --text-faint:  #3f5470;
+  --text-ghost:  #8c98a9;
 
   --accent:      #38bdf8;
   --accent-2:    #0ea5e9;
@@ -263,8 +267,9 @@ body.theme-sand {
 
   --text:        #3d2c18;
   --text-mute:   #715846;
-  --text-dim:    #9c8772;
+  --text-dim:    #786858;
   --text-faint:  #c8b497;
+  --text-ghost:  #746858;
 
   --accent:      #c2410c;
   --accent-2:    #9a330a;
@@ -299,8 +304,9 @@ body.theme-mocha {
 
   --text:        #f3e6d2;
   --text-mute:   #b29c83;
-  --text-dim:    #7e6a55;
+  --text-dim:    #9d8e7e;
   --text-faint:  #4d3f33;
+  --text-ghost:  #989089;
 
   --accent:      #e7c8a0;
   --accent-2:    #d2ad7d;
@@ -334,8 +340,9 @@ body.theme-olive {
 
   --text:        #eef2dd;
   --text-mute:   #a3aa84;
-  --text-dim:    #717656;
+  --text-dim:    #90947b;
   --text-faint:  #444834;
+  --text-ghost:  #919387;
 
   --accent:      #bef264;
   --accent-2:    #a3e635;
@@ -373,8 +380,9 @@ body.theme-aurora {
 
   --text:        #f8f1ff;
   --text-mute:   #c5bbe0;
-  --text-dim:    #8879a8;
+  --text-dim:    #8c7dab;
   --text-faint:  #524568;
+  --text-ghost:  #898198;
 
   --accent:      #ec4899;
   --accent-2:    #d946ef;
@@ -434,8 +442,9 @@ body.theme-sunset {
 
   --text:        #fef3e7;
   --text-mute:   #c0a091;
-  --text-dim:    #8a6a5e;
+  --text-dim:    #9f857b;
   --text-faint:  #4f3b34;
+  --text-ghost:  #958985;
 
   --accent:      #fb923c;
   --accent-2:    #f97316;
@@ -474,8 +483,9 @@ body.theme-nebula {
 
   --text:        #ecebff;
   --text-mute:   #9d9dce;
-  --text-dim:    #65659a;
+  --text-dim:    #7f7fab;
   --text-faint:  #3a3a66;
+  --text-ghost:  #81819d;
 
   --accent:      #a855f7;
   --accent-2:    #9333ea;
@@ -511,8 +521,9 @@ body.theme-slate {
 
   --text:        #ecedee;
   --text-mute:   #a4a4a8;
-  --text-dim:    #71717a;
+  --text-dim:    #93939a;
   --text-faint:  #45454c;
+  --text-ghost:  #939397;
 
   --accent:      #d4a373;
   --accent-2:    #b88662;
@@ -547,8 +558,9 @@ body.theme-frost {
 
   --text:        #1a2333;
   --text-mute:   #4a5a72;
-  --text-dim:    #8295ad;
+  --text-dim:    #5c6a7b;
   --text-faint:  #b9c5d4;
+  --text-ghost:  #626870;
 
   --accent:      #475569;
   --accent-2:    #334155;
@@ -583,8 +595,9 @@ body.theme-dusk {
 
   --text:        #f0e6ec;
   --text-mute:   #b29ca7;
-  --text-dim:    #7d6a76;
+  --text-dim:    #9c8e97;
   --text-faint:  #4d4150;
+  --text-ghost:  #98919a;
 
   --accent:      #d9a5b2;
   --accent-2:    #c08494;
@@ -1048,6 +1061,12 @@ body.theme-nebula .home-center-icon { box-shadow: 0 8px 28px rgba(168, 85, 247, 
 input, select, textarea {
   width: 100%;
   font: inherit;
+  /* 16px is the iOS threshold: below it, Safari/WebKit auto-zooms the page when a
+     field takes focus. The app previously suppressed that with
+     `user-scalable=no`, which also blocked deliberate pinch-zoom. Now that zoom is
+     allowed again (accessibility), inputs must be >=16px so focusing a field does
+     not yank the viewport. */
+  font-size: 16px;
   background: var(--surface-2);
   border: 1px solid var(--border);
   border-radius: 12px;
@@ -1058,7 +1077,7 @@ input, select, textarea {
   font-variant-numeric: tabular-nums;
 }
 
-input::placeholder { color: var(--text-faint); }
+input::placeholder { color: var(--text-ghost, var(--text-faint)); }
 
 input:focus, select:focus, textarea:focus {
   border-color: var(--border-focus);
@@ -3961,6 +3980,10 @@ body[dir="rtl"] .planner-day-head { text-align: right; }
 .run-nav .btn { flex: 1; height: 52px; font-size: 15px; font-weight: 800; }
 .run-prev:disabled { opacity: 0.4; pointer-events: none; }
 body[dir="rtl"] .run-nav svg { transform: scaleX(-1); }
+/* Month/day steppers are DIRECTIONAL: in RTL "previous" sits on the right, so the
+   arrows must mirror like .back-btn does. Without this the calendar's prev/next
+   pointed the wrong way in Arabic. */
+body[dir="rtl"] .calendar-nav-btn svg { transform: scaleX(-1); }
 
 /* ── Guided workout summary ──────────────────────────────────────────── */
 .run-summary { display: flex; flex-direction: column; gap: 10px; }
@@ -3972,6 +3995,9 @@ body[dir="rtl"] .run-nav svg { transform: scaleX(-1); }
 }
 .run-sum-name { font-size: 15px; font-weight: 800; color: var(--text); margin-bottom: 4px; }
 .run-sum-sets { font-size: 13px; color: var(--text-mute); font-weight: 700; font-variant-numeric: tabular-nums; }
+/* Personal best hit during a guided run — shown on the summary rather than as a
+   mid-workout toast (which would collide with the floating rest timer). */
+.run-sum-pr { margin-top: 4px; font-size: 12px; font-weight: 800; color: var(--accent); }
 .run-sum-unit { color: var(--text-dim); font-size: 11px; font-weight: 700; }
 .run-sum-totals { display: flex; gap: 10px; margin-top: 6px; }
 .run-sum-total {

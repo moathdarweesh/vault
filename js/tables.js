@@ -344,7 +344,20 @@
       // session. Skipped when the id set is huge to avoid an oversized delete query
       // (a miss just leaves the ghosts for the next pass — never data loss, since
       // the blob is the source of truth and these tables are analytics-only).
+      // SAFETY GATE (same class of bug that once destroyed the exercise images):
+      // when an id list is EMPTY the `.not('id','in',...)` filter below is skipped,
+      // so the delete degrades to "remove EVERY row of this table for this user".
+      // That is correct only if the local blob really is empty — and catastrophic
+      // if it is empty because the store failed to load, was mid-restore, or the
+      // projection ran before a cloud pull landed. So: only reconcile at all when
+      // the blob demonstrably holds real user data. A leftover ghost row is
+      // harmless (analytics-only, fixed on the next pass); a wiped mirror is not.
+      const blobLooksReal = !!(
+        sessions.length || cardioLogs.length || foodLogs.length ||
+        sleepLogs.length || supplements.length
+      );
       const reconcile = async (table, ids) => {
+        if (!blobLooksReal) return;   // never mass-delete from an empty/unloaded blob
         if (ids.length > 2000) return;
         try {
           let q = client.from(table).delete().eq('user_id', userId);
@@ -353,6 +366,7 @@
           if (error) summary['reconcile:' + table] = 'ERR: ' + error.message;
         } catch (_) {}
       };
+      if (!blobLooksReal) summary.reconcile = 'skipped (local blob has no user data)';
       await reconcile('workout_sessions', sessions.map((s) => s.id)); // sets cascade
       await reconcile('cardio_logs', cardioLogs.map((c) => c.id));
       await reconcile('food_logs', foodLogs.map((f) => f.id));

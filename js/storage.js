@@ -410,6 +410,12 @@ function migratePlan(plan) {
   return { mode: 'rotation', cycle, trainingDays, anchor: todayISO() };
 }
 
+// Set when the stored blob could not be parsed. While true the app runs
+// READ-ONLY: every write is refused so the unreadable-but-possibly-recoverable
+// bytes on disk are never replaced by an empty default state. Cleared only by a
+// DELIBERATE whole-blob replacement (cloud pull / backup restore / reset).
+let STATE_LOAD_FAILED = false;
+
 function loadState() {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
@@ -543,26 +549,89 @@ function loadState() {
 
     return parsed;
   } catch (err) {
-    console.warn('Failed to load state, resetting', err);
-    const fresh = defaultState();
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(fresh));
-    return fresh;
+    // DO NOT overwrite the stored blob here. It may well be recoverable — a
+    // truncated write, a quota-failed partial, a transient JSON error — and
+    // replacing it with defaultState() is exactly how a recoverable glitch
+    // becomes PERMANENT data loss (and then syncs that loss to the cloud).
+    //
+    // Instead: quarantine a copy, run READ-ONLY (save()/saveLocal() refuse to
+    // write while this flag is set), and tell the app so it can warn the user.
+    STATE_LOAD_FAILED = true;
+    try {
+      const raw = localStorage.getItem(STORAGE_KEY);
+      if (raw) localStorage.setItem(STORAGE_KEY + '__corrupt', raw);
+    } catch (_) { /* quarantine is best-effort; never block the boot */ }
+    console.error('[VAULT] Stored data could not be parsed — running READ-ONLY to protect it.', err);
+    try {
+      if (typeof window !== 'undefined') window.dispatchEvent(new CustomEvent('vault:load-failed'));
+    } catch (_) {}
+    return defaultState();   // in-memory only — never persisted while READ-ONLY
   }
 }
 
 let STATE = loadState();
 
+// The one low-level write. Returns true when the bytes actually landed.
+//
+// Two failure modes are handled here rather than at ~55 call sites:
+//   READ-ONLY  — the stored blob failed to parse; writing would destroy it.
+//   QUOTA      — localStorage is full; the write throws. Silently swallowing
+//                that means the app looks like it is saving while persisting
+//                NOTHING, and every set logged afterwards is lost on reload.
+function writeStore() {
+  if (STATE_LOAD_FAILED) {
+    console.error('[VAULT] Refusing to write: stored data is unreadable (READ-ONLY mode).');
+    return false;
+  }
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(STATE));
+    return true;
+  } catch (err) {
+    const quota = err && (err.name === 'QuotaExceededError' ||
+      err.name === 'NS_ERROR_DOM_QUOTA_REACHED' || err.code === 22 || err.code === 1014);
+    console.error('[VAULT] Save FAILED' + (quota ? ' (storage full)' : ''), err);
+    try {
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('vault:save-failed', { detail: { quota: !!quota } }));
+      }
+    } catch (_) {}
+    return false;
+  }
+}
+
 function save() {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(STATE));
+  if (!writeStore()) return;
   // Notify the cloud-sync layer (if present + logged in) to push the change.
   if (typeof window !== 'undefined' && window.Cloud && window.Cloud.onLocalChange) {
     window.Cloud.onLocalChange();
   }
 }
 
+// Persist WITHOUT telling the sync layer anything changed.
+//
+// Only for HOUSEKEEPING writes — data the device re-derives for itself (a Health
+// Connect cache refresh, the global-exercise merge, the onboarding flag). These
+// used to go through save(), which sets the sync "dirty" flag. On boot that
+// happens BEFORE bootSync's network pull resolves, so bootSync would see
+// `remoteNewer && isDirty` and report a CONFLICT that the user never caused —
+// and choosing "Keep this device" then force-pushes over a NEWER cloud blob,
+// skipping the empty-blob guard and the version compare. That is the same class
+// of silent overwrite that once destroyed every custom exercise image.
+//
+// Nothing is lost by not flagging: these values are re-derivable, and they ride
+// along in the payload of the next genuine user edit.
+function saveLocal() {
+  writeStore();
+}
+
 // Re-read the whole state from localStorage. Used after cloud sync replaces the
 // stored blob, so the in-memory STATE reflects the freshly pulled data.
 function reloadState() {
+  // A cloud pull / backup restore / reset has DELIBERATELY replaced the stored
+  // blob, so clear READ-ONLY mode first and let loadState() re-decide. Without
+  // this, a device that once hit a corrupt blob could never be recovered — even
+  // by pulling a known-good copy from the cloud.
+  STATE_LOAD_FAILED = false;
   STATE = loadState();
 }
 
@@ -583,7 +652,11 @@ const DB = {
     setTranslateExercises(on) { STATE.prefs.translateExercises = !!on; save(); },
     // First-run welcome flow: true once the user has seen (or skipped) it.
     onboarded() { return !!(STATE.prefs && STATE.prefs.onboarded); },
-    setOnboarded() { STATE.prefs.onboarded = true; save(); },
+    // Housekeeping: set during boot (app.js auto-flags existing users so an update
+    // never re-shows onboarding), which is BEFORE bootCloud resolves — flagging the
+    // blob dirty here is what manufactured false sync conflicts. It still reaches
+    // the cloud, riding along with the next genuine edit (see saveLocal).
+    setOnboarded() { STATE.prefs.onboarded = true; saveLocal(); },
   },
 
   // ----- Workout plan — CONTINUOUS ROTATION -----
@@ -671,11 +744,18 @@ const DB = {
     get() { return STATE.health || { data: null, syncedAt: 0, hidden: [] }; },
     setData(data) {
       const h = STATE.health || { hidden: [] };
+      // Change-detect: a Health Connect re-read that returns the SAME numbers must
+      // not rewrite the blob at all. Without this, every boot/foreground sync
+      // touched storage (and used to flag the blob dirty) for no actual change.
+      const same = JSON.stringify(h.data) === JSON.stringify(data);
+      if (same && h.syncedAt) return;
       h.data = data;
       h.syncedAt = Date.now();
       if (!Array.isArray(h.hidden)) h.hidden = [];
       STATE.health = h;
-      save();
+      // Housekeeping: a device-local cache of data Health Connect owns. Never a
+      // reason to flag the blob dirty (see saveLocal).
+      saveLocal();
     },
     isHidden(key) { return (STATE.health?.hidden || []).includes(key); },
     toggle(key) {
@@ -733,18 +813,20 @@ const DB = {
       save();
     },
     streak(supplementId) {
-      // Consecutive days ending today (or yesterday if not taken yet today)
+      // Consecutive days ending today (or yesterday if not taken yet today).
+      //
+      // Walks the LOCAL calendar via todayISO()/addDaysISO(), which is the same
+      // calendar every WRITE uses. This used to build the date with
+      // `new Date().setHours(0,0,0,0)` + `.toISOString()`, whose UTC conversion
+      // returns the PREVIOUS day anywhere east of UTC (e.g. UTC+3) — so the
+      // streak read one day short and today's dose appeared to do nothing until
+      // the next day. Third occurrence of this bug class in the codebase.
       let count = 0;
-      const today = new Date(); today.setHours(0, 0, 0, 0);
-      const todayIso = today.toISOString().slice(0, 10);
-      const start = new Date(today);
-      if (!this.isTaken(supplementId, todayIso)) start.setDate(start.getDate() - 1);
-      while (true) {
-        const iso = start.toISOString().slice(0, 10);
-        if (this.isTaken(supplementId, iso)) {
-          count += 1;
-          start.setDate(start.getDate() - 1);
-        } else break;
+      let iso = todayISO();
+      if (!this.isTaken(supplementId, iso)) iso = addDaysISO(iso, -1);
+      while (this.isTaken(supplementId, iso)) {
+        count += 1;
+        iso = addDaysISO(iso, -1);
       }
       return count;
     },
@@ -1097,7 +1179,9 @@ const DB = {
         });
         added++;
       });
-      if (added) save();
+      // Housekeeping: the global catalog is admin-owned and re-pulled on every
+      // boot, so merging it must never flag the blob dirty (see saveLocal).
+      if (added) saveLocal();
       return added;
     },
   },

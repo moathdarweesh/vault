@@ -795,7 +795,10 @@
     async function renderReleases(box){
       var tok=renderToken;
       box.innerHTML='<div class="center">جارٍ جلب حالة الإصدار…</div>';
-      var apk=null; try{ var r=await fetch('version.json?_='+Date.now(),{cache:'no-store'}); if(r.ok){var j=await r.json(); apk=j&&j.apk;} }catch(_){}
+      // Keep the WHOLE manifest, not just .apk — the generator below must merge
+      // into it so `web` (the web auto-updater build) and `_comment` survive.
+      var manifest=null, apk=null;
+      try{ var r=await fetch('version.json?_='+Date.now(),{cache:'no-store'}); if(r.ok){ manifest=await r.json(); apk=manifest&&manifest.apk; } }catch(_){}
       if(tok!==renderToken) return;  // user navigated to another center meanwhile
       var cur=apk? '<div class="rel-card"><h4 style="margin:0 0 12px">النسخة الحالية للتطبيق (APK)</h4>'+
         '<div class="rel-row"><span class="k">رقم البناء</span><span class="v num">'+esc(apk.build)+'</span></div>'+
@@ -809,13 +812,27 @@
         '<label>الإصدار</label><input id="g-ver" type="text" placeholder="1.2">'+
         '<label>معرّف ملف Drive أو رابطه المباشر</label><input id="g-id" type="text" placeholder="Drive file id أو https://…">'+
         '<label>ملاحظات (عربي)</label><input id="g-ar" type="text" placeholder="ماذا الجديد؟">'+
+        '<label>ملاحظات (إنجليزي)</label><input id="g-en" type="text" placeholder="What\'s new?">'+
         '<button class="btn" id="g-go" style="margin-top:4px">توليد</button>'+
-        '<textarea class="gen" id="g-out" readonly placeholder="سيظهر هنا JSON جاهز للصق في version.json" style="margin-top:12px"></textarea></div>';
+        '<div class="empty-mini" style="margin-top:8px">هذا هو <b>الملف الكامل</b> — انسخه كما هو ليحلّ محلّ version.json بالكامل. مفتاح <code>web</code> محفوظ تلقائياً؛ حذفه يوقف تحديثات الويب لكل الأجهزة.</div>'+
+        '<textarea class="gen" id="g-out" readonly placeholder="سيظهر هنا ملف version.json الكامل" style="margin-top:12px"></textarea></div>';
       box.innerHTML=cur+share+gen;
       $('#g-go').addEventListener('click',function(){
         var id=($('#g-id').value||'').trim();
         var url=id.indexOf('http')===0?id:('https://drive.usercontent.google.com/download?id='+id+'&export=download&confirm=t');
-        var out={apk:{build:parseInt($('#g-build').value,10)||0, version:($('#g-ver').value||'').trim(), url:url, notes_ar:($('#g-ar').value||'').trim(), notes_en:''}};
+        // MERGE into the live manifest. Emitting only {apk:{…}} (as this used to)
+        // and pasting it over version.json DELETES the `web` key — which is what
+        // js/update.js compares to decide whether to reload devices onto a new web
+        // build. Losing it silently disables fleet-wide web updates.
+        var out = Object.assign({}, manifest || {});
+        out.apk = {
+          build: parseInt($('#g-build').value,10)||0,
+          version: ($('#g-ver').value||'').trim(),
+          url: url,
+          notes_ar: ($('#g-ar').value||'').trim(),
+          notes_en: ($('#g-en').value||'').trim()
+        };
+        if(!('web' in out)) { $('#g-out').value='⚠️ تعذّر جلب version.json الحالي — لا تلصق ناتجاً بدون مفتاح web. أعد تحميل الصفحة وحاول ثانية.'; return; }
         $('#g-out').value=JSON.stringify(out,null,2);
       });
     }

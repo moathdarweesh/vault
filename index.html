@@ -2,7 +2,12 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+  <!-- Pinch-zoom stays ENABLED. `maximum-scale=1, user-scalable=no` blocked it
+       app-wide, which on a UI with 10-12px labels leaves anyone with reduced
+       vision no way to read a value (WCAG 1.4.4). The iOS "focus zoom" this
+       usually guards against is prevented instead by the 16px input font-size
+       rule in styles.css ("INPUTS") — see the note there before lowering it. -->
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="theme-color" content="#000000">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -24,7 +29,7 @@
        needs it, instead of blocking the gate on a cold download. -->
   <link rel="preload" href="js/vendor/supabase.js" as="script">
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=Tajawal:wght@400;500;700;800;900&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="styles.css?v=188">
+  <link rel="stylesheet" href="styles.css?v=189">
 </head>
 <body class="theme-dark">
   <div class="app">
@@ -86,20 +91,20 @@
           await Promise.all(regs.map((r) => r.unregister()));
           const keys = await caches.keys();
           await Promise.all(keys.map((k) => caches.delete(k)));
-          if (!sessionStorage.getItem('__cleaned_v188')) {
-            sessionStorage.setItem('__cleaned_v188', '1');
+          if (!sessionStorage.getItem('__cleaned_v189')) {
+            sessionStorage.setItem('__cleaned_v189', '1');
             location.reload();
           }
         }
       }).catch(() => {});
     }
   </script>
-  <script src="js/cloud.js?v=188"></script>
-  <script src="js/storage.js?v=188"></script>
-  <script src="js/tables.js?v=188"></script>
-  <script src="js/app.js?v=188"></script>
-  <script src="js/health.js?v=188"></script>
-  <script src="js/foodai.js?v=188"></script>
-  <script src="js/update.js?v=188"></script>
+  <script src="js/cloud.js?v=189"></script>
+  <script src="js/storage.js?v=189"></script>
+  <script src="js/tables.js?v=189"></script>
+  <script src="js/app.js?v=189"></script>
+  <script src="js/health.js?v=189"></script>
+  <script src="js/foodai.js?v=189"></script>
+  <script src="js/update.js?v=189"></script>
 </body>
 </html>

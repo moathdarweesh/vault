@@ -1,0 +1,5 @@
+# Keep the knowledge graph about THE VAULT, not about its vendored libraries.
+# js/vendor/ holds minified third-party bundles (supabase.js, zxing.min.js) whose
+# internals produced ~70 of 132 communities and drowned the project's own code.
+js/vendor/
+*.min.js
