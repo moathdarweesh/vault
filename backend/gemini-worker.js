@@ -157,9 +157,13 @@ const SUPABASE_ANON = 'sb_publishable_ZBR2VENMP2O_K2YTMePCsw_NfLC9FSI';
 //
 // FAIL-SAFE, but no longer fail-OPEN on everything:
 //   - missing token                  → block (anonymous abuse)
-//   - ANY 4xx (401/403/400/422/429…) → block. Previously only 401/403 blocked and
-//     every other status fell through to "allow", so any 4xx Supabase might return
-//     for a malformed/garbage token silently authorised the caller.
+//   - a DEFINITIVE 4xx (400/401/403/404/422) → block. Previously only 401/403
+//     blocked and every other status fell through to "allow", so any other 4xx
+//     Supabase returned for a malformed/garbage token silently authorised it.
+//   - 429 (auth endpoint throttled)  → allow. This is NOT a statement about the
+//     token: Supabase is rate-limiting us, and treating it as "invalid" would
+//     lock a legitimate signed-in user out of AI during a traffic spike. Rate
+//     limited by token below, so it cannot be used as a bypass.
 //   - 5xx or a network error         → allow. This is the case the fail-open was
 //     written for: a genuine Supabase outage must not take AI down for real users.
 //
@@ -173,7 +177,11 @@ async function callerAllowed(request) {
     const r = await fetch(SUPABASE_URL + '/auth/v1/user', {
       headers: { Authorization: 'Bearer ' + token, apikey: SUPABASE_ANON },
     });
-    if (r.status >= 400 && r.status < 500) return { allowed: false, userId: null };
+    // 429 is Supabase throttling US, not a verdict on the token — fall through to
+    // the transient branch below instead of locking the user out.
+    if (r.status >= 400 && r.status < 500 && r.status !== 429) {
+      return { allowed: false, userId: null };
+    }
     if (r.ok) {
       let userId = null;
       try { const u = await r.json(); userId = (u && u.id) || null; } catch (_) {}
