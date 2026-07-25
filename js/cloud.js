@@ -787,6 +787,11 @@
     pull, push, onLocalChange,
     resolveOnLogin, chooseCloud, chooseLocal, bootSync, applyRemote,
     localHasData, // so the UI can tell an empty device from one that already has data
+    // Has this device EVER been signed in and linked to an account? Used by the
+    // mandatory-account gate to tell a brand-new install (must sign up) apart from
+    // a known user whose token merely expired while offline (must NOT be locked
+    // out of data that is already on their device).
+    wasLinked: () => { const u = getLastUid(); return !!u && isLinked(u); },
     getClient: sb, // exposed for the tables.js "mirror" projection (RLS-scoped)
     getUsername, checkUsername, setUsername,
     touchLastSeen, getMyFlags, submitFeedback, reportError,

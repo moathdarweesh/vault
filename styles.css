@@ -6051,15 +6051,7 @@ body[dir="rtl"] .variation-select svg { transform: scaleX(-1); }
   padding: 16px 8px 6px;
   cursor: pointer;
 }
-.auth-skip {
-  background: none;
-  border: none;
-  color: var(--text-faint);
-  font-family: inherit;
-  font-size: 13px;
-  padding: 8px;
-  cursor: pointer;
-}
+/* .auth-skip removed: an account is now required, so the gate has no skip. */
 .auth-legal {
   display: block;
   text-align: center;

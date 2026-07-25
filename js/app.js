@@ -12,7 +12,7 @@
 // build. The literal below is the fallback (file://, or a stripped query) and is
 // still bumped by `npm run release` — see CLAUDE.md "CACHE WORKFLOW".
 const VAULT_BUILD = (() => {
-  const FALLBACK = 'v191';
+  const FALLBACK = 'v192';
   try {
     const src = (document.currentScript && document.currentScript.src) || '';
     const m = src.match(/[?&]v=(\d+)/);
@@ -658,7 +658,7 @@ const I18N = {
     auth_signup: 'Create account',
     auth_toggle_to_up: "Don't have an account? Create one",
     auth_toggle_to_in: 'Already have an account? Sign in',
-    auth_skip: 'Continue without an account',
+    auth_offline_grace: "You're offline — signed in on this device, so your data is available. Sync resumes when you reconnect.",
     username_title: 'Choose your username',
     username_sub: 'A unique handle others will know you by. Required to continue.',
     username_ph: 'username',
@@ -1255,7 +1255,7 @@ const I18N = {
     auth_signup: 'إنشاء حساب',
     auth_toggle_to_up: 'ما عندك حساب؟ أنشئ واحد',
     auth_toggle_to_in: 'عندك حساب؟ سجّل دخول',
-    auth_skip: 'المتابعة بدون حساب',
+    auth_offline_grace: 'أنت دون اتصال — حسابك مسجَّل على هذا الجهاز، فبياناتك متاحة. تستأنف المزامنة عند عودة الاتصال.',
     username_title: 'اختر اسم المستخدم',
     username_sub: 'اسم فريد يُعرّفك أمام الآخرين. إلزامي للمتابعة.',
     username_ph: 'اسم_المستخدم',
@@ -7914,7 +7914,6 @@ function showAuthGate(mode) {
       <div class="auth-err" id="auth-err" role="alert"></div>
       <button class="btn btn-primary btn-block" id="auth-submit">${up ? t('auth_signup') : t('auth_signin')}</button>
       ${up ? '' : `<button class="auth-toggle" id="auth-forgot">${t('auth_forgot')}</button>`}
-      <button class="auth-skip" id="auth-skip">${t('auth_skip')}</button>
       <a class="auth-legal" href="privacy.html?lang=${(DB.prefs.get().lang) || 'en'}" target="_blank" rel="noopener">${t('privacy_policy')}</a>
     </div>`;
   document.body.appendChild(gate);
@@ -7957,7 +7956,9 @@ function showAuthGate(mode) {
   gate.querySelectorAll('.auth-seg-btn').forEach((b) =>
     b.addEventListener('click', () => { if (b.dataset.mode !== authMode) showAuthGate(b.dataset.mode); })
   );
-  document.getElementById('auth-skip').addEventListener('click', () => { hideAuthGate(); });
+  // No skip button any more: an account is REQUIRED (see bootCloud). The gate is
+  // the app's front door, so nothing here dismisses it except a successful
+  // sign-in/sign-up.
   const forgot = document.getElementById('auth-forgot');
   if (forgot) forgot.addEventListener('click', () => showForgotPassword(document.getElementById('auth-email').value));
 }
@@ -8492,7 +8493,29 @@ async function bootCloud() {
   Cloud.onPasswordRecovery(() => showChangePassword());
   let session = null;
   try { session = await Cloud.getSession(); } catch (_) {}
-  if (!session) { showAuthGate('in'); return; }
+  if (!session) {
+    // AN ACCOUNT IS REQUIRED — the gate has no skip and cannot be dismissed.
+    //
+    // ONE exception, and it is not a loophole: a user who is ALREADY signed in on
+    // this device, whose token merely could not be refreshed because there is no
+    // network (a gym basement is the normal case for this app), must not be
+    // locked away from data that is sitting on their own phone. Requiring an
+    // account is a product decision; holding someone's own workouts hostage to a
+    // signal is not.
+    //
+    // The valve is deliberately narrow: it needs BOTH a device previously linked
+    // to an account AND real local data AND the browser reporting offline. A
+    // fresh install can never satisfy it, so sign-up stays mandatory. The next
+    // launch with a connection re-runs this check and re-gates normally.
+    const offline = (typeof navigator !== 'undefined' && navigator.onLine === false);
+    const known = !!(Cloud.wasLinked && Cloud.wasLinked()) && !!(Cloud.localHasData && Cloud.localHasData());
+    if (offline && known) {
+      try { showToast(t('auth_offline_grace')); } catch (_) {}
+      return; // let them train; sync resumes when the connection does
+    }
+    showAuthGate('in');
+    return;
+  }
   // Already logged in — pick up any changes from other devices in the background.
   try {
     const r = await Cloud.bootSync();
