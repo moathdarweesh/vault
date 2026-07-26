@@ -138,6 +138,7 @@
 
   /* Theme-safe channels (each theme overrides --accent-rgb; light themes override --overlay) */
   --accent-rgb: 255, 106, 0;
+
   --overlay:    rgba(0, 0, 0, 0.72);
 }
 
@@ -156,10 +157,13 @@ body {
    THEME: LIGHT CLEAN
    ========================================================================= */
 body.theme-light {
-  /* Accent darkened one step (was #0d9488): --accent-ink is #ffffff here, and
-     white on that teal measured 3.74:1 — under AA for button labels. #0f766e
-     takes it to 5.54:1. Pre-existing, found by sweeping all 13 themes. */
-  --accent-rgb:  13, 148, 136;
+  /* LIGHT IS A MODE OF THE BRAND, NOT AN ALTERNATE SKIN.
+     `dark` and `light` are the same identity on two surfaces; the other eleven
+     themes are deliberate alternate skins with their own accents. This one used
+     to be teal (#0d9488), so switching to light quietly dropped the brand.
+     The brand orange is IDENTICAL here to dark mode; only --accent-text is
+     darkened (#b34a00, 5.06:1) for the places the accent is small text. */
+  --accent-rgb:  255, 106, 0;
   --overlay:     rgba(15, 23, 42, 0.45);
   --bg:          #f6f8fa;
   --bg-grad:     radial-gradient(1200px 600px at 50% -200px, #e6f7f4 0%, transparent 60%), #f6f8fa;
@@ -169,7 +173,7 @@ body.theme-light {
   --surface-hi:  #cbd5dc;
   --border:      rgba(15, 23, 42, 0.08);
   --border-hi:   rgba(15, 23, 42, 0.14);
-  --border-focus:rgba(15, 118, 110, 0.45);
+  --border-focus:rgba(255, 106, 0, 0.50);
 
   --text:        #0f172a;
   --text-mute:   #475569;
@@ -177,12 +181,13 @@ body.theme-light {
   --text-faint:  #cbd5e1;
   --text-ghost:  #6a6f75;
 
-  --accent:      #0f766e;
-  --accent-2:    #115e59;
-  --accent-3:    #134e4a;
-  --accent-soft: rgba(15, 118, 110, 0.1);
-  --accent-line: rgba(15, 118, 110, 0.28);
-  --accent-ink:  #ffffff;
+  --accent:      #ff6a00;
+  --accent-text: #b34a00;
+  --accent-2:    #e05c00;
+  --accent-3:    #b84a00;
+  --accent-soft: rgba(255, 106, 0, 0.12);
+  --accent-line: rgba(255, 106, 0, 0.30);
+  --accent-ink:  #1a0800;
 
   --green:       #16a34a;
   --green-2:     #15803d;
@@ -194,7 +199,7 @@ body.theme-light .bottom-nav {
   background: rgba(255, 255, 255, 0.85);
 }
 
-body.theme-light .vault-logo { color: var(--accent); }
+body.theme-light .vault-logo { color: var(--accent-text); }
 
 /* =========================================================================
    THEME: FOREST (deep pine on near-black)
@@ -304,7 +309,7 @@ body.theme-sand {
 }
 
 body.theme-sand .bottom-nav { background: rgba(251, 246, 238, 0.92); }
-body.theme-sand .vault-logo { color: var(--accent); }
+body.theme-sand .vault-logo { color: var(--accent-text); }
 
 /* =========================================================================
    THEME: MOCHA (dark coffee earth)
@@ -594,7 +599,7 @@ body.theme-frost {
 }
 
 body.theme-frost .bottom-nav { background: rgba(238, 242, 247, 0.92); }
-body.theme-frost .vault-logo { color: var(--accent); }
+body.theme-frost .vault-logo { color: var(--accent-text); }
 
 /* =========================================================================
    THEME: DUSK (muted plum twilight)
@@ -689,6 +694,20 @@ body.theme-olive { --text-dim: #a3a691; }
 body.theme-sunset { --text-dim: #aa938a; }
 body.theme-nebula { --text-dim: #8a8ab2; --accent: #bb7cf9; --accent-2: #a855f7; --accent-rgb: 187, 124, 249; }
 body.theme-dusk { --text-mute: #b49faa; --text-dim: #ada1a8; }
+
+/* The accent as SMALL TEXT. Identical to --accent everywhere it already passes —
+   every dark theme and every alternate skin. Only the light mode overrides it:
+   #ff6a00 is right as a button FILL on white (6.78:1 under the dark ink) but only
+   2.82:1 as 11-13px text on a white card. Two tokens, ONE brand colour; the
+   alternative was two different oranges, which is not an identity.
+   Use --accent for FILLS (backgrounds). `color:` and `border-color:` both take
+   --accent-text — on a white surface the darker variant is the better border too.
+
+   Declared on `body`, NOT on :root. `--accent-text: var(--accent)` resolves
+   against the element it is declared on, and the theme classes live on <body> —
+   so declaring it on :root froze it to the ROOT's orange and handed `frost` and
+   `sand` an accent-text from a different theme (2.37-2.67:1). */
+body { --accent-text: var(--accent); }
 
 /* =========================================================================
    RTL (Arabic) support
@@ -817,7 +836,7 @@ body.rest-active .main { padding-bottom: calc(var(--nav-h) + var(--safe-b) + 104
   display: flex;
   align-items: center;
   gap: 8px;
-  color: var(--accent);
+  color: var(--accent-text);
   font-size: 18px;
   font-weight: 900;
   letter-spacing: 0.28em;
@@ -828,7 +847,7 @@ body.rest-active .main { padding-bottom: calc(var(--nav-h) + var(--safe-b) + 104
 .vault-logo-mark {
   width: 22px;
   height: 22px;
-  color: var(--accent);
+  color: var(--accent-text);
 }
 
 .vault-action {
@@ -837,7 +856,7 @@ body.rest-active .main { padding-bottom: calc(var(--nav-h) + var(--safe-b) + 104
   border-radius: 12px;
   background: var(--accent-soft);
   border: 1px solid var(--accent-line);
-  color: var(--accent);
+  color: var(--accent-text);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -907,7 +926,7 @@ body.keyboard-open .sheet-overlay { height: var(--vvh, 100%); bottom: auto; }
   transition: transform 0.18s;
 }
 
-.nav-btn.active { color: var(--accent); }
+.nav-btn.active { color: var(--accent-text); }
 .nav-btn.active:not(.home-center) svg { transform: scale(1.08); }
 
 .nav-btn.active:not(.home-center)::before {
@@ -959,7 +978,7 @@ body.keyboard-open .sheet-overlay { height: var(--vvh, 100%); bottom: auto; }
   margin-top: 0;
 }
 
-.nav-btn.home-center.active span { color: var(--accent); }
+.nav-btn.home-center.active span { color: var(--accent-text); }
 
 /* Theme-specific shadows for center button */
 body.theme-light .home-center-icon { box-shadow: 0 8px 24px rgba(13, 148, 136, 0.3), 0 0 0 4px var(--bg); }
@@ -996,7 +1015,7 @@ body.theme-nebula .home-center-icon { box-shadow: 0 8px 28px rgba(168, 85, 247, 
 .page-eyebrow {
   font-size: 11px;
   font-weight: 700;
-  color: var(--accent);
+  color: var(--accent-text);
   text-transform: uppercase;
   letter-spacing: 0.2em;
   margin-bottom: 6px;
@@ -1232,7 +1251,7 @@ input[type="date"], input[type="time"] { color-scheme: dark; }
 .filter-pill.active {
   background: var(--accent);
   color: var(--accent-ink);
-  border-color: var(--accent);
+  border-color: var(--accent-text);
 }
 
 .filter-pill:active { transform: scale(0.96); }
@@ -1363,7 +1382,7 @@ input[type="date"], input[type="time"] { color-scheme: dark; }
   display: flex;
   align-items: center;
   justify-content: center;
-  color: var(--accent);
+  color: var(--accent-text);
   background: var(--accent-soft);
 }
 
@@ -1553,9 +1572,9 @@ input[type="date"], input[type="time"] { color-scheme: dark; }
    below the 4.5 that 14px text needs; --text-dim is AA in all 13 themes. */
 .heat-cell.lvl-0 .heat-cell-count { color: var(--text-dim); }
 .heat-cell.lvl-1 { background: rgba(var(--accent-rgb), 0.12); }
-.heat-cell.lvl-1 .heat-cell-count { color: var(--accent); }
+.heat-cell.lvl-1 .heat-cell-count { color: var(--accent-text); }
 .heat-cell.lvl-2 { background: rgba(var(--accent-rgb), 0.25); }
-.heat-cell.lvl-2 .heat-cell-count { color: var(--accent); }
+.heat-cell.lvl-2 .heat-cell-count { color: var(--accent-text); }
 .heat-cell.lvl-3 { background: rgba(var(--accent-rgb), 0.4); border: 1px solid var(--accent-line); }
 .heat-cell.lvl-3 .heat-cell-count { color: var(--text); }
 .heat-cell.lvl-4 {
@@ -1587,7 +1606,7 @@ input[type="date"], input[type="time"] { color-scheme: dark; }
   border-radius: 14px;
   background: var(--accent-soft);
   border: 1px solid var(--accent-line);
-  color: var(--accent);
+  color: var(--accent-text);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1630,7 +1649,7 @@ input[type="date"], input[type="time"] { color-scheme: dark; }
   -webkit-tap-highlight-color: transparent;
   transition: background .15s, border-color .15s, color .15s;
 }
-.supp-preset.picked { background: var(--accent-soft, var(--surface-2)); border-color: var(--accent); color: var(--text); }
+.supp-preset.picked { background: var(--accent-soft, var(--surface-2)); border-color: var(--accent-text); color: var(--text); }
 /* Already in the user's list — still tappable (they may want a second entry at a
    different dose), just visibly de-emphasised. */
 .supp-preset.added { opacity: 0.45; }
@@ -1657,7 +1676,7 @@ input[type="date"], input[type="time"] { color-scheme: dark; }
   width: 32px; height: 32px; border-radius: 10px; flex: 0 0 auto;
   display: flex; align-items: center; justify-content: center;
   background: var(--accent-soft, var(--surface-2));
-  color: var(--accent);
+  color: var(--accent-text);
 }
 .last-set-icon svg { width: 18px; height: 18px; }
 .last-set-name {
@@ -1971,7 +1990,7 @@ body[dir="rtl"] .bento-card.wide .bento-card-name-tag { left: 14px; }
   align-items: center;
   justify-content: center;
   gap: 8px;
-  color: var(--accent);
+  color: var(--accent-text);
   text-align: center;
   padding: 16px;
 }
@@ -2147,7 +2166,7 @@ button.schedule-prev-row { width: 100%; font: inherit; color: inherit; text-alig
   line-height: 1;
 }
 
-.stat-box-value.accent { color: var(--accent); }
+.stat-box-value.accent { color: var(--accent-text); }
 /* --text-dim, not --text-faint: this is a value the user reads, and faint is
    reserved for decorative dots/bars. It measured 1.48:1 on the light theme. */
 .stat-box-value.none { color: var(--text-dim); font-size: 18px; }
@@ -2252,7 +2271,7 @@ button.schedule-prev-row { width: 100%; font: inherit; color: inherit; text-alig
 .sets-row-num { font-weight: 800; color: var(--text); letter-spacing: -0.02em; }
 .sets-row-unit { color: var(--text-dim); font-size: 11px; }
 
-.sets-row.best .sets-row-num { color: var(--accent); }
+.sets-row.best .sets-row-num { color: var(--accent-text); }
 
 /* Dual-unit weight (e.g. "60 kg  132 lb") */
 .w-num {
@@ -2272,7 +2291,7 @@ button.schedule-prev-row { width: 100%; font: inherit; color: inherit; text-alig
   margin-left: 8px;
   white-space: nowrap;
 }
-.sets-row.best .w-num { color: var(--accent); }
+.sets-row.best .w-num { color: var(--accent-text); }
 body[dir="rtl"] .w-alt { margin-left: 0; margin-right: 8px; }
 body[dir="rtl"] .w-unit { margin-left: 0; margin-right: 2px; }
 
@@ -2308,7 +2327,7 @@ body[dir="rtl"] .w-unit { margin-left: 0; margin-right: 2px; }
 
 .pill.custom {
   background: var(--accent-soft);
-  color: var(--accent);
+  color: var(--accent-text);
   border-color: var(--accent-line);
 }
 
@@ -2359,7 +2378,7 @@ body[dir="rtl"] .w-unit { margin-left: 0; margin-right: 2px; }
 .data-icon.walking   { background: var(--cat-legs-bg); color: var(--cat-legs); }
 .data-icon.running   { background: var(--cat-chest-bg); color: var(--cat-chest); }
 .data-icon.cycling   { background: var(--cat-cardio-bg); color: var(--cat-cardio); }
-.data-icon.custom    { background: var(--accent-soft); color: var(--accent); }
+.data-icon.custom    { background: var(--accent-soft); color: var(--accent-text); }
 .data-icon.food      { background: var(--cat-arms-bg); color: var(--cat-arms); }
 .data-icon.sleep     { background: var(--cat-shoulders-bg); color: var(--cat-shoulders); }
 .data-icon.workout   { background: var(--cat-legs-bg); color: var(--cat-legs); }
@@ -2781,7 +2800,7 @@ body[dir="rtl"] .w-unit { margin-left: 0; margin-right: 2px; }
 }
 .set-add-btn:active {
   background: var(--surface-2);
-  color: var(--accent);
+  color: var(--accent-text);
   border-color: var(--accent-line);
 }
 
@@ -2800,7 +2819,7 @@ body[dir="rtl"] .w-unit { margin-left: 0; margin-right: 2px; }
   align-items: center;
   font-size: 11px;
   font-weight: 800;
-  color: var(--accent);
+  color: var(--accent-text);
   text-transform: uppercase;
   letter-spacing: 0.12em;
   margin-bottom: 6px;
@@ -2841,11 +2860,11 @@ body[dir="rtl"] .w-unit { margin-left: 0; margin-right: 2px; }
 }
 .type-option.type-option-add:hover {
   border-color: var(--accent-line);
-  color: var(--accent);
+  color: var(--accent-text);
   background: var(--accent-soft);
 }
 .type-option.type-option-add svg { color: var(--text-mute); }
-.type-option.type-option-add:hover svg { color: var(--accent); }
+.type-option.type-option-add:hover svg { color: var(--accent-text); }
 
 /* Icon picker chips inside the new-cardio-type modal */
 .cardio-icon-chips {
@@ -2868,7 +2887,7 @@ body[dir="rtl"] .w-unit { margin-left: 0; margin-right: 2px; }
 .cardio-icon-chip.active {
   background: var(--accent-soft);
   border-color: var(--accent-line);
-  color: var(--accent);
+  color: var(--accent-text);
 }
 .cardio-icon-chip:hover { border-color: var(--border-hi); }
 
@@ -2916,15 +2935,15 @@ body[dir="rtl"] .w-unit { margin-left: 0; margin-right: 2px; }
   transition: background .15s, color .15s;
 }
 .type-option svg { width: 22px; height: 22px; }
-.type-option.active .type-option-icon { background: var(--accent-soft, var(--surface-2)); color: var(--accent); }
+.type-option.active .type-option-icon { background: var(--accent-soft, var(--surface-2)); color: var(--accent-text); }
 .type-option-add svg { width: 18px; height: 18px; color: var(--text-mute); }
 
 .type-option.active {
   border-color: var(--accent-line);
   background: var(--accent-soft);
-  color: var(--accent);
+  color: var(--accent-text);
 }
-.type-option.active svg { color: var(--accent); }
+.type-option.active svg { color: var(--accent-text); }
 
 .type-option-label {
   font-size: 12px;
@@ -3125,7 +3144,7 @@ body.rest-active .toast { bottom: calc(var(--nav-h) + var(--safe-b) + 120px); }
   flex-shrink: 0;
   background: transparent;
   border: none;
-  color: var(--accent);
+  color: var(--accent-text);
   font-weight: 900;
   font-size: 13px;
   text-transform: uppercase;
@@ -3168,7 +3187,7 @@ body.rest-active .toast { bottom: calc(var(--nav-h) + var(--safe-b) + 120px); }
   align-items: center;
   justify-content: center;
   background: var(--accent-soft);
-  color: var(--accent);
+  color: var(--accent-text);
 }
 .tool-card-icon svg { width: 18px; height: 18px; }
 
@@ -3209,7 +3228,7 @@ body[dir="rtl"] .tool-card { text-align: right; align-items: flex-end; }
 .today-plan-eyebrow {
   font-size: 11px;
   font-weight: 800;
-  color: var(--accent);
+  color: var(--accent-text);
   text-transform: uppercase;
   letter-spacing: 0.16em;
 }
@@ -3325,7 +3344,7 @@ body[dir="rtl"] .tool-card { text-align: right; align-items: flex-end; }
 .schedule-day.active {
   background: var(--accent);
   color: var(--accent-ink);
-  border-color: var(--accent);
+  border-color: var(--accent-text);
 }
 .schedule-preview {
   display: flex;
@@ -3345,7 +3364,7 @@ body[dir="rtl"] .tool-card { text-align: right; align-items: flex-end; }
 .schedule-prev-row.rest { opacity: 0.5; background: transparent; }
 .schedule-prev-day { width: 84px; flex-shrink: 0; font-weight: 700; color: var(--text); }
 .schedule-prev-arrow { color: var(--text-dim); }
-.schedule-prev-workout { font-weight: 700; color: var(--accent); }
+.schedule-prev-workout { font-weight: 700; color: var(--accent-text); }
 .schedule-prev-row.rest .schedule-prev-workout { color: var(--text-mute); font-weight: 500; }
 
 /* ---- Rotation planner (continuous cycle editor) ---- */
@@ -3382,7 +3401,7 @@ body[dir="rtl"] .tool-card { text-align: right; align-items: flex-end; }
   background: none;
   border: none;
   border-radius: var(--radius-sm);
-  color: var(--accent);
+  color: var(--accent-text);
   font-family: inherit;
   font-size: 12px;
   font-weight: 800;
@@ -3415,7 +3434,7 @@ body[dir="rtl"] .tool-card { text-align: right; align-items: flex-end; }
 }
 .cycle-chip.current {
   background: var(--accent-soft, var(--surface-2));
-  border-color: var(--accent);
+  border-color: var(--accent-text);
   color: var(--text);
 }
 .cycle-chip-num {
@@ -3533,7 +3552,7 @@ body[dir="rtl"] .tool-card { text-align: right; align-items: flex-end; }
   margin-bottom: 3px;
 }
 
-.planner-day.today .planner-day-name { color: var(--accent); }
+.planner-day.today .planner-day-name { color: var(--accent-text); }
 
 .planner-day-title {
   font-size: 15px;
@@ -3596,7 +3615,7 @@ body[dir="rtl"] .tool-card { text-align: right; align-items: flex-end; }
   background: var(--text-faint);
 }
 
-.planner-side.anterior .planner-side-label { color: var(--accent); }
+.planner-side.anterior .planner-side-label { color: var(--accent-text); }
 .planner-side.anterior .planner-side-label::before { background: var(--accent); }
 .planner-side.posterior .planner-side-label { color: var(--green); }
 .planner-side.posterior .planner-side-label::before { background: var(--green); }
@@ -3623,7 +3642,7 @@ body[dir="rtl"] .tool-card { text-align: right; align-items: flex-end; }
 .muscle-chip.anterior {
   background: var(--accent-soft);
   border-color: var(--accent-line);
-  color: var(--accent);
+  color: var(--accent-text);
 }
 
 .muscle-chip.posterior {
@@ -3698,7 +3717,7 @@ body[dir="rtl"] .planner-day { text-align: right; }
 .planner-day-add:active {
   transform: scale(0.9);
   background: var(--accent-soft);
-  color: var(--accent);
+  color: var(--accent-text);
 }
 
 .planner-ex-list {
@@ -3711,7 +3730,8 @@ body[dir="rtl"] .planner-day { text-align: right; }
 
 .planner-empty-hint {
   font-size: 12px;
-  color: var(--text-faint);
+  /* --text-dim: this is a sentence the user reads, not a decorative bar. */
+  color: var(--text-dim);
   font-weight: 600;
   padding: 4px 2px;
 }
@@ -3802,7 +3822,7 @@ body[dir="rtl"] .planner-day { text-align: right; }
 }
 
 .planner-day.drop-target {
-  border-color: var(--accent);
+  border-color: var(--accent-text);
   background: linear-gradient(180deg, var(--accent-soft), transparent 70%), var(--surface-1);
 }
 
@@ -3961,7 +3981,7 @@ body[dir="rtl"] .planner-day-head { text-align: right; }
   transition: border-color 0.15s, background 0.15s;
 }
 .sd-set-row input:focus {
-  border-color: var(--accent);
+  border-color: var(--accent-text);
   background: var(--surface-1);
 }
 
@@ -4153,7 +4173,7 @@ body[dir="rtl"] .planner-day-head { text-align: right; }
   outline: none;
   transition: border-color 0.15s, background 0.15s;
 }
-.run-set-row input:focus { border-color: var(--accent); background: var(--surface-1); }
+.run-set-row input:focus { border-color: var(--accent-text); background: var(--surface-1); }
 .run-set-row.done input { border-color: var(--accent-line); background: var(--accent-soft); }
 .run-set-done {
   width: 46px;
@@ -4170,7 +4190,7 @@ body[dir="rtl"] .planner-day-head { text-align: right; }
 }
 .run-set-done svg { width: 18px; height: 18px; }
 .run-set-done:active { transform: scale(var(--press-scale)); }
-.run-set-done.done { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+.run-set-done.done { background: var(--accent); border-color: var(--accent-text); color: var(--accent-ink); }
 .run-addset { margin-top: 12px; font-size: 13px; }
 
 .run-nav { display: flex; gap: 10px; margin-top: 22px; }
@@ -4198,7 +4218,7 @@ body[dir="rtl"] .calendar-nav-btn svg { transform: scaleX(-1); }
 .run-sum-sets { font-size: 13px; color: var(--text-mute); font-weight: 700; font-variant-numeric: tabular-nums; }
 /* Personal best hit during a guided run — shown on the summary rather than as a
    mid-workout toast (which would collide with the floating rest timer). */
-.run-sum-pr { margin-top: 4px; font-size: 12px; font-weight: 800; color: var(--accent); }
+.run-sum-pr { margin-top: 4px; font-size: 12px; font-weight: 800; color: var(--accent-text); }
 .run-sum-unit { color: var(--text-dim); font-size: 11px; font-weight: 700; }
 .run-sum-totals { display: flex; gap: 10px; margin-top: 6px; }
 .run-sum-total {
@@ -4321,7 +4341,7 @@ body[dir="rtl"] .calendar-nav-btn svg { transform: scaleX(-1); }
   min-width: 20px;
   text-align: center;
   font-weight: 900;
-  color: var(--accent);
+  color: var(--accent-text);
   font-variant-numeric: tabular-nums;
 }
 .chosen-name {
@@ -4450,7 +4470,7 @@ body[dir="rtl"] .calendar-nav-btn svg { transform: scaleX(-1); }
 }
 .picker-row.picked .picker-row-check {
   background: var(--accent);
-  border-color: var(--accent);
+  border-color: var(--accent-text);
   color: var(--accent-ink);
 }
 .picker-row-check svg { width: 16px; height: 16px; }
@@ -4545,18 +4565,18 @@ body[dir="rtl"] .picker-row { text-align: right; }
 .calendar-cell.today {
   box-shadow: inset 0 0 0 2px var(--accent);
   border-color: transparent;
-  color: var(--accent);
+  color: var(--accent-text);
   font-weight: 800;
 }
 
-.calendar-cell.lvl-1 { background: rgba(var(--accent-rgb), 0.18); color: var(--accent); }
-.calendar-cell.lvl-2 { background: rgba(var(--accent-rgb), 0.32); color: var(--accent); }
+.calendar-cell.lvl-1 { background: rgba(var(--accent-rgb), 0.18); color: var(--accent-text); }
+.calendar-cell.lvl-2 { background: rgba(var(--accent-rgb), 0.32); color: var(--accent-text); }
 .calendar-cell.lvl-3 {
   background: rgba(var(--accent-rgb), 0.55);
   color: var(--text);
   border-color: var(--accent-line);
 }
-.calendar-cell.lvl-4 { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+.calendar-cell.lvl-4 { background: var(--accent); color: var(--accent-ink); border-color: var(--accent-text); }
 
 .calendar-legend {
   display: flex;
@@ -4615,7 +4635,7 @@ body[dir="rtl"] .picker-row { text-align: right; }
 
 .supp-streak {
   font-size: 11px;
-  color: var(--accent);
+  color: var(--accent-text);
   font-weight: 700;
   margin-top: 4px;
   display: flex;
@@ -4645,7 +4665,7 @@ body[dir="rtl"] .picker-row { text-align: right; }
 .supp-toggle.taken {
   background: var(--accent);
   color: var(--accent-ink);
-  border-color: var(--accent);
+  border-color: var(--accent-text);
 }
 
 .supp-toggle:active { transform: scale(0.92); }
@@ -4738,7 +4758,7 @@ body[dir="rtl"] .picker-row { text-align: right; }
   margin: 0; padding-inline-start: 20px;
   font-size: 13px; color: var(--text-mute); line-height: 1.7;
 }
-.ai-steps a { color: var(--accent); }
+.ai-steps a { color: var(--accent-text); }
 .ai-keypanel input,
 .ai-input-row input {
   width: 100%; padding: 12px 14px; border-radius: 12px;
@@ -4961,7 +4981,7 @@ body[dir="rtl"] .picker-row { text-align: right; }
 .weight-card-icon {
   flex: 0 0 auto; width: 38px; height: 38px; border-radius: 12px;
   display: flex; align-items: center; justify-content: center;
-  background: var(--accent-soft); color: var(--accent);
+  background: var(--accent-soft); color: var(--accent-text);
 }
 .weight-card-main { flex: 1; min-width: 0; }
 .weight-card-label { font-size: 12px; color: var(--text-mute); font-weight: 700; letter-spacing: .3px; }
@@ -4970,7 +4990,7 @@ body[dir="rtl"] .picker-row { text-align: right; }
 .weight-card-empty { font-size: 15px; font-weight: 700; color: var(--text-dim); }
 .weight-card-spark { flex: 0 0 64px; height: 28px; }
 .weight-spark-svg { width: 64px; height: 28px; display: block; }
-.weight-card-add { flex: 0 0 auto; color: var(--accent); display: flex; align-items: center; }
+.weight-card-add { flex: 0 0 auto; color: var(--accent-text); display: flex; align-items: center; }
 .weight-delta { font-size: 12px; font-weight: 800; padding: 2px 7px; border-radius: 999px; white-space: nowrap; }
 .weight-delta.up { color: #f87171; background: rgba(248,113,113,.14); }
 .weight-delta.down { color: #34d399; background: rgba(52,211,153,.14); }
@@ -5080,7 +5100,7 @@ body[dir="rtl"] .picker-row { text-align: right; }
 }
 .add-tile-icon svg { width: 24px; height: 24px; }
 .add-tile-icon.voice { background: rgba(239, 68, 68, 0.18); color: #f87171; }
-.add-tile-icon.chat { background: var(--accent-soft); color: var(--accent); }
+.add-tile-icon.chat { background: var(--accent-soft); color: var(--accent-text); }
 .add-tile-icon.photo { background: rgba(96, 165, 250, 0.18); color: #60a5fa; }
 .add-tile-icon.saved { background: rgba(52, 211, 153, 0.18); color: #34d399; }
 .add-tile-icon.manual { background: rgba(251, 191, 36, 0.16); color: #fbbf24; }
@@ -5108,7 +5128,7 @@ body[dir="rtl"] .picker-row { text-align: right; }
   font-weight: 700; font-size: 13px; appearance: none; -webkit-appearance: none;
   transition: all 0.12s;
 }
-.seg-btn.active { background: var(--accent-soft); border-color: var(--accent-line); color: var(--accent); }
+.seg-btn.active { background: var(--accent-soft); border-color: var(--accent-line); color: var(--accent-text); }
 .calc-preview { margin: 6px 0 14px; }
 .calc-preview-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
 .calc-cell { background: var(--surface-2); border-radius: 12px; padding: 12px 6px; text-align: center; }
@@ -5219,7 +5239,7 @@ body[dir="rtl"] .picker-row { text-align: right; }
 
 .chart-latest {
   font-size: 12px;
-  color: var(--accent);
+  color: var(--accent-text);
   font-weight: 700;
   font-variant-numeric: tabular-nums;
 }
@@ -5390,7 +5410,7 @@ body[dir="rtl"] .lib-section-count {
 .bento-toggle.added {
   background: var(--accent);
   color: var(--accent-ink);
-  border-color: var(--accent);
+  border-color: var(--accent-text);
 }
 
 /* Library pick-mode banner — shown above the grid when adding from Train */
@@ -5469,7 +5489,7 @@ body.library-pick-mode .bento-toggle.added {
    already in the user's Train list. Strong border + glow so it's instantly
    recognizable. */
 .bento-card.added {
-  border-color: var(--accent);
+  border-color: var(--accent-text);
   box-shadow:
     0 0 0 2px var(--accent-line),
     0 4px 16px rgba(0, 0, 0, 0.18);
@@ -5601,7 +5621,7 @@ body[dir="rtl"] .bento-card.wide .bento-added-stripe { left: 14px; }
   gap: 4px;
   padding: 6px 12px;
   background: var(--accent-soft);
-  color: var(--accent);
+  color: var(--accent-text);
   border: 1px solid var(--accent-line);
   border-radius: 8px;
   font-size: 12px;
@@ -5687,7 +5707,7 @@ body[dir="rtl"] .variation-select svg { transform: scaleX(-1); }
 /* .theme-card:active press feedback is owned by the unified block near end of file */
 
 .theme-card.active {
-  border-color: var(--accent);
+  border-color: var(--accent-text);
   box-shadow: 0 0 0 3px var(--accent-soft);
 }
 
@@ -5889,7 +5909,7 @@ body[dir="rtl"] .variation-select svg { transform: scaleX(-1); }
   font-size: 11px;
   font-weight: 700;
   letter-spacing: 0.02em;
-  color: var(--accent);
+  color: var(--accent-text);
   background: var(--accent-soft);
   border: 1px solid var(--accent-line);
   vertical-align: middle;
@@ -6020,7 +6040,7 @@ body[dir="rtl"] .variation-select svg { transform: scaleX(-1); }
 }
 .health-card-toggle.on {
   background: var(--accent);
-  border-color: var(--accent);
+  border-color: var(--accent-text);
   color: var(--accent-ink);
 }
 
@@ -6101,7 +6121,7 @@ body[dir="rtl"] .variation-select svg { transform: scaleX(-1); }
 .onb-logo {
   width: 68px; height: 68px; margin: 4px auto 16px; border-radius: 20px;
   display: flex; align-items: center; justify-content: center;
-  background: var(--accent-soft, var(--surface-2)); color: var(--accent);
+  background: var(--accent-soft, var(--surface-2)); color: var(--accent-text);
 }
 .onb-logo svg { width: 32px; height: 32px; }
 .onb-title { font-size: 22px; font-weight: 900; color: var(--text); margin-bottom: 8px; line-height: 1.3; }
@@ -6116,7 +6136,7 @@ body[dir="rtl"] .variation-select svg { transform: scaleX(-1); }
   display: flex; align-items: center; gap: 12px; padding: 13px 14px; border-radius: var(--radius);
   background: var(--surface-3); border: 1px solid var(--border); font-size: 14px; font-weight: 700; color: var(--text);
 }
-.onb-feat svg { width: 20px; height: 20px; color: var(--accent); flex: 0 0 auto; }
+.onb-feat svg { width: 20px; height: 20px; color: var(--accent-text); flex: 0 0 auto; }
 .onb-feat span { flex: 1; min-width: 0; }
 
 /* Units slide — margin-bottom, or the "Next" button sits flush against the two
@@ -6129,7 +6149,7 @@ body[dir="rtl"] .variation-select svg { transform: scaleX(-1); }
 }
 .onb-unit b { font-size: 20px; font-weight: 900; line-height: 1.3; }
 .onb-unit span { font-size: 12px; color: var(--text-mute); font-weight: 700; }
-.onb-unit.active { border-color: var(--accent); background: var(--accent-soft, var(--surface-2)); }
+.onb-unit.active { border-color: var(--accent-text); background: var(--accent-soft, var(--surface-2)); }
 
 /* Skip — a quiet text action BELOW the primary one. It used to be a second
    full-width `.btn-block` pressed straight against the green button, which gave
@@ -6172,7 +6192,7 @@ body[dir="rtl"] .variation-select svg { transform: scaleX(-1); }
   align-items: center;
   justify-content: center;
   background: var(--accent-soft, var(--surface-2));
-  color: var(--accent);
+  color: var(--accent-text);
 }
 .auth-title {
   font-size: 26px;
@@ -6201,7 +6221,7 @@ body[dir="rtl"] .variation-select svg { transform: scaleX(-1); }
   background: none;
   border: none;
   padding: 4px 4px;
-  color: var(--accent);
+  color: var(--accent-text);
   font-family: inherit;
   font-size: 13px;
   font-weight: 800;
@@ -6250,7 +6270,7 @@ body[dir="rtl"] .variation-select svg { transform: scaleX(-1); }
 .auth-toggle {
   background: none;
   border: none;
-  color: var(--accent);
+  color: var(--accent-text);
   font-family: inherit;
   font-size: 14px;
   font-weight: 600;
@@ -6330,7 +6350,7 @@ body[dir="rtl"] .variation-select svg { transform: scaleX(-1); }
    photo → lightbox) rather than the whole card, which holds the set inputs. */
 .sd-card-name[role="button"] { cursor: pointer; }
 .sd-card-name[role="button"]:hover,
-.sd-card-name[role="button"]:active { color: var(--accent); }
+.sd-card-name[role="button"]:active { color: var(--accent-text); }
 .sd-thumb-zoom:active { transform: scale(var(--press-scale)); }
 .sd-card-name[role="button"]:focus-visible,
 .sd-thumb-zoom:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
@@ -6396,7 +6416,7 @@ body[dir="rtl"] .variation-select svg { transform: scaleX(-1); }
   background: rgba(var(--accent-rgb), 0.12);
   border: 1px solid rgba(var(--accent-rgb), 0.3);
   border-radius: var(--radius-pill);
-  color: var(--accent);
+  color: var(--accent-text);
   font-family: inherit;
   font-size: var(--fs-body);
   font-weight: 800;
@@ -6446,7 +6466,7 @@ body[dir="rtl"] .variation-select svg { transform: scaleX(-1); }
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: var(--tracking-caps);
-  color: var(--accent);
+  color: var(--accent-text);
   margin-bottom: var(--sp-2);
   position: relative;
 }
@@ -6604,7 +6624,7 @@ body[dir="rtl"] .variation-select svg { transform: scaleX(-1); }
 .quick-add-cal {
   font-size: var(--fs-caption);
   font-weight: 600;
-  color: var(--accent);
+  color: var(--accent-text);
 }
 
 /* Image fade-in: images start invisible over the --img-placeholder surface
@@ -6654,7 +6674,7 @@ body[dir="rtl"] .variation-select svg { transform: scaleX(-1); }
   height: 38px;
   border-radius: 12px;
   background: rgba(var(--accent-rgb), 0.12);
-  color: var(--accent);
+  color: var(--accent-text);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -6739,12 +6759,12 @@ body[dir="rtl"] .variation-select svg { transform: scaleX(-1); }
   padding-inline-end: 16px;
 }
 .food-lib-chip .flc-cal { font-size: 11px; color: var(--text-mute); }
-.food-lib-chip .flc-cal .num { color: var(--accent); font-weight: 800; }
+.food-lib-chip .flc-cal .num { color: var(--accent-text); font-weight: 800; }
 .food-lib-chip .flc-check {
   position: absolute;
   top: 8px;
   inset-inline-end: 8px;
-  color: var(--accent);
+  color: var(--accent-text);
   opacity: 0;
 }
 .food-lib-chip .flc-check svg { width: 16px; height: 16px; }
@@ -6800,7 +6820,7 @@ body[dir="rtl"] .variation-select svg { transform: scaleX(-1); }
   display: grid;
   place-items: center;
   border-radius: 50%;
-  color: var(--accent);
+  color: var(--accent-text);
   background: rgba(var(--accent-rgb), 0.15);
 }
 .update-banner-icon svg { width: 20px; height: 20px; }

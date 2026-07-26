@@ -30,9 +30,9 @@
   <!-- Must carry the SAME ?v=N that cloud.js appends when it injects this script,
        or the preload warms a different URL and is wasted. `npm run release` bumps
        both (this one by regex, cloud.js by deriving from its own marker). -->
-  <link rel="preload" href="js/vendor/supabase.js?v=205" as="script">
+  <link rel="preload" href="js/vendor/supabase.js?v=206" as="script">
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=Tajawal:wght@400;500;700;800;900&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="styles.css?v=205">
+  <link rel="stylesheet" href="styles.css?v=206">
 </head>
 <body class="theme-dark">
   <div class="app">
@@ -97,20 +97,20 @@
           await Promise.all(regs.map((r) => r.unregister()));
           const keys = await caches.keys();
           await Promise.all(keys.map((k) => caches.delete(k)));
-          if (!sessionStorage.getItem('__cleaned_v205')) {
-            sessionStorage.setItem('__cleaned_v205', '1');
+          if (!sessionStorage.getItem('__cleaned_v206')) {
+            sessionStorage.setItem('__cleaned_v206', '1');
             location.reload();
           }
         }
       }).catch(() => {});
     }
   </script>
-  <script src="js/cloud.js?v=205"></script>
-  <script src="js/storage.js?v=205"></script>
-  <script src="js/tables.js?v=205"></script>
-  <script src="js/app.js?v=205"></script>
-  <script src="js/health.js?v=205"></script>
-  <script src="js/foodai.js?v=205"></script>
-  <script src="js/update.js?v=205"></script>
+  <script src="js/cloud.js?v=206"></script>
+  <script src="js/storage.js?v=206"></script>
+  <script src="js/tables.js?v=206"></script>
+  <script src="js/app.js?v=206"></script>
+  <script src="js/health.js?v=206"></script>
+  <script src="js/foodai.js?v=206"></script>
+  <script src="js/update.js?v=206"></script>
 </body>
 </html>

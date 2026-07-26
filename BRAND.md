@@ -37,8 +37,23 @@ Chosen by measurement, not taste:
 | `--accent-line` | `rgba(255,106,0,.30)` | selected borders |
 | `--accent-ink` | `#1a0800` | text **on** the accent — 6.78:1 |
 | `--accent-rgb` | `255, 106, 0` | for `rgba(var(--accent-rgb), α)` |
+| `--accent-text` | `= --accent`, `#b34a00` in light | the accent as **small text** |
 
-**The other 12 themes are alternate identities, not variations.** Each defines its
+**One brand orange, two tokens.** `--accent` is identical in light and dark — the
+primary button is `#ff6a00` in both. But `#ff6a00` is only 2.82:1 as 11–13px text
+on a white card, so light mode overrides `--accent-text` alone. Use `--accent` for
+fills; `color:` and `border-color:` take `--accent-text`.
+
+`--accent-text` is declared on **`body`**, never `:root`: `var()` resolves against
+the element it is declared on, and the theme classes live on `<body>` — declaring it
+on `:root` froze it to the root's orange and handed `frost` and `sand` an
+accent-text belonging to a different theme.
+
+**`light` and `dark` are two MODES of one identity; the other 11 are alternate
+skins.** `light` carries the same `#ff6a00`. The eleven skins each define their own
+accent — do not push the brand orange into those.
+
+**The other 11 themes are alternate identities, not variations.** Each defines its
 own accent set. Do **not** push the brand orange into them — the theme system is the
 strongest asset in the codebase precisely because each theme overrides only ~25 of
 the 88 tokens and inherits the rest.
