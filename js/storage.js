@@ -292,12 +292,26 @@ function uid() {
   return 'id-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 9);
 }
 
+// Starting UI language for a BRAND-NEW install. The app deliberately never ASKS
+// which language to use (the login screen carries an ar/en toggle instead), so
+// this guess is the only thing standing between an Arabic speaker and an English
+// first screen. Consulted ONLY when building a fresh state — an existing user's
+// saved `prefs.lang` is never overridden by the phone's locale.
+function detectLang() {
+  try {
+    const list = (navigator.languages && navigator.languages.length)
+      ? navigator.languages
+      : [navigator.language || ''];
+    return list.some((l) => String(l).toLowerCase().startsWith('ar')) ? 'ar' : 'en';
+  } catch (_) { return 'en'; }
+}
+
 
 function defaultState() {
   return {
     version: SCHEMA_VERSION,
     prefs: {
-      lang: 'en',
+      lang: detectLang(),
       theme: 'dark',
       unit: 'kg',
       translateExercises: true,   // Arabic UI: transliterate built-in exercise names
@@ -646,16 +660,10 @@ const DB = {
   // ----- User preferences -----
   prefs: {
     get() { return STATE.prefs || { lang: 'en', theme: 'dark', unit: 'kg' }; },
-    // Setting the language is ALSO the record that the user chose one. `lang`
-    // alone cannot carry that: it defaults to 'en', so a fresh install is
-    // indistinguishable from someone who deliberately picked English — and the
-    // first-run language screen would then either never show or show twice.
-    setLang(lang) { STATE.prefs.lang = lang; STATE.prefs.langPicked = true; save(); },
-    // Has the user explicitly chosen a language yet? Drives the language screen
-    // that must come BEFORE the mandatory account gate, so an Arabic speaker is
-    // not asked to sign up through an English form.
-    langPicked() { return !!(STATE.prefs && STATE.prefs.langPicked); },
-    setLangPicked() { STATE.prefs.langPicked = true; saveLocal(); },
+    // No `langPicked` companion flag any more: nothing needs to know whether the
+    // choice was deliberate, because the app never asks. A fresh install gets
+    // detectLang() and the login screen's ar/en toggle changes it.
+    setLang(lang) { STATE.prefs.lang = lang; save(); },
     setTheme(theme) { STATE.prefs.theme = theme; save(); },
     setUnit(unit) { STATE.prefs.unit = unit === 'lb' ? 'lb' : 'kg'; save(); },
     setTranslateExercises(on) { STATE.prefs.translateExercises = !!on; save(); },

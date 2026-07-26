@@ -12,7 +12,7 @@
 // build. The literal below is the fallback (file://, or a stripped query) and is
 // still bumped by `npm run release` — see CLAUDE.md "CACHE WORKFLOW".
 const VAULT_BUILD = (() => {
-  const FALLBACK = 'v196';
+  const FALLBACK = 'v197';
   try {
     const src = (document.currentScript && document.currentScript.src) || '';
     const m = src.match(/[?&]v=(\d+)/);
@@ -570,7 +570,8 @@ const I18N = {
     onb_feat_workouts: 'Plan & log every workout', onb_feat_ai: 'AI calories — photo, voice, or barcode',
     onb_feat_progress: 'Track weight, streaks & progress', onb_start: 'Get started',
     onb_unit_title: 'Choose your units', onb_unit_sub: 'You can change this later in Settings.',
-    onb_unit_metric: 'kilograms', onb_unit_imperial: 'pounds',
+    onb_unit_metric: 'Metric', onb_unit_imperial: 'Imperial',
+    unit_kg_name: 'Kilograms', unit_lb_name: 'Pounds',
     onb_goal_title: 'Set your calorie goal', onb_goal_sub: 'A quick calculator builds your daily targets. You can skip and set it later.',
     onb_set_goal: 'Set my goal', onb_skip: 'Skip for now',
     barcode_hint: 'Point the camera at a barcode',
@@ -656,8 +657,9 @@ const I18N = {
     auth_password: 'Password',
     auth_signin: 'Sign in',
     auth_signup: 'Create account',
-    auth_toggle_to_up: "Don't have an account? Create one",
-    auth_toggle_to_in: 'Already have an account? Sign in',
+    // Prefix only — the action next to it reuses auth_signup / auth_signin.
+    auth_no_account: "Don't have an account?",
+    auth_have_account: 'Already have an account?',
     auth_offline_grace: "You're offline — signed in on this device, so your data is available. Sync resumes when you reconnect.",
     username_title: 'Choose your username',
     username_sub: 'A unique handle others will know you by. Required to continue.',
@@ -1167,9 +1169,13 @@ const I18N = {
     onb_feat_workouts: 'خطّط وسجّل كل تمرين', onb_feat_ai: 'سعرات بالذكاء الاصطناعي — صورة أو صوت أو باركود',
     onb_feat_progress: 'تابع الوزن والإنجاز والتقدّم', onb_start: 'لنبدأ',
     onb_unit_title: 'اختر وحدة القياس', onb_unit_sub: 'يمكنك تغييرها لاحقاً من الإعدادات.',
-    onb_unit_metric: 'كيلوغرام', onb_unit_imperial: 'رطل',
+    // The system, not the unit — the unit name is already the bold label above it.
+    onb_unit_metric: 'النظام المتري', onb_unit_imperial: 'النظام الإمبراطوري',
+    unit_kg_name: 'كيلوغرام', unit_lb_name: 'رطل',
     onb_goal_title: 'حدّد هدف السعرات', onb_goal_sub: 'حاسبة سريعة تبني أهدافك اليومية. يمكنك التخطّي وضبطها لاحقاً.',
-    onb_set_goal: 'حدّد هدفي', onb_skip: 'التخطّي الآن',
+    // 'التخطّي الآن' was the definite masdar — it reads as a heading, not an
+    // action. A quiet 'لاحقاً' is the formal, idiomatic label for this button.
+    onb_set_goal: 'تحديد هدفي', onb_skip: 'لاحقاً',
     barcode_hint: 'وجّه الكاميرا نحو الباركود',
     barcode_looking: 'أبحث عنه…',
     barcode_not_found: 'غير موجود — جرّب الصورة أو اليدوي.',
@@ -1253,8 +1259,9 @@ const I18N = {
     auth_password: 'كلمة السر',
     auth_signin: 'تسجيل الدخول',
     auth_signup: 'إنشاء حساب',
-    auth_toggle_to_up: 'ما عندك حساب؟ أنشئ واحد',
-    auth_toggle_to_in: 'عندك حساب؟ سجّل دخول',
+    // Were 'ما عندك حساب؟' / 'عندك حساب؟' — dialect. Formal MSA:
+    auth_no_account: 'ليس لديك حساب؟',
+    auth_have_account: 'لديك حساب بالفعل؟',
     auth_offline_grace: 'أنت دون اتصال — حسابك مسجَّل على هذا الجهاز، فبياناتك متاحة. تستأنف المزامنة عند عودة الاتصال.',
     username_title: 'اختر اسم المستخدم',
     username_sub: 'اسم فريد يُعرّفك أمام الآخرين. إلزامي للمتابعة.',
@@ -1585,8 +1592,10 @@ const I18N = {
     food_log_card_sub: 'سجّل وجباتك',
 
     unit_label: 'وحدة الوزن',
-    kg_label: 'كيلوجرام (kg)',
-    lb_label: 'باوند (lb)',
+    // Formal MSA, not transliteration: كيلوغرام (not the dialectal كيلوجرام) and
+    // رطل (not the borrowed باوند). See CLAUDE.md — the Arabic UI is فصحى.
+    kg_label: 'كيلوغرام (kg)',
+    lb_label: 'رطل (lb)',
 
     // Navigation a11y
     back: 'رجوع',
@@ -1663,6 +1672,21 @@ function applyLang(lang) {
   document.querySelectorAll('[data-t]').forEach((el) => {
     el.textContent = t(el.dataset.t);
   });
+}
+
+// Switch the UI language and re-render everything that is currently on screen.
+// applyLang alone only fixes `dir` and the [data-t] nav labels — every view and
+// every open gate builds its text with t() at render time, so anything already
+// rendered keeps the old language until it is rebuilt. The boot-time overlays
+// matter most: the login gate and the first-run card are BOTH alive at once (the
+// gate is stacked on top), so changing the language on the gate has to reach the
+// card underneath it too.
+function setUiLanguage(lang) {
+  DB.prefs.setLang(lang);
+  applyLang(lang);
+  try { if (currentView) renderView(currentView); } catch (_) {}
+  const onb = document.getElementById('onboard-gate');
+  if (onb && onb.__render) { try { onb.__render(); } catch (_) {} }
 }
 
 // ==========================================================================
@@ -7939,28 +7963,61 @@ function isDevHost() {
 
 function showAuthGate(mode) {
   authMode = mode || 'in';
+  // Re-rendering (language switch, sign-in ⇄ sign-up) must not throw away what
+  // the user already typed.
+  const prev = document.getElementById('auth-gate');
+  const keep = prev
+    ? {
+        email: (prev.querySelector('#auth-email') || {}).value || '',
+        pw: (prev.querySelector('#auth-password') || {}).value || '',
+      }
+    : null;
   hideAuthGate();
   const up = authMode === 'up';
+  const lang = (DB.prefs.get().lang === 'ar') ? 'ar' : 'en';
   const gate = document.createElement('div');
   gate.id = 'auth-gate';
   gate.className = 'auth-gate';
   gate.innerHTML = `
     <div class="auth-card">
-      <div class="auth-title">THE VAULT</div>
-      <div class="auth-seg">
-        <button class="auth-seg-btn ${up ? '' : 'active'}" data-mode="in">${t('auth_signin')}</button>
-        <button class="auth-seg-btn ${up ? 'active' : ''}" data-mode="up">${t('auth_signup')}</button>
+      <div class="auth-lang" role="group" aria-label="${t('language')}">
+        <button type="button" class="auth-lang-btn ${lang === 'ar' ? 'active' : ''}" data-setlang="ar" lang="ar" aria-pressed="${lang === 'ar'}">العربية</button>
+        <button type="button" class="auth-lang-btn ${lang === 'en' ? 'active' : ''}" data-setlang="en" lang="en" aria-pressed="${lang === 'en'}">English</button>
       </div>
+      <div class="auth-title">THE VAULT</div>
       <div class="auth-sub">${up ? t('auth_sub_up') : t('auth_sub_in')}</div>
       <input type="email" id="auth-email" class="auth-input" placeholder="${t('auth_email')}" autocomplete="email" inputmode="email">
       <input type="password" id="auth-password" class="auth-input" placeholder="${t('auth_password')}" autocomplete="${up ? 'new-password' : 'current-password'}">
       <div class="auth-err" id="auth-err" role="alert"></div>
       <button class="btn btn-primary btn-block" id="auth-submit">${up ? t('auth_signup') : t('auth_signin')}</button>
       ${up ? '' : `<button class="auth-toggle" id="auth-forgot">${t('auth_forgot')}</button>`}
+      <!-- Mode switch: one small line UNDER the form, the way every sign-in page
+           does it. It replaced a top segmented control that gave sign-in and
+           sign-up equal visual weight and pushed the actual form down. -->
+      <div class="auth-switch">
+        ${up ? t('auth_have_account') : t('auth_no_account')}
+        <button type="button" data-mode="${up ? 'in' : 'up'}">${up ? t('auth_signin') : t('auth_signup')}</button>
+      </div>
       <a class="auth-legal" href="privacy.html?lang=${(DB.prefs.get().lang) || 'en'}" target="_blank" rel="noopener">${t('privacy_policy')}</a>
       ${isDevHost() ? `<button class="auth-dev-skip" id="auth-dev-skip">skip (dev only)</button>` : ''}
     </div>`;
   document.body.appendChild(gate);
+
+  if (keep) {
+    document.getElementById('auth-email').value = keep.email;
+    document.getElementById('auth-password').value = keep.pw;
+  }
+
+  // The ONLY language control in the whole first-run flow. Both labels always
+  // stay in their own script so each is legible to the person who wants it, and
+  // neither is ever a question the user has to answer to get past this screen.
+  gate.querySelectorAll('[data-setlang]').forEach((b) =>
+    b.addEventListener('click', () => {
+      if (b.dataset.setlang === lang) return;
+      setUiLanguage(b.dataset.setlang);
+      showAuthGate(authMode); // rebuild this card in the new language
+    })
+  );
 
   const err = (msg) => { const e = document.getElementById('auth-err'); if (e) e.textContent = msg || ''; };
   const submit = document.getElementById('auth-submit');
@@ -7997,7 +8054,7 @@ function showAuthGate(mode) {
 
   submit.addEventListener('click', run);
   document.getElementById('auth-password').addEventListener('keydown', (e) => { if (e.key === 'Enter') run(); });
-  gate.querySelectorAll('.auth-seg-btn').forEach((b) =>
+  gate.querySelectorAll('[data-mode]').forEach((b) =>
     b.addEventListener('click', () => { if (b.dataset.mode !== authMode) showAuthGate(b.dataset.mode); })
   );
   // No skip button in production: an account is REQUIRED (see bootCloud), and
@@ -8535,9 +8592,6 @@ function renderPersonalRecords(el) {
 
 async function bootCloud() {
   if (!window.Cloud || !Cloud.configured()) return; // not set up → local-only
-  // Ask for a language BEFORE the account gate. The gate is mandatory now, so it
-  // would otherwise be an unskippable English form for an Arabic-speaking user.
-  try { await showLangGate(); } catch (_) {}
   await Cloud.ensureSdk(); // load the Supabase SDK on demand
   // Opened from a password-reset link → let the user set a new password.
   Cloud.onPasswordRecovery(() => showChangePassword());
@@ -8801,44 +8855,14 @@ function setupKeyboardHandling() {
 // Existing users are silently marked onboarded so they never see it. Ends by
 // handing off to the real calorie calculator — no duplicated goal logic.
 // ==========================================================================
-// Language FIRST — shown before the (mandatory) account gate on a brand-new
-// install. Without this an Arabic speaker's very first screen is an English
-// sign-up form, which is now unskippable. Resolves once a language is chosen.
-function showLangGate() {
-  return new Promise((resolve) => {
-    if (DB.prefs.langPicked() || document.getElementById('lang-gate')) { resolve(); return; }
-    const gate = document.createElement('div');
-    gate.id = 'lang-gate';
-    gate.className = 'auth-gate onboard-gate';
-    // Bilingual by necessity: we do not yet know which language to address them in.
-    gate.innerHTML = `
-      <div class="auth-card onb-card">
-        <div class="onb-logo">${icon('vault', 32)}</div>
-        <div class="onb-title">اختر لغتك<br>Choose your language</div>
-        <div class="onb-langs">
-          <button type="button" class="onb-lang-opt" data-pick="ar"><b>العربية</b><span>Arabic</span></button>
-          <button type="button" class="onb-lang-opt" data-pick="en"><b>English</b><span>الإنجليزية</span></button>
-        </div>
-      </div>`;
-    document.body.appendChild(gate);
-    gate.querySelectorAll('[data-pick]').forEach((b) =>
-      b.addEventListener('click', () => {
-        DB.prefs.setLang(b.dataset.pick);
-        applyLang(b.dataset.pick);
-        gate.remove();
-        try { renderView(currentView); } catch (_) {}
-        resolve();
-      })
-    );
-  });
-}
-
+// NO language step here, and no separate language gate before the login screen.
+// Both existed, and both ran on the same fresh install — its own gate asked, then
+// onboarding's step 0 asked the exact same question again seconds later. The
+// language is now guessed from the phone's locale (storage.js detectLang) and
+// corrected with the ar/en toggle on the login screen, so it is never a question.
 function showOnboarding() {
   if (document.getElementById('onboard-gate')) return;
-  // Start past the language step when the language gate already asked. Keeping
-  // step 0 reachable means a user who picked a language 3 seconds ago is asked
-  // again — the duplicate question that made the old flow feel broken.
-  let step = DB.prefs.langPicked() ? 1 : 0;
+  let step = 0;
   const gate = document.createElement('div');
   gate.id = 'onboard-gate';
   gate.className = 'auth-gate onboard-gate';
@@ -8847,7 +8871,7 @@ function showOnboarding() {
   const finish = (openGoal) => {
     DB.prefs.setOnboarded();
     gate.remove();
-    // Reflect any language/unit change picked during onboarding.
+    // Reflect the unit picked during onboarding.
     if (typeof renderView === 'function' && typeof currentView !== 'undefined' && currentView) {
       try { renderView(currentView); } catch (_) {}
     }
@@ -8859,20 +8883,10 @@ function showOnboarding() {
   };
 
   const render = () => {
-    const lang = DB.prefs.get().lang || 'en';
     const unit = DB.prefs.get().unit || 'kg';
-    const dots = [0, 1, 2, 3].map((i) => `<span class="onb-dot ${i === step ? 'active' : ''}"></span>`).join('');
+    const dots = [0, 1, 2].map((i) => `<span class="onb-dot ${i === step ? 'active' : ''}"></span>`).join('');
     let inner = '';
     if (step === 0) {
-      // Language first — the user hasn't picked one yet, so the title is bilingual.
-      inner = `
-        <div class="onb-logo">${icon('vault', 32)}</div>
-        <div class="onb-title">اختر لغتك<br>Choose your language</div>
-        <div class="onb-langs">
-          <button type="button" class="onb-lang-opt ${lang === 'ar' ? 'active' : ''}" data-setlang="ar"><b>العربية</b><span>Arabic</span></button>
-          <button type="button" class="onb-lang-opt ${lang === 'en' ? 'active' : ''}" data-setlang="en"><b>English</b><span>الإنجليزية</span></button>
-        </div>`;
-    } else if (step === 1) {
       inner = `
         <div class="onb-logo">${icon('vault', 32)}</div>
         <div class="onb-title">${t('onb_welcome_title')}</div>
@@ -8883,14 +8897,17 @@ function showOnboarding() {
           <div class="onb-feat">${icon('chart', 20)}<span>${t('onb_feat_progress')}</span></div>
         </div>
         <button type="button" class="btn btn-primary btn-block" data-next>${t('onb_start')}</button>`;
-    } else if (step === 2) {
+    } else if (step === 1) {
       inner = `
         <div class="onb-logo">${icon('settings', 32)}</div>
         <div class="onb-title">${t('onb_unit_title')}</div>
         <div class="onb-sub">${t('onb_unit_sub')}</div>
         <div class="onb-units">
-          <button type="button" class="onb-unit ${unit === 'kg' ? 'active' : ''}" data-unit="kg"><b>${t('kg_label')}</b><span>${t('onb_unit_metric')}</span></button>
-          <button type="button" class="onb-unit ${unit === 'lb' ? 'active' : ''}" data-unit="lb"><b>${t('lb_label')}</b><span>${t('onb_unit_imperial')}</span></button>
+          <!-- Bare unit NAME in the bold line and the (kg)/(lb) code down in the
+               sub-line: kg_label carries both, and both together wrap inside a
+               ~150px card, stranding "(kg)" on a line of its own. -->
+          <button type="button" class="onb-unit ${unit === 'kg' ? 'active' : ''}" data-unit="kg"><b>${t('unit_kg_name')}</b><span>${t('onb_unit_metric')} (kg)</span></button>
+          <button type="button" class="onb-unit ${unit === 'lb' ? 'active' : ''}" data-unit="lb"><b>${t('unit_lb_name')}</b><span>${t('onb_unit_imperial')} (lb)</span></button>
         </div>
         <button type="button" class="btn btn-primary btn-block" data-next>${t('next')}</button>`;
     } else {
@@ -8899,17 +8916,10 @@ function showOnboarding() {
         <div class="onb-title">${t('onb_goal_title')}</div>
         <div class="onb-sub">${t('onb_goal_sub')}</div>
         <button type="button" class="btn btn-primary btn-block" data-goal>${t('onb_set_goal')}</button>
-        <button type="button" class="btn btn-ghost btn-block" data-skip>${t('onb_skip')}</button>`;
+        <button type="button" class="onb-skip" data-skip>${t('onb_skip')}</button>`;
     }
     gate.innerHTML = `<div class="auth-card onb-card">${inner}<div class="onb-dots">${dots}</div></div>`;
 
-    // Language slide → set + apply + advance to Welcome.
-    gate.querySelectorAll('[data-setlang]').forEach((b) => b.addEventListener('click', () => {
-      DB.prefs.setLang(b.dataset.setlang);
-      if (typeof applyLang === 'function') applyLang(b.dataset.setlang);
-      step = 1;
-      render();
-    }));
     gate.querySelectorAll('[data-unit]').forEach((b) => b.addEventListener('click', () => {
       DB.prefs.setUnit(b.dataset.unit);
       render();
@@ -8918,6 +8928,9 @@ function showOnboarding() {
     gate.querySelector('[data-goal]')?.addEventListener('click', () => finish(true));
     gate.querySelector('[data-skip]')?.addEventListener('click', () => finish(false));
   };
+  // This card is built at boot but the login gate is stacked ON TOP of it, so the
+  // language can change after it is already rendered. setUiLanguage() calls this.
+  gate.__render = render;
   render();
 }
 
@@ -8945,12 +8958,6 @@ function showOnboarding() {
     if (hasHistory) DB.prefs.setOnboarded();
     else { try { showOnboarding(); } catch (_) {} }
   }
-
-  // Backfill for everyone who was already using the app before the language
-  // screen existed: they have a language (whether they set it or not) and must
-  // never be interrupted by a first-run question on an update. Only a genuinely
-  // fresh install — no history, not onboarded — is left unflagged.
-  if (!DB.prefs.langPicked() && DB.prefs.onboarded()) DB.prefs.setLangPicked();
 
   bootCloud();
   bootCatalog(); // best-effort admin-content pull; works logged-out too
