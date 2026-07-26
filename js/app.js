@@ -12,7 +12,7 @@
 // build. The literal below is the fallback (file://, or a stripped query) and is
 // still bumped by `npm run release` — see CLAUDE.md "CACHE WORKFLOW".
 const VAULT_BUILD = (() => {
-  const FALLBACK = 'v203';
+  const FALLBACK = 'v204';
   try {
     const src = (document.currentScript && document.currentScript.src) || '';
     const m = src.match(/[?&]v=(\d+)/);
@@ -1685,7 +1685,9 @@ function applyTheme(theme) {
   document.body.classList.remove(...THEMES.map((t) => 'theme-' + t));
   document.body.classList.add('theme-' + theme);
   const themeColorMap = {
-    dark: '#06141b',
+    // #000000, not the old #06141b navy — that colour matched no theme in the app
+    // (dark's --bg is pure black), so the phone's status bar sat a shade off.
+    dark: '#000000',
     light: '#f6f8fa',
     forest: '#0a1812',
     ocean: '#0a1929',

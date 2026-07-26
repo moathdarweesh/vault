@@ -1,12 +1,16 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
-  <rect width="512" height="512" fill="#06141b" rx="96"/>
-  <g fill="none" stroke="#2dd4bf" stroke-width="28" stroke-linecap="round" stroke-linejoin="round">
-    <path d="M96 192v128"/>
-    <path d="M160 140v232"/>
-    <path d="M224 210v92"/>
-    <path d="M288 210v92"/>
-    <path d="M352 140v232"/>
-    <path d="M416 192v128"/>
-    <path d="M224 256h64"/>
+  <!-- THE VAULT app mark. This is the `vault` glyph from ICONS scaled to 512 —
+       five bars, NO crossbar. The crossbar belongs to `dumbbell`; the old icon
+       carried it, so the app icon was the equipment glyph rather than the brand
+       mark. Flat caps + mitre joins to match the VAULT Machined icon language,
+       pure black to match the app's actual --bg (the old #06141b navy matched no
+       theme), and the brand accent #ff6a00. -->
+  <rect width="512" height="512" fill="#000000" rx="96"/>
+  <g fill="none" stroke="#ff6a00" stroke-width="40" stroke-linecap="butt" stroke-linejoin="miter">
+    <path d="M96 176v160"/>
+    <path d="M176 96v320"/>
+    <path d="M256 128v256"/>
+    <path d="M336 96v320"/>
+    <path d="M416 176v160"/>
   </g>
 </svg>

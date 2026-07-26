@@ -20,7 +20,7 @@
   --surface-hi:  #262626;
   --border:      rgba(255, 255, 255, 0.14);
   --border-hi:   rgba(255, 255, 255, 0.22);
-  --border-focus:rgba(91, 141, 239, 0.55);
+  --border-focus:rgba(255, 106, 0, 0.55);
 
   --text:        #ffffff;
   --text-mute:   #a3a3a3;
@@ -28,12 +28,20 @@
   --text-faint:  #7a7a7a;
   --text-ghost:  #7e7e7e;
 
-  --accent:      #5b8def;
-  --accent-2:    #3f6fd1;
-  --accent-3:    #325cae;
-  --accent-soft: rgba(91, 141, 239, 0.13);
-  --accent-line: rgba(91, 141, 239, 0.30);
-  --accent-ink:  #06122e;
+  /* ===== BRAND ACCENT — hot metal =====
+     Only the DEFAULT (dark) theme carries the brand colour; the other twelve are
+     deliberate alternate identities and each defines its own accent, so this is
+     the one place the brand lives.
+     #ff6a00 was chosen over the other oranges by measurement: 7.31:1 on black,
+     and the largest RGB separation from the two colours it could be confused
+     with — the `sunset` theme's own accent (#fb923c) and --cat-arms (#fbbf24).
+     A softer amber would have made `dark` and `sunset` near-duplicates. */
+  --accent:      #ff6a00;
+  --accent-2:    #e05c00;
+  --accent-3:    #b84a00;
+  --accent-soft: rgba(255, 106, 0, 0.13);
+  --accent-line: rgba(255, 106, 0, 0.30);
+  --accent-ink:  #1a0800;
 
   --green:       #22c55e;
   --green-2:     #16a34a;
@@ -86,6 +94,14 @@
   --fs-body:    15px;
   --fs-sub:     13px;
   --fs-caption: 11px;
+  /* Added after measuring the stylesheet: 12px (49 uses) and 14px (34 uses) were
+     the 2nd and 4th most-used sizes in the whole file and had NO token to name
+     them — which is most of why --fs-* adoption sat at 9%. --fs-page is the 26px
+     .page-title introduced in v200. All three are declared at the values already
+     in use, so this is a naming fix with zero visual change. */
+  --fs-page:    26px;
+  --fs-label:   14px;
+  --fs-meta:    12px;
   --fw-display: 800;
   --fw-title:   700;
   --fw-body:    500;
@@ -121,7 +137,7 @@
   --press-scale: 0.97;
 
   /* Theme-safe channels (each theme overrides --accent-rgb; light themes override --overlay) */
-  --accent-rgb: 91, 141, 239;
+  --accent-rgb: 255, 106, 0;
   --overlay:    rgba(0, 0, 0, 0.72);
 }
 
@@ -140,6 +156,9 @@ body {
    THEME: LIGHT CLEAN
    ========================================================================= */
 body.theme-light {
+  /* Accent darkened one step (was #0d9488): --accent-ink is #ffffff here, and
+     white on that teal measured 3.74:1 — under AA for button labels. #0f766e
+     takes it to 5.54:1. Pre-existing, found by sweeping all 13 themes. */
   --accent-rgb:  13, 148, 136;
   --overlay:     rgba(15, 23, 42, 0.45);
   --bg:          #f6f8fa;
@@ -150,7 +169,7 @@ body.theme-light {
   --surface-hi:  #cbd5dc;
   --border:      rgba(15, 23, 42, 0.08);
   --border-hi:   rgba(15, 23, 42, 0.14);
-  --border-focus:rgba(13, 148, 136, 0.45);
+  --border-focus:rgba(15, 118, 110, 0.45);
 
   --text:        #0f172a;
   --text-mute:   #475569;
@@ -158,11 +177,11 @@ body.theme-light {
   --text-faint:  #cbd5e1;
   --text-ghost:  #6a6f75;
 
-  --accent:      #0d9488;
-  --accent-2:    #0f766e;
-  --accent-3:    #115e59;
-  --accent-soft: rgba(13, 148, 136, 0.1);
-  --accent-line: rgba(13, 148, 136, 0.28);
+  --accent:      #0f766e;
+  --accent-2:    #115e59;
+  --accent-3:    #134e4a;
+  --accent-soft: rgba(15, 118, 110, 0.1);
+  --accent-line: rgba(15, 118, 110, 0.28);
   --accent-ink:  #ffffff;
 
   --green:       #16a34a;
