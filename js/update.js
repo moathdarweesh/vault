@@ -92,7 +92,7 @@
     el.innerHTML =
       '<div class="update-banner-main">' +
         '<div class="update-banner-icon">' +
-          '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 0 1 15-6.7L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-15 6.7L3 16"/><path d="M3 21v-5h5"/></svg>' +
+          '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="butt" stroke-linejoin="miter" stroke-miterlimit="4"><path d="M12 4a8 8 0 1 1-8 8"/><path d="M8 8l4-4 4 4"/></svg>' +
         '</div>' +
         '<div class="update-banner-text">' +
           '<div class="update-banner-title">' + esc(tr('web_update_title')) + '</div>' +
@@ -151,7 +151,7 @@
     el.innerHTML =
       '<div class="update-banner-main">' +
         '<div class="update-banner-icon">' +
-          '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5"/><path d="m5 12 7-7 7 7"/></svg>' +
+          '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="butt" stroke-linejoin="miter" stroke-miterlimit="4"><path d="M12 20V4"/><path d="M6 10l6-6 6 6"/></svg>' +
         '</div>' +
         '<div class="update-banner-text">' +
           '<div class="update-banner-title">' + esc(tr('update_title')) + (ver ? ' · ' + ver : '') + '</div>' +

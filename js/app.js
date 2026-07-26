@@ -12,7 +12,7 @@
 // build. The literal below is the fallback (file://, or a stripped query) and is
 // still bumped by `npm run release` — see CLAUDE.md "CACHE WORKFLOW".
 const VAULT_BUILD = (() => {
-  const FALLBACK = 'v201';
+  const FALLBACK = 'v202';
   try {
     const src = (document.currentScript && document.currentScript.src) || '';
     const m = src.match(/[?&]v=(\d+)/);
@@ -24,65 +24,69 @@ const VAULT_BUILD = (() => {
 // Icons
 // ==========================================================================
 const ICONS = {
-  plus: '<path d="M12 5v14"/><path d="M5 12h14"/>',
-  minus: '<path d="M5 12h14"/>',
-  close: '<path d="M18 6 6 18"/><path d="m6 6 12 12"/>',
-  back: '<path d="m15 18-6-6 6-6"/>',
-  chevronRight: '<path d="m9 18 6-6-6-6"/>',
-  trash: '<path d="M3 6h18"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>',
-  edit: '<path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>',
-  grip: '<line x1="4" y1="8" x2="20" y2="8"/><line x1="4" y1="12" x2="20" y2="12"/><line x1="4" y1="16" x2="20" y2="16"/>',
-  droplet: '<path d="M12 2.69l5.66 5.66a8 8 0 1 1-11.31 0z"/>',
-  footprints: '<path d="M4 16v-2.38C4 11.5 2.97 10.5 3 8c.03-2.72 1.49-6 4.5-6C9.37 2 10 3.8 10 5.5c0 3.11-2 5.66-2 8.68V16a2 2 0 1 1-4 0Z"/><path d="M20 20v-2.38c0-2.12 1.03-3.12 1-5.62-.03-2.72-1.49-6-4.5-6C14.63 6 14 7.8 14 9.5c0 3.11 2 5.66 2 8.68V20a2 2 0 1 0 4 0Z"/>',
-  calendar: '<rect width="18" height="18" x="3" y="4" rx="2"/><line x1="16" x2="16" y1="2" y2="6"/><line x1="8" x2="8" y1="2" y2="6"/><line x1="3" x2="21" y1="10" y2="10"/>',
-  chart: '<line x1="18" x2="18" y1="20" y2="10"/><line x1="12" x2="12" y1="20" y2="4"/><line x1="6" x2="6" y1="20" y2="14"/>',
-  dumbbell: '<path d="M4 9v6"/><path d="M7 7v10"/><path d="M10 10v4"/><path d="M14 10v4"/><path d="M17 7v10"/><path d="M20 9v6"/><path d="M10 12h4"/>',
-  vault: '<path d="M4 8v8"/><path d="M8 6v12"/><path d="M11 9v6"/><path d="M14 9v6"/><path d="M17 6v12"/><path d="M20 8v8"/><path d="M11 12h3"/>',
-  vaultDoor: '<rect x="3" y="3" width="18" height="18" rx="3.5"/><circle cx="12" cy="12" r="3.8"/><path d="M12 8.2V6"/><path d="M12 18v-2.2"/><path d="M8.2 12H6"/><path d="M18 12h-2.2"/><circle cx="12" cy="12" r="1" fill="currentColor"/>',
-  run: '<circle cx="14" cy="4" r="2"/><path d="m4.5 22 3.5-7 4-2 4 5 4 1"/><path d="m12 13-4-2 1-4"/>',
-  moon: '<path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79Z"/>',
-  apple: '<path d="M12 10c-3 0-6 2-6 6s3 6 6 6 6-3 6-6-3-6-6-6Z"/><path d="M10 10c0-2 1-4 2-5"/><path d="M14 5c-.5.5-1 1.2-1.4 2"/>',
-  home: '<path d="M3 12 12 3l9 9"/><path d="M5 10v10a1 1 0 0 0 1 1h3v-6h6v6h3a1 1 0 0 0 1-1V10"/>',
-  flame: '<path d="M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.153.433-2.294 1-3a2.5 2.5 0 0 0 2.5 2.5z"/>',
-  clock: '<circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>',
-  bed: '<path d="M2 4v16"/><path d="M2 8h18a2 2 0 0 1 2 2v10"/><path d="M2 17h20"/><path d="M6 8v9"/>',
-  search: '<circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/>',
-  check: '<polyline points="20 6 9 17 4 12"/>',
-  arrowUp: '<path d="M12 19V5"/><path d="m5 12 7-7 7 7"/>',
-  arrowDown: '<path d="M12 5v14"/><path d="m19 12-7 7-7-7"/>',
-  walk: '<circle cx="13" cy="4" r="2"/><path d="m9 22 1.5-6 3-2 3 5 4 1"/><path d="m10 16-3-3 1-3"/>',
-  bike: '<circle cx="6" cy="17" r="3"/><circle cx="18" cy="17" r="3"/><path d="M6 17 11 7l3 7"/><circle cx="14" cy="6" r="1"/><path d="M14 7v3l-3 4"/>',
-  treadmill: '<rect x="2" y="14" width="20" height="6" rx="1.5"/><path d="M5 14V9a2 2 0 0 1 2-2h2"/><path d="M9 7V5"/><circle cx="9" cy="3.5" r="1"/><path d="M5 20l-1.5 2"/><path d="M19 20l1.5 2"/>',
-  heart: '<path d="M19 14c1.5-1.5 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z"/>',
-  heartPulse: '<path d="M19 14c1.5-1.5 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z"/><path d="M3.22 12H9.5l1.5-3 2 6 1.5-3h6.28"/>',
-  utensils: '<path d="M3 2v7c0 1.1.9 2 2 2h4a2 2 0 0 0 2-2V2"/><path d="M7 2v20"/><path d="M21 15V2v0a5 5 0 0 0-5 5v6c0 1.1.9 2 2 2h3Zm0 0v7"/>',
-  trophy: '<path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6"/><path d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18"/><path d="M4 22h16"/><path d="M10 14.66V17c0 .55-.47.98-.97 1.21C7.85 18.75 7 20.24 7 22"/><path d="M14 14.66V17c0 .55.47.98.97 1.21C16.15 18.75 17 20.24 17 22"/><path d="M18 2H6v7a6 6 0 0 0 12 0V2Z"/>',
-  zap: '<polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>',
-  target: '<circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/>',
-  message: '<path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/>',
-  columns: '<rect x="4" y="4" width="6" height="16" rx="1"/><rect x="14" y="9" width="6" height="11" rx="1"/>',
-  mic: '<path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="22"/>',
-  settings: '<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>',
-  globe: '<circle cx="12" cy="12" r="10"/><line x1="2" x2="22" y1="12" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/>',
-  palette: '<circle cx="13.5" cy="6.5" r=".5"/><circle cx="17.5" cy="10.5" r=".5"/><circle cx="8.5" cy="7.5" r=".5"/><circle cx="6.5" cy="12.5" r=".5"/><path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10c.926 0 1.648-.746 1.648-1.688 0-.437-.18-.835-.437-1.125-.29-.289-.438-.652-.438-1.125a1.64 1.64 0 0 1 1.668-1.668h1.996c3.051 0 5.555-2.503 5.555-5.554C21.965 6.012 17.461 2 12 2z"/>',
-  download: '<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" x2="12" y1="15" y2="3"/>',
-  upload: '<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" x2="12" y1="3" y2="15"/>',
-  refresh: '<path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M3 21v-5h5"/>',
-  info: '<circle cx="12" cy="12" r="10"/><line x1="12" x2="12" y1="16" y2="12"/><line x1="12" x2="12.01" y1="8" y2="8"/>',
-  backspace: '<path d="M20 5H9l-7 7 7 7h11a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2Z"/><line x1="18" y1="9" x2="12" y2="15"/><line x1="12" y1="9" x2="18" y2="15"/>',
-  camera: '<path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3z"/><circle cx="12" cy="13" r="3.2"/>',
-  // Evenly spaced + centered (was 3,7,11,15,19,21 — a cramped 2-unit last gap
-  // vs 4 everywhere else, which read lopsided at small render sizes).
-  barcode: '<path d="M4 5v14M8 5v14M12 5v14M16 5v14M20 5v14"/>',
-  // Design-panel additions (v175): clearer, meaning-fit glyphs.
-  play: '<polygon points="8 5 8 19 19 12"/>',                              // "start" — Guided Mode
-  pill: '<path d="m10.5 20.5 10-10a4.95 4.95 0 1 0-7-7l-10 10a4.95 4.95 0 1 0 7 7Z"/><path d="m8.5 8.5 7 7"/>', // supplements (not a droplet)
-  trendLine: '<polyline points="3 17 8 10 12 14 16 6 21 11"/>',           // a value over time (direction-neutral) — weight
-  // AI-assisted. Filled (not stroked, unlike the rest of this set) on purpose:
-  // a thin stroked outline on a small concave 4-point star gets bulgy/blobby at
-  // the round line-joins once scaled down to a 16-18px button — the same
-  // per-shape fill override already used by vaultDoor's center dot.
-  sparkle: '<polygon points="12 3 15 9 21 12 15 15 12 21 9 15 3 12 9 9" fill="currentColor" stroke="none"/>',
+  // VAULT Machined — every endpoint on an even coordinate, angles 0/45/90 only,
+  // radii from {1,2,3,4,6,8,10}, outer rx=2, max 5 sub-paths, flat caps + mitre
+  // joins (see icon()). The signature motif is a filled r=1 centre dot, used
+  // sparingly: vaultDoor, target, flame, info — never a whole row of them.
+  plus: '<path d="M12 4v16"/><path d="M4 12h16"/>',
+  minus: '<path d="M4 12h16"/>',
+  close: '<path d="M6 6 18 18"/><path d="M18 6 6 18"/>',
+  back: '<path d="M14 6 8 12l6 6"/>',
+  chevronRight: '<path d="M10 6l6 6-6 6"/>',
+  trash: '<path d="M4 6h16"/><path d="M6 6v12a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2V6"/><path d="M10 6V4h4v2"/>',
+  edit: '<path d="M4 20v-4L16 4l4 4L8 20Z"/><path d="M14 6l4 4"/>',
+  grip: '<path d="M4 8h16"/><path d="M4 12h16"/><path d="M4 16h16"/>',
+  droplet: '<path d="M12 4l6 6a6 6 0 1 1-12 0Z"/>',
+  footprints: '<rect x="4" y="4" width="6" height="10" rx="2"/><rect x="14" y="10" width="6" height="10" rx="2"/>',
+  calendar: '<rect x="4" y="6" width="16" height="14" rx="2"/><path d="M4 10h16"/><path d="M8 4v4"/><path d="M16 4v4"/>',
+  chart: '<path d="M6 20v-6"/><path d="M12 20V8"/><path d="M18 20v-10"/>',
+  dumbbell: '<path d="M4 8v8"/><path d="M8 4v16"/><path d="M16 4v16"/><path d="M20 8v8"/><path d="M8 12h8"/>',
+  vault: '<path d="M4 8v8"/><path d="M8 4v16"/><path d="M12 6v12"/><path d="M16 4v16"/><path d="M20 8v8"/>',
+  vaultDoor: '<rect x="4" y="4" width="16" height="16" rx="2"/><circle cx="12" cy="12" r="4"/><path d="M12 4v4"/><path d="M12 16v4"/><circle cx="12" cy="12" r="1" fill="currentColor" stroke="none"/>',
+  run: '<circle cx="16" cy="6" r="2"/><path d="M14 8l-4 4"/><path d="M10 12l-4 4v4"/><path d="M10 12l4 4v4"/><path d="M14 10h4"/>',
+  moon: '<path d="M20 14a8 8 0 1 1-10-10 8 8 0 0 0 10 10Z"/>',
+  apple: '<circle cx="12" cy="14" r="6"/><path d="M12 8V4"/><path d="M12 4h4v2"/>',
+  home: '<path d="M4 12 12 4l8 8"/><path d="M6 10v10h12V10"/><path d="M10 20v-6h4v6"/>',
+  flame: '<path d="M12 2l6 6-2 2 2 2a6 6 0 1 1-12 0l2-2-2-2Z"/><circle cx="12" cy="14" r="1" fill="currentColor" stroke="none"/>',
+  clock: '<circle cx="12" cy="12" r="8"/><path d="M12 8v4h4"/>',
+  bed: '<path d="M2 20V8"/><path d="M2 12h16a4 4 0 0 1 4 4v4"/><path d="M6 12V8h4v4"/>',
+  search: '<circle cx="10" cy="10" r="6"/><path d="M16 16l4 4"/>',
+  check: '<path d="M4 12l6 6L20 6"/>',
+  arrowUp: '<path d="M12 20V4"/><path d="M6 10l6-6 6 6"/>',
+  arrowDown: '<path d="M12 4v16"/><path d="M6 14l6 6 6-6"/>',
+  walk: '<circle cx="12" cy="4" r="2"/><path d="M12 6v6"/><path d="M12 12l-4 4v4"/><path d="M12 12l4 4v4"/><path d="M8 8h8"/>',
+  bike: '<circle cx="6" cy="16" r="4"/><circle cx="18" cy="16" r="4"/><path d="M6 16l6-6 6 6"/><path d="M12 10V6h2"/>',
+  treadmill: '<rect x="2" y="16" width="16" height="4" rx="2"/><path d="M18 18V8h-4"/><path d="M14 8v4"/>',
+  heart: '<path d="M4 10a4 4 0 0 1 8 0 4 4 0 0 1 8 0l-8 8Z"/>',
+  heartPulse: '<path d="M4 10a4 4 0 0 1 8 0 4 4 0 0 1 8 0l-8 8Z"/><path d="M2 12h6l2-2 4 4 2-2h6"/>',
+  utensils: '<path d="M6 4v6h4V4"/><path d="M8 10v10"/><path d="M18 4v16"/><path d="M18 4l-4 4v4h4"/>',
+  trophy: '<path d="M6 4h12v6a6 6 0 0 1-12 0Z"/><path d="M6 6H4v2a2 2 0 0 0 2 2"/><path d="M18 6h2v2a2 2 0 0 1-2 2"/><path d="M12 16v4"/><path d="M8 20h8"/>',
+  zap: '<path d="M14 2 4 12h6v10l10-10h-6V2Z"/>',
+  target: '<circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="4"/><circle cx="12" cy="12" r="1" fill="currentColor" stroke="none"/>',
+  message: '<rect x="2" y="4" width="20" height="14" rx="2"/><path d="M8 18v4l4-4"/>',
+  columns: '<rect x="4" y="4" width="6" height="16" rx="2"/><rect x="14" y="10" width="6" height="10" rx="2"/>',
+  mic: '<rect x="8" y="2" width="8" height="12" rx="4"/><path d="M6 12v2a6 6 0 0 0 12 0v-2"/><path d="M12 20v2"/>',
+  settings: '<path d="M4 8h16"/><path d="M4 16h16"/><circle cx="10" cy="8" r="2"/><circle cx="16" cy="16" r="2"/>',
+  globe: '<circle cx="12" cy="12" r="8"/><path d="M4 12h16"/><path d="M12 4a10 10 0 0 1 0 16 10 10 0 0 1 0-16Z"/>',
+  palette: '<rect x="4" y="4" width="16" height="16" rx="2"/><path d="M12 4v16"/><path d="M4 12h16"/>',
+  download: '<path d="M12 4v10"/><path d="M8 10l4 4 4-4"/><path d="M4 18v2h16v-2"/>',
+  upload: '<path d="M12 18V8"/><path d="M8 12l4-4 4 4"/><path d="M4 18v2h16v-2"/>',
+  refresh: '<path d="M12 4a8 8 0 1 1-8 8"/><path d="M8 8l4-4 4 4"/>',
+  info: '<circle cx="12" cy="12" r="8"/><path d="M12 10v6"/><circle cx="12" cy="6" r="1" fill="currentColor" stroke="none"/>',
+  backspace: '<path d="M10 4h10v16H10L2 12Z"/><path d="M14 10l4 4"/><path d="M18 10l-4 4"/>',
+  camera: '<rect x="2" y="6" width="20" height="14" rx="2"/><circle cx="12" cy="14" r="3"/><path d="M8 6V4h4v2"/>',
+  barcode: '<path d="M4 4v16"/><path d="M8 4v16"/><path d="M12 4v16"/><path d="M16 4v16"/><path d="M20 4v16"/>',
+  play: '<path d="M8 4l8 8-8 8Z"/>',
+  pill: '<rect x="2" y="8" width="20" height="8" rx="4"/><path d="M12 8v8"/>',
+  trendLine: '<path d="M4 16l4-4 4 4 8-8"/>',
+  // ADDED (not a redesign): app.js already called icon('send') for the Settings
+  // feedback row, but no such key existed — ICONS[name] || '' returned an empty
+  // string and the icon had been silently blank in production. Exactly the
+  // failure mode the brief warns about, found by auditing all 201 call sites.
+  send: '<path d="M4 12h14"/><path d="M12 6l6 6-6 6"/>',
+  // Filled, like the centre dots: a thin stroked outline on a small concave star
+  // goes blobby at the joins once scaled to a 16px button.
+  sparkle: '<path d="M12 2 14 10 22 12 14 14 12 22 10 14 2 12 10 10Z" fill="currentColor" stroke="none"/>',
 };
 
 // Optical-weight correction: this app renders the SAME 24-viewBox glyphs anywhere
@@ -94,10 +98,20 @@ const ICONS = {
 // line up with the app's size scale (16=sm, 18=md, 20=lg, 24=xl, 28=FAB): the
 // two most common, already-established sizes (18 and 20) keep the original
 // stroke-width of 2 unchanged.
+// Flat caps + mitre joins are the VAULT Machined signature — they are what makes
+// the set read as tooled rather than as generic rounded (Lucide/Feather) glyphs.
+// A few glyphs genuinely need round caps; keep this map as small as possible,
+// because every entry weakens the set's unity.
+const ICON_CAPS = {
+  heartPulse: 'round',  // the ECG trace: mitred spikes on a 2px stroke pick up hard barbs
+};
+
 function icon(name, size = 20) {
   const path = ICONS[name] || '';
   const strokeWidth = size <= 16 ? 2.25 : size >= 22 ? 1.75 : 2;
-  return `<svg viewBox="0 0 24 24" width="${size}" height="${size}" fill="none" stroke="currentColor" stroke-width="${strokeWidth}" stroke-linecap="round" stroke-linejoin="round">${path}</svg>`;
+  const cap = ICON_CAPS[name] || 'butt';
+  const join = cap === 'round' ? 'round' : 'miter';
+  return `<svg viewBox="0 0 24 24" width="${size}" height="${size}" fill="none" stroke="currentColor" stroke-width="${strokeWidth}" stroke-linecap="${cap}" stroke-linejoin="${join}" stroke-miterlimit="4">${path}</svg>`;
 }
 
 // ==========================================================================
