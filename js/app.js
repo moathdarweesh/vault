@@ -12,7 +12,7 @@
 // build. The literal below is the fallback (file://, or a stripped query) and is
 // still bumped by `npm run release` — see CLAUDE.md "CACHE WORKFLOW".
 const VAULT_BUILD = (() => {
-  const FALLBACK = 'v197';
+  const FALLBACK = 'v198';
   try {
     const src = (document.currentScript && document.currentScript.src) || '';
     const m = src.match(/[?&]v=(\d+)/);
@@ -426,7 +426,9 @@ function dayName(dow, full = false) {
 const I18N = {
   en: {
     app_name: 'THE VAULT',
-    nav_home: 'Home', nav_train: 'Train', nav_cardio: 'Cardio', nav_food: 'Food', nav_sleep: 'Sleep',
+    // nav_train labels the Program tab (view id 'workouts'), not the exercise
+    // browser — that moved to its own screen. See renderProgram.
+    nav_home: 'Home', nav_train: 'Program', nav_cardio: 'Cardio', nav_food: 'Food', nav_sleep: 'Sleep',
 
     greet_morning: 'Good morning', greet_afternoon: 'Good afternoon', greet_evening: 'Good evening',
 
@@ -821,10 +823,8 @@ const I18N = {
     today: 'Today', yesterday: 'Yesterday',
     days_ago: 'days ago', weeks_ago: 'weeks ago', months_ago: 'months ago',
 
-    // Library / Train list
-    library_title: 'Library',
-    library_subtitle: 'Browse all exercises and add the ones you do.',
-    browse_library: 'Browse Library',
+    // Exercise browser. (library_title/library_subtitle/browse_library went with
+    // the unreachable `library` view; the browser reuses train/train_subtitle.)
     add_from_library: 'Add from Library',
     add_exercise: 'Add exercise',
     exercise_removed: 'Exercise removed',
@@ -837,6 +837,19 @@ const I18N = {
     rotation_preview: 'Next 7 days',
     move_up: 'Move up',
     move_down: 'Move down',
+    // Program tab (the plan & progression center)
+    program_title: 'My Program',
+    program_subtitle: 'Your cycle, your weekly volume, your records.',
+    program_where: 'Where you are',
+    program_next: 'Next training days',
+    edit_cycle: 'Edit cycle',
+    program_volume: 'Volume',
+    program_days: 'Days',
+    program_no_plan_title: 'No program yet',
+    program_no_plan_sub: 'Pick a ready-made plan or build your own cycle.',
+    program_build: 'Build my program',
+    workout_label: 'Workout',
+    view_all: 'View all',
     prev_month: 'Previous month',
     next_month: 'Next month',
     exercise_order: 'Exercise order',
@@ -875,7 +888,7 @@ const I18N = {
     no_plan_today: 'Rest day',
     no_plan_today_sub: 'No exercises scheduled for today.',
     start_workout: 'Start Workout', guided_mode: 'Guided mode',
-    today_workout: "Today's workout", start_today_workout: "Start today's workout",
+    today_workout: "Today's workout",
     first_workout_title: 'Ready to train?', first_workout_sub: 'Log your first workout to get started.',
     start_first_workout: 'Start your first workout',
     exercise_word: 'Exercise',
@@ -1029,7 +1042,7 @@ const I18N = {
 
   ar: {
     app_name: 'ذا فولت',
-    nav_home: 'الرئيسية', nav_train: 'تمارين', nav_cardio: 'كارديو', nav_food: 'الأكل', nav_sleep: 'النوم',
+    nav_home: 'الرئيسية', nav_train: 'برنامجي', nav_cardio: 'كارديو', nav_food: 'الأكل', nav_sleep: 'النوم',
 
     greet_morning: 'صباح الخير', greet_afternoon: 'نهارك سعيد', greet_evening: 'مساء الخير',
 
@@ -1421,9 +1434,6 @@ const I18N = {
     weeks_ago: 'أسابيع',
     months_ago: 'أشهر',
 
-    library_title: 'المكتبة',
-    library_subtitle: 'تصفّح جميع التمارين وأضف ما تمارسه.',
-    browse_library: 'تصفّح المكتبة',
     add_from_library: 'إضافة من المكتبة',
     add_exercise: 'أضف تمرين',
     exercise_removed: 'تمت إزالة التمرين',
@@ -1436,6 +1446,19 @@ const I18N = {
     rotation_preview: 'الأيام السبعة القادمة',
     move_up: 'تحريك لأعلى',
     move_down: 'تحريك لأسفل',
+    // تبويب البرنامج (مركز الخطة والتقدّم)
+    program_title: 'برنامجي',
+    program_subtitle: 'دورتك، وحجم عملك الأسبوعي، وأرقامك القياسية.',
+    program_where: 'موضعك في الدورة',
+    program_next: 'أيام التمرين القادمة',
+    edit_cycle: 'تعديل الدورة',
+    program_volume: 'الحجم',
+    program_days: 'الأيام',
+    program_no_plan_title: 'لا يوجد برنامج بعد',
+    program_no_plan_sub: 'اختر خطة جاهزة أو ابنِ دورتك الخاصة.',
+    program_build: 'ابنِ برنامجي',
+    workout_label: 'تمرين',
+    view_all: 'عرض الكل',
     prev_month: 'الشهر السابق',
     next_month: 'الشهر التالي',
     exercise_order: 'ترتيب التمارين',
@@ -1472,7 +1495,7 @@ const I18N = {
     no_plan_today: 'يوم راحة',
     no_plan_today_sub: 'لا توجد تمارين مجدولة اليوم.',
     start_workout: 'ابدأ التمرين', guided_mode: 'الوضع الموجّه',
-    today_workout: 'تمرين اليوم', start_today_workout: 'ابدأ تمرين اليوم',
+    today_workout: 'تمرين اليوم',
     first_workout_title: 'جاهز للتمرين؟', first_workout_sub: 'سجّل أول تمرين لتبدأ.',
     start_first_workout: 'ابدأ أول تمرين',
     exercise_word: 'تمرين',
@@ -1928,12 +1951,16 @@ function navigate(view, context = {}, opts = {}) {
 
   $$('.view').forEach((v) => v.classList.toggle('active', v.dataset.view === view));
 
+  // Which bottom-nav tab stays lit on a child screen. Everything reached FROM the
+  // Program tab points back at it — the rotation editor and the records list moved
+  // there out of Home's tool rail, and the exercise browser plus the muscle history
+  // are only reachable through it now.
   const navMap = {
-    home: 'home', workouts: 'workouts', library: 'workouts', 'exercise-detail': 'workouts',
+    home: 'home', workouts: 'workouts',
+    exercises: 'workouts', 'exercise-detail': 'workouts', 'custom-exercises': 'workouts',
+    planner: 'workouts', 'personal-records': 'workouts', 'muscle-sessions': 'workouts',
     cardio: 'cardio', food: 'food', sleep: 'sleep',
-    compare: 'home', settings: 'home',
-    planner: 'home', calendar: 'home', supplements: 'home', foodlog: 'food',
-    'personal-records': 'home',
+    compare: 'home', settings: 'home', calendar: 'home', supplements: 'home', foodlog: 'food',
   };
   const highlightView = navMap[view] || view;
   $$('.nav-btn').forEach((b) => b.classList.toggle('active', b.dataset.view === highlightView));
@@ -2131,11 +2158,16 @@ function syncDetailTopTitle() {
 
 function renderView(view) {
   const el = $(`.view[data-view="${view}"]`);
-  if (!el) return;
+  // Unknown view → fall back to home instead of leaving a blank screen with no way
+  // out. Reachable in one real way: a pushState entry in someone's history that
+  // names a view a later build removed.
+  if (!el) { if (view !== 'home') navigate('home', {}, { fromPop: true }); return; }
   switch (view) {
     case 'home': renderHome(el); break;
-    case 'workouts': renderWorkouts(el); break;
-    case 'library': renderLibrary(el); break;
+    // 'workouts' is the Program tab; the exercise browser is 'exercises' (which
+    // took over the <section> slot of the old, unreachable 'library' view).
+    case 'workouts': renderProgram(el); break;
+    case 'exercises': renderExercises(el); break;
     case 'exercise-detail': renderExerciseDetail(el, viewContext.exerciseId); break;
     case 'cardio': renderCardio(el); break;
     case 'food': renderFood(el); break;
@@ -2317,7 +2349,9 @@ function deltaBlock(current, previous, unit) {
   return `<div class="compare-delta flat">${icon('minus', 16)} ${t('same_as_last_week')}</div>`;
 }
 
-function formatDelta(n) { return (Math.round(n * 10) / 10).toString(); }
+// fmtNum, not toString: weekly tonnage deltas run into the thousands, and a bare
+// "+3760" next to a value rendered as "6,460" reads as a different kind of number.
+function formatDelta(n) { return fmtNum(Math.round(n * 10) / 10); }
 
 // Count-up animation for hero/stat numerals (rAF, ease-out cubic).
 // Respects prefers-reduced-motion and cancels a previous run on re-render
@@ -2374,35 +2408,10 @@ function renderHome(el) {
   const lang = DB.prefs.get().lang || 'en';
   const dayLabel = now.toLocaleDateString(lang === 'ar' ? 'ar-u-nu-latn' : 'en-US', { weekday: 'long', month: 'long', day: 'numeric' });
 
-  // Muscle heatmap
-  const sevenDaysAgo = new Date(now); sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7); sevenDaysAgo.setHours(0, 0, 0, 0);
+  // The muscle heatmap moved to the Program tab (renderProgram) — it answers
+  // "is my volume balanced across muscles", which is a programme question, and
+  // keeping a second copy here is the duplication this redesign removed.
   const exercises = DB.exercises.list();
-  const exIdToCat = Object.fromEntries(exercises.map((e) => [e.id, e.category]));
-  const catCounts = Object.fromEntries(EXERCISE_CATEGORIES.map((c) => [c, 0]));
-  allSessions.forEach((s) => {
-    const d = new Date(s.date + 'T00:00:00');
-    if (d >= sevenDaysAgo) {
-      const cat = exIdToCat[s.exerciseId];
-      if (cat && catCounts[cat] !== undefined) catCounts[cat] += 1;
-    }
-  });
-
-  const heatTotal = EXERCISE_CATEGORIES.reduce((sum, c) => sum + (catCounts[c] || 0), 0);
-  const heatCells = EXERCISE_CATEGORIES.filter((c) => c !== 'Other').map((cat) => {
-    const count = catCounts[cat] || 0;
-    let lvl = 0;
-    if (count >= 1) lvl = 1;
-    if (count >= 3) lvl = 2;
-    if (count >= 5) lvl = 3;
-    if (count >= 8) lvl = 4;
-    // A real <button>: tapping a muscle opens its full session history.
-    return `
-      <button class="heat-cell lvl-${lvl}" data-muscle="${escapeHtml(cat)}" aria-label="${escapeHtml(categoryLabel(cat))}">
-        <div class="heat-cell-name">${escapeHtml(categoryLabel(cat))}</div>
-        <div class="heat-cell-count num">${count}</div>
-      </button>
-    `;
-  }).join('');
 
   // Recent
   const recent = [
@@ -2550,25 +2559,15 @@ function renderHome(el) {
 
     ${typeof Health !== 'undefined' ? Health.homeSectionHtml() : ''}
 
-    ${heatTotal > 0 ? `<div class="muscle-heatmap">
-      <div class="heatmap-head">
-        <div>
-          <div class="heatmap-title">${t('muscle_focus')}</div>
-          <div class="heatmap-sub">${t('muscle_focus_sub')}</div>
-        </div>
-      </div>
-      <div class="heatmap-grid band">${heatCells}</div>
-    </div>` : ''}
-
     <div class="section-title">${t('tools_section')}</div>
     <div class="tool-rail">
-      <button class="tool-pod" data-goto="planner">
+      <!-- The plan and records pods moved to the Program tab, which now owns both.
+           Calendar takes a pod because its only other entry point is the streak
+           chip, which is not rendered at all while the streak is 0 — so a new
+           user could not reach the calendar. -->
+      <button class="tool-pod" data-goto="calendar">
         <div class="tool-pod-icon">${icon('calendar', 18)}</div>
-        <div class="tool-pod-label">${t('plan_card')}</div>
-      </button>
-      <button class="tool-pod" data-goto="personal-records">
-        <div class="tool-pod-icon" aria-hidden="true">${icon('trophy', 18)}</div>
-        <div class="tool-pod-label">${t('pr_card')}</div>
+        <div class="tool-pod-label">${t('calendar_title')}</div>
       </button>
       <button class="tool-pod" data-goto="compare">
         <div class="tool-pod-icon">${icon('columns', 18)}</div>
@@ -2602,10 +2601,6 @@ function renderHome(el) {
     if (!hasAnyPlan) { navigate('planner'); return; }
     navigate('session-day', { date: todayISO() });
   });
-  // Tap a muscle in the focus heatmap → its full session history.
-  el.querySelectorAll('[data-muscle]').forEach((b) =>
-    b.addEventListener('click', () => navigate('muscle-sessions', { muscleCat: b.dataset.muscle }))
-  );
   if (typeof Health !== 'undefined') Health.bindHomeSection();
   $('#home-weight', el)?.addEventListener('click', () => openWeightSheet());
 }
@@ -3002,10 +2997,219 @@ function bentoCardHtml(ex, i, { showPR = true, toggle = null } = {}) {
 }
 
 // ==========================================================================
-// TRAIN (user's selected exercises)
+// PROGRAM — the plan & progression centre. Bottom-nav tab, view id 'workouts'.
+//
+// This tab used to be an exercise browser with a COPY of Home's "start today's
+// workout" button on top of it — the same navigate('session-day', today) call,
+// minus Home's branch that opens the planner when no plan exists. That is why it
+// felt purposeless: Home already owned starting a workout, so the tab was a
+// library with a stray button.
+//
+// Nothing here is newly invented except the weekly tonnage. The parts of a real
+// program screen already existed but were scattered: the rotation editor was one
+// pod in Home's tool rail, records another, and the muscle heatmap and weekly
+// counts were Home sections. This consolidates them so the tab answers one
+// question — "what is my programme, and am I progressing?"
+//
+// The view id stays 'workouts': it is baked into index.html's <section>, the nav
+// button, and every pushState entry already sitting in users' browser history.
+// The editor deliberately stays its own screen (renderPlanner) so this page stays
+// scannable and no working code had to be rewritten to move it.
 // ==========================================================================
-function renderWorkouts(el) {
-  const all = DB.exercises.list();
+function renderProgram(el) {
+  const plan = DB.plan.get() || { cycle: [], trainingDays: [], anchor: null };
+  const cycle = Array.isArray(plan.cycle) ? plan.cycle : [];
+
+  // Noon anchor: workoutForDate does date-only maths, and midnight ± a DST shift
+  // can land on the previous day.
+  const now = new Date(); now.setHours(12, 0, 0, 0);
+  const todayWorkout = DB.plan.workoutForDate(now);
+  // Identity compare is safe: workoutForDate returns the actual cycle element.
+  const currentIdx = todayWorkout ? cycle.indexOf(todayWorkout) : -1;
+
+  // ---- Where you are in the cycle ------------------------------------------
+  // Numbered chips, not arrows: an arrow glyph between chips points the wrong
+  // way once the row lays out right-to-left in Arabic.
+  // No exercise count on the chip: "1 Push 3" reads as if the 3 were part of the
+  // workout's name. This strip answers "where am I in the cycle" — counts belong
+  // in the editor, which already shows them per slot.
+  const cycleHtml = cycle.map((slot, i) => `
+      <div class="cycle-chip ${i === currentIdx ? 'current' : ''}">
+        <span class="cycle-chip-num num">${fmtNum(i + 1)}</span>
+        <span class="cycle-chip-name">${escapeHtml(slot.name || t('workout_label'))}</span>
+      </div>`).join('');
+
+  // ---- Next training days (rest days omitted — the planner's preview shows the
+  // raw 7-day roll including rest; here only the days you actually train). -----
+  const nextDays = [];
+  for (let i = 0; i < 28 && nextDays.length < 4; i++) {
+    const d = new Date(now); d.setDate(now.getDate() + i);
+    const w = DB.plan.workoutForDate(d);
+    if (w) nextDays.push({ iso: addDaysISO(todayISO(), i), dow: d.getDay(), w, isToday: i === 0 });
+  }
+  const nextHtml = nextDays.map(({ iso, dow, w, isToday }) => `
+    <button type="button" class="schedule-prev-row" data-day-iso="${iso}">
+      <span class="schedule-prev-day">${isToday ? t('today') : escapeHtml(dayName(dow, true))}</span>
+      <span class="schedule-prev-arrow"></span>
+      <span class="schedule-prev-workout">${escapeHtml(w.name || t('workout_label'))}</span>
+    </button>`).join('');
+
+  // ---- This week vs last week ----------------------------------------------
+  const { thisStart, thisEnd, lastStart, lastEnd } = weekRanges();
+  const allSessions = DB.sessions.listAll();
+  const wk = allSessions.filter((s) => inRangeISO(s.date, thisStart, thisEnd));
+  const lw = allSessions.filter((s) => inRangeISO(s.date, lastStart, lastEnd));
+  const daysOf = (list) => new Set(list.map((s) => s.date)).size;
+  const setsOf = (list) => list.reduce((n, s) => n + (s.sets || []).length, 0);
+  // Tonnage — Σ (weight × reps). The one number that actually tracks progression:
+  // more sets at a lighter weight is not progress, and nothing computed this.
+  const volOf = (list) => list.reduce((v, s) =>
+    v + (s.sets || []).reduce((n, x) => n + (Number(x.weight) || 0) * (Number(x.reps) || 0), 0), 0);
+  const volNow = volOf(wk);
+
+  // ---- Muscle volume, last 7 days (moved here from Home) -------------------
+  const sevenDaysAgo = new Date(now); sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7); sevenDaysAgo.setHours(0, 0, 0, 0);
+  const exIdToCat = Object.fromEntries(DB.exercises.list().map((e) => [e.id, e.category]));
+  const catCounts = Object.fromEntries(EXERCISE_CATEGORIES.map((c) => [c, 0]));
+  allSessions.forEach((s) => {
+    if (new Date(s.date + 'T00:00:00') >= sevenDaysAgo) {
+      const cat = exIdToCat[s.exerciseId];
+      if (cat && catCounts[cat] !== undefined) catCounts[cat] += 1;
+    }
+  });
+  const heatTotal = EXERCISE_CATEGORIES.reduce((sum, c) => sum + (catCounts[c] || 0), 0);
+  const heatCells = EXERCISE_CATEGORIES.filter((c) => c !== 'Other').map((cat) => {
+    const count = catCounts[cat] || 0;
+    let lvl = 0;
+    if (count >= 1) lvl = 1;
+    if (count >= 3) lvl = 2;
+    if (count >= 5) lvl = 3;
+    if (count >= 8) lvl = 4;
+    return `
+      <button class="heat-cell lvl-${lvl}" data-muscle="${escapeHtml(cat)}" aria-label="${escapeHtml(categoryLabel(cat))}">
+        <div class="heat-cell-name">${escapeHtml(categoryLabel(cat))}</div>
+        <div class="heat-cell-count num">${count}</div>
+      </button>`;
+  }).join('');
+
+  // ---- Top records (same filter as the full PR screen) ---------------------
+  const prRows = DB.exercises.list()
+    .map((ex) => {
+      if (!ex) return null;
+      const snap = DB.sessions.prSnapshot(ex.id);
+      if (snap.sessionCount === 0 || snap.maxWeight === 0) return null;
+      return { ex, snap };
+    })
+    .filter(Boolean)
+    .sort((a, b) => b.snap.bestORM - a.snap.bestORM)
+    .slice(0, 3);
+
+  el.innerHTML = `
+    ${vaultBar({ action: icon('search', 20), actionLabel: t('search_exercises') })}
+
+    <div class="page-header">
+      <h1 class="page-title">${t('program_title')}</h1>
+      <p class="page-subtitle">${t('program_subtitle')}</p>
+    </div>
+
+    ${cycle.length === 0 ? `
+      ${emptyState({ iconName: 'calendar', title: t('program_no_plan_title'), text: t('program_no_plan_sub') })}
+      <button class="btn btn-primary btn-block" data-goto="planner">${icon('plus', 18)} ${t('program_build')}</button>
+    ` : `
+      <div class="rot-section">
+        <div class="rot-section-head">
+          <div class="rot-section-title">${t('program_where')}</div>
+          <button class="rot-section-action" data-goto="planner">${icon('edit', 16)} ${t('edit_cycle')}</button>
+        </div>
+        <div class="cycle-strip">${cycleHtml}</div>
+      </div>
+
+      <div class="rot-section">
+        <div class="rot-section-title">${t('program_next')}</div>
+        <div class="schedule-preview">${nextHtml}</div>
+      </div>
+    `}
+
+    <div class="section-title">${t('this_week')}</div>
+    <div class="stat-strip">
+      <div class="stat-cell">
+        <div class="stat-cell-value num">${fmtNum(daysOf(wk))}</div>
+        <div class="stat-cell-label">${t('program_days')}</div>
+        ${deltaBlock(daysOf(wk), daysOf(lw), '')}
+      </div>
+      <div class="stat-cell">
+        <div class="stat-cell-value num">${fmtNum(setsOf(wk))}</div>
+        <div class="stat-cell-label">${t('sets')}</div>
+        ${deltaBlock(setsOf(wk), setsOf(lw), '')}
+      </div>
+      <div class="stat-cell">
+        <div class="stat-cell-value num">${fmtWeight(Math.round(volNow))}</div>
+        <div class="stat-cell-label">${t('program_volume')} · ${unitLabel()}</div>
+        ${deltaBlock(Math.round(volNow), Math.round(volOf(lw)), '')}
+      </div>
+    </div>
+
+    ${heatTotal > 0 ? `<div class="muscle-heatmap">
+      <div class="heatmap-head">
+        <div>
+          <div class="heatmap-title">${t('muscle_focus')}</div>
+          <div class="heatmap-sub">${t('muscle_focus_sub')}</div>
+        </div>
+      </div>
+      <div class="heatmap-grid band">${heatCells}</div>
+    </div>` : ''}
+
+    ${prRows.length ? `
+      <div class="rot-section-head">
+        <div class="rot-section-title">${t('pr_view_title')}</div>
+        <button class="rot-section-action" data-goto="personal-records">${t('view_all')}</button>
+      </div>
+      <div class="data-list">
+        ${prRows.map(({ ex, snap }) => `
+          <div class="data-row pr-row">
+            <div class="data-icon custom" aria-hidden="true">${icon('trophy', 20)}</div>
+            <div class="data-main">
+              <div class="data-title">${escapeHtml(exDisplayName(ex))}</div>
+              <div class="data-meta pr-stats">
+                <span>${escapeHtml(t('pr_max_weight'))}: <span class="num">${fmtWeight(snap.maxWeight)}${unitLabel()}</span></span>
+                <span class="dot-sep"></span>
+                <span>${escapeHtml(t('pr_est_orm'))}: <span class="num">${fmtWeight(Math.round(snap.bestORM))}${unitLabel()}</span></span>
+              </div>
+            </div>
+          </div>
+        `).join('')}
+      </div>
+    ` : ''}
+
+    <button class="btn btn-ghost btn-block" data-goto="exercises" style="margin-top:4px">${icon('search', 18)} ${t('train')}</button>
+  `;
+
+  // Top-bar magnifier → the exercise browser (its own screen since v198).
+  bindVaultAction(() => navigate('exercises'));
+
+  // Tap a day in "next training days" → open/log that day's session.
+  el.querySelector('.schedule-preview')?.addEventListener('click', (e) => {
+    const row = e.target.closest('[data-day-iso]');
+    if (row) navigate('session-day', { date: row.dataset.dayIso });
+  });
+
+  // Tap a muscle → its full session history.
+  el.querySelectorAll('[data-muscle]').forEach((b) =>
+    b.addEventListener('click', () => navigate('muscle-sessions', { muscleCat: b.dataset.muscle }))
+  );
+}
+
+// ==========================================================================
+// EXERCISES — the browser. Every exercise (built-in + custom), searchable and
+// category-filterable; tap any → its history / PRs / progress / logging. Custom
+// management lives one tap away.
+//
+// Was the body of the Train tab (view id 'workouts'); moved to its own screen so
+// that tab could become the program centre. It reuses the router + <section> slot
+// of the old `library` view, which was 196 lines of unreachable duplicate of this
+// same grid — nothing in the app ever navigated to it.
+// ==========================================================================
+function renderExercises(el) {
   const query = viewContext.workoutQuery || '';
   const filter = viewContext.workoutFilter || 'All';
   const searchOpen = !!viewContext.workoutSearchOpen;
@@ -3014,19 +3218,16 @@ function renderWorkouts(el) {
     .map((f) => `<button class="filter-pill ${f === filter ? 'active' : ''}" data-filter="${f}">${escapeHtml(categoryLabel(f))}</button>`)
     .join('');
 
-  // ONE exercises screen: every exercise (built-in + custom) is browsable here,
-  // searchable + category-filterable; tap any → its history / PRs / progress /
-  // logging. The old separate "Library" (browse) and "My List" (inMyList) split
-  // is gone — this IS the library. Custom management lives one tap away.
   el.innerHTML = `
-    ${vaultBar()}
+    <div class="detail-top">
+      <button class="back-btn" data-goto="workouts" aria-label="${escapeHtml(t('back'))}">${icon('back', 20)}</button>
+      <div class="detail-top-title">${t('train')}</div>
+    </div>
 
     <div class="page-header">
       <h1 class="page-title">${t('train')}</h1>
       <p class="page-subtitle">${t('train_subtitle')}</p>
     </div>
-
-    <button class="btn btn-accent btn-block train-start-today" id="train-start-today">${icon('dumbbell', 18)} <span>${t('start_today_workout')}</span></button>
 
     <div class="exq-toolbar">
       ${searchOpen ? `
@@ -3080,20 +3281,16 @@ function renderWorkouts(el) {
   }
   updateWorkoutGrid();
 
-  // Primary action: start logging today's workout (session-day handles an empty
-  // day itself, so this works even before any plan is built).
-  $('#train-start-today', el)?.addEventListener('click', () => navigate('session-day', { date: todayISO() }));
-
   // Compact square search: tap the magnifier to expand the search field, X to collapse.
   $('#workout-search-open', el)?.addEventListener('click', () => {
     viewContext.workoutSearchOpen = true;
-    renderView('workouts');
+    renderView('exercises');
     setTimeout(() => $('#workout-search')?.focus(), 30);
   });
   $('#workout-search-close', el)?.addEventListener('click', () => {
     viewContext.workoutSearchOpen = false;
     viewContext.workoutQuery = '';
-    renderView('workouts');
+    renderView('exercises');
   });
 
   // Debounced search → grid-only update (was a full view re-render per keystroke)
@@ -3119,201 +3316,6 @@ function renderWorkouts(el) {
     const card = e.target.closest('[data-exercise]');
     if (card) navigate('exercise-detail', { exerciseId: card.dataset.exercise });
   });
-}
-
-// ==========================================================================
-// LIBRARY - browse all exercises grouped by category, with add/remove toggle
-// ==========================================================================
-function renderLibrary(el) {
-  const exercises = DB.exercises.list();
-  const query = viewContext.libraryQuery || '';
-  const filter = viewContext.libraryFilter || 'All';
-  const pickMode = !!viewContext.libraryPickMode;
-  const addedCount = exercises.filter((e) => e.inMyList).length;
-
-  const filterPills = ['All', ...EXERCISE_CATEGORIES]
-    .map((f) => `<button class="filter-pill ${f === filter ? 'active' : ''}" data-filter="${f}">${escapeHtml(categoryLabel(f))}</button>`)
-    .join('');
-
-  const topBar = pickMode
-    ? `
-      <div class="detail-top">
-        <button class="back-btn" data-pick-done aria-label="${escapeHtml(t('done'))}">${icon('back', 20)}</button>
-        <div class="detail-top-title">${t('add_from_library')}</div>
-      </div>
-    `
-    : `
-      <div class="detail-top">
-        <button class="back-btn" data-goto="workouts" aria-label="${escapeHtml(t('back'))}">${icon('back', 20)}</button>
-        <div class="detail-top-title">${t('library_title')}</div>
-      </div>
-    `;
-
-  const headerBlock = pickMode
-    ? `
-      <div class="pick-banner">
-        <div class="pick-banner-icon">${icon('plus', 18)}</div>
-        <div class="pick-banner-main">
-          <div class="pick-banner-title">${t('pick_mode_title')}</div>
-          <div class="pick-banner-sub">${t('pick_mode_sub')}</div>
-        </div>
-        <div class="pick-banner-count num">${fmtNum(addedCount)}</div>
-      </div>
-    `
-    : `
-      <div class="page-header">
-        <div class="page-eyebrow">${fmtNum(exercises.length)}</div>
-        <h1 class="page-title">${t('library_title')}</h1>
-        <p class="page-subtitle">${t('library_subtitle')}</p>
-      </div>
-    `;
-
-  // Shell renders ONCE — search box and filter bar are never rebuilt, so the
-  // keyboard keeps focus and no cursor-restore hack is needed.
-  el.innerHTML = `
-    ${topBar}
-
-    ${headerBlock}
-
-    <div class="toolbar" style="display:flex;gap:10px;margin-bottom:14px">
-      <div class="search-wrap">
-        ${icon('search', 18)}
-        <input type="search" id="library-search" placeholder="${t('search_exercises')}" value="${escapeHtml(query)}">
-      </div>
-    </div>
-
-    <div class="filter-bar">${filterPills}</div>
-
-    <div id="library-list"></div>
-  `;
-
-  // In pick mode, mark the body so we can style cards differently (cursor, hover)
-  document.body.classList.toggle('library-pick-mode', pickMode);
-
-  // Rebuild ONLY the grouped card list — called on search/filter changes.
-  function updateLibraryList() {
-    const list = $('#library-list', el);
-    if (!list) return;
-    const q = (viewContext.libraryQuery || '').toLowerCase();
-    const f = viewContext.libraryFilter || 'All';
-
-    let filtered = DB.exercises.list();
-    if (f !== 'All') filtered = filtered.filter((x) => x.category === f);
-    if (q) filtered = filtered.filter((x) => exMatchesQuery(x, q));
-
-    // Group filtered exercises by category, in EXERCISE_CATEGORIES order
-    const grouped = {};
-    filtered.forEach((ex) => {
-      if (!grouped[ex.category]) grouped[ex.category] = [];
-      grouped[ex.category].push(ex);
-    });
-
-    const groupsHtml = EXERCISE_CATEGORIES
-      .filter((cat) => grouped[cat] && grouped[cat].length > 0)
-      .map((cat) => {
-        const items = grouped[cat].map((ex, i) =>
-          bentoCardHtml(ex, i, { showPR: false, toggle: { added: !!ex.inMyList } })
-        ).join('');
-        return `
-          <div class="lib-section">
-            <div class="lib-section-head">
-              <h2 class="lib-section-title" data-cat="${cat}">${escapeHtml(categoryLabel(cat))}</h2>
-              <span class="lib-section-count num">${fmtNum(grouped[cat].length)}</span>
-            </div>
-            <div class="bento-grid">${items}</div>
-          </div>
-        `;
-      })
-      .join('');
-
-    list.innerHTML = filtered.length === 0
-      ? emptyState({ iconName: 'search', title: t('no_matches'), text: t('no_matches_hint') })
-      : groupsHtml;
-  }
-  updateLibraryList();
-
-  // Debounced search → list-only update (was a full 100+ card re-render per keystroke)
-  let searchTimer = null;
-  $('#library-search', el)?.addEventListener('input', (e) => {
-    viewContext.libraryQuery = e.target.value;
-    clearTimeout(searchTimer);
-    searchTimer = setTimeout(updateLibraryList, 150);
-  });
-
-  el.querySelectorAll('[data-filter]').forEach((btn) =>
-    btn.addEventListener('click', () => {
-      viewContext.libraryFilter = btn.dataset.filter;
-      el.querySelectorAll('[data-filter]').forEach((b) => b.classList.toggle('active', b === btn));
-      updateLibraryList();
-    })
-  );
-
-  // Flip ONE card's added-state in place — no list re-render, scroll preserved.
-  function setCardAdded(id, added) {
-    el.querySelectorAll(`.bento-card[data-exercise="${id}"]`).forEach((card) => {
-      card.classList.toggle('added', added);
-      const tBtn = card.querySelector('[data-toggle-ex]');
-      if (tBtn) {
-        tBtn.classList.toggle('added', added);
-        tBtn.innerHTML = icon(added ? 'check' : 'plus', 16);
-        tBtn.setAttribute('aria-label', added ? t('remove_image') : t('add_to_train'));
-      }
-      const stripe = card.querySelector('.bento-added-stripe');
-      if (added && !stripe) {
-        card.insertAdjacentHTML('beforeend',
-          `<div class="bento-added-stripe"><span class="bento-added-stripe-icon">${icon('check', 11)}</span><span>${t('added')}</span></div>`);
-      } else if (!added && stripe) {
-        stripe.remove();
-      }
-    });
-    const count = $('.pick-banner-count', el);
-    if (count) count.textContent = fmtNum(DB.exercises.list().filter((x) => x.inMyList).length);
-  }
-
-  function toggleExercise(id) {
-    const ex = DB.exercises.getById(id);
-    if (!ex) return;
-    const newState = !ex.inMyList;
-    DB.exercises.setInMyList(id, newState);
-    showToast(newState ? t('added_to_train') : t('removed_from_train'));
-    setCardAdded(id, newState);
-  }
-
-  // ONE delegated click listener for the whole list (was 100+ per-card
-  // listeners re-attached on every keystroke). Preserves all three behaviors:
-  // toggle button, pick-mode whole-card toggle, normal navigate-to-detail.
-  $('#library-list', el).addEventListener('click', (e) => {
-    const toggleBtn = e.target.closest('[data-toggle-ex]');
-    if (toggleBtn) {
-      e.stopPropagation();
-      e.preventDefault();
-      toggleExercise(toggleBtn.dataset.toggleEx);
-      return;
-    }
-    const card = e.target.closest('[data-exercise]');
-    if (!card) return;
-    if (pickMode) toggleExercise(card.dataset.exercise);
-    else navigate('exercise-detail', { exerciseId: card.dataset.exercise });
-  });
-
-  // Keyboard support for the span-based toggle (role="button")
-  $('#library-list', el).addEventListener('keydown', (e) => {
-    if (e.key !== 'Enter' && e.key !== ' ') return;
-    const toggleBtn = e.target.closest('[data-toggle-ex]');
-    if (toggleBtn) {
-      e.preventDefault();
-      toggleExercise(toggleBtn.dataset.toggleEx);
-    }
-  });
-
-  // Done button — exits pick mode and returns to Train
-  el.querySelectorAll('[data-pick-done]').forEach((b) =>
-    b.addEventListener('click', () => {
-      viewContext.libraryPickMode = false;
-      document.body.classList.remove('library-pick-mode');
-      navigate('workouts');
-    })
-  );
 }
 
 // Small chooser shown by the session-day "Add exercise" button: pick from the
@@ -8659,7 +8661,7 @@ async function bootCatalog() {
         machineType: g && g.machine_type,
       })));
       // Reflect immediately if the library happens to already be open.
-      if (added && currentView === 'library') renderView('library');
+      if (added && currentView === 'exercises') renderView('exercises');
     }
   } catch (_) {}
 
