@@ -633,6 +633,64 @@ body.theme-dusk {
 body.theme-dusk .bottom-nav { background: rgba(28, 22, 32, 0.85); }
 
 /* =========================================================================
+   LIGHT THEMES — semantic hues re-tuned for light surfaces
+   :root declares --up/--down/--red once, tuned for dark backgrounds, and no light
+   theme overrode them: "up" measured 1.59:1 and the danger row 2.77:1 on white.
+   --cat-* are deliberately left alone — they only ever paint over the bento
+   cards' dark gradient scrim, where the light hues are correct.
+   ========================================================================= */
+body.theme-light,
+body.theme-frost,
+body.theme-sand {
+  --up:      #047857;
+  --up-bg:   rgba(4, 120, 87, 0.12);
+  --down:    #b91c1c;
+  --down-bg: rgba(185, 28, 28, 0.12);
+  --red:     #b91c1c;
+  --red-soft: rgba(185, 28, 28, 0.12);
+}
+/* --green also carries white ink here (--green-ink: #ffffff), so it has to be
+   dark enough for a white label: #16a34a gave 3.30:1. */
+/* The three category hues that are used as TEXT (the macro tracker's
+   protein/carb/fat labels) rather than only on the bento cards' dark scrim.
+   --cat-legs measured 1.75:1 as label text on a light card. The other 13 --cat-*
+   are left alone: they only ever paint over the scrim. */
+body.theme-light,
+body.theme-frost,
+body.theme-sand {
+  --cat-chest:     #be185d;
+  --cat-legs:      #047857;
+  --cat-shoulders: #7e22ce;
+}
+body.theme-light { --green: #15803d; --green-2: #166534; }
+body.theme-sand  { --green: #116631; --green-2: #0e5228; }
+/* The posterior/anterior planner labels and muscle chips paint --green and
+   --accent as 11px text on a tinted tile; these three landed at 4.28-4.42,
+   just under AA. Nudged one step each — measured, not eyeballed. */
+body.theme-frost { --green: #0c6076; --green-2: #094e60; }
+/* Marginal misses found by the sweep, nudged one step. */
+body.theme-frost { --text-dim: #4a5666; }
+body.theme-sand  { --accent: #9a3412; --accent-2: #7c2d12; --accent-3: #6b2710; --accent-rgb: 154, 52, 18; }
+
+/* Muted-text contrast, corrected per theme against that theme's own worst
+   surface. Small text on --surface-3 measured 3.64-4.43:1 in ten themes —
+   the tokens were calibrated against --bg, never against the tinted tiles
+   they actually sit on. aurora is excluded on purpose: the static pairing
+   says it fails but the rendered sweep shows it passing, so the pair never
+   meets on screen. */
+body.theme-light { --text-dim: #5f6876; }
+body.theme-frost { --text-dim: #546170; }
+body.theme-sand { --text-dim: #6e5f50; }
+body.theme-mocha { --text-dim: #ada194; }
+body.theme-slate { --text-dim: #a2a2a8; }
+body.theme-forest { --text-mute: #95b09e; --text-dim: #9cb0a3; }
+body.theme-ocean { --text-dim: #9ca9bb; }
+body.theme-olive { --text-dim: #a3a691; }
+body.theme-sunset { --text-dim: #aa938a; }
+body.theme-nebula { --text-dim: #8a8ab2; --accent: #bb7cf9; --accent-2: #a855f7; --accent-rgb: 187, 124, 249; }
+body.theme-dusk { --text-mute: #b49faa; --text-dim: #ada1a8; }
+
+/* =========================================================================
    RTL (Arabic) support
    ========================================================================= */
 body[dir="rtl"] .page-header {
@@ -993,16 +1051,17 @@ body.theme-nebula .home-center-icon { box-shadow: 0 8px 28px rgba(168, 85, 247, 
   flex-shrink: 0;
 }
 
-.btn-primary {
-  background: var(--green);
-  color: var(--green-ink);
-}
-.btn-primary:active { background: var(--green-2); transform: scale(0.97); }
-
+/* The primary action carries the BRAND colour. It used to be --green while
+   .btn-accent (the accent one) was used exactly zero times in the app — so the
+   identity never appeared on the 46 buttons that matter most, and green was
+   doing double duty as both "primary" and "success". Green now means success
+   and confirmation only. .btn-accent is kept as an alias so nothing breaks. */
+.btn-primary,
 .btn-accent {
   background: var(--accent);
   color: var(--accent-ink);
 }
+.btn-primary:active,
 .btn-accent:active { background: var(--accent-2); transform: scale(0.97); }
 
 .btn-ghost {
@@ -2089,7 +2148,9 @@ button.schedule-prev-row { width: 100%; font: inherit; color: inherit; text-alig
 }
 
 .stat-box-value.accent { color: var(--accent); }
-.stat-box-value.none { color: var(--text-faint); font-size: 18px; }
+/* --text-dim, not --text-faint: this is a value the user reads, and faint is
+   reserved for decorative dots/bars. It measured 1.48:1 on the light theme. */
+.stat-box-value.none { color: var(--text-dim); font-size: 18px; }
 
 .stat-box-unit {
   font-size: 12px;

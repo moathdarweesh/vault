@@ -297,6 +297,16 @@ function uid() {
 // this guess is the only thing standing between an Arabic speaker and an English
 // first screen. Consulted ONLY when building a fresh state — an existing user's
 // saved `prefs.lang` is never overridden by the phone's locale.
+// Starting THEME for a brand-new install, from the phone's own light/dark setting
+// — the same principle as detectLang: don't ask for something the device already
+// knows. Only consulted when building a fresh state; an existing user's chosen
+// theme is never overridden, and all 13 themes are still available in Settings.
+function detectTheme() {
+  try {
+    return (window.matchMedia && matchMedia('(prefers-color-scheme: light)').matches) ? 'light' : 'dark';
+  } catch (_) { return 'dark'; }
+}
+
 function detectLang() {
   try {
     const list = (navigator.languages && navigator.languages.length)
@@ -312,7 +322,7 @@ function defaultState() {
     version: SCHEMA_VERSION,
     prefs: {
       lang: detectLang(),
-      theme: 'dark',
+      theme: detectTheme(),
       unit: 'kg',
       translateExercises: true,   // Arabic UI: transliterate built-in exercise names
     },

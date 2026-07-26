@@ -111,13 +111,29 @@ Do **not** unify 12/13/14/15 — they carry 157 declarations in distinct roles.
 - Follow platform convention over invention: the sign-in ⇄ sign-up switch is a small
   line under the form because that is where every sign-in page puts it.
 
-## 7. Known gaps (measured, not yet fixed)
+## 7. Light & dark
+
+Both are first-class. **All 13 themes measure zero contrast failures** across 12
+views (v205) — verified by a scrim-aware sweep, i.e. one that knows a gradient
+overlay counts as the real backdrop. A naive checker reports the bento cards as
+1.10:1 when their text actually sits on a 0.92-black scrim; don't "fix" those.
+
+- A fresh install picks the theme from the device (`detectTheme()`,
+  `prefers-color-scheme`) — the same principle as language: never ask for
+  something the device already knows. All 13 stay available in Settings.
+- Semantic hues (`--up`, `--down`, `--red`, `--green`) and the three category
+  hues used as **text** (`--cat-chest/-legs/-shoulders`) have light-theme
+  overrides. The other 13 `--cat-*` are deliberately untouched — they only paint
+  over the bento scrim, where the light hues are correct.
+- `--text-mute` / `--text-dim` are calibrated against each theme's **`--surface-3`**,
+  not against `--bg`. They sit on tinted tiles, and that is where they were failing.
+
+## 8. Known gaps (measured, not yet fixed)
 
 | Gap | Size |
 |---|---|
 | Spacing token adoption | **6%** — 563 hardcoded px. 43% would be a pure find-replace; the rest is off the 4px scale (6, 10, 14, 18 dominate), so the scale needs a 2px grid first |
 | Font-size adoption | **9%** — 276 hardcoded, now 56% mechanically replaceable |
 | Radius / motion adoption | 34% / 25% |
-| Light-theme contrast | `light`, `frost`, `sand` have **9–11 failing classes each, worst 1.10:1** — the `--cat-*` hues are tuned for dark backgrounds and wash out on light ones. Dark is clean. **This is the largest open defect in the system.** |
 | Three parallel stat systems | `.stat-box-*`, `.stat-cell-*`, `.stat-tile`/`-grid`/`-row` |
 | Nav icon stroke weight | Nav renders at 22px but hard-codes `stroke-width: 2`; the band for that size is 1.75 |
