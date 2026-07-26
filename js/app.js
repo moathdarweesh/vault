@@ -12,7 +12,7 @@
 // build. The literal below is the fallback (file://, or a stripped query) and is
 // still bumped by `npm run release` — see CLAUDE.md "CACHE WORKFLOW".
 const VAULT_BUILD = (() => {
-  const FALLBACK = 'v200';
+  const FALLBACK = 'v201';
   try {
     const src = (document.currentScript && document.currentScript.src) || '';
     const m = src.match(/[?&]v=(\d+)/);
@@ -842,8 +842,8 @@ const I18N = {
     program_where: 'Where you are',
     program_next: 'Next training days',
     edit_cycle: 'Edit cycle',
-    program_volume: 'Volume',
-    program_days: 'Days',
+    program_adherence: 'Adherence',
+    program_new_prs: 'New records',
     last_set: 'Last set', set_label: 'Set',
     common_supplements: 'Common supplements', already_added: 'Already added',
     program_no_plan_title: 'No program yet',
@@ -1452,8 +1452,8 @@ const I18N = {
     program_where: 'موضعك في الدورة',
     program_next: 'أيام التمرين القادمة',
     edit_cycle: 'تعديل الدورة',
-    program_volume: 'الحجم',
-    program_days: 'الأيام',
+    program_adherence: 'الالتزام',
+    program_new_prs: 'أرقام جديدة',
     last_set: 'آخر مجموعة', set_label: 'المجموعة',
     common_supplements: 'مكمّلات شائعة', already_added: 'مضاف بالفعل',
     program_no_plan_title: 'لا يوجد برنامج بعد',
@@ -3046,11 +3046,39 @@ function renderProgram(el) {
   const lw = allSessions.filter((s) => inRangeISO(s.date, lastStart, lastEnd));
   const daysOf = (list) => new Set(list.map((s) => s.date)).size;
   const setsOf = (list) => list.reduce((n, s) => n + (s.sets || []).length, 0);
-  // Tonnage — Σ (weight × reps). The one number that actually tracks progression:
-  // more sets at a lighter weight is not progress, and nothing computed this.
-  const volOf = (list) => list.reduce((v, s) =>
-    v + (s.sets || []).reduce((n, x) => n + (Number(x.weight) || 0) * (Number(x.reps) || 0), 0), 0);
-  const volNow = volOf(wk);
+
+  // Adherence — days trained out of days the rotation actually schedules this
+  // week. Replaced weekly tonnage, which was a five-digit number (12,920) that
+  // dominated the row, moved for reasons the user couldn't act on, and answered
+  // no question they were asking. "3 / 5" answers the one this tab exists for.
+  //
+  // The denominator is trainingDays.length — how many days a week you intend to
+  // train — NOT a workoutForDate() sweep of the week. workoutForDate returns null
+  // for any date before the plan's anchor ("before the plan started"), which is
+  // right for the rotation but wrong here: a plan created today would make the
+  // six earlier days of this week unplanned and render "1 / 1".
+  const weekPlanned = cycle.length ? (plan.trainingDays || []).length : 0;
+  const doneNow = daysOf(wk);
+  // Capped: training on a rest day should never render "6 / 5".
+  const adherence = weekPlanned ? Math.min(doneNow, weekPlanned) : doneNow;
+
+  // New records — exercises whose best weight this window beat their own best
+  // from BEFORE it. Prior history is required, so a brand-new exercise is not
+  // counted as a "record"; that would make trying something new look like progress.
+  const newPrCount = (start, end) => {
+    const byEx = {};
+    allSessions.forEach((s) => { (byEx[s.exerciseId] = byEx[s.exerciseId] || []).push(s); });
+    const best = (arr) => Math.max(0, ...arr.flatMap((s) => (s.sets || []).map((x) => Number(x.weight) || 0)));
+    let n = 0;
+    Object.values(byEx).forEach((list) => {
+      const before = list.filter((s) => new Date(s.date + 'T12:00:00') < start);
+      const within = list.filter((s) => inRangeISO(s.date, start, end));
+      if (!before.length || !within.length) return;
+      if (best(within) > best(before)) n++;
+    });
+    return n;
+  };
+  const prsNow = newPrCount(thisStart, thisEnd);
 
   // ---- Muscle volume, last 7 days (moved here from Home) -------------------
   const sevenDaysAgo = new Date(now); sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7); sevenDaysAgo.setHours(0, 0, 0, 0);
@@ -3124,9 +3152,9 @@ function renderProgram(el) {
       <div class="rot-section-title">${t('this_week')}</div>
       <div class="stat-strip">
         <div class="stat-cell">
-          <div class="stat-cell-value num">${fmtNum(daysOf(wk))}</div>
-          <div class="stat-cell-label">${t('program_days')}</div>
-          ${deltaBlock(daysOf(wk), daysOf(lw), '')}
+          <div class="stat-cell-value num">${fmtNum(adherence)}${weekPlanned ? `<span class="stat-cell-of">/${fmtNum(weekPlanned)}</span>` : ''}</div>
+          <div class="stat-cell-label">${t('program_adherence')}</div>
+          ${deltaBlock(doneNow, daysOf(lw), '')}
         </div>
         <div class="stat-cell">
           <div class="stat-cell-value num">${fmtNum(setsOf(wk))}</div>
@@ -3134,9 +3162,9 @@ function renderProgram(el) {
           ${deltaBlock(setsOf(wk), setsOf(lw), '')}
         </div>
         <div class="stat-cell">
-          <div class="stat-cell-value num">${fmtWeight(Math.round(volNow))}</div>
-          <div class="stat-cell-label">${t('program_volume')} · ${unitLabel()}</div>
-          ${deltaBlock(Math.round(volNow), Math.round(volOf(lw)), '')}
+          <div class="stat-cell-value num">${fmtNum(prsNow)}</div>
+          <div class="stat-cell-label">${t('program_new_prs')}</div>
+          ${deltaBlock(prsNow, newPrCount(lastStart, lastEnd), '')}
         </div>
       </div>
     </div>

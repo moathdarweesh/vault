@@ -816,7 +816,7 @@ body.keyboard-open .sheet-overlay { height: var(--vvh, 100%); bottom: auto; }
   gap: 4px;
   padding: 8px 4px 4px;
   color: var(--text-dim);
-  font-size: 10px;
+  font-size: 11px;
   font-weight: 600;
   letter-spacing: 0.06em;
   text-transform: uppercase;
@@ -1170,7 +1170,7 @@ input[type="date"], input[type="time"] { color-scheme: dark; }
 }
 
 .home-hero {
-  font-size: 30px;
+  font-size: 28px;
   font-weight: 900;
   letter-spacing: -0.035em;
   line-height: 1.1;
@@ -1257,7 +1257,7 @@ input[type="date"], input[type="time"] { color-scheme: dark; }
   display: flex;
   flex-direction: column;
   gap: 4px;
-  text-align: left;
+  text-align: start;  /* was `left` with no RTL override */
   position: relative;
   overflow: hidden;
   transition: transform 0.12s ease, border-color 0.15s;
@@ -1591,7 +1591,7 @@ input[type="date"], input[type="time"] { color-scheme: dark; }
 .last-set-figure {
   display: flex; align-items: baseline; flex-wrap: wrap; gap: 4px;
   margin: 14px 0 8px;
-  font-size: 34px; font-weight: 900; line-height: 1;
+  font-size: 32px; font-weight: 900; line-height: 1;
   color: var(--text);
   font-variant-numeric: tabular-nums;
   letter-spacing: -0.02em;
@@ -1718,7 +1718,7 @@ body[dir="rtl"] .bento-card-content { text-align: right; }
   backdrop-filter: blur(8px);
   border: 1px solid var(--border-hi);
   border-radius: var(--radius-pill);
-  font-size: 9px;
+  font-size: 11px;
   font-weight: 800;
   text-transform: uppercase;
   letter-spacing: 0.1em;
@@ -1729,7 +1729,7 @@ body[dir="rtl"] .bento-card-content { text-align: right; }
   top: 16px;
   right: 16px;
   padding: 4px 12px;
-  font-size: 10px;
+  font-size: 11px;
 }
 
 /* Top-right exercise name chip on bento cards */
@@ -1779,7 +1779,7 @@ body[dir="rtl"] .bento-card.wide .bento-card-name-tag { left: 14px; }
   display: inline-block;
   padding: 2px 8px;
   border-radius: 999px;
-  font-size: 9px;
+  font-size: 11px;
   font-weight: 800;
   text-transform: uppercase;
   letter-spacing: 0.1em;
@@ -1849,7 +1849,7 @@ body[dir="rtl"] .bento-card.wide .bento-card-name-tag { left: 14px; }
   background: var(--accent);
   color: var(--accent-ink);
   border-radius: var(--radius-pill);
-  font-size: 10px;
+  font-size: 11px;
   font-weight: 900;
   letter-spacing: 0.1em;
   text-transform: uppercase;
@@ -2016,7 +2016,7 @@ body[dir="rtl"] .bento-card.wide .bento-card-name-tag { left: 14px; }
   backdrop-filter: blur(10px);
   border: 1px solid var(--border-hi);
   border-radius: var(--radius-pill);
-  font-size: 10px;
+  font-size: 11px;
   font-weight: 800;
   text-transform: uppercase;
   letter-spacing: 0.12em;
@@ -2053,7 +2053,7 @@ button.stat-box { font: inherit; color: inherit; cursor: pointer; -webkit-appear
 button.schedule-prev-row { width: 100%; font: inherit; color: inherit; text-align: start; cursor: pointer; border: none; -webkit-appearance: none; }
 
 .stat-box-label {
-  font-size: 10px;
+  font-size: 11px;
   color: var(--text-mute);
   text-transform: uppercase;
   letter-spacing: 0.14em;
@@ -2125,7 +2125,7 @@ button.schedule-prev-row { width: 100%; font: inherit; color: inherit; text-alig
 }
 
 .session-card-volume-label {
-  font-size: 10px;
+  font-size: 11px;
   color: var(--text-dim);
   text-transform: uppercase;
   letter-spacing: 0.12em;
@@ -2211,7 +2211,7 @@ body[dir="rtl"] .w-unit { margin-left: 0; margin-right: 2px; }
   align-items: center;
   padding: 3px 9px;
   border-radius: var(--radius-pill);
-  font-size: 10px;
+  font-size: 11px;
   font-weight: 800;
   text-transform: uppercase;
   letter-spacing: 0.1em;
@@ -2500,7 +2500,7 @@ body[dir="rtl"] .w-unit { margin-left: 0; margin-right: 2px; }
 }
 
 .modal-title {
-  font-size: 19px;
+  font-size: 20px;
   font-weight: 900;
   letter-spacing: -0.03em;
   line-height: 1.2;
@@ -2567,7 +2567,7 @@ body[dir="rtl"] .w-unit { margin-left: 0; margin-right: 2px; }
 }
 
 .confirm-title {
-  font-size: 17px;
+  font-size: 18px;
   font-weight: 900;
   letter-spacing: -0.025em;
   margin-bottom: 8px;
@@ -2594,7 +2594,7 @@ body[dir="rtl"] .w-unit { margin-left: 0; margin-right: 2px; }
   grid-template-columns: 32px 1fr 1fr 38px;
   gap: 8px;
   margin-bottom: 2px;
-  font-size: 10px;
+  font-size: 11px;
   font-weight: 800;
   color: var(--text-dim);
   text-transform: uppercase;
@@ -2718,7 +2718,7 @@ body[dir="rtl"] .w-unit { margin-left: 0; margin-right: 2px; }
   display: flex;
   justify-content: space-between;
   align-items: center;
-  font-size: 10px;
+  font-size: 11px;
   font-weight: 800;
   color: var(--accent);
   text-transform: uppercase;
@@ -2889,7 +2889,7 @@ body[dir="rtl"] .w-unit { margin-left: 0; margin-right: 2px; }
   margin-bottom: 10px;
   display: block;
   width: 100%;
-  text-align: left;
+  text-align: start;  /* was `left` with no RTL override */
   transition: transform 0.12s, border-color 0.15s;
 }
 
@@ -2915,7 +2915,7 @@ body[dir="rtl"] .w-unit { margin-left: 0; margin-right: 2px; }
 }
 
 .compare-week-label {
-  font-size: 10px;
+  font-size: 11px;
   color: var(--text-mute);
   text-transform: uppercase;
   letter-spacing: 0.14em;
@@ -2986,7 +2986,7 @@ body[dir="rtl"] .w-unit { margin-left: 0; margin-right: 2px; }
   left: 0;
   right: 0;
   text-align: center;
-  font-size: 9px;
+  font-size: 11px;
   color: var(--text-dim);
   font-weight: 600;
 }
@@ -3127,7 +3127,7 @@ body[dir="rtl"] .tool-card { text-align: right; align-items: flex-end; }
 }
 
 .today-plan-eyebrow {
-  font-size: 10px;
+  font-size: 11px;
   font-weight: 800;
   color: var(--accent);
   text-transform: uppercase;
@@ -3234,7 +3234,7 @@ body[dir="rtl"] .tool-card { text-align: right; align-items: flex-end; }
   background: var(--surface-2);
   color: var(--text-mute);
   font-family: inherit;
-  font-size: 10px;
+  font-size: 11px;
   font-weight: 800;
   white-space: nowrap;
   overflow: hidden;
@@ -3353,6 +3353,14 @@ body[dir="rtl"] .tool-card { text-align: right; align-items: flex-end; }
 .cycle-chip-name { font-size: 14px; font-weight: 800; }
 .cycle-chip-meta { font-size: 11px; font-weight: 700; color: var(--text-mute); }
 
+/* "3 / 5" — the denominator is context, not the value, so it stays quiet and
+   does not compete with the number the user is actually reading. */
+.stat-cell-of {
+  font-size: 15px;
+  font-weight: 800;
+  color: var(--text-mute);
+  margin-inline-start: 2px;
+}
 /* The weekly stat cells carry a vs-last-week delta under the label. */
 .stat-cell .compare-delta { margin-top: 6px; font-size: 11px; }
 
@@ -3489,7 +3497,7 @@ body[dir="rtl"] .tool-card { text-align: right; align-items: flex-end; }
 }
 
 .planner-side-label {
-  font-size: 10px;
+  font-size: 11px;
   font-weight: 800;
   letter-spacing: 0.14em;
   text-transform: uppercase;
@@ -3817,7 +3825,7 @@ body[dir="rtl"] .planner-day-head { text-align: right; }
   background: var(--accent);
   color: var(--accent-ink);
   border-radius: 999px;
-  font-size: 10px;
+  font-size: 11px;
   font-weight: 900;
   letter-spacing: 0.06em;
   text-transform: uppercase;
@@ -3829,7 +3837,7 @@ body[dir="rtl"] .planner-day-head { text-align: right; }
   grid-template-columns: 32px 1fr 1fr 32px;
   gap: 8px;
   margin-bottom: 4px;
-  font-size: 10px;
+  font-size: 11px;
   font-weight: 800;
   color: var(--text-dim);
   text-transform: uppercase;
@@ -4014,7 +4022,7 @@ body[dir="rtl"] .planner-day-head { text-align: right; }
   grid-template-columns: 34px 30px 1fr 1fr 46px;
   gap: 8px;
   margin-bottom: 6px;
-  font-size: 10px;
+  font-size: 11px;
   font-weight: 800;
   color: var(--text-dim);
   text-transform: uppercase;
@@ -4153,7 +4161,7 @@ body[dir="rtl"] .calendar-nav-btn svg { transform: scaleX(-1); }
   display: inline-flex;
   align-items: center;
   gap: 5px;
-  font-size: 10px;
+  font-size: 11px;
   font-weight: 800;
   text-transform: uppercase;
   letter-spacing: 0.1em;
@@ -4418,7 +4426,7 @@ body[dir="rtl"] .picker-row { text-align: right; }
 }
 
 .calendar-dow {
-  font-size: 10px;
+  font-size: 11px;
   font-weight: 800;
   color: var(--text-dim);
   text-transform: uppercase;
@@ -4615,7 +4623,7 @@ body[dir="rtl"] .picker-row { text-align: right; }
 }
 
 .macro-total-label {
-  font-size: 10px;
+  font-size: 11px;
   color: var(--text-mute);
   text-transform: uppercase;
   letter-spacing: 0.12em;
@@ -4724,14 +4732,14 @@ body[dir="rtl"] .picker-row { text-align: right; }
   gap: 10px;
 }
 .food-log-list { display: flex; flex-direction: column; gap: 8px; }
-.settings-hint { font-size: 12.5px; color: var(--text-mute); margin: -4px 0 10px; line-height: 1.5; }
+.settings-hint { font-size: 13px; color: var(--text-mute); margin: -4px 0 10px; line-height: 1.5; }
 
 /* Small inline text link (e.g. Food "Past days") — reads as a link, not a
    heavy button; the global svg{width:100%} is pinned so the chevron stays small. */
 .link-btn {
   display: inline-flex; align-items: center; gap: 3px; flex-shrink: 0;
   background: none; border: none; cursor: pointer; padding: 6px 2px;
-  color: var(--text-mute); font: inherit; font-size: 12.5px; font-weight: 700;
+  color: var(--text-mute); font: inherit; font-size: 13px; font-weight: 700;
   appearance: none; -webkit-appearance: none; -webkit-tap-highlight-color: transparent;
 }
 .link-btn:active { color: var(--text); }
@@ -4791,7 +4799,7 @@ body[dir="rtl"] .picker-row { text-align: right; }
 }
 .nutri-setup-main { flex: 1; min-width: 0; }
 .nutri-setup-title { font-size: 16px; font-weight: 800; }
-.nutri-setup-text { font-size: 12.5px; color: var(--text-mute); margin-top: 2px; }
+.nutri-setup-text { font-size: 13px; color: var(--text-mute); margin-top: 2px; }
 
 /* Hero: calorie ring + macro tracks */
 .nutri-hero {
@@ -4972,7 +4980,7 @@ body[dir="rtl"] .picker-row { text-align: right; }
   transition: transform 0.3s cubic-bezier(0.22, 1, 0.36, 1);
 }
 .sheet-overlay.open .add-sheet { transform: translateY(0); }
-.add-sheet-title { font-size: 17px; font-weight: 800; text-align: center; margin: 4px 0 16px; }
+.add-sheet-title { font-size: 18px; font-weight: 800; text-align: center; margin: 4px 0 16px; }
 /* Consistent square tiles in a 3-column grid. */
 .add-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
 .add-tile {
@@ -4996,7 +5004,7 @@ body[dir="rtl"] .picker-row { text-align: right; }
 .add-tile-icon.photo { background: rgba(96, 165, 250, 0.18); color: #60a5fa; }
 .add-tile-icon.saved { background: rgba(52, 211, 153, 0.18); color: #34d399; }
 .add-tile-icon.manual { background: rgba(251, 191, 36, 0.16); color: #fbbf24; }
-.add-tile-title { font-size: 12.5px; font-weight: 700; line-height: 1.2; }
+.add-tile-title { font-size: 13px; font-weight: 700; line-height: 1.2; }
 
 /* =========================================================================
    CALCULATOR MODAL
@@ -5017,22 +5025,22 @@ body[dir="rtl"] .picker-row { text-align: right; }
      "Sedentary"/"Very active" overflow the box. */
   flex: 1 1 auto; white-space: nowrap; padding: 9px 14px; border-radius: 10px; cursor: pointer;
   background: var(--surface-2); border: 1px solid var(--border); color: var(--text-mute);
-  font-weight: 700; font-size: 12.5px; appearance: none; -webkit-appearance: none;
+  font-weight: 700; font-size: 13px; appearance: none; -webkit-appearance: none;
   transition: all 0.12s;
 }
 .seg-btn.active { background: var(--accent-soft); border-color: var(--accent-line); color: var(--accent); }
 .calc-preview { margin: 6px 0 14px; }
 .calc-preview-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
 .calc-cell { background: var(--surface-2); border-radius: 12px; padding: 12px 6px; text-align: center; }
-.calc-cell-v { font-size: 19px; font-weight: 900; letter-spacing: -0.02em; }
+.calc-cell-v { font-size: 20px; font-weight: 900; letter-spacing: -0.02em; }
 .calc-cell-v span { font-size: 11px; font-weight: 700; color: var(--text-mute); margin-inline-start: 1px; }
-.calc-cell-l { font-size: 10.5px; color: var(--text-mute); margin-top: 2px; }
+.calc-cell-l { font-size: 11px; color: var(--text-mute); margin-top: 2px; }
 .calc-preview-hint { font-size: 12px; color: var(--text-mute); text-align: center; margin-top: 10px; }
 /* Small secondary link under the Save button — switches calc <-> manual. */
 .calc-switch {
   display: block; margin: 10px auto 0; padding: 6px 10px;
   background: none; border: none; cursor: pointer;
-  color: var(--text-mute); font: inherit; font-size: 12.5px; font-weight: 600;
+  color: var(--text-mute); font: inherit; font-size: 13px; font-weight: 600;
   text-decoration: underline; text-underline-offset: 3px;
   appearance: none; -webkit-appearance: none;
 }
@@ -5412,7 +5420,7 @@ body.library-pick-mode .bento-toggle.added {
   background: var(--accent);
   color: var(--accent-ink);
   border-radius: 999px;
-  font-size: 10px;
+  font-size: 11px;
   font-weight: 900;
   letter-spacing: 0.08em;
   text-transform: uppercase;
@@ -5732,7 +5740,13 @@ body[dir="rtl"] .variation-select svg { transform: scaleX(-1); }
   align-items: center;
   gap: 12px;
   width: 100%;
-  text-align: left;
+  /* A <button> with no `color` inherits the UA buttontext default, which measured
+     2.23:1 against this surface — the worst contrast in the app. */
+  color: var(--text);
+  /* `start`, not `left`: these three rules had no body[dir="rtl"] override, so
+     Arabic text sat left-aligned inside a right-to-left row. In LTR `start`
+     resolves to `left`, so nothing changes there. */
+  text-align: start;
   transition: transform 0.12s, border-color 0.15s;
   margin-bottom: 8px;
 }
@@ -5792,7 +5806,7 @@ body[dir="rtl"] .variation-select svg { transform: scaleX(-1); }
   margin-inline-start: 8px;
   padding: 2px 7px;
   border-radius: 999px;
-  font-size: 10px;
+  font-size: 11px;
   font-weight: 700;
   letter-spacing: 0.02em;
   color: var(--accent);
@@ -6010,7 +6024,7 @@ body[dir="rtl"] .variation-select svg { transform: scaleX(-1); }
   background: var(--accent-soft, var(--surface-2)); color: var(--accent);
 }
 .onb-logo svg { width: 32px; height: 32px; }
-.onb-title { font-size: 21px; font-weight: 900; color: var(--text); margin-bottom: 8px; line-height: 1.3; }
+.onb-title { font-size: 22px; font-weight: 900; color: var(--text); margin-bottom: 8px; line-height: 1.3; }
 .onb-sub { font-size: 14px; color: var(--text-dim); line-height: 1.6; margin-bottom: 22px; }
 
 /* (The .onb-langs language slide is gone — the app no longer asks. The login
@@ -6592,7 +6606,7 @@ body[dir="rtl"] .variation-select svg { transform: scaleX(-1); }
 }
 .cta-floating .cta-card-icon { width: 38px; height: 38px; border-radius: 12px; }
 .cta-floating .cta-card-title { font-size: 14px; margin-bottom: 1px; }
-.cta-floating .cta-card-sub { font-size: 11.5px; }
+.cta-floating .cta-card-sub { font-size: 11px; }
 .cta-floating:active { transform: translateX(-50%) scale(var(--press-scale)); }
 /* Give the food list room so its last row clears the floating bar */
 .view[data-view="food"] { padding-bottom: 84px; }
