@@ -899,7 +899,10 @@ body.theme-nebula .home-center-icon { box-shadow: 0 8px 28px rgba(168, 85, 247, 
 }
 
 .page-title {
-  font-size: 32px;
+  /* 26px, not 32px. At 32 it tied exactly with .stat-cell-value (32/900), so the
+     eye was pulled equally to a heading read once and to the numbers that are the
+     actual content — and the type scale jumped 18 -> 32 with nothing between. */
+  font-size: 26px;
   font-weight: 900;
   letter-spacing: -0.03em;
   line-height: 1.05;
@@ -1321,24 +1324,8 @@ input[type="date"], input[type="time"] { color-scheme: dark; }
   margin-bottom: 18px;
 }
 
-.heatmap-head {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 14px;
-}
-
-.heatmap-title {
-  font-size: 14px;
-  font-weight: 800;
-  letter-spacing: -0.015em;
-}
-
-.heatmap-sub {
-  font-size: 11px;
-  color: var(--text-dim);
-  font-weight: 500;
-}
+/* .heatmap-head/-title/-sub removed: the heatmap uses the standard
+   .rot-section-title + .rot-section-sub above its card, like every other section. */
 
 .heatmap-grid {
   display: grid;
@@ -1460,7 +1447,8 @@ input[type="date"], input[type="time"] { color-scheme: dark; }
 .ms-x { opacity: 0.5; margin: 0 1px; }
 
 .heat-cell-name {
-  font-size: 10px;
+  /* 11px is the floor; at 10px Arabic loses its dots at a glance. */
+  font-size: 11px;
   font-weight: 700;
   color: var(--text-mute);
   text-transform: uppercase;
@@ -1482,7 +1470,10 @@ input[type="date"], input[type="time"] { color-scheme: dark; }
 }
 
 /* Heat levels — the more sessions, the stronger the color */
-.heat-cell.lvl-0 .heat-cell-count { color: var(--text-faint); }
+/* --text-dim, not --text-faint: this is a NUMBER the user reads, and --text-faint
+   is reserved for decorative dots/bars (see CLAUDE.md). It measured 3.97:1 here,
+   below the 4.5 that 14px text needs; --text-dim is AA in all 13 themes. */
+.heat-cell.lvl-0 .heat-cell-count { color: var(--text-dim); }
 .heat-cell.lvl-1 { background: rgba(var(--accent-rgb), 0.12); }
 .heat-cell.lvl-1 .heat-cell-count { color: var(--accent); }
 .heat-cell.lvl-2 { background: rgba(var(--accent-rgb), 0.25); }
@@ -3289,6 +3280,18 @@ body[dir="rtl"] .tool-card { text-align: right; align-items: flex-end; }
   gap: var(--sp-3);
 }
 .rot-section-head .rot-section-title { flex: 1; min-width: 0; }
+/* Optional context line under a section title. */
+.rot-section-sub {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-mute);
+  margin: -8px 0 var(--sp-3);
+}
+/* Blocks inside a .rot-section must not add their own bottom margin — the section
+   owns the rhythm. Without this the strip's own margin stacked on the section's. */
+.rot-section > .stat-strip,
+.rot-section > .muscle-heatmap,
+.rot-section > .data-list { margin-bottom: 0; }
 .rot-section-action {
   flex: 0 0 auto;
   display: inline-flex;

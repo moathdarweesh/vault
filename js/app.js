@@ -12,7 +12,7 @@
 // build. The literal below is the fallback (file://, or a stripped query) and is
 // still bumped by `npm run release` — see CLAUDE.md "CACHE WORKFLOW".
 const VAULT_BUILD = (() => {
-  const FALLBACK = 'v199';
+  const FALLBACK = 'v200';
   try {
     const src = (document.currentScript && document.currentScript.src) || '';
     const m = src.match(/[?&]v=(\d+)/);
@@ -3115,58 +3115,66 @@ function renderProgram(el) {
       </div>
     `}
 
-    <div class="section-title">${t('this_week')}</div>
-    <div class="stat-strip">
-      <div class="stat-cell">
-        <div class="stat-cell-value num">${fmtNum(daysOf(wk))}</div>
-        <div class="stat-cell-label">${t('program_days')}</div>
-        ${deltaBlock(daysOf(wk), daysOf(lw), '')}
-      </div>
-      <div class="stat-cell">
-        <div class="stat-cell-value num">${fmtNum(setsOf(wk))}</div>
-        <div class="stat-cell-label">${t('sets')}</div>
-        ${deltaBlock(setsOf(wk), setsOf(lw), '')}
-      </div>
-      <div class="stat-cell">
-        <div class="stat-cell-value num">${fmtWeight(Math.round(volNow))}</div>
-        <div class="stat-cell-label">${t('program_volume')} · ${unitLabel()}</div>
-        ${deltaBlock(Math.round(volNow), Math.round(volOf(lw)), '')}
+    <!-- Every block below is a .rot-section with a .rot-section-title. It used to
+         mix two header systems on one screen — .section-title (700, plus a ::after
+         rule) for "This week" and .rot-section-title (800, no rule) for the rest,
+         so one heading had a horizontal line and the others did not. One system,
+         one spacing rhythm. -->
+    <div class="rot-section">
+      <div class="rot-section-title">${t('this_week')}</div>
+      <div class="stat-strip">
+        <div class="stat-cell">
+          <div class="stat-cell-value num">${fmtNum(daysOf(wk))}</div>
+          <div class="stat-cell-label">${t('program_days')}</div>
+          ${deltaBlock(daysOf(wk), daysOf(lw), '')}
+        </div>
+        <div class="stat-cell">
+          <div class="stat-cell-value num">${fmtNum(setsOf(wk))}</div>
+          <div class="stat-cell-label">${t('sets')}</div>
+          ${deltaBlock(setsOf(wk), setsOf(lw), '')}
+        </div>
+        <div class="stat-cell">
+          <div class="stat-cell-value num">${fmtWeight(Math.round(volNow))}</div>
+          <div class="stat-cell-label">${t('program_volume')} · ${unitLabel()}</div>
+          ${deltaBlock(Math.round(volNow), Math.round(volOf(lw)), '')}
+        </div>
       </div>
     </div>
 
-    ${heatTotal > 0 ? `<div class="muscle-heatmap">
-      <div class="heatmap-head">
-        <div>
-          <div class="heatmap-title">${t('muscle_focus')}</div>
-          <div class="heatmap-sub">${t('muscle_focus_sub')}</div>
+    ${heatTotal > 0 ? `
+      <div class="rot-section">
+        <div class="rot-section-title">${t('muscle_focus')}</div>
+        <div class="rot-section-sub">${t('muscle_focus_sub')}</div>
+        <div class="muscle-heatmap">
+          <div class="heatmap-grid band">${heatCells}</div>
         </div>
-      </div>
-      <div class="heatmap-grid band">${heatCells}</div>
-    </div>` : ''}
+      </div>` : ''}
 
     ${prRows.length ? `
-      <div class="rot-section-head">
-        <div class="rot-section-title">${t('pr_view_title')}</div>
-        <button class="rot-section-action" data-goto="personal-records">${t('view_all')}</button>
-      </div>
-      <div class="data-list">
-        ${prRows.map(({ ex, snap }) => `
-          <div class="data-row pr-row">
-            <div class="data-icon custom" aria-hidden="true">${icon('trophy', 20)}</div>
-            <div class="data-main">
-              <div class="data-title">${escapeHtml(exDisplayName(ex))}</div>
-              <div class="data-meta pr-stats">
-                <span>${escapeHtml(t('pr_max_weight'))}: <span class="num">${fmtWeight(snap.maxWeight)}${unitLabel()}</span></span>
-                <span class="dot-sep"></span>
-                <span>${escapeHtml(t('pr_est_orm'))}: <span class="num">${fmtWeight(Math.round(snap.bestORM))}${unitLabel()}</span></span>
+      <div class="rot-section">
+        <div class="rot-section-head">
+          <div class="rot-section-title">${t('pr_view_title')}</div>
+          <button class="rot-section-action" data-goto="personal-records">${t('view_all')}</button>
+        </div>
+        <div class="data-list">
+          ${prRows.map(({ ex, snap }) => `
+            <div class="data-row pr-row">
+              <div class="data-icon custom" aria-hidden="true">${icon('trophy', 20)}</div>
+              <div class="data-main">
+                <div class="data-title">${escapeHtml(exDisplayName(ex))}</div>
+                <div class="data-meta pr-stats">
+                  <span>${escapeHtml(t('pr_max_weight'))}: <span class="num">${fmtWeight(snap.maxWeight)}${unitLabel()}</span></span>
+                  <span class="dot-sep"></span>
+                  <span>${escapeHtml(t('pr_est_orm'))}: <span class="num">${fmtWeight(Math.round(snap.bestORM))}${unitLabel()}</span></span>
+                </div>
               </div>
             </div>
-          </div>
-        `).join('')}
+          `).join('')}
+        </div>
       </div>
     ` : ''}
 
-    <button class="btn btn-ghost btn-block" data-goto="exercises" style="margin-top:4px">${icon('search', 18)} ${t('train')}</button>
+    <button class="btn btn-ghost btn-block" data-goto="exercises">${icon('search', 18)} ${t('train')}</button>
   `;
 
   // Top-bar magnifier → the exercise browser (its own screen since v198).
