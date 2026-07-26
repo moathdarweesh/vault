@@ -6494,6 +6494,27 @@ body[dir="rtl"] .variation-select svg { transform: scaleX(-1); }
   position: relative;
 }
 .hero-card .planner-day-muscles { margin-top: var(--sp-3); position: relative; }
+/* Nutrition twin of the workout hero. Same card, one extra element: a slim
+   progress bar, because "calories left" only means something next to how far
+   through the day's target you already are. */
+.hero-food .hero-numeral.over,
+.hero-food .hero-bar-fill.over { color: var(--red); }
+.hero-bar {
+  height: 6px;
+  border-radius: var(--radius-pill);
+  background: var(--surface-3);
+  overflow: hidden;
+  margin-top: var(--sp-3);
+}
+.hero-bar-fill {
+  display: block;
+  height: 100%;
+  border-radius: var(--radius-pill);
+  background: var(--accent);
+  transition: width .6s cubic-bezier(0.22, 1, 0.36, 1);
+}
+.hero-bar-fill.over { background: var(--red); }
+
 .hero-cta {
   display: flex;
   align-items: center;

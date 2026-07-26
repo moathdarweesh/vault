@@ -12,7 +12,7 @@
 // build. The literal below is the fallback (file://, or a stripped query) and is
 // still bumped by `npm run release` — see CLAUDE.md "CACHE WORKFLOW".
 const VAULT_BUILD = (() => {
-  const FALLBACK = 'v206';
+  const FALLBACK = 'v207';
   try {
     const src = (document.currentScript && document.currentScript.src) || '';
     const m = src.match(/[?&]v=(\d+)/);
@@ -561,6 +561,7 @@ const I18N = {
     nutri_setup_title: 'Set your daily goal',
     nutri_setup_text: 'Calculate your calories & macros to start tracking.',
     nutri_left: 'left',
+    nutri_setup_cta: 'Set it up',
     nutri_over: 'over',
     nutri_calories: 'Calories',
     nutri_today: "Today's food",
@@ -1172,6 +1173,7 @@ const I18N = {
     nutri_setup_title: 'حدّد هدفك اليومي',
     nutri_setup_text: 'احسب سعراتك وماكروزك لتبدأ المتابعة.',
     nutri_left: 'متبقّي',
+    nutri_setup_cta: 'حدّده الآن',
     nutri_over: 'زيادة',
     nutri_calories: 'السعرات',
     nutri_today: 'أكل اليوم',
@@ -2460,6 +2462,35 @@ function renderHome(el) {
     </button>
   `;
 
+  // Twin of the workout hero, for nutrition. Same three-state shape: nothing set
+  // up yet -> an invitation; set up -> today's number and how far through it you
+  // are. Both land on the Food view, which already owns the goal setup, so this
+  // card never has to duplicate that flow.
+  const foodHeroHtml = (() => {
+    if (!DB.nutrition.hasTargets()) {
+      return `
+        <button class="hero-card hero-first hero-food" id="home-food-hero">
+          <div class="hero-eyebrow">${t('calories')}</div>
+          <div class="hero-first-title">${t('nutri_setup_title')}</div>
+          <div class="hero-first-sub">${t('nutri_setup_text')}</div>
+          <div class="hero-cta">${icon('target', 18)}<span>${t('nutri_setup_cta')}</span></div>
+        </button>`;
+    }
+    const tgt = DB.nutrition.get().targets;
+    const eaten = DB.foodLogs.totalsForDate(todayISO());
+    const left = Math.round(tgt.calories - eaten.calories);
+    const over = left < 0;
+    const pct = tgt.calories > 0 ? Math.min(100, Math.round((eaten.calories / tgt.calories) * 100)) : 0;
+    return `
+      <button class="hero-card hero-food" id="home-food-hero">
+        <div class="hero-eyebrow">${t('calories')} · ${t('today')}</div>
+        <div class="hero-numeral num ${over ? 'over' : ''}">${fmtNum(Math.abs(left))}</div>
+        <div class="hero-meta">${over ? t('nutri_over') : t('nutri_left')} · <span class="num">${fmtNum(Math.round(eaten.calories))}</span> / <span class="num">${fmtNum(tgt.calories)}</span> ${t('cal')}</div>
+        <div class="hero-bar"><span class="hero-bar-fill ${over ? 'over' : ''}" style="width:${pct}%"></span></div>
+        <div class="hero-cta">${icon('utensils', 18)}<span>${t('food')}</span></div>
+      </button>`;
+  })();
+
   const streakUnit = streak === 1 ? t('streak_one_day') : t('streak_days');
   const streakLabel = streak > 0 ? t('streak_active') : t('streak_start');
 
@@ -2538,6 +2569,8 @@ function renderHome(el) {
 
     ${heroHtml}
 
+    ${foodHeroHtml}
+
     ${hasAnyActivity ? `<div class="stat-strip">
       <button class="stat-cell" data-goto="workouts">
         <div class="stat-cell-value num"><span class="anim" data-count="${weekWorkoutDays}">0</span></div>
@@ -2599,6 +2632,7 @@ function renderHome(el) {
     if (!hasAnyPlan) { navigate('planner'); return; }
     navigate('session-day', { date: todayISO() });
   });
+  $('#home-food-hero', el)?.addEventListener('click', () => navigate('food'));
   const lastSetCard = $('.last-set-card', el);
   if (lastSetCard) lastSetCard.addEventListener('click', () =>
     navigate('exercise-detail', { exerciseId: lastSetCard.dataset.openExercise }));
