@@ -709,6 +709,44 @@ body.theme-dusk { --text-mute: #b49faa; --text-dim: #ada1a8; }
    `sand` an accent-text from a different theme (2.37-2.67:1). */
 body { --accent-text: var(--accent); }
 
+/* Reminder time chips + the add row. */
+.time-chips { display: flex; flex-wrap: wrap; gap: 8px; }
+.time-chip {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 7px 10px 7px 12px;
+  border-radius: var(--radius-pill);
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  color: var(--text);
+  font-size: var(--fs-meta); font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+.time-chip-x {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 20px; height: 20px; padding: 0;
+  border: none; border-radius: var(--radius-pill);
+  background: var(--surface-3); color: var(--text-mute);
+  cursor: pointer; -webkit-tap-highlight-color: transparent;
+}
+.time-chip-x svg { width: 12px; height: 12px; }
+.time-empty { font-size: var(--fs-meta); color: var(--text-dim); font-weight: 600; }
+.time-add { display: flex; gap: 8px; align-items: center; margin-top: 10px; flex-wrap: wrap; }
+.time-add input[type="time"], .time-add select {
+  height: 44px; padding: 0 12px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border);
+  background: var(--surface-2); color: var(--text);
+  font-family: inherit; font-size: 16px;   /* 16px: below it iOS zooms on focus */
+}
+.time-add .btn { height: 44px; }
+.rem-summary {
+  margin-top: 4px; padding: 12px;
+  border-radius: var(--radius-md);
+  background: var(--accent-soft);
+  color: var(--accent-text);
+  font-size: var(--fs-sub); font-weight: 800; text-align: center;
+}
+
 /* =========================================================================
    RTL (Arabic) support
    ========================================================================= */

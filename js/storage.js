@@ -301,6 +301,17 @@ function uid() {
 // — the same principle as detectLang: don't ask for something the device already
 // knows. Only consulted when building a fresh state; an existing user's chosen
 // theme is never overridden, and all 13 themes are still available in Settings.
+function pad2(n) { return String(n).padStart(2, '0'); }
+
+// Small stable integer id from a string — the native notification plugin keys
+// everything by int, and reusing the same id lets a re-sync REPLACE an alarm
+// instead of stacking a duplicate.
+function hashId(str) {
+  let h = 5381;
+  for (let i = 0; i < str.length; i++) h = ((h << 5) + h + str.charCodeAt(i)) | 0;
+  return Math.abs(h) % 2000000000;
+}
+
 function detectTheme() {
   try {
     return (window.matchMedia && matchMedia('(prefers-color-scheme: light)').matches) ? 'light' : 'dark';
@@ -359,6 +370,10 @@ function defaultState() {
     // across training days (never reset weekly). See migratePlan()/DB.plan.
     plan: { mode: 'rotation', cycle: [], trainingDays: [], anchor: null },
     supplements: [],
+    // Reminder settings. Times are LOCAL "HH:MM" strings, never timestamps: a
+    // reminder means "08:00 wherever you are", so it must survive a timezone
+    // change and DST without shifting.
+    reminders: { enabled: false, water: { on: false, from: '09:00', to: '21:00', everyMin: 120 } },
     supplementLogs: {},
     foodLogs: {},
     water: {}, // per-day water intake in ml, keyed by YYYY-MM-DD
@@ -469,6 +484,7 @@ function loadState() {
     parsed.sleep = parsed.sleep || [];
     parsed.plan = migratePlan(parsed.plan);   // legacy dow-grid → continuous rotation
     parsed.supplements = parsed.supplements || [];
+    parsed.reminders = parsed.reminders || { enabled: false, water: { on: false, from: '09:00', to: '21:00', everyMin: 120 } };
     parsed.supplementLogs = parsed.supplementLogs || {};
     parsed.foodLogs = parsed.foodLogs || {};
     parsed.water = parsed.water || {};
@@ -798,12 +814,13 @@ const DB = {
   // ----- Supplements -----
   supplements: {
     list() { return [...(STATE.supplements || [])].sort((a, b) => a.name.localeCompare(b.name)); },
-    add({ name, dose, color }) {
+    add({ name, dose, color, times }) {
       const item = {
         id: uid(),
         name: name.trim(),
         dose: (dose || '').trim(),
         color: color || '#22d3ee',
+        times: Array.isArray(times) ? times.slice() : [],   // local "HH:MM" reminder times
         createdAt: new Date().toISOString(),
       };
       STATE.supplements.push(item);
@@ -816,9 +833,13 @@ const DB = {
       if (data.name != null) s.name = data.name.trim();
       if (data.dose != null) s.dose = (data.dose || '').trim();
       if (data.color != null) s.color = data.color;
+      // This whitelist silently DROPS any field it doesn't name — reminder times
+      // saved fine on a new supplement and vanished on an edit until this line.
+      if (Array.isArray(data.times)) s.times = data.times.slice();
       save();
       return s;
     },
+    setTimes(id, times) { return this.update(id, { times: Array.isArray(times) ? times : [] }); },
     remove(id) {
       STATE.supplements = STATE.supplements.filter((s) => s.id !== id);
       // Also clean logs for this supplement
@@ -1312,6 +1333,64 @@ const DB = {
         });
       });
       return { maxWeight, bestORM, sessionCount: sessions.length };
+    },
+  },
+
+  // ----- Reminders -----
+  reminders: {
+    get() {
+      const r = STATE.reminders || {};
+      return { enabled: !!r.enabled, water: Object.assign({ on: false, from: '09:00', to: '21:00', everyMin: 120 }, r.water || {}) };
+    },
+    setEnabled(on) { STATE.reminders = this.get(); STATE.reminders.enabled = !!on; save(); },
+    setWater(patch) {
+      const cur = this.get();
+      STATE.reminders = { enabled: cur.enabled, water: Object.assign(cur.water, patch || {}) };
+      save();
+    },
+
+    // The ONE place that turns settings into a concrete list of daily alarms.
+    // Both the native scheduler and the in-app catch-up read this, so the two can
+    // never disagree about what was due. Times are local "HH:MM"; `id` is stable
+    // and numeric because the native plugin keys notifications by integer id.
+    schedule() {
+      const out = [];
+      const r = this.get();
+      if (!r.enabled) return out;
+
+      (STATE.supplements || []).forEach((sup) => {
+        (sup.times || []).forEach((hhmm, i) => {
+          const [h, m] = String(hhmm).split(':').map(Number);
+          if (!(h >= 0 && h < 24 && m >= 0 && m < 60)) return;
+          out.push({
+            id: hashId('s:' + sup.id + ':' + i),
+            kind: 'supplement', refId: sup.id,
+            hour: h, minute: m, at: hhmm,
+            name: sup.name, dose: sup.dose || '',
+          });
+        });
+      });
+
+      const w = r.water;
+      if (w.on) {
+        const [fh, fm] = w.from.split(':').map(Number);
+        const [th, tm] = w.to.split(':').map(Number);
+        const step = Math.max(30, Number(w.everyMin) || 120);
+        let mins = fh * 60 + fm;
+        const end = th * 60 + tm;
+        let n = 0;
+        // Hard cap: a 30-minute step across a full day is 48 alarms, and Android
+        // silently drops a runaway schedule rather than erroring.
+        while (mins <= end && n < 24) {
+          out.push({
+            id: hashId('w:' + n), kind: 'water',
+            hour: Math.floor(mins / 60), minute: mins % 60,
+            at: pad2(Math.floor(mins / 60)) + ':' + pad2(mins % 60),
+          });
+          mins += step; n++;
+        }
+      }
+      return out.sort((a, b) => (a.hour - b.hour) || (a.minute - b.minute));
     },
   },
 

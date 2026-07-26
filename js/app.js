@@ -12,7 +12,7 @@
 // build. The literal below is the fallback (file://, or a stripped query) and is
 // still bumped by `npm run release` — see CLAUDE.md "CACHE WORKFLOW".
 const VAULT_BUILD = (() => {
-  const FALLBACK = 'v207';
+  const FALLBACK = 'v208';
   try {
     const src = (document.currentScript && document.currentScript.src) || '';
     const m = src.match(/[?&]v=(\d+)/);
@@ -528,6 +528,19 @@ const I18N = {
     name: 'Name', category: 'Category',
     save: 'Save', cancel: 'Cancel', update: 'Update', delete: 'Delete', edit: 'Edit', select: 'Select',
     unit: 'Unit', done: 'Done',
+    // Reminders
+    remind_title: 'Reminders',
+    remind_sub: 'Supplement and water reminders.',
+    remind_on: 'On', remind_off: 'Off',
+    remind_native: 'Alerts arrive even when the app is closed.',
+    remind_inapp: 'Shown when you open the app — install the latest APK for real alerts.',
+    remind_every: 'every', remind_from: 'From', remind_to: 'To',
+    remind_daily: 'reminders a day', remind_none: 'No reminders set',
+    remind_times: 'Reminder times', remind_add_time: 'Add time',
+    remind_supp_hint: 'Set times on each supplement.',
+    remind_denied: 'Notifications are blocked in your phone settings.',
+    remind_water_title: 'Water', remind_water_body: 'Time for a glass of water.',
+    remind_supp_title: 'Supplement', open: 'Open',
     not_found: 'Not found', not_found_text: 'This exercise no longer exists.',
 
     // Cardio
@@ -1142,6 +1155,19 @@ const I18N = {
     name: 'الاسم', category: 'الفئة',
     save: 'حفظ', cancel: 'إلغاء', update: 'تحديث', delete: 'حذف', edit: 'تعديل', select: 'اختيار',
     unit: 'الوحدة', done: 'تم',
+    // التنبيهات
+    remind_title: 'التنبيهات',
+    remind_sub: 'تنبيهات المكمّلات والماء.',
+    remind_on: 'مفعّلة', remind_off: 'متوقّفة',
+    remind_native: 'تصلك حتى والتطبيق مغلق.',
+    remind_inapp: 'تظهر عند فتح التطبيق — ثبّت أحدث نسخة APK لتصلك فعلياً.',
+    remind_every: 'كل', remind_from: 'من', remind_to: 'إلى',
+    remind_daily: 'تنبيهاً يومياً', remind_none: 'لا توجد تنبيهات',
+    remind_times: 'أوقات التذكير', remind_add_time: 'أضف وقتاً',
+    remind_supp_hint: 'حدّد الأوقات في كل مكمّل.',
+    remind_denied: 'التنبيهات محجوبة من إعدادات هاتفك.',
+    remind_water_title: 'الماء', remind_water_body: 'حان وقت كوب ماء.',
+    remind_supp_title: 'مكمّل', open: 'فتح',
     not_found: 'غير موجود', not_found_text: 'هذا التمرين لم يعد موجوداً.',
 
     cardio_subtitle: 'جلسات السير، المشي، والدراجة.',
@@ -5853,6 +5879,22 @@ function renderSettings(el) {
     </div>
 
     <div class="settings-section">
+      <div class="section-title">${t('remind_title')}</div>
+      <button class="settings-action-row" id="reminders-btn">
+        <div class="settings-action-icon">${icon('clock', 18)}</div>
+        <div class="settings-action-main">
+          <div class="settings-action-title">${t('remind_title')}</div>
+          <div class="settings-action-sub">${(() => {
+            const r = DB.reminders.get();
+            if (!r.enabled) return t('remind_off');
+            const n = DB.reminders.schedule().length;
+            return n ? `${fmtNum(n)} ${t('remind_daily')}` : t('remind_none');
+          })()}</div>
+        </div>
+      </button>
+    </div>
+
+    <div class="settings-section">
       <div class="section-title">${t('feedback_title')}</div>
       <button class="settings-action-row" id="feedback-btn">
         <div class="settings-action-icon">${icon('send', 18)}</div>
@@ -5937,6 +5979,8 @@ function renderSettings(el) {
     if (window.Health && typeof window.Health.open === 'function') window.Health.open();
     else showToast(t('health_only_android'));
   });
+
+  $('#reminders-btn', el)?.addEventListener('click', openRemindersModal);
 
   // Feedback / suggestions
   $('#feedback-btn', el)?.addEventListener('click', showFeedback);
@@ -7706,6 +7750,100 @@ function renderSupplements(el) {
   });
 }
 
+// Reminders: the master switch, the water schedule, and a read-only summary of
+// what is actually queued. Supplement times are edited on each supplement, so
+// this screen never becomes a second place to define them.
+function openRemindersModal() {
+  const render = () => {
+    const r = DB.reminders.get();
+    const items = DB.reminders.schedule();
+    const supps = DB.supplements.list().filter((x) => (x.times || []).length);
+    const native = !!(window.Notify && Notify.isNative());
+
+    openModal(`
+      <div class="modal-header">
+        <div>
+          <div class="modal-title">${t('remind_title')}</div>
+          <div class="modal-subtitle">${t('remind_sub')}</div>
+        </div>
+        <button class="icon-btn icon-btn-tile" data-close aria-label="${escapeHtml(t('close'))}">${icon('close', 18)}</button>
+      </div>
+
+      <button type="button" class="settings-action-row" id="rem-toggle">
+        <div class="settings-action-icon">${icon(r.enabled ? 'check' : 'clock', 18)}</div>
+        <div class="settings-action-main">
+          <div class="settings-action-title">${r.enabled ? t('remind_on') : t('remind_off')}</div>
+          <div class="settings-action-sub">${native ? t('remind_native') : t('remind_inapp')}</div>
+        </div>
+      </button>
+
+      <div class="form-group" style="margin-top:16px">
+        <label class="form-label">${t('water')}</label>
+        <button type="button" class="settings-action-row" id="rem-water">
+          <div class="settings-action-icon">${icon('droplet', 18)}</div>
+          <div class="settings-action-main">
+            <div class="settings-action-title">${r.water.on ? t('remind_on') : t('remind_off')}</div>
+            <div class="settings-action-sub">${escapeHtml(r.water.from)} – ${escapeHtml(r.water.to)} · ${t('remind_every')} ${fmtNum(r.water.everyMin)} ${t('unit_min')}</div>
+          </div>
+        </button>
+        ${r.water.on ? `
+          <div class="time-add" style="margin-top:8px">
+            <input type="time" id="rem-from" value="${escapeHtml(r.water.from)}" aria-label="${escapeHtml(t('remind_from'))}">
+            <input type="time" id="rem-to" value="${escapeHtml(r.water.to)}" aria-label="${escapeHtml(t('remind_to'))}">
+            <select id="rem-every" aria-label="${escapeHtml(t('remind_every'))}">
+              ${[60, 90, 120, 180, 240].map((v) => `<option value="${v}" ${v === r.water.everyMin ? 'selected' : ''}>${fmtNum(v)} ${t('unit_min')}</option>`).join('')}
+            </select>
+          </div>` : ''}
+      </div>
+
+      <div class="form-group">
+        <label class="form-label">${t('supplements_card')}</label>
+        ${supps.length
+          ? `<div class="time-chips">${supps.map((x) => `<span class="time-chip">${escapeHtml(x.name)} · ${escapeHtml((x.times || []).slice().sort().join(' '))}</span>`).join('')}</div>`
+          : `<div class="time-empty">${t('remind_supp_hint')}</div>`}
+      </div>
+
+      <div class="rem-summary">${items.length
+        ? `${fmtNum(items.length)} ${t('remind_daily')}`
+        : t('remind_none')}</div>
+
+      <div class="form-actions">
+        <button type="button" class="btn btn-primary btn-block" data-close>${t('done')}</button>
+      </div>
+    `);
+
+    // Master switch. Turning it ON asks for the OS permission first (native only)
+    // so the user never sees "on" while Android is silently dropping every alarm.
+    $('#rem-toggle')?.addEventListener('click', async () => {
+      const next = !DB.reminders.get().enabled;
+      if (next && window.Notify && Notify.isNative()) {
+        const ok = await Notify.ensurePermission();
+        if (!ok) { showToast(t('remind_denied')); return; }
+      }
+      DB.reminders.setEnabled(next);
+      try { if (window.Notify) await Notify.sync(); } catch (_) {}
+      closeModal(); render();
+    });
+
+    $('#rem-water')?.addEventListener('click', async () => {
+      DB.reminders.setWater({ on: !DB.reminders.get().water.on });
+      try { if (window.Notify) await Notify.sync(); } catch (_) {}
+      closeModal(); render();
+    });
+
+    const push = async () => {
+      const from = $('#rem-from')?.value, to = $('#rem-to')?.value, every = Number($('#rem-every')?.value);
+      if (!from || !to) return;
+      // A window that ends before it starts yields zero alarms; keep it sane.
+      DB.reminders.setWater({ from, to: (to > from ? to : from), everyMin: every });
+      try { if (window.Notify) await Notify.sync(); } catch (_) {}
+      closeModal(); render();
+    };
+    ['#rem-from', '#rem-to', '#rem-every'].forEach((sel) => $(sel)?.addEventListener('change', push));
+  };
+  render();
+}
+
 function openSupplementModal(id = null) {
   const existing = id ? DB.supplements.list().find((x) => x.id === id) : null;
   let pickedColor = existing ? existing.color : SUPP_COLORS[0];
@@ -7753,12 +7891,33 @@ function openSupplementModal(id = null) {
       <div class="color-swatches" id="color-swatches">${swatches}</div>
     </div>
 
+    <div class="form-group">
+      <label class="form-label">${t('remind_times')}</label>
+      <div class="time-chips" id="supp-times"></div>
+      <div class="time-add">
+        <input type="time" id="supp-time-input" value="08:00">
+        <button type="button" class="btn btn-ghost" id="supp-time-add">${icon('plus', 16)} ${t('remind_add_time')}</button>
+      </div>
+    </div>
+
     <div class="form-actions">
       ${existing ? `<button type="button" class="btn btn-danger" id="supp-delete" aria-label="${escapeHtml(t('delete'))}">${icon('trash', 18)}</button>` : ''}
       <button type="button" class="btn btn-ghost" data-close>${t('cancel')}</button>
       <button type="button" class="btn btn-primary" id="supp-save">${existing ? t('update') : t('save')}</button>
     </div>
   `);
+
+  let times = existing && Array.isArray(existing.times) ? existing.times.slice() : [];
+  const paintTimes = () => {
+    const host = $('#supp-times');
+    if (!host) return;
+    host.innerHTML = times.length
+      ? times.slice().sort().map((tm) => `
+          <span class="time-chip">${escapeHtml(tm)}
+            <button type="button" class="time-chip-x" data-rm-time="${escapeHtml(tm)}" aria-label="${escapeHtml(t('delete'))}">${icon('close', 12)}</button>
+          </span>`).join('')
+      : `<span class="time-empty">${t('remind_none')}</span>`;
+  };
 
   const paintSwatches = () => $('#color-swatches').querySelectorAll('[data-color]').forEach((x) =>
     x.classList.toggle('active', x.dataset.color === pickedColor));
@@ -7768,6 +7927,20 @@ function openSupplementModal(id = null) {
     if (!sw) return;
     pickedColor = sw.dataset.color;
     paintSwatches();
+  });
+
+  paintTimes();
+  $('#supp-time-add')?.addEventListener('click', () => {
+    const v = $('#supp-time-input').value;
+    if (!v || times.indexOf(v) !== -1) return;   // ignore blanks and duplicates
+    times.push(v);
+    paintTimes();
+  });
+  $('#supp-times')?.addEventListener('click', (e) => {
+    const b = e.target.closest('[data-rm-time]');
+    if (!b) return;
+    times = times.filter((x) => x !== b.dataset.rmTime);
+    paintTimes();
   });
 
   // A preset FILLS the form, it does not submit it — the name, dose and colour
@@ -7789,12 +7962,14 @@ function openSupplementModal(id = null) {
     const dose = $('#supp-dose').value.trim();
     if (!name) { showToast(t('enter_name')); return; }
     if (existing) {
-      DB.supplements.update(existing.id, { name, dose, color: pickedColor });
+      DB.supplements.update(existing.id, { name, dose, color: pickedColor, times });
       showToast(t('updated'));
     } else {
-      DB.supplements.add({ name, dose, color: pickedColor });
+      DB.supplements.add({ name, dose, color: pickedColor, times });
       showToast(t('saved'));
     }
+    // Times changed → the alarm set is stale. No-op off-native.
+    try { if (window.Notify) Notify.sync(); } catch (_) {}
     closeModal();
     renderView(currentView);
   });
@@ -9104,6 +9279,14 @@ function showOnboarding() {
   bootCloud();
   bootCatalog(); // best-effort admin-content pull; works logged-out too
 
+  // Reminders. sync() re-arms the OS alarms (native only, no-op on web);
+  // catchUp() surfaces anything that came due earlier today and was not done —
+  // which is the ONLY delivery available on web and on any shell built before
+  // the notifications plugin landed. Deferred so neither blocks first paint.
+  setTimeout(() => {
+    try { if (window.Notify) { Notify.sync(); Notify.catchUp(); } } catch (_) {}
+  }, 1500);
+
   // When the app is re-foregrounded (common on the APK — Android keeps it warm),
   // refresh without a full restart: pull admin content again (so a freshly
   // activated announcement appears) and re-check for a newer web build (shows a
@@ -9119,6 +9302,8 @@ function showOnboarding() {
   document.addEventListener('visibilitychange', () => {
     if (document.visibilityState !== 'visible') return;
     try { bootCatalog(); } catch (_) {}
+    // Re-check on foreground: a reminder may have come due while the app slept.
+    try { if (window.Notify) Notify.catchUp(); } catch (_) {}
     try { if (window.VaultUpdate && VaultUpdate.checkWeb) VaultUpdate.checkWeb(); } catch (_) {}
     // Re-resolve the calendar day on every foreground.
     try {

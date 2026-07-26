@@ -35,7 +35,7 @@ A fitness / workout-tracking **PWA**. Vanilla JS, **no build step**, bilingual *
 npm run release          # bump every marker + verify, then commit all files together
 ```
 
-**Current version: v202.**
+**Current version: v208.** APK: build 8 / v1.7.
 
 `scripts/release.js` rewrites all **13** markers and then re-reads them from disk to confirm; it exits non-zero if any disagree. The markers are `?v=N` in `index.html` (×11, including the `js/vendor/supabase.js` preload), the `__cleaned_vN` sessionStorage keys, the `FALLBACK` literal in `app.js`, and `version.json` → `web`.
 
@@ -98,6 +98,36 @@ Every device loads the same live URL, so a bad push reaches everyone at once.
   no-op without permission, 20s throttle). `renderCardio` calls it, because Health
   Connect sessions already import into the cardio log but only rendering HOME ever
   triggered a sync.
+
+### Reminders (v208) — the first native change since v109
+Supplement and water reminders. **This is why APK build 8 exists**: a Capacitor
+plugin is a native change, so unlike every release since v109 it does NOT reach
+installed users from a `git push` — they must install the new APK.
+
+- `DB.reminders.schedule()` in `js/storage.js` is the **single source of truth**:
+  it turns settings into a concrete list of daily alarms. Both delivery paths read
+  it, so they can never disagree about what was due. Times are local `"HH:MM"`
+  strings, never timestamps — a reminder means "08:00 wherever you are", which is
+  what survives a timezone change and DST.
+- `js/notify.js` has two paths. **Native**: `@capacitor/local-notifications`,
+  real alarms with the app closed, scheduled with `{ on: { hour, minute } }` so
+  they repeat daily at wall-clock time. **In-app**: everywhere else (web, and any
+  shell older than build 8) it catches up on open — anything due earlier today and
+  not logged is surfaced once as a toast, deduped per day in `vault_reminder_seen`.
+  The in-app path is not a downgrade; it answers "what did I miss?" and stays
+  useful on the APK.
+- `sync()` cancels everything and re-schedules, rather than diffing — that is how
+  you avoid an orphan alarm for a deleted supplement. Call it after ANY change to
+  times or settings.
+- Manifest needs all three: `POST_NOTIFICATIONS` (targetSdk 36),
+  **`RECEIVE_BOOT_COMPLETED`** (Android drops every alarm on reboot; without this
+  reminders silently stop until the app is next opened) and `SCHEDULE_EXACT_ALARM`
+  (falls back to inexact when not granted, which is fine for a reminder).
+- Water slots are generated from a from/to window and a step, **capped at 24** —
+  Android silently drops a runaway schedule rather than erroring.
+- `DB.supplements.update()` is a **field whitelist**; it silently drops anything it
+  doesn't name. Reminder times saved on create and vanished on edit until `times`
+  was added to it. Check that list when adding a field.
 
 ### Icon set — "VAULT Machined" (v202)
 `ICONS` in `js/app.js` is a **53-key** hand-drawn set on a strict grid: every

@@ -81,6 +81,19 @@
     <uses-feature android:name="android.hardware.camera" android:required="false" />
     <uses-feature android:name="android.hardware.camera.autofocus" android:required="false" />
 
+    <!-- Supplement + water reminders (@capacitor/local-notifications).
+         POST_NOTIFICATIONS is mandatory from Android 13 (targetSdk is 36) and is
+         requested at runtime the first time reminders are switched on.
+         RECEIVE_BOOT_COMPLETED is what makes reminders survive a restart —
+         Android drops every scheduled alarm on reboot, and without this the
+         plugin's boot receiver never runs, so reminders would silently stop
+         until the app was next opened.
+         SCHEDULE_EXACT_ALARM asks for on-the-minute delivery; when it is not
+         granted the plugin falls back to inexact, which is fine for a reminder. -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+    <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
+
     <!-- Health Connect read permissions -->
     <uses-permission android:name="android.permission.health.READ_STEPS" />
     <uses-permission android:name="android.permission.health.READ_HEART_RATE" />
