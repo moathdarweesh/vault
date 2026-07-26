@@ -12,7 +12,7 @@
 // build. The literal below is the fallback (file://, or a stripped query) and is
 // still bumped by `npm run release` — see CLAUDE.md "CACHE WORKFLOW".
 const VAULT_BUILD = (() => {
-  const FALLBACK = 'v198';
+  const FALLBACK = 'v199';
   try {
     const src = (document.currentScript && document.currentScript.src) || '';
     const m = src.match(/[?&]v=(\d+)/);
@@ -462,7 +462,6 @@ const I18N = {
     muscle_focus_sub: 'Sessions per muscle · last 7 days',
     compare_progress: 'Compare Progress',
     compare_progress_sub: 'Week-over-week trends across all activity.',
-    recent_activity: 'Recent Activity',
 
     // Train / Workouts
     train: 'Train', cardio_title: 'Cardio', food: 'Food', sleep: 'Sleep', compare: 'Compare', settings: 'Settings',
@@ -845,6 +844,8 @@ const I18N = {
     edit_cycle: 'Edit cycle',
     program_volume: 'Volume',
     program_days: 'Days',
+    last_set: 'Last set', set_label: 'Set',
+    common_supplements: 'Common supplements', already_added: 'Already added',
     program_no_plan_title: 'No program yet',
     program_no_plan_sub: 'Pick a ready-made plan or build your own cycle.',
     program_build: 'Build my program',
@@ -1076,7 +1077,6 @@ const I18N = {
     muscle_focus_sub: 'جلسات لكل عضلة · آخر 7 أيام',
     compare_progress: 'قارن تقدمك',
     compare_progress_sub: 'مقارنة أسبوعية لكل الأنشطة.',
-    recent_activity: 'النشاط الأخير',
 
     train: 'التمارين', cardio_title: 'الكارديو', food: 'الأكل', sleep: 'النوم', compare: 'المقارنة', settings: 'الإعدادات',
     library: 'المكتبة',
@@ -1454,6 +1454,8 @@ const I18N = {
     edit_cycle: 'تعديل الدورة',
     program_volume: 'الحجم',
     program_days: 'الأيام',
+    last_set: 'آخر مجموعة', set_label: 'المجموعة',
+    common_supplements: 'مكمّلات شائعة', already_added: 'مضاف بالفعل',
     program_no_plan_title: 'لا يوجد برنامج بعد',
     program_no_plan_sub: 'اختر خطة جاهزة أو ابنِ دورتك الخاصة.',
     program_build: 'ابنِ برنامجي',
@@ -2413,53 +2415,33 @@ function renderHome(el) {
   // keeping a second copy here is the duplication this redesign removed.
   const exercises = DB.exercises.list();
 
-  // Recent
-  const recent = [
-    ...allSessions.slice(0, 5).map((s) => {
-      const ex = DB.exercises.getById(s.exerciseId);
-      const maxW = Math.max(0, ...s.sets.map((x) => x.weight));
-      return {
-        date: s.date, createdAt: s.createdAt,
-        iconName: 'dumbbell', iconCls: 'workout',
-        title: ex ? ex.name : t('workouts'),
-        meta: `${s.sets.length} ${t('sets').toLowerCase()}`,
-        value: maxW > 0 ? `${fmtWeight(maxW)} ${unitLabel()}` : `${s.sets.reduce((tt, x) => tt + x.reps, 0)} ${t('reps')}`,
-      };
-    }),
-    ...allCardio.slice(0, 5).map((c) => ({
-      date: c.date, createdAt: c.createdAt,
-      iconName: c.type === 'cycling' ? 'bike' : c.type === 'walking' ? 'walk' : 'treadmill',
-      iconCls: c.type,
-      title: t(c.type),
-      meta: `${c.duration} ${t('minutes').toLowerCase()}`,
-      value: `${c.calories} ${t('cal')}`,
-    })),
-    ...DB.sleep.list().slice(0, 5).map((s) => ({
-      date: s.date, createdAt: s.createdAt,
-      iconName: 'bed', iconCls: 'sleep',
-      title: t('sleep'),
-      meta: `${formatTime12(s.sleepTime)} → ${formatTime12(s.wakeTime)}`,
-      value: formatDuration(s.durationMinutes),
-    })),
-  ].sort((a, b) => {
-    if (a.date !== b.date) return b.date.localeCompare(a.date);
-    return (b.createdAt || '').localeCompare(a.createdAt || '');
-  }).slice(0, 5);
+  // The LAST SET, not a mixed recent-activity feed. Two things were wrong with
+  // that feed: it interleaved workouts, cardio and sleep (all three already have
+  // their own cell in the stat strip above), and its workout row showed the
+  // session's HEAVIEST weight — never the set actually performed last, which is
+  // the number you want when you pick the bar back up.
+  //
+  // listAll() is newest-first, and a session's `sets` stay in the order they were
+  // performed, so the last element of the newest non-empty session IS that set.
+  const lastSession = allSessions.find((s) => s.sets && s.sets.length);
+  const lastSet = lastSession ? lastSession.sets[lastSession.sets.length - 1] : null;
+  const lastSetEx = lastSession ? DB.exercises.getById(lastSession.exerciseId) : null;
 
-  const recentHtml = recent.length === 0 ? '' : `
-    <div class="section-title">${t('recent_activity')}</div>
-    <div class="recent-list">
-      ${recent.map((r) => `
-        <div class="recent-item">
-          <div class="recent-item-icon data-icon ${escapeHtml(r.iconCls)}">${icon(r.iconName, 16)}</div>
-          <div class="recent-item-main">
-            <div class="recent-item-title">${escapeHtml(r.title)}</div>
-            <div class="recent-item-meta">${escapeHtml(daysAgoLocalized(r.date))} · ${escapeHtml(r.meta)}</div>
-          </div>
-          <div class="recent-item-value num">${escapeHtml(r.value)}</div>
-        </div>
-      `).join('')}
-    </div>
+  const recentHtml = !lastSet ? '' : `
+    <div class="section-title">${t('last_set')}</div>
+    <button class="last-set-card" data-open-exercise="${escapeHtml(lastSession.exerciseId)}">
+      <div class="last-set-top">
+        <span class="last-set-icon" aria-hidden="true">${icon('dumbbell', 20)}</span>
+        <span class="last-set-name">${escapeHtml(lastSetEx ? exDisplayName(lastSetEx) : t('workouts'))}</span>
+      </div>
+      <div class="last-set-figure">
+        ${lastSet.weight > 0 ? `
+          <span class="num">${fmtWeight(lastSet.weight)}</span><span class="last-set-unit">${unitLabel()}</span>
+          <span class="last-set-x" aria-hidden="true">×</span>` : ''}
+        <span class="num">${fmtNum(lastSet.reps)}</span><span class="last-set-unit">${t('reps')}</span>
+      </div>
+      <div class="last-set-meta">${t('set_label')} ${fmtNum(lastSession.sets.length)} · ${escapeHtml(daysAgoLocalized(lastSession.date))}</div>
+    </button>
   `;
 
   const streakUnit = streak === 1 ? t('streak_one_day') : t('streak_days');
@@ -2601,6 +2583,9 @@ function renderHome(el) {
     if (!hasAnyPlan) { navigate('planner'); return; }
     navigate('session-day', { date: todayISO() });
   });
+  const lastSetCard = $('.last-set-card', el);
+  if (lastSetCard) lastSetCard.addEventListener('click', () =>
+    navigate('exercise-detail', { exerciseId: lastSetCard.dataset.openExercise }));
   if (typeof Health !== 'undefined') Health.bindHomeSection();
   $('#home-weight', el)?.addEventListener('click', () => openWeightSheet());
 }
@@ -3903,6 +3888,14 @@ function renderCardio(el) {
       });
     })
   );
+
+  // Pull the watch's newest exercise sessions on open. Health Connect sessions
+  // already import into this very list (DB.cardio.importFromHealth, badged
+  // "Watch"), but the only thing that ever triggered a sync was rendering HOME —
+  // so opening Cardio directly showed whatever was cached last time. No-op on
+  // web, no-op without permission, throttled to once per 20s; when it does bring
+  // something new, Health re-renders this view itself.
+  if (typeof Health !== 'undefined' && Health.autoSync) Health.autoSync();
 }
 
 function openCardioModal(cardioId = null) {
@@ -3914,9 +3907,11 @@ function openCardioModal(cardioId = null) {
     const opts = all.map((tt) => {
       const label = tt.isCustom ? tt.label : t(tt.id);
       const ic = tt.iconName || 'heart';
+      // Icon in a tinted tile, like .tool-pod-icon everywhere else in the app — a
+      // bare 20px glyph floating over a card is what made this grid look unfinished.
       return `
         <button type="button" class="type-option ${tt.id === selectedType ? 'active' : ''}" data-type="${escapeHtml(tt.id)}">
-          ${icon(ic, 20)}
+          <span class="type-option-icon" aria-hidden="true">${icon(ic, 22)}</span>
           <div class="type-option-label">${escapeHtml(label)}</div>
         </button>
       `;
@@ -7494,6 +7489,34 @@ function openCalendarDayModal(iso) {
 // ==========================================================================
 const SUPP_COLORS = ['#22d3ee', '#34d399', '#fbbf24', '#f472b6', '#a855f7', '#fb923c', '#60a5fa', '#f87171'];
 
+// Common supplements, so the usual ones are one tap instead of typed by hand.
+// Names carry their own `ar` rather than going through t(): this is DATA (like
+// the seeded exercises), not interface chrome, and 20 entries would otherwise add
+// 40 translation keys that no other screen ever reads. Doses are the ordinary
+// serving — always editable after the tap, and the manual fields stay open.
+const SUPP_PRESETS = [
+  { en: 'Whey Protein',  ar: 'بروتين واي',      dose: '30 g',    color: '#60a5fa' },
+  { en: 'Creatine',      ar: 'كرياتين',          dose: '5 g',     color: '#22d3ee' },
+  { en: 'Multivitamin',  ar: 'فيتامينات متعددة', dose: '1',       color: '#fbbf24' },
+  { en: 'Vitamin D3',    ar: 'فيتامين د',        dose: '2000 IU', color: '#fbbf24' },
+  { en: 'Omega-3',       ar: 'أوميغا ٣',         dose: '1000 mg', color: '#fb923c' },
+  { en: 'Magnesium',     ar: 'مغنيسيوم',         dose: '400 mg',  color: '#a855f7' },
+  { en: 'Zinc',          ar: 'زنك',              dose: '25 mg',   color: '#60a5fa' },
+  { en: 'Vitamin C',     ar: 'فيتامين ج',        dose: '500 mg',  color: '#fb923c' },
+  { en: 'Iron',          ar: 'حديد',             dose: '18 mg',   color: '#f87171' },
+  { en: 'Caffeine',      ar: 'كافيين',           dose: '200 mg',  color: '#f87171' },
+  { en: 'Pre-workout',   ar: 'ما قبل التمرين',   dose: '1 scoop', color: '#f472b6' },
+  { en: 'Beta-Alanine',  ar: 'بيتا ألانين',      dose: '3 g',     color: '#f472b6' },
+  { en: 'BCAA',          ar: 'أحماض أمينية BCAA', dose: '5 g',    color: '#34d399' },
+  { en: 'EAA',           ar: 'أحماض أمينية EAA',  dose: '10 g',   color: '#34d399' },
+  { en: 'Collagen',      ar: 'كولاجين',          dose: '10 g',    color: '#f472b6' },
+  { en: 'L-Carnitine',   ar: 'إل-كارنيتين',      dose: '2 g',     color: '#22d3ee' },
+  { en: 'Ashwagandha',   ar: 'أشواغاندا',        dose: '600 mg',  color: '#a855f7' },
+  { en: 'Probiotic',     ar: 'بروبيوتيك',        dose: '1',       color: '#34d399' },
+];
+
+function suppPresetName(p) { return (DB.prefs.get().lang === 'ar') ? p.ar : p.en; }
+
 function renderSupplements(el) {
   const list = DB.supplements.list();
   const todayIso = todayISO();
@@ -7605,6 +7628,20 @@ function openSupplementModal(id = null) {
     <button type="button" class="color-swatch ${pickedColor === c ? 'active' : ''}" style="background:${c}" data-color="${c}"></button>
   `).join('');
 
+  // Presets only when ADDING. On an edit they would silently overwrite the name
+  // and dose the user came here to change.
+  const taken = new Set(DB.supplements.list().map((s) => (s.name || '').trim().toLowerCase()));
+  const presetsHtml = existing ? '' : `
+    <div class="form-group">
+      <label class="form-label">${t('common_supplements')}</label>
+      <div class="supp-presets" id="supp-presets">
+        ${SUPP_PRESETS.map((p, i) => {
+          const already = taken.has(suppPresetName(p).toLowerCase()) || taken.has(p.en.toLowerCase());
+          return `<button type="button" class="supp-preset${already ? ' added' : ''}" data-preset="${i}"${already ? ` title="${escapeHtml(t('already_added'))}"` : ''}>${escapeHtml(suppPresetName(p))}</button>`;
+        }).join('')}
+      </div>
+    </div>`;
+
   openModal(`
     <div class="modal-header">
       <div>
@@ -7612,6 +7649,8 @@ function openSupplementModal(id = null) {
       </div>
       <button class="icon-btn icon-btn-tile" data-close>${icon('close', 18)}</button>
     </div>
+
+    ${presetsHtml}
 
     <div class="form-group">
       <label class="form-label">${t('supplement_name')}</label>
@@ -7635,13 +7674,28 @@ function openSupplementModal(id = null) {
     </div>
   `);
 
+  const paintSwatches = () => $('#color-swatches').querySelectorAll('[data-color]').forEach((x) =>
+    x.classList.toggle('active', x.dataset.color === pickedColor));
+
   $('#color-swatches').addEventListener('click', (e) => {
     const sw = e.target.closest('[data-color]');
     if (!sw) return;
     pickedColor = sw.dataset.color;
-    $('#color-swatches').querySelectorAll('[data-color]').forEach((x) =>
-      x.classList.toggle('active', x.dataset.color === pickedColor)
-    );
+    paintSwatches();
+  });
+
+  // A preset FILLS the form, it does not submit it — the name, dose and colour
+  // stay editable, which is what keeps the manual path intact.
+  $('#supp-presets')?.addEventListener('click', (e) => {
+    const btn = e.target.closest('[data-preset]');
+    if (!btn) return;
+    const p = SUPP_PRESETS[Number(btn.dataset.preset)];
+    if (!p) return;
+    $('#supp-name').value = suppPresetName(p);
+    $('#supp-dose').value = p.dose;
+    pickedColor = p.color;
+    paintSwatches();
+    $('#supp-presets').querySelectorAll('[data-preset]').forEach((x) => x.classList.toggle('picked', x === btn));
   });
 
   $('#supp-save').addEventListener('click', () => {

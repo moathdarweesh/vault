@@ -405,7 +405,6 @@ body.theme-aurora .compare-card,
 body.theme-aurora .streak-banner,
 body.theme-aurora .muscle-heatmap,
 body.theme-aurora .cta-card,
-body.theme-aurora .recent-item,
 body.theme-aurora .modal,
 body.theme-aurora .confirm-dialog,
 body.theme-aurora .prev-session,
@@ -1546,69 +1545,72 @@ input[type="date"], input[type="time"] { color-scheme: dark; }
   flex-shrink: 0;
 }
 
-/* =========================================================================
-   RECENT ACTIVITY
-   ========================================================================= */
-.recent-list {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.recent-item {
-  background: var(--surface-1);
+/* Common-supplement chips — tapping one FILLS the form below (name, dose,
+   colour) rather than submitting it, so the manual path is untouched. */
+.supp-presets { display: flex; flex-wrap: wrap; gap: 8px; }
+.supp-preset {
+  padding: 9px 13px;
+  border-radius: var(--chip-radius, 999px);
+  background: var(--surface-2);
   border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
-  padding: 12px 14px;
-  display: flex;
-  align-items: center;
-  gap: 12px;
-}
-
-.recent-item-icon {
-  width: 36px;
-  height: 36px;
-  border-radius: 10px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  flex-shrink: 0;
-}
-.recent-item-icon svg { width: 16px; height: 16px; }
-/* Higher specificity than `.data-icon svg` (a later, equally-specific rule
-   used for its category-color modifiers) — without this, cascade SOURCE ORDER
-   let the 20px data-icon size win over the intended 16px here, rendering the
-   recent-activity row icon too big for its smaller 36px tile. */
-.recent-item-icon.data-icon svg { width: 16px; height: 16px; }
-
-.recent-item-main {
-  flex: 1;
-  min-width: 0;
-}
-
-.recent-item-title {
-  font-size: 14px;
-  font-weight: 700;
-  letter-spacing: -0.015em;
-  margin-bottom: 2px;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.recent-item-meta {
-  font-size: 12px;
-  color: var(--text-mute);
-  font-variant-numeric: tabular-nums;
-}
-
-.recent-item-value {
+  color: var(--text-dim);
+  font-family: inherit;
   font-size: 13px;
-  font-weight: 800;
+  font-weight: 700;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  transition: background .15s, border-color .15s, color .15s;
+}
+.supp-preset.picked { background: var(--accent-soft, var(--surface-2)); border-color: var(--accent); color: var(--text); }
+/* Already in the user's list — still tappable (they may want a second entry at a
+   different dose), just visibly de-emphasised. */
+.supp-preset.added { opacity: 0.45; }
+
+/* =========================================================================
+   LAST SET  (replaced the mixed RECENT ACTIVITY feed on Home)
+   The feed interleaved workouts, cardio and sleep — all three already have their
+   own cell in the stat strip above it — and its workout row showed the session's
+   HEAVIEST weight, never the set actually performed last.
+   ========================================================================= */
+.last-set-card {
+  display: block;
+  width: 100%;
+  text-align: start;
+  padding: var(--sp-4, 16px);
+  background: var(--card-bg, var(--surface-1));
+  border: var(--card-border, 1px solid var(--border));
+  border-radius: var(--card-radius, var(--radius-md));
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+.last-set-top { display: flex; align-items: center; gap: 10px; }
+.last-set-icon {
+  width: 32px; height: 32px; border-radius: 10px; flex: 0 0 auto;
+  display: flex; align-items: center; justify-content: center;
+  background: var(--accent-soft, var(--surface-2));
+  color: var(--accent);
+}
+.last-set-icon svg { width: 18px; height: 18px; }
+.last-set-name {
+  flex: 1; min-width: 0;
+  font-size: 15px; font-weight: 800; color: var(--text);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+/* The set itself, as the headline of the card. */
+.last-set-figure {
+  display: flex; align-items: baseline; flex-wrap: wrap; gap: 4px;
+  margin: 14px 0 8px;
+  font-size: 34px; font-weight: 900; line-height: 1;
   color: var(--text);
   font-variant-numeric: tabular-nums;
   letter-spacing: -0.02em;
 }
+.last-set-unit, .last-set-x {
+  font-size: 14px; font-weight: 800; color: var(--text-mute);
+  letter-spacing: 0;
+}
+.last-set-x { margin: 0 4px; }
+.last-set-meta { font-size: 12px; font-weight: 700; color: var(--text-mute); }
 
 /* =========================================================================
    LIBRARY (WORKOUTS) - BENTO GRID
@@ -2744,10 +2746,20 @@ body[dir="rtl"] .w-unit { margin-left: 0; margin-right: 2px; }
 /* =========================================================================
    TYPE SELECTOR (cardio type)
    ========================================================================= */
+/* Two columns, not three. The four built-in types filled a 3-column grid as
+   3 + 1, leaving a hole beside the last one and stranding the "+ new type" tile
+   in the middle of row two. Two columns fills evenly and gives each card room. */
 .type-selector {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(2, 1fr);
   gap: 8px;
+}
+/* The add tile is an ACTION, not a fifth type: full width, on its own row. */
+.type-option.type-option-add {
+  grid-column: 1 / -1;
+  flex-direction: row;
+  justify-content: center;
+  padding: 12px 8px;
 }
 
 /* "+ New cardio type" tile that lives at the end of the type selector */
@@ -2825,7 +2837,16 @@ body[dir="rtl"] .w-unit { margin-left: 0; margin-right: 2px; }
   transition: all 0.15s;
 }
 
-.type-option svg { width: 20px; height: 20px; color: var(--text-mute); }
+.type-option-icon {
+  width: 40px; height: 40px; border-radius: 12px;
+  display: flex; align-items: center; justify-content: center;
+  background: var(--surface-3);
+  color: var(--text-mute);
+  transition: background .15s, color .15s;
+}
+.type-option svg { width: 22px; height: 22px; }
+.type-option.active .type-option-icon { background: var(--accent-soft, var(--surface-2)); color: var(--accent); }
+.type-option-add svg { width: 18px; height: 18px; color: var(--text-mute); }
 
 .type-option.active {
   border-color: var(--accent-line);
@@ -6180,7 +6201,7 @@ body[dir="rtl"] .variation-select svg { transform: scaleX(-1); }
 
 /* --- Unified card surface: one background, one border, one radius --- */
 .stat-tile, .bento-card, .session-card, .data-row, .tool-card,
-.compare-card, .recent-item, .today-plan, .muscle-heatmap, .cta-card {
+.compare-card, .today-plan, .muscle-heatmap, .cta-card {
   background: var(--card-bg);
   border: var(--card-border);
   border-radius: var(--card-radius);
@@ -6193,7 +6214,7 @@ body[dir="rtl"] .variation-select svg { transform: scaleX(-1); }
 .stat-tile, .tool-card, .compare-card, .today-plan, .muscle-heatmap, .cta-card {
   padding: var(--card-pad);
 }
-.data-row, .recent-item, .session-card {
+.data-row, .session-card {
   padding: var(--card-pad-sm) var(--card-pad);
 }
 
@@ -6202,7 +6223,7 @@ body[dir="rtl"] .variation-select svg { transform: scaleX(-1); }
 
 /* --- Global press feedback: one scale, everywhere tappable --- */
 .nav-btn:active, .btn:active, .stat-tile:active, .tool-card:active,
-.session-card:active, .recent-item:active, .heat-cell:active,
+.session-card:active, .heat-cell:active,
 .calendar-cell:active, .bento-card:active, .compare-card:active,
 .cta-card:active, .filter-pill:active, .theme-card:active,
 .planner-day:active, .settings-action-row:active {

@@ -143,11 +143,17 @@
     try { if (DB.cardio && DB.cardio.importFromHealth) DB.cardio.importFromHealth(data.exerciseSessions); } catch (_) { /* ignore */ }
   }
 
-  // Re-render the home view if it's the one currently on screen — checked from
-  // the DOM so it works regardless of when the app sets its currentView.
-  function refreshHome() {
-    const v = document.querySelector('.view[data-view="home"]');
-    if (v && v.classList.contains('active') && typeof renderView === 'function') renderView('home');
+  // Re-render whichever screen a sync just changed, if it is the one on screen —
+  // checked from the DOM so it works regardless of when the app sets currentView.
+  // Home is not the only one: applyToLogs writes watch sessions straight into the
+  // cardio and sleep logs, and those pages used to keep showing the pre-sync list
+  // until you navigated away and back.
+  function refreshActive() {
+    if (typeof renderView !== 'function') return;
+    ['home', 'cardio', 'sleep'].forEach((name) => {
+      const v = document.querySelector(`.view[data-view="${name}"]`);
+      if (v && v.classList.contains('active')) renderView(name);
+    });
   }
 
   // Read + cache + import into logs + refresh the home cards.
@@ -156,7 +162,7 @@
     lastSyncAt = Date.now();
     DB.health.setData(mergeData(DB.health.get().data, fresh));
     applyToLogs(fresh);
-    refreshHome();
+    refreshActive();
   }
 
   // Pull fresh data without prompting (only if permission already granted).
@@ -328,5 +334,8 @@
     else window.addEventListener('load', bootstrap);
   }
 
-  window.Health = { open, sync, isNative, homeSectionHtml, bindHomeSection };
+  // autoSync: safe to call from any view's render. No-op off-native, no-op without
+  // permission, and throttled to once per 20s — so a screen can ask for fresh
+  // watch data on open without prompting or hammering Health Connect.
+  window.Health = { open, sync, autoSync: silentSync, isNative, homeSectionHtml, bindHomeSection };
 })();
