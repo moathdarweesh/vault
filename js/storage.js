@@ -312,6 +312,23 @@ function hashId(str) {
   return Math.abs(h) % 2000000000;
 }
 
+// Retired colour skins (v210) → the mode each one most resembles. Only the two
+// pale skins map to light; every other one was a dark surface.
+const LEGACY_THEME_MAP = {
+  forest: 'dark', ocean: 'dark', mocha: 'dark', olive: 'dark', aurora: 'dark',
+  sunset: 'dark', nebula: 'dark', slate: 'dark', dusk: 'dark',
+  sand: 'light', frost: 'light',
+};
+
+// The one way to read that map. A plain `MAP[theme]` reaches Object.prototype,
+// so a tampered backup carrying theme:"constructor" resolves to a FUNCTION —
+// which JSON.stringify then drops, taking the key with it. Everything that is
+// not a known retired id or 'light' collapses to 'dark'.
+function canonicalTheme(theme) {
+  if (Object.prototype.hasOwnProperty.call(LEGACY_THEME_MAP, theme)) return LEGACY_THEME_MAP[theme];
+  return theme === 'light' ? 'light' : 'dark';
+}
+
 function detectTheme() {
   try {
     return (window.matchMedia && matchMedia('(prefers-color-scheme: light)').matches) ? 'light' : 'dark';
@@ -505,6 +522,17 @@ function loadState() {
     const seedByName = Object.fromEntries(SEED_EXERCISES.map((e) => [e.name, e]));
     let migrated = false;
 
+    // v210 cut the eleven alternate skins down to the two brand modes. This has
+    // to REWRITE the stored value, not just correct it in memory: the blob is
+    // synced whole, so a `nebula` left in localStorage keeps travelling to the
+    // cloud and back and every future load has to keep guessing. Hence the
+    // `migrated` flag below — that is what persists it. The two pale skins land
+    // on light; everything else was a dark surface.
+    {
+      const want = canonicalTheme(parsed.prefs.theme);
+      if (parsed.prefs.theme !== want) { parsed.prefs.theme = want; migrated = true; }
+    }
+
     // Build a set of exerciseIds that have logged sessions (used for inMyList migration)
     const exercisesWithSessions = new Set((parsed.sessions || []).map((s) => s.exerciseId));
 
@@ -584,7 +612,13 @@ function loadState() {
     });
 
     if (migrated) {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(parsed));
+      try {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(parsed));
+      } catch (_) {
+        // Deliberately swallowed, and deliberately NOT rethrown into the outer
+        // catch: that catch means "this blob is unreadable" and would quarantine
+        // a healthy one. The migration already applied in memory.
+      }
     }
 
     return parsed;
@@ -690,7 +724,7 @@ const DB = {
     // choice was deliberate, because the app never asks. A fresh install gets
     // detectLang() and the login screen's ar/en toggle changes it.
     setLang(lang) { STATE.prefs.lang = lang; save(); },
-    setTheme(theme) { STATE.prefs.theme = theme; save(); },
+    setTheme(theme) { STATE.prefs.theme = canonicalTheme(theme); save(); },
     setUnit(unit) { STATE.prefs.unit = unit === 'lb' ? 'lb' : 'kg'; save(); },
     setTranslateExercises(on) { STATE.prefs.translateExercises = !!on; save(); },
     // First-run welcome flow: true once the user has seen (or skipped) it.
@@ -1131,8 +1165,32 @@ const DB = {
       const data = JSON.parse(json);
       if (!this._validateBlob(data)) return false;
       if (!this._idsSafe(data)) return false;   // block attribute-breakout XSS via tampered ids
-      STATE = data;
-      save();
+
+      // GO IN THROUGH THE SAME DOOR AS A CLOUD PULL: write the raw blob, then
+      // let loadState() re-read it. This used to do `STATE = data; save();`,
+      // which skipped every backfill loadState performs — and _validateBlob
+      // deliberately only insists on `exercises`, so a legitimate backup can be
+      // missing `prefs`, `cardio`, `sessions`, `foods`… Restoring one left
+      // STATE.cardio undefined and the Cardio tab threw "not iterable"; a
+      // missing `prefs` made every setter throw, which killed the mode toggle
+      // outright. Routing through loadState() also picks up the schema
+      // migrations for free — including the v210 clamp that rewrites a retired
+      // theme id, which a backup taken before v210 still carries.
+      //
+      // Written with a bare setItem, not writeStore(): writeStore refuses while
+      // READ-ONLY is set, and a restore is precisely the DELIBERATE whole-blob
+      // replacement that is supposed to lift READ-ONLY. reloadState() clears the
+      // flag and lets loadState() re-decide from the new bytes.
+      try {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+      } catch (_) {
+        return false;   // quota / private mode — say so rather than report success
+      }
+      reloadState();
+      // The restored blob is now the device's truth and has to reach the cloud.
+      if (typeof window !== 'undefined' && window.Cloud && window.Cloud.onLocalChange) {
+        window.Cloud.onLocalChange();
+      }
       return true;
     } catch (e) {
       return false;
@@ -1140,6 +1198,7 @@ const DB = {
   },
   resetAll() {
     STATE = defaultState();
+    STATE_LOAD_FAILED = false;   // a reset is a deliberate replacement — see importJSON
     save();
   },
 
@@ -1340,12 +1399,24 @@ const DB = {
   reminders: {
     get() {
       const r = STATE.reminders || {};
-      return { enabled: !!r.enabled, water: Object.assign({ on: false, from: '09:00', to: '21:00', everyMin: 120 }, r.water || {}) };
+      return {
+        enabled: !!r.enabled,
+        // Sound defaults ON: a reminder you cannot hear is a reminder you miss.
+        // `!== false` so an older blob with no field at all still gets sound.
+        sound: r.sound !== false,
+        water: Object.assign({ on: false, from: '09:00', to: '21:00', everyMin: 120 }, r.water || {}),
+      };
     },
-    setEnabled(on) { STATE.reminders = this.get(); STATE.reminders.enabled = !!on; save(); },
+    // Every setter reads get() and writes the WHOLE object back, so no setter
+    // can drop a field a SIBLING setter owns — which is exactly how `times` was
+    // lost on a supplement edit. Note the shape is still fixed by get(): a field
+    // added to STATE.reminders without being listed there is dropped on the next
+    // setter call, so add it in get() too.
+    setEnabled(on) { STATE.reminders = Object.assign(this.get(), { enabled: !!on }); save(); },
+    setSound(on) { STATE.reminders = Object.assign(this.get(), { sound: !!on }); save(); },
     setWater(patch) {
       const cur = this.get();
-      STATE.reminders = { enabled: cur.enabled, water: Object.assign(cur.water, patch || {}) };
+      STATE.reminders = Object.assign(cur, { water: Object.assign(cur.water, patch || {}) });
       save();
     },
 

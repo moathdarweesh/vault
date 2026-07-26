@@ -1,6 +1,6 @@
 # THE VAULT — Claude Code Project Guide
 
-A fitness / workout-tracking **PWA**. Vanilla JS, **no build step**, bilingual **EN/AR** (RTL), dark-themed, mobile-first. Deployed to GitHub Pages and wrapped as an Android app via Capacitor.
+A fitness / workout-tracking **PWA**. Vanilla JS, **no build step**, bilingual **EN/AR** (RTL), two modes (dark + light), mobile-first. Deployed to GitHub Pages and wrapped as an Android app via Capacitor.
 
 - **Live:** https://moathdarweesh.github.io/vault/ (GitHub Pages, branch `main`)
 - **Repo:** github.com/moathdarweesh/vault
@@ -35,7 +35,7 @@ A fitness / workout-tracking **PWA**. Vanilla JS, **no build step**, bilingual *
 npm run release          # bump every marker + verify, then commit all files together
 ```
 
-**Current version: v208.** APK: build 8 / v1.7.
+**Current version: v210.** APK: build 9 / v1.8.
 
 `scripts/release.js` rewrites all **13** markers and then re-reads them from disk to confirm; it exits non-zero if any disagree. The markers are `?v=N` in `index.html` (×11, including the `js/vendor/supabase.js` preload), the `__cleaned_vN` sessionStorage keys, the `FALLBACK` literal in `app.js`, and `version.json` → `web`.
 
@@ -99,7 +99,7 @@ Every device loads the same live URL, so a bad push reaches everyone at once.
   Connect sessions already import into the cardio log but only rendering HOME ever
   triggered a sync.
 
-### Reminders (v208) — the first native change since v109
+### Reminders (v208, repaired in v210) — the only native surface
 Supplement and water reminders. **This is why APK build 8 exists**: a Capacitor
 plugin is a native change, so unlike every release since v109 it does NOT reach
 installed users from a `git push` — they must install the new APK.
@@ -110,19 +110,64 @@ installed users from a `git push` — they must install the new APK.
   strings, never timestamps — a reminder means "08:00 wherever you are", which is
   what survives a timezone change and DST.
 - `js/notify.js` has two paths. **Native**: `@capacitor/local-notifications`,
-  real alarms with the app closed, scheduled with `{ on: { hour, minute } }` so
-  they repeat daily at wall-clock time. **In-app**: everywhere else (web, and any
+  real alarms with the app closed, scheduled with `{ on: { hour, minute, second: 0 } }`
+  so they repeat daily at wall-clock time. **`second: 0` is load-bearing** —
+  `DateMatch.buildNextTriggerTime` zeroes only the millisecond, so an omitted
+  second bakes in whatever second `sync()` ran at, and `postponeTriggerIfNeeded`
+  compares with `<=`, pushing a same-minute alarm a FULL DAY forward. **In-app**: everywhere else (web, and any
   shell older than build 8) it catches up on open — anything due earlier today and
   not logged is surfaced once as a toast, deduped per day in `vault_reminder_seen`.
   The in-app path is not a downgrade; it answers "what did I miss?" and stays
   useful on the APK.
 - `sync()` cancels everything and re-schedules, rather than diffing — that is how
   you avoid an orphan alarm for a deleted supplement. Call it after ANY change to
-  times or settings.
-- Manifest needs all three: `POST_NOTIFICATIONS` (targetSdk 36),
+  times or settings. Three rules it must keep:
+  1. **Decide before destroying.** The permission check and the "is there anything
+     to arm?" check both run BEFORE the cancel. Cancelling first looks harmless
+     because a re-arm follows, but a cloud pull restoring `enabled: false`, or a
+     revoked permission, would wipe every live alarm and arm nothing.
+  2. **Check, never request.** `sync()` runs unattended (boot, foreground, every
+     settings change). On Android 13+ a `POST_NOTIFICATIONS` dialog dismissed
+     twice is hard-denied FOREVER, so burning the prompt with no user gesture
+     behind it loses the permission permanently. Requesting belongs to `gate()`.
+  3. **Report what Android holds**, not what we asked for: the returned `count`
+     is re-read from `getPending()`.
+- **It is also called on every foreground**, not just at boot. When the plugin
+  re-arms a fired daily repeat it uses `set(AlarmManager.RTC, …)` —
+  `RTC`, not `RTC_WAKEUP`, with `allowWhileIdle` dropped
+  (`TimedNotificationPublisher.java`), which Doze can defer a long way. Only the
+  INITIAL arming takes the wakeup-capable path, so re-syncing keeps every reminder
+  on it.
+- Manifest needs four: `POST_NOTIFICATIONS` (targetSdk 36),
   **`RECEIVE_BOOT_COMPLETED`** (Android drops every alarm on reboot; without this
-  reminders silently stop until the app is next opened) and `SCHEDULE_EXACT_ALARM`
-  (falls back to inexact when not granted, which is fine for a reminder).
+  reminders silently stop until the app is next opened), `SCHEDULE_EXACT_ALARM`,
+  and **`USE_EXACT_ALARM`**. From Android 14 `SCHEDULE_EXACT_ALARM` is denied by
+  default and the user has to find the toggle; `USE_EXACT_ALARM` is granted at
+  install. Google Play restricts it to alarm-clock and calendar apps — THE VAULT
+  is sideload-only, so it does not apply, but **if this is ever published to Play
+  that line must be removed** (the in-app "allow exact alarms" row covers the
+  fallback).
+- **The notification channel is ours, declared from JS** (`vault-reminders-v1` at
+  importance HIGH, `vault-reminders-quiet-v1` at LOW for the sound-off setting).
+  Left alone the plugin invents a channel called "Default" at IMPORTANCE_DEFAULT —
+  no heads-up banner, and a settings entry the user cannot recognise. **A channel
+  is IMMUTABLE once created**: importance, sound and vibration can never be
+  changed afterwards, only the name. That is why sound on/off is two channels, and
+  why the ids carry a version suffix — changing behaviour later means a NEW id.
+  Neither channel sets `sound`, so each uses the phone's own default tone.
+- **The small icon needs the APK.** Android draws a notification's small icon from
+  its ALPHA CHANNEL ONLY; the plugin's fallback is `android.R.drawable.ic_dialog_info`,
+  a fully opaque asset that flattens to a featureless white blob. `res/drawable/ic_stat_vault.xml`
+  plus `plugins.LocalNotifications.smallIcon` in `capacitor.config.json` fix it —
+  both are baked into the APK, so passing `smallIcon` from JS is a harmless no-op
+  until the new build is installed.
+- **Everything on this path fails SILENTLY**, which is why `Notify.diagnose()` and
+  the test button exist. A refused permission, a muted channel, a battery optimiser
+  sitting on the alarm and an OS that dropped the schedule all look identical to
+  "the feature is broken". The Reminders screen states the permission, what Android
+  actually holds, whether exact timing is allowed (with a one-tap fix), and how to
+  clear a battery restriction; `Notify.test()` fires a real notification 5s out
+  through the same channel and icon.
 - **`Notify.gate()` is the single permission entry point** and every
   reminder-related control calls it: the master switch, the water switch, adding a
   time to a supplement, and opening the Reminders screen while enabled but
@@ -138,6 +183,43 @@ installed users from a `git push` — they must install the new APK.
 - `DB.supplements.update()` is a **field whitelist**; it silently drops anything it
   doesn't name. Reminder times saved on create and vanished on edit until `times`
   was added to it. Check that list when adding a field.
+
+### Two modes, one identity (v210) — the theme system
+The eleven alternate colour skins (forest, ocean, sand, mocha, olive, aurora,
+sunset, nebula, slate, frost, dusk) were **deleted**. Each one defined its own
+accent, so switching away from `dark` quietly dropped the brand — the app did not
+have a look, it had a dropdown. `THEMES` is now `['dark', 'light']` and they are
+the same identity on two surfaces. `BRAND.md` is the authority.
+
+- **The rule that generates the rest: *elevation is temperature*.** The page is a
+  void, and anything lifted toward the viewer is heated metal, so the surface ramp
+  climbs in warmth as well as lightness (H30, S~30%). `--bg` stays **pure black** —
+  it matches the app-icon tile and is the OLED win on the phone this runs on;
+  warming the void would read as a sepia filter. Light inverts the story rather
+  than repeating it: bone ground, warm ink, near-white sheets.
+- **The accent is `#ff6a00` in BOTH modes** (owner's explicit instruction). Only
+  `--accent-text` darkens in light, for the places the accent is small text, and it
+  must stay declared on **`body`, never `:root`** — `var()` resolves on the element
+  the property is declared on.
+- **Migration, not fallback.** A stored `nebula` has to become a stored `dark`, or
+  it survives in localStorage AND in the synced blob forever. `LEGACY_THEME_MAP`
+  (`js/storage.js`) maps every retired id; the clamp runs at **all three doors into
+  STATE** — `loadState()` (setting `migrated = true` so it persists), `setTheme()`,
+  and `importJSON()` (restoring an old backup). `normalizeTheme()` in `app.js` is
+  the runtime backstop for a pref arriving from the cloud mid-session.
+- **`applyTheme()`'s `<meta name="theme-color">` must track `--bg` exactly**
+  (`#000000` / `#faf5f0`) or the phone paints a seam above the app.
+- **The IDENTITY LAYER at the end of `styles.css` is the authority** for the four
+  devices that make the app recognisable — the machined edge (fill separates, a
+  border MEANS interactive), the 2:1 corner law, no circles, and the five-bar
+  field. It sits **last on purpose**: those rules have the same (0,1,0) specificity
+  as the component rules they override, so only source order makes them win.
+- Zeroing `--card-border` drops the outline from **nine** components via the
+  "Unified card surface" block. Anything that consumes it must be handed
+  `box-shadow: var(--elev-1)` in the same breath or it loses its edge and gains
+  nothing. Two deliberate exceptions: `.quick-add-chip` (a control, so it keeps an
+  interactive border) and `.bento-card` (its `inset: 0` child paints over an inset
+  bevel).
 
 ### Icon set — "VAULT Machined" (v202)
 `ICONS` in `js/app.js` is a **53-key** hand-drawn set on a strict grid: every
@@ -213,7 +295,7 @@ Full findings + verification in `CODEBASE_REVIEW.md`. The load-bearing rules:
 - **Mirror reconcile is gated on `blobLooksReal`** (`js/tables.js`). An empty id list makes the delete unbounded, so it only runs when the blob demonstrably holds user data.
 - **Dates: always `todayISO()` / `addDaysISO()`, never `toISOString()`** for calendar days. `toISOString()` returns the previous day for every UTC+ user — this bug class has now appeared three times.
 - **Error visibility.** `Cloud.reportError()` + `window.onerror`/`unhandledrejection` write to `client_errors` (`backend/client-errors-v9.sql`): signed-in users only, no user content, per-session dedupe, DB-side rate cap of 20/hour, 30-day retention via `admin_prune_client_errors()`. The reporter must never throw and never block.
-- **Accessibility invariants.** All 13 themes pass WCAG AA on `--text-dim`; `--text-ghost` (new) is for input placeholders — `--text-faint` stays for decorative dots/bars, so do not "unify" them. Pinch-zoom is enabled, which means **inputs must stay ≥16px** or iOS focus-zoom returns.
+- **Accessibility invariants.** Both modes pass WCAG AA across 15 views and the modals, swept with a scrim-aware auditor. `--text-ghost` is for input placeholders and `--text-faint` is **decorative only** (~1.4:1 in light by design) — do not "unify" them, and never use `--text-faint` for text a user has to read. Muted tokens are calibrated against **`--surface-3`**, the worst surface they land on, never against `--bg`. Pinch-zoom is enabled, which means **inputs must stay ≥16px** or iOS focus-zoom returns.
 - **Worker auth** (`backend/gemini-worker.js`) fails **closed** on any 4xx and open only on 5xx/network error, plus a per-caller rate limit. Requires a manual Cloudflare redeploy.
 - **Pending SQL (written, not yet applied):** `backend/client-errors-v9.sql`, `backend/hardening-v8.sql` (revoke PUBLIC execute + pin `search_path`), `backend/ban-rls-v10.sql` (extend the ban to the mirror tables, storage and profiles). Also still pending from the earlier audit: `backend/hardening-v5.sql`.
 

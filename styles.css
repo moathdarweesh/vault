@@ -1,6 +1,18 @@
 /* =========================================================================
    THE VAULT - Gym Tracker
-   Dark teal/navy theme with cyan accent. Image-forward bento layout.
+
+   TWO MODES, ONE IDENTITY (v210). Dark and light are the same object under two
+   lights, not two skins — the accent is #ff6a00 in both, and BRAND.md is the
+   authority. The eleven alternate palettes were deleted: each carried its own
+   accent, so switching away from `dark` quietly dropped the brand.
+
+   THE RULE THAT GENERATES THE REST: *elevation is temperature*. The page is a
+   void; anything lifted toward the viewer is heated metal, so the surface ramp
+   climbs in warmth, not just in lightness (H30, S~30%). Light mode inverts the
+   story rather than repeating it — bone ground, warm ink, near-white sheets.
+   The surface hue sits at 30°, five degrees off the accent's 25°, so #ff6a00
+   stays the only pure hue on screen instead of reading as its own surfaces
+   turned up.
    ========================================================================= */
 
 *, *::before, *::after {
@@ -11,37 +23,71 @@
 }
 
 :root, body.theme-dark {
-  /* ===== Theme: Pure Black (default) — one uniform background ===== */
+  /* ===== DARK — the void, and metal heated out of it =====
+     --bg stays PURE BLACK on purpose: BRAND §1 fixes the app-icon tile at
+     #000000, so app and icon share a substrate, and it is the OLED win on the
+     phones this actually runs on. Warming the void would have read as a sepia
+     filter. The warmth is spent only on surfaces that RISE out of it. */
   --bg:          #000000;
-  --bg-grad:     #000000;
-  --surface-1:   #000000;
-  --surface-2:   #121212;
-  --surface-3:   #1c1c1c;
-  --surface-hi:  #262626;
-  --border:      rgba(255, 255, 255, 0.14);
-  --border-hi:   rgba(255, 255, 255, 0.22);
+  /* One low bloom above the fold — heat entering from off-screen, not a glow.
+     --text on its brightest point is 18.12:1. */
+  --bg-grad:     radial-gradient(680px 380px at 50% -140px, #1a0f05 0%, transparent 70%), #000000;
+  /* THE ramp. --surface-1 used to equal --bg exactly (1.00:1), so every tile,
+     row and card was an invisible fill and its 1px outline did 100% of the
+     separating — the single most template-like construction in the file. */
+  --surface-1:   #0d0a07;
+  --surface-2:   #17120d;
+  --surface-3:   #231b13;
+  --surface-hi:  #30251a;
+  /* A pure-white hairline on a warm surface reads cold and cheap — it is what
+     makes a warm dark theme look like a filter rather than a design. Warm white,
+     lower alpha, because the fill now does the separating and the border is a
+     signal instead of scaffolding. --border-hi is the INTERACTIVE edge. */
+  --border:      rgba(255, 232, 212, 0.11);
+  --border-hi:   rgba(255, 232, 212, 0.22);
   --border-focus:rgba(255, 106, 0, 0.55);
 
-  --text:        #ffffff;
-  --text-mute:   #a3a3a3;
-  --text-dim:    #8c8c8c;
-  --text-faint:  #7a7a7a;
-  --text-ghost:  #7e7e7e;
+  /* 2%-warm white: imperceptible as a tint, removes the cold-LED cast that pure
+     #fff throws over a warm ramp. 20.19:1 on black. The muted pair is calibrated
+     against --surface-3 (the tinted tiles they sit on), never against --bg. */
+  --text:        #fdfaf7;
+  --text-mute:   #b0a69e;
+  --text-dim:    #9a8f86;
+  --text-faint:  #7d736b;   /* DECORATIVE only — dots and bars, never a label */
+  --text-ghost:  #8e847c;   /* input placeholders; 5.09:1 on --surface-2 */
 
   /* ===== BRAND ACCENT — hot metal =====
-     Only the DEFAULT (dark) theme carries the brand colour; the other twelve are
-     deliberate alternate identities and each defines its own accent, so this is
-     the one place the brand lives.
-     #ff6a00 was chosen over the other oranges by measurement: 7.31:1 on black,
-     and the largest RGB separation from the two colours it could be confused
-     with — the `sunset` theme's own accent (#fb923c) and --cat-arms (#fbbf24).
-     A softer amber would have made `dark` and `sunset` near-duplicates. */
+     The one place the brand lives, and IDENTICAL in light mode.
+     #ff6a00 was chosen by measurement: 7.31:1 on black, and the largest RGB
+     separation from --cat-arms (#fbbf24), the colour it could be confused with.
+     Re-verified against the warm ramp: 7.31 / 6.88 / 6.48 / 5.91:1 on
+     bg / surface-1 / -2 / -3, and 5.49:1 on an --accent-soft tile. */
   --accent:      #ff6a00;
   --accent-2:    #e05c00;
   --accent-3:    #b84a00;
   --accent-soft: rgba(255, 106, 0, 0.13);
   --accent-line: rgba(255, 106, 0, 0.30);
   --accent-ink:  #1a0800;
+
+  /* Chrome that used to be hard-coded, and was still TEAL-NAVY from the era
+     before the brand orange — on the one bar visible on every single screen. */
+  --nav-bg:      rgba(13, 10, 7, 0.82);
+  /* Photo scrims. Mode-INVARIANT by design: these sit over a photograph with
+     white text on them, so they must stay dark in light mode too. Do not
+     "fix" this to follow the surface. */
+  --scrim-rgb:   10, 5, 0;
+
+  /* ===== ELEVATION =====
+     A black shadow on a black page is invisible, so dark mode had no working
+     elevation system — 41 hand-tuned box-shadows that mostly did nothing. The
+     machined edge replaces it: one warm hairline on the LIT edge only, which is
+     what a milled aluminium chamfer does under overhead light. Light mode uses
+     the same token with the physics inverted (shadow seam at the bottom), which
+     is what makes the two modes feel like one object under two lights. */
+  --bevel:       inset 0 1px 0 rgba(255, 238, 222, 0.055);
+  --elev-1:      var(--bevel);
+  --elev-2:      var(--bevel), 0 10px 28px rgba(0, 0, 0, 0.55);
+  --elev-3:      var(--bevel), 0 28px 70px rgba(0, 0, 0, 0.72);
 
   --green:       #22c55e;
   --green-2:     #16a34a;
@@ -154,546 +200,113 @@ body {
 }
 
 /* =========================================================================
-   THEME: LIGHT CLEAN
+   MODE: LIGHT
    ========================================================================= */
 body.theme-light {
-  /* LIGHT IS A MODE OF THE BRAND, NOT AN ALTERNATE SKIN.
-     `dark` and `light` are the same identity on two surfaces; the other eleven
-     themes are deliberate alternate skins with their own accents. This one used
-     to be teal (#0d9488), so switching to light quietly dropped the brand.
-     The brand orange is IDENTICAL here to dark mode; only --accent-text is
-     darkened (#b34a00, 5.06:1) for the places the accent is small text. */
-  --accent-rgb:  255, 106, 0;
-  --overlay:     rgba(15, 23, 42, 0.45);
-  --bg:          #f6f8fa;
-  --bg-grad:     radial-gradient(1200px 600px at 50% -200px, #e6f7f4 0%, transparent 60%), #f6f8fa;
-  --surface-1:   #ffffff;
-  --surface-2:   #f1f5f8;
-  --surface-3:   #e5ecf1;
-  --surface-hi:  #cbd5dc;
-  --border:      rgba(15, 23, 42, 0.08);
-  --border-hi:   rgba(15, 23, 42, 0.14);
-  --border-focus:rgba(255, 106, 0, 0.50);
+  /* LIGHT IS A MODE OF THE BRAND, NOT AN ALTERNATE SKIN — the same object seen
+     from outside, in daylight. Bone ground, warm ink, near-white sheets.
+     The brand orange is IDENTICAL to dark mode; only --accent-text is darkened,
+     for the places the accent is small text.
 
-  --text:        #0f172a;
-  --text-mute:   #475569;
-  --text-dim:    #656f7d;
-  --text-faint:  #cbd5e1;
-  --text-ghost:  #6a6f75;
+     Everything here used to be Tailwind slate (#f6f8fa / #0f172a / rgba(15,23,42))
+     — cool blue-grey, the default of every generic light UI — with a MINT bloom
+     (#e6f7f4) still painted behind the whole app from the era when light mode's
+     accent was teal. That single leftover was a large part of why light mode did
+     not read as the same product as dark. */
+  --accent-rgb:  255, 106, 0;
+  --overlay:     rgba(28, 18, 10, 0.50);
+  --bg:          #faf5f0;
+  --bg-grad:     radial-gradient(1200px 600px at 50% -200px, #fff0e0 0%, transparent 60%), #faf5f0;
+  /* Pure white against a warm ground reads distinctly BLUE by simultaneous
+     contrast — the card would fight the page. A 3-point warm white keeps cards
+     reading as clean sheets on paper; --text is still 17.71:1 on it. */
+  --surface-1:   #fffcf9;
+  --surface-2:   #f7efe8;
+  --surface-3:   #eee3d9;
+  --surface-hi:  #dccbba;
+  /* Warm ink hairlines: a seam that reads as pencil on paper, not a UI stroke.
+     --border-hi matches dark's 0.22 exactly, so both modes press the same. */
+  --border:      rgba(58, 38, 22, 0.10);
+  --border-hi:   rgba(58, 38, 22, 0.22);
+  --border-focus:rgba(255, 106, 0, 0.55);
+
+  --text:        #1a1512;   /* a warm printing ink, not slate-900 */
+  --text-mute:   #5c5148;
+  --text-dim:    #665b53;   /* 5.22:1 on --surface-3, up from 4.72 */
+  --text-faint:  #ddd0c4;   /* DECORATIVE only — dots and bars, never a label */
+  --text-ghost:  #726257;   /* placeholders; 5.13:1 on --surface-2 */
 
   --accent:      #ff6a00;
-  --accent-text: #b34a00;
+  /* #b34a00 was 5.06:1 on white but only 4.52:1 on --surface-3 and 4.02:1 on an
+     --accent-soft tile — already failing wherever the accent is small text on a
+     tint, which is exactly where BRAND says it lives. One step deeper, same
+     hue: 4.91:1 on --surface-3, 4.85:1 on accent-soft. */
+  --accent-text: #a34400;
   --accent-2:    #e05c00;
   --accent-3:    #b84a00;
   --accent-soft: rgba(255, 106, 0, 0.12);
   --accent-line: rgba(255, 106, 0, 0.30);
   --accent-ink:  #1a0800;
 
-  --green:       #16a34a;
-  --green-2:     #15803d;
-  --green-soft:  rgba(22, 163, 74, 0.1);
-  --green-ink:   #ffffff;
+  --nav-bg:      rgba(250, 245, 240, 0.82);
+
+  /* Elevation, physically inverted: in dark the LIT edge is on top; here the
+     visible edge is the shadow seam at the bottom. Same token, opposite physics
+     — which is what makes the two modes feel like one object under two lights.
+     Warm brown-black shadows: a grey shadow on a warm ground is instantly
+     Material Design. */
+  --bevel:       inset 0 -1px 0 rgba(58, 38, 22, 0.07);
+  --elev-1:      var(--bevel), 0 1px 2px rgba(58, 38, 22, 0.05);
+  --elev-2:      var(--bevel), 0 10px 28px rgba(58, 38, 22, 0.10);
+  --elev-3:      var(--bevel), 0 28px 70px rgba(58, 38, 22, 0.16);
+
+  /* Semantic hues re-tuned for a light surface. :root declares these once for
+     the dark surface, and before light overrode them "up" measured 1.59:1 and
+     the danger row 2.77:1. Calibrated against --surface-3 — the worst surface
+     they land on — not against --bg. */
+  --up:       #036b4e;   /* 5.17:1 on --surface-3 */
+  --up-bg:    rgba(3, 107, 78, 0.12);
+  --down:     #b91c1c;
+  --down-bg:  rgba(185, 28, 28, 0.12);
+  --red:      #b91c1c;
+  --red-bg:   rgba(185, 28, 28, 0.10);
+
+  --green:      #126e35;   /* 5.03:1 on --surface-3; --green-ink #fff is 6.35:1 on it */
+  --green-2:    #0f5a2b;
+  --green-soft: rgba(18, 110, 53, 0.10);
+  --green-ink:  #ffffff;
+
+  /* Category hues re-tuned as TEXT. The previous pass corrected only three of
+     them on the theory that the rest "only ever paint over the bento cards'
+     dark scrim" — that turned out to be false: .pill.cat-*, .data-icon.* and
+     the food log's macro totals all paint them as text on a LIGHT surface.
+     --cat-arms measured 1.63:1 on the calories total and --cat-back 2.49:1.
+     All eight are now calibrated against --surface-3 AND against their own 14%
+     tint composited over it (the pill case), the two worst grounds each lands
+     on. Lowest result in the set is 4.80:1.
+     The --cat-*-bg tints keep the ORIGINAL bright hue on purpose — they are
+     backgrounds, and a 14% wash of the darkened value would read as mud. */
+  /* The raised sheet. Dark's --card-bg is --surface-2 (the surface that rises
+     out of the black); in light the sheet has to be LIGHTER than the page, or a
+     card reads as a hole in it. */
+  --card-bg:       var(--surface-1);
+
+  --cat-chest:     #a21a52;
+  --cat-back:      #1d4ed8;
+  --cat-legs:      #036b4e;
+  --cat-shoulders: #7e22ce;
+  --cat-arms:      #8a4b00;
+  --cat-core:      #b0173a;
+  --cat-other:     #4b5563;
+  --cat-cardio:    #155e75;
 }
 
-body.theme-light .bottom-nav {
-  background: rgba(255, 255, 255, 0.85);
-}
+/* --text-faint is DECORATIVE (dots, bars) and measures ~1.4:1 by design, but
+   the login gate used it for two pieces of real text — including the privacy
+   policy link, which has to be readable to do its job. */
+.auth-legal, .auth-dev-skip { color: var(--text-dim); }
 
 body.theme-light .vault-logo { color: var(--accent-text); }
-
-/* =========================================================================
-   THEME: FOREST (deep pine on near-black)
-   ========================================================================= */
-body.theme-forest {
-  --accent-rgb:  134, 239, 172;
-  --bg:          #0a1812;
-  --bg-grad:     radial-gradient(1200px 600px at 50% -200px, #112d1f 0%, transparent 60%), #0a1812;
-  --surface-1:   #122a1f;
-  --surface-2:   #173727;
-  --surface-3:   #1f4631;
-  --surface-hi:  #2a5840;
-  --border:      rgba(255, 255, 255, 0.06);
-  --border-hi:   rgba(255, 255, 255, 0.12);
-  --border-focus:rgba(134, 239, 172, 0.45);
-
-  --text:        #e6f3ea;
-  --text-mute:   #92ae9b;
-  --text-dim:    #88a090;
-  --text-faint:  #3a533f;
-  --text-ghost:  #8f9d92;
-
-  --accent:      #86efac;
-  --accent-2:    #4ade80;
-  --accent-3:    #22c55e;
-  --accent-soft: rgba(134, 239, 172, 0.13);
-  --accent-line: rgba(134, 239, 172, 0.3);
-  --accent-ink:  #051a0e;
-
-  --green:       #84cc16;
-  --green-2:     #65a30d;
-  --green-soft:  rgba(132, 204, 22, 0.14);
-  --green-ink:   #0a1500;
-}
-
-body.theme-forest .bottom-nav { background: rgba(10, 24, 18, 0.85); }
-
-/* =========================================================================
-   THEME: OCEAN (deep navy marine)
-   ========================================================================= */
-body.theme-ocean {
-  --accent-rgb:  56, 189, 248;
-  --bg:          #0a1929;
-  --bg-grad:     radial-gradient(1200px 600px at 50% -200px, #102b48 0%, transparent 60%), #0a1929;
-  --surface-1:   #112439;
-  --surface-2:   #182f4d;
-  --surface-3:   #1f3d63;
-  --surface-hi:  #2a527d;
-  --border:      rgba(255, 255, 255, 0.06);
-  --border-hi:   rgba(255, 255, 255, 0.13);
-  --border-focus:rgba(56, 189, 248, 0.45);
-
-  --text:        #e8f1f9;
-  --text-mute:   #97aabe;
-  --text-dim:    #8898ad;
-  --text-faint:  #3f5470;
-  --text-ghost:  #8c98a9;
-
-  --accent:      #38bdf8;
-  --accent-2:    #0ea5e9;
-  --accent-3:    #0284c7;
-  --accent-soft: rgba(56, 189, 248, 0.13);
-  --accent-line: rgba(56, 189, 248, 0.3);
-  --accent-ink:  #002033;
-
-  --green:       #22d3ee;
-  --green-2:     #06b6d4;
-  --green-soft:  rgba(34, 211, 238, 0.14);
-  --green-ink:   #001014;
-}
-
-body.theme-ocean .bottom-nav { background: rgba(10, 25, 41, 0.85); }
-
-/* =========================================================================
-   THEME: SAND (light warm cream + terracotta)
-   ========================================================================= */
-body.theme-sand {
-  --accent-rgb:  194, 65, 12;
-  --overlay:     rgba(61, 44, 24, 0.45);
-  --bg:          #fbf6ee;
-  --bg-grad:     radial-gradient(1200px 600px at 50% -200px, #f4ead8 0%, transparent 60%), #fbf6ee;
-  --surface-1:   #ffffff;
-  --surface-2:   #f5ecdb;
-  --surface-3:   #ebdfc6;
-  --surface-hi:  #c9b48a;
-  --border:      rgba(74, 55, 32, 0.1);
-  --border-hi:   rgba(74, 55, 32, 0.18);
-  --border-focus:rgba(194, 65, 12, 0.42);
-
-  --text:        #3d2c18;
-  --text-mute:   #715846;
-  --text-dim:    #786858;
-  --text-faint:  #c8b497;
-  --text-ghost:  #746858;
-
-  --accent:      #c2410c;
-  --accent-2:    #9a330a;
-  --accent-3:    #7c2d12;
-  --accent-soft: rgba(194, 65, 12, 0.1);
-  --accent-line: rgba(194, 65, 12, 0.3);
-  --accent-ink:  #ffffff;
-
-  --green:       #16a34a;
-  --green-2:     #15803d;
-  --green-soft:  rgba(22, 163, 74, 0.1);
-  --green-ink:   #ffffff;
-}
-
-body.theme-sand .bottom-nav { background: rgba(251, 246, 238, 0.92); }
-body.theme-sand .vault-logo { color: var(--accent-text); }
-
-/* =========================================================================
-   THEME: MOCHA (dark coffee earth)
-   ========================================================================= */
-body.theme-mocha {
-  --accent-rgb:  231, 200, 160;
-  --bg:          #1c1411;
-  --bg-grad:     radial-gradient(1200px 600px at 50% -200px, #2d1f18 0%, transparent 60%), #1c1411;
-  --surface-1:   #261c17;
-  --surface-2:   #322620;
-  --surface-3:   #44342b;
-  --surface-hi:  #5b483c;
-  --border:      rgba(255, 255, 255, 0.06);
-  --border-hi:   rgba(255, 255, 255, 0.12);
-  --border-focus:rgba(231, 200, 160, 0.45);
-
-  --text:        #f3e6d2;
-  --text-mute:   #b29c83;
-  --text-dim:    #9d8e7e;
-  --text-faint:  #4d3f33;
-  --text-ghost:  #989089;
-
-  --accent:      #e7c8a0;
-  --accent-2:    #d2ad7d;
-  --accent-3:    #b58e5a;
-  --accent-soft: rgba(231, 200, 160, 0.13);
-  --accent-line: rgba(231, 200, 160, 0.3);
-  --accent-ink:  #2a1d10;
-
-  --green:       #84cc16;
-  --green-2:     #65a30d;
-  --green-soft:  rgba(132, 204, 22, 0.14);
-  --green-ink:   #0a1500;
-}
-
-body.theme-mocha .bottom-nav { background: rgba(28, 20, 17, 0.85); }
-
-/* =========================================================================
-   THEME: OLIVE (army earth)
-   ========================================================================= */
-body.theme-olive {
-  --accent-rgb:  190, 242, 100;
-  --bg:          #14170c;
-  --bg-grad:     radial-gradient(1200px 600px at 50% -200px, #1f2412 0%, transparent 60%), #14170c;
-  --surface-1:   #1d2113;
-  --surface-2:   #272c19;
-  --surface-3:   #353c22;
-  --surface-hi:  #4b542e;
-  --border:      rgba(255, 255, 255, 0.06);
-  --border-hi:   rgba(255, 255, 255, 0.12);
-  --border-focus:rgba(190, 242, 100, 0.45);
-
-  --text:        #eef2dd;
-  --text-mute:   #a3aa84;
-  --text-dim:    #90947b;
-  --text-faint:  #444834;
-  --text-ghost:  #919387;
-
-  --accent:      #bef264;
-  --accent-2:    #a3e635;
-  --accent-3:    #84cc16;
-  --accent-soft: rgba(190, 242, 100, 0.13);
-  --accent-line: rgba(190, 242, 100, 0.3);
-  --accent-ink:  #0e1500;
-
-  --green:       #d97706;
-  --green-2:     #b45309;
-  --green-soft:  rgba(217, 119, 6, 0.14);
-  --green-ink:   #1a0a00;
-}
-
-body.theme-olive .bottom-nav { background: rgba(20, 23, 12, 0.85); }
-
-/* =========================================================================
-   THEME: AURORA GLASS (glassmorphism, purple/pink) — restored
-   ========================================================================= */
-body.theme-aurora {
-  --accent-rgb:  236, 72, 153;
-  --bg:          #0b0821;
-  --bg-grad:
-    radial-gradient(600px 400px at 0% 0%, rgba(236, 72, 153, 0.35), transparent 60%),
-    radial-gradient(800px 500px at 100% 30%, rgba(139, 92, 246, 0.35), transparent 65%),
-    radial-gradient(700px 450px at 50% 100%, rgba(34, 211, 238, 0.3), transparent 65%),
-    #0b0821;
-  --surface-1:   rgba(255, 255, 255, 0.05);
-  --surface-2:   rgba(255, 255, 255, 0.07);
-  --surface-3:   rgba(255, 255, 255, 0.1);
-  --surface-hi:  rgba(255, 255, 255, 0.18);
-  --border:      rgba(255, 255, 255, 0.12);
-  --border-hi:   rgba(255, 255, 255, 0.22);
-  --border-focus:rgba(236, 72, 153, 0.55);
-
-  --text:        #f8f1ff;
-  --text-mute:   #c5bbe0;
-  --text-dim:    #8c7dab;
-  --text-faint:  #524568;
-  --text-ghost:  #898198;
-
-  --accent:      #ec4899;
-  --accent-2:    #d946ef;
-  --accent-3:    #c026d3;
-  --accent-soft: rgba(236, 72, 153, 0.16);
-  --accent-line: rgba(236, 72, 153, 0.35);
-  --accent-ink:  #200012;
-
-  --green:       #22d3ee;
-  --green-2:     #06b6d4;
-  --green-soft:  rgba(34, 211, 238, 0.16);
-  --green-ink:   #001014;
-}
-
-body.theme-aurora .stat-tile,
-body.theme-aurora .bento-card,
-body.theme-aurora .data-row,
-body.theme-aurora .session-card,
-body.theme-aurora .compare-card,
-body.theme-aurora .streak-banner,
-body.theme-aurora .muscle-heatmap,
-body.theme-aurora .cta-card,
-body.theme-aurora .modal,
-body.theme-aurora .confirm-dialog,
-body.theme-aurora .prev-session,
-body.theme-aurora .stat-box,
-body.theme-aurora .compare-tabs,
-body.theme-aurora .compare-week,
-body.theme-aurora .type-option,
-body.theme-aurora .filter-pill {
-  backdrop-filter: blur(20px) saturate(140%);
-  -webkit-backdrop-filter: blur(20px) saturate(140%);
-}
-
-body.theme-aurora .bottom-nav {
-  background: rgba(11, 8, 33, 0.6);
-}
-
-/* =========================================================================
-   THEME: SUNSET (warm amber + rose) — restored
-   ========================================================================= */
-body.theme-sunset {
-  --accent-rgb:  251, 146, 60;
-  --bg:          #1a0f14;
-  --bg-grad:
-    radial-gradient(1200px 600px at 50% -100px, rgba(234, 88, 12, 0.25), transparent 60%),
-    radial-gradient(700px 400px at 20% 100%, rgba(190, 24, 93, 0.2), transparent 65%),
-    #1a0f14;
-  --surface-1:   #26161b;
-  --surface-2:   #301e24;
-  --surface-3:   #3d2730;
-  --surface-hi:  #52353f;
-  --border:      rgba(255, 255, 255, 0.07);
-  --border-hi:   rgba(255, 255, 255, 0.14);
-  --border-focus:rgba(251, 146, 60, 0.55);
-
-  --text:        #fef3e7;
-  --text-mute:   #c0a091;
-  --text-dim:    #9f857b;
-  --text-faint:  #4f3b34;
-  --text-ghost:  #958985;
-
-  --accent:      #fb923c;
-  --accent-2:    #f97316;
-  --accent-3:    #ea580c;
-  --accent-soft: rgba(251, 146, 60, 0.15);
-  --accent-line: rgba(251, 146, 60, 0.35);
-  --accent-ink:  #1a0a00;
-
-  --green:       #f59e0b;
-  --green-2:     #d97706;
-  --green-soft:  rgba(245, 158, 11, 0.15);
-  --green-ink:   #1a1000;
-}
-
-body.theme-sunset .bottom-nav {
-  background: rgba(26, 15, 20, 0.82);
-}
-
-/* =========================================================================
-   THEME: NEBULA (deep navy + electric violet) — restored
-   ========================================================================= */
-body.theme-nebula {
-  --accent-rgb:  168, 85, 247;
-  --bg:          #070714;
-  --bg-grad:
-    radial-gradient(900px 500px at 30% -100px, rgba(99, 102, 241, 0.3), transparent 60%),
-    radial-gradient(700px 500px at 80% 40%, rgba(168, 85, 247, 0.22), transparent 65%),
-    #070714;
-  --surface-1:   #0f0f24;
-  --surface-2:   #171732;
-  --surface-3:   #22224a;
-  --surface-hi:  #30306a;
-  --border:      rgba(255, 255, 255, 0.06);
-  --border-hi:   rgba(255, 255, 255, 0.14);
-  --border-focus:rgba(168, 85, 247, 0.5);
-
-  --text:        #ecebff;
-  --text-mute:   #9d9dce;
-  --text-dim:    #7f7fab;
-  --text-faint:  #3a3a66;
-  --text-ghost:  #81819d;
-
-  --accent:      #a855f7;
-  --accent-2:    #9333ea;
-  --accent-3:    #7e22ce;
-  --accent-soft: rgba(168, 85, 247, 0.14);
-  --accent-line: rgba(168, 85, 247, 0.35);
-  --accent-ink:  #1a0033;
-
-  --green:       #22d3ee;
-  --green-2:     #06b6d4;
-  --green-soft:  rgba(34, 211, 238, 0.14);
-  --green-ink:   #001014;
-}
-
-body.theme-nebula .bottom-nav {
-  background: rgba(7, 7, 20, 0.82);
-}
-
-/* =========================================================================
-   THEME: SLATE (neutral warm grey + bronze)
-   ========================================================================= */
-body.theme-slate {
-  --accent-rgb:  212, 163, 115;
-  --bg:          #1a1a1c;
-  --bg-grad:     radial-gradient(1200px 600px at 50% -200px, #232325 0%, transparent 60%), #1a1a1c;
-  --surface-1:   #232326;
-  --surface-2:   #2c2c30;
-  --surface-3:   #38383d;
-  --surface-hi:  #4a4a51;
-  --border:      rgba(255, 255, 255, 0.06);
-  --border-hi:   rgba(255, 255, 255, 0.12);
-  --border-focus:rgba(212, 163, 115, 0.45);
-
-  --text:        #ecedee;
-  --text-mute:   #a4a4a8;
-  --text-dim:    #93939a;
-  --text-faint:  #45454c;
-  --text-ghost:  #939397;
-
-  --accent:      #d4a373;
-  --accent-2:    #b88662;
-  --accent-3:    #9c6b4b;
-  --accent-soft: rgba(212, 163, 115, 0.13);
-  --accent-line: rgba(212, 163, 115, 0.3);
-  --accent-ink:  #1f1408;
-
-  --green:       #a3e635;
-  --green-2:     #84cc16;
-  --green-soft:  rgba(163, 230, 53, 0.14);
-  --green-ink:   #0c1500;
-}
-
-body.theme-slate .bottom-nav { background: rgba(26, 26, 28, 0.85); }
-
-/* =========================================================================
-   THEME: FROST (cool light blue/grey)
-   ========================================================================= */
-body.theme-frost {
-  --accent-rgb:  71, 85, 105;
-  --overlay:     rgba(26, 35, 51, 0.45);
-  --bg:          #eef2f7;
-  --bg-grad:     radial-gradient(1200px 600px at 50% -200px, #dde7f0 0%, transparent 60%), #eef2f7;
-  --surface-1:   #ffffff;
-  --surface-2:   #e3eaf2;
-  --surface-3:   #d2dde8;
-  --surface-hi:  #b1c1d2;
-  --border:      rgba(15, 23, 42, 0.08);
-  --border-hi:   rgba(15, 23, 42, 0.16);
-  --border-focus:rgba(71, 85, 105, 0.45);
-
-  --text:        #1a2333;
-  --text-mute:   #4a5a72;
-  --text-dim:    #5c6a7b;
-  --text-faint:  #b9c5d4;
-  --text-ghost:  #626870;
-
-  --accent:      #475569;
-  --accent-2:    #334155;
-  --accent-3:    #1e293b;
-  --accent-soft: rgba(71, 85, 105, 0.1);
-  --accent-line: rgba(71, 85, 105, 0.3);
-  --accent-ink:  #ffffff;
-
-  --green:       #0891b2;
-  --green-2:     #0e7490;
-  --green-soft:  rgba(8, 145, 178, 0.1);
-  --green-ink:   #ffffff;
-}
-
-body.theme-frost .bottom-nav { background: rgba(238, 242, 247, 0.92); }
-body.theme-frost .vault-logo { color: var(--accent-text); }
-
-/* =========================================================================
-   THEME: DUSK (muted plum twilight)
-   ========================================================================= */
-body.theme-dusk {
-  --accent-rgb:  217, 165, 178;
-  --bg:          #1c1620;
-  --bg-grad:     radial-gradient(1200px 600px at 50% -200px, #2a1f30 0%, transparent 60%), #1c1620;
-  --surface-1:   #261d2c;
-  --surface-2:   #322638;
-  --surface-3:   #443549;
-  --surface-hi:  #5b4862;
-  --border:      rgba(255, 255, 255, 0.06);
-  --border-hi:   rgba(255, 255, 255, 0.12);
-  --border-focus:rgba(217, 165, 178, 0.45);
-
-  --text:        #f0e6ec;
-  --text-mute:   #b29ca7;
-  --text-dim:    #9c8e97;
-  --text-faint:  #4d4150;
-  --text-ghost:  #98919a;
-
-  --accent:      #d9a5b2;
-  --accent-2:    #c08494;
-  --accent-3:    #a16374;
-  --accent-soft: rgba(217, 165, 178, 0.13);
-  --accent-line: rgba(217, 165, 178, 0.3);
-  --accent-ink:  #2a1218;
-
-  --green:       #a3a3ff;
-  --green-2:     #8888e8;
-  --green-soft:  rgba(163, 163, 255, 0.14);
-  --green-ink:   #0a0a1f;
-}
-
-body.theme-dusk .bottom-nav { background: rgba(28, 22, 32, 0.85); }
-
-/* =========================================================================
-   LIGHT THEMES — semantic hues re-tuned for light surfaces
-   :root declares --up/--down/--red once, tuned for dark backgrounds, and no light
-   theme overrode them: "up" measured 1.59:1 and the danger row 2.77:1 on white.
-   --cat-* are deliberately left alone — they only ever paint over the bento
-   cards' dark gradient scrim, where the light hues are correct.
-   ========================================================================= */
-body.theme-light,
-body.theme-frost,
-body.theme-sand {
-  --up:      #047857;
-  --up-bg:   rgba(4, 120, 87, 0.12);
-  --down:    #b91c1c;
-  --down-bg: rgba(185, 28, 28, 0.12);
-  --red:     #b91c1c;
-  --red-soft: rgba(185, 28, 28, 0.12);
-}
-/* --green also carries white ink here (--green-ink: #ffffff), so it has to be
-   dark enough for a white label: #16a34a gave 3.30:1. */
-/* The three category hues that are used as TEXT (the macro tracker's
-   protein/carb/fat labels) rather than only on the bento cards' dark scrim.
-   --cat-legs measured 1.75:1 as label text on a light card. The other 13 --cat-*
-   are left alone: they only ever paint over the scrim. */
-body.theme-light,
-body.theme-frost,
-body.theme-sand {
-  --cat-chest:     #be185d;
-  --cat-legs:      #047857;
-  --cat-shoulders: #7e22ce;
-}
-body.theme-light { --green: #15803d; --green-2: #166534; }
-body.theme-sand  { --green: #116631; --green-2: #0e5228; }
-/* The posterior/anterior planner labels and muscle chips paint --green and
-   --accent as 11px text on a tinted tile; these three landed at 4.28-4.42,
-   just under AA. Nudged one step each — measured, not eyeballed. */
-body.theme-frost { --green: #0c6076; --green-2: #094e60; }
-/* Marginal misses found by the sweep, nudged one step. */
-body.theme-frost { --text-dim: #4a5666; }
-body.theme-sand  { --accent: #9a3412; --accent-2: #7c2d12; --accent-3: #6b2710; --accent-rgb: 154, 52, 18; }
-
-/* Muted-text contrast, corrected per theme against that theme's own worst
-   surface. Small text on --surface-3 measured 3.64-4.43:1 in ten themes —
-   the tokens were calibrated against --bg, never against the tinted tiles
-   they actually sit on. aurora is excluded on purpose: the static pairing
-   says it fails but the rendered sweep shows it passing, so the pair never
-   meets on screen. */
-body.theme-light { --text-dim: #5f6876; }
-body.theme-frost { --text-dim: #546170; }
-body.theme-sand { --text-dim: #6e5f50; }
-body.theme-mocha { --text-dim: #ada194; }
-body.theme-slate { --text-dim: #a2a2a8; }
-body.theme-forest { --text-mute: #95b09e; --text-dim: #9cb0a3; }
-body.theme-ocean { --text-dim: #9ca9bb; }
-body.theme-olive { --text-dim: #a3a691; }
-body.theme-sunset { --text-dim: #aa938a; }
-body.theme-nebula { --text-dim: #8a8ab2; --accent: #bb7cf9; --accent-2: #a855f7; --accent-rgb: 187, 124, 249; }
-body.theme-dusk { --text-mute: #b49faa; --text-dim: #ada1a8; }
 
 /* The accent as SMALL TEXT. Identical to --accent everywhere it already passes —
    every dark theme and every alternate skin. Only the light mode overrides it:
@@ -746,6 +359,26 @@ body { --accent-text: var(--accent); }
   color: var(--accent-text);
   font-size: var(--fs-sub); font-weight: 800; text-align: center;
 }
+
+/* Reminder diagnostics. Each row states one fact about the delivery path, so a
+   reminder that never arrives has a visible reason instead of looking broken. */
+.rem-status { display: flex; flex-direction: column; gap: var(--sp-2); }
+.rem-status-row {
+  display: flex; flex-direction: column; gap: 2px;
+  padding: 10px var(--sp-3); border-radius: var(--radius-sm);
+  background: var(--surface-2); border: 1px solid var(--border);
+  border-inline-start: 3px solid var(--text-dim);
+  font-size: var(--fs-meta); font-weight: 600; color: var(--text-mute);
+  text-align: start;
+}
+.rem-status-row.ok  { border-inline-start-color: var(--green); }
+.rem-status-row.bad { border-inline-start-color: var(--red); color: var(--text); }
+.rem-status-row strong { font-size: var(--fs-sub); font-weight: 800; color: var(--text); }
+.rem-status-action {
+  width: 100%; font: inherit; cursor: pointer;
+  appearance: none; -webkit-appearance: none;
+}
+.rem-status-action:active { transform: scale(var(--press-scale)); }
 
 /* =========================================================================
    RTL (Arabic) support
@@ -913,7 +546,10 @@ body.rest-active .main { padding-bottom: calc(var(--nav-h) + var(--safe-b) + 104
   right: 0;
   height: calc(var(--nav-h) + var(--safe-b));
   padding-bottom: var(--safe-b);
-  background: rgba(10, 25, 32, 0.82);
+  /* Was a hard-coded rgba(10,25,32,.82) — a teal-navy bar left over from the
+     era before the brand orange, on the one chrome element visible on every
+     screen, that no theme class ever overrode. */
+  background: var(--nav-bg);
   backdrop-filter: blur(24px) saturate(180%);
   -webkit-backdrop-filter: blur(24px) saturate(180%);
   border-top: 1px solid var(--border);
@@ -1019,10 +655,7 @@ body.keyboard-open .sheet-overlay { height: var(--vvh, 100%); bottom: auto; }
 .nav-btn.home-center.active span { color: var(--accent-text); }
 
 /* Theme-specific shadows for center button */
-body.theme-light .home-center-icon { box-shadow: 0 8px 24px rgba(13, 148, 136, 0.3), 0 0 0 4px var(--bg); }
-body.theme-aurora .home-center-icon { box-shadow: 0 8px 28px rgba(236, 72, 153, 0.5), 0 0 0 4px var(--bg); }
-body.theme-sunset .home-center-icon { box-shadow: 0 8px 24px rgba(251, 146, 60, 0.4), 0 0 0 4px var(--bg); }
-body.theme-nebula .home-center-icon { box-shadow: 0 8px 28px rgba(168, 85, 247, 0.45), 0 0 0 4px var(--bg); }
+body.theme-light .home-center-icon { box-shadow: 0 8px 24px rgba(255, 106, 0, 0.28), 0 0 0 4px var(--bg); }
 
 /* =========================================================================
    PAGE HEADER (inside view)
@@ -1235,7 +868,11 @@ input[type="number"]::-webkit-outer-spin-button {
 }
 input[type="number"] { -moz-appearance: textfield; }
 
-input[type="date"], input[type="time"] { color-scheme: dark; }
+/* The native picker chrome follows the mode. This was an unconditional
+   `color-scheme: dark`, so every date and time field — including the reminder
+   time inputs — rendered a dark picker on a light page. */
+body.theme-dark  input[type="date"], body.theme-dark  input[type="time"] { color-scheme: dark; }
+body.theme-light input[type="date"], body.theme-light input[type="time"] { color-scheme: light; }
 
 /* Search bar with icon */
 .search-wrap {
@@ -1312,69 +949,9 @@ input[type="date"], input[type="time"] { color-scheme: dark; }
   margin-bottom: 18px;
 }
 
-/* Streak banner */
-.streak-banner {
-  background: linear-gradient(135deg, var(--accent-soft), transparent);
-  border: 1px solid var(--accent-line);
-  border-radius: var(--radius-md);
-  padding: 16px 18px;
-  display: flex;
-  align-items: center;
-  gap: 14px;
-  margin-bottom: 18px;
-  position: relative;
-  overflow: hidden;
-}
-
-.streak-banner::before {
-  content: '';
-  position: absolute;
-  top: -40px;
-  right: -40px;
-  width: 160px;
-  height: 160px;
-  background: radial-gradient(circle, rgba(var(--accent-rgb), 0.18), transparent 65%);
-}
-
-.streak-icon {
-  width: 44px;
-  height: 44px;
-  border-radius: 14px;
-  background: var(--accent);
-  color: var(--accent-ink);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  flex-shrink: 0;
-  z-index: 1;
-}
-.streak-icon svg { width: 24px; height: 24px; }
-
-.streak-text {
-  flex: 1;
-  z-index: 1;
-}
-
-.streak-number {
-  font-size: 22px;
-  font-weight: 900;
-  letter-spacing: -0.03em;
-  line-height: 1;
-  margin-bottom: 2px;
-}
-.streak-number .unit {
-  font-size: 12px;
-  color: var(--text-mute);
-  font-weight: 600;
-  margin-left: 4px;
-  letter-spacing: 0;
-}
-
-.streak-label {
-  font-size: 12px;
-  color: var(--text-mute);
-  font-weight: 500;
-}
+/* .streak-banner / .streak-icon / .streak-text / .streak-number /
+   .streak-label were deleted in v210: zero occurrences in js/app.js or
+   index.html. The Home streak lives in .streak-chip further down. */
 
 /* Stat grid */
 .stat-grid {
@@ -1849,7 +1426,7 @@ body[dir="rtl"] .bento-card-content { text-align: right; }
   top: 10px;
   right: 10px;
   padding: 3px 9px;
-  background: rgba(6, 20, 27, 0.72);
+  background: rgba(var(--scrim-rgb), 0.72);
   backdrop-filter: blur(8px);
   border: 1px solid var(--border-hi);
   border-radius: var(--radius-pill);
@@ -1874,7 +1451,7 @@ body[dir="rtl"] .bento-card-content { text-align: right; }
   right: 8px;
   max-width: calc(100% - 56px);
   padding: 5px 10px;
-  background: rgba(6, 20, 27, 0.78);
+  background: rgba(var(--scrim-rgb), 0.78);
   backdrop-filter: blur(10px);
   -webkit-backdrop-filter: blur(10px);
   border: 1px solid rgba(255, 255, 255, 0.14);
@@ -2105,7 +1682,7 @@ body[dir="rtl"] .bento-card.wide .bento-card-name-tag { left: 14px; }
   content: '';
   position: absolute;
   inset: 0;
-  background: linear-gradient(180deg, rgba(6, 20, 27, 0) 60%, rgba(6, 20, 27, 0.98) 100%);
+  background: linear-gradient(180deg, rgba(var(--scrim-rgb), 0) 60%, rgba(var(--scrim-rgb), 0.98) 100%);
   pointer-events: none;
 }
 
@@ -2147,7 +1724,7 @@ body[dir="rtl"] .bento-card.wide .bento-card-name-tag { left: 14px; }
 
 .detail-hero-cat {
   padding: 4px 12px;
-  background: rgba(6, 20, 27, 0.68);
+  background: rgba(var(--scrim-rgb), 0.68);
   backdrop-filter: blur(10px);
   border: 1px solid var(--border-hi);
   border-radius: var(--radius-pill);
@@ -2560,7 +2137,7 @@ body[dir="rtl"] .w-unit { margin-left: 0; margin-right: 2px; }
   max-height: 100%;
   object-fit: contain;
   border-radius: var(--radius-lg);
-  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.6);
+  box-shadow: var(--elev-3);
 }
 .img-lightbox-close {
   position: absolute;
@@ -2949,7 +2526,7 @@ body[dir="rtl"] .w-unit { margin-left: 0; margin-right: 2px; }
   width: 100%;
   max-height: 85vh;
   overflow-y: auto;
-  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.45);
+  box-shadow: var(--elev-3);
 }
 
 .type-option {
@@ -3150,7 +2727,7 @@ body[dir="rtl"] .w-unit { margin-left: 0; margin-right: 2px; }
   transition: opacity 0.25s cubic-bezier(0.22, 1, 0.36, 1), transform 0.25s cubic-bezier(0.22, 1, 0.36, 1);
   pointer-events: none;
   z-index: 200;
-  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.5);
+  box-shadow: var(--elev-2);
   white-space: nowrap;
   max-width: 90vw;
   letter-spacing: -0.01em;
@@ -3730,7 +3307,7 @@ body[dir="rtl"] .planner-day { text-align: right; }
   z-index: 9999;
   pointer-events: none;
   margin: 0;
-  box-shadow: 0 18px 40px rgba(0, 0, 0, 0.6);
+  box-shadow: var(--elev-3);
   border-color: var(--accent-line) !important;
   opacity: 0.96;
   transform: scale(1.02);
@@ -3844,7 +3421,7 @@ body[dir="rtl"] .planner-day { text-align: right; }
   z-index: 9999;
   pointer-events: none;
   margin: 0;
-  box-shadow: 0 14px 34px rgba(0, 0, 0, 0.55);
+  box-shadow: var(--elev-2);
   border-color: var(--accent-line) !important;
   background: var(--surface-1);
   opacity: 0.97;
@@ -4291,7 +3868,7 @@ body[dir="rtl"] .calendar-nav-btn svg { transform: scaleX(-1); }
   background: var(--surface-1);
   border: 1px solid var(--accent-line);
   border-radius: 16px;
-  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.45);
+  box-shadow: var(--elev-2);
   animation: popIn var(--dur) var(--ease);
 }
 .rest-timer-mid { flex: 1; text-align: center; }
@@ -5137,11 +4714,11 @@ body[dir="rtl"] .picker-row { text-align: right; }
   background: var(--surface-hi); color: var(--text);
 }
 .add-tile-icon svg { width: 24px; height: 24px; }
-.add-tile-icon.voice { background: rgba(239, 68, 68, 0.18); color: #f87171; }
+.add-tile-icon.voice { background: var(--red-bg); color: var(--red); }
 .add-tile-icon.chat { background: var(--accent-soft); color: var(--accent-text); }
-.add-tile-icon.photo { background: rgba(96, 165, 250, 0.18); color: #60a5fa; }
-.add-tile-icon.saved { background: rgba(52, 211, 153, 0.18); color: #34d399; }
-.add-tile-icon.manual { background: rgba(251, 191, 36, 0.16); color: #fbbf24; }
+.add-tile-icon.photo { background: var(--cat-back-bg); color: var(--cat-back); }
+.add-tile-icon.saved { background: var(--green-soft); color: var(--green); }
+.add-tile-icon.manual { background: var(--cat-arms-bg); color: var(--cat-arms); }
 .add-tile-title { font-size: 13px; font-weight: 700; line-height: 1.2; }
 
 /* =========================================================================
@@ -5710,164 +5287,51 @@ body[dir="rtl"] .variation-select svg { transform: scaleX(-1); }
   color: var(--accent-ink);
 }
 
-.theme-grid {
+/* Mode toggle — the two brand modes, shown in place in Settings. Each option
+   paints a miniature of the mode it selects: the page ground, one raised card
+   on it, and the accent bar. Hard-coded hexes on purpose — a swatch has to show
+   the mode you are NOT in, so it cannot read from the live custom properties. */
+.mode-toggle {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 10px;
+  gap: var(--sp-3);
 }
-
-/* Compact "Theme" row in Settings — opens the theme grid in a modal. */
-.settings-picker-row {
-  display: flex; align-items: center; justify-content: space-between; gap: 12px;
-  width: 100%; padding: 14px 16px; border-radius: var(--radius);
+.mode-option {
+  display: flex; flex-direction: column; align-items: stretch; gap: var(--sp-2);
+  padding: var(--sp-3); border-radius: var(--radius);
   background: var(--surface-2); border: 1px solid var(--border);
-  color: var(--text); font: inherit; cursor: pointer;
-  appearance: none; -webkit-appearance: none; -webkit-tap-highlight-color: transparent;
-  transition: transform 0.12s, background 0.15s;
+  color: var(--text-mute); font: inherit; cursor: pointer; text-align: start;
+  appearance: none; -webkit-appearance: none;
+  transition: border-color var(--dur) var(--ease), color var(--dur) var(--ease);
 }
-.settings-picker-row:active { transform: scale(0.99); background: var(--surface-3); }
-.settings-picker-label { font-size: 15px; font-weight: 700; }
-.settings-picker-right { display: inline-flex; align-items: center; gap: 10px; color: var(--text-mute); }
-.settings-picker-right .theme-preview-dots { display: inline-flex; gap: 4px; }
-
-.theme-card {
-  border-radius: var(--radius);
-  overflow: hidden;
-  border: 2px solid var(--border);
-  aspect-ratio: 16 / 10;
-  position: relative;
-  transition: transform 0.15s, border-color 0.15s;
-  display: block;
-  width: 100%;
-  padding: 0;
+.mode-option.active {
+  border-color: var(--accent);
+  color: var(--text);
+  box-shadow: inset 0 0 0 1px var(--accent);
 }
+.mode-option:active { transform: scale(var(--press-scale)); }
+.mode-name { font-size: var(--fs-sub); font-weight: var(--fw-title); }
 
-/* .theme-card:active press feedback is owned by the unified block near end of file */
-
-.theme-card.active {
-  border-color: var(--accent-text);
-  box-shadow: 0 0 0 3px var(--accent-soft);
+.mode-swatch {
+  position: relative; display: block;
+  height: 52px; border-radius: var(--radius-sm); overflow: hidden;
+  border: 1px solid var(--border);
 }
-
-.theme-preview {
-  position: absolute;
-  inset: 0;
-  padding: 12px;
-  display: flex;
-  flex-direction: column;
-  justify-content: space-between;
+.mode-swatch-dark  { background: #0a0908; }
+.mode-swatch-light { background: #f7f5f2; }
+/* the raised card */
+.mode-swatch-card {
+  position: absolute; inset-inline-start: 8px; top: 10px;
+  width: 46%; height: 32px; border-radius: 5px;
 }
-
-.theme-preview-dark {
-  background: #000000;
-  color: #5b8def;
+.mode-swatch-dark  .mode-swatch-card { background: #1a1715; }
+.mode-swatch-light .mode-swatch-card { background: #ffffff; box-shadow: 0 1px 2px rgba(28, 22, 18, 0.10); }
+/* the accent bar — identical in both, which is the whole point */
+.mode-swatch-bar {
+  position: absolute; inset-inline-end: 8px; top: 10px;
+  width: 26%; height: 32px; border-radius: 5px;
+  background: #ff6a00;
 }
-
-.theme-preview-light {
-  background: radial-gradient(400px 200px at 50% -50px, #e6f7f4 0%, transparent 60%), #f6f8fa;
-  color: #0d9488;
-}
-
-.theme-preview-aurora {
-  background:
-    radial-gradient(200px 150px at 0% 0%, rgba(236, 72, 153, 0.6), transparent 70%),
-    radial-gradient(260px 180px at 100% 30%, rgba(139, 92, 246, 0.55), transparent 70%),
-    radial-gradient(240px 160px at 50% 100%, rgba(34, 211, 238, 0.5), transparent 70%),
-    #0b0821;
-  color: #ec4899;
-}
-
-.theme-preview-sunset {
-  background:
-    radial-gradient(400px 200px at 50% -50px, rgba(234, 88, 12, 0.4), transparent 60%),
-    radial-gradient(200px 150px at 20% 100%, rgba(190, 24, 93, 0.35), transparent 65%),
-    #1a0f14;
-  color: #fb923c;
-}
-
-.theme-preview-nebula {
-  background:
-    radial-gradient(300px 200px at 30% -30px, rgba(99, 102, 241, 0.5), transparent 60%),
-    radial-gradient(220px 180px at 80% 40%, rgba(168, 85, 247, 0.4), transparent 65%),
-    #070714;
-  color: #a855f7;
-}
-
-.theme-preview-forest {
-  background: radial-gradient(400px 200px at 50% -50px, #173727 0%, transparent 60%), #0a1812;
-  color: #86efac;
-}
-
-.theme-preview-ocean {
-  background: radial-gradient(400px 200px at 50% -50px, #1f3d63 0%, transparent 60%), #0a1929;
-  color: #38bdf8;
-}
-
-.theme-preview-sand {
-  background: radial-gradient(400px 200px at 50% -50px, #f4ead8 0%, transparent 60%), #fbf6ee;
-  color: #c2410c;
-}
-
-.theme-preview-mocha {
-  background: radial-gradient(400px 200px at 50% -50px, #44342b 0%, transparent 60%), #1c1411;
-  color: #e7c8a0;
-}
-
-.theme-preview-olive {
-  background: radial-gradient(400px 200px at 50% -50px, #353c22 0%, transparent 60%), #14170c;
-  color: #bef264;
-}
-
-.theme-preview-slate {
-  background: radial-gradient(400px 200px at 50% -50px, #38383d 0%, transparent 60%), #1a1a1c;
-  color: #d4a373;
-}
-
-.theme-preview-frost {
-  background: radial-gradient(400px 200px at 50% -50px, #dde7f0 0%, transparent 60%), #eef2f7;
-  color: #475569;
-}
-
-.theme-preview-dusk {
-  background: radial-gradient(400px 200px at 50% -50px, #443549 0%, transparent 60%), #1c1620;
-  color: #d9a5b2;
-}
-
-.theme-preview-name {
-  font-size: 13px;
-  font-weight: 900;
-  letter-spacing: -0.02em;
-  color: inherit;
-}
-
-.theme-preview-dots {
-  display: flex;
-  gap: 4px;
-}
-
-.theme-preview-dot {
-  width: 10px;
-  height: 10px;
-  border-radius: 50%;
-  opacity: 0.9;
-}
-
-.theme-card.active .theme-check {
-  position: absolute;
-  top: 8px;
-  right: 8px;
-  width: 22px;
-  height: 22px;
-  background: var(--accent);
-  color: var(--accent-ink);
-  border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 2;
-}
-
-.theme-check svg { width: 16px; height: 16px; }
 
 .settings-action-row {
   background: var(--surface-1);
@@ -6147,14 +5611,17 @@ body[dir="rtl"] .variation-select svg { transform: scaleX(-1); }
 .auth-lang-btn.active { background: var(--accent); color: var(--accent-ink); }
 
 /* First-run onboarding — floating card */
-.onboard-gate { background: radial-gradient(120% 90% at 50% -8%, #10151f, #000 55%); }
+/* Was a hard-coded #10151f navy from the pre-orange era — the one full-screen
+   surface in the app not driven by a token, and it overrode .auth-gate's
+   --bg-grad in BOTH modes. */
+.onboard-gate { background: var(--bg-grad, var(--bg)); }
 .onb-card {
   position: relative; gap: 0;
   background: var(--surface-2);
   border: 1px solid var(--border-hi);
   border-radius: 24px;
   padding: 28px 22px 22px;
-  box-shadow: 0 24px 70px rgba(0, 0, 0, 0.6);
+  box-shadow: var(--elev-3);
 }
 .onb-logo {
   width: 68px; height: 68px; margin: 4px auto 16px; border-radius: 20px;
@@ -6380,7 +5847,7 @@ body[dir="rtl"] .variation-select svg { transform: scaleX(-1); }
 .nav-btn:active, .btn:active, .stat-tile:active, .tool-card:active,
 .session-card:active, .heat-cell:active,
 .calendar-cell:active, .bento-card:active, .compare-card:active,
-.cta-card:active, .filter-pill:active, .theme-card:active,
+.cta-card:active, .filter-pill:active,
 .planner-day:active, .settings-action-row:active {
   transform: scale(var(--press-scale));
 }
@@ -6761,7 +6228,7 @@ body[dir="rtl"] .variation-select svg { transform: scaleX(-1); }
   border-radius: 22px;
   border-color: rgba(var(--accent-rgb), 0.3);
   background: linear-gradient(180deg, var(--surface-2), var(--surface-1));
-  box-shadow: 0 14px 36px rgba(0, 0, 0, 0.55);
+  box-shadow: var(--elev-2);
 }
 .cta-floating .cta-card-icon { width: 38px; height: 38px; border-radius: 12px; }
 .cta-floating .cta-card-title { font-size: 14px; margin-bottom: 1px; }
@@ -6859,7 +6326,7 @@ body[dir="rtl"] .variation-select svg { transform: scaleX(-1); }
   background: var(--surface-2);
   border: 1px solid rgba(var(--accent-rgb), 0.45);
   border-radius: var(--radius-lg);
-  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.45);
+  box-shadow: var(--elev-2);
   transform: translateY(140%);
   opacity: 0;
   transition: transform var(--dur, 200ms) var(--ease), opacity var(--dur, 200ms) var(--ease);
@@ -6938,3 +6405,153 @@ body[dir="rtl"] .variation-select svg { transform: scaleX(-1); }
 }
 .announcement-banner .update-banner-main { flex: 1 1 auto; }
 .announcement-banner .update-banner-actions { margin-inline-start: var(--sp-2); }
+
+/* =========================================================================
+   IDENTITY LAYER  (v210)
+
+   The authority for the five devices that make this app recognisable as THE
+   VAULT rather than as a dark template. It sits last on purpose: these rules
+   are meant to WIN over the component rules above, and keeping them in one
+   readable place is how the identity stays checkable instead of dissolving
+   back into 6,000 lines of one-off values.
+
+   The five devices:
+     1. The machined edge   — fill separates, a border MEANS interactive
+     2. The 2:1 corner law  — a container's radius is twice its leaf's
+     3. Readable text       — the decorative token stays decorative
+     4. No circles          — the mark is five straight bars
+     5. The five-bar tick  — one bar of the mark, stamped on every section
+   ========================================================================= */
+
+/* --- 1. THE MACHINED EDGE ------------------------------------------------
+   An outline on all four sides of everything is the signature of a UI that was
+   assembled rather than designed — and here it was doing ALL the work, because
+   --surface-1 used to equal --bg exactly (1.00:1), so every card was an
+   invisible fill held together by a hairline. Now the fill separates on its
+   own and the border is free to carry meaning. */
+/* --card-border is the alias the "Unified card surface" block above feeds to
+   nine card components; zeroing it is what actually drops the outlines. Every
+   surface that consumes it therefore has to be handed the elevation in the same
+   breath, or it loses its edge and gains nothing. */
+body { --card-border: 0; }
+
+.data-row, .session-card, .cta-card, .compare-card, .today-plan,
+.muscle-heatmap, .rot-slot, .ms-card, .last-set-card, .sleep-detail,
+.nutri-hero, .hero-card, .stat-cell, .tool-pod {
+  border: 0;
+  box-shadow: var(--elev-1);
+}
+
+/* THREE EXCEPTIONS, all for the same reason — a border now MEANS something, so
+   anything whose border was carrying meaning has to get it back explicitly.
+
+   .bento-card keeps a plain edge: its inset:0 .bento-card-bg child paints
+   straight over an inset bevel, so dropping the border left it with no edge.
+   .session-card.pr keeps the accent edge that is the ONLY thing marking a
+   personal-record session — `border: 0` resets border-style to none, which makes
+   a surviving border-color declaration paint nothing.
+   .cta-floating is `position: fixed` over scrolling content: an inset hairline
+   cannot lift it off the page, so it keeps its own outline and drop shadow. */
+.bento-card { border: 1px solid var(--border); }
+.session-card.pr { border: 1px solid var(--accent-line); }
+.cta-card.cta-floating {
+  border: 1px solid rgba(var(--accent-rgb), 0.3);
+  box-shadow: var(--elev-3);
+}
+
+/* .bento-add is the one exception: its dashed accent outline IS the affordance
+   ("this slot is empty, add one"), not scaffolding. It also carries no photo,
+   so the scrim .bento-card::after paints for white-on-image text has nothing to
+   sit on — in light mode it laid a near-black gradient under dark ink and the
+   card measured 1.02:1. Both fixed here rather than by weakening the rule. */
+.bento-add { border: 1px dashed var(--accent-line); }
+.bento-add::after { content: none; }
+
+/* Those rules transitioned border-color, which is now a no-op. */
+.cta-card, .compare-card {
+  transition: transform var(--dur-press) var(--ease), box-shadow var(--dur) var(--ease);
+}
+
+/* A border is now a SIGNAL: it marks what you can act on, and nothing else in
+   the app gets one. Scanning a screen and knowing which rectangles are
+   touchable with no colour involved is the usability half of the idea. */
+.search-wrap input, .time-add input[type="time"], .time-add select,
+.btn-ghost, .icon-square, .filter-pill, .time-chip, .mode-option {
+  border: 1px solid var(--border-hi);
+}
+
+/* --- 2. THE 2:1 CORNER LAW -----------------------------------------------
+   Was 10 / 14 / 16 / 22 — four values, off any grid, chosen one at a time.
+   BRAND fixes every one of the 53 icons at outer rx=2 / inner rx=1; the UI now
+   obeys the same law, so a container's radius is ALWAYS exactly twice that of
+   whatever it contains. An 8px well inside a 16px card reads as concentric;
+   a 12px well inside a 14px card reads as an accident. */
+:root, body.theme-dark, body.theme-light {
+  --radius-sm:  8px;    /* leaf:      buttons, badges, icon wells */
+  --radius:    16px;    /* container: cards, rows, tiles */
+  --radius-md: 16px;    /* alias, so no existing call site breaks */
+  --radius-lg: 24px;    /* outer:     bento cards, sheets, modals */
+}
+.data-row       { border-radius: var(--radius); }
+.data-icon      { border-radius: var(--radius-sm); }
+.rot-slot       { border-radius: var(--radius); }
+.rot-slot-num   { border-radius: var(--radius-sm); }
+.ms-thumb, .picker-row-thumb { border-radius: var(--radius-sm); }
+.modal          { border-radius: var(--radius-lg) var(--radius-lg) 0 0; }
+
+/* --- 3. TEXT THAT HAS TO BE READ ----------------------------------------
+   --text-faint is decorative by definition and measures ~1.4:1 in light mode
+   on purpose — but five rules were using it for text a user actually reads,
+   including the privacy-policy link on the login gate and the Health Connect
+   instruction sentence. Decorative token, readable role: the role wins. */
+.auth-legal, .auth-dev-skip, .health-hint, .health-card-empty, .ai-dots {
+  color: var(--text-dim);
+}
+
+/* --- 4. NO CIRCLES -------------------------------------------------------
+   The mark is five straight bars with butt caps and mitre joins; a 999px
+   capsule and a circular FAB contradict the whole icon language and are the
+   two most reproduced shapes in mobile UI. BRAND already forbids this exact
+   element (rounded rectangles, medium-to-small, never a large circular FAB)
+   and the nav had been shipping a 54px circle on every screen. The shrink also
+   stops the FAB out-weighting the .btn-primary it competes with. */
+.home-center-icon {
+  width: 56px;
+  height: 40px;
+  border-radius: var(--radius-sm);
+  margin-top: -10px;
+  box-shadow: 0 6px 18px rgba(var(--accent-rgb), 0.30), 0 0 0 3px var(--bg);
+}
+body.theme-light .home-center-icon {
+  box-shadow: 0 6px 18px rgba(var(--accent-rgb), 0.30), 0 0 0 3px var(--bg);
+}
+.nav-btn.home-center.active .home-center-icon {
+  box-shadow: 0 8px 22px rgba(var(--accent-rgb), 0.45), 0 0 0 3px var(--bg);
+}
+/* Capsules are for TRANSIENT chips only. Anything that holds STATE gets the
+   machined corner. */
+.filter-pill { border-radius: var(--radius-sm); }
+.nav-btn.active:not(.home-center)::before { border-radius: var(--radius-sm); }
+
+/* --- 5. THE FIVE-BAR TICK -----------------------------------------------
+   The only device that puts the actual MARK into the interface rather than just
+   its colour, so the identity is present on screens carrying no logo. One bar of
+   the vault door, at the mark's own 2-unit stroke width. Costs zero bytes — no
+   asset, no dependency. */
+:root { --bar-w: 2px; }
+
+/* Section headers: the full-width hairline rule becomes ONE bar of the mark —
+   a tick stamped ahead of the label, not an underline. It works in RTL for
+   free because it is a flex child at the start. --text-faint is exactly its
+   sanctioned role: decorative, never a value anyone reads. */
+.section-title::after { content: none; }
+.section-title::before {
+  content: '';
+  flex: 0 0 auto;
+  width: var(--bar-w);
+  height: 12px;
+  background: var(--text-faint);
+}
+/* .rot-section-title deliberately does NOT get the tick: BRAND keeps the two
+   section-header systems distinguishable, and giving both the same mark
+   removes the only cue that tells them apart. */

@@ -12,7 +12,7 @@
 // build. The literal below is the fallback (file://, or a stripped query) and is
 // still bumped by `npm run release` — see CLAUDE.md "CACHE WORKFLOW".
 const VAULT_BUILD = (() => {
-  const FALLBACK = 'v209';
+  const FALLBACK = 'v210';
   try {
     const src = (document.currentScript && document.currentScript.src) || '';
     const m = src.match(/[?&]v=(\d+)/);
@@ -84,6 +84,8 @@ const ICONS = {
   // string and the icon had been silently blank in production. Exactly the
   // failure mode the brief warns about, found by auditing all 201 call sites.
   send: '<path d="M4 12h14"/><path d="M12 6l6 6-6 6"/>',
+  bell: '<path d="M6 16v-4a6 6 0 0 1 12 0v4"/><path d="M4 16h16"/><path d="M10 18h4"/>',
+  bellOff: '<path d="M6 16v-4a6 6 0 0 1 12 0v4"/><path d="M4 16h16"/><path d="M4 4l16 16"/>',
   // Filled, like the centre dots: a thin stroked outline on a small concave star
   // goes blobby at the joins once scaled to a 16px button.
   sparkle: '<path d="M12 2 14 10 22 12 14 14 12 22 10 14 2 12 10 10Z" fill="currentColor" stroke="none"/>',
@@ -542,6 +544,24 @@ const I18N = {
     remind_blocked: 'Notifications are blocked — turn them on in your phone settings.',
     remind_water_title: 'Water', remind_water_body: 'Time for a glass of water.',
     remind_supp_title: 'Supplement', open: 'Open',
+    remind_sound: 'Sound & vibration',
+    remind_sound_on: 'Rings and vibrates', remind_sound_off: 'Silent — drawer only',
+    remind_test: 'Send a test alert', remind_test_sub: 'Arrives in about 5 seconds',
+    remind_test_title: 'THE VAULT', remind_test_body: 'Test alert — reminders are working.',
+    remind_test_sent: 'Test sent — watch your notification bar.',
+    remind_test_failed: 'Could not send',
+    remind_channel_alert: 'Reminders', remind_channel_quiet: 'Reminders (silent)',
+    remind_channel_desc: 'Supplement and water reminders',
+    remind_status: 'Status',
+    remind_stat_perm_ok: 'Permission granted', remind_stat_perm_no: 'Permission not granted',
+    remind_stat_off: 'Notifications are switched off for THE VAULT in Android settings.',
+    remind_stat_queued: 'queued with Android',
+    remind_exact_title: 'Exact timing is off',
+    remind_exact_sub: 'Android may delay reminders. Tap to allow exact alarms.',
+    remind_exact_ok: 'Exact timing allowed',
+    remind_battery_title: 'Still nothing arriving?',
+    remind_battery_sub: 'Battery saving can hold reminders back. Settings → Apps → THE VAULT → Battery → Unrestricted. On Samsung also: Settings → Battery → Background usage limits → remove THE VAULT from sleeping apps.',
+    remind_sync_failed: 'Android refused the schedule',
     not_found: 'Not found', not_found_text: 'This exercise no longer exists.',
 
     // Cardio
@@ -803,19 +823,7 @@ const I18N = {
     translate_ex_on: 'Arabic', translate_ex_off: 'English',
     theme: 'Theme',
     data: 'Data',
-    theme_dark: 'Dark Vault', theme_dark_sub: 'Teal on black',
-    theme_light: 'Light Clean', theme_light_sub: 'Crisp white',
-    theme_forest: 'Forest', theme_forest_sub: 'Pine & moss',
-    theme_ocean: 'Ocean', theme_ocean_sub: 'Deep marine',
-    theme_sand: 'Sand', theme_sand_sub: 'Warm desert',
-    theme_mocha: 'Mocha', theme_mocha_sub: 'Coffee earth',
-    theme_olive: 'Olive', theme_olive_sub: 'Army green',
-    theme_aurora: 'Aurora Glass', theme_aurora_sub: 'Pink & violet',
-    theme_sunset: 'Sunset', theme_sunset_sub: 'Warm amber',
-    theme_nebula: 'Nebula', theme_nebula_sub: 'Deep violet',
-    theme_slate: 'Slate', theme_slate_sub: 'Stone & bronze',
-    theme_frost: 'Frost', theme_frost_sub: 'Cool sky',
-    theme_dusk: 'Dusk', theme_dusk_sub: 'Muted plum',
+    theme_dark: 'Dark', theme_light: 'Light',
     export_data: 'Export Data', export_data_sub: 'Download a JSON backup',
     storage_error_title: 'Your data could not be saved',
     storage_full_text: 'This device has run out of storage space, so new entries are NOT being saved. Export a backup now, then free up space (removing custom exercise photos helps most — they are already backed up to your account).',
@@ -1170,6 +1178,24 @@ const I18N = {
     remind_blocked: 'التنبيهات محجوبة — فعّلها من إعدادات هاتفك.',
     remind_water_title: 'الماء', remind_water_body: 'حان وقت كوب ماء.',
     remind_supp_title: 'مكمّل', open: 'فتح',
+    remind_sound: 'الصوت والاهتزاز',
+    remind_sound_on: 'يرنّ ويهتزّ', remind_sound_off: 'صامت — في لوحة الإشعارات فقط',
+    remind_test: 'أرسل تنبيهاً تجريبياً', remind_test_sub: 'يصل خلال خمس ثوانٍ تقريباً',
+    remind_test_title: 'THE VAULT', remind_test_body: 'تنبيه تجريبي — التنبيهات تعمل.',
+    remind_test_sent: 'أُرسل التنبيه — راقب شريط الإشعارات.',
+    remind_test_failed: 'تعذّر الإرسال',
+    remind_channel_alert: 'التنبيهات', remind_channel_quiet: 'التنبيهات (صامتة)',
+    remind_channel_desc: 'تنبيهات المكمّلات والماء',
+    remind_status: 'الحالة',
+    remind_stat_perm_ok: 'الإذن ممنوح', remind_stat_perm_no: 'الإذن غير ممنوح',
+    remind_stat_off: 'التنبيهات موقوفة لتطبيق THE VAULT في إعدادات أندرويد.',
+    remind_stat_queued: 'مجدولة لدى أندرويد',
+    remind_exact_title: 'التوقيت الدقيق متوقّف',
+    remind_exact_sub: 'قد يؤخّر أندرويد التنبيهات. اضغط للسماح بالمنبّهات الدقيقة.',
+    remind_exact_ok: 'التوقيت الدقيق مسموح',
+    remind_battery_title: 'ما زال لا يصلك شيء؟',
+    remind_battery_sub: 'قد يحجز توفير البطارية التنبيهات. الإعدادات ← التطبيقات ← THE VAULT ← البطارية ← بلا قيود. وفي أجهزة سامسونج أيضاً: الإعدادات ← البطارية ← حدود الاستخدام في الخلفية ← أزل THE VAULT من التطبيقات النائمة.',
+    remind_sync_failed: 'رفض أندرويد جدولة التنبيهات',
     not_found: 'غير موجود', not_found_text: 'هذا التمرين لم يعد موجوداً.',
 
     cardio_subtitle: 'جلسات السير، المشي، والدراجة.',
@@ -1429,19 +1455,7 @@ const I18N = {
     translate_ex_on: 'عربي', translate_ex_off: 'إنجليزي',
     theme: 'المظهر',
     data: 'البيانات',
-    theme_dark: 'Dark Vault', theme_dark_sub: 'تركواز على أسود',
-    theme_light: 'Light Clean', theme_light_sub: 'أبيض نظيف',
-    theme_forest: 'Forest', theme_forest_sub: 'صنوبر وطحلب',
-    theme_ocean: 'Ocean', theme_ocean_sub: 'أزرق بحري عميق',
-    theme_sand: 'Sand', theme_sand_sub: 'صحراوي دافئ',
-    theme_mocha: 'Mocha', theme_mocha_sub: 'بُني قهوة',
-    theme_olive: 'Olive', theme_olive_sub: 'زيتي عسكري',
-    theme_aurora: 'Aurora Glass', theme_aurora_sub: 'وردي وبنفسجي',
-    theme_sunset: 'Sunset', theme_sunset_sub: 'كهرماني دافئ',
-    theme_nebula: 'Nebula', theme_nebula_sub: 'بنفسجي عميق',
-    theme_slate: 'Slate', theme_slate_sub: 'حجري وبرونزي',
-    theme_frost: 'Frost', theme_frost_sub: 'سماء باردة',
-    theme_dusk: 'Dusk', theme_dusk_sub: 'برقوقي هادئ',
+    theme_dark: 'داكن', theme_light: 'فاتح',
     export_data: 'تصدير البيانات', export_data_sub: 'تنزيل نسخة JSON احتياطية',
     storage_error_title: 'تعذّر حفظ بياناتك',
     storage_full_text: 'نفدت مساحة التخزين في هذا الجهاز، لذلك لا يتم حفظ الإدخالات الجديدة. صدّر نسخة احتياطية الآن، ثم فرّغ بعض المساحة (حذف صور التمارين المخصّصة هو الأجدى — فهي محفوظة أصلاً في حسابك).',
@@ -1708,31 +1722,40 @@ function daysAgoLocalized(iso) {
 // ==========================================================================
 // Theme & language
 // ==========================================================================
-const THEMES = ['dark', 'light', 'forest', 'ocean', 'sand', 'mocha', 'olive', 'aurora', 'sunset', 'nebula', 'slate', 'frost', 'dusk'];
+// Two modes, not thirteen skins. The eleven alternate palettes were removed in
+// v210: each one carried its own accent, so switching away from `dark` quietly
+// dropped the brand — the app had no look of its own, it had a dropdown. Dark
+// and light are now the SAME identity on two surfaces (see BRAND.md).
+// THEME_ALIAS maps every retired id onto the mode it most resembles, so a user
+// whose stored (and cloud-synced) pref is `nebula` lands on dark, not on the
+// silent fallback. storage.js migrates the stored value on load; this is the
+// second line of defence for a pref that arrives from the cloud mid-session.
+const THEMES = ['dark', 'light'];
+const THEME_ALIAS = {
+  forest: 'dark', ocean: 'dark', mocha: 'dark', olive: 'dark', aurora: 'dark',
+  sunset: 'dark', nebula: 'dark', slate: 'dark', dusk: 'dark',
+  sand: 'light', frost: 'light',
+};
+
+function normalizeTheme(theme) {
+  if (THEMES.includes(theme)) return theme;
+  // hasOwnProperty, not a bare lookup: THEME_ALIAS['constructor'] resolves up the
+  // prototype chain to a FUNCTION, which is truthy — and a pref can arrive from a
+  // hand-edited backup or the synced blob.
+  if (Object.prototype.hasOwnProperty.call(THEME_ALIAS, theme)) return THEME_ALIAS[theme];
+  return 'dark';
+}
 
 function applyTheme(theme) {
-  if (!THEMES.includes(theme)) theme = 'dark';
+  theme = normalizeTheme(theme);
   document.body.classList.remove(...THEMES.map((t) => 'theme-' + t));
   document.body.classList.add('theme-' + theme);
-  const themeColorMap = {
-    // #000000, not the old #06141b navy — that colour matched no theme in the app
-    // (dark's --bg is pure black), so the phone's status bar sat a shade off.
-    dark: '#000000',
-    light: '#f6f8fa',
-    forest: '#0a1812',
-    ocean: '#0a1929',
-    sand: '#fbf6ee',
-    mocha: '#1c1411',
-    olive: '#14170c',
-    aurora: '#0b0821',
-    sunset: '#1a0f14',
-    nebula: '#070714',
-    slate: '#1a1a1c',
-    frost: '#eef2f7',
-    dusk: '#1c1620',
-  };
   const meta = document.querySelector('meta[name="theme-color"]');
-  if (meta) meta.setAttribute('content', themeColorMap[theme]);
+  // Must track --bg EXACTLY or the phone paints a seam above the app. Dark's
+  // --bg is pure black (the ramp warms the surfaces, never the void); light's
+  // is the bone ground. Keep these two in step with styles.css and with the
+  // static <meta> in index.html, which covers the frames before this runs.
+  if (meta) meta.setAttribute('content', theme === 'light' ? '#faf5f0' : '#000000');
 }
 
 function applyLang(lang) {
@@ -5752,60 +5775,28 @@ function renderCompareSleep() {
 // ==========================================================================
 // SETTINGS
 // ==========================================================================
-// Colour themes. Names come from t('theme_<id>'); dots are the preview swatches.
-const THEME_LIST = [
-  { id: 'dark', cls: 'theme-preview-dark', dots: ['#5b8def', '#000000', '#a3a3a3'] },
-  { id: 'light', cls: 'theme-preview-light', dots: ['#0d9488', '#f6f8fa', '#475569'] },
-  { id: 'forest', cls: 'theme-preview-forest', dots: ['#86efac', '#173727', '#4ade80'] },
-  { id: 'ocean', cls: 'theme-preview-ocean', dots: ['#38bdf8', '#112439', '#22d3ee'] },
-  { id: 'sand', cls: 'theme-preview-sand', dots: ['#c2410c', '#fbf6ee', '#3d2c18'] },
-  { id: 'mocha', cls: 'theme-preview-mocha', dots: ['#e7c8a0', '#322620', '#d2ad7d'] },
-  { id: 'olive', cls: 'theme-preview-olive', dots: ['#bef264', '#272c19', '#a3e635'] },
-  { id: 'aurora', cls: 'theme-preview-aurora', dots: ['#ec4899', '#8b5cf6', '#22d3ee'] },
-  { id: 'sunset', cls: 'theme-preview-sunset', dots: ['#fb923c', '#be185d', '#fef3e7'] },
-  { id: 'nebula', cls: 'theme-preview-nebula', dots: ['#a855f7', '#6366f1', '#22d3ee'] },
-  { id: 'slate', cls: 'theme-preview-slate', dots: ['#d4a373', '#2c2c30', '#a3e635'] },
-  { id: 'frost', cls: 'theme-preview-frost', dots: ['#475569', '#eef2f7', '#0891b2'] },
-  { id: 'dusk', cls: 'theme-preview-dusk', dots: ['#d9a5b2', '#322638', '#a3a3ff'] },
+// Two modes. With thirteen skins this needed a row that opened a modal grid;
+// with two it is a segmented control shown in place — one tap instead of three,
+// and the choice is visible without opening anything. Each option paints a real
+// miniature of the mode it selects (page ground, a raised card, the accent) so
+// the swatch is the thing itself rather than three abstract dots.
+const MODE_LIST = [
+  { id: 'dark', cls: 'mode-swatch-dark' },
+  { id: 'light', cls: 'mode-swatch-light' },
 ];
-function themeDotsHtml(dots) {
-  return dots.map((c) => `<span class="theme-preview-dot" style="background:${c}"></span>`).join('');
-}
-function themeGridHtml(currentTheme) {
-  return THEME_LIST.map((tm) => `
-    <button class="theme-card ${currentTheme === tm.id ? 'active' : ''}" data-theme="${tm.id}">
-      <div class="theme-preview ${tm.cls}">
-        <div class="theme-preview-name">${escapeHtml(t('theme_' + tm.id))}</div>
-        <div class="theme-preview-dots">${themeDotsHtml(tm.dots)}</div>
-      </div>
-      ${currentTheme === tm.id ? `<div class="theme-check">${icon('check', 16)}</div>` : ''}
-    </button>
-  `).join('');
-}
-// The theme grid opens in a modal from the compact "Theme" settings row, so the
-// 13 themes no longer sprawl down the settings page.
-function openThemePicker() {
-  const overlay = openModal(`
-    <div class="modal-header">
-      <div class="modal-title">${t('theme')}</div>
-      <button class="icon-btn icon-btn-tile" data-close>${icon('close', 18)}</button>
-    </div>
-    <div class="theme-grid">${themeGridHtml(DB.prefs.get().theme || 'dark')}</div>
-  `);
-  overlay.querySelectorAll('[data-theme]').forEach((b) =>
-    b.addEventListener('click', () => {
-      DB.prefs.setTheme(b.dataset.theme);
-      applyTheme(b.dataset.theme);
-      closeModal();
-      if (currentView === 'settings') renderView('settings'); // refresh the row's name/dots
-    }));
+function modeToggleHtml(currentTheme) {
+  return `<div class="mode-toggle" role="radiogroup" aria-label="${escapeHtml(t('theme'))}">${MODE_LIST.map((m) => `
+    <button class="mode-option ${currentTheme === m.id ? 'active' : ''}" data-theme="${m.id}"
+            role="radio" aria-checked="${currentTheme === m.id}">
+      <span class="mode-swatch ${m.cls}" aria-hidden="true"><span class="mode-swatch-card"></span><span class="mode-swatch-bar"></span></span>
+      <span class="mode-name">${escapeHtml(t('theme_' + m.id))}</span>
+    </button>`).join('')}</div>`;
 }
 
 function renderSettings(el) {
   const prefs = DB.prefs.get();
-  const currentTheme = prefs.theme || 'dark';
+  const currentTheme = normalizeTheme(prefs.theme);
   const currentLang = prefs.lang || 'en';
-  const currentThemeObj = THEME_LIST.find((tm) => tm.id === currentTheme) || THEME_LIST[0];
 
   el.innerHTML = `
     <div class="detail-top">
@@ -5852,13 +5843,7 @@ function renderSettings(el) {
 
     <div class="settings-section">
       <div class="section-title">${t('theme')}</div>
-      <button class="settings-picker-row" id="theme-row">
-        <span class="settings-picker-label">${escapeHtml(t('theme_' + currentThemeObj.id))}</span>
-        <span class="settings-picker-right">
-          <span class="theme-preview-dots">${themeDotsHtml(currentThemeObj.dots)}</span>
-          <span class="dir-icon">${icon('chevronRight', 18)}</span>
-        </span>
-      </button>
+      ${modeToggleHtml(currentTheme)}
     </div>
 
     <div class="settings-section">
@@ -5965,8 +5950,14 @@ function renderSettings(el) {
     })
   );
 
-  // Theme row → open the theme picker modal (grid lives there now).
-  $('#theme-row', el)?.addEventListener('click', openThemePicker);
+  // Mode toggle — applies immediately, so the tap IS the preview.
+  el.querySelectorAll('[data-theme]').forEach((b) =>
+    b.addEventListener('click', () => {
+      DB.prefs.setTheme(b.dataset.theme);
+      applyTheme(b.dataset.theme);
+      renderSettings(el);
+    })
+  );
 
   // Unit toggle
   el.querySelectorAll('[data-unit]').forEach((b) =>
@@ -7810,6 +7801,17 @@ function openRemindersModal() {
       </div>
 
       <div class="form-group">
+        <label class="form-label">${t('remind_sound')}</label>
+        <button type="button" class="settings-action-row" id="rem-sound">
+          <div class="settings-action-icon">${icon(r.sound ? 'bell' : 'bellOff', 18)}</div>
+          <div class="settings-action-main">
+            <div class="settings-action-title">${r.sound ? t('remind_sound_on') : t('remind_sound_off')}</div>
+            <div class="settings-action-sub">${t('remind_channel_desc')}</div>
+          </div>
+        </button>
+      </div>
+
+      <div class="form-group">
         <label class="form-label">${t('supplements_card')}</label>
         ${supps.length
           ? `<div class="time-chips">${supps.map((x) => `<span class="time-chip">${escapeHtml(x.name)} · ${escapeHtml((x.times || []).slice().sort().join(' '))}</span>`).join('')}</div>`
@@ -7820,14 +7822,102 @@ function openRemindersModal() {
         ? `${fmtNum(items.length)} ${t('remind_daily')}`
         : t('remind_none')}</div>
 
+      <!-- Everything below exists because every failure on this path is silent:
+           a refused permission, a muted channel, a battery optimiser sitting on
+           the alarm — all three look exactly like "the feature is broken".
+           The status block names the state, the test proves it end to end. -->
+      <div class="form-group">
+        <label class="form-label">${t('remind_status')}</label>
+        <div id="rem-status" class="rem-status"></div>
+        <button type="button" class="settings-action-row" id="rem-test" style="margin-top:8px">
+          <div class="settings-action-icon">${icon('send', 18)}</div>
+          <div class="settings-action-main">
+            <div class="settings-action-title">${t('remind_test')}</div>
+            <div class="settings-action-sub">${t('remind_test_sub')}</div>
+          </div>
+        </button>
+      </div>
+
       <div class="form-actions">
         <button type="button" class="btn btn-primary btn-block" data-close>${t('done')}</button>
       </div>
     `);
 
+    // Re-schedule, and SAY SO when Android refuses. The old code discarded the
+    // result, so a rejected schedule left the UI reading "on" forever.
+    const syncNow = async () => {
+      if (!window.Notify) return;
+      const res = await Notify.sync();
+      if (res && !res.ok && res.reason !== 'unsupported' && res.reason !== 'denied') {
+        showToast(`${t('remind_sync_failed')} · ${res.reason}`);
+      }
+    };
+
+    // Filled after paint: diagnose() has to cross the native bridge.
+    const paintStatus = async () => {
+      const box = $('#rem-status');
+      if (!box || !window.Notify) return;
+      const d = await Notify.diagnose();
+      const rows = [];
+      if (d.osEnabled === false) rows.push(`<div class="rem-status-row bad">${t('remind_stat_off')}</div>`);
+      rows.push(`<div class="rem-status-row ${d.permission === 'granted' ? 'ok' : 'bad'}">${
+        d.permission === 'granted' ? t('remind_stat_perm_ok') : t('remind_stat_perm_no')}</div>`);
+      if (d.native && d.pending !== null) {
+        rows.push(`<div class="rem-status-row ${d.pending ? 'ok' : ''}">${fmtNum(d.pending)} ${t('remind_stat_queued')}</div>`);
+      }
+      // The single biggest reason a reminder never arrives. From Android 14 the
+      // "Alarms & reminders" permission is DENIED by default, and the plugin then
+      // re-arms each daily repeat with a plain non-wakeup alarm — which Doze can
+      // hold indefinitely. It is one tap to fix and nothing was ever asking.
+      if (d.exact === 'denied') {
+        rows.push(`<button type="button" class="rem-status-row bad rem-status-action" id="rem-exact">
+          <strong>${t('remind_exact_title')}</strong><span>${t('remind_exact_sub')}</span></button>`);
+      } else if (d.exact === 'granted') {
+        rows.push(`<div class="rem-status-row ok">${t('remind_exact_ok')}</div>`);
+      }
+      // Last resort, and deliberately last: an OEM battery restriction cannot be
+      // detected or requested from here, only explained.
+      if (d.native) {
+        rows.push(`<div class="rem-status-row">
+          <strong>${t('remind_battery_title')}</strong><span>${t('remind_battery_sub')}</span></div>`);
+      }
+      // diagnose() crossed the native bridge, so the modal may have closed while
+      // we waited. Bail rather than write to a detached node — and bind INSIDE
+      // `box`, not with a document-wide query, or a stale listener from the
+      // previous modal ends up on the new one.
+      if (!box.isConnected) return;
+      box.innerHTML = rows.join('');
+      box.querySelector('#rem-exact')?.addEventListener('click', async () => {
+        await Notify.requestExactAlarms();
+        paintStatus();
+      });
+    };
+    paintStatus();
+
+    // One reminder action at a time. Every handler below awaits the native
+    // bridge, and a double-tap would otherwise interleave two syncs — leaving
+    // alarms armed while the stored setting says "off".
+    let busy = false;
+    const once = (fn) => async (...a) => { if (busy) return; busy = true; try { await fn(...a); } finally { busy = false; } };
+
+    $('#rem-sound')?.addEventListener('click', once(async () => {
+      DB.reminders.setSound(!DB.reminders.get().sound);
+      await syncNow();   // the channel decides the sound, so the schedule must move to it
+      closeModal(); render();
+    }));
+
+    // gate() is the ONLY prompt in this tap; Notify.test() then merely checks.
+    // Asking twice in one press is how two dismissals — a permanent hard-deny on
+    // Android 13+ — come out of a single button.
+    $('#rem-test')?.addEventListener('click', once(async () => {
+      if (window.Notify) await Notify.gate();
+      const res = window.Notify ? await Notify.test() : { ok: false, reason: 'unsupported' };
+      showToast(res.ok ? t('remind_test_sent') : `${t('remind_test_failed')} · ${res.reason}`);
+    }));
+
     // Master switch. Turning it ON asks for the OS permission first (native only)
     // so the user never sees "on" while Android is silently dropping every alarm.
-    $('#rem-toggle')?.addEventListener('click', async () => {
+    $('#rem-toggle')?.addEventListener('click', once(async () => {
       const next = !DB.reminders.get().enabled;
       // Every reminder control goes through the same gate, so the OS sheet appears
       // on whatever the user touches first — not only on this switch.
@@ -7836,24 +7926,28 @@ function openRemindersModal() {
       // feature — it only means alerts appear when the app is opened.
       if (next && window.Notify) await Notify.gate();
       DB.reminders.setEnabled(next);
-      try { if (window.Notify) await Notify.sync(); } catch (_) {}
+      await syncNow();
       closeModal(); render();
-    });
+    }));
 
-    $('#rem-water')?.addEventListener('click', async () => {
+    $('#rem-water')?.addEventListener('click', once(async () => {
       const turningOn = !DB.reminders.get().water.on;
       if (turningOn && window.Notify) await Notify.gate();
       DB.reminders.setWater({ on: turningOn });
-      try { if (window.Notify) await Notify.sync(); } catch (_) {}
+      await syncNow();
       closeModal(); render();
-    });
+    }));
 
+    // Deliberately NOT wrapped in once(): it re-reads all three inputs on every
+    // call, so running it twice just writes the same final state — whereas
+    // dropping the second `change` would silently lose an edit the user made
+    // while the first was still awaiting the native bridge.
     const push = async () => {
       const from = $('#rem-from')?.value, to = $('#rem-to')?.value, every = Number($('#rem-every')?.value);
       if (!from || !to) return;
       // A window that ends before it starts yields zero alarms; keep it sane.
       DB.reminders.setWater({ from, to: (to > from ? to : from), everyMin: every });
-      try { if (window.Notify) await Notify.sync(); } catch (_) {}
+      await syncNow();
       closeModal(); render();
     };
     ['#rem-from', '#rem-to', '#rem-every'].forEach((sel) => $(sel)?.addEventListener('change', push));
@@ -8273,11 +8367,19 @@ function openFoodLogEntryModal(date, food) {
 // ==========================================================================
 let authMode = 'in'; // 'in' | 'up'
 
+// Everything that has to follow a cloud PULL, i.e. after the whole blob was
+// replaced by a copy from another device.
 function refreshAfterSync() {
   const prefs = DB.prefs.get();
   applyTheme(prefs.theme || 'dark');
   applyLang(prefs.lang || 'en');
   renderView(currentView || 'home');
+  // The pulled blob carries its own reminder settings and supplement times, and
+  // the OS alarms still reflect the ones this device had a moment ago. Nothing
+  // else re-arms them: the boot sync runs on a 1.5s timer that can fire before
+  // the pull lands, so without this a phone can sit on a schedule the user
+  // changed on their other device — or on none at all.
+  try { if (window.Notify) Notify.sync(); } catch (_) {}
 }
 
 function hideAuthGate() {
@@ -9326,7 +9428,15 @@ function showOnboarding() {
     if (document.visibilityState !== 'visible') return;
     try { bootCatalog(); } catch (_) {}
     // Re-check on foreground: a reminder may have come due while the app slept.
-    try { if (window.Notify) Notify.catchUp(); } catch (_) {}
+    //
+    // sync() as well as catchUp(), and not only for tidiness. When the plugin
+    // re-arms a DAILY repeat after it fires, it uses a plain non-wakeup alarm
+    // (TimedNotificationPublisher: `set(AlarmManager.RTC, …)` — RTC, not
+    // RTC_WAKEUP, and allowWhileIdle dropped), which Doze can defer a long way.
+    // Only the INITIAL arming goes through the wakeup-capable path. Re-syncing
+    // on every foreground keeps every reminder on that first-fire path, so the
+    // degraded repeat is rarely the one that has to deliver.
+    try { if (window.Notify) { Notify.sync(); Notify.catchUp(); } } catch (_) {}
     try { if (window.VaultUpdate && VaultUpdate.checkWeb) VaultUpdate.checkWeb(); } catch (_) {}
     // Re-resolve the calendar day on every foreground.
     try {

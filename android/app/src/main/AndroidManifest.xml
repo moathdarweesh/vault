@@ -88,11 +88,23 @@
          Android drops every scheduled alarm on reboot, and without this the
          plugin's boot receiver never runs, so reminders would silently stop
          until the app was next opened.
-         SCHEDULE_EXACT_ALARM asks for on-the-minute delivery; when it is not
-         granted the plugin falls back to inexact, which is fine for a reminder. -->
+         SCHEDULE_EXACT_ALARM asks for on-the-minute delivery, but from Android
+         14 it is DENIED BY DEFAULT and the user has to find the "Alarms &
+         reminders" toggle themselves. Without it the plugin re-arms each daily
+         repeat with a plain non-wakeup alarm, which Doze can defer a long way —
+         so a reminder that worked on day one quietly stops being on time.
+
+         USE_EXACT_ALARM is granted at install with no toggle to find, which is
+         the whole fix. It carries ONE constraint: Google Play restricts it to
+         alarm-clock and calendar apps. THE VAULT is distributed by sideload from
+         the repo (version.json -> raw.githubusercontent.com) and has never been
+         on Play, so the restriction does not apply. IF THIS APP IS EVER
+         PUBLISHED TO PLAY, THIS LINE MUST BE REMOVED — the in-app "allow exact
+         alarms" row in Settings -> Reminders already covers the fallback. -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
     <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
+    <uses-permission android:name="android.permission.USE_EXACT_ALARM" />
 
     <!-- Health Connect read permissions -->
     <uses-permission android:name="android.permission.health.READ_STEPS" />
