@@ -97,7 +97,12 @@
     // Permanent, brand-clean download link. Reads the current APK URL from the
     // app's version manifest so this page NEVER needs editing across releases;
     // falls back to a hardcoded direct link if the manifest can't be reached.
-    var FALLBACK = 'https://drive.usercontent.google.com/download?id=1tYfS2GOdxZCY5I-ShRQJpvdSZZSQVjSv&export=download&confirm=t';
+    //
+    // The fallback tracks the SAME repo path version.json points at. It used to be
+    // a Google Drive file id pinned to the v109 APK, so any hiccup fetching the
+    // manifest quietly handed people a build from several versions back. This URL
+    // is stable across releases because the file name never changes.
+    var FALLBACK = 'https://raw.githubusercontent.com/moathdarweesh/vault/main/download/THE-VAULT.apk';
     var btn = document.getElementById('download');
     var statusEl = document.getElementById('status');
     var verEl = document.getElementById('ver');

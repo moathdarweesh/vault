@@ -35,7 +35,7 @@ A fitness / workout-tracking **PWA**. Vanilla JS, **no build step**, bilingual *
 npm run release          # bump every marker + verify, then commit all files together
 ```
 
-**Current version: v190.**
+**Current version: v202.**
 
 `scripts/release.js` rewrites all **13** markers and then re-reads them from disk to confirm; it exits non-zero if any disagree. The markers are `?v=N` in `index.html` (×11, including the `js/vendor/supabase.js` preload), the `__cleaned_vN` sessionStorage keys, the `FALLBACK` literal in `app.js`, and `version.json` → `web`.
 
@@ -60,7 +60,77 @@ Every device loads the same live URL, so a bad push reaches everyone at once.
 - **Water tracking** (v169): `DB.water` (per-day ml) + a card on the Food dashboard (+250/+500/undo).
 - **Body-weight + trend** (v170): `DB.bodyweight` (one entry/day, kg-canonical) + a Home card (sparkline) + `openWeightSheet()` (SVG trend chart, log input, editable history). Respects the kg/lb unit pref.
 - **Adjust the AI estimate** (v171): every AI food card (chat/photo in foodai.js, voice in app.js) has a portion stepper (0.25–20×) that live-recomputes macros; the estimate is stored as the per-serving base with the chosen portion as `servings` (totals = macros × servings). `logNutritionItems` honors `it.servings`.
-- **First-run onboarding** (v172): `DB.prefs.onboarded()`/`setOnboarded()` + `showOnboarding()` (3-step overlay: welcome/lang, units, goal→hands off to the real calculator). Shown only to genuinely empty installs; existing users (any history/targets) are auto-flagged so an update never re-shows it.
+- **First-run onboarding** (v172, reshaped in v197): `DB.prefs.onboarded()`/`setOnboarded()` + `showOnboarding()`. Now a **3-slide** overlay (welcome, units, goal→hands off to the real calculator) — the language slide is gone, see below. Shown only to genuinely empty installs; existing users (any history/targets) are auto-flagged so an update never re-shows it.
+
+## Navigation & information architecture (v197–v202) — read before touching a view
+
+- **The app NEVER asks for a language.** It is guessed from the device locale
+  (`detectLang()` in storage.js, consulted only when building a fresh state) and
+  corrected by an **ar/en toggle on the login card**. Two screens used to ask on
+  the same fresh install — a dedicated pre-login gate *and* onboarding step 0.
+  Both are deleted, along with the `langPicked` flag. **Do not add a language
+  question anywhere.** `setUiLanguage(lang)` is the single entry point: it also
+  re-renders the current view AND the first-run card, which is alive underneath
+  the login gate — `applyLang()` alone only fixes `dir` and the `[data-t]` labels.
+- **Bottom-nav tab ids vs. their names.** The Program tab's view id is still
+  **`workouts`** (baked into index.html's `<section>`, the nav button, and every
+  pushState entry in users' history) but it renders `renderProgram` and is labelled
+  **Program / برنامجي**. The exercise browser is its own view, **`exercises`**,
+  which took over the router+section slot of the old `library` view — 195 lines
+  nothing ever navigated to. `renderWorkouts`/`renderLibrary` no longer exist.
+- **The Program tab owns the plan and progression**: cycle position, next training
+  days, This week (adherence / sets / new records, each vs last week), muscle
+  volume, top records. The rotation editor deliberately stays its own screen
+  (`renderPlanner`, reached by "Edit cycle"). Home owns *starting* a workout; its
+  hero is the only "start today" control — the Train tab used to carry a byte-identical
+  copy of that `navigate()` call, which is why it had no job of its own.
+- **Adherence denominator is `trainingDays.length`, never a `workoutForDate()`
+  sweep.** `workoutForDate` returns null for any date before the plan's anchor
+  ("before the plan started"), so a plan created today renders "1 / 1".
+- **`navMap` in `navigate()`** decides which tab stays lit on a child screen.
+  Anything reached from the Program tab must map to `workouts`.
+- **`renderView` falls back to home on an unknown view** rather than leaving a
+  blank screen — reachable via a pushState entry naming a view a later build removed.
+- **Home shows the LAST SET**, not a recent-activity feed. The feed mixed workouts,
+  cardio and sleep (all three already in the stat strip) and showed the session's
+  *heaviest* weight rather than the set actually performed last.
+- **`Health.autoSync()`** is safe to call from any view's render (no-op off-native,
+  no-op without permission, 20s throttle). `renderCardio` calls it, because Health
+  Connect sessions already import into the cardio log but only rendering HOME ever
+  triggered a sync.
+
+### Icon set — "VAULT Machined" (v202)
+`ICONS` in `js/app.js` is a **53-key** hand-drawn set on a strict grid: every
+endpoint on an even coordinate, angles 0/45/90 only, radii from {1,2,3,4,6,8,10},
+outer `rx=2`, **max 5 sub-paths**, flat caps + mitre joins.
+- `icon(name, size)` keeps its per-size stroke-width bands (16→2.25, 18–20→2,
+  22+→1.75) — that is deliberate optical correction, do not "simplify" it.
+- `ICON_CAPS` is a per-icon cap override; **keep it minimal** (currently
+  `heartPulse` alone). Every entry weakens the set's unity.
+- **7 glyphs are duplicated outside `ICONS`** and must be kept byte-identical:
+  five in `index.html`'s bottom-nav (`calendar`, `heartPulse`, `home`, `utensils`,
+  `moon`) and two in `js/update.js` (`refresh`, `arrowUp`).
+- A wrong key name returns `''` and the icon vanishes **silently, with no error** —
+  this actually shipped (`icon('send')` with no `send` key left the Settings
+  feedback row blank). Audit call sites when renaming anything.
+- **Known, deliberately unfixed:** the nav icons render at 22px (26 for home) but
+  hard-code `stroke-width="2"`/`2.4`, where the band for that size is 1.75 — so
+  they sit ~14% heavier than the same glyph elsewhere.
+
+### Type scale & RTL invariants (v200–v201)
+- **Nothing renders below 11px.** 24 declarations were at 9–10px; all raised.
+  Fractional sizes are gone. 12/13/14/15 are NOT unified — they carry 157
+  declarations in distinct roles across 18 views.
+- `.page-title` is **26px**, not 32: at 32 it tied exactly with `.stat-cell-value`,
+  so a heading read once competed with the numbers that are the content.
+- **One section-header system per screen.** `.rot-section-title` (+ optional
+  `.rot-section-head` for a trailing action, `.rot-section-sub` for context) is the
+  Program tab's; `.section-title` draws a `::after` rule and must not be mixed in
+  beside it.
+- **`text-align: start`, never `left`,** unless a `body[dir="rtl"]` override exists
+  for that exact selector. Three rules shipped Arabic left-aligned inside RTL rows.
+- A `<button>` with no `color` inherits the UA `buttontext` default — `.settings-action-row`
+  measured **2.23:1** that way. Always set `color` on a styled button.
 
 ### Auto-update delivery (since v113) — how updates actually reach devices
 The `?v=N` busting alone does NOT reach phones, because the **entry `index.html` itself** is HTTP-cached by GitHub Pages (`Cache-Control: max-age=600`) and the SPA/APK-WebView never re-fetches it while open. `js/update.js` fixes this: on boot it fetches `version.json` fresh (`no-store`), compares `web` to the page's own `?v=N` (parsed from the script src), and if newer **reloads the entry html with a `?u=<build>` cache-buster** → fresh index.html + fresh `?v=N` scripts. Runs on web AND inside the APK WebView. Four guards make a reload loop impossible (unknown-build no-op, `<=` no-op, url-already-`?u=`-targeted no-op, once-per-session `sessionStorage` guard). On resume it re-pulls admin content + shows a tap-to-update banner. **Bootstrap caveat:** a device only gains the auto-updater once it is already ON a build that has it (≥v113) — the first arrival of ≥v113 still relies on the 10-min HTTP cache expiring (or a manual hard-refresh / clear-cache). Every update after that is automatic within seconds of app open.
