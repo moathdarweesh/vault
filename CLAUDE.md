@@ -123,6 +123,16 @@ installed users from a `git push` — they must install the new APK.
   **`RECEIVE_BOOT_COMPLETED`** (Android drops every alarm on reboot; without this
   reminders silently stop until the app is next opened) and `SCHEDULE_EXACT_ALARM`
   (falls back to inexact when not granted, which is fine for a reminder).
+- **`Notify.gate()` is the single permission entry point** and every
+  reminder-related control calls it: the master switch, the water switch, adding a
+  time to a supplement, and opening the Reminders screen while enabled but
+  unpermitted. It RAISES the system dialog; it does **not** veto the action —
+  refusing the OS permission costs only the alerts that fire while the app is
+  closed, and the in-app catch-up needs no permission, so blocking the action
+  would disable a feature that still works. It also never re-prompts once the OS
+  has hard-denied (Android stops showing the sheet); it explains instead.
+- On web the same gate uses `Notification.requestPermission()`, and the catch-up
+  raises a real system notification when granted, falling back to a toast.
 - Water slots are generated from a from/to window and a step, **capped at 24** —
   Android silently drops a runaway schedule rather than erroring.
 - `DB.supplements.update()` is a **field whitelist**; it silently drops anything it

@@ -33,13 +33,53 @@
 
   // ---------------------------------------------------------------- native ---
 
+  // Has the OS already answered, without asking again?
+  async function permissionState() {
+    if (supported()) {
+      try { return (await plugin().checkPermissions()).display; } catch (_) { return 'denied'; }
+    }
+    // Web: the browser's own Notification permission. Used so the in-app path can
+    // raise a real system notification while the tab is alive, instead of a toast.
+    if (typeof Notification !== 'undefined') return Notification.permission; // granted|denied|default
+    return 'unsupported';
+  }
+
+  // Show the SYSTEM permission dialog. Safe to call from any reminder-related
+  // control: the OS shows the sheet only the first time and afterwards returns
+  // the remembered answer silently, so this never becomes a nag.
   async function ensurePermission() {
-    if (!supported()) return false;
-    try {
-      let p = await plugin().checkPermissions();
-      if (p.display !== 'granted') p = await plugin().requestPermissions();
-      return p.display === 'granted';
-    } catch (_) { return false; }
+    if (supported()) {
+      try {
+        let p = await plugin().checkPermissions();
+        if (p.display !== 'granted') p = await plugin().requestPermissions();
+        return p.display === 'granted';
+      } catch (_) { return false; }
+    }
+    if (typeof Notification !== 'undefined') {
+      try {
+        if (Notification.permission === 'granted') return true;
+        if (Notification.permission === 'denied') return false;
+        return (await Notification.requestPermission()) === 'granted';
+      } catch (_) { return false; }
+    }
+    return false;
+  }
+
+  // The single gate every reminder control goes through. Its job is to RAISE THE
+  // SYSTEM DIALOG at the moment the user touches anything reminder-related — not
+  // to veto the action. Refusing the OS permission only costs the alerts that
+  // fire while the app is closed; the in-app catch-up needs no permission at all,
+  // so callers proceed either way and this just explains the limitation.
+  async function gate() {
+    const before = await permissionState();
+    if (before === 'granted') return true;
+    if (before === 'unsupported') return true;   // nothing to ask; in-app toasts still work
+    const ok = await ensurePermission();
+    if (!ok) {
+      // 'denied' before we asked means the OS will not show the sheet again.
+      try { showToast(before === 'denied' ? tr('remind_blocked') : tr('remind_denied')); } catch (_) {}
+    }
+    return ok;
   }
 
   // Cancel everything we own, then re-schedule from the current settings. Full
@@ -109,6 +149,15 @@
     if (!list.length) return;
     const it = list[0];
     markSeen(todayISO(), it.id);
+    // A real system notification when the browser has granted it; the toast is
+    // the fallback, and is all a WebView without permission can do.
+    try {
+      if (!supported() && typeof Notification !== 'undefined' && Notification.permission === 'granted') {
+        const n = new Notification(titleFor(it), { body: bodyFor(it), tag: 'vault-' + it.id });
+        n.onclick = () => { try { window.focus(); navigate(it.kind === 'water' ? 'food' : 'supplements'); } catch (_) {} };
+        return;
+      }
+    } catch (_) {}
     try {
       showToast(`${titleFor(it)} · ${bodyFor(it)}`, {
         actionLabel: tr('open'),
@@ -117,5 +166,5 @@
     } catch (_) {}
   }
 
-  window.Notify = { isNative: supported, sync, ensurePermission, catchUp, missed };
+  window.Notify = { isNative: supported, sync, ensurePermission, permissionState, gate, catchUp, missed };
 })();

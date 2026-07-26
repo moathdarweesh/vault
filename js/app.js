@@ -12,7 +12,7 @@
 // build. The literal below is the fallback (file://, or a stripped query) and is
 // still bumped by `npm run release` — see CLAUDE.md "CACHE WORKFLOW".
 const VAULT_BUILD = (() => {
-  const FALLBACK = 'v208';
+  const FALLBACK = 'v209';
   try {
     const src = (document.currentScript && document.currentScript.src) || '';
     const m = src.match(/[?&]v=(\d+)/);
@@ -538,7 +538,8 @@ const I18N = {
     remind_daily: 'reminders a day', remind_none: 'No reminders set',
     remind_times: 'Reminder times', remind_add_time: 'Add time',
     remind_supp_hint: 'Set times on each supplement.',
-    remind_denied: 'Notifications are blocked in your phone settings.',
+    remind_denied: 'Notifications were not allowed.',
+    remind_blocked: 'Notifications are blocked — turn them on in your phone settings.',
     remind_water_title: 'Water', remind_water_body: 'Time for a glass of water.',
     remind_supp_title: 'Supplement', open: 'Open',
     not_found: 'Not found', not_found_text: 'This exercise no longer exists.',
@@ -1165,7 +1166,8 @@ const I18N = {
     remind_daily: 'تنبيهاً يومياً', remind_none: 'لا توجد تنبيهات',
     remind_times: 'أوقات التذكير', remind_add_time: 'أضف وقتاً',
     remind_supp_hint: 'حدّد الأوقات في كل مكمّل.',
-    remind_denied: 'التنبيهات محجوبة من إعدادات هاتفك.',
+    remind_denied: 'لم يُسمح بالتنبيهات.',
+    remind_blocked: 'التنبيهات محجوبة — فعّلها من إعدادات هاتفك.',
     remind_water_title: 'الماء', remind_water_body: 'حان وقت كوب ماء.',
     remind_supp_title: 'مكمّل', open: 'فتح',
     not_found: 'غير موجود', not_found_text: 'هذا التمرين لم يعد موجوداً.',
@@ -5980,7 +5982,18 @@ function renderSettings(el) {
     else showToast(t('health_only_android'));
   });
 
-  $('#reminders-btn', el)?.addEventListener('click', openRemindersModal);
+  $('#reminders-btn', el)?.addEventListener('click', async () => {
+    // Opening the screen counts as "touching notifications": if reminders are
+    // already switched on but the OS permission is missing (revoked in system
+    // settings, or carried over from a build without the plugin), ask here
+    // rather than letting the screen claim everything is fine.
+    try {
+      if (window.Notify && DB.reminders.get().enabled && (await Notify.permissionState()) !== 'granted') {
+        await Notify.gate();
+      }
+    } catch (_) {}
+    openRemindersModal();
+  });
 
   // Feedback / suggestions
   $('#feedback-btn', el)?.addEventListener('click', showFeedback);
@@ -7816,17 +7829,21 @@ function openRemindersModal() {
     // so the user never sees "on" while Android is silently dropping every alarm.
     $('#rem-toggle')?.addEventListener('click', async () => {
       const next = !DB.reminders.get().enabled;
-      if (next && window.Notify && Notify.isNative()) {
-        const ok = await Notify.ensurePermission();
-        if (!ok) { showToast(t('remind_denied')); return; }
-      }
+      // Every reminder control goes through the same gate, so the OS sheet appears
+      // on whatever the user touches first — not only on this switch.
+      // gate() raises the OS sheet; it does not veto. Reminders still work
+      // in-app without the permission, so refusing it must not disable the
+      // feature — it only means alerts appear when the app is opened.
+      if (next && window.Notify) await Notify.gate();
       DB.reminders.setEnabled(next);
       try { if (window.Notify) await Notify.sync(); } catch (_) {}
       closeModal(); render();
     });
 
     $('#rem-water')?.addEventListener('click', async () => {
-      DB.reminders.setWater({ on: !DB.reminders.get().water.on });
+      const turningOn = !DB.reminders.get().water.on;
+      if (turningOn && window.Notify) await Notify.gate();
+      DB.reminders.setWater({ on: turningOn });
       try { if (window.Notify) await Notify.sync(); } catch (_) {}
       closeModal(); render();
     });
@@ -7930,9 +7947,15 @@ function openSupplementModal(id = null) {
   });
 
   paintTimes();
-  $('#supp-time-add')?.addEventListener('click', () => {
+  $('#supp-time-add')?.addEventListener('click', async () => {
     const v = $('#supp-time-input').value;
     if (!v || times.indexOf(v) !== -1) return;   // ignore blanks and duplicates
+    // Setting a time is asking to be reminded — so this is where the OS sheet
+    // belongs, not buried in Settings behind a switch the user never found.
+    // The time is kept either way: without the OS permission the reminder still
+    // reaches them through the in-app catch-up.
+    if (window.Notify) await Notify.gate();
+    if (!DB.reminders.get().enabled) DB.reminders.setEnabled(true);
     times.push(v);
     paintTimes();
   });
