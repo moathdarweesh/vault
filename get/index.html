@@ -7,7 +7,7 @@
   <meta name="theme-color" content="#000000">
   <meta property="og:title" content="THE VAULT — تطبيق اللياقة">
   <meta property="og:description" content="حمّل تطبيق THE VAULT لتتبّع تمارينك وتغذيتك ونومك.">
-  <link rel="icon" type="image/svg+xml" href="../icons/icon.svg?v=213">
+  <link rel="icon" type="image/svg+xml" href="../icons/icon.svg?v=214">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -36,13 +36,20 @@
       animation:rise .5s cubic-bezier(.2,.8,.2,1) both;
     }
     @keyframes rise{ from{ opacity:0; transform:translateY(16px); } to{ opacity:1; transform:none; } }
+    /* The actual app icon, not a decoration: black tile at the brand's 22.5%
+       radius (17px on 76) carrying the V letterform, so the visitor sees the
+       icon that will land on their home screen. */
     .logo{
-      width:76px; height:76px; margin:0 auto 20px; border-radius:22px;
+      width:76px; height:76px; margin:0 auto 20px; border-radius:17px;
       display:grid; place-items:center;
-      background:radial-gradient(120% 120% at 50% 0%, rgba(255,106,0,.35), rgba(255,106,0,.08));
-      border:1px solid rgba(255,106,0,.4);
+      background:#000; overflow:hidden; position:relative;
     }
-    .logo svg{ width:40px; height:40px; color:var(--accent); }
+    /* The five-bar field as a pinstripe, same 6-on-33 rhythm as icons/icon.svg. */
+    .logo::before{
+      content:''; position:absolute; inset:0;
+      background:repeating-linear-gradient(90deg, rgba(255,255,255,.035) 0 2px, transparent 2px 11px);
+    }
+    .logo svg{ width:46px; height:46px; position:relative; }
     h1{ font-size:15px; font-weight:800; letter-spacing:6px; color:var(--dim); margin-bottom:4px; }
     .brand{ font-size:30px; font-weight:900; letter-spacing:8px; margin-bottom:22px; }
     .status{ display:flex; align-items:center; justify-content:center; gap:10px; color:var(--dim); font-size:15px; font-weight:500; margin-bottom:26px; min-height:22px; }
@@ -69,7 +76,7 @@
 <body>
   <div class="card">
     <div class="logo">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12 12 3l9 9"/><path d="M5 10v10a1 1 0 0 0 1 1h3v-6h6v6h3a1 1 0 0 0 1-1V10"/></svg>
+      <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M4.4 4.5h3.4l4.2 11.4L16.2 4.5h3.4L13.7 20.4h-3.4Z" fill="#ff6a00"/></svg>
     </div>
     <h1>THE</h1>
     <div class="brand">VAULT</div>
@@ -80,7 +87,7 @@
     </div>
 
     <a class="btn" id="download" href="#" rel="noopener">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12"/><path d="m7 10 5 5 5-5"/><path d="M5 21h14"/></svg>
+      <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M2.6 16.4h2.8V19h13.2v-2.6h2.8V21.8H2.6Z" fill="currentColor"/><path d="M10.6 2.6h2.8v8.6l3.6-3.6 2 2L12 16.6 5 9.6l2-2 3.6 3.6Z" fill="currentColor"/></svg>
       تحميل التطبيق
     </a>
     <div class="meta" id="meta">تطبيق أندرويد · ملف APK</div>
