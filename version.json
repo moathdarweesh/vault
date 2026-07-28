@@ -1,11 +1,11 @@
 {
   "_comment": "Update manifest. `web` is the latest web build — it MUST equal the ?v=N in index.html on every release; js/update.js reads it fresh (no-store) and reloads the entry html so web/CSS/JS updates reach all devices without a reinstall. `apk` only triggers the in-app 'download new APK' banner when apk.build here is GREATER than the versionCode installed on the device. To release a NEW APK: bump android/app/build.gradle versionCode, build, upload to Drive, then set apk.build to that number + apk.url to the new Drive share link + notes, and push.",
-  "web": 212,
+  "web": 213,
   "apk": {
-    "build": 10,
-    "version": "1.9",
+    "build": 11,
+    "version": "2.0",
     "url": "https://raw.githubusercontent.com/moathdarweesh/vault/main/download/THE-VAULT.apk",
-    "notes_ar": "أيقونة التطبيق. كانت أيقونة Capacitor الافتراضية (حرف X أزرق) على كل جهاز منذ البداية — لأن ملف الأيقونة الذي حُدّث سابقاً يخصّ المتصفح فقط، أمّا أيقونة التطبيق المثبّت فملفٌّ آخر لم يُستبدل قط. صارت الآن علامة VAULT.",
-    "notes_en": "The app icon. Every install had been showing the stock Capacitor placeholder (a blue \"X\") since day one: the icon file that was updated long ago only feeds the browser, while the installed app reads a separate file nobody had replaced. It is the VAULT mark now."
+    "notes_ar": "أيقونة التطبيق الجديدة من كلود ديزاين: حرف V مصمت على مربّع أسود. وخطوط الهوية الثلاثة — IBM Plex Sans Arabic للنص، وArchivo للشعار، وJetBrains Mono للأرقام.",
+    "notes_en": "The new app icon from Claude Design: a solid V on a black tile. Plus the brand type system — IBM Plex Sans Arabic for text, Archivo for the wordmark, JetBrains Mono for figures."
   }
 }

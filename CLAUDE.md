@@ -35,7 +35,7 @@ A fitness / workout-tracking **PWA**. Vanilla JS, **no build step**, bilingual *
 npm run release          # bump every marker + verify, then commit all files together
 ```
 
-**Current version: v212.** APK: build 10 / v1.9.
+**Current version: v213.** APK: build 11 / v2.0.
 
 `scripts/release.js` rewrites all **16** markers and then re-reads them from disk to confirm; it exits non-zero if any disagree. The markers are `?v=N` in `index.html` (×14 — every script and stylesheet, the `js/vendor/supabase.js` preload, and **both `icons/icon.svg` links**), the `__cleaned_vN` sessionStorage key, the `FALLBACK` literal in `app.js`, and `version.json` → `web`. The count is derived, not hard-coded, so adding a marker is safe — just keep this sentence honest.
 
@@ -220,6 +220,30 @@ the same identity on two surfaces. `BRAND.md` is the authority.
   nothing. Two deliberate exceptions: `.quick-add-chip` (a control, so it keeps an
   interactive border) and `.bento-card` (its `inset: 0` child paints over an inset
   bevel).
+
+### Typography — three faces, from the brand kit (v213)
+One face for text, one for the mark, one for figures. The Google Fonts link in
+`index.html` loads these and nothing else.
+- **IBM Plex Sans Arabic** — the body face, for **both scripts**. It carries a
+  full Latin set, so it replaced the old Inter + Tajawal pair. The
+  `body[dir="rtl"]` font override is **gone**: the app used to change typeface
+  when you changed language.
+- **Archivo** 800, `.2em` tracking — the `VAULT` wordmark and nothing else.
+- **JetBrains Mono** — `.num`, i.e. every figure in the app. They are all
+  measurements (reps, kg, kcal, 7:12, −0.6), and a mono face makes a column of
+  them line up as data. It is tabular by construction, so the old negative
+  `letter-spacing` that tightened Inter's figures was removed — it fought the
+  mono metrics.
+
+### App icon — the V, NOT the five bars (v213)
+The brand kit ("Vault Brand Kit" §01) specifies a **solid V letterform** on a
+tile: black tile / orange letter in dark, orange tile / black letter in light.
+`icons/icon.svg` carries both in one file via a `prefers-color-scheme` query.
+
+**The five bars are a different mark.** They are `ICONS.vault` (the in-app logo)
+and `ic_stat_vault.xml` (the status-bar icon); on the app icon they survive only
+as the pinstripe texture behind the letter. v212 put the bars on the tile, which
+was wrong — do not "restore" them.
 
 ### App icon vs LAUNCHER icon — two different files (v212)
 `icons/icon.svg` is the PWA / browser-tab / apple-touch icon **only**. The

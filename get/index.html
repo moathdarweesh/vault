@@ -7,25 +7,25 @@
   <meta name="theme-color" content="#000000">
   <meta property="og:title" content="THE VAULT — تطبيق اللياقة">
   <meta property="og:description" content="حمّل تطبيق THE VAULT لتتبّع تمارينك وتغذيتك ونومك.">
-  <link rel="icon" type="image/svg+xml" href="../icons/icon.svg">
+  <link rel="icon" type="image/svg+xml" href="../icons/icon.svg?v=213">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700;800;900&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@400;500;600;700&display=swap" rel="stylesheet">
   <style>
-    :root{ --accent:#5b8def; --bg:#000; --card:#101012; --text:#fff; --dim:#8c8c8c; --border:rgba(255,255,255,.1); }
+    :root{ --accent:#ff6a00; --bg:#000; --card:#0d0a07; --text:#f4efe9; --dim:#8f8478; --border:rgba(255,232,212,.11); }
     *{ box-sizing:border-box; margin:0; padding:0; }
     html,body{ height:100%; }
     body{
       background:var(--bg); color:var(--text);
-      font-family:'Tajawal',system-ui,-apple-system,'Segoe UI',sans-serif;
+      font-family:'IBM Plex Sans Arabic',system-ui,-apple-system,sans-serif;
       display:grid; place-items:center; min-height:100dvh; padding:24px;
       overflow:hidden; position:relative;
     }
     body::before{
       content:''; position:fixed; inset:0; z-index:0; pointer-events:none;
       background:
-        radial-gradient(60% 50% at 50% 0%, rgba(91,141,239,.22), transparent 70%),
-        radial-gradient(50% 40% at 50% 100%, rgba(91,141,239,.10), transparent 70%);
+        radial-gradient(60% 50% at 50% 0%, rgba(255,106,0,.20), transparent 70%),
+        radial-gradient(50% 40% at 50% 100%, rgba(255,106,0,.09), transparent 70%);
     }
     .card{
       position:relative; z-index:1; width:100%; max-width:420px; text-align:center;
@@ -39,8 +39,8 @@
     .logo{
       width:76px; height:76px; margin:0 auto 20px; border-radius:22px;
       display:grid; place-items:center;
-      background:radial-gradient(120% 120% at 50% 0%, rgba(91,141,239,.35), rgba(91,141,239,.08));
-      border:1px solid rgba(91,141,239,.4);
+      background:radial-gradient(120% 120% at 50% 0%, rgba(255,106,0,.35), rgba(255,106,0,.08));
+      border:1px solid rgba(255,106,0,.4);
     }
     .logo svg{ width:40px; height:40px; color:var(--accent); }
     h1{ font-size:15px; font-weight:800; letter-spacing:6px; color:var(--dim); margin-bottom:4px; }

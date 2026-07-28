@@ -12,12 +12,20 @@ Five vertical bars — the bars of a vault door. **No crossbar**: that belongs t
 `dumbbell` glyph, and for a long time the app icon carried it, so the icon was the
 equipment, not the brand.
 
-| Use | Source |
-|---|---|
-| App icon (PWA / home screen) | `icons/icon.svg` — 512px, black `rx=96` tile, `#ff6a00` bars, `stroke-width=40` |
-| In-app logo | `ICONS.vault`, rendered by `icon('vault', 22)` in `vaultBar()` |
+**There are TWO marks, and they are not interchangeable.**
 
-The two must stay the same shape. `ICONS.vault` has no crossbar; neither does the icon.
+| Use | Mark | Source |
+|---|---|---|
+| App icon (PWA + Android launcher) | a solid **V** letterform on a tile | `icons/icon.svg` and `res/drawable/ic_launcher_foreground.xml` |
+| In-app logo | the **five bars** | `ICONS.vault`, via `icon('vault', 22)` in `vaultBar()` |
+| Status-bar notification | the **five bars**, monochrome | `res/drawable/ic_stat_vault.xml` |
+
+The V is the app icon per the Claude Design brand kit (§01): black tile with an
+orange letter in dark, orange tile with a black letter in light. The five bars
+appear on it only as the pinstripe texture behind the letter. A v212 pass put the
+bars on the tile itself; that was wrong and was corrected at v213.
+
+The bars keep the no-crossbar rule — the crossbar belongs to `dumbbell`.
 
 ## 2. Colour
 
@@ -96,7 +104,16 @@ below now describes the *silhouettes* rather than a stroke.
 
 ## 4. Type
 
-**Inter** (Latin) · **Tajawal** (Arabic). Weights 400–900.
+Three faces, one job each (brand kit):
+
+| Face | Role |
+|---|---|
+| **IBM Plex Sans Arabic** | body text, **both scripts** — one face for an EN/AR app |
+| **Archivo** 800, `.2em` | the `VAULT` wordmark, and nothing else |
+| **JetBrains Mono** | `.num` — every figure, because every figure is a measurement |
+
+This replaced Inter + Tajawal at v213. There is no longer an RTL font override:
+the app used to change typeface when you changed language.
 
 | Token | px | Role |
 |---|---|---|

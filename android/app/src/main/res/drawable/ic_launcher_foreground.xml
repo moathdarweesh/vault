@@ -1,48 +1,35 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
-  THE VAULT launcher icon — foreground layer of the adaptive icon.
+  THE VAULT launcher icon, foreground layer.
 
-  This replaces the STOCK CAPACITOR placeholder (a blue "X" on white) that had
-  been shipping as the app icon on every install. icons/icon.svg was updated to
-  the VAULT mark long ago, but that file only feeds the PWA / browser / favicon;
-  the installed Android app reads mipmap-*/ic_launcher*, which nobody had ever
-  replaced.
+  The mark is the solid V letterform from the Claude Design brand kit
+  ("Vault Brand Kit", section 01 APP ICON) — NOT the five bars. The bars are the
+  in-app mark (ICONS.vault) and the status-bar icon (ic_stat_vault.xml); on the
+  app icon they appear only as the pinstripe texture on the background layer.
+  A previous pass put the bars on the tile, which was wrong.
 
   A VECTOR, not five PNG densities: minSdkVersion is 26, so mipmap-anydpi-v26
-  always wins and the legacy density PNGs could never be loaded. This is sharp at
-  every size and reviewable as text.
+  always wins and the legacy density PNGs could never be loaded.
 
-  ADAPTIVE-ICON GEOMETRY: the canvas is 108x108dp but the launcher masks it to a
-  shape and parallaxes it, so only the inner 72dp (18..90) is guaranteed visible.
-  This is ICONS.vault at scale 2.77 about centre (54,54), spanning x 27.96..80.04
-  and y 34.61..69.51 — 52dp across, about 72% of the safe zone. A first pass used
-  scale 3.3 (86% of the zone); rendered against a circular mask it read
-  noticeably oversized next to ordinary launcher icons.
-
-  The outer pair sits at 55% alpha, the same three-tone depth the in-app mark
-  gained at v211. BRAND.md section 1: the app icon and ICONS.vault must stay the
-  same shape.
+  ADAPTIVE-ICON GEOMETRY: the canvas is 108x108dp but a launcher masks and
+  parallaxes it, so only the inner 72dp (18..90) is guaranteed visible. The
+  group below scales the kit's 24-unit glyph by 2.895 and centres its INK (not
+  its bounding box — the V is not vertically centred inside its own 24 box) on
+  (54,54). Ink lands at x 32..76 and y 31..77: 44dp across, about 61% of the
+  safe zone, which is the same glyph-to-tile ratio the kit draws.
 -->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     android:width="108dp"
     android:height="108dp"
     android:viewportWidth="108"
     android:viewportHeight="108">
-    <path
-        android:fillColor="#FF6A00"
-        android:fillAlpha="0.55"
-        android:pathData="M27.96,49.57 A3.88,3.88 0 0 1 35.72,49.57 V58.43 A3.88,3.88 0 0 1 27.96,58.43 Z" />
-    <path
-        android:fillColor="#FF6A00"
-        android:pathData="M40.15,38.49 A3.88,3.88 0 0 1 47.91,38.49 V69.51 A3.88,3.88 0 0 1 40.15,69.51 Z" />
-    <path
-        android:fillColor="#FF6A00"
-        android:pathData="M50.12,44.03 A3.88,3.88 0 0 1 57.88,44.03 V63.97 A3.88,3.88 0 0 1 50.12,63.97 Z" />
-    <path
-        android:fillColor="#FF6A00"
-        android:pathData="M60.09,38.49 A3.88,3.88 0 0 1 67.85,38.49 V69.51 A3.88,3.88 0 0 1 60.09,69.51 Z" />
-    <path
-        android:fillColor="#FF6A00"
-        android:fillAlpha="0.55"
-        android:pathData="M72.28,49.57 A3.88,3.88 0 0 1 80.04,49.57 V58.43 A3.88,3.88 0 0 1 72.28,58.43 Z" />
+    <group
+        android:scaleX="2.895"
+        android:scaleY="2.895"
+        android:translateX="19.26"
+        android:translateY="17.96">
+        <path
+            android:fillColor="#FF6A00"
+            android:pathData="M4.4,4.5h3.4l4.2,11.4L16.2,4.5h3.4L13.7,20.4h-3.4Z" />
+    </group>
 </vector>

@@ -407,9 +407,9 @@ body[dir="rtl"] .sets-row-weight {
 body[dir="rtl"] .session-card-volume { text-align: left; }
 body[dir="rtl"] .home-center-icon svg { transform: none; }
 
-body[dir="rtl"] {
-  font-family: 'Tajawal', 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
-}
+/* No RTL font override any more: IBM Plex Sans Arabic covers Arabic AND Latin,
+   so one face serves both directions. The old rule swapped in Tajawal for RTL,
+   which meant the app literally changed typeface when you changed language. */
 
 html, body {
   height: 100%;
@@ -419,7 +419,7 @@ html, body {
 }
 
 body {
-  font-family: 'Inter', -apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI", Roboto, sans-serif;
+  font-family: 'IBM Plex Sans Arabic', system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
   font-size: 15px;
   line-height: 1.5;
   color: var(--text);
@@ -447,7 +447,16 @@ button {
 svg { display: block; width: 100%; height: 100%; }
 img { display: block; max-width: 100%; }
 
-.num { font-variant-numeric: tabular-nums; letter-spacing: -0.02em; }
+/* Numerals are JetBrains Mono per the brand kit — every figure in the app is a
+   measurement (reps, kg, kcal, 7:12, -0.6), and a mono face makes a column of
+   them line up and read as data rather than as prose. It is already tabular by
+   construction; the letter-spacing that used to tighten Inter's figures would
+   now fight the mono metrics, so it is gone. */
+.num {
+  font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0;
+}
 
 /* =========================================================================
    APP SHELL
@@ -503,14 +512,17 @@ body.rest-active .main { padding-bottom: calc(var(--nav-h) + var(--safe-b) + 104
   background: transparent;
 }
 
+/* The wordmark, and the ONLY place Archivo appears. The brand kit sets it at
+   800 with .2em tracking; the mark sits beside it. */
 .vault-logo {
   display: flex;
   align-items: center;
   gap: 8px;
   color: var(--accent-text);
+  font-family: 'Archivo', system-ui, sans-serif;
   font-size: 18px;
-  font-weight: 900;
-  letter-spacing: 0.28em;
+  font-weight: 800;
+  letter-spacing: 0.2em;
   line-height: 1;
   text-transform: uppercase;
 }
