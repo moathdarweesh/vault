@@ -307,7 +307,9 @@ function uid() {
 // Starting THEME for a brand-new install, from the phone's own light/dark setting
 // — the same principle as detectLang: don't ask for something the device already
 // knows. Only consulted when building a fresh state; an existing user's chosen
-// theme is never overridden, and all 13 themes are still available in Settings.
+// theme is never overridden. There are exactly two: dark and light (v210 cut the
+// eleven alternate skins, each of which carried its own accent and so dropped the
+// brand on every switch). Settings offers that pair and nothing else.
 function pad2(n) { return String(n).padStart(2, '0'); }
 
 // Small stable integer id from a string — the native notification plugin keys

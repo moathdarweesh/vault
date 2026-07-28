@@ -1,31 +1,70 @@
 # THE VAULT — Brand & Design System
 
-> The identity is **VAULT Machined**: *precision-made, not politely drawn.*
-> Flat edges, a strict grid, pure black, one colour that leads.
+> The identity is **THE CUT**: *one line shears the name, and that line is the whole
+> brand.* Flat edges, a strict grid, pure black, one colour that leads.
 > Every rule here is enforceable and was derived by measuring the codebase, not asserted.
 
 ---
 
-## 1. The mark
+## 1. The mark — THE CUT
 
-Five vertical bars — the bars of a vault door. **No crossbar**: that belongs to the
-`dumbbell` glyph, and for a long time the app icon carried it, so the icon was the
-equipment, not the brand.
+**There is no symbol.** No logo beside the name, no glyph in the top bar. A single
+horizontal line cuts through the wordmark: it is the door, and it is the line only
+you cross. One element carries the whole meaning, so nothing competes for attention —
+and the line detaches from the name and still works alone, which is what makes it
+survive down to 16px.
 
-**There are TWO marks, and they are not interchangeable.**
+The cut is **two layers, never one**: a **slot** the colour of the surface behind the
+text, and an **accent hairline** sitting inside it. A single orange line is not the
+mark; it is the DON'T at the bottom of this section.
 
-| Use | Mark | Source |
+### The law
+
+| Rule | Value | Why |
 |---|---|---|
-| App icon (PWA + Android launcher) | a solid **V** letterform on a tile | `icons/icon.svg` and `res/drawable/ic_launcher_foreground.xml` |
-| In-app logo | the **five bars** | `ICONS.vault`, via `icon('vault', 22)` in `vaultBar()` |
-| Status-bar notification | the **five bars**, monochrome | `res/drawable/ic_stat_vault.xml` |
+| Slot height | **7% of the type size**, floor **2px** | proportional so the mark survives being resized; the floor because a slot is still a slot |
+| Monogram slot | **11%** | a lone V is two thin diagonals meeting at a point, and 7% is swallowed in the join |
+| Hairline | **1.5px minimum** | below this it stops being a line inside a slot |
+| Position | **50%** Latin, **52%** Arabic | optical, not arithmetic: an Arabic line carries its mass high because of the dots and marks |
+| Tracking | **0.02em** | wide tracking turns the cut into a line lying beside some letters |
+| Wordmark floor | **24px** (9mm print) | at 24px the slot is already on its 2px floor with a 1.5px hairline inside it |
+| Tile switch | **48px** | at or above, the cut letterform; below, the slot alone |
+| Clear space | **slot height × 6** | measured in slots, so it scales itself |
+| Hairline colour | `#ff6a00` on dark, **`#a34400` on light** | the brighter orange is 2.87:1 on the bone ground |
 
-The V is the app icon per the Claude Design brand kit (§01): black tile with an
-orange letter in dark, orange tile with a black letter in light. The five bars
-appear on it only as the pinstripe texture behind the letter. A v212 pass put the
-bars on the tile itself; that was wrong and was corrected at v213.
+### Where each form ships
 
-The bars keep the no-crossbar rule — the crossbar belongs to `dumbbell`.
+| Use | Form | Source |
+|---|---|---|
+| App icon, PWA + Android launcher | cut **V** on a tile, 11% slot | `icons/icon.svg`, `res/drawable/ic_launcher_foreground.xml` |
+| Android themed icon | the same V with the slot as a **hole** | `res/drawable/ic_launcher_monochrome.xml` |
+| Status-bar notification | **the slot alone** on a tile | `res/drawable/ic_stat_vault.xml` |
+| In-app top bar, login, first run | the cut **wordmark** | `.cut` in `styles.css`, IDENTITY LAYER device 7 |
+| Download page | the cut wordmark, masked | `get/index.html` |
+
+**Two ways to draw the slot, and the surface decides which.** On a flat surface,
+paint it in that surface's own token — this is what `.cut` does through `--cut-bg`,
+and every context that moves the mark onto a different surface MUST override it or
+the slot reads as a bar laid on top. On a surface that is a gradient, an image, or
+anything translucent, no single colour can match it: mask the band away instead, so
+whatever is behind shows through. `get/index.html` is the masked case, and its
+hairline lives on the parent because a mask also erases the element's own pseudo
+elements.
+
+### The five bars are texture now, not a mark
+
+They survive as the **pinstripe** on the app icon (a 2px bar on an 11px pitch) and as
+the section tick in the identity layer. They are no longer a logo anywhere. Until
+v215 the app shipped the bars in the top bar and the V on the icon — two marks
+competing for one job — and the status-bar icon was the bars as well. Do not
+reintroduce them as a mark.
+
+### DON'T
+
+- A slot thick enough to sever the letters, or a hairline thick enough to fill it.
+- The slot anywhere but the optical middle.
+- Wide tracking under a cut.
+- A gradient wordmark, or a hairline that is not the accent — never white, never gold.
 
 ## 2. Colour
 
@@ -64,14 +103,11 @@ which is exactly where it lives. One step deeper buys 4.91:1 and 4.85:1.
 the element it is declared on, and the theme classes live on `<body>` — declaring it
 on `:root` froze it to the root's orange.
 
-**`light` and `dark` are two MODES of one identity; the other 11 are alternate
-skins.** `light` carries the same `#ff6a00`. The eleven skins each define their own
-accent — do not push the brand orange into those.
-
-**The other 11 themes are alternate identities, not variations.** Each defines its
-own accent set. Do **not** push the brand orange into them — the theme system is the
-strongest asset in the codebase precisely because each theme overrides only ~25 of
-the 88 tokens and inherits the rest.
+**`light` and `dark` are the only two modes, and they are one identity under two
+lights.** Both carry the same `#ff6a00`. There is nothing else to keep the brand out
+of: the eleven alternate skins were deleted in v210 precisely because each defined
+its own accent, so switching away from `dark` silently dropped the brand. `THEMES` is
+`['dark','light']` and §7 is the authority on the pair.
 
 **Reserved, never for branding:** `--green` (success/confirm), `--red` (destructive),
 the 16 `--cat-*` muscle hues.
@@ -88,19 +124,31 @@ the 16 `--cat-*` muscle hues.
 
 ## 3. Geometry — the 2-unit grid
 
-The signature. The grid still governs the icon set; since v211 the set is FILLED
-(two masses per glyph, base + accent) rather than stroked, so the caps/joins rule
-below now describes the *silhouettes* rather than a stroke.
+The grid governs the icon set. (The *signature* is §1 — the cut. This section is
+about the icons, which are a supporting system, not the mark.) Since v211 the set is
+FILLED — two masses per glyph, base plus accent — rather than stroked, so the
+caps/joins rule below describes the *silhouettes* rather than a stroke.
 
 - `viewBox 0 0 24 24`, live area 20×20, optical centre 12,12.
 - Every endpoint and vertex on an **even** coordinate.
 - Angles **0° / 45° / 90°** only.
-- Radii from **{1, 2, 3, 4, 6, 8, 10}**. Outer `rx=2`, inner `rx=1`.
 - **Flat, mitred silhouettes** — no rounded terminals. This is what separates the
   set from Lucide/Feather. (Pre-v211 this was literally `stroke-linecap: butt` /
   `stroke-linejoin: miter`; the filled set carries the same language in outline.)
 - Max **5 sub-paths**; min **3 units** between parallel strokes or they merge at 16px.
 - One signature element per icon max: a filled `r=1` centre dot.
+
+**On corner radii, this doc used to lie.** It published "radii from
+{1, 2, 3, 4, 6, 8, 10}, outer `rx=2`, inner `rx=1`" — and **not one** of the 39 `rx`
+declarations in the shipped set is a member of that set. The real distribution,
+measured: `1.4`×9, `.9`×4, `1.2`×4, `1.6`×4, `2.4`×4, `1.3`×3, `.8`×3, `.7`×3,
+`2.6`×2, and one each of `1.8`, `3.4`, `5`. The stated set belonged to the STROKED
+set that v211 replaced; the filled set softens each mass in proportion to its own
+width instead, which is why the values are fractional and continuous.
+
+That is a description, not yet a law. Either derive the real rule and write it here,
+or normalise the 39 values onto a stated scale — but do not restore the old sentence,
+which described nothing that has shipped since v211. Tracked in §8.
 
 ## 4. Type
 
@@ -205,3 +253,4 @@ longest were on screens the earlier sweeps never reached.
 | Three parallel stat systems | `.stat-box-*`, `.stat-cell-*`, `.stat-tile`/`-grid`/`-row` |
 | Nav icon stroke weight | Nav renders at 22px but hard-codes `stroke-width: 2`; the band for that size is 1.75 |
 | Coloured shadows | 13 of 41 `box-shadow` lines are `rgba(0,0,0,α)` and could take a warm token; the other ~24 are deliberately accent- or category-coloured (the `.ms-thumb` rings are the only thing colour-coding those thumbnails), so any conversion must be explicit, never mechanical |
+| Icon corner radii have no law | 39 `rx` values across 12 distinct numbers, none in the set §3 used to claim. Needs either a derived rule or a normalisation pass |

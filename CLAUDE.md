@@ -235,15 +235,37 @@ One face for text, one for the mark, one for figures. The Google Fonts link in
   `letter-spacing` that tightened Inter's figures was removed — it fought the
   mono metrics.
 
-### App icon — the V, NOT the five bars (v213)
-The brand kit ("Vault Brand Kit" §01) specifies a **solid V letterform** on a
-tile: black tile / orange letter in dark, orange tile / black letter in light.
-`icons/icon.svg` carries both in one file via a `prefers-color-scheme` query.
+### The mark is THE CUT (v216) — there is no symbol
+The Claude Design spec "Vault Logo CUT" replaced both earlier marks. A single
+horizontal line shears the name: a **slot** in the surface colour with an
+**accent hairline** inside it. Two layers, never one. `BRAND.md` §1 is the law;
+the short version:
 
-**The five bars are a different mark.** They are `ICONS.vault` (the in-app logo)
-and `ic_stat_vault.xml` (the status-bar icon); on the app icon they survive only
-as the pinstripe texture behind the letter. v212 put the bars on the tile, which
-was wrong — do not "restore" them.
+- Slot **7%** of the type size, floor **2px**. Hairline **1.5px** minimum.
+- **11%** for the V monogram — its two diagonals meet at a point and swallow 7%.
+- **50%** on Latin, **52%** on Arabic (the dots carry the mass high).
+- Tracking **.02em**. Wordmark floor **24px**. Below a **48px** tile the letter
+  is dropped and the slot alone is the mark.
+- Hairline is `#ff6a00` on dark, `#a34400` on light — `--accent-text`, not
+  `--accent`, which is only 2.87:1 on the bone ground.
+
+**Two ways to draw the slot; the surface picks.** Flat surface → paint it in
+that surface's token (`.cut` does this via `--cut-bg`, and any context that
+moves the mark onto a different surface MUST override it). Gradient or
+translucent surface → mask the band away instead, because no single colour
+matches it. `get/index.html` is the masked case.
+
+**The Android themed icon needs its own file.** A monochrome layer is flattened
+to alpha and tinted one colour, so the foreground's painted slot would come out
+the same colour as the letter and the cut would vanish.
+`ic_launcher_monochrome.xml` cuts the slot as a **hole** (`fillType="evenOdd"`),
+using two quadrilaterals — one per diagonal — because a single rectangle across
+both would count odd in the gap between them and fill in solid.
+
+**The five bars are texture now, not a mark.** They survive as the pinstripe on
+the app icon and as the section tick. They are no longer the in-app logo (the
+top bar is the cut wordmark) and no longer the status-bar icon (that is the slot
+mark). Do not reintroduce them as a logo.
 
 ### App icon vs LAUNCHER icon — two different files (v212)
 `icons/icon.svg` is the PWA / browser-tab / apple-touch icon **only**. The

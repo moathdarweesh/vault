@@ -306,7 +306,13 @@ body.theme-light {
    policy link, which has to be readable to do its job. */
 .auth-legal, .auth-dev-skip { color: var(--text-dim); }
 
-body.theme-light .vault-logo { color: var(--accent-text); }
+/* (The light-mode `.vault-logo { color: var(--accent-text) }` override is gone.
+   It existed because the wordmark used to BE the accent colour, and on the bone
+   surface the brighter orange only reaches 2.82:1 as text. Under the CUT spec
+   the wordmark is text-coloured in both modes and the hairline is the only
+   accent, so there is nothing left to correct. Keeping the rule was actively
+   harmful: at (0,2,1) it outranked the Arabic override at (0,3,0), so light
+   mode dragged 'ذا فولت' back into Archivo 900 with Latin tracking. */
 
 /* The accent as SMALL TEXT. Identical to --accent everywhere it already passes —
    every dark theme and every alternate skin. Only the light mode overrides it:
@@ -512,26 +518,26 @@ body.rest-active .main { padding-bottom: calc(var(--nav-h) + var(--safe-b) + 104
   background: transparent;
 }
 
-/* The wordmark, and the ONLY place Archivo appears. The brand kit sets it at
-   800 with .2em tracking; the mark sits beside it. */
+/* The wordmark, and the ONLY place Archivo appears. It is always rendered with
+   .cut — the base values here are just the floor, and IDENTITY LAYER device 7
+   carries the live ones. The old .2em tracking is deliberately gone: the CUT
+   spec lists wide tracking as a DON'T, because once the letters drift apart the
+   slot stops reading as a cut through a word. */
 .vault-logo {
   display: flex;
   align-items: center;
-  gap: 8px;
-  color: var(--accent-text);
+  color: var(--text);
   font-family: 'Archivo', system-ui, sans-serif;
-  font-size: 18px;
-  font-weight: 800;
-  letter-spacing: 0.2em;
+  font-size: 24px;
+  font-weight: 900;
+  letter-spacing: 0.02em;
   line-height: 1;
   text-transform: uppercase;
 }
 
-.vault-logo-mark {
-  width: 22px;
-  height: 22px;
-  color: var(--accent-text);
-}
+/* (.vault-logo-mark is gone with the symbol. The Claude Design spec "Vault Logo
+   CUT" is explicit that there is no symbol beside the name — the name IS the
+   mark, and the slot through it is the device. See IDENTITY LAYER device 7.) */
 
 .vault-action {
   width: 40px;
@@ -1196,7 +1202,7 @@ body.theme-light input[type="date"], body.theme-light input[type="time"] { color
 /* Heat levels — the more sessions, the stronger the color */
 /* --text-dim, not --text-faint: this is a NUMBER the user reads, and --text-faint
    is reserved for decorative dots/bars (see CLAUDE.md). It measured 3.97:1 here,
-   below the 4.5 that 14px text needs; --text-dim is AA in all 13 themes. */
+   below the 4.5 that 14px text needs; --text-dim is AA in both modes. */
 .heat-cell.lvl-0 .heat-cell-count { color: var(--text-dim); }
 .heat-cell.lvl-1 { background: rgba(var(--accent-rgb), 0.12); }
 .heat-cell.lvl-1 .heat-cell-count { color: var(--accent-text); }
@@ -6427,14 +6433,21 @@ body[dir="rtl"] .variation-select svg { transform: scaleX(-1); }
    readable place is how the identity stays checkable instead of dissolving
    back into 6,000 lines of one-off values.
 
-   The five devices:
+   The devices:
      1. The machined edge   — fill separates, a border MEANS interactive
      2. The 2:1 corner law  — a container's radius is twice its leaf's
      3. Readable text       — the decorative token stays decorative
-     4. No circles          — the mark is five straight bars
-     5. The five-bar tick  — one bar of the mark, stamped on every section
+     4. No circles          — straight edges, butt caps, mitre joins
+     5. The bar tick        — one bar of the field, stamped on every section
      6. Duotone icons       — two filled masses, recoloured by state
-   ========================================================================= */
+     7. THE CUT (v216)      — a slot through the name, and the whole identity
+
+   ON DEVICE 7 SUPERSEDING THE OLD MARK. Until v215 the mark was the five bars
+   and the app icon was a V. That is two marks competing for the same job, and
+   the Claude Design spec "Vault Logo CUT" replaced both: there is no symbol at
+   all now, only the name with a slot cut through it. The bars survive as
+   TEXTURE (the pinstripe on the app icon, the tick in device 5) and as nothing
+   else. Do not reintroduce them as a logo. */
 
 /* --- 1. THE MACHINED EDGE ------------------------------------------------
    An outline on all four sides of everything is the signature of a UI that was
@@ -6624,3 +6637,136 @@ body { --icon-accent: var(--accent-text); }
 
 /* Destructive controls carry their own pair. */
 .icon-btn.danger, #reset-btn { color: var(--red); --icon-accent: var(--red); }
+
+/* --- 7. THE CUT (v216) ---------------------------------------------------
+   The identity, per the Claude Design spec "Vault Logo CUT". One horizontal
+   line shears the name: a slot in the surface colour, and an accent hairline
+   sitting inside it. Two layers, one element, no asset.
+
+   WHY IT IS BUILT FROM em AND NOT FROM PIXELS. The spec states the slot as a
+   PROPORTION — 7% of the type size — precisely so the mark survives being
+   resized by whatever context it lands in. Hard-coding 3px would make the mark
+   correct at exactly one size. The two floors are the spec's own: the slot
+   never goes under 2px and the hairline never under 1.5px, because below that
+   the hairline swallows the gap and the pair collapses into a single line.
+   Those floors are what set the 24px minimum for the wordmark: at 24px the
+   slot is already ON its floor (7% of 24 is 1.68, so 2px wins) with only
+   0.25px of surface left showing on each side. Do not use .cut below 24px.
+   Under that size the letterform is dropped entirely and the SLOT ALONE is the
+   mark — that is the app icon and the status-bar icon, not this component.
+
+   --cut-bg IS NOT DECORATION, IT IS THE SLOT. The slot has to be painted in
+   whatever sits behind the text, or it reads as a bar laid on top rather than
+   an absence carved out. It defaults to --bg and every context that puts the
+   mark on something else MUST override it. Getting this wrong is the one way
+   to make the mark look broken.
+
+   THE HAIRLINE TAKES --accent-text, NOT --accent. The spec is explicit that
+   the line is #a34400 on light and #ff6a00 on dark, which is exactly the split
+   those two tokens already encode. Using --accent would ship 2.87:1 hairline
+   on the bone surface. */
+.cut {
+  position: relative;
+  display: inline-block;
+  font-family: 'Archivo', system-ui, sans-serif;
+  font-weight: 900;
+  font-size: 24px;          /* the spec's floor; override upward, never down */
+  letter-spacing: 0.02em;   /* wide tracking turns the slot into a loose line */
+  line-height: 1;
+  text-transform: uppercase;
+  color: var(--text);
+  white-space: nowrap;
+  --cut-slot: max(2px, 0.07em);
+  --cut-hair: max(1.5px, 0.024em);
+  --cut-y: 50%;
+  --cut-bg: var(--bg);
+}
+.cut::before,
+.cut::after {
+  content: '';
+  position: absolute;
+  inset-inline: 0;
+  top: var(--cut-y);
+  transform: translateY(-50%);
+  pointer-events: none;
+}
+.cut::before { height: var(--cut-slot); background: var(--cut-bg); }
+.cut::after  { height: var(--cut-hair); background: var(--accent-text); }
+
+/* The monogram exception. A lone V is two thin diagonals meeting at a point,
+   so a 7% slot is swallowed in the join; the spec cuts it at 11% instead. */
+.cut.cut-mono { --cut-slot: max(2px, 0.11em); }
+
+/* Arabic rides 2 points lower. The spec's reason is typographic, not a nudge:
+   an Arabic line carries its visual mass above the baseline because of the
+   dots and marks, so a slot on the arithmetic centre reads high. */
+.cut:lang(ar), [dir="rtl"] .cut {
+  font-family: 'IBM Plex Sans Arabic', system-ui, sans-serif;
+  font-weight: 700;
+  letter-spacing: 0;
+  text-transform: none;
+  --cut-y: 52%;
+}
+
+/* Clear space is measured in SLOTS, not pixels, so it tracks any size. */
+.cut-lockup { padding: calc(var(--cut-slot, 2px) * 6); }
+
+/* --- the mark in the top bar --------------------------------------------
+   The bar used to pair the five-bar glyph with the name. The spec removed the
+   symbol, so the name is now the whole mark and the glyph is gone. Tracking
+   drops from .2em to .02em for the reason given above, and the size rises to
+   the 24px floor — at the old 18px the slot could not have been drawn.
+
+   .vault-bar is transparent, so the slot is cut in --bg, not in a nav colour.
+
+   The wordmark is text-coloured in both modes and the hairline is the only
+   accent, which is the spec's whole point. The light-mode `--accent-text`
+   override that used to sit near the top of this file is gone with it — see
+   the note there for why keeping it broke the Arabic top bar. */
+.vault-logo.cut {
+  display: inline-block;
+  font-size: 24px;
+  font-weight: 900;
+  letter-spacing: 0.02em;
+  color: var(--text);
+  --cut-bg: var(--bg);
+}
+
+/* The login screen is the one place the mark is the hero, so it runs large.
+   .auth-card carries no background of its own, so the slot is cut in --bg. */
+.auth-title.cut {
+  font-size: 44px;
+  letter-spacing: 0.02em;
+  --cut-bg: var(--bg);
+}
+
+/* First-run welcome. This replaced a 68px accent-tinted badge holding the old
+   five-bar glyph; the spec has no badge and no symbol, so the mark stands on
+   its own. It sits on .onb-card, so the slot is cut in --surface-2 — NOT --bg,
+   which is the mistake that makes the slot read as a painted bar. */
+.onb-wordmark {
+  margin: 4px auto 18px;
+  text-align: center;
+}
+.onb-wordmark .cut {
+  font-size: 32px;
+  --cut-bg: var(--surface-2);
+}
+
+/* --- Arabic wins last -----------------------------------------------------
+   This block sits after the per-context sizing on purpose. `.vault-logo.cut`
+   and `.onb-wordmark .cut` both carry the same (0,2,0) weight as the Arabic
+   rule above them, so without this the top bar would render 'ذا فولت' in
+   Archivo's Latin metrics at .02em tracking — and letter-spacing on Arabic
+   pries apart glyphs that are supposed to join, which is not a style choice,
+   it is a broken word. Tracking goes to zero and the slot to 52% everywhere. */
+[dir="rtl"] .cut,
+[dir="rtl"] .vault-logo.cut,
+[dir="rtl"] .onb-wordmark .cut,
+[dir="rtl"] .auth-title.cut {
+  font-family: 'IBM Plex Sans Arabic', system-ui, sans-serif;
+  font-weight: 700;
+  letter-spacing: 0;
+  text-transform: none;
+  --cut-y: 52%;
+}

@@ -12,7 +12,7 @@
 // build. The literal below is the fallback (file://, or a stripped query) and is
 // still bumped by `npm run release` — see CLAUDE.md "CACHE WORKFLOW".
 const VAULT_BUILD = (() => {
-  const FALLBACK = 'v215';
+  const FALLBACK = 'v216';
   try {
     const src = (document.currentScript && document.currentScript.src) || '';
     const m = src.match(/[?&]v=(\d+)/);
@@ -1982,10 +1982,7 @@ function confirmDialog({ title, text, onConfirm, confirmLabel, variant = 'danger
 function vaultBar({ action = '', actionLabel = '' } = {}) {
   return `
     <div class="vault-bar">
-      <div class="vault-logo">
-        <span class="vault-logo-mark">${icon('vault', 22)}</span>
-        <span>${t('app_name')}</span>
-      </div>
+      <div class="vault-logo cut">${t('app_name')}</div>
       ${action ? `<button class="vault-action" id="vault-action"${actionLabel ? ` aria-label="${escapeHtml(actionLabel)}"` : ''}>${action}</button>` : '<span style="width:40px"></span>'}
     </div>
   `;
@@ -8431,7 +8428,7 @@ function showAuthGate(mode) {
         <button type="button" class="auth-lang-btn ${lang === 'ar' ? 'active' : ''}" data-setlang="ar" lang="ar" aria-pressed="${lang === 'ar'}">العربية</button>
         <button type="button" class="auth-lang-btn ${lang === 'en' ? 'active' : ''}" data-setlang="en" lang="en" aria-pressed="${lang === 'en'}">English</button>
       </div>
-      <div class="auth-title">THE VAULT</div>
+      <div class="auth-title cut">THE VAULT</div>
       <div class="auth-sub">${up ? t('auth_sub_up') : t('auth_sub_in')}</div>
       <input type="email" id="auth-email" class="auth-input" placeholder="${t('auth_email')}" autocomplete="email" inputmode="email">
       <input type="password" id="auth-password" class="auth-input" placeholder="${t('auth_password')}" autocomplete="${up ? 'new-password' : 'current-password'}">
@@ -9335,7 +9332,7 @@ function showOnboarding() {
     let inner = '';
     if (step === 0) {
       inner = `
-        <div class="onb-logo">${icon('vault', 32)}</div>
+        <div class="onb-wordmark"><span class="cut">${t('app_name')}</span></div>
         <div class="onb-title">${t('onb_welcome_title')}</div>
         <div class="onb-sub">${t('onb_welcome_sub')}</div>
         <div class="onb-feats">

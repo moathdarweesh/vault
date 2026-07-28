@@ -6,6 +6,10 @@
     <background android:drawable="@color/ic_launcher_background"/>
     <foreground android:drawable="@drawable/ic_launcher_foreground"/>
     <!-- Android 13+ themed icons: the launcher tints this layer to the user's
-         wallpaper palette. Without it the app is left out of the themed set. -->
-    <monochrome android:drawable="@drawable/ic_launcher_foreground"/>
+         wallpaper palette. Without it the app is left out of the themed set.
+         It points at its OWN drawable, not the foreground: a monochrome layer
+         is flattened to alpha, so the foreground's painted slot would tint the
+         same colour as the letter and the cut would vanish. The monochrome
+         vector cuts the slot as a hole instead. -->
+    <monochrome android:drawable="@drawable/ic_launcher_monochrome"/>
 </adaptive-icon>

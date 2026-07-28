@@ -1,38 +1,51 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
   <title>THE VAULT</title>
   <!--
-    THE VAULT app icon, exactly as specified in the Claude Design brand kit
-    ("Vault Brand Kit", section 01 APP ICON): a solid V letterform on a tile,
-    over the five-bar field rendered as a pinstripe texture.
+    THE VAULT app icon, per the Claude Design spec "Vault Logo CUT", section
+    03 APP ICON. The identity is THE CUT: a horizontal slot through the mark,
+    carrying a thin accent hairline. There is no separate symbol; the slot is
+    the whole device, and it detaches from the letter to work on its own.
+
+    Layering, bottom to top:
+      tile, pinstripe field, V letterform, slot (tile colour), hairline (accent).
 
     Two variants in one file, following the system appearance:
-      dark  = black tile, orange letter
-      light = orange tile, black letter
+      dark  = black tile, orange letter, black slot, orange hairline
+      light = orange tile, black letter, orange slot, black hairline
     The swap is a prefers-color-scheme media query inside the SVG, which a
     browser honours when this is loaded as an image. Anything that ignores it
     keeps the dark variant, which is the primary.
 
-    NOTE the V is NOT the five bars. The bars are the IN-APP mark (ICONS.vault)
-    and the status-bar icon (ic_stat_vault.xml); here they survive only as the
-    texture behind the letter. The brand kit is explicit about this split, and
-    an earlier pass got it wrong by putting the bars on the tile.
+    THE MONOGRAM EXCEPTION. The slot law is 7% of the em, but a lone V is two
+    thin diagonals meeting at a point, so a 7% slot is swallowed between them.
+    The spec cuts the monogram at 11% instead. Here the em is 24 glyph units
+    at scale 13.05, so 313.2px, and 11% of that is 34.5. The hairline holds the
+    spec ratio of 2.4% of the em, so 7.5.
 
-    Geometry is the kit's, not re-derived: the tile radius is 22.5% of its side
-    (38/170 in the kit), and the 24-unit glyph box is scaled to 61% of the tile
-    and centred, giving scale 13.05 at 512.
+    The slot sits on the optical middle of the CAP height, not of the em box.
+    Cap runs y 4.5 to 20.4 in glyph units, so 158.2 to 365.7 here, and its
+    middle is 262. The slot runs wider than the letter at that height, which is
+    intended: the line has to read as crossing the mark, not sitting inside it.
+
+    Below 48px the letter is dropped entirely and the slot alone is the mark.
+    That is a separate asset, not this file. See ic_stat_vault.xml and BRAND.md.
   -->
   <style>
     .tile { fill: #000000; }
     .mark { fill: #ff6a00; }
+    .slot { fill: #000000; }
+    .hair { fill: #ff6a00; }
     .grain { fill: #ffffff; fill-opacity: .035; }
     @media (prefers-color-scheme: light) {
       .tile { fill: #ff6a00; }
       .mark { fill: #000000; }
+      .slot { fill: #ff6a00; }
+      .hair { fill: #000000; }
       .grain { fill: #000000; fill-opacity: .06; }
     }
   </style>
   <defs>
-    <!-- The five-bar field as a repeating texture: the kit uses a 2px bar on an
+    <!-- The bar field survives only as a pinstripe texture: a 2px bar on an
          11px pitch at 170px, which is 6 on 33 at this scale. -->
     <pattern id="bars" width="33" height="512" patternUnits="userSpaceOnUse">
       <rect class="grain" width="6" height="512"/>
@@ -44,8 +57,10 @@
   <g clip-path="url(#tileClip)">
     <rect class="tile" width="512" height="512"/>
     <rect width="512" height="512" fill="url(#bars)"/>
-  </g>
-  <g transform="translate(99.5 99.5) scale(13.05)">
-    <path class="mark" d="M4.4 4.5h3.4l4.2 11.4L16.2 4.5h3.4L13.7 20.4h-3.4Z"/>
+    <g transform="translate(99.5 99.5) scale(13.05)">
+      <path class="mark" d="M4.4 4.5h3.4l4.2 11.4L16.2 4.5h3.4L13.7 20.4h-3.4Z"/>
+    </g>
+    <rect class="slot" x="172" y="244.75" width="168" height="34.5"/>
+    <rect class="hair" x="172" y="258.25" width="168" height="7.5"/>
   </g>
 </svg>

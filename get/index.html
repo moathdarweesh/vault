@@ -10,7 +10,10 @@
   <link rel="icon" type="image/svg+xml" href="../icons/icon.svg?v=215">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <!-- Archivo is not optional here: the wordmark is set in it, and without it
+       the browser fell back to IBM Plex Sans Arabic's 900 and the mark on the
+       public download page was simply not the mark. -->
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@400;500;600;700&family=Archivo:wght@900&display=swap" rel="stylesheet">
   <style>
     :root{ --accent:#ff6a00; --bg:#000; --card:#0d0a07; --text:#f4efe9; --dim:#8f8478; --border:rgba(255,232,212,.11); }
     *{ box-sizing:border-box; margin:0; padding:0; }
@@ -50,15 +53,50 @@
       background:repeating-linear-gradient(90deg, rgba(255,255,255,.035) 0 2px, transparent 2px 11px);
     }
     .logo svg{ width:46px; height:46px; position:relative; }
-    h1{ font-size:15px; font-weight:800; letter-spacing:6px; color:var(--dim); margin-bottom:4px; }
-    .brand{ font-size:30px; font-weight:900; letter-spacing:8px; margin-bottom:22px; }
+    /* THE CUT, per the Claude Design spec "Vault Logo CUT". The page used to
+       stack a tracked-out "THE" over a tracked-out "VAULT" at 6px and 8px of
+       letter-spacing; the spec lists exactly that as a DON'T, because once the
+       letters drift apart the slot stops reading as a cut through a word and
+       becomes a line lying next to some characters. One lockup, .02em.
+
+       WHY THIS ONE IS MASKED AND THE APP'S IS PAINTED. The spec draws the slot
+       as a div filled with the surface colour, which is what styles.css does —
+       it is exact and self-documenting when the surface is a flat token. This
+       card is not flat: it is a translucent gradient over a radial glow, so no
+       single colour can match it at the wordmark's height. Masking removes the
+       band instead of overpainting it, so whatever is behind shows through and
+       the slot stays correct however the card is restyled. The hairline has to
+       live on the PARENT, since a mask applies to the element's own pseudo
+       elements too and would erase a hairline sitting inside the gap. */
+    .brand{
+      position:relative; display:inline-block; margin-bottom:22px;
+      font-family:Archivo,system-ui,sans-serif; font-weight:900;
+      font-size:30px; line-height:1; letter-spacing:.02em; text-transform:uppercase;
+      color:var(--text);
+      --slot:2.1px;   /* 7% of 30px */
+      --hair:1.5px;   /* the spec's floor */
+    }
+    .brand-cut{
+      display:block;
+      -webkit-mask-image:linear-gradient(to bottom, #000 0 calc(50% - var(--slot)/2), transparent calc(50% - var(--slot)/2) calc(50% + var(--slot)/2), #000 calc(50% + var(--slot)/2) 100%);
+      mask-image:linear-gradient(to bottom, #000 0 calc(50% - var(--slot)/2), transparent calc(50% - var(--slot)/2) calc(50% + var(--slot)/2), #000 calc(50% + var(--slot)/2) 100%);
+    }
+    .brand::after{
+      content:''; position:absolute; left:0; right:0; top:50%;
+      height:var(--hair); transform:translateY(-50%);
+      background:var(--accent); pointer-events:none;
+    }
     .status{ display:flex; align-items:center; justify-content:center; gap:10px; color:var(--dim); font-size:15px; font-weight:500; margin-bottom:26px; min-height:22px; }
     .spinner{ width:18px; height:18px; border:2px solid rgba(255,255,255,.18); border-top-color:var(--accent); border-radius:50%; animation:spin .8s linear infinite; }
     @keyframes spin{ to{ transform:rotate(360deg); } }
     .btn{
       display:inline-flex; align-items:center; justify-content:center; gap:10px;
       width:100%; padding:16px 22px; border-radius:16px; border:none;
-      background:var(--accent); color:#fff; font-family:inherit; font-size:17px; font-weight:800;
+      /* Ink, NOT white. White on #ff6a00 is 2.87:1 — a ratio BRAND.md itself
+         publishes as a failure — and this is the one button on the one page a
+         new user sees before they have the app at all. The dark ink is 6.78:1
+         on the same fill and is what the accent is designed to carry. */
+      background:var(--accent); color:#1a1512; font-family:inherit; font-size:17px; font-weight:800;
       cursor:pointer; text-decoration:none; transition:transform .12s ease, filter .2s ease;
     }
     .btn:active{ transform:scale(.97); }
@@ -76,10 +114,18 @@
 <body>
   <div class="card">
     <div class="logo">
-      <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M4.4 4.5h3.4l4.2 11.4L16.2 4.5h3.4L13.7 20.4h-3.4Z" fill="#ff6a00"/></svg>
+      <!-- The cut monogram, matching icons/icon.svg: the V, then the slot in
+           the tile colour, then the hairline. The monogram exception applies —
+           11% of the 24-unit em, not 7%, because a 7% slot is swallowed where
+           the two diagonals meet. Slot y 11.13..13.77 straddles the optical
+           middle of the cap height (12.45); the hairline is 2.4% of the em. -->
+      <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+        <path d="M4.4 4.5h3.4l4.2 11.4L16.2 4.5h3.4L13.7 20.4h-3.4Z" fill="#ff6a00"/>
+        <rect x="5.616" y="11.13" width="12.768" height="2.64" fill="#000"/>
+        <rect x="5.616" y="12.162" width="12.768" height="0.576" fill="#ff6a00"/>
+      </svg>
     </div>
-    <h1>THE</h1>
-    <div class="brand">VAULT</div>
+    <div class="brand"><span class="brand-cut">THE VAULT</span></div>
 
     <div class="status" id="status">
       <span class="spinner"></span>

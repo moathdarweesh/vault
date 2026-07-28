@@ -2,21 +2,29 @@
 <!--
   THE VAULT launcher icon, foreground layer.
 
-  The mark is the solid V letterform from the Claude Design brand kit
-  ("Vault Brand Kit", section 01 APP ICON) — NOT the five bars. The bars are the
-  in-app mark (ICONS.vault) and the status-bar icon (ic_stat_vault.xml); on the
-  app icon they appear only as the pinstripe texture on the background layer.
-  A previous pass put the bars on the tile, which was wrong.
+  The identity is THE CUT, per the Claude Design spec "Vault Logo CUT": a
+  horizontal slot through the mark carrying a thin accent hairline. This layer
+  draws the V, then the slot in the background colour, then the hairline.
 
   A VECTOR, not five PNG densities: minSdkVersion is 26, so mipmap-anydpi-v26
   always wins and the legacy density PNGs could never be loaded.
 
+  DO NOT add a res/drawable-v24/ copy of this file. That qualifier outranks
+  plain res/drawable on every device this app runs on, so a stale v24 copy
+  silently shadows this one and ships the wrong glyph. It cost three releases.
+
   ADAPTIVE-ICON GEOMETRY: the canvas is 108x108dp but a launcher masks and
   parallaxes it, so only the inner 72dp (18..90) is guaranteed visible. The
-  group below scales the kit's 24-unit glyph by 2.895 and centres its INK (not
-  its bounding box — the V is not vertically centred inside its own 24 box) on
-  (54,54). Ink lands at x 32..76 and y 31..77: 44dp across, about 61% of the
-  safe zone, which is the same glyph-to-tile ratio the kit draws.
+  group scales the 24-unit glyph by 2.895 and centres its INK (not its bounding
+  box, since the V is not vertically centred inside its own 24 box) on (54,54).
+  Ink lands at x 32..76 and y 31..77: 44dp across, about 61% of the safe zone.
+
+  THE MONOGRAM EXCEPTION: the slot law is 7% of the em, but a lone V is two thin
+  diagonals meeting at a point and a 7% slot vanishes between them, so the spec
+  cuts the monogram at 11%. The em here is 24 units at scale 2.895, so 69.5dp;
+  11% of that is 7.64 and the hairline holds the spec ratio of 2.4%, so 1.67.
+  The slot sits on the optical middle of the CAP height, which is y 54, and runs
+  8% inside the ink on each side: x 35.52 to 72.48.
 -->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     android:width="108dp"
@@ -32,4 +40,10 @@
             android:fillColor="#FF6A00"
             android:pathData="M4.4,4.5h3.4l4.2,11.4L16.2,4.5h3.4L13.7,20.4h-3.4Z" />
     </group>
+    <path
+        android:fillColor="#000000"
+        android:pathData="M35.52,50.18h36.96v7.64h-36.96Z" />
+    <path
+        android:fillColor="#FF6A00"
+        android:pathData="M35.52,53.165h36.96v1.67h-36.96Z" />
 </vector>

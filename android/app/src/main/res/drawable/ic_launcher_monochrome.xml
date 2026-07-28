@@ -1,0 +1,50 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  THE VAULT themed-icon (monochrome) layer, Android 13+.
+
+  WHY THIS FILE EXISTS SEPARATELY FROM ic_launcher_foreground.xml. A launcher
+  renders the monochrome layer from its ALPHA CHANNEL ONLY and tints the whole
+  thing one wallpaper colour. The coloured foreground paints the slot in the
+  background colour and the hairline in the accent, which works when it sits on
+  an opaque black tile; flattened to alpha those two rectangles are just more
+  ink, so the slot would tint the same colour as the letter and the cut would
+  disappear. A themed VAULT icon with no cut is not the mark.
+
+  So here the slot is a HOLE, not a painted bar. android:fillType="evenOdd"
+  makes an enclosed subpath subtract from the one containing it.
+
+  WHY THE SLOT IS TWO QUADRILATERALS AND NOT ONE RECTANGLE. A V at cut height is
+  two separate diagonal strokes with a gap between them. One rectangle spanning
+  both would, under evenOdd, be inside the slot but outside the letter across
+  that gap, which counts odd and fills in solid. Each stroke therefore gets its
+  own subpath, cut to that stroke's exact width where the slot crosses it, so
+  every hole lies wholly inside the letter. The edges are the letter's own:
+    left  outer x = 4.4  + (y - 4.5) * 0.37107
+    left  inner x = 7.8  + (y - 4.5) * 0.36842
+    right inner x = 16.2 - (y - 4.5) * 0.36842
+    right outer x = 19.6 - (y - 4.5) * 0.37107
+  evaluated at the slot's own top and bottom, y 11.129 and 13.767 in glyph
+  units, which is the 11% monogram slot centred on the optical middle of the
+  cap height. See ic_launcher_foreground.xml for where those numbers come from.
+
+  The hairline is added back as a filled subpath. Under evenOdd it re-fills
+  inside the holes and fills on its own across the gap, so the line reads
+  continuously through the letter. That matches the colour icon exactly, where
+  the letter and the hairline are both the accent and are indistinguishable.
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <group
+        android:scaleX="2.895"
+        android:scaleY="2.895"
+        android:translateX="19.26"
+        android:translateY="17.96">
+        <path
+            android:fillColor="#FFFFFFFF"
+            android:fillType="evenOdd"
+            android:pathData="M4.4,4.5h3.4l4.2,11.4L16.2,4.5h3.4L13.7,20.4h-3.4ZM6.86,11.129L10.242,11.129L11.214,13.767L7.839,13.767ZM13.758,11.129L17.14,11.129L16.161,13.767L12.786,13.767ZM5.617,12.1595L18.383,12.1595L18.383,12.7365L5.617,12.7365Z" />
+    </group>
+</vector>
