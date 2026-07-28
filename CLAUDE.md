@@ -35,7 +35,7 @@ A fitness / workout-tracking **PWA**. Vanilla JS, **no build step**, bilingual *
 npm run release          # bump every marker + verify, then commit all files together
 ```
 
-**Current version: v214.** APK: build 11 / v2.0.
+**Current version: v215.** APK: build 12 / v2.1.
 
 `scripts/release.js` rewrites all **16** markers and then re-reads them from disk to confirm; it exits non-zero if any disagree. The markers are `?v=N` in `index.html` (×14 — every script and stylesheet, the `js/vendor/supabase.js` preload, and **both `icons/icon.svg` links**), the `__cleaned_vN` sessionStorage key, the `FALLBACK` literal in `app.js`, and `version.json` → `web`. The count is derived, not hard-coded, so adding a marker is safe — just keep this sentence honest.
 
@@ -261,6 +261,19 @@ the other; when the mark changes, BOTH have to move.
   `mipmap-anydpi-v26/ic_launcher{,_round}.xml`. minSdkVersion is 26, so the
   anydpi-v26 adaptive icon ALWAYS wins — the five density PNGs beside it could
   never be loaded, and were deleted rather than left showing the wrong brand.
+- ⚠️ **`res/drawable-v24/` shadows `res/drawable/`.** Capacitor ships a stock
+  `drawable-v24/ic_launcher_foreground.xml` — the Android **robot** — and at
+  minSdk 26 the `-v24` qualifier always wins. Writing the brand icon into plain
+  `drawable/` therefore did nothing for THREE releases (v212, v213, v214): users
+  saw our black background with their robot on it. Deleted at v215. **When
+  replacing any drawable, `find res -name '<name>*'` first** — a qualified
+  variant anywhere silently outranks the unqualified one.
+- **Verify the icon by DECOMPILING it, never by checking a filename.** The check
+  that missed this was "does the APK contain a file called
+  `ic_launcher_foreground`?" — which matched the stock file. The check that
+  caught it:
+  `aapt2 dump xmltree <apk> --file res/drawable/ic_launcher_foreground.xml`
+  and reading the actual `pathData`. It must start `M4.4,4.5h3.4l4.2,11.4`.
 - `<monochrome>` points at the same vector, so the app joins the Android 13+
   themed-icon set instead of showing as a plain shrunken square beside them.
 - **Adaptive-icon safe zone:** the canvas is 108dp but only the inner 72dp
