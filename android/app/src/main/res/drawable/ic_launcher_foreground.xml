@@ -1,0 +1,48 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  THE VAULT launcher icon — foreground layer of the adaptive icon.
+
+  This replaces the STOCK CAPACITOR placeholder (a blue "X" on white) that had
+  been shipping as the app icon on every install. icons/icon.svg was updated to
+  the VAULT mark long ago, but that file only feeds the PWA / browser / favicon;
+  the installed Android app reads mipmap-*/ic_launcher*, which nobody had ever
+  replaced.
+
+  A VECTOR, not five PNG densities: minSdkVersion is 26, so mipmap-anydpi-v26
+  always wins and the legacy density PNGs could never be loaded. This is sharp at
+  every size and reviewable as text.
+
+  ADAPTIVE-ICON GEOMETRY: the canvas is 108x108dp but the launcher masks it to a
+  shape and parallaxes it, so only the inner 72dp (18..90) is guaranteed visible.
+  This is ICONS.vault at scale 2.77 about centre (54,54), spanning x 27.96..80.04
+  and y 34.61..69.51 — 52dp across, about 72% of the safe zone. A first pass used
+  scale 3.3 (86% of the zone); rendered against a circular mask it read
+  noticeably oversized next to ordinary launcher icons.
+
+  The outer pair sits at 55% alpha, the same three-tone depth the in-app mark
+  gained at v211. BRAND.md section 1: the app icon and ICONS.vault must stay the
+  same shape.
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <path
+        android:fillColor="#FF6A00"
+        android:fillAlpha="0.55"
+        android:pathData="M27.96,49.57 A3.88,3.88 0 0 1 35.72,49.57 V58.43 A3.88,3.88 0 0 1 27.96,58.43 Z" />
+    <path
+        android:fillColor="#FF6A00"
+        android:pathData="M40.15,38.49 A3.88,3.88 0 0 1 47.91,38.49 V69.51 A3.88,3.88 0 0 1 40.15,69.51 Z" />
+    <path
+        android:fillColor="#FF6A00"
+        android:pathData="M50.12,44.03 A3.88,3.88 0 0 1 57.88,44.03 V63.97 A3.88,3.88 0 0 1 50.12,63.97 Z" />
+    <path
+        android:fillColor="#FF6A00"
+        android:pathData="M60.09,38.49 A3.88,3.88 0 0 1 67.85,38.49 V69.51 A3.88,3.88 0 0 1 60.09,69.51 Z" />
+    <path
+        android:fillColor="#FF6A00"
+        android:fillAlpha="0.55"
+        android:pathData="M72.28,49.57 A3.88,3.88 0 0 1 80.04,49.57 V58.43 A3.88,3.88 0 0 1 72.28,58.43 Z" />
+</vector>

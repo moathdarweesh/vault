@@ -1,16 +1,31 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
-  <!-- THE VAULT app mark. This is the `vault` glyph from ICONS scaled to 512 —
-       five bars, NO crossbar. The crossbar belongs to `dumbbell`; the old icon
-       carried it, so the app icon was the equipment glyph rather than the brand
-       mark. Flat caps + mitre joins to match the VAULT Machined icon language,
-       pure black to match the app's actual --bg (the old #06141b navy matched no
-       theme), and the brand accent #ff6a00. -->
+  <!-- THE VAULT app mark — the five bars of a vault door, NO crossbar (the
+       crossbar belongs to `dumbbell`; the icon carried it for a long time, so
+       the icon was the equipment rather than the brand).
+
+       This is `ICONS.vault` scaled to 512. BRAND.md §1 requires the two to stay
+       the SAME SHAPE, so when the in-app set became filled and three-tone at
+       v211 this had to follow: the bars are solid rounded rects rather than
+       strokes, and the outer pair sits back at 55% to give the mark depth at
+       launcher size. Pure black tile, matching the app's own page background:
+       the surface ramp is warm precisely so the void can stay black.
+       (No double hyphen anywhere in this comment — XML forbids it inside a
+       comment, and an invalid comment makes the whole file fail to parse as an
+       image. That shipped for about a minute before a render test caught it.)
+
+       Geometry: the 24-grid glyph at scale 18.5 about centre (256,256) — 348px
+       wide (68% of the tile) and 259px tall, so it still reads at 48px.
+
+       ⚠️ This file is the PWA / browser / apple-touch icon ONLY. The installed
+       Android app takes its launcher icon from android/.../mipmap-*/ic_launcher*
+       — those are separate PNGs baked into the APK, and they must be regenerated
+       from this artwork whenever it changes. -->
   <rect width="512" height="512" fill="#000000" rx="96"/>
-  <g fill="none" stroke="#ff6a00" stroke-width="40" stroke-linecap="butt" stroke-linejoin="miter">
-    <path d="M96 176v160"/>
-    <path d="M176 96v320"/>
-    <path d="M256 128v256"/>
-    <path d="M336 96v320"/>
-    <path d="M416 176v160"/>
+  <g fill="#ff6a00">
+    <rect x="82"  y="200" width="52" height="111" rx="26" opacity=".55"/>
+    <rect x="164" y="126" width="52" height="259" rx="26"/>
+    <rect x="230" y="164" width="52" height="185" rx="26"/>
+    <rect x="296" y="126" width="52" height="259" rx="26"/>
+    <rect x="378" y="200" width="52" height="111" rx="26" opacity=".55"/>
   </g>
 </svg>

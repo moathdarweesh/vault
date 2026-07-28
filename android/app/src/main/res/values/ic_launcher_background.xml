@@ -1,4 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <color name="ic_launcher_background">#FFFFFF</color>
+    <!-- The launcher icon's background layer. Was #FFFFFF, the stock Capacitor
+         white behind the placeholder "X". Pure black matches the app's own page
+         background and the tile in icons/icon.svg: the surface ramp is warm
+         precisely so the void can stay black. -->
+    <color name="ic_launcher_background">#000000</color>
 </resources>

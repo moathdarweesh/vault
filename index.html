@@ -17,8 +17,12 @@
        slow styles.css load never flashes unstyled white content (FOUC). -->
   <style>html,body{margin:0;background:#000;color:#fff}</style>
   <link rel="manifest" href="manifest.json">
-  <link rel="icon" type="image/svg+xml" href="icons/icon.svg">
-  <link rel="apple-touch-icon" href="icons/icon.svg">
+  <!-- These carry ?v=N like every other asset: without it a browser that has
+       already cached the favicon keeps serving the OLD mark forever, so an icon
+       redesign reaches nobody. `npm run release` rewrites every ?v= in this
+       file, so these stay in step automatically. -->
+  <link rel="icon" type="image/svg+xml" href="icons/icon.svg?v=212">
+  <link rel="apple-touch-icon" href="icons/icon.svg?v=212">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <!-- Warm the Supabase connection (DNS + TLS) during page load so the first
@@ -30,9 +34,9 @@
   <!-- Must carry the SAME ?v=N that cloud.js appends when it injects this script,
        or the preload warms a different URL and is wasted. `npm run release` bumps
        both (this one by regex, cloud.js by deriving from its own marker). -->
-  <link rel="preload" href="js/vendor/supabase.js?v=211" as="script">
+  <link rel="preload" href="js/vendor/supabase.js?v=212" as="script">
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=Tajawal:wght@400;500;700;800;900&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="styles.css?v=211">
+  <link rel="stylesheet" href="styles.css?v=212">
 </head>
 <body class="theme-dark">
   <div class="app">
@@ -97,21 +101,21 @@
           await Promise.all(regs.map((r) => r.unregister()));
           const keys = await caches.keys();
           await Promise.all(keys.map((k) => caches.delete(k)));
-          if (!sessionStorage.getItem('__cleaned_v211')) {
-            sessionStorage.setItem('__cleaned_v211', '1');
+          if (!sessionStorage.getItem('__cleaned_v212')) {
+            sessionStorage.setItem('__cleaned_v212', '1');
             location.reload();
           }
         }
       }).catch(() => {});
     }
   </script>
-  <script src="js/cloud.js?v=211"></script>
-  <script src="js/storage.js?v=211"></script>
-  <script src="js/tables.js?v=211"></script>
-  <script src="js/app.js?v=211"></script>
-  <script src="js/health.js?v=211"></script>
-  <script src="js/notify.js?v=211"></script>
-  <script src="js/foodai.js?v=211"></script>
-  <script src="js/update.js?v=211"></script>
+  <script src="js/cloud.js?v=212"></script>
+  <script src="js/storage.js?v=212"></script>
+  <script src="js/tables.js?v=212"></script>
+  <script src="js/app.js?v=212"></script>
+  <script src="js/health.js?v=212"></script>
+  <script src="js/notify.js?v=212"></script>
+  <script src="js/foodai.js?v=212"></script>
+  <script src="js/update.js?v=212"></script>
 </body>
 </html>

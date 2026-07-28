@@ -35,9 +35,9 @@ A fitness / workout-tracking **PWA**. Vanilla JS, **no build step**, bilingual *
 npm run release          # bump every marker + verify, then commit all files together
 ```
 
-**Current version: v211.** APK: build 9 / v1.8 (unchanged — v211 is web-only).
+**Current version: v212.** APK: build 10 / v1.9.
 
-`scripts/release.js` rewrites all **13** markers and then re-reads them from disk to confirm; it exits non-zero if any disagree. The markers are `?v=N` in `index.html` (×11, including the `js/vendor/supabase.js` preload), the `__cleaned_vN` sessionStorage keys, the `FALLBACK` literal in `app.js`, and `version.json` → `web`.
+`scripts/release.js` rewrites all **16** markers and then re-reads them from disk to confirm; it exits non-zero if any disagree. The markers are `?v=N` in `index.html` (×14 — every script and stylesheet, the `js/vendor/supabase.js` preload, and **both `icons/icon.svg` links**), the `__cleaned_vN` sessionStorage key, the `FALLBACK` literal in `app.js`, and `version.json` → `web`. The count is derived, not hard-coded, so adding a marker is safe — just keep this sentence honest.
 
 - `VAULT_BUILD` is **derived at runtime** from `app.js`'s own `?v=N`, so the visible label and the bug-report tag always describe the bundle the browser actually loaded. The `FALLBACK` literal is only for `file://`.
 - `js/cloud.js` derives the same marker to cache-bust `js/vendor/supabase.js` — it must match the preload in `index.html` or the preload is wasted.
@@ -220,6 +220,34 @@ the same identity on two surfaces. `BRAND.md` is the authority.
   nothing. Two deliberate exceptions: `.quick-add-chip` (a control, so it keeps an
   interactive border) and `.bento-card` (its `inset: 0` child paints over an inset
   bevel).
+
+### App icon vs LAUNCHER icon — two different files (v212)
+`icons/icon.svg` is the PWA / browser-tab / apple-touch icon **only**. The
+installed Android app takes its icon from `android/.../mipmap-*/ic_launcher*`,
+a completely separate asset baked into the APK.
+
+Nobody had ever replaced those, so **the app icon on every phone was the stock
+Capacitor placeholder — a blue "X" on white** — for the app's whole life, while
+`icon.svg` had carried the VAULT mark since v202. Updating one does not touch
+the other; when the mark changes, BOTH have to move.
+
+- The launcher icon is now a **VectorDrawable**
+  (`res/drawable/ic_launcher_foreground.xml`) plus a black
+  `ic_launcher_background` colour, wired through
+  `mipmap-anydpi-v26/ic_launcher{,_round}.xml`. minSdkVersion is 26, so the
+  anydpi-v26 adaptive icon ALWAYS wins — the five density PNGs beside it could
+  never be loaded, and were deleted rather than left showing the wrong brand.
+- `<monochrome>` points at the same vector, so the app joins the Android 13+
+  themed-icon set instead of showing as a plain shrunken square beside them.
+- **Adaptive-icon safe zone:** the canvas is 108dp but only the inner 72dp
+  (18..90) is guaranteed visible — a launcher masks and parallaxes the rest. The
+  mark spans 52dp, about 72% of that zone. A first pass at 86% rendered visibly
+  oversized against a circular mask next to ordinary icons; check it against a
+  real mask, not against the bare canvas.
+- **XML comments may not contain a double hyphen.** `icon.svg` shipped for about
+  a minute with `--bg` inside its comment, which makes the whole file fail to
+  parse as an image — the HTML parser is lenient, an `image/svg+xml` consumer is
+  not. Render it to a canvas to catch this; a text diff will not show it.
 
 ### Icon set — "VAULT Duotone" (v211, replaced the stroked v202 set)
 `ICONS` in `js/app.js` is a **55-key** FILLED set (+2 back-compat aliases) on the

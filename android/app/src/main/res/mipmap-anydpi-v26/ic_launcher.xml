@@ -1,5 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
 <adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- @drawable (a vector), not @mipmap (the stock Capacitor PNG this used to
+         point at). minSdkVersion is 26, so this file is what EVERY install
+         actually uses — the density PNGs beside it could never be loaded. -->
     <background android:drawable="@color/ic_launcher_background"/>
-    <foreground android:drawable="@mipmap/ic_launcher_foreground"/>
+    <foreground android:drawable="@drawable/ic_launcher_foreground"/>
+    <!-- Android 13+ themed icons: the launcher tints this layer to the user's
+         wallpaper palette. Without it the app is left out of the themed set. -->
+    <monochrome android:drawable="@drawable/ic_launcher_foreground"/>
 </adaptive-icon>
