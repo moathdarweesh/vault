@@ -30,7 +30,7 @@ mark; it is the DON'T at the bottom of this section.
 | Wordmark floor | **24px** (9mm print) | at 24px the slot is already on its 2px floor with a 1.5px hairline inside it |
 | Tile switch | **48px** | at or above, the cut letterform; below, the slot alone |
 | Clear space | **slot height × 6** | measured in slots, so it scales itself |
-| Hairline colour | `#ff6a00` on dark, **`#a34400` on light** | the brighter orange is 2.87:1 on the bone ground |
+| Hairline colour | **`#ff6a00` in both modes** | one identity, not two — see the exception below |
 
 ### Where each form ships
 
@@ -58,6 +58,22 @@ the section tick in the identity layer. They are no longer a logo anywhere. Unti
 v215 the app shipped the bars in the top bar and the V on the icon — two marks
 competing for one job — and the status-bar icon was the bars as well. Do not
 reintroduce them as a mark.
+
+### The hairline's contrast exception (owner decision, v216)
+
+The Claude Design spec sets the hairline to `#a34400` on light, and `--accent-text`
+encodes that split already. The owner chose `#ff6a00` in **both** modes instead, so
+the mark is one colour everywhere rather than two.
+
+The cost, stated plainly: `#ff6a00` measures **2.87:1** on the bone ground. Where the
+hairline crosses the gaps *between* letters it is therefore decorative, not a
+readable element. It stays legible because most of its length overlaps the near-black
+wordmark, and because it is a brand device rather than information — nothing is lost
+if a reader cannot resolve it.
+
+**This is the only place `--accent` is permitted under 4.5:1 on light.** It is not a
+precedent. Small accent text everywhere else takes `--accent-text`, which is the
+entire reason that token exists (§2).
 
 ### DON'T
 

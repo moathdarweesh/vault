@@ -394,7 +394,7 @@ function defaultState() {
     sleep: [],
     // Workout plan — a CONTINUOUS ROTATION: an ordered cycle of workouts rolled
     // across training days (never reset weekly). See migratePlan()/DB.plan.
-    plan: { mode: 'rotation', cycle: [], trainingDays: [], anchor: null },
+    plan: { mode: 'rotation', cycle: [], trainingDays: [], anchor: null, restDates: [] },
     supplements: [],
     // Reminder settings. Times are LOCAL "HH:MM" strings, never timestamps: a
     // reminder means "08:00 wherever you are", so it must survive a timezone
@@ -430,7 +430,15 @@ function defaultNutrition() {
 
 // Count training-weekday dates x with anchor <= x < D (date-only). Used to find
 // the rotation position: each elapsed training day advances one cycle slot.
-function trainingDaysBetween(anchorStr, D, trainingDays) {
+//
+// `rest` is the set of YYYY-MM-DD dates the user marked "not going today". They
+// are skipped here, and that single line is the whole postpone behaviour: a day
+// that does not count as elapsed does not advance the cycle, so the workout it
+// would have carried lands on the next real training day and everything after
+// it slides by one. Nothing is lost and nothing needs rescheduling — which is
+// the point of a continuous rotation, as opposed to a fixed weekly grid where
+// the same skip would simply forfeit that workout.
+function trainingDaysBetween(anchorStr, D, trainingDays, rest) {
   const a = new Date(anchorStr + 'T00:00:00');
   const a0 = new Date(a.getFullYear(), a.getMonth(), a.getDate());
   const d0 = new Date(D.getFullYear(), D.getMonth(), D.getDate());
@@ -439,10 +447,24 @@ function trainingDaysBetween(anchorStr, D, trainingDays) {
   const cur = new Date(a0);
   let guard = 0;
   while (cur < d0 && guard++ < 4000) {
-    if (trainingDays.indexOf(cur.getDay()) !== -1) count++;
+    if (trainingDays.indexOf(cur.getDay()) !== -1 && !(rest && rest[isoOf(cur)])) count++;
     cur.setDate(cur.getDate() + 1);
   }
   return count;
+}
+
+// Date -> 'YYYY-MM-DD' using LOCAL fields. Never toISOString(): that converts to
+// UTC first, so east of Greenwich an evening date comes back as the next day.
+function isoOf(d) {
+  return d.getFullYear() + '-' + pad2(d.getMonth() + 1) + '-' + pad2(d.getDate());
+}
+
+// The rest set as a lookup object, tolerating a missing/!array field.
+function restMap(p) {
+  const out = {};
+  const list = p && Array.isArray(p.restDates) ? p.restDates : [];
+  for (let i = 0; i < list.length; i++) out[list[i]] = true;
+  return out;
 }
 
 // Convert a legacy day-of-week plan grid (or a missing/partial plan) into the
@@ -459,6 +481,11 @@ function migratePlan(plan) {
       })),
       trainingDays: Array.isArray(plan.trainingDays) ? plan.trainingDays.slice() : [],
       anchor: plan.anchor || todayISO(),
+      // This runs on EVERY load, not just on the legacy grid, and it rebuilds the
+      // object field by field — so anything omitted here is silently erased from
+      // the saved blob on the next write. restDates predates nothing: an existing
+      // user simply has no such field, hence the [] default.
+      restDates: Array.isArray(plan.restDates) ? plan.restDates.slice() : [],
     };
   }
   const grid = plan || {};
@@ -472,7 +499,7 @@ function migratePlan(plan) {
       if (!seen[key]) { seen[key] = true; cycle.push({ name: nm, exerciseIds: day.exerciseIds.slice() }); }
     }
   }
-  return { mode: 'rotation', cycle, trainingDays, anchor: todayISO() };
+  return { mode: 'rotation', cycle, trainingDays, anchor: todayISO(), restDates: [] };
 }
 
 // Set when the stored blob could not be parsed. While true the app runs
@@ -750,23 +777,55 @@ const DB = {
   // The workout for a date = cycle[(training days elapsed since anchor) mod cycle.length];
   // rest days (weekday ∉ trainingDays) have no workout. The cycle rolls across weeks — never reset.
   plan: {
-    get() { return STATE.plan || { mode: 'rotation', cycle: [], trainingDays: [], anchor: null }; },
+    get() { return STATE.plan || { mode: 'rotation', cycle: [], trainingDays: [], anchor: null, restDates: [] }; },
 
     // THE single source of truth: what workout (or null=rest) falls on date D.
     workoutForDate(D) {
       const p = STATE.plan;
       if (!p || p.mode !== 'rotation' || !Array.isArray(p.cycle) || !p.cycle.length) return null;
       const td = Array.isArray(p.trainingDays) ? p.trainingDays : [];
-      if (td.indexOf(D.getDay()) === -1) return null;              // rest day
+      if (td.indexOf(D.getDay()) === -1) return null;              // scheduled rest weekday
+      const rest = restMap(p);
+      if (rest[isoOf(D)]) return null;                             // user took this day off
       const anchor = p.anchor || todayISO();
       const a = new Date(anchor + 'T00:00:00');
       const a0 = new Date(a.getFullYear(), a.getMonth(), a.getDate());
       const d0 = new Date(D.getFullYear(), D.getMonth(), D.getDate());
       if (d0 < a0) return null;                                    // before the plan started
-      const elapsed = trainingDaysBetween(anchor, D, td);
+      const elapsed = trainingDaysBetween(anchor, D, td, rest);
       const len = p.cycle.length;
       return p.cycle[((elapsed % len) + len) % len];
     },
+
+    // ----- "not going today" -----
+    // A day the user opted out of. It is NOT the same as a non-training weekday:
+    // this one was scheduled and was declined, so it also has to stop advancing
+    // the cycle (see trainingDaysBetween) or the workout it carried is forfeited.
+    isRest(D) {
+      const p = STATE.plan;
+      if (!p) return false;
+      return !!restMap(p)[typeof D === 'string' ? D : isoOf(D)];
+    },
+    setRest(D, on) {
+      const iso = typeof D === 'string' ? D : isoOf(D);
+      if (!STATE.plan) return false;
+      if (!Array.isArray(STATE.plan.restDates)) STATE.plan.restDates = [];
+      const list = STATE.plan.restDates;
+      const at = list.indexOf(iso);
+      if (on && at === -1) list.push(iso);
+      else if (!on && at !== -1) list.splice(at, 1);
+      else return this.isRest(iso);                    // no change, no write
+      // Unbounded growth would bloat a blob that is synced whole on every save.
+      // Only dates from here on can still affect the rotation, and the calendar
+      // reads logged sessions rather than this list, so anything older than a
+      // year is dead weight. Sorted so the prune is a cheap prefix drop.
+      list.sort();
+      const cutoff = isoOf(new Date(Date.now() - 365 * 864e5));
+      while (list.length && list[0] < cutoff) list.shift();
+      save();
+      return this.isRest(iso);
+    },
+    toggleRest(D) { return this.setRest(D, !this.isRest(D)); },
 
     // Replace the whole rotation (used by the schedule modal on template adopt).
     setRotation({ cycle, trainingDays, anchor }) {
@@ -775,6 +834,10 @@ const DB = {
         cycle: (cycle || []).map((s) => ({ name: (s && s.name) || 'Workout', exerciseIds: Array.isArray(s && s.exerciseIds) ? s.exerciseIds.slice() : [] })),
         trainingDays: (trainingDays || []).slice().sort((a, b) => a - b),
         anchor: anchor || todayISO(),
+        // Carried over, not reset. This also rebuilds the object field by field,
+        // and a day the user has already declared off (tomorrow, say) is a fact
+        // about their week, not about which template they picked.
+        restDates: Array.isArray(STATE.plan && STATE.plan.restDates) ? STATE.plan.restDates.slice() : [],
       };
       save();
     },
@@ -818,7 +881,7 @@ const DB = {
       if (s) { s.exerciseIds = s.exerciseIds.filter((id) => id !== exId); save(); }
     },
     clearAll() {
-      STATE.plan = { mode: 'rotation', cycle: [], trainingDays: [], anchor: todayISO() };
+      STATE.plan = { mode: 'rotation', cycle: [], trainingDays: [], anchor: todayISO(), restDates: [] };
       save();
     },
   },

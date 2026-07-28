@@ -12,7 +12,7 @@
 // build. The literal below is the fallback (file://, or a stripped query) and is
 // still bumped by `npm run release` — see CLAUDE.md "CACHE WORKFLOW".
 const VAULT_BUILD = (() => {
-  const FALLBACK = 'v216';
+  const FALLBACK = 'v217';
   try {
     const src = (document.currentScript && document.currentScript.src) || '';
     const m = src.match(/[?&]v=(\d+)/);
@@ -958,6 +958,12 @@ const I18N = {
     pick_exercises: 'Pick Exercises',
     no_exercises_picked: 'No exercises picked yet',
     rest_day: 'Rest',
+    rest_today_toggle: 'Not training today',
+    rest_today_title: 'Today is off',
+    rest_today_sub: 'Your cycle picks up where it left off.',
+    rest_today_next: 'Next up {day} — {name}. Nothing was lost.',
+    rest_today_on: 'Today is off. The cycle moves with you.',
+    rest_today_off: "Today is back on.",
     plan_empty: 'Your weekly plan is empty',
     plan_empty_sub: 'Apply a template or build it yourself day by day.',
     apply_template: 'Apply Template',
@@ -1587,6 +1593,12 @@ const I18N = {
     pick_exercises: 'اختر تمارين',
     no_exercises_picked: 'لم تختر أي تمارين بعد',
     rest_day: 'راحة',
+    rest_today_toggle: 'لن أتمرّن اليوم',
+    rest_today_title: 'اليوم راحة',
+    rest_today_sub: 'دورتك تُكمل من حيث توقّفت.',
+    rest_today_next: 'التالي {day} — {name}. لم يسقط شيء.',
+    rest_today_on: 'اليوم راحة. الدورة تتحرّك معك.',
+    rest_today_off: 'عاد اليوم يوم تمرين.',
     plan_empty: 'خطتك الأسبوعية فاضية',
     plan_empty_sub: 'طبّق قالبًا جاهزًا أو ابنِها يومًا بيوم.',
     apply_template: 'طبّق قالب',
@@ -2550,6 +2562,10 @@ function renderHome(el) {
   // Hero "Today" card — the flagship element of the redesigned home.
   // Plan scheduled today → plan name + muscles + a bold Start CTA.
   // No plan → this week's set count as a large count-up numeral.
+  // workoutForDate already returns null for a day the user marked off, so ask
+  // separately whether THAT is why — a declined day and an ordinary rest weekday
+  // look identical from the return value but must not read the same on screen.
+  const todayIsOff = DB.plan.isRest(now);
   const todayPlan = DB.plan.workoutForDate(now);   // continuous rotation → today's slot
   const exerciseById = Object.fromEntries(exercises.map((e) => [e.id, e]));
   const hasPlanToday = !!(todayPlan && todayPlan.exerciseIds && todayPlan.exerciseIds.length > 0);
@@ -2559,8 +2575,42 @@ function renderHome(el) {
   const planState = DB.plan.get();
   const hasAnyPlan = !!(planState && Array.isArray(planState.cycle) && planState.cycle.length > 0);
 
+  // "Not going today" — sits OUTSIDE the hero, which is itself a <button>: a
+  // nested button is invalid HTML and its click would bubble straight into
+  // starting the workout the user just declined. Only offered when the rotation
+  // actually puts something on today, or when today is already marked off (so
+  // there is a way back). `aria-pressed` because it is a toggle, not an action.
+  const restToggleHtml = (hasPlanToday || todayIsOff) ? `
+    <button class="rest-toggle${todayIsOff ? ' is-off' : ''}" id="home-rest-toggle"
+            type="button" aria-pressed="${todayIsOff ? 'true' : 'false'}">
+      <span class="rest-box" aria-hidden="true">${todayIsOff ? icon('check', 14) : ''}</span>
+      <span class="rest-label">${t('rest_today_toggle')}</span>
+    </button>
+  ` : '';
+
   let heroHtml = '';
-  if (hasPlanToday) {
+  if (todayIsOff) {
+    // Declined day. Say what it cost — nothing — because the whole reason the
+    // rotation is continuous is that a missed day postpones rather than forfeits.
+    const nextUp = (() => {
+      const d = new Date(now);
+      for (let i = 1; i <= 14; i++) {
+        d.setDate(d.getDate() + 1);
+        const w = DB.plan.workoutForDate(d);
+        if (w) return { name: w.name, day: dayName(d.getDay(), true) };
+      }
+      return null;
+    })();
+    heroHtml = `
+      <div class="hero-card hero-rest">
+        <div class="hero-eyebrow">${t('rest_day')} · ${escapeHtml(dayName(now.getDay(), true))}</div>
+        <div class="hero-title">${t('rest_today_title')}</div>
+        <div class="hero-meta">${nextUp
+          ? escapeHtml(t('rest_today_next').replace('{day}', nextUp.day).replace('{name}', nextUp.name))
+          : t('rest_today_sub')}</div>
+      </div>
+    `;
+  } else if (hasPlanToday) {
     const exObjs = todayPlan.exerciseIds.map((id) => exerciseById[id]).filter(Boolean);
     const muscles = groupMusclesFromExercises(exObjs);
     const sideRow = (label, keys, sideClass) => keys.length === 0 ? '' : `
@@ -2621,6 +2671,7 @@ function renderHome(el) {
     </div>
 
     ${heroHtml}
+    ${restToggleHtml}
 
     ${foodHeroHtml}
 
@@ -2684,6 +2735,16 @@ function renderHome(el) {
     // ready-made plan or builds one, instead of landing in an empty session.
     if (!hasAnyPlan) { navigate('planner'); return; }
     navigate('session-day', { date: todayISO() });
+  });
+  // "Not going today". Re-reads the date at click time for the same
+  // across-midnight reason as the Start card above, then re-renders Home so the
+  // hero, the toggle and the week counters all reflect the new rotation
+  // position — toggling this SLIDES the cycle, so a partial repaint would lie.
+  $('#home-rest-toggle', el)?.addEventListener('click', () => {
+    const d = new Date();
+    const nowOff = DB.plan.toggleRest(d);
+    showToast(nowOff ? t('rest_today_on') : t('rest_today_off'));
+    renderView('home');   // NOT renderHome() — it needs its view element
   });
   $('#home-food-hero', el)?.addEventListener('click', () => navigate('food'));
   const lastSetCard = $('.last-set-card', el);

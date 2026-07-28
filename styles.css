@@ -6661,10 +6661,17 @@ body { --icon-accent: var(--accent-text); }
    mark on something else MUST override it. Getting this wrong is the one way
    to make the mark look broken.
 
-   THE HAIRLINE TAKES --accent-text, NOT --accent. The spec is explicit that
-   the line is #a34400 on light and #ff6a00 on dark, which is exactly the split
-   those two tokens already encode. Using --accent would ship 2.87:1 hairline
-   on the bone surface. */
+   THE HAIRLINE IS --accent IN BOTH MODES, and that is a deliberate exception.
+   The Claude Design spec calls for #a34400 on light, and --accent-text already
+   encodes exactly that split, so the token was the obvious choice. The owner
+   chose the brand orange in both modes instead, for one identity rather than
+   two. The cost is real and is recorded here rather than hidden: #ff6a00 is
+   2.87:1 against the bone ground, so where the hairline crosses the gaps
+   BETWEEN letters it is decorative, not a readable element. It is legible in
+   practice because it spends most of its length overlapping the near-black
+   wordmark. This is the ONE place the accent is allowed to sit under 4.5:1 on
+   light — do not read it as licence to use --accent for small text anywhere
+   else, which is the entire reason --accent-text exists. */
 .cut {
   position: relative;
   display: inline-block;
@@ -6676,6 +6683,16 @@ body { --icon-accent: var(--accent-text); }
   text-transform: uppercase;
   color: var(--text);
   white-space: nowrap;
+  /* THE CUT MUST NEVER BE WIDER THAN THE WORD IT CUTS. The slot and hairline
+     span the element box, so any box wider than its own text leaves the line
+     hanging in open space on both sides — which is precisely the spec's
+     "floating line" DON'T, not a cut through a name.
+     `display:inline-block` alone does NOT protect against this: a stretched
+     flex item is blockified and takes the container's width regardless. On the
+     login card (a flex column at align-items:stretch) the wordmark measured
+     226px of ink inside a 380px box, so the hairline overhung 77px per side.
+     fit-content pins the box to the ink in every container type. */
+  width: fit-content;
   --cut-slot: max(2px, 0.07em);
   --cut-hair: max(1.5px, 0.024em);
   --cut-y: 50%;
@@ -6691,7 +6708,7 @@ body { --icon-accent: var(--accent-text); }
   pointer-events: none;
 }
 .cut::before { height: var(--cut-slot); background: var(--cut-bg); }
-.cut::after  { height: var(--cut-hair); background: var(--accent-text); }
+.cut::after  { height: var(--cut-hair); background: var(--accent); }
 
 /* The monogram exception. A lone V is two thin diagonals meeting at a point,
    so a 7% slot is swallowed in the join; the spec cuts it at 11% instead. */
@@ -6733,10 +6750,14 @@ body { --icon-accent: var(--accent-text); }
 }
 
 /* The login screen is the one place the mark is the hero, so it runs large.
-   .auth-card carries no background of its own, so the slot is cut in --bg. */
+   .auth-card carries no background of its own, so the slot is cut in --bg.
+   align-self is required, not cosmetic: fit-content stops the box stretching,
+   and without this the now-narrow box would sit at the card's start edge
+   instead of under the centred sub-line. */
 .auth-title.cut {
   font-size: 44px;
   letter-spacing: 0.02em;
+  align-self: center;
   --cut-bg: var(--bg);
 }
 
@@ -6770,3 +6791,69 @@ body { --icon-accent: var(--accent-text); }
   text-transform: none;
   --cut-y: 52%;
 }
+
+/* --- "Not training today" -------------------------------------------------
+   Sits under the hero, not inside it: the hero is itself a <button>, and a
+   nested button is both invalid markup and a click that bubbles into starting
+   the very workout the user just declined.
+
+   Deliberately quiet. This is an escape hatch, not a call to action — it must
+   never out-weigh the Start button beside it, so it takes no fill, no accent
+   and the small type. It is still a 44px-tall target. */
+.rest-toggle {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  min-height: 44px;
+  margin-top: var(--sp-2, 8px);
+  padding: 10px 14px;
+  background: none;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--text-dim);
+  font-family: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  text-align: start;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+.rest-toggle:active { transform: scale(.99); }
+
+/* The square. A checkbox shape, not a switch: the state is "is today off",
+   a fact about one day, which is what a checkbox means. Rounded rectangle at
+   the leaf radius — BRAND forbids the capsule and the circle. */
+.rest-box {
+  flex: none;
+  width: 20px;
+  height: 20px;
+  border-radius: var(--radius-sm);
+  border: 1.5px solid var(--border-hi);
+  background: var(--surface-2);
+  display: grid;
+  place-items: center;
+  color: var(--bg);
+}
+.rest-box > svg { width: 14px; height: 14px; }
+
+/* Checked. The accent as a FILL, where it measures 6.31:1 under the dark ink —
+   never as text, which is the --accent / --accent-text split. */
+.rest-toggle.is-off {
+  border-color: var(--accent-line);
+  color: var(--text);
+}
+.rest-toggle.is-off .rest-box {
+  background: var(--accent);
+  border-color: var(--accent);
+  --icon-accent: var(--bg);
+}
+
+/* The hero on a declined day. A plain div, not a button — there is nothing to
+   start, and a card that looks pressable but does nothing is worse than a card
+   that plainly is not. */
+.hero-rest {
+  cursor: default;
+  border-style: dashed;
+}
+.hero-rest .hero-title { color: var(--text-mute); }
