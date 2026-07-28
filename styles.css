@@ -6421,6 +6421,7 @@ body[dir="rtl"] .variation-select svg { transform: scaleX(-1); }
      3. Readable text       — the decorative token stays decorative
      4. No circles          — the mark is five straight bars
      5. The five-bar tick  — one bar of the mark, stamped on every section
+     6. Duotone icons       — two filled masses, recoloured by state
    ========================================================================= */
 
 /* --- 1. THE MACHINED EDGE ------------------------------------------------
@@ -6555,3 +6556,59 @@ body.theme-light .home-center-icon {
 /* .rot-section-title deliberately does NOT get the tick: BRAND keeps the two
    section-header systems distinguishable, and giving both the same mark
    removes the only cue that tells them apart. */
+
+/* --- 6. DUOTONE ICONS (v211) --------------------------------------------
+   The icon set is FILLED, in two layers: the base takes `currentColor` (so a
+   glyph keeps following whatever colour its container already sets — nothing
+   about the v210 colour work changes) and the accent layer takes
+   `--icon-accent`. A state change therefore recolours a MASS rather than a 2px
+   line, which is what makes an active tab read instantly.
+
+   NOTE — three deliberate departures from the design doc's CSS, each measured:
+
+   1. It proposed a bare `svg { color: var(--text-mute); }`. That sets colour ON
+      every svg, which BEATS inheritance — so the glyph inside .btn-primary, the
+      home FAB and every accent chip would have gone grey, and the rules under it
+      existed only to repair that. Icons inherit here instead, which is already
+      correct app-wide.
+   2. It targeted `.tab-btn`; this app's bottom bar is `.nav-btn` (`.tab-btn`
+      matches nothing). Same for `.is-disabled`.
+   3. The accent defaults to `--accent-text`, not `--accent`. As a GRAPHIC mass
+      #ff6a00 measures 2.65:1 on the light page and 2.81:1 on a light card —
+      under the 3:1 WCAG minimum for non-text graphics. `--accent-text` is the
+      brand orange in dark and #a34400 in light (4.91-6.07:1), which is exactly
+      the token that exists for "accent that has to stay legible". */
+body { --icon-accent: var(--accent-text); }
+
+/* On a solid accent FILL the accent layer would be orange on orange — invisible.
+   There the duotone collapses to a single mass in the container's own ink.
+   These six are the complete live set (found by walking every rendered svg and
+   testing its container's background, not by guessing). */
+.home-center-icon, .hero-cta, .btn-primary, .food-fab, .nutri-setup-icon {
+  --icon-accent: currentColor;
+}
+
+/* Only the ACTIVE tab leads. An inactive one keeps the second tone so the glyph
+   still reads as two masses, but pulled back into the muted range. */
+.nav-btn:not(.active) { --icon-accent: var(--text-dim); }
+
+/* .nav-btn.active sets `color: var(--accent-text)` for the LABEL — which would
+   also paint the glyph's base layer, making base and accent identical and
+   flattening the duotone exactly where it matters most. Give that one glyph a
+   neutral base back, so the active tab reads as a light mass with an orange
+   cut through it while its label stays orange. Scoped to a single element on
+   purpose: setting `color` on an svg overrides inheritance, so it is only ever
+   safe where the difference is the point. (.home-center is excluded — it sits
+   on an accent FILL and is handled above.) */
+.nav-btn.active:not(.home-center) > svg { color: var(--text); }
+
+/* Disabled: one flat tone, no accent to suggest something is still live.
+   --text-faint was the obvious choice and is wrong: it is the DECORATIVE token
+   and measures 1.33:1 in light mode, which made the calendar's next-day arrow
+   effectively invisible rather than merely unavailable. --text-dim held back by
+   opacity reads as "off" in both modes while staying perceivable. */
+[disabled] { color: var(--text-dim); --icon-accent: var(--text-dim); }
+[disabled] svg { opacity: 0.45; }
+
+/* Destructive controls carry their own pair. */
+.icon-btn.danger, #reset-btn { color: var(--red); --icon-accent: var(--red); }

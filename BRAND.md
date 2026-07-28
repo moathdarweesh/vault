@@ -80,14 +80,17 @@ the 16 `--cat-*` muscle hues.
 
 ## 3. Geometry — the 2-unit grid
 
-The signature. Already enforced across all 53 icons and verified by script.
+The signature. The grid still governs the icon set; since v211 the set is FILLED
+(two masses per glyph, base + accent) rather than stroked, so the caps/joins rule
+below now describes the *silhouettes* rather than a stroke.
 
 - `viewBox 0 0 24 24`, live area 20×20, optical centre 12,12.
 - Every endpoint and vertex on an **even** coordinate.
 - Angles **0° / 45° / 90°** only.
 - Radii from **{1, 2, 3, 4, 6, 8, 10}**. Outer `rx=2`, inner `rx=1`.
-- **Flat caps, mitre joins** (`stroke-linecap: butt`, `stroke-linejoin: miter`).
-  This is what separates the set from Lucide/Feather.
+- **Flat, mitred silhouettes** — no rounded terminals. This is what separates the
+  set from Lucide/Feather. (Pre-v211 this was literally `stroke-linecap: butt` /
+  `stroke-linejoin: miter`; the filled set carries the same language in outline.)
 - Max **5 sub-paths**; min **3 units** between parallel strokes or they merge at 16px.
 - One signature element per icon max: a filled `r=1` centre dot.
 

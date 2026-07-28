@@ -12,7 +12,7 @@
 // build. The literal below is the fallback (file://, or a stripped query) and is
 // still bumped by `npm run release` — see CLAUDE.md "CACHE WORKFLOW".
 const VAULT_BUILD = (() => {
-  const FALLBACK = 'v210';
+  const FALLBACK = 'v211';
   try {
     const src = (document.currentScript && document.currentScript.src) || '';
     const m = src.match(/[?&]v=(\d+)/);
@@ -23,99 +23,104 @@ const VAULT_BUILD = (() => {
 // ==========================================================================
 // Icons
 // ==========================================================================
+// VAULT Duotone (v3) — FILLED two-layer glyphs, no stroke anywhere.
+//
+// Every glyph is two masses on the same 24 grid: the base in `currentColor`
+// (so it follows whatever colour its container already sets) and the accent in
+// `var(--icon-accent)`. That is the whole system — a state change recolours a
+// MASS rather than a 2px line, which is why an active tab now reads instantly.
+//
+// This replaced the stroked "VAULT Machined" set: because there is no stroke,
+// the three per-size stroke-width bands and the ICON_CAPS exception map are
+// gone, and ONE path set reads correctly at 16px and at 40px. It also removes
+// the known defect where the bottom nav hard-coded stroke-width 2/2.4 at 22px
+// and rendered ~14% heavier than the same glyph elsewhere.
+//
+// `apple` and `palette` survive as aliases at the bottom, so no call site broke.
 const ICONS = {
-  // VAULT Machined — every endpoint on an even coordinate, angles 0/45/90 only,
-  // radii from {1,2,3,4,6,8,10}, outer rx=2, max 5 sub-paths, flat caps + mitre
-  // joins (see icon()). The signature motif is a filled r=1 centre dot, used
-  // sparingly: vaultDoor, target, flame, info — never a whole row of them.
-  plus: '<path d="M12 4v16"/><path d="M4 12h16"/>',
-  minus: '<path d="M4 12h16"/>',
-  close: '<path d="M6 6 18 18"/><path d="M18 6 6 18"/>',
-  back: '<path d="M14 6 8 12l6 6"/>',
-  chevronRight: '<path d="M10 6l6 6-6 6"/>',
-  trash: '<path d="M4 6h16"/><path d="M6 6v12a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2V6"/><path d="M10 6V4h4v2"/>',
-  edit: '<path d="M4 20v-4L16 4l4 4L8 20Z"/><path d="M14 6l4 4"/>',
-  grip: '<path d="M4 8h16"/><path d="M4 12h16"/><path d="M4 16h16"/>',
-  droplet: '<path d="M12 4l6 6a6 6 0 1 1-12 0Z"/>',
-  footprints: '<rect x="4" y="4" width="6" height="10" rx="2"/><rect x="14" y="10" width="6" height="10" rx="2"/>',
-  calendar: '<rect x="4" y="6" width="16" height="14" rx="2"/><path d="M4 10h16"/><path d="M8 4v4"/><path d="M16 4v4"/>',
-  chart: '<path d="M6 20v-6"/><path d="M12 20V8"/><path d="M18 20v-10"/>',
-  dumbbell: '<path d="M4 8v8"/><path d="M8 4v16"/><path d="M16 4v16"/><path d="M20 8v8"/><path d="M8 12h8"/>',
-  vault: '<path d="M4 8v8"/><path d="M8 4v16"/><path d="M12 6v12"/><path d="M16 4v16"/><path d="M20 8v8"/>',
-  vaultDoor: '<rect x="4" y="4" width="16" height="16" rx="2"/><circle cx="12" cy="12" r="4"/><path d="M12 4v4"/><path d="M12 16v4"/><circle cx="12" cy="12" r="1" fill="currentColor" stroke="none"/>',
-  run: '<circle cx="16" cy="6" r="2"/><path d="M14 8l-4 4"/><path d="M10 12l-4 4v4"/><path d="M10 12l4 4v4"/><path d="M14 10h4"/>',
-  moon: '<path d="M20 14a8 8 0 1 1-10-10 8 8 0 0 0 10 10Z"/>',
-  apple: '<circle cx="12" cy="14" r="6"/><path d="M12 8V4"/><path d="M12 4h4v2"/>',
-  home: '<path d="M4 12 12 4l8 8"/><path d="M6 10v10h12V10"/><path d="M10 20v-6h4v6"/>',
-  flame: '<path d="M12 2l6 6-2 2 2 2a6 6 0 1 1-12 0l2-2-2-2Z"/><circle cx="12" cy="14" r="1" fill="currentColor" stroke="none"/>',
-  clock: '<circle cx="12" cy="12" r="8"/><path d="M12 8v4h4"/>',
-  bed: '<path d="M2 20V8"/><path d="M2 12h16a4 4 0 0 1 4 4v4"/><path d="M6 12V8h4v4"/>',
-  search: '<circle cx="10" cy="10" r="6"/><path d="M16 16l4 4"/>',
-  check: '<path d="M4 12l6 6L20 6"/>',
-  arrowUp: '<path d="M12 20V4"/><path d="M6 10l6-6 6 6"/>',
-  arrowDown: '<path d="M12 4v16"/><path d="M6 14l6 6 6-6"/>',
-  walk: '<circle cx="12" cy="4" r="2"/><path d="M12 6v6"/><path d="M12 12l-4 4v4"/><path d="M12 12l4 4v4"/><path d="M8 8h8"/>',
-  bike: '<circle cx="6" cy="16" r="4"/><circle cx="18" cy="16" r="4"/><path d="M6 16l6-6 6 6"/><path d="M12 10V6h2"/>',
-  treadmill: '<rect x="2" y="16" width="16" height="4" rx="2"/><path d="M18 18V8h-4"/><path d="M14 8v4"/>',
-  heart: '<path d="M4 10a4 4 0 0 1 8 0 4 4 0 0 1 8 0l-8 8Z"/>',
-  heartPulse: '<path d="M4 10a4 4 0 0 1 8 0 4 4 0 0 1 8 0l-8 8Z"/><path d="M2 12h6l2-2 4 4 2-2h6"/>',
-  utensils: '<path d="M6 4v6h4V4"/><path d="M8 10v10"/><path d="M18 4v16"/><path d="M18 4l-4 4v4h4"/>',
-  trophy: '<path d="M6 4h12v6a6 6 0 0 1-12 0Z"/><path d="M6 6H4v2a2 2 0 0 0 2 2"/><path d="M18 6h2v2a2 2 0 0 1-2 2"/><path d="M12 16v4"/><path d="M8 20h8"/>',
-  zap: '<path d="M14 2 4 12h6v10l10-10h-6V2Z"/>',
-  target: '<circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="4"/><circle cx="12" cy="12" r="1" fill="currentColor" stroke="none"/>',
-  message: '<rect x="2" y="4" width="20" height="14" rx="2"/><path d="M8 18v4l4-4"/>',
-  columns: '<rect x="4" y="4" width="6" height="16" rx="2"/><rect x="14" y="10" width="6" height="10" rx="2"/>',
-  mic: '<rect x="8" y="2" width="8" height="12" rx="4"/><path d="M6 12v2a6 6 0 0 0 12 0v-2"/><path d="M12 20v2"/>',
-  settings: '<path d="M4 8h16"/><path d="M4 16h16"/><circle cx="10" cy="8" r="2"/><circle cx="16" cy="16" r="2"/>',
-  globe: '<circle cx="12" cy="12" r="8"/><path d="M4 12h16"/><path d="M12 4a10 10 0 0 1 0 16 10 10 0 0 1 0-16Z"/>',
-  palette: '<rect x="4" y="4" width="16" height="16" rx="2"/><path d="M12 4v16"/><path d="M4 12h16"/>',
-  download: '<path d="M12 4v10"/><path d="M8 10l4 4 4-4"/><path d="M4 18v2h16v-2"/>',
-  upload: '<path d="M12 18V8"/><path d="M8 12l4-4 4 4"/><path d="M4 18v2h16v-2"/>',
-  refresh: '<path d="M12 4a8 8 0 1 1-8 8"/><path d="M8 8l4-4 4 4"/>',
-  info: '<circle cx="12" cy="12" r="8"/><path d="M12 10v6"/><circle cx="12" cy="6" r="1" fill="currentColor" stroke="none"/>',
-  backspace: '<path d="M10 4h10v16H10L2 12Z"/><path d="M14 10l4 4"/><path d="M18 10l-4 4"/>',
-  camera: '<rect x="2" y="6" width="20" height="14" rx="2"/><circle cx="12" cy="14" r="3"/><path d="M8 6V4h4v2"/>',
-  barcode: '<path d="M4 4v16"/><path d="M8 4v16"/><path d="M12 4v16"/><path d="M16 4v16"/><path d="M20 4v16"/>',
-  play: '<path d="M8 4l8 8-8 8Z"/>',
-  pill: '<rect x="2" y="8" width="20" height="8" rx="4"/><path d="M12 8v8"/>',
-  trendLine: '<path d="M4 16l4-4 4 4 8-8"/>',
-  // ADDED (not a redesign): app.js already called icon('send') for the Settings
-  // feedback row, but no such key existed — ICONS[name] || '' returned an empty
-  // string and the icon had been silently blank in production. Exactly the
-  // failure mode the brief warns about, found by auditing all 201 call sites.
-  send: '<path d="M4 12h14"/><path d="M12 6l6 6-6 6"/>',
-  bell: '<path d="M6 16v-4a6 6 0 0 1 12 0v4"/><path d="M4 16h16"/><path d="M10 18h4"/>',
-  bellOff: '<path d="M6 16v-4a6 6 0 0 1 12 0v4"/><path d="M4 16h16"/><path d="M4 4l16 16"/>',
-  // Filled, like the centre dots: a thin stroked outline on a small concave star
-  // goes blobby at the joins once scaled to a 16px button.
-  sparkle: '<path d="M12 2 14 10 22 12 14 14 12 22 10 14 2 12 10 10Z" fill="currentColor" stroke="none"/>',
+  // ——— core & nav ———
+  home: '<path d="M12 2.6 1.8 11.2h3.4v10.2h13.6V11.2h3.4Z" fill="currentColor"/><path d="M9.2 21.4V15.4h5.6v6Z" fill="var(--icon-accent,#ff6a00)"/>',
+  // Five-bar field: the outer pair sits back at 55% opacity, the inner pair full
+  // currentColor, the centre bar takes the accent — three tones, one colour token.
+  vault: '<rect x="2.6" y="9" width="2.8" height="6" rx="1.4" fill="currentColor" opacity=".55"/><rect x="7" y="5" width="2.8" height="14" rx="1.4" fill="currentColor"/><rect x="14.2" y="5" width="2.8" height="14" rx="1.4" fill="currentColor"/><rect x="18.6" y="9" width="2.8" height="6" rx="1.4" fill="currentColor" opacity=".55"/><rect x="10.6" y="7" width="2.8" height="10" rx="1.4" fill="var(--icon-accent,#ff6a00)"/>',
+  vaultDoor: '<rect x="2.5" y="2.5" width="19" height="19" rx="5" fill="currentColor"/><circle cx="12" cy="12" r="4.4" fill="var(--icon-accent,#ff6a00)"/><rect x="11.1" y="3.8" width="1.8" height="3.2" rx=".9" fill="var(--icon-accent,#ff6a00)"/><rect x="11.1" y="17" width="1.8" height="3.2" rx=".9" fill="var(--icon-accent,#ff6a00)"/><rect x="3.8" y="11.1" width="3.2" height="1.8" rx=".9" fill="var(--icon-accent,#ff6a00)"/><rect x="17" y="11.1" width="3.2" height="1.8" rx=".9" fill="var(--icon-accent,#ff6a00)"/>',
+  calendar: '<rect x="6.8" y="1.8" width="2.6" height="4.4" rx="1.3" fill="currentColor"/><rect x="14.6" y="1.8" width="2.6" height="4.4" rx="1.3" fill="currentColor"/><path d="M2.6 9.6h18.8v8.4a3.4 3.4 0 0 1-3.4 3.4H6a3.4 3.4 0 0 1-3.4-3.4Z" fill="currentColor"/><path d="M6 4.2h12a3.4 3.4 0 0 1 3.4 3.4v2H2.6v-2A3.4 3.4 0 0 1 6 4.2Z" fill="var(--icon-accent,#ff6a00)"/>',
+  chart: '<rect x="2.4" y="19.4" width="19.2" height="2.4" rx="1.2" fill="currentColor"/><rect x="4.4" y="12.4" width="4.2" height="5.6" rx="1.4" fill="currentColor"/><rect x="15.4" y="9.4" width="4.2" height="8.6" rx="1.4" fill="currentColor"/><rect x="9.9" y="5.4" width="4.2" height="12.6" rx="1.4" fill="var(--icon-accent,#ff6a00)"/>',
+  dumbbell: '<rect x="1.5" y="9" width="3" height="6" rx="1.2" fill="currentColor"/><rect x="5.5" y="6" width="4" height="12" rx="1.6" fill="currentColor"/><rect x="14.5" y="6" width="4" height="12" rx="1.6" fill="currentColor"/><rect x="19.5" y="9" width="3" height="6" rx="1.2" fill="currentColor"/><rect x="9.5" y="10.4" width="5" height="3.2" fill="var(--icon-accent,#ff6a00)"/>',
+  moon: '<path d="M21.4 15.2A9.4 9.4 0 0 1 8.8 2.6 9.4 9.4 0 1 0 21.4 15.2Z" fill="currentColor"/><circle cx="17.6" cy="5.2" r="1.7" fill="var(--icon-accent,#ff6a00)"/><circle cx="21" cy="9.8" r="1" fill="var(--icon-accent,#ff6a00)"/>',
+  bed: '<path d="M2.4 7.6h2.8v6H18a3.6 3.6 0 0 1 3.6 3.6v4.2h-2.8v-3.4H5.2v3.4H2.4Z" fill="currentColor"/><rect x="6.2" y="8.8" width="5.6" height="3.6" rx="1.8" fill="var(--icon-accent,#ff6a00)"/>',
+  utensils: '<rect x="8.9" y="10.4" width="2.4" height="11" rx="1.2" fill="currentColor"/><path d="M17.8 21.4h-2.4v-7.6c-1.5-.5-2.4-2.2-2.4-4.8 0-3.6 1.7-6.2 3.4-6.2h1.4Z" fill="currentColor"/><path d="M6 2.6h1.9v4.6h1.2V2.6H11v4.6h1.2V2.6h1.9v5.2a4 4 0 0 1-8 0Z" fill="var(--icon-accent,#ff6a00)"/>',
+  meal: '<path d="M2.4 11.2h19.2c-.5 5-4.6 8.8-9.6 8.8s-9.1-3.8-9.6-8.8Z" fill="currentColor"/><path d="M8.6 8.4c0-1.8 1.6-1.8 1.6-3.6h1.6c0 2.4-1.6 2.4-1.6 3.6Z" fill="var(--icon-accent,#ff6a00)"/><path d="M13.2 8.4c0-1.8 1.6-1.8 1.6-3.6h1.6c0 2.4-1.6 2.4-1.6 3.6Z" fill="var(--icon-accent,#ff6a00)"/>',
+  heart: '<path d="M12 21.3S2.6 15.8 2.6 9.6a4.9 4.9 0 0 1 9.4-2Z" fill="currentColor"/><path d="M12 7.6a4.9 4.9 0 0 1 9.4 2c0 6.2-9.4 11.7-9.4 11.7Z" fill="var(--icon-accent,#ff6a00)"/>',
+  heartPulse: '<path d="M12 21.3S2.6 15.8 2.6 9.6a4.9 4.9 0 0 1 9.4-2 4.9 4.9 0 0 1 9.4 2c0 6.2-9.4 11.7-9.4 11.7Z" fill="currentColor"/><path d="M1.6 11h5.6l1.8-3 2.8 5.6 2-3.4h8.6v2.4h-7.2l-3.6 6-2.8-5.6-.6 1H1.6Z" fill="var(--icon-accent,#ff6a00)"/>',
+
+  // ——— actions ———
+  plus: '<path d="M4 10.6h16v2.8H4Z" fill="currentColor"/><path d="M10.6 4h2.8v16h-2.8Z" fill="var(--icon-accent,#ff6a00)"/>',
+  minus: '<path d="M4 10.6h10.4v2.8H4Z" fill="currentColor"/><path d="M14.4 10.6H20v2.8h-5.6Z" fill="var(--icon-accent,#ff6a00)"/>',
+  close: '<path d="M6.3 4.3 19.7 17.7l-2 2L4.3 6.3Z" fill="currentColor"/><path d="M17.7 4.3 19.7 6.3 6.3 19.7l-2-2Z" fill="var(--icon-accent,#ff6a00)"/>',
+  back: '<path d="M15.4 2.6 17.4 4.6 8.6 13.4 6.6 11.4Z" fill="currentColor"/><path d="M6.6 12.6 8.6 10.6 17.4 19.4 15.4 21.4Z" fill="var(--icon-accent,#ff6a00)"/>',
+  chevronRight: '<path d="M8.6 2.6 6.6 4.6 15.4 13.4 17.4 11.4Z" fill="currentColor"/><path d="M17.4 12.6 15.4 10.6 6.6 19.4 8.6 21.4Z" fill="var(--icon-accent,#ff6a00)"/>',
+  trash: '<path d="M6 7.4h12l-.9 12.2a2.4 2.4 0 0 1-2.4 2.2H9.3a2.4 2.4 0 0 1-2.4-2.2Z" fill="currentColor"/><path d="M9.4 2.6h5.2a1.5 1.5 0 0 1 1.5 1.5v.9H20v2.4H4V5h3.9v-.9a1.5 1.5 0 0 1 1.5-1.5Z" fill="var(--icon-accent,#ff6a00)"/>',
+  edit: '<path d="M2.8 21.2v-4.6L13.8 5.6l4.6 4.6L7.4 21.2Z" fill="currentColor"/><path d="M15.4 4 16.8 2.6a2.8 2.8 0 0 1 4 4L19.4 8Z" fill="var(--icon-accent,#ff6a00)"/>',
+  check: '<path d="M9.4 18.6 7.3 16.5 18.4 5l2.2 2.2Z" fill="currentColor"/><path d="M9.4 18.6 3.4 12.6l2.2-2.2 5.9 5.9Z" fill="var(--icon-accent,#ff6a00)"/>',
+  search: '<path d="M10.4 2.8a7.6 7.6 0 1 0 0 15.2 7.6 7.6 0 0 0 0-15.2Zm0 2.9a4.7 4.7 0 1 1 0 9.4 4.7 4.7 0 0 1 0-9.4Z" fill="currentColor"/><path d="m15.7 17.7 2-2 4.1 4.1-2 2Z" fill="var(--icon-accent,#ff6a00)"/>',
+  arrowUp: '<path d="M10.6 6h2.8v15h-2.8Z" fill="currentColor"/><path d="M12 2.8 19.4 10.2l-2 2-5.4-5.4-5.4 5.4-2-2Z" fill="var(--icon-accent,#ff6a00)"/>',
+  arrowDown: '<path d="M10.6 3h2.8v15h-2.8Z" fill="currentColor"/><path d="M12 21.2 4.6 13.8l2-2 5.4 5.4 5.4-5.4 2 2Z" fill="var(--icon-accent,#ff6a00)"/>',
+  grip: '<circle cx="9" cy="6.6" r="1.5" fill="currentColor"/><circle cx="9" cy="12" r="1.5" fill="currentColor"/><circle cx="9" cy="17.4" r="1.5" fill="currentColor"/><circle cx="15" cy="6.6" r="1.5" fill="var(--icon-accent,#ff6a00)"/><circle cx="15" cy="12" r="1.5" fill="var(--icon-accent,#ff6a00)"/><circle cx="15" cy="17.4" r="1.5" fill="var(--icon-accent,#ff6a00)"/>',
+  play: '<path d="M7.6 4.4a1.4 1.4 0 0 1 2.1-1.2l6.5 4.7v8.2l-6.5 4.7a1.4 1.4 0 0 1-2.1-1.2Z" fill="currentColor"/><path d="M16.2 7.9l3.1 2.3a1.4 1.4 0 0 1 0 2.3l-3.1 2.3Z" fill="var(--icon-accent,#ff6a00)"/>',
+  send: '<path d="M21.6 2.4 2.4 9.8l7.4 3.8Z" fill="currentColor"/><path d="M21.6 2.4 13.8 21.6l-3.8-7.4Z" fill="var(--icon-accent,#ff6a00)"/>',
+  backspace: '<path d="M9.4 3.4h9.2a3 3 0 0 1 3 3v11.2a3 3 0 0 1-3 3H9.4a1.7 1.7 0 0 1-1.2-.5L1.6 13a1.4 1.4 0 0 1 0-2l6.6-7a1.7 1.7 0 0 1 1.2-.6Z" fill="currentColor"/><path d="m11.4 8.6 1.9-1.9 2.7 2.7 2.7-2.7 1.9 1.9-2.7 2.7 2.7 2.7-1.9 1.9-2.7-2.7-2.7 2.7-1.9-1.9 2.7-2.7Z" fill="var(--icon-accent,#ff6a00)"/>',
+
+  // ——— cardio & movement ———
+  run: '<path d="M14.6 7.6 8.4 11l2 3.8-4 6.4 2.8 1.6 4.6-7.2-1.4-2.6 3-1.6 3.4 2.2 1.6-2.6-4.2-2.8Z" fill="currentColor"/><circle cx="16.4" cy="4.6" r="2.7" fill="var(--icon-accent,#ff6a00)"/>',
+  walk: '<path d="M11.2 7.4 8 13.4l2.4 2.2-1.8 5.8 2.8.8 2.2-7-1.6-1.8 1.6-2.4 2.4 1.8 1.4 3.6 2.6-1-1.8-4.6Z" fill="currentColor"/><circle cx="13" cy="4.2" r="2.7" fill="var(--icon-accent,#ff6a00)"/>',
+  bike: '<path d="M5.6 12.4a4.6 4.6 0 1 0 0 9.2 4.6 4.6 0 0 0 0-9.2Zm0 2.6a2 2 0 1 1 0 4 2 2 0 0 1 0-4Z" fill="currentColor"/><path d="M18.4 12.4a4.6 4.6 0 1 0 0 9.2 4.6 4.6 0 0 0 0-9.2Zm0 2.6a2 2 0 1 1 0 4 2 2 0 0 1 0-4Z" fill="currentColor"/><path d="M9.2 5.6h4.6l4.8 10.6-2.2 1-4.2-9.2H9.2Z" fill="var(--icon-accent,#ff6a00)"/><path d="m12.6 7.4 2.4.6-2.6 8.8-2.4-.7Z" fill="var(--icon-accent,#ff6a00)"/>',
+  treadmill: '<path d="M4.6 13.6h10.8a3.4 3.4 0 0 1 0 6.8H4.6a3.4 3.4 0 0 1 0-6.8Z" fill="currentColor"/><path d="M16.6 17.4V6.4h-4.4V4h6.8v13.4Z" fill="var(--icon-accent,#ff6a00)"/>',
+  footprints: '<path d="M6.8 2.6c1.9 0 3.4 2.3 3.4 5.2S8.7 13 6.8 13 3.4 10.7 3.4 7.8 4.9 2.6 6.8 2.6Z" fill="currentColor"/><path d="M17.2 9.4c1.9 0 3.4 2.3 3.4 5.2s-1.5 5.2-3.4 5.2-3.4-2.3-3.4-5.2 1.5-5.2 3.4-5.2Z" fill="var(--icon-accent,#ff6a00)"/>',
+  columns: '<rect x="3.4" y="3.4" width="6.4" height="17.2" rx="2.6" fill="currentColor"/><rect x="14.2" y="9.4" width="6.4" height="11.2" rx="2.6" fill="var(--icon-accent,#ff6a00)"/>',
+
+  // ——— data & body ———
+  droplet: '<path d="M12 2.4s6.6 6.8 6.6 10.8a6.6 6.6 0 0 1-13.2 0C5.4 9.2 12 2.4 12 2.4Z" fill="currentColor"/><path d="M12 19.8a6.6 6.6 0 0 0 6.6-6.6h-3.2A3.4 3.4 0 0 1 12 16.6Z" fill="var(--icon-accent,#ff6a00)"/>',
+  flame: '<path d="M12 1.8c.4 4 3.4 5.4 3.4 9 0 1.6-.9 2.8-2 3.2.5-2.4-.6-4.2-1.8-5.2.2 3-1.6 4.2-2.8 4.2-1 0-1.8-.8-1.8-2-1.4 1.4-2.4 3.2-2.4 5.2 0 3.6 3 6.6 7.4 6.6s7.4-3.2 7.4-7.2c0-6-5.6-8.2-7.4-13.8Z" fill="currentColor"/><path d="M12 22.2c2.6 0 4.4-1.9 4.4-4.2 0-2.6-2.4-3.6-3.2-6-.8 2-3.4 3-3.4 5.6 0 2.4 1.6 4.6 2.2 4.6Z" fill="var(--icon-accent,#ff6a00)"/>',
+  clock: '<path d="M12 2.4a9.6 9.6 0 1 0 0 19.2 9.6 9.6 0 0 0 0-19.2Zm0 2.8a6.8 6.8 0 1 1 0 13.6 6.8 6.8 0 0 1 0-13.6Z" fill="currentColor"/><path d="M10.8 6.4h2.4v5.2l3.4 2-1.2 2-4.6-2.8Z" fill="var(--icon-accent,#ff6a00)"/>',
+  pill: '<path d="M6 7.6h12a4.4 4.4 0 0 1 0 8.8H6a4.4 4.4 0 0 1 0-8.8Z" fill="currentColor"/><path d="M12 7.6h6a4.4 4.4 0 0 1 0 8.8h-6Z" fill="var(--icon-accent,#ff6a00)"/>',
+  target: '<path d="M12 2.4a9.6 9.6 0 1 0 0 19.2 9.6 9.6 0 0 0 0-19.2Zm0 2.8a6.8 6.8 0 1 1 0 13.6 6.8 6.8 0 0 1 0-13.6Z" fill="currentColor"/><path d="M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8Z" fill="var(--icon-accent,#ff6a00)"/>',
+  trendLine: '<path d="m2.6 15.4 6.4-6.4 3.6 3.6 7-7 2 2-9 9-3.6-3.6-4.4 4.4Z" fill="currentColor"/><path d="M14.4 4.4h7.2v7.2h-2.8V7.2h-4.4Z" fill="var(--icon-accent,#ff6a00)"/>',
+  camera: '<path d="M8.6 3.4h6.8l1.6 3H19a3.4 3.4 0 0 1 3.4 3.4v7.4a3.4 3.4 0 0 1-3.4 3.4H5a3.4 3.4 0 0 1-3.4-3.4V9.8A3.4 3.4 0 0 1 5 6.4h2Z" fill="currentColor"/><circle cx="12" cy="13.4" r="3.8" fill="var(--icon-accent,#ff6a00)"/>',
+  barcode: '<rect x="2.6" y="4.6" width="2.4" height="14.8" rx=".8" fill="currentColor"/><rect x="6.6" y="4.6" width="1.4" height="14.8" rx=".7" fill="currentColor"/><rect x="13.4" y="4.6" width="1.4" height="14.8" rx=".7" fill="currentColor"/><rect x="16.4" y="4.6" width="2.4" height="14.8" rx=".8" fill="currentColor"/><rect x="20.2" y="4.6" width="1.4" height="14.8" rx=".7" fill="currentColor"/><rect x="9.6" y="4.6" width="2.4" height="14.8" rx=".8" fill="var(--icon-accent,#ff6a00)"/>',
+  zap: '<path d="M13.6 1.8 3.6 14.4h6.2L9 22.2 20.4 9.6h-6.4Z" fill="var(--icon-accent,#ff6a00)"/>',
+
+  // ——— system ———
+  settings: '<rect x="2.6" y="6.4" width="18.8" height="3.2" rx="1.6" fill="currentColor"/><rect x="2.6" y="14.4" width="18.8" height="3.2" rx="1.6" fill="currentColor"/><circle cx="15.4" cy="8" r="3.4" fill="var(--icon-accent,#ff6a00)"/><circle cx="8.6" cy="16" r="3.4" fill="var(--icon-accent,#ff6a00)"/>',
+  globe: '<path d="M12 2.4a9.6 9.6 0 1 0 0 19.2 9.6 9.6 0 0 0 0-19.2Zm0 2.6a7 7 0 1 1 0 14 7 7 0 0 1 0-14Z" fill="currentColor"/><path d="M3.6 10.6h16.8v2.8H3.6Z" fill="currentColor"/><path d="M12 2.4c2.9 2.9 4.4 6.1 4.4 9.6S14.9 18.7 12 21.6c-2.9-2.9-4.4-6.1-4.4-9.6S9.1 5.3 12 2.4Zm0 4.2c-1.2 1.6-1.8 3.4-1.8 5.4s.6 3.8 1.8 5.4c1.2-1.6 1.8-3.4 1.8-5.4s-.6-3.8-1.8-5.4Z" fill="var(--icon-accent,#ff6a00)"/>',
+  swatches: '<rect x="3.4" y="3.4" width="7.6" height="7.6" rx="2.4" fill="currentColor"/><rect x="13" y="3.4" width="7.6" height="7.6" rx="2.4" fill="currentColor"/><rect x="3.4" y="13" width="7.6" height="7.6" rx="2.4" fill="currentColor"/><rect x="13" y="13" width="7.6" height="7.6" rx="2.4" fill="var(--icon-accent,#ff6a00)"/>',
+  download: '<path d="M2.6 16.4h2.8V19h13.2v-2.6h2.8V21.8H2.6Z" fill="currentColor"/><path d="M10.6 2.6h2.8v8.6l3.6-3.6 2 2L12 16.6 5 9.6l2-2 3.6 3.6Z" fill="var(--icon-accent,#ff6a00)"/>',
+  upload: '<path d="M2.6 16.4h2.8V19h13.2v-2.6h2.8V21.8H2.6Z" fill="currentColor"/><path d="M13.4 15.4h-2.8V6.8L7 10.4l-2-2L12 1.4l7 7-2 2-3.6-3.6Z" fill="var(--icon-accent,#ff6a00)"/>',
+  refresh: '<path d="M12 2.4a9.6 9.6 0 1 0 9.6 9.6h-2.8A6.8 6.8 0 1 1 12 5.2Z" fill="currentColor"/><path d="M12 2.4a9.5 9.5 0 0 1 6.4 2.4V2.2h2.8v7.2H14V6.6h3.2A6.7 6.7 0 0 0 12 5.2Z" fill="var(--icon-accent,#ff6a00)"/>',
+  info: '<path d="M12 2.4a9.6 9.6 0 1 0 0 19.2 9.6 9.6 0 0 0 0-19.2Zm0 2.8a6.8 6.8 0 1 1 0 13.6 6.8 6.8 0 0 1 0-13.6Z" fill="currentColor"/><circle cx="12" cy="7.8" r="1.4" fill="var(--icon-accent,#ff6a00)"/><rect x="10.7" y="10.2" width="2.6" height="6.6" rx="1.3" fill="var(--icon-accent,#ff6a00)"/>',
+  message: '<path d="M6 3.4h12a3.4 3.4 0 0 1 3.4 3.4v8.6a3.4 3.4 0 0 1-3.4 3.4H8.6l-6 4.2V6.8A3.4 3.4 0 0 1 6 3.4Z" fill="currentColor"/><circle cx="8.4" cy="11" r="1.5" fill="var(--icon-accent,#ff6a00)"/><circle cx="12" cy="11" r="1.5" fill="var(--icon-accent,#ff6a00)"/><circle cx="15.6" cy="11" r="1.5" fill="var(--icon-accent,#ff6a00)"/>',
+  mic: '<path d="M4.6 10.4h2.8v1.8a4.6 4.6 0 0 0 9.2 0v-1.8h2.8v1.8a7.4 7.4 0 0 1-6 7.3v1.9h2.4v2.4H8.2v-2.4h2.4v-1.9a7.4 7.4 0 0 1-6-7.3Z" fill="currentColor"/><rect x="8.6" y="1.6" width="6.8" height="12.4" rx="3.4" fill="var(--icon-accent,#ff6a00)"/>',
+  bell: '<path d="M12 1.8a6.8 6.8 0 0 1 6.8 6.8v5l2 3.2H3.2l2-3.2v-5A6.8 6.8 0 0 1 12 1.8Z" fill="currentColor"/><path d="M8.8 18.6h6.4a3.2 3.2 0 0 1-6.4 0Z" fill="var(--icon-accent,#ff6a00)"/>',
+  bellOff: '<path d="M12 1.8a6.8 6.8 0 0 1 6.8 6.8v5l2 3.2H3.2l2-3.2v-5A6.8 6.8 0 0 1 12 1.8Zm-3.2 16.8h6.4a3.2 3.2 0 0 1-6.4 0Z" fill="currentColor"/><path d="m3.4 1.6 19 19-2 2-19-19Z" fill="var(--icon-accent,#ff6a00)"/>',
+  trophy: '<path d="M6.4 4.6h-3.4v3a4.2 4.2 0 0 0 3.4 4.1V9.1a1.7 1.7 0 0 1-1-1.5V7h1Z" fill="currentColor"/><path d="M17.6 4.6H21v3a4.2 4.2 0 0 1-3.4 4.1V9.1a1.7 1.7 0 0 0 1-1.5V7h-1Z" fill="currentColor"/><rect x="10.7" y="13.8" width="2.6" height="4.4" fill="currentColor"/><rect x="7.2" y="18.2" width="9.6" height="2.8" rx="1.4" fill="currentColor"/><path d="M6.2 2.6h11.6v6.2a5.8 5.8 0 0 1-11.6 0Z" fill="var(--icon-accent,#ff6a00)"/>',
+  sparkle: '<path d="M12 1.6c.5 4.8 2.5 6.8 7.3 7.3-4.8.5-6.8 2.5-7.3 7.3-.5-4.8-2.5-6.8-7.3-7.3 4.8-.5 6.8-2.5 7.3-7.3Z" fill="var(--icon-accent,#ff6a00)"/><path d="M18.2 15c.2 2.4 1.2 3.4 3.6 3.6-2.4.2-3.4 1.2-3.6 3.6-.2-2.4-1.2-3.4-3.6-3.6 2.4-.2 3.4-1.2 3.6-3.6Z" fill="currentColor"/>',
 };
 
-// Optical-weight correction: this app renders the SAME 24-viewBox glyphs anywhere
-// from ~16px (dense list rows/badges) to 28px (the food FAB), and a flat
-// stroke-width scales 1:1 with size — so a small icon's stroke shrinks to a
-// near-invisible hairline while a big icon's stroke gets visually chunky. Nudge
-// the stroke-width per size band so every icon reads at the same weight
-// regardless of where it's used, the way a hand-tuned icon set would. The bands
-// line up with the app's size scale (16=sm, 18=md, 20=lg, 24=xl, 28=FAB): the
-// two most common, already-established sizes (18 and 20) keep the original
-// stroke-width of 2 unchanged.
-// Flat caps + mitre joins are the VAULT Machined signature — they are what makes
-// the set read as tooled rather than as generic rounded (Lucide/Feather) glyphs.
-// A few glyphs genuinely need round caps; keep this map as small as possible,
-// because every entry weakens the set's unity.
-const ICON_CAPS = {
-  heartPulse: 'round',  // the ECG trace: mitred spikes on a 2px stroke pick up hard barbs
-};
+// Back-compat aliases — old call sites keep working.
+ICONS.apple = ICONS.meal;
+ICONS.palette = ICONS.swatches;
 
+// The glyphs are filled, so there is nothing here to tune: no stroke width, no
+// caps, no joins. The per-size stroke bands and the ICON_CAPS exception map that
+// used to live here both died with the stroked set — a filled mass keeps its
+// weight at any size on its own.
+//
+// Colour comes from the CONTAINER, not from here: base = currentColor, accent =
+// --icon-accent (see the "VAULT Duotone icons" block in styles.css).
 function icon(name, size = 20) {
   const path = ICONS[name] || '';
-  const strokeWidth = size <= 16 ? 2.25 : size >= 22 ? 1.75 : 2;
-  const cap = ICON_CAPS[name] || 'butt';
-  const join = cap === 'round' ? 'round' : 'miter';
-  return `<svg viewBox="0 0 24 24" width="${size}" height="${size}" fill="none" stroke="currentColor" stroke-width="${strokeWidth}" stroke-linecap="${cap}" stroke-linejoin="${join}" stroke-miterlimit="4">${path}</svg>`;
+  return `<svg viewBox="0 0 24 24" width="${size}" height="${size}" fill="none" aria-hidden="true">${path}</svg>`;
 }
-
 // ==========================================================================
 // Workout templates (predefined)
 // Each day's `exercises` are matched to user's library by name.

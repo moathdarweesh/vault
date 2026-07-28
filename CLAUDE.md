@@ -35,7 +35,7 @@ A fitness / workout-tracking **PWA**. Vanilla JS, **no build step**, bilingual *
 npm run release          # bump every marker + verify, then commit all files together
 ```
 
-**Current version: v210.** APK: build 9 / v1.8.
+**Current version: v211.** APK: build 9 / v1.8 (unchanged — v211 is web-only).
 
 `scripts/release.js` rewrites all **13** markers and then re-reads them from disk to confirm; it exits non-zero if any disagree. The markers are `?v=N` in `index.html` (×11, including the `js/vendor/supabase.js` preload), the `__cleaned_vN` sessionStorage keys, the `FALLBACK` literal in `app.js`, and `version.json` → `web`.
 
@@ -221,23 +221,49 @@ the same identity on two surfaces. `BRAND.md` is the authority.
   interactive border) and `.bento-card` (its `inset: 0` child paints over an inset
   bevel).
 
-### Icon set — "VAULT Machined" (v202)
-`ICONS` in `js/app.js` is a **53-key** hand-drawn set on a strict grid: every
-endpoint on an even coordinate, angles 0/45/90 only, radii from {1,2,3,4,6,8,10},
-outer `rx=2`, **max 5 sub-paths**, flat caps + mitre joins.
-- `icon(name, size)` keeps its per-size stroke-width bands (16→2.25, 18–20→2,
-  22+→1.75) — that is deliberate optical correction, do not "simplify" it.
-- `ICON_CAPS` is a per-icon cap override; **keep it minimal** (currently
-  `heartPulse` alone). Every entry weakens the set's unity.
-- **7 glyphs are duplicated outside `ICONS`** and must be kept byte-identical:
-  five in `index.html`'s bottom-nav (`calendar`, `heartPulse`, `home`, `utensils`,
-  `moon`) and two in `js/update.js` (`refresh`, `arrowUp`).
+### Icon set — "VAULT Duotone" (v211, replaced the stroked v202 set)
+`ICONS` in `js/app.js` is a **55-key** FILLED set (+2 back-compat aliases) on the
+same 24 grid. Every glyph is **two masses**: the base in `currentColor` and the
+accent in `var(--icon-accent)`. Nothing is stroked.
+- `icon(name, size)` is now four lines and has **no knobs** — no stroke width, no
+  caps, no joins. The per-size stroke bands and the `ICON_CAPS` map that used to
+  live here are GONE: a filled mass holds its weight at any size, so one path set
+  reads at 16px and at 40px. Do not reintroduce them.
+- This also retired a known defect: the bottom nav hard-coded `stroke-width`
+  2/2.4 at 22px and rendered ~14% heavier than the same glyph elsewhere. With no
+  stroke there is nothing left to diverge.
+- **Colour comes from the CONTAINER**, never from `icon()`. The rules live in the
+  "DUOTONE ICONS" block of the identity layer at the end of `styles.css`. Three
+  things there are load-bearing:
+  - `--icon-accent` defaults to **`--accent-text`**, not `--accent`. As a GRAPHIC
+    mass `#ff6a00` measures 2.65:1 on the light page — under the 3:1 WCAG floor
+    for non-text graphics. `--accent-text` is the same orange in dark and `#a34400`
+    in light (4.9–6.1:1).
+  - On a solid accent FILL (`.home-center-icon`, `.hero-cta`, `.btn-primary`,
+    `.food-fab`, `.nutri-setup-icon`) the accent layer would be orange on orange,
+    so `--icon-accent: currentColor` collapses the glyph to one mass. That list is
+    the complete live set — re-derive it by walking rendered svgs if new accent
+    fills appear, don't guess.
+  - **Never write a bare `svg { color: … }` rule.** Setting `color` on an svg beats
+    inheritance, so it silently overrides every container that already sets the
+    colour correctly. The one sanctioned exception is
+    `.nav-btn.active:not(.home-center) > svg`, where a different base from the
+    label IS the point.
+- **7 glyphs are duplicated outside `ICONS`** and must be kept identical: five in
+  `index.html`'s bottom-nav (`calendar`, `heartPulse`, `home`, `utensils`, `moon`)
+  and two in `js/update.js` (`refresh`, `arrowUp`). Copy them from the live
+  `ICONS` object programmatically and replace **positionally** — a regex over a
+  repeated `<svg viewBox="0 0 24 24">` pattern will re-match an earlier slot,
+  which has broken a release before.
 - A wrong key name returns `''` and the icon vanishes **silently, with no error** —
-  this actually shipped (`icon('send')` with no `send` key left the Settings
-  feedback row blank). Audit call sites when renaming anything.
-- **Known, deliberately unfixed:** the nav icons render at 22px (26 for home) but
-  hard-code `stroke-width="2"`/`2.4`, where the band for that size is 1.75 — so
-  they sit ~14% heavier than the same glyph elsewhere.
+  this actually shipped once. `apple` and `palette` survive as aliases of `meal`
+  and `swatches` for exactly this reason. Some names are also **data-driven**
+  (`CARDIO_ICON_OPTIONS` in storage.js, built-in cardio `iconName`s, the add-sheet
+  tiles), so a rename has to be checked against those too, not just `icon('…')`
+  call sites.
+- `zap` is the one single-tone glyph (100% accent) — by design, not a bug.
+- Charts and illustrations are NOT icons and correctly keep their strokes:
+  `.cal-ring-*`, the sparkline paths, and `machineSvgFor()` in `js/storage.js`.
 
 ### Type scale & RTL invariants (v200–v201)
 - **Nothing renders below 11px.** 24 declarations were at 9–10px; all raised.

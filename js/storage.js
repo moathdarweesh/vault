@@ -80,8 +80,15 @@ function exerciseImageUrl(imageSlug) {
 // Used for exercises whose `machineType` field is set. Returns a data URI
 // that can be used as a CSS background-image.
 // ==========================================================================
-const MACHINE_SVG_BG = '#0c2733';
-const MACHINE_SVG_STROKE = '#2dd4bf';
+// The last two colours in the app from the retired teal era: a navy plate with a
+// #2dd4bf line, on the most-repeated surface in the product (every exercise card
+// in the grid). Re-cut to the identity — a warm near-black plate from the surface
+// ramp, and a warm neutral line at 5.49:1 on it. Deliberately NOT the accent: a
+// whole grid of orange blueprints is the "accent as wallpaper" failure the v210
+// pass removed. These are computed at render time, so changing them here repaints
+// every card immediately; nothing is cached.
+const MACHINE_SVG_BG = '#140f0a';
+const MACHINE_SVG_STROKE = '#948878';
 
 function machineSvgFor(type) {
   const bg = MACHINE_SVG_BG;
