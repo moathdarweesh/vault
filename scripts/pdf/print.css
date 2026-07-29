@@ -1,0 +1,92 @@
+@page { size: A4; margin: 18mm 16mm 20mm 16mm; }
+
+:root{
+  --ink:#14110e; --dim:#5c534a; --faint:#8a7f73;
+  --rule:#e3dbd1; --rule-soft:#f0e9e1;
+  --accent:#c2410c; --accent-soft:#fff4ec;
+  --code-bg:#f7f3ef; --mono:"JetBrains Mono","Cascadia Mono",Consolas,monospace;
+}
+*{box-sizing:border-box}
+body{
+  font-family:"Segoe UI","Helvetica Neue",Arial,sans-serif;
+  font-size:9.6pt; line-height:1.58; color:var(--ink);
+  margin:0; -webkit-print-color-adjust:exact; print-color-adjust:exact;
+}
+
+/* ---- cover ----------------------------------------------------------- */
+.cover{height:245mm; display:flex; flex-direction:column; justify-content:center;
+       page-break-after:always;}
+.cover .eyebrow{font-family:var(--mono); font-size:8pt; letter-spacing:.28em;
+                text-transform:uppercase; color:var(--accent); margin-bottom:10mm;}
+.cover h1{font-size:34pt; line-height:1.05; letter-spacing:-.015em; margin:0 0 4mm;
+          font-weight:800; border:0; padding:0;}
+.cover .sub{font-size:13pt; color:var(--dim); font-weight:400; margin-bottom:14mm;}
+.cover .rule{height:3px; background:var(--accent); width:52mm; margin-bottom:12mm;}
+.cover dl{display:grid; grid-template-columns:34mm 1fr; gap:2.5mm 6mm; font-size:9pt; margin:0;}
+.cover dt{font-family:var(--mono); font-size:7.6pt; letter-spacing:.1em;
+          text-transform:uppercase; color:var(--faint); padding-top:.6mm;}
+.cover dd{margin:0;}
+
+/* ---- contents -------------------------------------------------------- */
+.toc{page-break-after:always;}
+.toclist{list-style:none; margin:0; padding:0; font-size:9.4pt;}
+.toclist li{display:flex; align-items:baseline; gap:2mm; padding:1.5mm 0;
+            break-inside:avoid;}
+.toclist li.d2{font-weight:700; margin-top:2.5mm; border-bottom:0;}
+.toclist li.d3{font-weight:400; color:var(--dim); padding-inline-start:7mm; font-size:8.8pt;}
+.toclist .leader{flex:1; border-bottom:1px dotted var(--rule); transform:translateY(-1mm);}
+.toclist .pg{font-family:var(--mono); font-size:8.2pt; color:var(--faint); min-width:7mm;
+             text-align:end;}
+.toclist li.d2 .pg{color:var(--accent);}
+
+/* ---- headings -------------------------------------------------------- */
+h1,h2,h3,h4{line-height:1.2; font-weight:700; break-after:avoid; page-break-after:avoid;}
+h1{font-size:19pt; margin:0 0 5mm; padding-bottom:2.5mm; border-bottom:2px solid var(--ink);}
+h2{font-size:14.5pt; margin:11mm 0 4mm; padding-bottom:2mm;
+   border-bottom:1px solid var(--rule); break-before:page; page-break-before:always;}
+h3{font-size:11.2pt; margin:7mm 0 2.5mm; color:#241d17;}
+h4{font-size:9.8pt; margin:5mm 0 2mm; color:var(--dim);
+   font-family:var(--mono); letter-spacing:.04em;}
+
+p{margin:0 0 3mm; orphans:3; widows:3;}
+a{color:var(--accent); text-decoration:none;}
+
+ul,ol{margin:0 0 3.5mm; padding-inline-start:6mm;}
+li{margin-bottom:1.4mm;}
+li>ul,li>ol{margin-top:1.4mm;}
+
+/* ---- code ------------------------------------------------------------ */
+code{font-family:var(--mono); font-size:8.4pt; background:var(--code-bg);
+     padding:.4mm 1.1mm; border-radius:2px; color:#7a2e0b; word-break:break-word;}
+pre{background:var(--code-bg); border:1px solid var(--rule-soft);
+    border-inline-start:2.5px solid var(--accent); border-radius:3px;
+    padding:3mm 4mm; margin:0 0 4mm; white-space:pre-wrap; word-break:break-word;
+    break-inside:avoid; page-break-inside:avoid;}
+pre code{background:none; padding:0; color:#2a2119; font-size:8.1pt; line-height:1.5;}
+
+/* ---- tables ---------------------------------------------------------- */
+table{width:100%; border-collapse:collapse; margin:0 0 4.5mm; font-size:8.6pt;
+      break-inside:avoid; page-break-inside:avoid;}
+thead{display:table-header-group;}
+th{text-align:start; font-weight:700; font-size:7.8pt; letter-spacing:.05em;
+   text-transform:uppercase; color:var(--dim); background:#faf7f4;
+   border-bottom:1.5px solid var(--ink); padding:2mm 2.5mm; vertical-align:bottom;}
+td{padding:2mm 2.5mm; border-bottom:1px solid var(--rule-soft); vertical-align:top;}
+tr:last-child td{border-bottom:1px solid var(--rule);}
+td code{font-size:7.9pt;}
+
+/* ---- blockquote: carries every REASON and warning in the document ----- */
+blockquote{margin:0 0 4mm; padding:2.5mm 4mm; background:var(--accent-soft);
+           border-inline-start:2.5px solid var(--accent); border-radius:0 3px 3px 0;
+           color:#4a2a15; break-inside:avoid; page-break-inside:avoid;}
+blockquote p{margin:0 0 1.5mm;} blockquote p:last-child{margin:0;}
+blockquote table{margin:2mm 0 0; font-size:8.2pt;}
+blockquote th{background:transparent;}
+
+hr{border:0; border-top:1px solid var(--rule); margin:8mm 0;}
+
+/* ---- diagrams -------------------------------------------------------- */
+.diagram{margin:0 0 5mm; padding:4mm; background:#fdfbf9;
+         border:1px solid var(--rule-soft); border-radius:4px; text-align:center;
+         break-inside:avoid; page-break-inside:avoid;}
+.diagram svg{max-width:100%; height:auto;}

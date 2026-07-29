@@ -464,7 +464,7 @@ stateDiagram-v2
     Check --> WeekCount: weekSetsCount > 0
     Check --> FirstRun: otherwise
 
-    Rest: .hero-rest — a &lt;div&gt;, not a button<br/>scans 14 days for the next workout<br/>"next up {day} — {name}"
+    Rest: .hero-rest — a div, not a button<br/>scans 14 days for the next workout<br/>renders "next up · day · name"
     Planned: #home-start-workout<br/>plan name + muscle chips + CTA
     WeekCount: count-up numeral<br/>CTA opens today's session
     FirstRun: invitation, no wall of zeros

@@ -10,7 +10,8 @@
     "android": "npm run build:www && cap sync android && cap open android",
     "release": "node scripts/release.js",
     "release:check": "node scripts/release.js --check",
-    "hooks": "git config core.hooksPath .githooks"
+    "hooks": "git config core.hooksPath .githooks",
+    "pdf": "node scripts/pdf/build-lld-pdf.js LLD.md LLD.pdf"
   },
   "dependencies": {
     "@capacitor/android": "^8.4.1",
