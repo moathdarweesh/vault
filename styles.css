@@ -4652,15 +4652,9 @@ body[dir="rtl"] .picker-row { text-align: right; }
 .weight-row-del:active { background: var(--surface-3); color: var(--danger, #ef4444); }
 .weight-empty-hint { text-align: center; font-size: 13px; color: var(--text-mute); padding: 14px 8px 4px; }
 
-/* Coach CTA */
-.nutri-coach {
-  display: flex; align-items: center; gap: 12px; width: 100%;
-  margin-top: 12px; padding: 14px; cursor: pointer;
-  border-radius: var(--radius); background: var(--surface-2); border: 1px solid var(--border);
-  color: var(--text); appearance: none; -webkit-appearance: none; font: inherit;
-  transition: transform 0.15s; -webkit-tap-highlight-color: transparent;
-}
-.nutri-coach:active { transform: scale(0.99); }
+/* (.nutri-coach — the coach's entry button — was removed at v219 with the CTA
+   itself. The rules below still serve openCoach's MODAL, which is dormant but
+   intact; see the note above that function before deleting any of them.) */
 .coach-remaining {
   display: flex; gap: 14px; flex-wrap: wrap; padding: 12px 14px; margin-bottom: 12px;
   background: var(--surface-2); border-radius: var(--radius-sm); font-size: 13px; color: var(--text-dim);

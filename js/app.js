@@ -12,7 +12,7 @@
 // build. The literal below is the fallback (file://, or a stripped query) and is
 // still bumped by `npm run release` — see CLAUDE.md "CACHE WORKFLOW".
 const VAULT_BUILD = (() => {
-  const FALLBACK = 'v219';
+  const FALLBACK = 'v220';
   try {
     const src = (document.currentScript && document.currentScript.src) || '';
     const m = src.match(/[?&]v=(\d+)/);
@@ -4481,8 +4481,6 @@ function renderFood(el) {
     if (setup) { openCalculatorModal(rerender); return; }
     const edit = e.target.closest('[data-edit-goal]');
     if (edit) { openCalculatorModal(rerender); return; }
-    const coach = e.target.closest('[data-coach]');
-    if (coach) { openCoach(date); return; }
     const water = e.target.closest('[data-add-water]');
     if (water) {
       DB.water.add(date, parseInt(water.getAttribute('data-add-water'), 10) || 0);
@@ -4586,14 +4584,6 @@ function nutritionDashboardHtml(date) {
     </div>
 
     ${waterCard}
-
-    <button class="nutri-coach" data-coach>
-      <div class="cta-card-icon">${icon('sparkle', 20)}</div>
-      <div style="flex:1;min-width:0;text-align:start">
-        <div class="cta-card-title">${t('coach_title')}</div>
-        <div class="cta-card-sub">${t('coach_sub')}</div>
-      </div>
-    </button>
   `;
 }
 
@@ -5264,6 +5254,15 @@ function openSavedFoodPicker(date, onSave) {
 // AI coach — reads what's LEFT for the day and suggests what to eat to hit it.
 // Reuses the FoodAI text model; no new backend.
 // ===========================================================================
+// DORMANT (v219) — the AI meal coach. Its entry point on the Food screen was
+// removed at the owner's request ("not this feature for now"), so nothing calls
+// this any more. The implementation, its modal styles and its ten translated
+// strings are deliberately kept rather than deleted, because "for now" is not
+// "never" and re-translating is the expensive part.
+//
+// TO RESTORE: put the button back after ${waterCard} in the nutrition panel and
+// re-add the one delegated line `if (e.target.closest('[data-coach]')) { openCoach(date); return; }`
+// above the [data-add-water] branch. Nothing else was touched.
 function openCoach(date) {
   const tgt = DB.nutrition.get().targets;
   const c = DB.foodLogs.totalsForDate(date);

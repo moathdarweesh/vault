@@ -4,35 +4,84 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>THE VAULT — سياسة الخصوصية والشروط / Privacy & Terms</title>
+<link rel="icon" type="image/svg+xml" href="icons/icon.svg?v=219">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<!-- Two of the brand's three faces. JetBrains Mono is not loaded: this page has
+     no numerals or technical labels to set in it. -->
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@400;500;600;700&family=Archivo:wght@900&display=swap" rel="stylesheet">
 <style>
-  :root { --bg:#0a1920; --card:#0f2129; --line:#1e3a44; --text:#e8f1f2; --dim:#9fb4bb; --accent:#4a9eff; }
+  /* This page is STANDALONE — it deliberately does not load styles.css, because
+     it must render for someone who has never opened the app. The tokens below
+     are therefore copied from the app's dark theme rather than imported. If the
+     ramp changes there, change it here too; there is no mechanism that will. */
+  :root {
+    --bg:#000000; --surface-1:#0d0a07; --surface-2:#17120d; --surface-3:#231b13;
+    --text:#fdfaf7; --text-mute:#b0a69e; --text-dim:#9a8f86;
+    --accent:#ff6a00; --accent-ink:#1a0800;
+    --accent-soft:rgba(255,106,0,.13); --accent-line:rgba(255,106,0,.30);
+    --border:rgba(255,232,212,.11); --border-hi:rgba(255,232,212,.22);
+    --radius-sm:10px; --radius:14px; --radius-md:16px;
+  }
   * { box-sizing:border-box; }
-  body { margin:0; background:var(--bg); color:var(--text); font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Arial,sans-serif; line-height:1.75; }
+  body {
+    margin:0; background:var(--bg); color:var(--text);
+    font-family:'IBM Plex Sans Arabic',system-ui,-apple-system,sans-serif;
+    line-height:1.8; -webkit-font-smoothing:antialiased;
+  }
   .wrap { max-width:760px; margin:0 auto; padding:28px 20px 80px; }
-  header { display:flex; align-items:center; justify-content:space-between; gap:12px; margin-bottom:24px; flex-wrap:wrap; }
-  .brand { font-weight:900; letter-spacing:.25em; color:var(--accent); font-size:16px; }
-  .langs button { background:var(--card); color:var(--dim); border:1px solid var(--line); border-radius:999px; padding:6px 14px; font-weight:800; cursor:pointer; font-size:13px; }
-  .langs button.active { background:var(--accent); border-color:var(--accent); color:#fff; }
-  h1 { font-size:26px; margin:.2em 0; }
-  h2 { font-size:18px; margin:1.6em 0 .4em; color:var(--accent); }
-  p, li { color:var(--text); }
-  .dim { color:var(--dim); font-size:14px; }
+  header { display:flex; align-items:center; justify-content:space-between; gap:12px; margin-bottom:28px; flex-wrap:wrap; }
+
+  /* THE CUT — the wordmark, per BRAND.md section 1. Painted slot, not masked:
+     the surface here is a flat token, so the slot can be filled with that exact
+     colour. The law is proportional so it survives any font-size: slot 7% of
+     the type size with a 2px floor, hairline 1.5px minimum, .02em tracking.
+     Latin only on this page, so the cut sits at 50%, not the Arabic 52%. */
+  .brand {
+    position:relative; display:inline-block; width:fit-content;
+    font-family:Archivo,system-ui,sans-serif; font-weight:900;
+    font-size:24px; letter-spacing:.02em; line-height:1; text-transform:uppercase;
+    color:var(--text); white-space:nowrap;
+    --cut-slot:max(2px,.07em); --cut-hair:max(1.5px,.024em);
+  }
+  .brand::before, .brand::after {
+    content:''; position:absolute; inset-inline:0; top:50%;
+    transform:translateY(-50%); pointer-events:none;
+  }
+  .brand::before { height:var(--cut-slot); background:var(--bg); }
+  .brand::after  { height:var(--cut-hair); background:var(--accent); }
+
+  /* The language toggle HOLDS STATE, so it takes the machined corner, not a
+     capsule — the identity layer reserves 999px for transient chips only. */
+  .langs { display:flex; gap:6px; padding:3px; background:var(--surface-2); border:1px solid var(--border); border-radius:var(--radius); }
+  .langs button {
+    background:none; color:var(--text-mute); border:none; border-radius:var(--radius-sm);
+    padding:8px 15px; font-family:inherit; font-weight:700; cursor:pointer; font-size:13px;
+    -webkit-tap-highlight-color:transparent;
+  }
+  .langs button.active { background:var(--accent); color:var(--accent-ink); }
+
+  h1 { font-size:27px; font-weight:800; margin:.2em 0 .3em; line-height:1.3; }
+  h2 { font-size:17px; font-weight:700; margin:2em 0 .5em; color:var(--accent); }
+  p, li { color:var(--text-mute); }
+  b { color:var(--text); font-weight:600; }
   a { color:var(--accent); }
-  .card { background:var(--card); border:1px solid var(--line); border-radius:14px; padding:18px 20px; margin:14px 0; }
   ul { padding-inline-start:20px; }
+  li { margin-bottom:6px; }
   .sec { display:none; }
   .sec.active { display:block; }
-  hr { border:0; border-top:1px solid var(--line); margin:34px 0; }
-  .updated { font-size:13px; color:var(--dim); }
-  code { background:#0b1a20; padding:1px 6px; border-radius:6px; font-size:13px; }
-  .backbar { margin-top:36px; }
+  hr { border:0; border-top:1px solid var(--border); margin:38px 0; }
+  .updated { font-size:13px; color:var(--text-dim); }
+
+  .backbar { margin-top:40px; }
   .back-app-btn {
     display:flex; align-items:center; justify-content:center; gap:10px;
     width:100%; text-decoration:none;
-    background:var(--accent); color:#fff; font-weight:800; font-size:15px;
-    padding:15px 20px; border-radius:14px; border:none; cursor:pointer;
+    background:var(--accent); color:var(--accent-ink);
+    font-family:inherit; font-weight:700; font-size:16px;
+    padding:16px 20px; border-radius:var(--radius-md); border:none; cursor:pointer;
   }
-  .back-app-btn:active { opacity:.85; transform:scale(.99); }
+  .back-app-btn:active { filter:brightness(.94); transform:scale(.99); }
   .back-app-btn svg { width:18px; height:18px; }
   html[dir="rtl"] .back-app-btn svg { transform:scaleX(-1); }
 </style>
@@ -64,29 +113,26 @@
     <h2>أين تُخزَّن</h2>
     <ul>
       <li><b>على جهازك</b> دائماً (تخزين محلي) — يعمل التطبيق دون اتصال.</li>
-      <li><b>في حسابك السحابي</b> على Supabase عند تسجيل الدخول، لمزامنة بياناتك بين أجهزتك ونسخها احتياطياً. بياناتك معزولة عن غيرك عبر سياسات أمان على مستوى الصف (RLS).</li>
+      <li><b>في حسابك السحابي</b> عند تسجيل الدخول، لمزامنة بياناتك بين أجهزتك ونسخها احتياطياً. بياناتك معزولة عن بيانات غيرك.</li>
     </ul>
 
     <h2>الذكاء الاصطناعي (تقدير السعرات)</h2>
-    <p>لتقدير السعرات، يُرسَل وصف/صورة/صوت الطعام إلى <b>Google Gemini</b> عبر خادم وسيط (Cloudflare) يحمل المفتاح بأمان. تُستخدم هذه المدخلات لإرجاع التقدير فقط، وتخضع لشروط واجهة Google. لا نبيع بياناتك ولا نستخدمها للإعلانات.</p>
+    <p>لتقدير السعرات، يُرسَل وصف الطعام أو صورته أو تسجيله الصوتي إلى مزوّد ذكاء اصطناعي خارجي عبر خادم آمن. تُستخدم هذه المدخلات لإرجاع التقدير فقط وتخضع لشروط ذلك المزوّد. لا نبيع بياناتك ولا نستخدمها للإعلانات.</p>
 
     <h2>المشاركة</h2>
-    <p>لا نبيع بياناتك الشخصية. نشاركها فقط مع مزوّدي الخدمة اللازمين لتشغيل التطبيق: Supabase (التخزين/الحساب)، Google Gemini و Cloudflare (تقدير السعرات).</p>
+    <p>لا نبيع بياناتك الشخصية. نشاركها فقط مع مزوّدي الخدمة اللازمين لتشغيل التطبيق: مزوّد استضافة وقواعد بيانات (الحساب والمزامنة)، ومزوّد ذكاء اصطناعي (تقدير السعرات).</p>
 
     <h2>حقوقك</h2>
     <ul>
       <li><b>الاطّلاع والتصدير:</b> يمكنك تصدير كل بياناتك من داخل التطبيق (الإعدادات).</li>
-      <li><b>الحذف:</b> يمكنك حذف حسابك وكل بياناتك من الإعدادات ← «حذف الحساب»، أو بمراسلتنا.</li>
+      <li><b>الحذف:</b> يمكنك حذف حسابك وكل بياناتك من الإعدادات ← «حذف الحساب»، ويتم الحذف فوراً وبلا وساطة.</li>
     </ul>
 
     <h2>الأمان</h2>
-    <p>البيانات مُشفّرة أثناء النقل (HTTPS)، ومعزولة لكل مستخدم. لا يُخزَّن أي مفتاح حسّاس داخل التطبيق.</p>
+    <p>البيانات مُشفّرة أثناء النقل، ومعزولة لكل مستخدم.</p>
 
     <h2>الأطفال</h2>
     <p>التطبيق غير موجّه لمن هم دون 13 عاماً.</p>
-
-    <h2>التواصل</h2>
-    <p>لأي استفسار أو طلب حذف: <a href="mailto:darweeshmahmoud1980@gmail.com">darweeshmahmoud1980@gmail.com</a></p>
 
     <hr>
 
@@ -118,29 +164,26 @@
     <h2>Where it's stored</h2>
     <ul>
       <li><b>On your device</b> at all times (local storage) — the app works offline.</li>
-      <li><b>In your cloud account</b> on Supabase when signed in, to sync across your devices and back it up. Your data is isolated from other users by row-level security (RLS).</li>
+      <li><b>In your cloud account</b> when signed in, to sync across your devices and back it up. Your data is kept isolated from other users'.</li>
     </ul>
 
     <h2>AI (calorie estimation)</h2>
-    <p>To estimate calories, your food description/photo/voice is sent to <b>Google Gemini</b> through a proxy server (Cloudflare) that holds the key securely. These inputs are used only to return the estimate, under Google's API terms. We do not sell your data or use it for ads.</p>
+    <p>To estimate calories, your food description, photo or voice note is sent to an external AI provider through a secure server. These inputs are used only to return the estimate and are subject to that provider's terms. We do not sell your data or use it for ads.</p>
 
     <h2>Sharing</h2>
-    <p>We do not sell your personal data. We share it only with the service providers needed to run the app: Supabase (storage/account), Google Gemini and Cloudflare (calorie estimation).</p>
+    <p>We do not sell your personal data. We share it only with the service providers needed to run the app: a hosting and database provider (account and sync), and an AI provider (calorie estimation).</p>
 
     <h2>Your rights</h2>
     <ul>
       <li><b>Access & export:</b> export all your data from inside the app (Settings).</li>
-      <li><b>Deletion:</b> delete your account and all data from Settings → “Delete account”, or by contacting us.</li>
+      <li><b>Deletion:</b> delete your account and all data from Settings → “Delete account”. It happens immediately, with no one in between.</li>
     </ul>
 
     <h2>Security</h2>
-    <p>Data is encrypted in transit (HTTPS) and isolated per user. No sensitive key is stored inside the app.</p>
+    <p>Data is encrypted in transit and isolated per user.</p>
 
     <h2>Children</h2>
     <p>The app is not directed to anyone under 13.</p>
-
-    <h2>Contact</h2>
-    <p>For any question or deletion request: <a href="mailto:darweeshmahmoud1980@gmail.com">darweeshmahmoud1980@gmail.com</a></p>
 
     <hr>
 
