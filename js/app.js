@@ -12,7 +12,7 @@
 // build. The literal below is the fallback (file://, or a stripped query) and is
 // still bumped by `npm run release` — see CLAUDE.md "CACHE WORKFLOW".
 const VAULT_BUILD = (() => {
-  const FALLBACK = 'v217';
+  const FALLBACK = 'v218';
   try {
     const src = (document.currentScript && document.currentScript.src) || '';
     const m = src.match(/[?&]v=(\d+)/);
@@ -958,12 +958,33 @@ const I18N = {
     pick_exercises: 'Pick Exercises',
     no_exercises_picked: 'No exercises picked yet',
     rest_day: 'Rest',
-    rest_today_toggle: 'Not training today',
     rest_today_title: 'Today is off',
     rest_today_sub: 'Your cycle picks up where it left off.',
     rest_today_next: 'Next up {day} — {name}. Nothing was lost.',
     rest_today_on: 'Today is off. The cycle moves with you.',
     rest_today_off: "Today is back on.",
+    rest_short: 'Rest',
+    minutes_short: 'm',
+    rest_is_the_plan: 'Rest is part of the plan — the muscle grows today, not yesterday.',
+    rest_undo_cta: 'I can train today after all',
+    // The sheet speaks in the user's voice, never the app's, and never threatens.
+    rest_sheet_title_1: "So you can't train today",
+    rest_sheet_body_1: "Understood — not every day is the same. Just keep this in mind: <b>don't take two in a row.</b> The first day is rest; the second is where a lapse begins. Today's streak counts anything you log, so anything at all keeps it.",
+    rest_sheet_title_2: 'That would be two days in a row',
+    rest_sheet_body_2: 'You rested yesterday. Take today too and the lapse starts here — and coming back gets heavier than the workout itself.',
+    rest_streak_line: 'Your streak is {n} days — a day with nothing logged ends it',
+    rest_do_what_i_can: "I'll do what I can",
+    rest_full_rest: 'No, I need a full rest day',
+    rest_full_again: 'Rest again — I accept the cost',
+    rest_min_title: 'What can you manage today?',
+    rest_min_sub: "Pick the smallest thing you can finish. What matters is that the line doesn't break.",
+    rest_min_one: 'One exercise',
+    rest_min_one_sub: 'The heaviest lift in the plan, 3 sets',
+    rest_min_half: 'Half the session',
+    rest_min_half_sub: 'The first two exercises and done',
+    rest_min_walk: 'A walk, nothing else',
+    rest_min_walk_sub: 'Logged as light cardio',
+    rest_min_logged: 'Logged. The streak holds.',
     plan_empty: 'Your weekly plan is empty',
     plan_empty_sub: 'Apply a template or build it yourself day by day.',
     apply_template: 'Apply Template',
@@ -1593,12 +1614,32 @@ const I18N = {
     pick_exercises: 'اختر تمارين',
     no_exercises_picked: 'لم تختر أي تمارين بعد',
     rest_day: 'راحة',
-    rest_today_toggle: 'لن أتمرّن اليوم',
     rest_today_title: 'اليوم راحة',
     rest_today_sub: 'دورتك تُكمل من حيث توقّفت.',
     rest_today_next: 'التالي {day} — {name}. لم يسقط شيء.',
     rest_today_on: 'اليوم راحة. الدورة تتحرّك معك.',
     rest_today_off: 'عاد اليوم يوم تمرين.',
+    rest_short: 'راحة',
+    minutes_short: 'د',
+    rest_is_the_plan: 'الراحة جزء من الخطة — العضلة تكبر اليوم لا أمس.',
+    rest_undo_cta: 'أستطيع التمرّن اليوم',
+    rest_sheet_title_1: 'إذن لن تستطيع التمرّن اليوم',
+    rest_sheet_body_1: 'مفهوم، وليست الأيام كلها سواء. لكن اجعل هذه في ذهنك: <b>لا تأخذ يومين متتاليين.</b> اليوم الأول راحة، والثاني بداية انقطاع. والسلسلة تُحسب بالتسجيل — فأي شيء مسجَّل يُبقيها.',
+    rest_sheet_title_2: 'هذا ثاني يوم على التوالي',
+    rest_sheet_body_2: 'أخذت راحة أمس. وإن أخذت اليوم كذلك بدأ الانقطاع من هنا — وتصير العودة أثقل من التمرين نفسه.',
+    rest_streak_line: 'سلسلتك {n} يومًا — ويومٌ بلا تسجيل يقطعها',
+    rest_do_what_i_can: 'سأفعل ما بوسعي',
+    rest_full_rest: 'لا، أحتاج راحة كاملة',
+    rest_full_again: 'راحة ثانية — أتحمّل النتيجة',
+    rest_min_title: 'ما الذي تقدر عليه اليوم؟',
+    rest_min_sub: 'اختر أقلّ شيء تستطيع إتمامه. المهمّ ألّا ينكسر الخطّ.',
+    rest_min_one: 'تمرين واحد',
+    rest_min_one_sub: 'أثقل حركة في الخطة، ٣ مجموعات',
+    rest_min_half: 'نصف الجلسة',
+    rest_min_half_sub: 'أول تمرينين فقط',
+    rest_min_walk: 'مشي فقط',
+    rest_min_walk_sub: 'يُحتسب كارديو خفيفًا',
+    rest_min_logged: 'سُجِّل. السلسلة سليمة.',
     plan_empty: 'خطتك الأسبوعية فاضية',
     plan_empty_sub: 'طبّق قالبًا جاهزًا أو ابنِها يومًا بيوم.',
     apply_template: 'طبّق قالب',
@@ -2575,18 +2616,27 @@ function renderHome(el) {
   const planState = DB.plan.get();
   const hasAnyPlan = !!(planState && Array.isArray(planState.cycle) && planState.cycle.length > 0);
 
-  // "Not going today" — sits OUTSIDE the hero, which is itself a <button>: a
-  // nested button is invalid HTML and its click would bubble straight into
-  // starting the workout the user just declined. Only offered when the rotation
-  // actually puts something on today, or when today is already marked off (so
-  // there is a way back). `aria-pressed` because it is a toggle, not an action.
-  const restToggleHtml = (hasPlanToday || todayIsOff) ? `
-    <button class="rest-toggle${todayIsOff ? ' is-off' : ''}" id="home-rest-toggle"
-            type="button" aria-pressed="${todayIsOff ? 'true' : 'false'}">
-      <span class="rest-box" aria-hidden="true">${todayIsOff ? icon('check', 14) : ''}</span>
-      <span class="rest-label">${t('rest_today_toggle')}</span>
-    </button>
-  ` : '';
+  // THE SPLIT CONTROL — "Vault Rest Day" spec, option A.
+  //
+  // One decision in one moment ("train, or not") deserves ONE shape, so this is
+  // a single rounded bar cut in two rather than a button with a checkbox loose
+  // beneath it. The dark half reads as the other possibility for the same
+  // decision; the hairline between them keeps the two targets from blurring.
+  //
+  // The previous build put a checkbox OUTSIDE the hero because the hero was
+  // itself a <button> and nesting one is invalid HTML. The spec's own critique
+  // of that shape — "an empty circle hanging between two cards; the easiest
+  // thing on the screen to press, and the worst thing to press" — is why the
+  // hero is now a plain <div> holding two real buttons instead.
+  const splitCtaHtml = `
+    <div class="hero-split">
+      <button class="hero-split-main" id="home-start-workout" type="button">
+        ${icon('dumbbell', 20)}<span>${t('today_workout')}</span>
+      </button>
+      <button class="hero-split-rest" id="home-rest-toggle" type="button">
+        ${t('rest_short')}
+      </button>
+    </div>`;
 
   let heroHtml = '';
   if (todayIsOff) {
@@ -2601,6 +2651,10 @@ function renderHome(el) {
       }
       return null;
     })();
+    // THE INVERTED STATE. A rest day does not leave the screen empty: the same
+    // slot turns around and offers the opposite. The solid orange disappears and
+    // becomes an outline only — per the spec, "a filled colour promises a task,
+    // and today there is no task". The undo stays available for the whole day.
     heroHtml = `
       <div class="hero-card hero-rest">
         <div class="hero-eyebrow">${t('rest_day')} · ${escapeHtml(dayName(now.getDay(), true))}</div>
@@ -2608,6 +2662,13 @@ function renderHome(el) {
         <div class="hero-meta">${nextUp
           ? escapeHtml(t('rest_today_next').replace('{day}', nextUp.day).replace('{name}', nextUp.name))
           : t('rest_today_sub')}</div>
+        <div class="rest-note">
+          <span class="rest-note-icon">${icon('moon', 20)}</span>
+          <span>${t('rest_is_the_plan')}</span>
+        </div>
+        <button class="hero-ghost-cta" id="home-undo-rest" type="button">
+          ${icon('dumbbell', 20)}<span>${t('rest_undo_cta')}</span>
+        </button>
       </div>
     `;
   } else if (hasPlanToday) {
@@ -2623,7 +2684,7 @@ function renderHome(el) {
     `;
 
     heroHtml = `
-      <button class="hero-card" id="home-start-workout">
+      <div class="hero-card">
         <div class="hero-eyebrow">${t('today_plan')} · ${escapeHtml(dayName(now.getDay(), true))}</div>
         <div class="hero-title">${escapeHtml(todayPlan.name || t('start_workout'))}</div>
         <div class="hero-meta">${fmtNum(exObjs.length)} ${exObjs.length === 1 ? t('exercise') : t('exercises')} · ${fmtNum(weekSetsCount)} ${t('sessions_this_week')}</div>
@@ -2631,8 +2692,8 @@ function renderHome(el) {
           ${sideRow(t('anterior'), muscles.anterior, 'anterior')}
           ${sideRow(t('posterior'), muscles.posterior, 'posterior')}
         </div>
-        <div class="hero-cta">${icon('dumbbell', 18)}<span>${t('today_workout')}</span></div>
-      </button>
+        ${splitCtaHtml}
+      </div>
     `;
   } else if (weekSetsCount > 0) {
     // Active this week but no plan today → keep the week count, but the CTA opens
@@ -2671,7 +2732,7 @@ function renderHome(el) {
     </div>
 
     ${heroHtml}
-    ${restToggleHtml}
+
 
     ${foodHeroHtml}
 
@@ -2736,14 +2797,15 @@ function renderHome(el) {
     if (!hasAnyPlan) { navigate('planner'); return; }
     navigate('session-day', { date: todayISO() });
   });
-  // "Not going today". Re-reads the date at click time for the same
-  // across-midnight reason as the Start card above, then re-renders Home so the
-  // hero, the toggle and the week counters all reflect the new rotation
-  // position — toggling this SLIDES the cycle, so a partial repaint would lie.
-  $('#home-rest-toggle', el)?.addEventListener('click', () => {
-    const d = new Date();
-    const nowOff = DB.plan.toggleRest(d);
-    showToast(nowOff ? t('rest_today_on') : t('rest_today_off'));
+  // "Rest" no longer marks the day silently — it opens the sheet, which argues
+  // one point and then offers a middle option. The day is only marked off if the
+  // user chooses it there.
+  $('#home-rest-toggle', el)?.addEventListener('click', () => openRestSheet());
+  // The inverted state's way back. Straight undo, no argument — nobody needs
+  // persuading INTO training.
+  $('#home-undo-rest', el)?.addEventListener('click', () => {
+    DB.plan.setRest(new Date(), false);
+    showToast(t('rest_today_off'));
     renderView('home');   // NOT renderHome() — it needs its view element
   });
   $('#home-food-hero', el)?.addEventListener('click', () => navigate('food'));
@@ -4807,6 +4869,170 @@ function openAddSheet(date, onChange) {
 }
 
 // ===========================================================================
+// THE REST-DAY SHEET  ("Vault Rest Day" spec, section 02)
+//
+// The old control was a silent checkbox: press it and the day was gone with no
+// resistance at all. This asks ONE question first, and carries the single rule
+// that actually changes behaviour — DON'T TAKE TWO IN A ROW — then lets the user
+// out through a middle option (least effort) rather than through zero.
+//
+// Copy rules from the spec, encoded here so they survive editing:
+//   · The text speaks in the USER's voice, not the app's. "I'll do what I can"
+//     is a promise he made, which is harder to walk back than a button labelled
+//     "start a short workout".
+//   · No threats and no red. Red is for deletion. The second-day-in-a-row case
+//     takes GOLD — the same colour as the streak that is on the line.
+//   · It appears once a day. Twice turns advice into nuisance, and nuisance gets
+//     ignored. DB.plan.markRestPrompted() is the gate.
+// ===========================================================================
+function openRestSheet() {
+  const app = document.querySelector('.app');
+  if (!app) return;
+  document.getElementById('rest-sheet-overlay')?.remove();
+
+  const todayIso = todayISO();
+  // "Second day in a row" is asked of YESTERDAY's declared rest, not of whether
+  // yesterday happened to be a scheduled non-training weekday — a Friday off in
+  // a 5-day plan is the plan working, not a lapse.
+  const secondInARow = DB.plan.isRest(addDaysISO(todayIso, -1));
+  const streak = computeStreak();
+
+  const overlay = document.createElement('div');
+  overlay.id = 'rest-sheet-overlay';
+  overlay.className = 'sheet-overlay';
+
+  const stepOne = () => `
+    <div class="rest-sheet-icon${secondInARow ? ' warn' : ''}">${icon(secondInARow ? 'flame' : 'moon', 28)}</div>
+    <div class="rest-sheet-head">
+      <div class="rest-sheet-title">${secondInARow ? t('rest_sheet_title_2') : t('rest_sheet_title_1')}</div>
+      <div class="rest-sheet-body">${secondInARow ? t('rest_sheet_body_2') : t('rest_sheet_body_1')}</div>
+    </div>
+    ${streak > 0 ? `
+      <div class="rest-streak">
+        ${icon('flame', 22)}
+        <div>${t('rest_streak_line')
+          .replace('{n}', `<b class="num">${fmtNum(streak)}</b>`)}</div>
+      </div>` : ''}
+    <div class="rest-sheet-actions">
+      <button class="btn btn-primary btn-block" data-rest="minimum">${t('rest_do_what_i_can')}</button>
+      <button class="btn btn-ghost btn-block" data-rest="full">
+        ${secondInARow ? t('rest_full_again') : t('rest_full_rest')}
+      </button>
+    </div>`;
+
+  // Step 2 — the middle option. Three sizes of "something", so the answer to
+  // "I can't do the session" is never forced to be "then nothing".
+  const stepTwo = () => {
+    const plan = DB.plan.workoutForDate(new Date());
+    const byId = Object.fromEntries(DB.exercises.list().map((e) => [e.id, e]));
+    const exObjs = (plan?.exerciseIds || []).map((id) => byId[id]).filter(Boolean);
+    // "The heaviest movement in the plan" — by best estimated 1RM, which is the
+    // only ranking the app already knows. Falls back to plan order when nothing
+    // has been logged yet.
+    const heaviest = exObjs.slice().sort(
+      (a, b) => DB.sessions.bestOneRM(b.id) - DB.sessions.bestOneRM(a.id))[0] || exObjs[0];
+    const opts = [];
+    if (heaviest) {
+      opts.push({ k: 'one', mins: 10, icon: 'dumbbell',
+        title: t('rest_min_one'), sub: t('rest_min_one_sub') });
+    }
+    if (exObjs.length > 2) {
+      opts.push({ k: 'half', mins: 20, icon: 'columns',
+        title: t('rest_min_half'), sub: t('rest_min_half_sub') });
+    }
+    opts.push({ k: 'walk', mins: 15, icon: 'walk',
+      title: t('rest_min_walk'), sub: t('rest_min_walk_sub') });
+
+    return `
+      <div class="rest-sheet-head">
+        <div class="rest-sheet-title">${t('rest_min_title')}</div>
+        <div class="rest-sheet-body">${t('rest_min_sub')}</div>
+      </div>
+      <div class="min-options">
+        ${opts.map((o) => `
+          <button class="min-option" data-min="${o.k}" data-mins="${o.mins}">
+            <span class="min-badge num">${fmtNum(o.mins)}${t('minutes_short')}</span>
+            <span class="min-text">
+              <span class="min-title">${o.title}</span>
+              <span class="min-sub">${o.sub}</span>
+            </span>
+            <span class="min-chev">${icon('chevronRight', 18)}</span>
+          </button>`).join('')}
+      </div>`;
+  };
+
+  const paint = (step) => {
+    overlay.innerHTML = `
+      <div class="add-sheet rest-sheet" role="dialog" aria-modal="true"
+           aria-label="${escapeHtml(t('rest_sheet_title_1'))}">
+        <div class="sheet-handle"></div>
+        ${step === 1 ? stepOne() : stepTwo()}
+      </div>`;
+  };
+  paint(1);
+  app.appendChild(overlay);
+  requestAnimationFrame(() => overlay.classList.add('open'));
+  DB.plan.markRestPrompted();
+
+  const close = (cb) => {
+    overlay.classList.remove('open');
+    setTimeout(() => { overlay.remove(); if (typeof cb === 'function') cb(); }, 260);
+  };
+
+  overlay.addEventListener('click', (e) => {
+    if (e.target === overlay) { close(); return; }
+
+    const step1 = e.target.closest('[data-rest]');
+    if (step1) {
+      if (step1.dataset.rest === 'minimum') { paint(2); return; }
+      // Full rest. THIS is the only place the day is actually marked off.
+      DB.plan.setRest(new Date(), true);
+      close(() => { showToast(t('rest_today_on')); renderView('home'); });
+      return;
+    }
+
+    const step2 = e.target.closest('[data-min]');
+    if (!step2) return;
+    const kind = step2.dataset.min;
+    const mins = Number(step2.dataset.mins) || 10;
+    close(() => startMinimumSession(kind, mins));
+  });
+}
+
+// The three middle options resolve into the app's EXISTING logging paths rather
+// than a parallel one: a reduced session goes through session-day exactly like a
+// full one, and a walk is a cardio entry. Nothing here invents a second way to
+// write a workout.
+function startMinimumSession(kind, mins) {
+  if (kind === 'walk') {
+    const type = (DB.cardioTypes.allTypes().find((c) => /walk|مشي/i.test(c.label || c.id)) || {}).id
+      || (DB.cardioTypes.allTypes()[0] || {}).id;
+    if (!type) { showToast(t('rest_min_walk')); return; }
+    DB.cardio.add({ type, date: todayISO(), duration: mins, calories: 0 });
+    showToast(t('rest_min_logged'));
+    renderView('home');
+    return;
+  }
+
+  const plan = DB.plan.workoutForDate(new Date());
+  const ids = (plan?.exerciseIds || []).slice();
+  if (!ids.length) { navigate('session-day', { date: todayISO() }); return; }
+
+  let only;
+  if (kind === 'one') {
+    const byBest = ids.slice().sort(
+      (a, b) => DB.sessions.bestOneRM(b) - DB.sessions.bestOneRM(a));
+    only = [byBest[0]];
+  } else {
+    only = ids.slice(0, 2);
+  }
+  // sdOnly narrows the session screen to the chosen subset; sdMinimum tags every
+  // set logged from it, so the day counts as a real (if reduced) workout in the
+  // stats and in the streak.
+  navigate('session-day', { date: todayISO(), sdOnly: only, sdMinimum: true });
+}
+
+// ===========================================================================
 // Calorie / macro calculator (Mifflin-St Jeor). Live preview as the user edits.
 // ===========================================================================
 function openCalculatorModal(onSave) {
@@ -6725,7 +6951,14 @@ function renderSessionDay(el) {
   const day = DB.plan.workoutForDate(sdDateObj);
   const slotIdx = day ? ((DB.plan.get().cycle || []).indexOf(day)) : -1;
   const exerciseById = Object.fromEntries(DB.exercises.list().map((e) => [e.id, e]));
-  const exObjs = (day?.exerciseIds || []).map((id) => exerciseById[id]).filter(Boolean);
+  // sdOnly narrows the day to a subset — the "least effort" route out of the
+  // rest-day sheet. It is a VIEW filter, not a plan edit: the cycle slot still
+  // holds every exercise, so tomorrow's plan and the planner are untouched, and
+  // leaving the screen drops the filter with the rest of viewContext.
+  const sdOnly = Array.isArray(viewContext.sdOnly) ? viewContext.sdOnly : null;
+  const planIds = (day?.exerciseIds || []);
+  const exObjs = (sdOnly ? planIds.filter((id) => sdOnly.includes(id)) : planIds)
+    .map((id) => exerciseById[id]).filter(Boolean);
 
   // Per-exercise local state for unsaved edits. Persists across re-renders
   // until the user navigates away.
@@ -7016,7 +7249,13 @@ function renderSessionDay(el) {
       if (existingId && DB.sessions.update(existingId, { date: viewContext.sdDate, sets: cleaned })) {
         wasUpdate = true;
       } else {
-        const created = DB.sessions.add({ exerciseId: exId, date: viewContext.sdDate, sets: cleaned });
+        // Tagged 'minimum' when this session came out of the rest-day sheet, so
+        // a reduced day is still a REAL logged session — it counts in the stats
+        // and it keeps the streak — while staying distinguishable from a full one.
+        const created = DB.sessions.add({
+          exerciseId: exId, date: viewContext.sdDate, sets: cleaned,
+          kind: viewContext.sdMinimum ? 'minimum' : undefined,
+        });
         st.savedSessionId = created.id;
       }
       const prMsg = checkPR(exId, prior, cleaned);

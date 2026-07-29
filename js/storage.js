@@ -394,7 +394,7 @@ function defaultState() {
     sleep: [],
     // Workout plan — a CONTINUOUS ROTATION: an ordered cycle of workouts rolled
     // across training days (never reset weekly). See migratePlan()/DB.plan.
-    plan: { mode: 'rotation', cycle: [], trainingDays: [], anchor: null, restDates: [] },
+    plan: { mode: 'rotation', cycle: [], trainingDays: [], anchor: null, restDates: [], restPromptAt: null },
     supplements: [],
     // Reminder settings. Times are LOCAL "HH:MM" strings, never timestamps: a
     // reminder means "08:00 wherever you are", so it must survive a timezone
@@ -486,6 +486,7 @@ function migratePlan(plan) {
       // the saved blob on the next write. restDates predates nothing: an existing
       // user simply has no such field, hence the [] default.
       restDates: Array.isArray(plan.restDates) ? plan.restDates.slice() : [],
+      restPromptAt: plan.restPromptAt || null,
     };
   }
   const grid = plan || {};
@@ -499,7 +500,7 @@ function migratePlan(plan) {
       if (!seen[key]) { seen[key] = true; cycle.push({ name: nm, exerciseIds: day.exerciseIds.slice() }); }
     }
   }
-  return { mode: 'rotation', cycle, trainingDays, anchor: todayISO(), restDates: [] };
+  return { mode: 'rotation', cycle, trainingDays, anchor: todayISO(), restDates: [], restPromptAt: null };
 }
 
 // Set when the stored blob could not be parsed. While true the app runs
@@ -777,7 +778,7 @@ const DB = {
   // The workout for a date = cycle[(training days elapsed since anchor) mod cycle.length];
   // rest days (weekday ∉ trainingDays) have no workout. The cycle rolls across weeks — never reset.
   plan: {
-    get() { return STATE.plan || { mode: 'rotation', cycle: [], trainingDays: [], anchor: null, restDates: [] }; },
+    get() { return STATE.plan || { mode: 'rotation', cycle: [], trainingDays: [], anchor: null, restDates: [], restPromptAt: null }; },
 
     // THE single source of truth: what workout (or null=rest) falls on date D.
     workoutForDate(D) {
@@ -827,6 +828,18 @@ const DB = {
     },
     toggleRest(D) { return this.setRest(D, !this.isRest(D)); },
 
+    // ----- the rest-day sheet's once-a-day gate -----
+    // The sheet argues a case; arguing it twice in one day turns advice into
+    // nuisance, and nuisance gets ignored. One ISO date, not a list — only
+    // "was it already shown TODAY" is ever asked.
+    restPromptedToday() { return !!STATE.plan && STATE.plan.restPromptAt === todayISO(); },
+    markRestPrompted() {
+      if (!STATE.plan) return;
+      if (STATE.plan.restPromptAt === todayISO()) return;   // no write, no sync churn
+      STATE.plan.restPromptAt = todayISO();
+      saveLocal();   // a UI nag-guard, not user data — must not flag the blob dirty
+    },
+
     // Replace the whole rotation (used by the schedule modal on template adopt).
     setRotation({ cycle, trainingDays, anchor }) {
       STATE.plan = {
@@ -838,6 +851,7 @@ const DB = {
         // and a day the user has already declared off (tomorrow, say) is a fact
         // about their week, not about which template they picked.
         restDates: Array.isArray(STATE.plan && STATE.plan.restDates) ? STATE.plan.restDates.slice() : [],
+        restPromptAt: (STATE.plan && STATE.plan.restPromptAt) || null,
       };
       save();
     },
@@ -881,7 +895,7 @@ const DB = {
       if (s) { s.exerciseIds = s.exerciseIds.filter((id) => id !== exId); save(); }
     },
     clearAll() {
-      STATE.plan = { mode: 'rotation', cycle: [], trainingDays: [], anchor: todayISO(), restDates: [] };
+      STATE.plan = { mode: 'rotation', cycle: [], trainingDays: [], anchor: todayISO(), restDates: [], restPromptAt: null };
       save();
     },
   },
@@ -1384,11 +1398,16 @@ const DB = {
     get(id) {
       return STATE.sessions.find((s) => s.id === id) || null;
     },
-    add({ exerciseId, date, sets }) {
+    // `kind` is optional and today only ever 'minimum' — the reduced session the
+    // rest-day sheet offers instead of nothing. It is written ONLY when present,
+    // so the millions of ordinary sessions do not each carry a null field: the
+    // blob is serialised whole and uploaded on every save.
+    add({ exerciseId, date, sets, kind }) {
       const session = {
         id: uid(),
         exerciseId,
         date,
+        ...(kind ? { kind } : {}),
         sets: sets.map((s) => ({
           reps: Number(s.reps) || 0,
           weight: Number(s.weight) || 0,

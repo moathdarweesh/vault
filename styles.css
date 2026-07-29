@@ -6792,68 +6792,216 @@ body { --icon-accent: var(--accent-text); }
   --cut-y: 52%;
 }
 
-/* --- "Not training today" -------------------------------------------------
-   Sits under the hero, not inside it: the hero is itself a <button>, and a
-   nested button is both invalid markup and a click that bubbles into starting
-   the very workout the user just declined.
-
-   Deliberately quiet. This is an escape hatch, not a call to action — it must
-   never out-weigh the Start button beside it, so it takes no fill, no accent
-   and the small type. It is still a 44px-tall target. */
-.rest-toggle {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  width: 100%;
-  min-height: 44px;
-  margin-top: var(--sp-2, 8px);
-  padding: 10px 14px;
-  background: none;
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
-  color: var(--text-dim);
-  font-family: inherit;
-  font-size: 14px;
-  font-weight: 600;
-  text-align: start;
-  cursor: pointer;
-  -webkit-tap-highlight-color: transparent;
-}
-.rest-toggle:active { transform: scale(.99); }
-
-/* The square. A checkbox shape, not a switch: the state is "is today off",
-   a fact about one day, which is what a checkbox means. Rounded rectangle at
-   the leaf radius — BRAND forbids the capsule and the circle. */
-.rest-box {
-  flex: none;
-  width: 20px;
-  height: 20px;
-  border-radius: var(--radius-sm);
-  border: 1.5px solid var(--border-hi);
-  background: var(--surface-2);
-  display: grid;
-  place-items: center;
-  color: var(--bg);
-}
-.rest-box > svg { width: 14px; height: 14px; }
-
-/* Checked. The accent as a FILL, where it measures 6.31:1 under the dark ink —
-   never as text, which is the --accent / --accent-text split. */
-.rest-toggle.is-off {
-  border-color: var(--accent-line);
-  color: var(--text);
-}
-.rest-toggle.is-off .rest-box {
-  background: var(--accent);
-  border-color: var(--accent);
-  --icon-accent: var(--bg);
-}
-
-/* The hero on a declined day. A plain div, not a button — there is nothing to
-   start, and a card that looks pressable but does nothing is worse than a card
-   that plainly is not. */
 .hero-rest {
   cursor: default;
   border-style: dashed;
 }
 .hero-rest .hero-title { color: var(--text-mute); }
+
+/* --- THE SPLIT CONTROL + THE REST-DAY SHEET (v218) -----------------------
+   From the Claude Design spec "Vault Rest Day", option A.
+
+   ONE decision in one moment — train, or not — so it gets ONE shape: a single
+   rounded bar cut in two, not a button with a checkbox loose underneath it.
+   The dark half reads as the other possibility for the same decision; the
+   hairline between them stops the two targets blurring into one.
+
+   What this replaced, in the spec's own words: "an empty circle hanging between
+   two cards. The easiest thing on the screen to press, and the worst thing to
+   press." Both halves here are 56px tall, so neither is the accidental one. */
+.hero-split {
+  display: flex;
+  height: 56px;
+  border-radius: var(--radius-md);
+  overflow: hidden;
+  margin-top: var(--sp-3, 12px);
+}
+.hero-split-main {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  border: none;
+  background: var(--accent);
+  color: var(--accent-ink);
+  --icon-accent: currentColor;   /* on a solid accent fill the duotone collapses */
+  font-family: inherit;
+  font-size: 17px;
+  font-weight: 700;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+/* The divider is drawn as a border on the REST half, not as a third element:
+   one fewer node, and it can never fall out of sync with the split. */
+.hero-split-rest {
+  width: 74px;
+  flex: none;
+  border: none;
+  border-inline-start: 1px solid rgba(0, 0, 0, .35);
+  background: var(--accent-dim);
+  color: var(--accent-quiet);
+  font-family: inherit;
+  font-size: 13.5px;
+  font-weight: 600;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+.hero-split-main:active, .hero-split-rest:active { filter: brightness(.94); }
+
+/* Light mode needs its own pair: the dark half is defined against a black page
+   and turns into a smudge on the bone ground. */
+body.theme-light .hero-split-rest {
+  background: var(--surface-3);
+  color: var(--text-mute);
+  border-inline-start-color: rgba(0, 0, 0, .18);
+}
+
+/* --- the inverted rest-day state ---------------------------------------
+   The solid orange is gone on purpose: a filled colour promises a task, and on
+   a rest day there is no task. It becomes an outline — present, reachable, and
+   not shouting. */
+.hero-ghost-cta {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  width: 100%;
+  height: 54px;
+  margin-top: var(--sp-3, 12px);
+  border: 1px solid var(--accent-line);
+  border-radius: var(--radius-md);
+  background: none;
+  color: var(--accent-text);
+  font-family: inherit;
+  font-size: 16px;
+  font-weight: 700;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+.hero-ghost-cta:active { background: var(--accent-soft); }
+
+.rest-note {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: var(--sp-3, 12px);
+  padding-top: var(--sp-3, 12px);
+  border-top: 1px solid var(--border);
+  font-size: 13.5px;
+  line-height: 1.65;
+  color: var(--text-mute);
+}
+.rest-note-icon {
+  flex: none;
+  width: 40px; height: 40px;
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+  display: grid; place-items: center;
+  color: var(--text-dim);
+  --icon-accent: var(--text-dim);
+}
+
+/* --- the sheet ---------------------------------------------------------- */
+.rest-sheet { padding-top: 8px; }
+.rest-sheet-icon {
+  width: 52px; height: 52px;
+  border-radius: var(--radius-md);
+  background: var(--surface-2);
+  display: grid; place-items: center;
+  color: var(--text-dim);
+  --icon-accent: var(--text-dim);
+  margin-bottom: var(--sp-4, 16px);
+}
+/* Second day in a row takes GOLD, never red. Red is reserved for deletion —
+   using it here would read as an error the user committed, which is both untrue
+   and the fastest way to make someone close the sheet. Gold is the streak's own
+   colour, so the warning and the thing at risk are visibly the same object. */
+.rest-sheet-icon.warn {
+  background: rgba(224, 179, 65, .14);
+  color: var(--gold);
+  --icon-accent: var(--gold);
+}
+.rest-sheet-head { display: flex; flex-direction: column; gap: 10px; margin-bottom: var(--sp-4, 16px); }
+.rest-sheet-title { font-size: 22px; font-weight: 800; line-height: 1.35; color: var(--text); }
+.rest-sheet-body { font-size: 14.5px; line-height: 1.8; color: var(--text-mute); }
+.rest-sheet-body b { color: var(--text); font-weight: 700; }
+
+.rest-streak {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 16px;
+  margin-bottom: var(--sp-4, 16px);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--bg);
+  font-size: 14px;
+  line-height: 1.6;
+  color: var(--text-mute);
+  --icon-accent: var(--gold);
+}
+.rest-streak b { color: var(--gold); font-weight: 600; }
+
+.rest-sheet-actions { display: flex; flex-direction: column; gap: 11px; }
+
+/* --- step 2: the middle option ------------------------------------------
+   Three sizes of "something", so the answer to "I can't do the session" is
+   never forced to be "then nothing". */
+.min-options { display: flex; flex-direction: column; gap: 10px; }
+.min-option {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  width: 100%;
+  padding: 14px 16px;
+  border: 1px solid var(--border-hi);
+  border-radius: var(--radius-sm);
+  background: var(--surface-1);
+  color: var(--text);
+  font-family: inherit;
+  text-align: start;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+.min-option:active { background: var(--surface-2); }
+.min-badge {
+  flex: none;
+  min-width: 46px;
+  padding: 7px 0;
+  border-radius: var(--radius-sm);
+  background: var(--accent-soft);
+  color: var(--accent-text);
+  font-size: 13px;
+  font-weight: 700;
+  text-align: center;
+}
+.min-text { flex: 1; display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.min-title { font-size: 15.5px; font-weight: 700; }
+.min-sub { font-size: 12.5px; color: var(--text-dim); line-height: 1.5; }
+.min-chev { flex: none; color: var(--text-faint); display: grid; place-items: center; }
+
+/* --- tokens the rest-day work introduced ---------------------------------
+   Declared rather than inlined so the next component that needs "the streak
+   colour" or "the quiet half of the split" gets the same value, and so the
+   light-mode correction below has something to correct.
+
+   --gold is the streak's colour and therefore the second-day warning's colour:
+   the warning and the thing at risk must visibly be the same object. Red is NOT
+   available here — it means deletion everywhere else in this app, and pointing
+   it at a user who is simply tired reads as an accusation.
+
+   THE LIGHT VALUE IS NOT THE SAME COLOUR. #e0b341 measures about 1.9:1 on the
+   bone ground, so the streak count — a number the user is meant to read — would
+   be decoration. The light variant is darkened to clear 4.5:1 while staying
+   recognisably the same hue. */
+:root, body.theme-dark {
+  --gold: #e0b341;
+  --accent-dim: #2a1a0c;     /* the split's quiet half, against a black page */
+  --accent-quiet: #c9a888;   /* its label */
+}
+body.theme-light {
+  --gold: #7a5a05;
+  --accent-dim: var(--surface-3);
+  --accent-quiet: var(--text-mute);
+}
