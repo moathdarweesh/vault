@@ -156,6 +156,20 @@ and there is nowhere else common to all:
 }
 ```
 
+> **⚠ Two unrelated fields are both called `version`. Do not conflate them.**
+>
+> | Field | Where | Read by anyone? |
+> |---|---|---|
+> | `STATE.version` | inside the blob, `= SCHEMA_VERSION = 1` | **Never.** Grep confirms it is written at `:359` and read nowhere. Every migration sniffs *shape*, not version. |
+> | `vault_data.version` | the Postgres **row**, `cloud.js:243` | **Yes** — server-authoritative optimistic concurrency (§4). Incremented by a BEFORE UPDATE trigger; the client only reads and echoes it. |
+>
+> Bumping `SCHEMA_VERSION` would therefore change nothing at all.
+
+`loadState()` also **deletes seven retired keys** on every load — `pinHash`, `pinSalt`, `pinSetAt`,
+`autoLock`, `securityQuestion`, `securityAnswerHash`, `securityAnswerSalt` — left over from a
+removed PIN/recovery feature. They are stripped rather than ignored because the blob is uploaded
+whole and dead credential material should not keep travelling to the cloud.
+
 ### 3.3 Entities
 
 | Entity | Shape | Notes |
