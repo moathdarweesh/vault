@@ -6798,7 +6798,7 @@ body { --icon-accent: var(--accent-text); }
 }
 .hero-rest .hero-title { color: var(--text-mute); }
 
-/* --- THE SPLIT CONTROL + THE REST-DAY SHEET (v218) -----------------------
+/* --- THE REST CHIP + THE REST-DAY SHEET (v218-219) -----------------------
    From the Claude Design spec "Vault Rest Day", option A.
 
    ONE decision in one moment — train, or not — so it gets ONE shape: a single
@@ -6809,54 +6809,6 @@ body { --icon-accent: var(--accent-text); }
    What this replaced, in the spec's own words: "an empty circle hanging between
    two cards. The easiest thing on the screen to press, and the worst thing to
    press." Both halves here are 56px tall, so neither is the accidental one. */
-.hero-split {
-  display: flex;
-  height: 56px;
-  border-radius: var(--radius-md);
-  overflow: hidden;
-  margin-top: var(--sp-3, 12px);
-}
-.hero-split-main {
-  flex: 1;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 10px;
-  border: none;
-  background: var(--accent);
-  color: var(--accent-ink);
-  --icon-accent: currentColor;   /* on a solid accent fill the duotone collapses */
-  font-family: inherit;
-  font-size: 17px;
-  font-weight: 700;
-  cursor: pointer;
-  -webkit-tap-highlight-color: transparent;
-}
-/* The divider is drawn as a border on the REST half, not as a third element:
-   one fewer node, and it can never fall out of sync with the split. */
-.hero-split-rest {
-  width: 74px;
-  flex: none;
-  border: none;
-  border-inline-start: 1px solid rgba(0, 0, 0, .35);
-  background: var(--accent-dim);
-  color: var(--accent-quiet);
-  font-family: inherit;
-  font-size: 13.5px;
-  font-weight: 600;
-  cursor: pointer;
-  -webkit-tap-highlight-color: transparent;
-}
-.hero-split-main:active, .hero-split-rest:active { filter: brightness(.94); }
-
-/* Light mode needs its own pair: the dark half is defined against a black page
-   and turns into a smudge on the bone ground. */
-body.theme-light .hero-split-rest {
-  background: var(--surface-3);
-  color: var(--text-mute);
-  border-inline-start-color: rgba(0, 0, 0, .18);
-}
-
 /* --- the inverted rest-day state ---------------------------------------
    The solid orange is gone on purpose: a filled colour promises a task, and on
    a rest day there is no task. It becomes an outline — present, reachable, and
@@ -7004,4 +6956,77 @@ body.theme-light {
   --gold: #7a5a05;
   --accent-dim: var(--surface-3);
   --accent-quiet: var(--text-mute);
+}
+
+/* --- the rest chip (spec option C, superseding the v218 split bar) --------
+   Rest lives at the card's far corner beside the eyebrow, not in the action
+   row: the furthest point from the thumb's arc, so it is hard to press by
+   accident and easy to find deliberately. The workout button keeps its full
+   width and has nothing competing on its row.
+
+   Border only, never a fill — all the orange on this card belongs to training.
+   That is what makes it read as a status tag rather than a second button.
+
+   ON THE CAPSULE. The identity layer forbids 999px on anything that HOLDS
+   STATE and reserves it for transient chips. This qualifies: it is a label you
+   tap, and it stores nothing — the decision is made in the sheet it opens.
+
+   `justify-content: space-between` puts the eyebrow at the start and the chip
+   at the end in BOTH directions, so Arabic gets it on the left and English on
+   the right with no direction-scoped rule. */
+.hero-eyebrow-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+.hero-eyebrow-row .hero-eyebrow { margin: 0; }
+.rest-chip {
+  position: relative;      /* anchors the enlarged hit area below */
+  z-index: 1;              /* see the ::after note — .hero-title paints over it otherwise */
+  flex: none;
+  padding: 6px 13px;
+  border: 1px solid var(--border-hi);
+  border-radius: var(--radius-pill, 999px);
+  background: none;
+  color: var(--text-mute);
+  font-family: inherit;
+  font-size: 12.5px;
+  font-weight: 600;
+  line-height: 1;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+.rest-chip:active { background: var(--surface-2); }
+/* THE VISIBLE CHIP IS 27px TALL; THE TARGET IS NOT.
+   The spec's geometry (6px padding on 12.5px text) is deliberately small — it
+   wants a control that is hard to hit by accident. But "hard to hit by
+   accident" is not "too small to hit on purpose", and 27px is well under the
+   44px floor every other control in this app meets. This pseudo-element grows
+   the hit area to ~49x67 without moving a pixel of the design. It is
+   pointer-events only; nothing paints.
+
+   THE z-index ON .rest-chip IS PART OF THIS, NOT DECORATION. The band added
+   BELOW the chip overlaps .hero-title, which comes later in the DOM and so
+   paints over an unpositioned sibling — measured, the downward half of the
+   target was being swallowed and the real height was 36px, not 45. Raising the
+   chip one layer hands those pixels back, and nothing is covered because the
+   pseudo-element is transparent. */
+.rest-chip::after {
+  content: '';
+  position: absolute;
+  inset: -11px -9px;
+}
+
+/* The hero CTA is a real <button> now, not a div inside one — the card stopped
+   being a button so that the chip could be a sibling rather than a nested
+   control. These are the properties a <button> does not inherit. */
+.hero-cta-btn {
+  width: 100%;
+  border: none;
+  font-family: inherit;
+  font-weight: 700;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  --icon-accent: currentColor;   /* duotone collapses on a solid accent fill */
 }

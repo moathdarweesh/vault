@@ -12,7 +12,7 @@
 // build. The literal below is the fallback (file://, or a stripped query) and is
 // still bumped by `npm run release` — see CLAUDE.md "CACHE WORKFLOW".
 const VAULT_BUILD = (() => {
-  const FALLBACK = 'v218';
+  const FALLBACK = 'v219';
   try {
     const src = (document.currentScript && document.currentScript.src) || '';
     const m = src.match(/[?&]v=(\d+)/);
@@ -2616,27 +2616,26 @@ function renderHome(el) {
   const planState = DB.plan.get();
   const hasAnyPlan = !!(planState && Array.isArray(planState.cycle) && planState.cycle.length > 0);
 
-  // THE SPLIT CONTROL — "Vault Rest Day" spec, option A.
+  // THE CONTROL — "Vault Rest Day" spec, option C (this superseded option A,
+  // the split bar, which shipped in v218).
   //
-  // One decision in one moment ("train, or not") deserves ONE shape, so this is
-  // a single rounded bar cut in two rather than a button with a checkbox loose
-  // beneath it. The dark half reads as the other possibility for the same
-  // decision; the hairline between them keeps the two targets from blurring.
+  // Rest is pulled OUT of the action row entirely and pinned to the card's far
+  // corner, beside the eyebrow: the furthest point on the card from the thumb's
+  // arc, so it is hard to hit by accident and easy to find when looked for.
+  // The workout button gets its full width back and becomes the only call on
+  // the screen with nothing competing on its row.
   //
-  // The previous build put a checkbox OUTSIDE the hero because the hero was
-  // itself a <button> and nesting one is invalid HTML. The spec's own critique
-  // of that shape — "an empty circle hanging between two cards; the easiest
-  // thing on the screen to press, and the worst thing to press" — is why the
-  // hero is now a plain <div> holding two real buttons instead.
-  const splitCtaHtml = `
-    <div class="hero-split">
-      <button class="hero-split-main" id="home-start-workout" type="button">
-        ${icon('dumbbell', 20)}<span>${t('today_workout')}</span>
-      </button>
-      <button class="hero-split-rest" id="home-rest-toggle" type="button">
-        ${t('rest_short')}
-      </button>
-    </div>`;
+  // It carries a GREY border and no fill — all the orange belongs to training.
+  // That makes it read as a status tag rather than a second button, which is
+  // the intent, and it is why the capsule radius is allowed here: the identity
+  // layer reserves capsules for TRANSIENT chips and forbids them on anything
+  // holding state, which this does not.
+  const restChipHtml = `
+    <button class="rest-chip" id="home-rest-toggle" type="button">${t('rest_short')}</button>`;
+  const fullCtaHtml = `
+    <button class="hero-cta hero-cta-btn" id="home-start-workout" type="button">
+      ${icon('dumbbell', 18)}<span>${t('today_workout')}</span>
+    </button>`;
 
   let heroHtml = '';
   if (todayIsOff) {
@@ -2685,14 +2684,17 @@ function renderHome(el) {
 
     heroHtml = `
       <div class="hero-card">
-        <div class="hero-eyebrow">${t('today_plan')} · ${escapeHtml(dayName(now.getDay(), true))}</div>
+        <div class="hero-eyebrow-row">
+          <div class="hero-eyebrow">${t('today_plan')} · ${escapeHtml(dayName(now.getDay(), true))}</div>
+          ${restChipHtml}
+        </div>
         <div class="hero-title">${escapeHtml(todayPlan.name || t('start_workout'))}</div>
         <div class="hero-meta">${fmtNum(exObjs.length)} ${exObjs.length === 1 ? t('exercise') : t('exercises')} · ${fmtNum(weekSetsCount)} ${t('sessions_this_week')}</div>
         <div class="planner-day-muscles">
           ${sideRow(t('anterior'), muscles.anterior, 'anterior')}
           ${sideRow(t('posterior'), muscles.posterior, 'posterior')}
         </div>
-        ${splitCtaHtml}
+        ${fullCtaHtml}
       </div>
     `;
   } else if (weekSetsCount > 0) {
