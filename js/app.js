@@ -12,7 +12,7 @@
 // build. The literal below is the fallback (file://, or a stripped query) and is
 // still bumped by `npm run release` — see CLAUDE.md "CACHE WORKFLOW".
 const VAULT_BUILD = (() => {
-  const FALLBACK = 'v220';
+  const FALLBACK = 'v221';
   try {
     const src = (document.currentScript && document.currentScript.src) || '';
     const m = src.match(/[?&]v=(\d+)/);
@@ -2059,6 +2059,16 @@ let viewContext = {};
 let navStack = [{ view: 'home', context: {} }];
 
 function navigate(view, context = {}, opts = {}) {
+  // FLUSH A HALF-TYPED SET BEFORE THE SCREEN CHANGES. The guided-run inputs
+  // commit on blur, but navigating away only hides the section — the focused
+  // field is not reliably blurred when its container merely gets display:none,
+  // so a number typed and then "backed out of" could be lost. Blurring here
+  // fires that same commit handler; it is a no-op everywhere else.
+  try {
+    const ae = document.activeElement;
+    if (ae && typeof ae.blur === 'function' && ae.closest?.('.run-set-row')) ae.blur();
+  } catch (_) {}
+
   currentView = view;
   viewContext = context;
 
@@ -2810,7 +2820,7 @@ function renderHome(el) {
     showToast(t('rest_today_off'));
     renderView('home');   // NOT renderHome() — it needs its view element
   });
-  $('#home-food-hero', el)?.addEventListener('click', () => navigate('food'));
+  $('#home-food-hero', el)?.addEventListener('click', () => navigate('food', { openAdd: true }));
   const lastSetCard = $('.last-set-card', el);
   if (lastSetCard) lastSetCard.addEventListener('click', () =>
     navigate('exercise-detail', { exerciseId: lastSetCard.dataset.openExercise }));
@@ -4474,6 +4484,17 @@ function renderFood(el) {
 
   // A single add button: the floating FAB (the top-bar action was a duplicate).
   $('#food-fab', el)?.addEventListener('click', () => openAddSheet(date, rerender));
+
+  // Arriving from Home's food card with "add" intent — open the sheet straight
+  // away, so one tap gets the user to the thing they actually came to do.
+  // It opens here rather than at the call site because the sheet needs THIS
+  // view's `rerender` closure; opening it from Home would hand it a callback
+  // that repaints nothing. The flag is cleared immediately so returning to Food
+  // by any other route (the nav, back) does not re-open the sheet.
+  if (viewContext.openAdd) {
+    viewContext.openAdd = false;
+    openAddSheet(date, rerender);
+  }
 
   const host = $('#nutri-host', el);
   host?.addEventListener('click', (e) => {
@@ -7642,6 +7663,20 @@ function renderSessionRun(el) {
           st.sets[i].reps = v === '' ? '' : Number(v);
         }
       });
+      // WRITE IT THE MOMENT THE FIELD IS LEFT. `input` above only updates the
+      // in-memory runState; until this was added, a number typed here reached
+      // the database only when the user moved to another exercise or finished
+      // the workout — so closing the app, or backing out mid-set, silently threw
+      // the number away.
+      //
+      // On `change`, not on `input`: every keystroke would mean a localStorage
+      // write plus a cloud dirty-flag on a blob that is synced whole, and "48"
+      // would be persisted as 4 then 48. `change` on a number input fires when
+      // the value is committed and focus leaves, which is exactly "typed it and
+      // moved to something else". `blur` covers the case where the value did not
+      // change but the row was completed by other means.
+      inp.addEventListener('change', () => commitExercise(ex.id));
+      inp.addEventListener('blur', () => commitExercise(ex.id));
     });
     // ✓ Done → mark the set complete + start the rest timer. If the row is still
     // empty, fill it from the "last time" ghost — one tap = "same as last time".
@@ -7664,6 +7699,10 @@ function renderSessionRun(el) {
       row.classList.toggle('done', set.done);
       row.querySelector('[data-done]').classList.toggle('done', set.done);
       row.querySelector('[data-done]').setAttribute('aria-pressed', String(set.done));
+      // Ticking a set is the strongest "I finished this" signal in the screen,
+      // and it can fill the row from the ghost values without any field being
+      // touched — so it must persist on its own, not wait for a blur.
+      commitExercise(ex.id);
     });
     // Delete this set (only shown when more than one set exists). Offer an Undo
     // so an accidental tap is instantly recoverable — the removed set is put
@@ -9726,6 +9765,19 @@ function showOnboarding() {
   // deliberately excluded: their date is an explicit choice, not "today".
   const DATE_DERIVED_VIEWS = ['home', 'food', 'foodlog'];
   let __lastActiveDay = todayISO();
+
+  // GOING AWAY is the other half of the guided-run auto-save. Android can kill a
+  // backgrounded WebView without ever firing blur on the focused field, so the
+  // last number typed would die with it. Blurring on the way OUT runs the same
+  // commit handler while the page is still alive. This must sit before the
+  // visible-only guard below, because it fires precisely when NOT visible.
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible') return;
+    try {
+      const ae = document.activeElement;
+      if (ae && typeof ae.blur === 'function' && ae.closest?.('.run-set-row')) ae.blur();
+    } catch (_) {}
+  });
 
   document.addEventListener('visibilitychange', () => {
     if (document.visibilityState !== 'visible') return;
