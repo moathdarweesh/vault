@@ -7034,24 +7034,129 @@ body.theme-light {
   --icon-accent: currentColor;   /* duotone collapses on a solid accent fill */
 }
 
-/* --- reorder the day's exercises before the guided run (v222) -------------
-   The run walks the list top to bottom, so this order IS the order the user
-   will be taken through. Up/down rather than drag: a drag inside a vertically
-   scrolling list of cards fights the scroll on touch, and these rows already
-   hold two number inputs and a delete button. */
-.sd-reorder { display: flex; flex-direction: column; gap: 2px; flex: none; }
-.sd-move {
-  width: 30px; height: 24px;
-  display: grid; place-items: center;
-  border: 1px solid var(--border); border-radius: var(--radius-sm);
-  background: var(--surface-2); color: var(--text-mute);
-  cursor: pointer; -webkit-tap-highlight-color: transparent;
-}
-.sd-move:active { background: var(--surface-3); }
-/* Disabled at the ends of the list — kept in place rather than hidden so the
-   card head does not reflow as an exercise moves up and down the list. */
-.sd-move[disabled] { opacity: .3; cursor: default; }
-.sd-move > svg { width: 15px; height: 15px; }
-
 /* The calorie ring is now a target: it opens the day's log. */
 .nutri-hero { cursor: pointer; }
+
+/* --- the reorder sheet (v223) --------------------------------------------
+   Reordering moved OFF the cards and into its own sheet. The first pass put an
+   up/down pair in every card head, which charged each row a permanent
+   two-button tax for something done rarely and crowded a head that already
+   holds a thumbnail, a name, a status pill and a delete. Here the arrows are
+   the only thing on the line, so they can be full-size targets. */
+.sd-reorder-open {
+  display: flex; align-items: center; justify-content: center; gap: 8px;
+  width: 100%; min-height: 44px; margin-bottom: var(--sp-3, 12px);
+  padding: 11px 14px;
+  border: 1px solid var(--border); border-radius: var(--radius);
+  background: none; color: var(--text-mute);
+  font-family: inherit; font-size: 14px; font-weight: 600;
+  cursor: pointer; -webkit-tap-highlight-color: transparent;
+  --icon-accent: var(--text-dim);
+}
+.sd-reorder-open:active { background: var(--surface-2); }
+
+.reorder-list { display: flex; flex-direction: column; gap: 8px; margin-bottom: var(--sp-4, 16px); }
+.reorder-row {
+  display: flex; align-items: center; gap: 12px;
+  padding: 10px 12px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+}
+.reorder-num {
+  flex: none; width: 26px; height: 26px;
+  display: grid; place-items: center;
+  border-radius: var(--radius-sm);
+  background: var(--accent-soft); color: var(--accent-text);
+  font-size: 12.5px; font-weight: 700;
+}
+.reorder-name {
+  flex: 1; min-width: 0; font-size: 15px; font-weight: 600; color: var(--text);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.reorder-arrows { flex: none; display: flex; gap: 6px; }
+.reorder-arrows button {
+  width: 40px; height: 40px;
+  display: grid; place-items: center;
+  border: 1px solid var(--border-hi); border-radius: var(--radius-sm);
+  background: var(--surface-1); color: var(--text-mute);
+  cursor: pointer; -webkit-tap-highlight-color: transparent;
+}
+.reorder-arrows button:active { background: var(--surface-3); }
+/* Disabled rather than hidden at the ends, so the row does not reflow as an
+   item travels up and down the list. */
+.reorder-arrows button[disabled] { opacity: .3; cursor: default; }
+
+/* --- the 7-day strip on Home (v223) ---------------------------------------
+   The last seven days ending today, NOT the calendar week: a Monday-anchored
+   week shows one day of history on a Monday, which is exactly when someone is
+   most likely to be looking back. This window always holds a full week.
+
+   Each chip carries up to three dots — trained, ate, cardio — because a bare
+   date says nothing about whether the day is worth opening. */
+.wk-strip {
+  display: grid; grid-template-columns: repeat(7, 1fr); gap: 5px;
+  margin-bottom: var(--sp-3, 12px);
+}
+.wk-chip {
+  display: flex; flex-direction: column; align-items: center; gap: 3px;
+  min-height: 62px; padding: 8px 2px 6px;
+  border: 1px solid var(--border); border-radius: var(--radius-sm);
+  background: var(--surface-1); color: var(--text-dim);
+  font-family: inherit; cursor: pointer; -webkit-tap-highlight-color: transparent;
+}
+.wk-chip:active { background: var(--surface-2); }
+.wk-chip.is-today { border-color: var(--accent-line); background: var(--accent-soft); }
+.wk-dow { font-size: 10px; font-weight: 600; letter-spacing: .04em; }
+.wk-num { font-size: 15px; font-weight: 700; color: var(--text); line-height: 1.1; }
+.wk-chip.is-today .wk-num, .wk-chip.is-today .wk-dow { color: var(--accent-text); }
+/* The dot row keeps its height whether or not there are dots, so chips with
+   activity and chips without stay the same size and the strip does not jitter. */
+.wk-dots { display: flex; gap: 3px; height: 5px; align-items: center; }
+.wk-dot { width: 5px; height: 5px; border-radius: 50%; display: block; }
+.wk-dot.train { background: var(--accent); }
+.wk-dot.eat { background: var(--green, #22c55e); }
+.wk-dot.cardio { background: var(--red, #ef4444); }
+
+/* --- one day, everything --------------------------------------------------
+   Read-only by design: each section links out to the screen that OWNS that
+   data rather than editing in place, so there is still exactly one write path
+   per kind of record. */
+.day-section { margin-bottom: var(--sp-4, 16px); }
+.day-section-head {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 10px; margin-bottom: 8px;
+}
+.day-section-title { font-size: 13px; font-weight: 700; color: var(--accent-text); }
+.day-tag {
+  font-size: 11px; font-weight: 600; color: var(--text-dim);
+  border: 1px solid var(--border); border-radius: var(--radius-pill, 999px);
+  padding: 2px 8px;
+}
+.day-stats {
+  display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 10px;
+}
+.day-stat {
+  flex: 1 1 0; min-width: 74px;
+  padding: 10px 12px;
+  background: var(--surface-1); border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+}
+.day-stat-value { font-size: 19px; font-weight: 700; color: var(--text); line-height: 1.2; }
+.day-stat-unit { font-size: 12px; font-weight: 600; color: var(--text-dim); }
+.day-stat-label { font-size: 11.5px; color: var(--text-dim); margin-top: 2px; }
+.day-rows { display: flex; flex-direction: column; }
+.day-row {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  padding: 9px 2px; border-bottom: 1px solid var(--border);
+  font-size: 14px;
+}
+.day-row:last-child { border-bottom: 0; }
+.day-row-name { flex: 1; min-width: 0; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.day-row-meta { flex: none; color: var(--text-dim); font-size: 13px; }
+.day-more { padding: 8px 2px; font-size: 13px; color: var(--text-dim); }
+.day-empty {
+  display: flex; flex-direction: column; align-items: center; gap: 10px;
+  padding: 40px 20px; text-align: center;
+  color: var(--text-dim); --icon-accent: var(--text-faint);
+}

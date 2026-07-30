@@ -12,7 +12,7 @@
 // build. The literal below is the fallback (file://, or a stripped query) and is
 // still bumped by `npm run release` — see CLAUDE.md "CACHE WORKFLOW".
 const VAULT_BUILD = (() => {
-  const FALLBACK = 'v222';
+  const FALLBACK = 'v223';
   try {
     const src = (document.currentScript && document.currentScript.src) || '';
     const m = src.match(/[?&]v=(\d+)/);
@@ -876,6 +876,14 @@ const I18N = {
     rotation_cycle: 'Workout cycle',
     add_workout: 'Add workout',
     rotation_preview: 'Next 7 days',
+    last_7_days: 'The last 7 days',
+    day_nothing: 'Nothing recorded on this day.',
+    day_body: 'Body',
+    day_weight: 'Weight',
+    day_water: 'Water',
+    day_minimum: 'minimum',
+    reorder_exercises: 'Reorder exercises',
+    ro_done: 'Done',
     move_up: 'Move up',
     move_down: 'Move down',
     // Program tab (the plan & progression center)
@@ -1534,6 +1542,14 @@ const I18N = {
     rotation_cycle: 'دورة التمارين',
     add_workout: 'إضافة تمرين',
     rotation_preview: 'الأيام السبعة القادمة',
+    last_7_days: 'آخر ٧ أيام',
+    day_nothing: 'لا يوجد شيء مسجَّل في هذا اليوم.',
+    day_body: 'الجسم',
+    day_weight: 'الوزن',
+    day_water: 'الماء',
+    day_minimum: 'أقل مجهود',
+    reorder_exercises: 'ترتيب التمارين',
+    ro_done: 'تمّ',
     move_up: 'تحريك لأعلى',
     move_down: 'تحريك لأسفل',
     // تبويب البرنامج (مركز الخطة والتقدّم)
@@ -2097,6 +2113,7 @@ function navigate(view, context = {}, opts = {}) {
     planner: 'workouts', 'personal-records': 'workouts', 'muscle-sessions': 'workouts',
     cardio: 'cardio', food: 'food', sleep: 'sleep',
     compare: 'home', settings: 'home', calendar: 'home', supplements: 'home', foodlog: 'food',
+    day: 'home',
   };
   const highlightView = navMap[view] || view;
   $$('.nav-btn').forEach((b) => b.classList.toggle('active', b.dataset.view === highlightView));
@@ -2319,6 +2336,7 @@ function renderView(view) {
     case 'personal-records': renderPersonalRecords(el); break;
     case 'muscle-sessions': renderMuscleSessions(el); break;
     case 'custom-exercises': renderCustomExercises(el); break;
+    case 'day': renderDay(el); break;
   }
   // Give every icon-only back button an accessible name, in one place.
   el.querySelectorAll('.back-btn:not([aria-label])').forEach((b) => b.setAttribute('aria-label', t('back')));
@@ -2647,6 +2665,41 @@ function renderHome(el) {
       ${icon('dumbbell', 18)}<span>${t('today_workout')}</span>
     </button>`;
 
+  // THE LAST SEVEN DAYS, ending today on the trailing edge.
+  //
+  // Seven days back rather than the calendar week: a Monday-anchored week shows
+  // one day of history on a Monday and is nearly useless right when the user is
+  // most likely to be reviewing. This window always holds a full week of past.
+  //
+  // Each chip carries up to three dots — trained, ate, cardio — because a bare
+  // date tells the user nothing about whether it is worth opening. The dots are
+  // computed from the same records the day view reads, so the strip can never
+  // promise a day that then turns out empty.
+  const weekStripHtml = (() => {
+    const sessionDates = new Set(DB.sessions.listAll().map((s) => s.date));
+    const cardioDates = new Set(DB.cardio.list().map((c) => c.date));
+    const chips = [];
+    for (let back = 6; back >= 0; back--) {
+      const iso = addDaysISO(todayISO(), -back);
+      const dd = new Date(iso + 'T12:00:00');
+      const trained = sessionDates.has(iso);
+      const ate = (DB.foodLogs.listForDate(iso) || []).length > 0;
+      const didCardio = cardioDates.has(iso);
+      chips.push(`
+        <button class="wk-chip${back === 0 ? ' is-today' : ''}" data-day="${iso}"
+                aria-label="${escapeHtml(formatDate(iso))}">
+          <span class="wk-dow">${escapeHtml(dayName(dd.getDay(), false))}</span>
+          <span class="wk-num num">${fmtNum(dd.getDate())}</span>
+          <span class="wk-dots">
+            ${trained ? '<i class="wk-dot train"></i>' : ''}
+            ${ate ? '<i class="wk-dot eat"></i>' : ''}
+            ${didCardio ? '<i class="wk-dot cardio"></i>' : ''}
+          </span>
+        </button>`);
+    }
+    return `<div class="wk-strip" role="group" aria-label="${escapeHtml(t('last_7_days'))}">${chips.join('')}</div>`;
+  })();
+
   let heroHtml = '';
   if (todayIsOff) {
     // Declined day. Say what it cost — nothing — because the whole reason the
@@ -2743,6 +2796,8 @@ function renderHome(el) {
       </button>` : ''}
     </div>
 
+    ${weekStripHtml}
+
     ${heroHtml}
 
 
@@ -2820,6 +2875,12 @@ function renderHome(el) {
     showToast(t('rest_today_off'));
     renderView('home');   // NOT renderHome() — it needs its view element
   });
+  // One delegated listener for all seven chips rather than seven bindings.
+  $('.wk-strip', el)?.addEventListener('click', (e) => {
+    const chip = e.target.closest('[data-day]');
+    if (chip) navigate('day', { dayDate: chip.dataset.day });
+  });
+
   $('#home-food-hero', el)?.addEventListener('click', () => navigate('food', { openAdd: true }));
   const lastSetCard = $('.last-set-card', el);
   if (lastSetCard) lastSetCard.addEventListener('click', () =>
@@ -3587,6 +3648,228 @@ function renderExercises(el) {
 
 // Small chooser shown by the session-day "Add exercise" button: pick from the
 // library, or create a new custom exercise and drop it straight into this day.
+// ===========================================================================
+// ONE DAY, EVERYTHING.
+//
+// Every other screen slices the data by TOPIC — food here, workouts there,
+// weight somewhere else — which answers "how is my protein doing" but never
+// "what did I actually do on Tuesday". This view is the other axis: one date,
+// every kind of record, in the order a person recalls a day.
+//
+// It is READ-ONLY on purpose. Each section links to the screen that owns that
+// data rather than editing in place, so there is still exactly one write path
+// per kind of record and this screen can never disagree with them.
+// ===========================================================================
+function renderDay(el) {
+  const iso = viewContext.dayDate || todayISO();
+  const d = new Date(iso + 'T12:00:00');   // noon: date-only maths, DST-safe
+  const isToday = iso === todayISO();
+
+  const sessions = DB.sessions.listAll().filter((s) => s.date === iso);
+  const cardio = DB.cardio.list().filter((c) => c.date === iso);
+  const foods = DB.foodLogs.listForDate(iso);
+  const totals = DB.foodLogs.totalsForDate(iso);
+  const targets = DB.nutrition.get().targets;
+  const bw = DB.bodyweight.list().find((b) => b.date === iso);
+  const water = DB.water.get(iso);
+  const sleep = DB.sleep.list().find((s) => s.date === iso);
+  const sups = DB.supplements.list().filter((s) => DB.supplements.isTaken(s.id, iso));
+  const plan = DB.plan.workoutForDate(d);
+  const wasRest = DB.plan.isRest(d);
+
+  const byId = Object.fromEntries(DB.exercises.list().map((e) => [e.id, e]));
+  const totalSets = sessions.reduce((n, s) => n + s.sets.length, 0);
+  const volume = sessions.reduce((n, s) =>
+    n + s.sets.reduce((v, x) => v + (Number(x.reps) || 0) * (Number(x.weight) || 0), 0), 0);
+  const isMinimum = sessions.length > 0 && sessions.every((s) => s.kind === 'minimum');
+
+  const nothing = !sessions.length && !cardio.length && !foods.length && !bw && !water && !sleep && !sups.length;
+
+  const section = (title, body, goto) => `
+    <div class="day-section">
+      <div class="day-section-head">
+        <span class="day-section-title">${title}</span>
+        ${goto ? `<button class="link-btn" data-goto="${goto}">${t('open')} <span class="dir-icon">${icon('chevronRight', 15)}</span></button>` : ''}
+      </div>
+      ${body}
+    </div>`;
+
+  const stat = (label, value, unit) => `
+    <div class="day-stat">
+      <div class="day-stat-value num">${value}${unit ? `<span class="day-stat-unit">${unit}</span>` : ''}</div>
+      <div class="day-stat-label">${label}</div>
+    </div>`;
+
+  el.innerHTML = `
+    <div class="detail-top show-title">
+      <button class="back-btn" data-back aria-label="${escapeHtml(t('back'))}">${icon('back', 20)}</button>
+      <div class="detail-top-title">${escapeHtml(dayName(d.getDay(), true))}</div>
+    </div>
+
+    <div class="page-header">
+      <div class="page-eyebrow">${isToday ? t('today') : escapeHtml(dayName(d.getDay(), true))}</div>
+      <h1 class="page-title">${escapeHtml(formatDate(iso))}</h1>
+      <p class="page-subtitle">${
+        wasRest ? t('rest_today_title')
+        : plan ? escapeHtml(plan.name || t('start_workout'))
+        : t('rest_day')}</p>
+    </div>
+
+    ${nothing ? `
+      <div class="day-empty">
+        ${icon('calendar', 28)}
+        <div>${t('day_nothing')}</div>
+      </div>` : ''}
+
+    ${sessions.length ? section(
+      `${t('workout_label')}${isMinimum ? ` · <span class="day-tag">${t('day_minimum')}</span>` : ''}`,
+      `<div class="day-stats">
+         ${stat(t('exercises'), fmtNum(sessions.length))}
+         ${stat(t('sets'), fmtNum(totalSets))}
+         ${stat(t('volume'), fmtNum(Math.round(volume)), ' kg')}
+       </div>
+       <div class="day-rows">
+         ${sessions.map((s) => {
+           const ex = byId[s.exerciseId];
+           const best = s.sets.reduce((m, x) => Math.max(m, Number(x.weight) || 0), 0);
+           return `
+             <div class="day-row">
+               <span class="day-row-name">${escapeHtml(ex ? exDisplayName(ex) : t('exercise'))}</span>
+               <span class="day-row-meta num">${fmtNum(s.sets.length)}×${best ? ` ${fmtNum(best)}kg` : ''}</span>
+             </div>`;
+         }).join('')}
+       </div>`) : ''}
+
+    ${cardio.length ? section(t('cardio'),
+      `<div class="day-rows">
+         ${cardio.map((c) => {
+           const ty = DB.cardioTypes.findById(c.type);
+           return `
+             <div class="day-row">
+               <span class="day-row-name">${escapeHtml(ty ? ty.label : c.type)}</span>
+               <span class="day-row-meta num">${fmtNum(c.duration)} ${t('unit_min')}${c.calories ? ` · ${fmtNum(c.calories)} ${t('cal')}` : ''}</span>
+             </div>`;
+         }).join('')}
+       </div>`) : ''}
+
+    ${(foods.length || totals.calories) ? section(t('food'),
+      `<div class="day-stats">
+         ${stat(t('cal'), fmtNum(Math.round(totals.calories)), targets.calories ? ` / ${fmtNum(targets.calories)}` : '')}
+         ${stat(t('protein_label'), fmtNum(Math.round(totals.protein)), 'g')}
+         ${stat(t('carbs_label'), fmtNum(Math.round(totals.carbs)), 'g')}
+         ${stat(t('fat_label'), fmtNum(Math.round(totals.fat)), 'g')}
+       </div>
+       <div class="day-rows">
+         ${foods.slice(0, 8).map((f) => `
+           <div class="day-row">
+             <span class="day-row-name">${escapeHtml(f.name)}</span>
+             <span class="day-row-meta num">${fmtNum(Math.round((f.calories || 0) * (f.servings || 1)))} ${t('cal')}</span>
+           </div>`).join('')}
+         ${foods.length > 8 ? `<div class="day-more">+${fmtNum(foods.length - 8)}</div>` : ''}
+       </div>`, 'foodlog') : ''}
+
+    ${(bw || water || sleep || sups.length) ? section(t('day_body'),
+      `<div class="day-stats">
+         ${bw ? stat(t('day_weight'), fmtNum(bw.kg), ' kg') : ''}
+         ${water ? stat(t('day_water'), fmtNum(water), ' ml') : ''}
+         ${sleep ? stat(t('sleep'), fmtNum(Math.round(sleep.durationMinutes / 6) / 10), ' h') : ''}
+         ${sups.length ? stat(t('supplements_title'), fmtNum(sups.length)) : ''}
+       </div>`) : ''}
+  `;
+
+  el.querySelectorAll('[data-goto]').forEach((b) =>
+    b.addEventListener('click', () => {
+      const v = b.dataset.goto;
+      // The food log owns its own date context; hand it this day, not today.
+      navigate(v, v === 'foodlog' ? { foodLog: { date: iso } } : {});
+    })
+  );
+}
+
+// ===========================================================================
+// REORDER THE DAY'S EXERCISES — its own sheet, not controls on every card.
+//
+// The first attempt put an up/down pair in each card's head, beside the delete
+// button. It worked, but it charged EVERY card a permanent two-button tax for
+// something the user does rarely, and it crowded a head that already carries a
+// thumbnail, a name, a status pill and a delete. Reordering is a task, not a
+// property of a row, so it gets a surface of its own: the cards go back to
+// clean, and inside the sheet the arrows are the only thing on the line and can
+// be large.
+//
+// Drag was considered and rejected twice over: HTML5 drag-and-drop does not
+// fire on touch at all, and a pointer-events implementation inside a vertically
+// scrolling list fights the scroll — the exact reason this list is not
+// drag-sortable in the first place.
+// ===========================================================================
+function openReorderSheet(slotIdx, onDone) {
+  const app = document.querySelector('.app');
+  if (!app) return;
+  document.getElementById('reorder-sheet-overlay')?.remove();
+
+  const overlay = document.createElement('div');
+  overlay.id = 'reorder-sheet-overlay';
+  overlay.className = 'sheet-overlay';
+
+  // Work on a LOCAL copy and write once on close: the user can shuffle freely
+  // without every intermediate arrangement being saved and synced.
+  let ids = ((DB.plan.get().cycle || [])[slotIdx]?.exerciseIds || []).slice();
+  const byId = Object.fromEntries(DB.exercises.list().map((e) => [e.id, e]));
+
+  const paint = () => {
+    overlay.innerHTML = `
+      <div class="add-sheet reorder-sheet" role="dialog" aria-modal="true"
+           aria-label="${escapeHtml(t('reorder_exercises'))}">
+        <div class="sheet-handle"></div>
+        <div class="add-sheet-title">${t('reorder_exercises')}</div>
+        <div class="reorder-list">
+          ${ids.map((id, i) => {
+            const ex = byId[id];
+            return `
+              <div class="reorder-row">
+                <span class="reorder-num num">${fmtNum(i + 1)}</span>
+                <span class="reorder-name">${escapeHtml(ex ? exDisplayName(ex) : id)}</span>
+                <span class="reorder-arrows">
+                  <button type="button" data-ro="${i}" data-dir="-1" ${i === 0 ? 'disabled' : ''}
+                          aria-label="${escapeHtml(t('move_up'))}">${icon('arrowUp', 18)}</button>
+                  <button type="button" data-ro="${i}" data-dir="1" ${i === ids.length - 1 ? 'disabled' : ''}
+                          aria-label="${escapeHtml(t('move_down'))}">${icon('arrowDown', 18)}</button>
+                </span>
+              </div>`;
+          }).join('')}
+        </div>
+        <button type="button" class="btn btn-primary btn-block" data-ro-done>${t('ro_done')}</button>
+      </div>`;
+  };
+  paint();
+  app.appendChild(overlay);
+  requestAnimationFrame(() => overlay.classList.add('open'));
+
+  const close = () => {
+    overlay.classList.remove('open');
+    setTimeout(() => overlay.remove(), 260);
+  };
+  const commit = () => {
+    // Written from the id list this sheet was opened with, so an exercise that
+    // was deleted elsewhere is not resurrected and none is silently dropped.
+    DB.plan.setSlotExercises(slotIdx, ids);
+    close();
+    if (typeof onDone === 'function') onDone();
+  };
+
+  overlay.addEventListener('click', (e) => {
+    if (e.target === overlay) { commit(); return; }          // tapping away saves
+    if (e.target.closest('[data-ro-done]')) { commit(); return; }
+    const b = e.target.closest('[data-ro]');
+    if (!b) return;
+    const from = Number(b.dataset.ro);
+    const to = from + (Number(b.dataset.dir) || 0);
+    if (to < 0 || to >= ids.length) return;
+    ids.splice(to, 0, ids.splice(from, 1)[0]);
+    paint();
+  });
+}
+
 // Add an exercise to a rotation cycle SLOT (slotIdx). Two ways: pick from the
 // library (opens the slot editor) or create a brand-new custom exercise.
 function openAddExerciseChooser(slotIdx) {
@@ -4364,6 +4647,30 @@ const FOOD_PRESETS = [
   { cat: 'protein', en: 'Salmon', ar: 'سلمون', s: '100g', sa: '١٠٠غ', cal: 208, pro: 20, carb: 0 },
   { cat: 'protein', en: 'Shrimp', ar: 'روبيان', s: '100g', sa: '١٠٠غ', cal: 99, pro: 24, carb: 0 },
   { cat: 'protein', en: 'Turkey Breast', ar: 'صدر ديك رومي', s: '100g', sa: '١٠٠غ', cal: 135, pro: 30, carb: 0 },
+  // Supplements and the packaged protein people actually buy. Serving sizes are
+  // the ones printed on the tub or wrapper — a "scoop", a "bar" — because that
+  // is the unit the user measures in; asking them to convert to 100g is how a
+  // food log stops being used. Figures are typical of the category rather than
+  // of one brand, and the portion stepper is there for the rest.
+  { cat: 'protein', en: 'Whey Protein (scoop)', ar: 'واي بروتين (سكوب)', s: '1 scoop · 30g', sa: 'سكوب · ٣٠غ', cal: 120, pro: 24, carb: 3, f: 1.5 },
+  { cat: 'protein', en: 'Whey Isolate (scoop)', ar: 'واي أيزوليت (سكوب)', s: '1 scoop · 30g', sa: 'سكوب · ٣٠غ', cal: 110, pro: 27, carb: 1, f: 0.5 },
+  { cat: 'protein', en: 'Casein (scoop)', ar: 'كازين (سكوب)', s: '1 scoop · 33g', sa: 'سكوب · ٣٣غ', cal: 120, pro: 24, carb: 4, f: 1 },
+  { cat: 'protein', en: 'Mass Gainer (scoop)', ar: 'ماس جينر (سكوب)', s: '1 scoop · 100g', sa: 'سكوب · ١٠٠غ', cal: 380, pro: 20, carb: 70, f: 3 },
+  { cat: 'protein', en: 'Protein Bar', ar: 'بروتين بار', s: '1 bar · 60g', sa: 'قطعة · ٦٠غ', cal: 210, pro: 20, carb: 21, f: 7 },
+  { cat: 'protein', en: 'Protein Shake (ready)', ar: 'مشروب بروتين جاهز', s: '1 bottle · 330ml', sa: 'عبوة · ٣٣٠مل', cal: 160, pro: 30, carb: 5, f: 2 },
+  { cat: 'protein', en: 'BCAA / EAA', ar: 'بي سي إيه إيه', s: '1 scoop', sa: 'سكوب', cal: 10, pro: 0, carb: 1, f: 0 },
+  { cat: 'protein', en: 'Creatine', ar: 'كرياتين', s: '5g', sa: '٥غ', cal: 0, pro: 0, carb: 0, f: 0 },
+  { cat: 'protein', en: 'Egg Whites', ar: 'بياض بيض', s: '100g', sa: '١٠٠غ', cal: 52, pro: 11, carb: 1, f: 0 },
+  { cat: 'protein', en: 'Greek Yoghurt (0%)', ar: 'زبادي يوناني خالي الدسم', s: '170g', sa: '١٧٠غ', cal: 100, pro: 17, carb: 6, f: 0 },
+  { cat: 'protein', en: 'Cottage Cheese', ar: 'جبن قريش', s: '100g', sa: '١٠٠غ', cal: 98, pro: 11, carb: 3, f: 4.3 },
+  { cat: 'protein', en: 'Labneh', ar: 'لبنة', s: '100g', sa: '١٠٠غ', cal: 174, pro: 8, carb: 6, f: 13 },
+  { cat: 'protein', en: 'Tuna in Water (can)', ar: 'تونة بالماء (علبة)', s: '1 can · 80g', sa: 'علبة · ٨٠غ', cal: 90, pro: 20, carb: 0, f: 1 },
+  { cat: 'protein', en: 'Sardines (can)', ar: 'سردين (علبة)', s: '1 can · 90g', sa: 'علبة · ٩٠غ', cal: 190, pro: 22, carb: 0, f: 11 },
+  { cat: 'protein', en: 'Peanut Butter', ar: 'زبدة فول سوداني', s: '1 tbsp · 16g', sa: 'ملعقة · ١٦غ', cal: 95, pro: 4, carb: 3, f: 8 },
+  { cat: 'protein', en: 'Lamb (lean)', ar: 'لحم غنم', s: '100g', sa: '١٠٠غ', cal: 258, pro: 25, carb: 0, f: 17 },
+  { cat: 'protein', en: 'Liver', ar: 'كبدة', s: '100g', sa: '١٠٠غ', cal: 165, pro: 26, carb: 4, f: 4.4 },
+  { cat: 'protein', en: 'Kabab / Kofta', ar: 'كباب / كفتة', s: '100g', sa: '١٠٠غ', cal: 215, pro: 18, carb: 2, f: 15 },
+  { cat: 'protein', en: 'Shawarma (chicken)', ar: 'شاورما دجاج', s: '100g', sa: '١٠٠غ', cal: 190, pro: 22, carb: 3, f: 10 },
   // Grains & Carbs
   { cat: 'carbs', en: 'White Rice', ar: 'رز أبيض', s: '100g', sa: '١٠٠غ', cal: 130, pro: 3, carb: 28 },
   { cat: 'carbs', en: 'Brown Rice', ar: 'رز بني', s: '100g', sa: '١٠٠غ', cal: 111, pro: 3, carb: 23 },
@@ -5673,7 +5980,15 @@ function openFoodLibraryModal() {
     if (!btn || btn.classList.contains('added')) return;
     const p = allFoodPresets()[Number(btn.dataset.preset)];
     if (!p) return;
-    DB.foods.add({ name: foodPresetName(p), serving: foodPresetServing(p), calories: p.cal, protein: p.pro, carbs: p.carb });
+    // `fat` was missing here entirely, so every preset added a food with 0 fat
+    // no matter what it actually contains — nuts, peanut butter and whole milk
+    // all landed as fat-free, and the fat target on the Food screen could never
+    // be filled from the library. Older presets carry no `f` yet; `|| 0` keeps
+    // them behaving exactly as before.
+    DB.foods.add({
+      name: foodPresetName(p), serving: foodPresetServing(p),
+      calories: p.cal, protein: p.pro, carbs: p.carb, fat: p.f || 0,
+    });
     btn.classList.add('added');
     btn.disabled = true;
     showToast(t('saved'));
@@ -7056,7 +7371,7 @@ function renderSessionDay(el) {
   // subset, and moving an item inside a subset cannot express a full-plan order.
   const canReorder = slotIdx >= 0 && exObjs.length > 1 && !sdOnly;
 
-  function renderExerciseCard(ex, exIdx) {
+  function renderExerciseCard(ex) {
     const st = initState(ex.id);
     const url = exerciseImgSrc(ex);
     const machineSvg = ex.machineType ? machineSvgFor(ex.machineType) : '';
@@ -7096,13 +7411,6 @@ function renderSessionDay(el) {
             <div class="sd-card-name">${escapeHtml(exDisplayName(ex))}</div>
           </div>
           ${isLogged ? `<div class="sd-status-pill">${icon('check', 16)} ${t('logged')}</div>` : ''}
-          ${canReorder ? `
-          <div class="sd-reorder">
-            <button type="button" class="sd-move" data-move-ex="${escapeHtml(ex.id)}" data-dir="-1"
-                    ${exIdx === 0 ? 'disabled' : ''} aria-label="${escapeHtml(t('move_up'))}">${icon('arrowUp', 15)}</button>
-            <button type="button" class="sd-move" data-move-ex="${escapeHtml(ex.id)}" data-dir="1"
-                    ${exIdx === exObjs.length - 1 ? 'disabled' : ''} aria-label="${escapeHtml(t('move_down'))}">${icon('arrowDown', 15)}</button>
-          </div>` : ''}
           <button type="button" class="icon-btn danger sd-remove-ex" data-remove-ex="${ex.id}" aria-label="${escapeHtml(t('remove_from_day'))}">${icon('trash', 18)}</button>
         </div>
 
@@ -7147,6 +7455,11 @@ function renderSessionDay(el) {
         <button type="button" data-sd-unit="lb" aria-pressed="${viewContext.sdUnit === 'lb'}" class="${viewContext.sdUnit === 'lb' ? 'active' : ''}">LB</button>
       </div>
     </div>
+
+    ${canReorder ? `
+    <button type="button" class="sd-reorder-open" id="sd-reorder-open">
+      ${icon('grip', 18)}<span>${t('reorder_exercises')}</span>
+    </button>` : ''}
 
     ${totalEx > 0
       ? `<button type="button" class="sd-start-run" id="sd-start-run">${icon('play', 20)}<span>${t('guided_mode')}</span></button>`
@@ -7215,21 +7528,7 @@ function renderSessionDay(el) {
 
   // Remove one exercise from this day, inline. Clears its unsaved set state so
   // it doesn't linger, then re-renders. Logged sessions in history are kept.
-  // Move one exercise up or down inside the cycle slot. The new order is built
-  // from the SLOT's own id list, not from exObjs — exObjs has already dropped
-  // any id whose exercise was deleted, and writing that back would silently
-  // prune the plan as a side effect of a reorder.
-  el.querySelectorAll('[data-move-ex]').forEach((b) =>
-    b.addEventListener('click', () => {
-      const ids = ((DB.plan.get().cycle || [])[slotIdx]?.exerciseIds || []).slice();
-      const from = ids.indexOf(b.dataset.moveEx);
-      const to = from + (Number(b.dataset.dir) || 0);
-      if (from < 0 || to < 0 || to >= ids.length) return;
-      ids.splice(to, 0, ids.splice(from, 1)[0]);
-      DB.plan.setSlotExercises(slotIdx, ids);
-      renderSessionDay(el);
-    })
-  );
+  $('#sd-reorder-open', el)?.addEventListener('click', () => openReorderSheet(slotIdx, () => renderSessionDay(el)));
 
   el.querySelectorAll('[data-remove-ex]').forEach((b) =>
     b.addEventListener('click', () => {
