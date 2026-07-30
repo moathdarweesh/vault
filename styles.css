@@ -4697,13 +4697,22 @@ body[dir="rtl"] .picker-row { text-align: right; }
   background: rgba(0, 0, 0, 0); transition: background 0.26s ease;
 }
 .sheet-overlay.open { background: var(--overlay, rgba(0, 0, 0, 0.5)); }
+/* THE SHEET FLOATS; IT IS NOT WELDED TO THE FRAME.
+   It used to be width:100% with only its TOP corners rounded, so its 1px top
+   border ran the full width of the app and the two rounded corners were pinned
+   hard against the side edges — the radius was there but had nothing to curve
+   away from, which reads as a seam across the screen rather than as a panel.
+   Insetting it by 10px lets the border close on all four sides and gives the
+   corners something to be corners of. The bottom inset also lifts it clear of
+   the home-indicator area on a gesture-nav phone. */
 .add-sheet {
-  width: 100%; max-height: 88%; overflow-y: auto;
+  width: calc(100% - 20px); max-height: 88%; overflow-y: auto;
+  margin: 0 10px calc(var(--safe-b) + 10px);
   background: var(--surface-1);
-  border-top-left-radius: 26px; border-top-right-radius: 26px;
-  border-top: 1px solid var(--border-hi);
-  padding: 8px 16px calc(var(--safe-b) + 20px);
-  transform: translateY(100%);
+  border-radius: 26px;
+  border: 1px solid var(--border-hi);
+  padding: 8px 16px 20px;
+  transform: translateY(calc(100% + var(--safe-b) + 10px));
   transition: transform 0.3s cubic-bezier(0.22, 1, 0.36, 1);
 }
 .sheet-overlay.open .add-sheet { transform: translateY(0); }
@@ -7024,3 +7033,25 @@ body.theme-light {
   -webkit-tap-highlight-color: transparent;
   --icon-accent: currentColor;   /* duotone collapses on a solid accent fill */
 }
+
+/* --- reorder the day's exercises before the guided run (v222) -------------
+   The run walks the list top to bottom, so this order IS the order the user
+   will be taken through. Up/down rather than drag: a drag inside a vertically
+   scrolling list of cards fights the scroll on touch, and these rows already
+   hold two number inputs and a delete button. */
+.sd-reorder { display: flex; flex-direction: column; gap: 2px; flex: none; }
+.sd-move {
+  width: 30px; height: 24px;
+  display: grid; place-items: center;
+  border: 1px solid var(--border); border-radius: var(--radius-sm);
+  background: var(--surface-2); color: var(--text-mute);
+  cursor: pointer; -webkit-tap-highlight-color: transparent;
+}
+.sd-move:active { background: var(--surface-3); }
+/* Disabled at the ends of the list — kept in place rather than hidden so the
+   card head does not reflow as an exercise moves up and down the list. */
+.sd-move[disabled] { opacity: .3; cursor: default; }
+.sd-move > svg { width: 15px; height: 15px; }
+
+/* The calorie ring is now a target: it opens the day's log. */
+.nutri-hero { cursor: pointer; }

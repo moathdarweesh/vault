@@ -12,7 +12,7 @@
 // build. The literal below is the fallback (file://, or a stripped query) and is
 // still bumped by `npm run release` — see CLAUDE.md "CACHE WORKFLOW".
 const VAULT_BUILD = (() => {
-  const FALLBACK = 'v221';
+  const FALLBACK = 'v222';
   try {
     const src = (document.currentScript && document.currentScript.src) || '';
     const m = src.match(/[?&]v=(\d+)/);
@@ -3440,8 +3440,16 @@ function renderProgram(el) {
       </div>
     ` : ''}
 
-    <button class="btn btn-ghost btn-block" data-goto="exercises">${icon('search', 18)} ${t('train')}</button>
   `;
+
+  // (The full-width "Exercises" button that used to close this screen is gone.
+  // Browsing the library is not a goal in itself — it is something you do IN
+  // ORDER to add an exercise to a template, and that path already carries its
+  // own picker with the whole library, a category filter and search
+  // (openAddExerciseChooser → openSlotEditorModal). A second entry point at the
+  // bottom of Program was a button whose answer to "what do I do here" was
+  // "leave". The browser is still reachable — deliberately, since it is a real
+  // screen — from the magnifier in this screen's top bar, bound just below.)
 
   // Top-bar magnifier → the exercise browser (its own screen since v198).
   bindVaultAction(() => navigate('exercises'));
@@ -4508,6 +4516,13 @@ function renderFood(el) {
       rerender();
       return;
     }
+    // The calorie ring answers "how much is left"; the natural next question is
+    // "left after WHAT", so tapping it opens today's log. It is checked LAST so
+    // the controls sitting inside the hero — the edit pencil above, the water
+    // steppers — keep their own behaviour and never fall through to a navigate.
+    // renderFoodLog reads viewContext.foodLog, NOT viewContext.date — passing a
+    // bare `date` here would silently land on today whatever day was open.
+    if (e.target.closest('.nutri-hero')) { navigate('foodlog', { foodLog: { date } }); return; }
   });
 
   // The calorie goal is MANDATORY: if none is set, open the calculator straight
@@ -7030,7 +7045,18 @@ function renderSessionDay(el) {
     return sdState[exId];
   }
 
-  function renderExerciseCard(ex) {
+  // REORDERING BEFORE THE GUIDED RUN. The run walks exObjs in order, so the
+  // order the user sets here IS the order they will be taken through. It edits
+  // the PLAN's cycle slot, not a view-local copy, so it persists to tomorrow's
+  // session too — reordering is a decision about the workout, not about today.
+  //
+  // Hidden when there is nothing to reorder (one exercise), when the day is not
+  // a real cycle slot (slotIdx -1, e.g. a date before the plan's anchor), and
+  // when the list is FILTERED by sdOnly — the "least effort" route shows a
+  // subset, and moving an item inside a subset cannot express a full-plan order.
+  const canReorder = slotIdx >= 0 && exObjs.length > 1 && !sdOnly;
+
+  function renderExerciseCard(ex, exIdx) {
     const st = initState(ex.id);
     const url = exerciseImgSrc(ex);
     const machineSvg = ex.machineType ? machineSvgFor(ex.machineType) : '';
@@ -7070,6 +7096,13 @@ function renderSessionDay(el) {
             <div class="sd-card-name">${escapeHtml(exDisplayName(ex))}</div>
           </div>
           ${isLogged ? `<div class="sd-status-pill">${icon('check', 16)} ${t('logged')}</div>` : ''}
+          ${canReorder ? `
+          <div class="sd-reorder">
+            <button type="button" class="sd-move" data-move-ex="${escapeHtml(ex.id)}" data-dir="-1"
+                    ${exIdx === 0 ? 'disabled' : ''} aria-label="${escapeHtml(t('move_up'))}">${icon('arrowUp', 15)}</button>
+            <button type="button" class="sd-move" data-move-ex="${escapeHtml(ex.id)}" data-dir="1"
+                    ${exIdx === exObjs.length - 1 ? 'disabled' : ''} aria-label="${escapeHtml(t('move_down'))}">${icon('arrowDown', 15)}</button>
+          </div>` : ''}
           <button type="button" class="icon-btn danger sd-remove-ex" data-remove-ex="${ex.id}" aria-label="${escapeHtml(t('remove_from_day'))}">${icon('trash', 18)}</button>
         </div>
 
@@ -7182,6 +7215,22 @@ function renderSessionDay(el) {
 
   // Remove one exercise from this day, inline. Clears its unsaved set state so
   // it doesn't linger, then re-renders. Logged sessions in history are kept.
+  // Move one exercise up or down inside the cycle slot. The new order is built
+  // from the SLOT's own id list, not from exObjs — exObjs has already dropped
+  // any id whose exercise was deleted, and writing that back would silently
+  // prune the plan as a side effect of a reorder.
+  el.querySelectorAll('[data-move-ex]').forEach((b) =>
+    b.addEventListener('click', () => {
+      const ids = ((DB.plan.get().cycle || [])[slotIdx]?.exerciseIds || []).slice();
+      const from = ids.indexOf(b.dataset.moveEx);
+      const to = from + (Number(b.dataset.dir) || 0);
+      if (from < 0 || to < 0 || to >= ids.length) return;
+      ids.splice(to, 0, ids.splice(from, 1)[0]);
+      DB.plan.setSlotExercises(slotIdx, ids);
+      renderSessionDay(el);
+    })
+  );
+
   el.querySelectorAll('[data-remove-ex]').forEach((b) =>
     b.addEventListener('click', () => {
       const exId = b.dataset.removeEx;
