@@ -12,7 +12,7 @@
 // build. The literal below is the fallback (file://, or a stripped query) and is
 // still bumped by `npm run release` — see CLAUDE.md "CACHE WORKFLOW".
 const VAULT_BUILD = (() => {
-  const FALLBACK = 'v223';
+  const FALLBACK = 'v224';
   try {
     const src = (document.currentScript && document.currentScript.src) || '';
     const m = src.match(/[?&]v=(\d+)/);
@@ -2665,40 +2665,7 @@ function renderHome(el) {
       ${icon('dumbbell', 18)}<span>${t('today_workout')}</span>
     </button>`;
 
-  // THE LAST SEVEN DAYS, ending today on the trailing edge.
-  //
-  // Seven days back rather than the calendar week: a Monday-anchored week shows
-  // one day of history on a Monday and is nearly useless right when the user is
-  // most likely to be reviewing. This window always holds a full week of past.
-  //
-  // Each chip carries up to three dots — trained, ate, cardio — because a bare
-  // date tells the user nothing about whether it is worth opening. The dots are
-  // computed from the same records the day view reads, so the strip can never
-  // promise a day that then turns out empty.
-  const weekStripHtml = (() => {
-    const sessionDates = new Set(DB.sessions.listAll().map((s) => s.date));
-    const cardioDates = new Set(DB.cardio.list().map((c) => c.date));
-    const chips = [];
-    for (let back = 6; back >= 0; back--) {
-      const iso = addDaysISO(todayISO(), -back);
-      const dd = new Date(iso + 'T12:00:00');
-      const trained = sessionDates.has(iso);
-      const ate = (DB.foodLogs.listForDate(iso) || []).length > 0;
-      const didCardio = cardioDates.has(iso);
-      chips.push(`
-        <button class="wk-chip${back === 0 ? ' is-today' : ''}" data-day="${iso}"
-                aria-label="${escapeHtml(formatDate(iso))}">
-          <span class="wk-dow">${escapeHtml(dayName(dd.getDay(), false))}</span>
-          <span class="wk-num num">${fmtNum(dd.getDate())}</span>
-          <span class="wk-dots">
-            ${trained ? '<i class="wk-dot train"></i>' : ''}
-            ${ate ? '<i class="wk-dot eat"></i>' : ''}
-            ${didCardio ? '<i class="wk-dot cardio"></i>' : ''}
-          </span>
-        </button>`);
-    }
-    return `<div class="wk-strip" role="group" aria-label="${escapeHtml(t('last_7_days'))}">${chips.join('')}</div>`;
-  })();
+  const weekStripHtml = weekStrip();
 
   let heroHtml = '';
   if (todayIsOff) {
@@ -2876,7 +2843,7 @@ function renderHome(el) {
     renderView('home');   // NOT renderHome() — it needs its view element
   });
   // One delegated listener for all seven chips rather than seven bindings.
-  $('.wk-strip', el)?.addEventListener('click', (e) => {
+  $('.wk-rail', el)?.addEventListener('click', (e) => {
     const chip = e.target.closest('[data-day]');
     if (chip) navigate('day', { dayDate: chip.dataset.day });
   });
@@ -3649,6 +3616,51 @@ function renderExercises(el) {
 // Small chooser shown by the session-day "Add exercise" button: pick from the
 // library, or create a new custom exercise and drop it straight into this day.
 // ===========================================================================
+// THE LAST SEVEN DAYS — one rail, seven discs, today on the trailing edge.
+//
+// Seven days BACK rather than the calendar week: a Monday-anchored week shows
+// one day of history on a Monday, which is exactly when someone is most likely
+// to be looking back. This window always holds a full week of past.
+//
+// Each disc carries up to three dots — trained, ate, cardio — because a bare
+// date says nothing about whether the day is worth opening. They are computed
+// from the same records renderDay reads, so the rail can never promise a day
+// that turns out empty.
+//
+// Shared by Home and by the day view itself, so moving day to day never
+// requires going back first. `activeIso` marks the day being viewed; on Home
+// nothing is active, because Home is not "a day", it is today's dashboard.
+// ===========================================================================
+function weekStrip(activeIso = null) {
+  const sessionDates = new Set(DB.sessions.listAll().map((s) => s.date));
+  const cardioDates = new Set(DB.cardio.list().map((c) => c.date));
+  const chips = [];
+  for (let back = 6; back >= 0; back--) {
+    const iso = addDaysISO(todayISO(), -back);
+    const dd = new Date(iso + 'T12:00:00');
+    const trained = sessionDates.has(iso);
+    const ate = (DB.foodLogs.listForDate(iso) || []).length > 0;
+    const didCardio = cardioDates.has(iso);
+    const cls = [back === 0 ? 'is-today' : '', activeIso === iso ? 'is-active' : ''].filter(Boolean).join(' ');
+    chips.push(`
+      <button class="wk-chip${cls ? ' ' + cls : ''}" data-day="${iso}"
+              ${activeIso === iso ? 'aria-current="date"' : ''}
+              aria-label="${escapeHtml(formatDate(iso))}">
+        <span class="wk-dow">${escapeHtml(dayName(dd.getDay(), false))}</span>
+        <span class="wk-disc">
+          <span class="wk-num num">${fmtNum(dd.getDate())}</span>
+        </span>
+        <span class="wk-dots">
+          ${trained ? '<i class="wk-dot train"></i>' : ''}
+          ${ate ? '<i class="wk-dot eat"></i>' : ''}
+          ${didCardio ? '<i class="wk-dot cardio"></i>' : ''}
+        </span>
+      </button>`);
+  }
+  return `<div class="wk-rail" role="group" aria-label="${escapeHtml(t('last_7_days'))}">${chips.join('')}</div>`;
+}
+
+// ===========================================================================
 // ONE DAY, EVERYTHING.
 //
 // Every other screen slices the data by TOPIC — food here, workouts there,
@@ -3706,6 +3718,9 @@ function renderDay(el) {
       <div class="detail-top-title">${escapeHtml(dayName(d.getDay(), true))}</div>
     </div>
 
+    ${weekStrip(iso)}
+
+    <div class="day-body ${viewContext.dayAnim || ''}">
     <div class="page-header">
       <div class="page-eyebrow">${isToday ? t('today') : escapeHtml(dayName(d.getDay(), true))}</div>
       <h1 class="page-title">${escapeHtml(formatDate(iso))}</h1>
@@ -3775,7 +3790,24 @@ function renderDay(el) {
          ${sleep ? stat(t('sleep'), fmtNum(Math.round(sleep.durationMinutes / 6) / 10), ' h') : ''}
          ${sups.length ? stat(t('supplements_title'), fmtNum(sups.length)) : ''}
        </div>`) : ''}
+    </div>
   `;
+
+  // The rail is live here too, so you can walk the week without going back.
+  // The animation is DIRECTION-AWARE: picking an earlier day slides the content
+  // in from the past side, a later day from the future side, which is the only
+  // thing that makes a transition read as movement along a timeline rather than
+  // as a generic fade. It is set as a class on the next render and cleared after,
+  // so a re-render for any other reason does not replay it.
+  el.querySelector('.wk-rail')?.addEventListener('click', (e) => {
+    const chip = e.target.closest('[data-day]');
+    if (!chip || chip.dataset.day === iso) return;
+    viewContext.dayAnim = chip.dataset.day > iso ? 'from-next' : 'from-prev';
+    viewContext.dayDate = chip.dataset.day;
+    renderDay(el);
+    // Clear so the class only ever describes THIS transition.
+    viewContext.dayAnim = '';
+  });
 
   el.querySelectorAll('[data-goto]').forEach((b) =>
     b.addEventListener('click', () => {

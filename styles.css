@@ -7087,37 +7087,6 @@ body.theme-light {
    item travels up and down the list. */
 .reorder-arrows button[disabled] { opacity: .3; cursor: default; }
 
-/* --- the 7-day strip on Home (v223) ---------------------------------------
-   The last seven days ending today, NOT the calendar week: a Monday-anchored
-   week shows one day of history on a Monday, which is exactly when someone is
-   most likely to be looking back. This window always holds a full week.
-
-   Each chip carries up to three dots — trained, ate, cardio — because a bare
-   date says nothing about whether the day is worth opening. */
-.wk-strip {
-  display: grid; grid-template-columns: repeat(7, 1fr); gap: 5px;
-  margin-bottom: var(--sp-3, 12px);
-}
-.wk-chip {
-  display: flex; flex-direction: column; align-items: center; gap: 3px;
-  min-height: 62px; padding: 8px 2px 6px;
-  border: 1px solid var(--border); border-radius: var(--radius-sm);
-  background: var(--surface-1); color: var(--text-dim);
-  font-family: inherit; cursor: pointer; -webkit-tap-highlight-color: transparent;
-}
-.wk-chip:active { background: var(--surface-2); }
-.wk-chip.is-today { border-color: var(--accent-line); background: var(--accent-soft); }
-.wk-dow { font-size: 10px; font-weight: 600; letter-spacing: .04em; }
-.wk-num { font-size: 15px; font-weight: 700; color: var(--text); line-height: 1.1; }
-.wk-chip.is-today .wk-num, .wk-chip.is-today .wk-dow { color: var(--accent-text); }
-/* The dot row keeps its height whether or not there are dots, so chips with
-   activity and chips without stay the same size and the strip does not jitter. */
-.wk-dots { display: flex; gap: 3px; height: 5px; align-items: center; }
-.wk-dot { width: 5px; height: 5px; border-radius: 50%; display: block; }
-.wk-dot.train { background: var(--accent); }
-.wk-dot.eat { background: var(--green, #22c55e); }
-.wk-dot.cardio { background: var(--red, #ef4444); }
-
 /* --- one day, everything --------------------------------------------------
    Read-only by design: each section links out to the screen that OWNS that
    data rather than editing in place, so there is still exactly one write path
@@ -7160,3 +7129,69 @@ body.theme-light {
   padding: 40px 20px; text-align: center;
   color: var(--text-dim); --icon-accent: var(--text-faint);
 }
+
+/* --- the week rail (v224) -------------------------------------------------
+   Seven discs on one bar. Round rather than rounded-rectangle because a date is
+   a POINT on a timeline, not a container of anything — and the identity layer's
+   "no circles" rule is about stateful CONTROLS competing with the mark, not
+   about a calendar's day markers, which is the one place a circle is the
+   conventional and correct shape.
+
+   The rail is a surface of its own so the seven discs read as one instrument
+   instead of seven loose buttons floating on the page. */
+.wk-rail {
+  display: grid; grid-template-columns: repeat(7, 1fr);
+  gap: 2px; align-items: start;
+  padding: 10px 6px;
+  margin-bottom: var(--sp-3, 12px);
+  background: var(--surface-1);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+.wk-chip {
+  display: flex; flex-direction: column; align-items: center; gap: 5px;
+  padding: 2px 0; min-height: 44px;
+  border: 0; background: none; color: var(--text-dim);
+  font-family: inherit; cursor: pointer; -webkit-tap-highlight-color: transparent;
+}
+.wk-dow { font-size: 10px; font-weight: 600; letter-spacing: .03em; }
+.wk-disc {
+  width: 34px; height: 34px; border-radius: 50%;
+  display: grid; place-items: center;
+  border: 1px solid transparent;
+  background: var(--surface-2);
+  transition: background var(--dur) var(--ease), border-color var(--dur) var(--ease);
+}
+.wk-num { font-size: 14px; font-weight: 700; color: var(--text); line-height: 1; }
+/* Today is outlined; the day being VIEWED is filled. Two different questions —
+   "which is today" and "which am I looking at" — so two different signals. */
+.wk-chip.is-today .wk-disc { border-color: var(--accent-line); }
+.wk-chip.is-active .wk-disc { background: var(--accent); border-color: var(--accent); }
+.wk-chip.is-active .wk-num { color: var(--accent-ink); }
+.wk-chip.is-active .wk-dow { color: var(--accent-text); }
+.wk-chip:active .wk-disc { transform: scale(.92); }
+/* The dot row keeps its height when empty so the rail never jitters. */
+.wk-dots { display: flex; gap: 3px; height: 5px; align-items: center; }
+.wk-dot { width: 5px; height: 5px; border-radius: 50%; display: block; }
+.wk-dot.train { background: var(--accent); }
+.wk-dot.eat { background: var(--green, #22c55e); }
+.wk-dot.cardio { background: var(--red, #ef4444); }
+.wk-chip.is-active .wk-dot { box-shadow: 0 0 0 1px var(--surface-1); }
+
+/* Direction-aware day transition. An earlier day enters from the past side and
+   a later one from the future side — that is what makes it read as movement
+   along a timeline instead of a generic fade. Uses logical translation so RTL
+   gets it mirrored for free.
+   prefers-reduced-motion is already handled globally, which flattens both. */
+.day-body.from-prev { animation: dayFromPrev var(--dur-slow) var(--ease) both; }
+.day-body.from-next { animation: dayFromNext var(--dur-slow) var(--ease) both; }
+@keyframes dayFromPrev {
+  from { opacity: 0; transform: translateX(-14px); }
+  to   { opacity: 1; transform: none; }
+}
+@keyframes dayFromNext {
+  from { opacity: 0; transform: translateX(14px); }
+  to   { opacity: 1; transform: none; }
+}
+[dir="rtl"] .day-body.from-prev { animation-name: dayFromNext; }
+[dir="rtl"] .day-body.from-next { animation-name: dayFromPrev; }
