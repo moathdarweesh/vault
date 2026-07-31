@@ -7195,3 +7195,33 @@ body.theme-light {
 }
 [dir="rtl"] .day-body.from-prev { animation-name: dayFromNext; }
 [dir="rtl"] .day-body.from-next { animation-name: dayFromPrev; }
+
+/* --- selectable effort options (v225) -------------------------------------
+   The list no longer acts on tap. Selecting MARKS the choice and a primary
+   button commits it, with the chosen duration in its own label — handing back
+   a bare list right after "I'll do what I can" spends the momentum that
+   sentence just created, because the user has to decide all over again. The
+   first option is pre-selected, so the whole step can cost one tap. */
+.min-option { position: relative; }
+.min-option.sel { border-color: var(--accent); background: var(--accent-soft); }
+.min-check {
+  flex: none; width: 22px; height: 22px;
+  display: grid; place-items: center;
+  border-radius: 50%;
+  background: var(--accent); color: var(--accent-ink);
+  --icon-accent: currentColor;
+  opacity: 0;
+}
+.min-option.sel .min-check { opacity: 1; }
+
+/* An option that COSTS a day says so in gold. Never red — red means deletion
+   everywhere else in this app, and this is a legitimate choice, not an error. */
+.min-sub.is-cost { color: var(--gold); font-weight: 600; }
+
+/* The "train anyway" sheet leads with the accent, not the warning gold: it is
+   an invitation, and the only caution in it belongs to one option. */
+.rest-sheet-icon.go {
+  background: var(--accent-soft);
+  color: var(--accent-text);
+  --icon-accent: var(--accent-text);
+}

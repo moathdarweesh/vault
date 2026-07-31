@@ -12,7 +12,7 @@
 // build. The literal below is the fallback (file://, or a stripped query) and is
 // still bumped by `npm run release` — see CLAUDE.md "CACHE WORKFLOW".
 const VAULT_BUILD = (() => {
-  const FALLBACK = 'v224';
+  const FALLBACK = 'v225';
   try {
     const src = (document.currentScript && document.currentScript.src) || '';
     const m = src.match(/[?&]v=(\d+)/);
@@ -876,6 +876,18 @@ const I18N = {
     rotation_cycle: 'Workout cycle',
     add_workout: 'Add workout',
     rotation_preview: 'Next 7 days',
+    rest_min_go: 'Start — {n} minutes',
+    train_anyway: 'I could train today',
+    anyway_title: 'Feeling up to it today?',
+    anyway_body: 'Today is rest by design, and that is the point. But if you have energy to spare, take something light — without borrowing from tomorrow.',
+    anyway_cardio: 'Light cardio',
+    anyway_cardio_sub: 'A walk or a bike — it does not tax the muscle',
+    anyway_lagging: 'A lagging muscle',
+    anyway_tomorrow: "Tomorrow's workout, now",
+    anyway_tomorrow_sub: 'Moves the plan a full day',
+    anyway_start: 'Start',
+    anyway_keep_rest: 'No, I will finish my rest',
+    anyway_moved: 'The plan moved a day forward.',
     last_7_days: 'The last 7 days',
     day_nothing: 'Nothing recorded on this day.',
     day_body: 'Body',
@@ -1542,6 +1554,18 @@ const I18N = {
     rotation_cycle: 'دورة التمارين',
     add_workout: 'إضافة تمرين',
     rotation_preview: 'الأيام السبعة القادمة',
+    rest_min_go: 'ابدأ — {n} دقائق',
+    train_anyway: 'أستطيع التمرّن اليوم',
+    anyway_title: 'تشعر أنك قادر اليوم؟',
+    anyway_body: 'اليوم راحة في الخطة، وهذا مقصود. لكن إن كانت لديك طاقة زائدة فخذ شيئًا خفيفًا — دون أن تسحب من تمرين الغد.',
+    anyway_cardio: 'كارديو خفيف',
+    anyway_cardio_sub: 'مشي أو دراجة — لا يُتعب العضلة',
+    anyway_lagging: 'عضلة متأخّرة',
+    anyway_tomorrow: 'تمرين الغد من الآن',
+    anyway_tomorrow_sub: 'يحرّك الخطة يومًا كاملًا',
+    anyway_start: 'ابدأ',
+    anyway_keep_rest: 'لا، أُكمل راحتي',
+    anyway_moved: 'تحرّكت الخطة يومًا إلى الأمام.',
     last_7_days: 'آخر ٧ أيام',
     day_nothing: 'لا يوجد شيء مسجَّل في هذا اليوم.',
     day_body: 'الجسم',
@@ -2667,8 +2691,18 @@ function renderHome(el) {
 
   const weekStripHtml = weekStrip();
 
+  // TWO KINDS OF REST DAY, and they are not the same thing.
+  //   · DECLINED  — the plan had a workout and the user said no. The way out is
+  //     undo, because nobody needs persuading INTO training.
+  //   · SCHEDULED — the plan itself says rest. There is nothing to undo, so the
+  //     way out is the "train anyway" sheet, which offers something light that
+  //     does not borrow from tomorrow.
+  // Until now a scheduled rest day fell through to the week-count hero and said
+  // nothing about rest at all.
+  const scheduledRest = !todayIsOff && hasAnyPlan && !hasPlanToday && !DB.plan.workoutForDate(now);
+
   let heroHtml = '';
-  if (todayIsOff) {
+  if (todayIsOff || scheduledRest) {
     // Declined day. Say what it cost — nothing — because the whole reason the
     // rotation is continuous is that a missed day postpones rather than forfeits.
     const nextUp = (() => {
@@ -2695,8 +2729,8 @@ function renderHome(el) {
           <span class="rest-note-icon">${icon('moon', 20)}</span>
           <span>${t('rest_is_the_plan')}</span>
         </div>
-        <button class="hero-ghost-cta" id="home-undo-rest" type="button">
-          ${icon('dumbbell', 20)}<span>${t('rest_undo_cta')}</span>
+        <button class="hero-ghost-cta" id="${scheduledRest ? 'home-train-anyway' : 'home-undo-rest'}" type="button">
+          ${icon('dumbbell', 20)}<span>${scheduledRest ? t('train_anyway') : t('rest_undo_cta')}</span>
         </button>
       </div>
     `;
@@ -2834,7 +2868,21 @@ function renderHome(el) {
   // "Rest" no longer marks the day silently — it opens the sheet, which argues
   // one point and then offers a middle option. The day is only marked off if the
   // user chooses it there.
-  $('#home-rest-toggle', el)?.addEventListener('click', () => openRestSheet());
+  // THE SHEET ARGUES ITS CASE ONCE A DAY. A second tap on Rest logs the day
+  // straight away instead of replaying the same paragraph — repeating an
+  // argument the user has already heard and rejected turns advice into nagging,
+  // and nagging gets dismissed without reading. The gate lived in storage from
+  // the start; nothing was calling it.
+  $('#home-rest-toggle', el)?.addEventListener('click', () => {
+    if (DB.plan.restPromptedToday()) {
+      DB.plan.setRest(new Date(), true);
+      showToast(t('rest_today_on'));
+      renderView('home');
+      return;
+    }
+    openRestSheet();
+  });
+  $('#home-train-anyway', el)?.addEventListener('click', () => openTrainAnywaySheet());
   // The inverted state's way back. Straight undo, no argument — nobody needs
   // persuading INTO training.
   $('#home-undo-rest', el)?.addEventListener('click', () => {
@@ -5310,23 +5358,35 @@ function openRestSheet() {
     opts.push({ k: 'walk', mins: 15, icon: 'walk',
       title: t('rest_min_walk'), sub: t('rest_min_walk_sub') });
 
+    // THE FIRST OPTION IS PRE-SELECTED AND A BUTTON CONFIRMS IT. Handing back a
+    // bare list right after the user said "I'll do what I can" spends the
+    // momentum that sentence just created — they have to decide again. Selected
+    // by default, the whole step costs one tap.
+    return effortStep(t('rest_min_title'), t('rest_min_sub'), opts, t('rest_min_go'));
+  };
+
+  // Shared by both sheets: same shape, opposite direction.
+  function effortStep(title, sub, opts, goLabel) {
     return `
       <div class="rest-sheet-head">
-        <div class="rest-sheet-title">${t('rest_min_title')}</div>
-        <div class="rest-sheet-body">${t('rest_min_sub')}</div>
+        <div class="rest-sheet-title">${title}</div>
+        <div class="rest-sheet-body">${sub}</div>
       </div>
       <div class="min-options">
-        ${opts.map((o) => `
-          <button class="min-option" data-min="${o.k}" data-mins="${o.mins}">
-            <span class="min-badge num">${fmtNum(o.mins)}${t('minutes_short')}</span>
+        ${opts.map((o, i) => `
+          <button class="min-option${i === 0 ? ' sel' : ''}" data-pick="${o.k}" data-mins="${o.mins}">
+            <span class="min-badge num" dir="ltr">${fmtNum(o.mins)}${t('minutes_short')}</span>
             <span class="min-text">
               <span class="min-title">${o.title}</span>
-              <span class="min-sub">${o.sub}</span>
+              <span class="min-sub${o.cost ? ' is-cost' : ''}">${o.sub}</span>
             </span>
-            <span class="min-chev">${icon('chevronRight', 18)}</span>
+            <span class="min-check">${icon('check', 14)}</span>
           </button>`).join('')}
-      </div>`;
-  };
+      </div>
+      <button class="btn btn-primary btn-block" data-go>
+        ${goLabel.replace('{n}', fmtNum(opts[0].mins))}
+      </button>`;
+  }
 
   const paint = (step) => {
     overlay.innerHTML = `
@@ -5358,11 +5418,125 @@ function openRestSheet() {
       return;
     }
 
-    const step2 = e.target.closest('[data-min]');
-    if (!step2) return;
-    const kind = step2.dataset.min;
-    const mins = Number(step2.dataset.mins) || 10;
-    close(() => startMinimumSession(kind, mins));
+    // Selecting only MARKS the choice; the primary button commits it. The
+    // button's label carries the chosen duration, so the commitment is stated
+    // in the same words the user picked.
+    const pick = e.target.closest('[data-pick]');
+    if (pick) {
+      overlay.querySelectorAll('[data-pick]').forEach((b) => b.classList.toggle('sel', b === pick));
+      const go = overlay.querySelector('[data-go]');
+      if (go) go.textContent = t('rest_min_go').replace('{n}', fmtNum(Number(pick.dataset.mins) || 10));
+      return;
+    }
+    const go = e.target.closest('[data-go]');
+    if (!go) return;
+    const sel = overlay.querySelector('[data-pick].sel');
+    if (!sel) return;
+    close(() => startMinimumSession(sel.dataset.pick, Number(sel.dataset.mins) || 10));
+  });
+}
+
+// ===========================================================================
+// THE SCHEDULED REST DAY — the same sheet pointed the other way.
+//
+// On a day the PLAN calls rest there is nothing to undo, so "I could train
+// today" does not simply flip a flag: it offers something light that does not
+// borrow from tomorrow. The third option DOES borrow, and says so in gold —
+// otherwise the button quietly burns the next session and the user finds out
+// two days later.
+// ===========================================================================
+function openTrainAnywaySheet() {
+  const app = document.querySelector('.app');
+  if (!app) return;
+  document.getElementById('rest-sheet-overlay')?.remove();
+
+  const overlay = document.createElement('div');
+  overlay.id = 'rest-sheet-overlay';
+  overlay.className = 'sheet-overlay';
+
+  // Muscles this week's plan never touches. Read from the same helper the plan
+  // card uses, so the two can never name different muscles for the same week.
+  const lagging = (() => {
+    const byId = Object.fromEntries(DB.exercises.list().map((e) => [e.id, e]));
+    const planned = new Set();
+    const d = new Date();
+    for (let i = 0; i < 7; i++) {
+      const w = DB.plan.workoutForDate(d);
+      if (w) (w.exerciseIds || []).map((id) => byId[id]).filter(Boolean)
+        .forEach((ex) => getMusclesForExercise(ex).forEach((m) => planned.add(m)));
+      d.setDate(d.getDate() + 1);
+    }
+    // Compared against the app's OWN muscle vocabulary, not a hand-written list:
+    // getMusclesForExercise returns these exact keys, so a muscle can never be
+    // reported "lagging" under a name the rest of the app does not use.
+    const ALL = ['chest', 'upper_chest', 'front_delts', 'side_delts', 'rear_delts',
+      'biceps', 'triceps', 'lats', 'upper_back', 'traps', 'abs',
+      'quads', 'hamstrings', 'glutes', 'calves'];
+    return ALL.filter((m) => !planned.has(m)).slice(0, 2);
+  })();
+
+  const opts = [
+    { k: 'cardio', mins: 20, title: t('anyway_cardio'), sub: t('anyway_cardio_sub') },
+    ...(lagging.length ? [{ k: 'lag', mins: 15, title: t('anyway_lagging'),
+        sub: lagging.map((m) => t('muscle_' + m, m)).join(' · ') }] : []),
+    { k: 'full', mins: 45, title: t('anyway_tomorrow'), sub: t('anyway_tomorrow_sub'), cost: true },
+  ];
+
+  overlay.innerHTML = `
+    <div class="add-sheet rest-sheet" role="dialog" aria-modal="true"
+         aria-label="${escapeHtml(t('anyway_title'))}">
+      <div class="sheet-handle"></div>
+      <div class="rest-sheet-icon go">${icon('zap', 28)}</div>
+      <div class="rest-sheet-head">
+        <div class="rest-sheet-title">${t('anyway_title')}</div>
+        <div class="rest-sheet-body">${t('anyway_body')}</div>
+      </div>
+      <div class="min-options">
+        ${opts.map((o, i) => `
+          <button class="min-option${i === 0 ? ' sel' : ''}" data-pick="${o.k}" data-mins="${o.mins}">
+            <span class="min-badge num" dir="ltr">${fmtNum(o.mins)}${t('minutes_short')}</span>
+            <span class="min-text">
+              <span class="min-title">${escapeHtml(o.title)}</span>
+              <span class="min-sub${o.cost ? ' is-cost' : ''}">${escapeHtml(o.sub)}</span>
+            </span>
+            <span class="min-check">${icon('check', 14)}</span>
+          </button>`).join('')}
+      </div>
+      <button class="btn btn-primary btn-block" data-go>${t('anyway_start')}</button>
+      <button class="btn btn-ghost btn-block" data-keep>${t('anyway_keep_rest')}</button>
+    </div>`;
+
+  app.appendChild(overlay);
+  requestAnimationFrame(() => overlay.classList.add('open'));
+
+  const close = (cb) => {
+    overlay.classList.remove('open');
+    setTimeout(() => { overlay.remove(); if (typeof cb === 'function') cb(); }, 260);
+  };
+
+  overlay.addEventListener('click', (e) => {
+    if (e.target === overlay || e.target.closest('[data-keep]')) { close(); return; }
+    const pick = e.target.closest('[data-pick]');
+    if (pick) {
+      overlay.querySelectorAll('[data-pick]').forEach((b) => b.classList.toggle('sel', b === pick));
+      return;
+    }
+    if (!e.target.closest('[data-go]')) return;
+    const sel = overlay.querySelector('[data-pick].sel');
+    const kind = sel ? sel.dataset.pick : 'cardio';
+    const mins = sel ? (Number(sel.dataset.mins) || 20) : 20;
+    close(() => {
+      if (kind === 'full') {
+        // Pulling tomorrow's session forward means today STOPS being a rest day
+        // in the rotation — which is exactly the "moves the plan a full day"
+        // the option warns about. One write, through the same door as everything else.
+        DB.plan.setRest(new Date(), false);
+        showToast(t('anyway_moved'));
+        navigate('session-day', { date: todayISO() });
+        return;
+      }
+      startMinimumSession(kind === 'lag' ? 'one' : 'walk', mins);
+    });
   });
 }
 
