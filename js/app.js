@@ -12,7 +12,7 @@
 // build. The literal below is the fallback (file://, or a stripped query) and is
 // still bumped by `npm run release` — see CLAUDE.md "CACHE WORKFLOW".
 const VAULT_BUILD = (() => {
-  const FALLBACK = 'v227';
+  const FALLBACK = 'v228';
   try {
     const src = (document.currentScript && document.currentScript.src) || '';
     const m = src.match(/[?&]v=(\d+)/);
@@ -882,6 +882,10 @@ const I18N = {
     rest_undo: 'Undo',
     anyway_start_named: 'Start — {name}',
     anyway_lagging_sub2: '{m} — not in this week’s plan',
+    /* Joining a list of names is language work, not punctuation: the separator
+       and the conjunction both change with the script. */
+    list_sep: ', ',
+    list_and: ' and ',
     rest_min_go: 'Start — {n} minutes',
     train_anyway: 'I could train today',
     anyway_title: 'Feeling up to it today?',
@@ -1562,6 +1566,10 @@ const I18N = {
     rest_undo: 'تراجع',
     anyway_start_named: 'ابدأ — {name}',
     anyway_lagging_sub2: '{m} — ما دخلت خطة الأسبوع',
+    /* The waw prefixes its word with no space after it, unlike "and" — so the
+       conjunction carries its own spacing rather than the call site adding it. */
+    list_sep: '، ',
+    list_and: ' و',
     rest_min_go: 'ابدأ — {n} دقائق',
     train_anyway: 'ممكن أتمرّن اليوم',
     anyway_title: 'حاس إنك قادر اليوم؟',
@@ -1908,6 +1916,15 @@ function initialsOf(str) {
 // Always render numbers using Latin digits (English), regardless of UI language
 function fmtNum(n) {
   return Number(n).toLocaleString('en-US');
+}
+
+// "A", "A and B", "A, B and C" — in whichever language is loaded. The one call
+// site that needed this used to join with a hard-coded Arabic waw, so English
+// read "Upper Chest وSide Delts": an RTL character mid-sentence in an LTR run,
+// which the browser reorders into something unreadable rather than dropping.
+function joinNames(names) {
+  if (names.length < 2) return names[0] || '';
+  return names.slice(0, -1).join(t('list_sep')) + t('list_and') + names[names.length - 1];
 }
 
 // Resize a File/Blob image to a smaller JPEG data URL (keeps localStorage manageable)
@@ -2679,7 +2696,7 @@ function renderHome(el) {
           <div class="hero-eyebrow">${t('calories')}</div>
           <div class="hero-first-title">${t('nutri_setup_title')}</div>
           <div class="hero-first-sub">${t('nutri_setup_text')}</div>
-          <div class="hero-cta ghost">${icon('target', 20)}<span>${t('nutri_setup_cta')}</span></div>
+          <div class="hero-cta">${icon('target', 20)}<span>${t('nutri_setup_cta')}</span></div>
         </button>`;
     }
     const tgt = DB.nutrition.get().targets;
@@ -2693,7 +2710,7 @@ function renderHome(el) {
         <div class="hero-numeral num ${over ? 'over' : ''}">${fmtNum(Math.abs(left))}</div>
         <div class="hero-meta">${over ? t('nutri_over') : t('nutri_left')} · <span class="num">${fmtNum(Math.round(eaten.calories))}</span> / <span class="num">${fmtNum(tgt.calories)}</span> ${t('cal')}</div>
         <div class="hero-bar"><span class="hero-bar-fill ${over ? 'over' : ''}" style="width:${pct}%"></span></div>
-        <div class="hero-cta ghost">${icon('utensils', 20)}<span>${t('food')}</span></div>
+        <div class="hero-cta">${icon('utensils', 20)}<span>${t('food')}</span></div>
       </button>`;
   })();
 
@@ -5562,8 +5579,8 @@ function openTrainAnywaySheet() {
   const opts = [
     { k: 'cardio', mins: 20, title: t('anyway_cardio'), sub: t('anyway_cardio_sub') },
     ...(lagging.length ? [{ k: 'lag', mins: 15, title: t('anyway_lagging'),
-        sub: t('anyway_lagging_sub2').replace('{m}',
-          lagging.map((m) => t('muscle_' + m, m)).join(' و')) }] : []),
+        sub: t('anyway_lagging_sub2').replace('{m}', joinNames(
+          lagging.map((m) => t('muscle_' + m, m)))) }] : []),
     { k: 'full', mins: 45, title: t('anyway_tomorrow'), sub: t('anyway_tomorrow_sub'), cost: true },
   ];
 
@@ -5587,9 +5604,11 @@ function openTrainAnywaySheet() {
             <span class="min-check">${icon('check', 16)}</span>
           </button>`).join('')}
       </div>
-      <button class="btn btn-primary btn-block" data-go>${
-        t('anyway_start_named').replace('{name}', escapeHtml(opts[0].title))}</button>
-      <button class="btn btn-ghost btn-block" data-keep>${t('anyway_keep_rest')}</button>
+      <div class="rest-sheet-actions">
+        <button class="btn btn-primary btn-block" data-go>${
+          t('anyway_start_named').replace('{name}', escapeHtml(opts[0].title))}</button>
+        <button class="btn btn-ghost btn-block" data-keep>${t('anyway_keep_rest')}</button>
+      </div>
     </div>`;
 
   app.appendChild(overlay);

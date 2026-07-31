@@ -3037,8 +3037,14 @@ body[dir="rtl"] .tool-card { text-align: right; align-items: flex-end; }
   align-items: baseline;
   justify-content: space-between;
   gap: var(--sp-3);
+  /* The head has to carry the title's bottom margin itself. Being a flex
+     container, it SWALLOWED the margin on the title inside it, so every section
+     using the plain .rot-section-title was separated from its content by 12px
+     while the one section with a trailing action sat flush against the strip
+     below it — the same 0px defect as the rest sheet's buttons. */
+  margin-bottom: var(--sp-3);
 }
-.rot-section-head .rot-section-title { flex: 1; min-width: 0; }
+.rot-section-head .rot-section-title { flex: 1; min-width: 0; margin-bottom: 0; }
 /* Optional context line under a section title. */
 .rot-section-sub {
   font-size: 12px;
@@ -6643,10 +6649,7 @@ body { --icon-accent: var(--accent-text); }
    There the duotone collapses to a single mass in the container's own ink.
    These six are the complete live set (found by walking every rendered svg and
    testing its container's background, not by guessing). */
-/* `.ghost` is excluded on purpose: the collapse exists only because an orange
-   accent layer disappears on an orange FILL. The ghost variant sits on
-   --surface-3, where the accent is both visible and wanted. */
-.home-center-icon, .hero-cta:not(.ghost), .btn-primary, .food-fab, .nutri-setup-icon {
+.home-center-icon, .hero-cta, .btn-primary, .food-fab, .nutri-setup-icon {
   --icon-accent: currentColor;
 }
 
@@ -6784,7 +6787,11 @@ body { --icon-accent: var(--accent-text); }
 /* --- step 2: the middle option ------------------------------------------
    Three sizes of "something", so the answer to "I can't do the session" is
    never forced to be "then nothing". */
-.min-options { display: flex; flex-direction: column; gap: 10px; }
+/* Carries its own bottom margin, the way .rest-sheet-head above it does — in
+   this sheet system each block owns the space beneath itself. Without it the
+   option list sat flush against the primary button with a 0px gap, the only
+   place in any sheet where two blocks touched. */
+.min-options { display: flex; flex-direction: column; gap: 10px; margin-bottom: 16px; }
 .min-option {
   display: flex;
   align-items: center;
