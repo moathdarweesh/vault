@@ -347,7 +347,7 @@ body { --accent-text: var(--accent); }
   background: var(--surface-3); color: var(--text-mute);
   cursor: pointer; -webkit-tap-highlight-color: transparent;
 }
-.time-chip-x svg { width: 12px; height: 12px; }
+.time-chip-x svg { width: 16px; height: 16px; }
 .time-empty { font-size: var(--fs-meta); color: var(--text-dim); font-weight: 600; }
 .time-add { display: flex; gap: 8px; align-items: center; margin-top: 10px; flex-wrap: wrap; }
 .time-add input[type="time"], .time-add select {
@@ -399,11 +399,16 @@ body[dir="rtl"] .cta-card-chev svg {
   transform: scaleX(-1);
 }
 
-/* Generic marker for a directional chevron/back glyph that sits in a spot where
-   the container class also hosts a non-directional icon on other renders (so a
-   blanket container-class rule would flip the wrong thing sometimes). Apply
-   `.dir-icon` directly to whichever element wraps ONLY the directional glyph. */
-body[dir="rtl"] .dir-icon svg { transform: scaleX(-1); }
+/* Generic marker for a glyph whose MEANING points along the reading direction,
+   so it has to flip in Arabic. The icon spec names exactly six: back,
+   chevronRight, send, play, backspace, trendLine. Everything else stays put —
+   run/walk/bike/footprints face a fixed way, and figures, the clock and the
+   logo never mirror. Vertical arrows (arrowUp/arrowDown) are not directional in
+   this sense either.
+   Apply `.icon-mirror` to whichever element wraps ONLY the directional glyph:
+   several container classes host a non-directional icon on other renders, so a
+   blanket container-class rule would flip the wrong thing sometimes. */
+body[dir="rtl"] .icon-mirror svg { transform: scaleX(-1); }
 
 body[dir="rtl"] .sets-row-reps,
 body[dir="rtl"] .sets-row-weight {
@@ -450,7 +455,20 @@ button {
   letter-spacing: inherit;
 }
 
-svg { display: block; width: 100%; height: 100%; }
+/* The size an svg ASKS for is the size it gets. This used to be a blanket
+   `width:100%; height:100%`, which silently voided the width/height that
+   `icon(name, size)` writes onto every glyph — so the size argument did nothing
+   unless some container happened to pin it, and roughly a dozen rules in this
+   file exist only to undo it one component at a time (each one labelled "the
+   global svg{width:100%} would blow this up"). An unpinned icon then inflated
+   to its column: the empty-day calendar glyph asked for 28px and rendered 408.
+   That is incompatible with a locked size ladder, whose whole premise is that
+   the size is passed to the function.
+   Charts and illustrations still want to fill their box, and they are exactly
+   the svgs that carry NO width attribute — .cal-ring, .chart-svg,
+   .weight-spark-svg, the machine artwork — so they keep the old behaviour. */
+svg { display: block; }
+svg:not([width]) { width: 100%; height: 100%; }
 img { display: block; max-width: 100%; }
 
 /* Numerals are JetBrains Mono per the brand kit — every figure in the app is a
@@ -484,14 +502,16 @@ img { display: block; max-width: 100%; }
   overflow-y: auto;
   overflow-x: hidden;
   padding-top: var(--safe-t);
-  padding-bottom: calc(var(--nav-h) + var(--safe-b) + 20px);
+  /* No --nav-h term any more: the bar is a sibling row in the flex column, so
+     the scroller already ends where the bar begins. Only the breathing gap. */
+  padding-bottom: 20px;
   -webkit-overflow-scrolling: touch;
   scrollbar-width: none;
 }
 .main::-webkit-scrollbar { display: none; }
 /* While the floating rest timer is up, add bottom room so the guided-mode
    Next/Prev buttons can scroll clear of it instead of being hidden underneath. */
-body.rest-active .main { padding-bottom: calc(var(--nav-h) + var(--safe-b) + 104px); }
+body.rest-active .main { padding-bottom: 104px; }
 
 .view {
   display: none;
@@ -518,50 +538,49 @@ body.rest-active .main { padding-bottom: calc(var(--nav-h) + var(--safe-b) + 104
   background: transparent;
 }
 
-/* The wordmark, and the ONLY place Archivo appears. It is always rendered with
-   .cut — the base values here are just the floor, and IDENTITY LAYER device 7
-   carries the live ones. The old .2em tracking is deliberately gone: the CUT
-   spec lists wide tracking as a DON'T, because once the letters drift apart the
-   slot stops reading as a cut through a word. */
-.vault-logo {
-  display: flex;
-  align-items: center;
-  color: var(--text);
-  font-family: 'Archivo', system-ui, sans-serif;
-  font-size: 24px;
-  font-weight: 900;
-  letter-spacing: 0.02em;
-  line-height: 1;
-  text-transform: uppercase;
-}
+/* The mark's slot in the top bar. The mark itself is .brand-lockup, defined at
+   the end of this file — this rule only positions it. It carries no type of its
+   own any more: the lockup sizes VAULT and TRAIN from locked ratios, and a
+   font-size here would fight them. */
+.vault-logo { display: flex; align-items: center; }
 
 /* (.vault-logo-mark is gone with the symbol. The Claude Design spec "Vault Logo
    CUT" is explicit that there is no symbol beside the name — the name IS the
    mark, and the slot through it is the device. See IDENTITY LAYER device 7.) */
 
+/* Neutral, not accent. The screen is allowed ONE accent action and it is never
+   this one — settings is a way out of the screen, not the thing to do on it.
+   Painting it orange put the loudest chrome on the least important control and
+   made it compete with the CTA below. 36px is the spec's size, and the logo
+   opposite is deliberately smaller than it. */
 .vault-action {
-  width: 40px;
-  height: 40px;
+  width: 36px;
+  height: 36px;
   border-radius: 12px;
-  background: var(--accent-soft);
-  border: 1px solid var(--accent-line);
-  color: var(--accent-text);
+  background: var(--surface-1);
+  border: 1px solid var(--surface-3);
+  color: var(--text-mute);
   display: flex;
   align-items: center;
   justify-content: center;
   transition: transform 0.12s, background 0.15s;
 }
-.vault-action svg { width: 20px; height: 20px; }
-.vault-action:active { transform: scale(0.94); background: rgba(var(--accent-rgb), 0.22); }
+/* 19px is this button's own rung on the ladder — nothing else uses it. */
+.vault-action svg { width: 19px; height: 19px; }
+.vault-action:active { transform: scale(0.94); background: var(--surface-2); }
 
 /* =========================================================================
    BOTTOM NAV
    ========================================================================= */
+/* IN THE FLOW, not `position: absolute`. The shell is already a column flex
+   (`.app`) with `.main` on `flex: 1`, so the bar just claims its own row and the
+   scroll area is genuinely the leftover space. Taking it out of flow is what
+   made the last card on several screens sit underneath the bar — the scroller
+   then has to be told to reserve room with a padding-bottom that has to be kept
+   in step with --nav-h by hand, and any screen whose author forgot lost its
+   final card. */
 .bottom-nav {
-  position: absolute;
-  bottom: 0;
-  left: 0;
-  right: 0;
+  flex: none;
   height: calc(var(--nav-h) + var(--safe-b));
   padding-bottom: var(--safe-b);
   /* Was a hard-coded rgba(10,25,32,.82) — a teal-navy bar left over from the
@@ -585,6 +604,11 @@ body.keyboard-open .bottom-nav {
   transform: translateY(140%);
   opacity: 0;
   pointer-events: none;
+  /* Now that the bar is IN the flow, sliding it away no longer gives the space
+     back — a transform does not affect layout, so the field being edited would
+     still be pushed up by an empty 64px row. Collapse the row with a negative
+     margin equal to its own height, and the slide-out animation still plays. */
+  margin-bottom: calc(-1 * (var(--nav-h) + var(--safe-b)));
 }
 
 /* While the keyboard is open, shrink the fixed full-screen shells to the VISIBLE
@@ -612,14 +636,17 @@ body.keyboard-open .sheet-overlay { height: var(--vvh, 100%); bottom: auto; }
   transition: color 0.15s;
 }
 
+/* 23px is the ladder's bottom-bar rung. */
 .nav-btn svg {
-  width: 22px;
-  height: 22px;
-  transition: transform 0.18s;
+  width: 23px;
+  height: 23px;
 }
 
+/* No `transform: scale` on an active glyph — the ladder is the only source of
+   size, and a scaled filled mass resamples its edges. The active state is
+   already carried by two stronger cues: the accent label colour and the pill
+   behind the icon. */
 .nav-btn.active { color: var(--accent-text); }
-.nav-btn.active:not(.home-center) svg { transform: scale(1.08); }
 
 .nav-btn.active:not(.home-center)::before {
   content: '';
@@ -629,7 +656,7 @@ body.keyboard-open .sheet-overlay { height: var(--vvh, 100%); bottom: auto; }
   transform: translateX(-50%);
   width: 32px;
   height: 32px;
-  border-radius: 10px;
+  border-radius: 13px;
   background: var(--accent-soft);
   z-index: -1;
 }
@@ -655,7 +682,7 @@ body.keyboard-open .sheet-overlay { height: var(--vvh, 100%); bottom: auto; }
   transition: transform 0.18s ease, box-shadow 0.18s ease;
 }
 
-.home-center-icon svg { width: 26px; height: 26px; }
+.home-center-icon svg { width: 28px; height: 28px; }
 
 .nav-btn.home-center:active .home-center-icon {
   transform: scale(0.92);
@@ -754,8 +781,8 @@ body.theme-light .home-center-icon { box-shadow: 0 8px 24px rgba(255, 106, 0, 0.
    otherwise blow the icon up to fill a stretched (flex:1 / btn-block) button,
    which also forces the button abnormally tall. Keep them small everywhere. */
 .btn svg {
-  width: 18px;
-  height: 18px;
+  width: 20px;
+  height: 20px;
   flex-shrink: 0;
 }
 
@@ -798,7 +825,7 @@ body.theme-light .home-center-icon { box-shadow: 0 8px 24px rgba(255, 106, 0, 0.
 .exq-toolbar { display: flex; align-items: center; gap: 8px; margin-bottom: 14px; }
 .exq-toolbar > .btn { height: 40px; min-height: 0; padding: 0 14px; font-size: 13px; }
 .exq-toolbar > .icon-square { width: 40px; height: 40px; }
-.exq-toolbar > .icon-square svg { width: 18px; height: 18px; }
+.exq-toolbar > .icon-square svg { width: 28px; height: 28px; }
 .exq-toolbar .search-wrap { flex: 1; height: 40px; margin: 0; }
 
 .btn-danger {
@@ -825,7 +852,7 @@ body.theme-light .home-center-icon { box-shadow: 0 8px 24px rgba(255, 106, 0, 0.
   background: transparent;
   transition: background 0.15s, color 0.15s;
 }
-.icon-btn svg { width: 18px; height: 18px; }
+.icon-btn svg { width: 22px; height: 22px; }
 .icon-btn:active { background: var(--surface-2); color: var(--text); }
 .icon-btn.danger { color: var(--red); }
 
@@ -1311,7 +1338,7 @@ body.theme-light input[type="date"], body.theme-light input[type="time"] { color
   background: var(--accent-soft, var(--surface-2));
   color: var(--accent-text);
 }
-.last-set-icon svg { width: 18px; height: 18px; }
+.last-set-icon svg { width: 22px; height: 22px; }
 .last-set-name {
   flex: 1; min-width: 0;
   font-size: 15px; font-weight: 800; color: var(--text);
@@ -1628,7 +1655,7 @@ body[dir="rtl"] .bento-card.wide .bento-card-name-tag { left: 14px; }
   padding: 16px;
 }
 
-.bento-add svg { width: 24px; height: 24px; }
+.bento-add svg { width: 16px; height: 16px; }
 
 .bento-add-title {
   font-size: 13px;
@@ -2060,7 +2087,7 @@ body[dir="rtl"] .w-unit { margin-left: 0; margin-right: 2px; }
   width: 32px;
   height: 32px;
 }
-.data-actions .icon-btn svg { width: 16px; height: 16px; }
+.data-actions .icon-btn svg { width: 22px; height: 22px; }
 
 /* Macro pills (food) */
 .macro-row {
@@ -2115,7 +2142,7 @@ body[dir="rtl"] .w-unit { margin-left: 0; margin-right: 2px; }
   border: 1px solid rgba(var(--accent-rgb), 0.2);
   color: rgb(var(--accent-rgb));
 }
-.empty-icon svg { width: 38px; height: 38px; }
+.empty-icon svg { width: 34px; height: 34px; }
 
 .empty-title {
   font-size: 16px;
@@ -2569,7 +2596,7 @@ body[dir="rtl"] .w-unit { margin-left: 0; margin-right: 2px; }
 }
 .type-option svg { width: 22px; height: 22px; }
 .type-option.active .type-option-icon { background: var(--accent-soft, var(--surface-2)); color: var(--accent-text); }
-.type-option-add svg { width: 18px; height: 18px; color: var(--text-mute); }
+.type-option-add svg { width: 20px; height: 20px; color: var(--text-mute); }
 
 .type-option.active {
   border-color: var(--accent-line);
@@ -2822,7 +2849,7 @@ body.rest-active .toast { bottom: calc(var(--nav-h) + var(--safe-b) + 120px); }
   background: var(--accent-soft);
   color: var(--accent-text);
 }
-.tool-card-icon svg { width: 18px; height: 18px; }
+.tool-card-icon svg { width: 22px; height: 22px; }
 
 .tool-card-title {
   font-size: 14px;
@@ -3821,7 +3848,7 @@ body[dir="rtl"] .planner-day-head { text-align: right; }
   cursor: pointer;
   transition: transform var(--dur-press) var(--ease), background 0.15s, color 0.15s, border-color 0.15s;
 }
-.run-set-done svg { width: 18px; height: 18px; }
+.run-set-done svg { width: 28px; height: 28px; }
 .run-set-done:active { transform: scale(var(--press-scale)); }
 .run-set-done.done { background: var(--accent); border-color: var(--accent-text); color: var(--accent-ink); }
 .run-addset { margin-top: 12px; font-size: 13px; }
@@ -3833,7 +3860,7 @@ body[dir="rtl"] .planner-day-head { text-align: right; }
    "Finish") on the last exercise and a chevron (directional, "Next") otherwise —
    a container-wide flip was mirroring the checkmark too. Both directional
    glyphs (run-prev's back arrow, run-next's chevron-only branch) are wrapped in
-   `.dir-icon` at the call site instead; see the generic rule above. */
+   `.icon-mirror` at the call site instead; see the generic rule above. */
 /* Month/day steppers are DIRECTIONAL: in RTL "previous" sits on the right, so the
    arrows must mirror like .back-btn does. Without this the calendar's prev/next
    pointed the wrong way in Arabic. */
@@ -4139,7 +4166,7 @@ body[dir="rtl"] .picker-row { text-align: right; }
   justify-content: center;
   color: var(--text);
 }
-.calendar-nav-btn svg { width: 18px; height: 18px; }
+.calendar-nav-btn svg { width: 22px; height: 22px; }
 .calendar-nav-btn:active { background: var(--surface-3); }
 
 .calendar-dow-row,
@@ -4293,7 +4320,7 @@ body[dir="rtl"] .picker-row { text-align: right; }
 /* Was missing entirely — the base `svg{width:100%}` was inflating the check/plus
    glyph to fill the whole 44px circle with zero padding. Same ratio as the
    other "mark done" toggle, .run-set-done. */
-.supp-toggle svg { width: 18px; height: 18px; }
+.supp-toggle svg { width: 28px; height: 28px; }
 
 .supp-toggle.taken {
   background: var(--accent);
@@ -4680,7 +4707,7 @@ body[dir="rtl"] .picker-row { text-align: right; }
 
 /* Keep the dashboard's boxed icons at a sane size (the global svg{width:100%}
    would otherwise make them fill their whole container). */
-.nutri-setup-icon svg { width: 24px; height: 24px; }
+.nutri-setup-icon svg { width: 28px; height: 28px; }
 .nutri-edit svg { width: 16px; height: 16px; }
 
 /* Icon-less compact empty state for the food log. */
@@ -4734,7 +4761,7 @@ body[dir="rtl"] .picker-row { text-align: right; }
   display: flex; align-items: center; justify-content: center;
   background: var(--surface-hi); color: var(--text);
 }
-.add-tile-icon svg { width: 24px; height: 24px; }
+.add-tile-icon svg { width: 28px; height: 28px; }
 .add-tile-icon.voice { background: var(--red-bg); color: var(--red); }
 .add-tile-icon.chat { background: var(--accent-soft); color: var(--accent-text); }
 .add-tile-icon.photo { background: var(--cat-back-bg); color: var(--cat-back); }
@@ -4794,7 +4821,7 @@ body[dir="rtl"] .picker-row { text-align: right; }
 }
 /* The global `svg{width:100%}` would blow the mic up to fill the whole circle
    (~97%) — pin it so the glyph sits clearly smaller than the circle. */
-.voice-mic svg { width: 24px; height: 24px; }
+.voice-mic svg { width: 28px; height: 28px; }
 .voice-mic:active { transform: scale(0.94); }
 .voice-mic.recording { background: #ef4444; color: #fff; border-color: #ef4444; animation: voice-pulse 1.4s ease-in-out infinite; }
 @keyframes voice-pulse { 0%, 100% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.5); } 50% { box-shadow: 0 0 0 13px rgba(239, 68, 68, 0); } }
@@ -4944,7 +4971,7 @@ body[dir="rtl"] .picker-row { text-align: right; }
   position: relative;
 }
 
-.image-preview svg { width: 24px; height: 24px; }
+.image-preview svg { width: 34px; height: 34px; }
 
 .image-preview img {
   width: 100%;
@@ -5075,7 +5102,7 @@ body[dir="rtl"] .lib-section-count {
 /* Was missing entirely — the base `svg{width:100%}` was inflating this icon to
    fill the whole 38px box with no breathing room. Same 38px-box → 18px-icon
    ratio as .icon-btn/.weight-card-icon elsewhere. */
-.pick-banner-icon svg { width: 18px; height: 18px; }
+.pick-banner-icon svg { width: 22px; height: 22px; }
 
 .pick-banner-main {
   flex: 1;
@@ -5174,7 +5201,7 @@ body.library-pick-mode .bento-toggle.added {
   justify-content: center;
 }
 
-.bento-added-stripe-icon svg { width: 11px; height: 11px; }
+.bento-added-stripe-icon svg { width: 16px; height: 16px; }
 
 .bento-card.wide .bento-added-stripe {
   bottom: 14px;
@@ -5201,7 +5228,7 @@ body[dir="rtl"] .bento-card.wide .bento-added-stripe { left: 14px; }
   font-size: 13px;
   white-space: nowrap;
 }
-.train-add-btn svg { width: 18px; height: 18px; }
+.train-add-btn svg { width: 20px; height: 20px; }
 
 /* Variation list (compact rows shown on the exercise detail page) */
 .variation-list {
@@ -5390,7 +5417,7 @@ body[dir="rtl"] .variation-select svg { transform: scaleX(-1); }
   flex-shrink: 0;
   color: var(--text-mute);
 }
-.settings-action-icon svg { width: 18px; height: 18px; }
+.settings-action-icon svg { width: 22px; height: 22px; }
 
 .settings-action-main { flex: 1; min-width: 0; }
 
@@ -5649,7 +5676,7 @@ body[dir="rtl"] .variation-select svg { transform: scaleX(-1); }
   display: flex; align-items: center; justify-content: center;
   background: var(--accent-soft, var(--surface-2)); color: var(--accent-text);
 }
-.onb-logo svg { width: 32px; height: 32px; }
+.onb-logo svg { width: 34px; height: 34px; }
 .onb-title { font-size: 22px; font-weight: 900; color: var(--text); margin-bottom: 8px; line-height: 1.3; }
 .onb-sub { font-size: 14px; color: var(--text-dim); line-height: 1.6; margin-bottom: 22px; }
 
@@ -5705,8 +5732,8 @@ body[dir="rtl"] .variation-select svg { transform: scaleX(-1); }
    any icon whose container doesn't set an explicit size (these were oversized). */
 .water-title svg { width: 16px; height: 16px; }
 .water-cup-minus svg { width: 16px; height: 16px; }
-.weight-card-icon svg { width: 18px; height: 18px; }
-.weight-card-add svg { width: 18px; height: 18px; }
+.weight-card-icon svg { width: 22px; height: 22px; }
+.weight-card-add svg { width: 20px; height: 20px; }
 .weight-row-del svg { width: 16px; height: 16px; }
 .ai-portion-btn svg { width: 16px; height: 16px; }
 .auth-logo {
@@ -6055,7 +6082,7 @@ body[dir="rtl"] .variation-select svg { transform: scaleX(-1); }
   font-weight: 800;
   position: relative;
 }
-.hero-cta svg { width: 18px; height: 18px; }
+.hero-cta svg { width: 20px; height: 20px; }
 /* First-run hero: an inviting title + subtitle instead of a wall of zeros. */
 .hero-first-title { font-size: var(--fs-title); font-weight: var(--fw-display); letter-spacing: var(--tracking-tight); line-height: 1.15; margin: var(--sp-2) 0 var(--sp-1); position: relative; }
 .hero-first-sub { font-size: var(--fs-sub); color: var(--text-mute); position: relative; }
@@ -6226,7 +6253,7 @@ body[dir="rtl"] .variation-select svg { transform: scaleX(-1); }
   align-items: center;
   justify-content: center;
 }
-.tool-pod-icon svg { width: 18px; height: 18px; }
+.tool-pod-icon svg { width: 22px; height: 22px; }
 .tool-pod-label {
   font-size: 11px;
   font-weight: 700;
@@ -6560,7 +6587,11 @@ body.theme-light .home-center-icon {
 /* Capsules are for TRANSIENT chips only. Anything that holds STATE gets the
    machined corner. */
 .filter-pill { border-radius: var(--radius-sm); }
-.nav-btn.active:not(.home-center)::before { border-radius: var(--radius-sm); }
+/* 13px, not --radius-sm: the icon spec fixes the active tab's pill at 13 around
+   a 32px box. Written as a literal because no token holds that value, and this
+   declaration has to live HERE — the same selector earlier in the file is
+   overridden by this layer, so setting it there would have changed nothing. */
+.nav-btn.active:not(.home-center)::before { border-radius: 13px; }
 
 /* --- 5. THE FIVE-BAR TICK -----------------------------------------------
    The only device that puts the actual MARK into the interface rather than just
@@ -6612,7 +6643,10 @@ body { --icon-accent: var(--accent-text); }
    There the duotone collapses to a single mass in the container's own ink.
    These six are the complete live set (found by walking every rendered svg and
    testing its container's background, not by guessing). */
-.home-center-icon, .hero-cta, .btn-primary, .food-fab, .nutri-setup-icon {
+/* `.ghost` is excluded on purpose: the collapse exists only because an orange
+   accent layer disappears on an orange FILL. The ghost variant sits on
+   --surface-3, where the accent is both visible and wanted. */
+.home-center-icon, .hero-cta:not(.ghost), .btn-primary, .food-fab, .nutri-setup-icon {
   --icon-accent: currentColor;
 }
 
@@ -6641,159 +6675,6 @@ body { --icon-accent: var(--accent-text); }
 /* Destructive controls carry their own pair. */
 .icon-btn.danger, #reset-btn { color: var(--red); --icon-accent: var(--red); }
 
-/* --- 7. THE CUT (v216) ---------------------------------------------------
-   The identity, per the Claude Design spec "Vault Logo CUT". One horizontal
-   line shears the name: a slot in the surface colour, and an accent hairline
-   sitting inside it. Two layers, one element, no asset.
-
-   WHY IT IS BUILT FROM em AND NOT FROM PIXELS. The spec states the slot as a
-   PROPORTION — 7% of the type size — precisely so the mark survives being
-   resized by whatever context it lands in. Hard-coding 3px would make the mark
-   correct at exactly one size. The two floors are the spec's own: the slot
-   never goes under 2px and the hairline never under 1.5px, because below that
-   the hairline swallows the gap and the pair collapses into a single line.
-   Those floors are what set the 24px minimum for the wordmark: at 24px the
-   slot is already ON its floor (7% of 24 is 1.68, so 2px wins) with only
-   0.25px of surface left showing on each side. Do not use .cut below 24px.
-   Under that size the letterform is dropped entirely and the SLOT ALONE is the
-   mark — that is the app icon and the status-bar icon, not this component.
-
-   --cut-bg IS NOT DECORATION, IT IS THE SLOT. The slot has to be painted in
-   whatever sits behind the text, or it reads as a bar laid on top rather than
-   an absence carved out. It defaults to --bg and every context that puts the
-   mark on something else MUST override it. Getting this wrong is the one way
-   to make the mark look broken.
-
-   THE HAIRLINE IS --accent IN BOTH MODES, and that is a deliberate exception.
-   The Claude Design spec calls for #a34400 on light, and --accent-text already
-   encodes exactly that split, so the token was the obvious choice. The owner
-   chose the brand orange in both modes instead, for one identity rather than
-   two. The cost is real and is recorded here rather than hidden: #ff6a00 is
-   2.87:1 against the bone ground, so where the hairline crosses the gaps
-   BETWEEN letters it is decorative, not a readable element. It is legible in
-   practice because it spends most of its length overlapping the near-black
-   wordmark. This is the ONE place the accent is allowed to sit under 4.5:1 on
-   light — do not read it as licence to use --accent for small text anywhere
-   else, which is the entire reason --accent-text exists. */
-.cut {
-  position: relative;
-  display: inline-block;
-  font-family: 'Archivo', system-ui, sans-serif;
-  font-weight: 900;
-  font-size: 24px;          /* the spec's floor; override upward, never down */
-  letter-spacing: 0.02em;   /* wide tracking turns the slot into a loose line */
-  line-height: 1;
-  text-transform: uppercase;
-  color: var(--text);
-  white-space: nowrap;
-  /* THE CUT MUST NEVER BE WIDER THAN THE WORD IT CUTS. The slot and hairline
-     span the element box, so any box wider than its own text leaves the line
-     hanging in open space on both sides — which is precisely the spec's
-     "floating line" DON'T, not a cut through a name.
-     `display:inline-block` alone does NOT protect against this: a stretched
-     flex item is blockified and takes the container's width regardless. On the
-     login card (a flex column at align-items:stretch) the wordmark measured
-     226px of ink inside a 380px box, so the hairline overhung 77px per side.
-     fit-content pins the box to the ink in every container type. */
-  width: fit-content;
-  --cut-slot: max(2px, 0.07em);
-  --cut-hair: max(1.5px, 0.024em);
-  --cut-y: 50%;
-  --cut-bg: var(--bg);
-}
-.cut::before,
-.cut::after {
-  content: '';
-  position: absolute;
-  inset-inline: 0;
-  top: var(--cut-y);
-  transform: translateY(-50%);
-  pointer-events: none;
-}
-.cut::before { height: var(--cut-slot); background: var(--cut-bg); }
-.cut::after  { height: var(--cut-hair); background: var(--accent); }
-
-/* The monogram exception. A lone V is two thin diagonals meeting at a point,
-   so a 7% slot is swallowed in the join; the spec cuts it at 11% instead. */
-.cut.cut-mono { --cut-slot: max(2px, 0.11em); }
-
-/* Arabic rides 2 points lower. The spec's reason is typographic, not a nudge:
-   an Arabic line carries its visual mass above the baseline because of the
-   dots and marks, so a slot on the arithmetic centre reads high. */
-.cut:lang(ar), [dir="rtl"] .cut {
-  font-family: 'IBM Plex Sans Arabic', system-ui, sans-serif;
-  font-weight: 700;
-  letter-spacing: 0;
-  text-transform: none;
-  --cut-y: 52%;
-}
-
-/* Clear space is measured in SLOTS, not pixels, so it tracks any size. */
-.cut-lockup { padding: calc(var(--cut-slot, 2px) * 6); }
-
-/* --- the mark in the top bar --------------------------------------------
-   The bar used to pair the five-bar glyph with the name. The spec removed the
-   symbol, so the name is now the whole mark and the glyph is gone. Tracking
-   drops from .2em to .02em for the reason given above, and the size rises to
-   the 24px floor — at the old 18px the slot could not have been drawn.
-
-   .vault-bar is transparent, so the slot is cut in --bg, not in a nav colour.
-
-   The wordmark is text-coloured in both modes and the hairline is the only
-   accent, which is the spec's whole point. The light-mode `--accent-text`
-   override that used to sit near the top of this file is gone with it — see
-   the note there for why keeping it broke the Arabic top bar. */
-.vault-logo.cut {
-  display: inline-block;
-  font-size: 24px;
-  font-weight: 900;
-  letter-spacing: 0.02em;
-  color: var(--text);
-  --cut-bg: var(--bg);
-}
-
-/* The login screen is the one place the mark is the hero, so it runs large.
-   .auth-card carries no background of its own, so the slot is cut in --bg.
-   align-self is required, not cosmetic: fit-content stops the box stretching,
-   and without this the now-narrow box would sit at the card's start edge
-   instead of under the centred sub-line. */
-.auth-title.cut {
-  font-size: 44px;
-  letter-spacing: 0.02em;
-  align-self: center;
-  --cut-bg: var(--bg);
-}
-
-/* First-run welcome. This replaced a 68px accent-tinted badge holding the old
-   five-bar glyph; the spec has no badge and no symbol, so the mark stands on
-   its own. It sits on .onb-card, so the slot is cut in --surface-2 — NOT --bg,
-   which is the mistake that makes the slot read as a painted bar. */
-.onb-wordmark {
-  margin: 4px auto 18px;
-  text-align: center;
-}
-.onb-wordmark .cut {
-  font-size: 32px;
-  --cut-bg: var(--surface-2);
-}
-
-/* --- Arabic wins last -----------------------------------------------------
-   This block sits after the per-context sizing on purpose. `.vault-logo.cut`
-   and `.onb-wordmark .cut` both carry the same (0,2,0) weight as the Arabic
-   rule above them, so without this the top bar would render 'ذا فولت' in
-   Archivo's Latin metrics at .02em tracking — and letter-spacing on Arabic
-   pries apart glyphs that are supposed to join, which is not a style choice,
-   it is a broken word. Tracking goes to zero and the slot to 52% everywhere. */
-[dir="rtl"] .cut,
-[dir="rtl"] .vault-logo.cut,
-[dir="rtl"] .onb-wordmark .cut,
-[dir="rtl"] .auth-title.cut {
-  font-family: 'IBM Plex Sans Arabic', system-ui, sans-serif;
-  font-weight: 700;
-  letter-spacing: 0;
-  text-transform: none;
-  --cut-y: 52%;
-}
 
 .hero-rest {
   cursor: default;
@@ -6952,11 +6833,18 @@ body { --icon-accent: var(--accent-text); }
    recognisably the same hue. */
 :root, body.theme-dark {
   --gold: #e0b341;
+  /* --warn is the handoff's own name for "this costs you a day" and "the streak
+     is on the line". It exists because --up is GREEN here, not gold, so the
+     spec could not reuse it. Same value as --gold, kept as a separate name
+     because they mean different things: --gold is the streak's colour, --warn
+     is the warning that uses it. */
+  --warn: #e0b341;
   --accent-dim: #2a1a0c;     /* the split's quiet half, against a black page */
   --accent-quiet: #c9a888;   /* its label */
 }
 body.theme-light {
   --gold: #7a5a05;
+  --warn: #8a5a00;   /* the handoff's light value, verbatim */
   --accent-dim: var(--surface-3);
   --accent-quiet: var(--text-mute);
 }
@@ -7226,25 +7114,57 @@ body.theme-light {
   --icon-accent: var(--accent-text);
 }
 
-/* --- the "last 7 days" evidence strip (v226) -------------------------------
-   From APPLY-restday.md, verbatim geometry. This appears ONLY inside the
-   second-day-in-a-row sheet, where it is evidence inside an argument — not the
-   disc rail from Home, which is a navigation control. Two different jobs, two
-   different shapes, on purpose.
+/* --- THE MARK: the "AJ" lockup (v227) -------------------------------------
+   From handoff/00-START-HERE.md §1, verbatim. This supersedes THE CUT, whose
+   component and per-context overrides are removed below.
 
-   ONE grey for rest, per the spec's own note: two greys read as decoration
-   rather than as data. Today is a dashed gold outline — it has not happened
-   yet, so it is neither filled nor spent. */
-.rest-last7 { margin-bottom: var(--sp-4, 16px); }
+   text-indent IS NOT OPTIONAL. letter-spacing adds its space AFTER the last
+   letter too, so a centred word drifts left by exactly one space unless the
+   same value is given back as text-indent. The spec calls this "the most common
+   mistake in tracked-out logos", and it is invisible until you measure it.
+
+   dir="ltr" is on the container in the markup, in BOTH languages: the mark is
+   Latin and does not mirror. */
+.brand-lockup {
+  display: inline-flex;
+  align-items: center;
+  color: var(--accent);          /* the plates inherit via currentColor */
+}
+.brand-lockup .bl-text {
+  display: flex; flex-direction: column; align-items: center; gap: 2px;
+}
+.brand-lockup .bl-name {
+  font-family: Archivo, sans-serif; font-weight: 800;
+  letter-spacing: .2em; text-indent: .2em;
+  line-height: 1; color: var(--text);
+  white-space: nowrap;
+}
+.brand-lockup .bl-sub {
+  font-family: 'JetBrains Mono', monospace;
+  letter-spacing: .3em; text-indent: .3em;
+  line-height: 1; color: var(--accent);
+  white-space: nowrap;
+}
+.brand-splash .bl-text { gap: 5px; }
+
+/* The top bar hosts the mark at header size. It is deliberately SMALLER than
+   the 36px settings button opposite it — stated in the spec, not an accident. */
+.vault-logo { display: flex; align-items: center; }
+
+/* --- THE CUT is retired ---------------------------------------------------
+   Its rules are gone rather than left dormant: they carried per-context
+   --cut-bg overrides that would silently apply to any element that reused the
+   class name later. The download page keeps its own masked implementation,
+   which is self-contained and unaffected. */
+
+/* The compact rail — the SAME weekStrip(), sized for use inside a sheet where
+   it is evidence in an argument rather than a navigation control. A second
+   seven-day strip is forbidden by the handoff, so this is a modifier, not a
+   new component. It is not interactive there: the sheet owns the decision. */
+.wk-compact { padding: 8px 4px; gap: 2px; }
+.wk-compact .wk-disc { width: 26px; height: 26px; }
+.wk-compact .wk-num { font-size: 12px; }
+.wk-compact .wk-dow { font-size: 9px; }
+.wk-compact .wk-chip { min-height: 0; pointer-events: none; }
 .l7-label { font-size: 12.5px; color: var(--text-dim); margin-bottom: 8px; }
-.last7 { display: flex; gap: 5px; direction: ltr; }
-.last7 i { flex: 1; height: 26px; border-radius: 5px; background: var(--surface-hi); display: block; }
-.last7 i.on    { background: var(--accent); }
-.last7 i.rest  { background: #5d554d; }
-/* The spec's CSS writes `var(--up)` here and calls it "the gold". In THIS
-   codebase --up is the green up/increase semantic (#34d399), so following the
-   token name literally would paint today green and contradict the spec's own
-   copy rule, which names the colour outright: "اليوم الثاني ياخذ الذهبي
-   #e0b341". --gold is exactly that value, so the stated colour wins over a
-   token name that means something else here. */
-.last7 i.today { background: none; border: 1.5px dashed var(--gold); }
+.rest-last7 { margin-bottom: var(--sp-4, 16px); }

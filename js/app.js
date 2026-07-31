@@ -12,7 +12,7 @@
 // build. The literal below is the fallback (file://, or a stripped query) and is
 // still bumped by `npm run release` — see CLAUDE.md "CACHE WORKFLOW".
 const VAULT_BUILD = (() => {
-  const FALLBACK = 'v226';
+  const FALLBACK = 'v227';
   try {
     const src = (document.currentScript && document.currentScript.src) || '';
     const m = src.match(/[?&]v=(\d+)/);
@@ -2074,12 +2074,56 @@ function confirmDialog({ title, text, onConfirm, confirmLabel, variant = 'danger
 }
 
 // ==========================================================================
+// THE MARK — "AJ" lockup (handoff 00-START-HERE §1). Supersedes THE CUT.
+//
+// Two half-plates flanking two stacked words: VAULT in cream over TRAIN in
+// orange mono. The plates are not a new drawing — they are ICONS.dumbbell cut
+// in half by a cropped viewBox, so if that icon ever changes the mark follows
+// it automatically. The spec pins those two viewBox strings and forbids
+// touching them, which is why they are literals here and not computed.
+//
+// ONLY TWO SIZES EXIST, per the spec: header (VAULT 11) and splash (VAULT 32).
+// No intermediate sizes, so this takes a name rather than a number — a caller
+// cannot invent a third by passing 18.
+//
+// The three proportions are locked to the VAULT size: plate = 1.35x,
+// TRAIN = 0.5x, gap = 0.57x. They are computed here rather than written out
+// twice so a future size cannot drift out of ratio.
+// ==========================================================================
+function brandLockup(size = 'header') {
+  const v = size === 'splash' ? 32 : 11;      // VAULT font-size
+  const plateH = Math.round(v * 1.35 * 10) / 10;
+  const plateW = Math.round(plateH * (10 / 15) * 10) / 10;   // the spec's 10x15 aspect
+  const sub = Math.round(v * 0.5 * 10) / 10;
+  const gap = Math.round(v * 0.57 * 10) / 10;
+  // Rule 5: below VAULT 10 the sub-word stops being legible even in mono, so it
+  // is dropped rather than shrunk. Both shipped sizes clear it; the guard is
+  // here so a future one cannot quietly ship an unreadable TRAIN.
+  const showSub = v >= 10;
+  return `
+    <div dir="ltr" class="brand-lockup brand-${size}" style="gap:${gap}px">
+      <svg viewBox="1.5 6 8 12" width="${plateW}" height="${plateH}" aria-hidden="true">
+        <rect x="1.5" y="9" width="3" height="6" rx="1.2" fill="currentColor"/>
+        <rect x="5.5" y="6" width="4" height="12" rx="1.6" fill="currentColor"/>
+      </svg>
+      <span class="bl-text">
+        <span class="bl-name" style="font-size:${v}px">VAULT</span>
+        ${showSub ? `<span class="bl-sub" style="font-size:${sub}px">TRAIN</span>` : ''}
+      </span>
+      <svg viewBox="14.5 6 8 12" width="${plateW}" height="${plateH}" aria-hidden="true">
+        <rect x="14.5" y="6" width="4" height="12" rx="1.6" fill="currentColor"/>
+        <rect x="19.5" y="9" width="3" height="6" rx="1.2" fill="currentColor"/>
+      </svg>
+    </div>`;
+}
+
+// ==========================================================================
 // VAULT Top Bar
 // ==========================================================================
 function vaultBar({ action = '', actionLabel = '' } = {}) {
   return `
     <div class="vault-bar">
-      <div class="vault-logo cut">${t('app_name')}</div>
+      <div class="vault-logo">${brandLockup('header')}</div>
       ${action ? `<button class="vault-action" id="vault-action"${actionLabel ? ` aria-label="${escapeHtml(actionLabel)}"` : ''}>${action}</button>` : '<span style="width:40px"></span>'}
     </div>
   `;
@@ -2635,7 +2679,7 @@ function renderHome(el) {
           <div class="hero-eyebrow">${t('calories')}</div>
           <div class="hero-first-title">${t('nutri_setup_title')}</div>
           <div class="hero-first-sub">${t('nutri_setup_text')}</div>
-          <div class="hero-cta">${icon('target', 18)}<span>${t('nutri_setup_cta')}</span></div>
+          <div class="hero-cta ghost">${icon('target', 20)}<span>${t('nutri_setup_cta')}</span></div>
         </button>`;
     }
     const tgt = DB.nutrition.get().targets;
@@ -2649,7 +2693,7 @@ function renderHome(el) {
         <div class="hero-numeral num ${over ? 'over' : ''}">${fmtNum(Math.abs(left))}</div>
         <div class="hero-meta">${over ? t('nutri_over') : t('nutri_left')} · <span class="num">${fmtNum(Math.round(eaten.calories))}</span> / <span class="num">${fmtNum(tgt.calories)}</span> ${t('cal')}</div>
         <div class="hero-bar"><span class="hero-bar-fill ${over ? 'over' : ''}" style="width:${pct}%"></span></div>
-        <div class="hero-cta">${icon('utensils', 18)}<span>${t('food')}</span></div>
+        <div class="hero-cta ghost">${icon('utensils', 20)}<span>${t('food')}</span></div>
       </button>`;
   })();
 
@@ -2690,7 +2734,7 @@ function renderHome(el) {
     <button class="rest-chip" id="home-rest-toggle" type="button">${t('rest_short')}</button>`;
   const fullCtaHtml = `
     <button class="hero-cta hero-cta-btn" id="home-start-workout" type="button">
-      ${icon('dumbbell', 18)}<span>${t('today_workout')}</span>
+      ${icon('dumbbell', 20)}<span>${t('today_workout')}</span>
     </button>`;
 
   const weekStripHtml = weekStrip();
@@ -2800,7 +2844,7 @@ function renderHome(el) {
         <div class="hero-eyebrow">${t('this_week')} · ${escapeHtml(dayName(now.getDay(), true))}</div>
         <div class="hero-numeral num anim" data-count="${weekSetsCount}">0</div>
         <div class="hero-meta">${t('sessions_this_week')}</div>
-        <div class="hero-cta">${icon('dumbbell', 18)}<span>${t('today_workout')}</span></div>
+        <div class="hero-cta">${icon('dumbbell', 20)}<span>${t('today_workout')}</span></div>
       </button>
     `;
   } else {
@@ -2810,13 +2854,13 @@ function renderHome(el) {
         <div class="hero-eyebrow">${escapeHtml(dayName(now.getDay(), true))}</div>
         <div class="hero-first-title">${t('first_workout_title')}</div>
         <div class="hero-first-sub">${t('first_workout_sub')}</div>
-        <div class="hero-cta">${icon('dumbbell', 18)}<span>${t('start_first_workout')}</span></div>
+        <div class="hero-cta">${icon('dumbbell', 20)}<span>${t('start_first_workout')}</span></div>
       </button>
     `;
   }
 
   el.innerHTML = `
-    ${vaultBar({ action: icon('settings', 20), actionLabel: t('settings_title') })}
+    ${vaultBar({ action: icon('settings', 19), actionLabel: t('settings_title') })}
 
     <div class="home-head">
       <div class="home-head-text">
@@ -2861,15 +2905,15 @@ function renderHome(el) {
            chip, which is not rendered at all while the streak is 0 — so a new
            user could not reach the calendar. -->
       <button class="tool-pod" data-goto="calendar">
-        <div class="tool-pod-icon">${icon('calendar', 18)}</div>
+        <div class="tool-pod-icon">${icon('calendar', 20)}</div>
         <div class="tool-pod-label">${t('calendar_title')}</div>
       </button>
       <button class="tool-pod" data-goto="compare">
-        <div class="tool-pod-icon">${icon('columns', 18)}</div>
+        <div class="tool-pod-icon">${icon('columns', 20)}</div>
         <div class="tool-pod-label">${t('compare_card')}</div>
       </button>
       <button class="tool-pod" data-goto="supplements">
-        <div class="tool-pod-icon">${icon('pill', 18)}</div>
+        <div class="tool-pod-icon">${icon('pill', 20)}</div>
         <div class="tool-pod-label">${t('supplements_card')}</div>
       </button>
     </div>
@@ -2974,7 +3018,7 @@ function weightCardHtml() {
   const spark = weightSparkline(entries.slice(-12));
   return `
     <button class="weight-card" id="home-weight">
-      <div class="weight-card-icon">${icon('trendLine', 18)}</div>
+      <div class="weight-card-icon icon-mirror">${icon('trendLine', 20)}</div>
       <div class="weight-card-main">
         <div class="weight-card-label">${t('bodyweight')}</div>
         <div class="weight-card-value">
@@ -2983,7 +3027,7 @@ function weightCardHtml() {
             : `<span class="weight-card-empty">${t('weight_add_first')}</span>`}
         </div>
       </div>
-      ${spark ? `<div class="weight-card-spark">${spark}</div>` : `<div class="weight-card-add">${icon('plus', 18)}</div>`}
+      ${spark ? `<div class="weight-card-spark">${spark}</div>` : `<div class="weight-card-add">${icon('plus', 20)}</div>`}
     </button>`;
 }
 
@@ -3063,7 +3107,7 @@ function openWeightSheet() {
   const overlay = openModal(`
     <div class="modal-header">
       <div class="modal-title">${t('bodyweight')}</div>
-      <button class="icon-btn icon-btn-tile" data-close>${icon('close', 18)}</button>
+      <button class="icon-btn icon-btn-tile" data-close>${icon('close', 20)}</button>
     </div>
     <div id="weight-sheet-body">${body()}</div>
   `);
@@ -3292,7 +3336,7 @@ function bentoCardHtml(ex, i, { showPR = true, toggle = null } = {}) {
   // are already in the user's Train list so they stand out clearly.
   const addedClass = toggle && toggle.added ? 'added' : '';
   const addedBadge = toggle && toggle.added
-    ? `<div class="bento-added-stripe"><span class="bento-added-stripe-icon">${icon('check', 11)}</span><span>${t('added')}</span></div>`
+    ? `<div class="bento-added-stripe"><span class="bento-added-stripe-icon">${icon('check', 16)}</span><span>${t('added')}</span></div>`
     : '';
 
   let bgHtml;
@@ -3472,7 +3516,7 @@ function renderProgram(el) {
 
     ${cycle.length === 0 ? `
       ${emptyState({ iconName: 'calendar', title: t('program_no_plan_title'), text: t('program_no_plan_sub') })}
-      <button class="btn btn-primary btn-block" data-goto="planner">${icon('plus', 18)} ${t('program_build')}</button>
+      <button class="btn btn-primary btn-block" data-goto="planner">${icon('plus', 20)} ${t('program_build')}</button>
     ` : `
       <div class="rot-section">
         <div class="rot-section-head">
@@ -3606,13 +3650,13 @@ function renderExercises(el) {
     <div class="exq-toolbar">
       ${searchOpen ? `
         <div class="search-wrap" style="flex:1">
-          ${icon('search', 18)}
+          ${icon('search', 20)}
           <input type="search" id="workout-search" placeholder="${t('search_exercises')}" value="${escapeHtml(query)}">
         </div>
-        <button class="icon-square" id="workout-search-close" aria-label="${escapeHtml(t('cancel'))}">${icon('close', 18)}</button>
+        <button class="icon-square" id="workout-search-close" aria-label="${escapeHtml(t('cancel'))}">${icon('close', 20)}</button>
       ` : `
         <button class="btn btn-ghost" data-goto="custom-exercises" style="flex:1">${t('my_exercises_short')}</button>
-        <button class="icon-square" id="workout-search-open" aria-label="${escapeHtml(t('search_exercises'))}">${icon('search', 18)}</button>
+        <button class="icon-square" id="workout-search-open" aria-label="${escapeHtml(t('search_exercises'))}">${icon('search', 20)}</button>
       `}
     </div>
 
@@ -3638,7 +3682,7 @@ function renderExercises(el) {
 
     const addCard = `
       <button class="bento-card bento-add" id="add-exercise-btn">
-        ${icon('plus', 24)}
+        ${icon('plus', 22)}
         <div>
           <div class="bento-add-title">${t('new_exercise')}</div>
           <div class="bento-add-sub">${t('add_custom')}</div>
@@ -3710,7 +3754,10 @@ function renderExercises(el) {
 // requires going back first. `activeIso` marks the day being viewed; on Home
 // nothing is active, because Home is not "a day", it is today's dashboard.
 // ===========================================================================
-function weekStrip(activeIso = null) {
+// `variant` = 'compact' shrinks it for use INSIDE a sheet, where it is evidence
+// rather than navigation. Same function, same data, same dots — the handoff is
+// explicit that no second seven-day strip may exist in this project.
+function weekStrip(activeIso = null, variant = '') {
   const sessionDates = new Set(DB.sessions.listAll().map((s) => s.date));
   const cardioDates = new Set(DB.cardio.list().map((c) => c.date));
   const chips = [];
@@ -3736,7 +3783,8 @@ function weekStrip(activeIso = null) {
         </span>
       </button>`);
   }
-  return `<div class="wk-rail" role="group" aria-label="${escapeHtml(t('last_7_days'))}">${chips.join('')}</div>`;
+  return `<div class="wk-rail${variant === 'compact' ? ' wk-compact' : ''}" role="group"
+    aria-label="${escapeHtml(t('last_7_days'))}">${chips.join('')}</div>`;
 }
 
 // ===========================================================================
@@ -3780,7 +3828,7 @@ function renderDay(el) {
     <div class="day-section">
       <div class="day-section-head">
         <span class="day-section-title">${title}</span>
-        ${goto ? `<button class="link-btn" data-goto="${goto}">${t('open')} <span class="dir-icon">${icon('chevronRight', 15)}</span></button>` : ''}
+        ${goto ? `<button class="link-btn" data-goto="${goto}">${t('open')} <span class="icon-mirror">${icon('chevronRight', 16)}</span></button>` : ''}
       </div>
       ${body}
     </div>`;
@@ -3942,9 +3990,9 @@ function openReorderSheet(slotIdx, onDone) {
                 <span class="reorder-name">${escapeHtml(ex ? exDisplayName(ex) : id)}</span>
                 <span class="reorder-arrows">
                   <button type="button" data-ro="${i}" data-dir="-1" ${i === 0 ? 'disabled' : ''}
-                          aria-label="${escapeHtml(t('move_up'))}">${icon('arrowUp', 18)}</button>
+                          aria-label="${escapeHtml(t('move_up'))}">${icon('arrowUp', 20)}</button>
                   <button type="button" data-ro="${i}" data-dir="1" ${i === ids.length - 1 ? 'disabled' : ''}
-                          aria-label="${escapeHtml(t('move_down'))}">${icon('arrowDown', 18)}</button>
+                          aria-label="${escapeHtml(t('move_down'))}">${icon('arrowDown', 20)}</button>
                 </span>
               </div>`;
           }).join('')}
@@ -3987,11 +4035,11 @@ function openAddExerciseChooser(slotIdx) {
   openModal(`
     <div class="modal-header">
       <div><div class="modal-title">${t('add_exercise')}</div></div>
-      <button class="icon-btn icon-btn-tile" data-close>${icon('close', 18)}</button>
+      <button class="icon-btn icon-btn-tile" data-close>${icon('close', 20)}</button>
     </div>
     <div style="display:flex;flex-direction:column;gap:10px;margin-top:4px">
-      <button type="button" class="btn btn-ghost btn-block" id="ch-from-lib" style="justify-content:center;gap:8px;padding:16px;font-size:15px">${icon('dumbbell', 18)} ${t('add_from_library')}</button>
-      <button type="button" class="btn btn-ghost btn-block" id="ch-new-ex" style="justify-content:center;gap:8px;padding:16px;font-size:15px">${icon('plus', 18)} ${t('new_exercise')}</button>
+      <button type="button" class="btn btn-ghost btn-block" id="ch-from-lib" style="justify-content:center;gap:8px;padding:16px;font-size:15px">${icon('dumbbell', 20)} ${t('add_from_library')}</button>
+      <button type="button" class="btn btn-ghost btn-block" id="ch-new-ex" style="justify-content:center;gap:8px;padding:16px;font-size:15px">${icon('plus', 20)} ${t('new_exercise')}</button>
     </div>
   `);
   // Both replace this chooser via openModal — no explicit close needed.
@@ -4018,7 +4066,7 @@ function openNewExerciseModal(exerciseId = null, opts = {}) {
     if (pickedImage) {
       return `<img src="${pickedImage}" alt="">`;
     }
-    return icon('apple', 24);
+    return icon('apple', 22);
   }
 
   openModal(`
@@ -4027,7 +4075,7 @@ function openNewExerciseModal(exerciseId = null, opts = {}) {
         <div class="modal-title">${existing ? t('edit_session') : t('new_exercise')}</div>
         <div class="modal-subtitle">${t('new_exercise_sub')}</div>
       </div>
-      <button class="icon-btn icon-btn-tile" data-close>${icon('close', 18)}</button>
+      <button class="icon-btn icon-btn-tile" data-close>${icon('close', 20)}</button>
     </div>
 
     <div class="form-group">
@@ -4044,7 +4092,7 @@ function openNewExerciseModal(exerciseId = null, opts = {}) {
       <label class="form-label">${t('image_optional')}</label>
       <div class="image-uploader">
         <div class="image-actions">
-          <button type="button" class="btn btn-ghost" id="ex-image-camera">${icon('camera', 18)} ${t('take_photo')}</button>
+          <button type="button" class="btn btn-ghost" id="ex-image-camera">${icon('camera', 20)} ${t('take_photo')}</button>
           <button type="button" class="btn btn-ghost" id="ex-image-pick">${pickedImage ? t('change_image') : t('choose_image')}</button>
           ${pickedImage ? `<button type="button" class="btn btn-danger" id="ex-image-clear">${t('remove_image')}</button>` : ''}
         </div>
@@ -4202,8 +4250,8 @@ function renderExerciseDetail(el, exerciseId) {
         </div>
         ${setsHtml}
         <div class="session-actions">
-          <button class="icon-btn" data-edit-session="${escapeHtml(s.id)}" aria-label="${escapeHtml(t('edit'))}">${icon('edit', 18)}</button>
-          <button class="icon-btn danger" data-delete-session="${escapeHtml(s.id)}" aria-label="${escapeHtml(t('delete'))}">${icon('trash', 18)}</button>
+          <button class="icon-btn" data-edit-session="${escapeHtml(s.id)}" aria-label="${escapeHtml(t('edit'))}">${icon('edit', 20)}</button>
+          <button class="icon-btn danger" data-delete-session="${escapeHtml(s.id)}" aria-label="${escapeHtml(t('delete'))}">${icon('trash', 20)}</button>
         </div>
       </div>
     `;
@@ -4213,8 +4261,8 @@ function renderExerciseDetail(el, exerciseId) {
     <div class="detail-top">
       <button class="back-btn" data-back aria-label="${escapeHtml(t('back'))}">${icon('back', 20)}</button>
       <div class="detail-top-title">${escapeHtml(exDisplayName(ex))}</div>
-      ${ex.isCustom ? `<button class="icon-btn icon-btn-tile" id="edit-exercise-btn" aria-label="${escapeHtml(t('edit'))}">${icon('edit', 18)}</button>
-      <button class="icon-btn icon-btn-tile danger" id="delete-exercise-btn" aria-label="${escapeHtml(t('delete'))}">${icon('trash', 18)}</button>` : ''}
+      ${ex.isCustom ? `<button class="icon-btn icon-btn-tile" id="edit-exercise-btn" aria-label="${escapeHtml(t('edit'))}">${icon('edit', 20)}</button>
+      <button class="icon-btn icon-btn-tile danger" id="delete-exercise-btn" aria-label="${escapeHtml(t('delete'))}">${icon('trash', 20)}</button>` : ''}
     </div>
 
     ${heroHtml}
@@ -4250,7 +4298,7 @@ function renderExerciseDetail(el, exerciseId) {
 
     <div class="row-between mb-16">
       <div class="section-title" style="margin:0">${t('history')}</div>
-      <button class="btn btn-primary" id="add-session-btn">${icon('plus', 18)} ${t('log_session')}</button>
+      <button class="btn btn-primary" id="add-session-btn">${icon('plus', 20)} ${t('log_session')}</button>
     </div>
 
     ${sessions.length === 0
@@ -4395,7 +4443,7 @@ function openSessionModal(exerciseId, sessionId = null) {
         <div class="modal-title">${existing ? t('edit_session') : t('log_session')}</div>
         <div class="modal-subtitle">${escapeHtml(exDisplayName(ex))}</div>
       </div>
-      <button class="icon-btn icon-btn-tile" data-close>${icon('close', 18)}</button>
+      <button class="icon-btn icon-btn-tile" data-close>${icon('close', 20)}</button>
     </div>
 
     ${lastPreview}
@@ -4537,7 +4585,7 @@ function renderCardio(el) {
 
     <div class="row-between mb-16">
       <div class="section-title" style="margin:0">${t('all_sessions')}</div>
-      <button class="btn btn-primary" id="add-cardio-btn">${icon('plus', 18)} ${t('log')}</button>
+      <button class="btn btn-primary" id="add-cardio-btn">${icon('plus', 20)} ${t('log')}</button>
     </div>
 
     ${list.length === 0
@@ -4606,7 +4654,7 @@ function openCardioModal(cardioId = null) {
         <div class="modal-title">${existing ? t('edit_cardio') : t('log_cardio')}</div>
         <div class="modal-subtitle">${t('cardio_quick')}</div>
       </div>
-      <button class="icon-btn icon-btn-tile" data-close>${icon('close', 18)}</button>
+      <button class="icon-btn icon-btn-tile" data-close>${icon('close', 20)}</button>
     </div>
 
     <div class="form-group">
@@ -4694,7 +4742,7 @@ function openNewCardioTypeModal(onCreated) {
           <div class="modal-title">${t('new_cardio_type')}</div>
           <div class="modal-subtitle">${t('new_cardio_type_sub')}</div>
         </div>
-        <button class="icon-btn icon-btn-tile" data-cardio-type-cancel aria-label="${escapeHtml(t('cancel'))}">${icon('close', 18)}</button>
+        <button class="icon-btn icon-btn-tile" data-cardio-type-cancel aria-label="${escapeHtml(t('cancel'))}">${icon('close', 20)}</button>
       </div>
 
       <div class="form-group">
@@ -4899,7 +4947,7 @@ function renderFood(el) {
           <h1 class="page-title">${t('food')}</h1>
           <p class="page-subtitle">${escapeHtml(formatDate(date))}</p>
         </div>
-        <button class="link-btn" data-goto="foodlog">${t('food_history')} <span class="dir-icon">${icon('chevronRight', 16)}</span></button>
+        <button class="link-btn" data-goto="foodlog">${t('food_history')} <span class="icon-mirror">${icon('chevronRight', 16)}</span></button>
       </div>
     </div>
     <div id="nutri-host">${nutritionDashboardHtml(date)}</div>
@@ -4964,7 +5012,7 @@ function nutritionDashboardHtml(date) {
   if (!nut.hasTargets()) {
     return `
       <button class="nutri-setup" data-setup-goal>
-        <div class="nutri-setup-icon">${icon('target', 24)}</div>
+        <div class="nutri-setup-icon">${icon('target', 22)}</div>
         <div class="nutri-setup-main">
           <div class="nutri-setup-title">${t('nutri_setup_title')}</div>
           <div class="nutri-setup-text">${t('nutri_setup_text')}</div>
@@ -5088,7 +5136,7 @@ function openBarcodeScanner(date, onSave) {
   const overlay = openModal(`
     <div class="modal-header">
       <div class="modal-title">${t('add_barcode')}</div>
-      <button class="icon-btn icon-btn-tile" data-close>${icon('close', 18)}</button>
+      <button class="icon-btn icon-btn-tile" data-close>${icon('close', 20)}</button>
     </div>
     <div class="barcode-stage" id="bc-stage"${canScan ? '' : ' style="display:none"'}>
       <video id="bc-video" playsinline muted></video>
@@ -5195,7 +5243,7 @@ function openBarcodeScanner(date, onSave) {
           <span class="bc-unit">${t('unit_g')}</span>
         </div>
         <div class="ai-macros" id="bc-macros"></div>
-        <button class="btn btn-primary btn-block" id="bc-add">${icon('plus', 18)} ${t('ai_add_all')}</button>
+        <button class="btn btn-primary btn-block" id="bc-add">${icon('plus', 20)} ${t('ai_add_all')}</button>
       </div>`;
     const gramsInput = result.querySelector('#bc-grams');
     const macrosEl = result.querySelector('#bc-macros');
@@ -5331,24 +5379,6 @@ function openAddSheet(date, onChange) {
 //   · It appears once a day. Twice turns advice into nuisance, and nuisance gets
 //     ignored. DB.plan.markRestPrompted() is the gate.
 // ===========================================================================
-// The 7 bars the spec puts in the second-day sheet: trained | rest | today.
-// ONE grey for rest, per the spec's own note — two greys read as decoration
-// rather than as data. Deliberately NOT the disc rail from Home: that one is a
-// navigation control, this is a static piece of evidence inside an argument.
-function last7Html() {
-  const trained = new Set([
-    ...DB.sessions.listAll().map((s) => s.date),
-    ...DB.cardio.list().map((c) => c.date),
-  ]);
-  const out = [];
-  for (let back = 6; back >= 0; back--) {
-    const iso = addDaysISO(todayISO(), -back);
-    const cls = back === 0 ? 'today' : (trained.has(iso) ? 'on' : 'rest');
-    out.push(`<i class="${cls}"></i>`);
-  }
-  return out.join('');
-}
-
 function openRestSheet() {
   const app = document.querySelector('.app');
   if (!app) return;
@@ -5374,7 +5404,7 @@ function openRestSheet() {
     ${secondInARow ? `
       <div class="rest-last7">
         <div class="l7-label">${t('last_7_days')}</div>
-        <div class="last7">${last7Html()}</div>
+        ${weekStrip(null, 'compact')}
       </div>`
     : streak > 0 ? `
       <div class="rest-streak">
@@ -5434,7 +5464,7 @@ function openRestSheet() {
               <span class="min-title">${o.title}</span>
               <span class="min-sub${o.cost ? ' is-cost' : ''}">${o.sub}</span>
             </span>
-            <span class="min-check">${icon('check', 14)}</span>
+            <span class="min-check">${icon('check', 16)}</span>
           </button>`).join('')}
       </div>
       <button class="btn btn-primary btn-block" data-go>
@@ -5554,7 +5584,7 @@ function openTrainAnywaySheet() {
               <span class="min-title">${escapeHtml(o.title)}</span>
               <span class="min-sub${o.cost ? ' is-cost' : ''}">${escapeHtml(o.sub)}</span>
             </span>
-            <span class="min-check">${icon('check', 14)}</span>
+            <span class="min-check">${icon('check', 16)}</span>
           </button>`).join('')}
       </div>
       <button class="btn btn-primary btn-block" data-go>${
@@ -5650,7 +5680,7 @@ function openCalculatorModal(onSave) {
         <div class="modal-title">${t('calc_title')}</div>
         <div class="modal-subtitle">${t('calc_sub')}</div>
       </div>
-      <button class="icon-btn icon-btn-tile" data-close>${icon('close', 18)}</button>
+      <button class="icon-btn icon-btn-tile" data-close>${icon('close', 20)}</button>
     </div>
 
     <div id="calc-body"></div>
@@ -5776,7 +5806,7 @@ function openManualFoodEntry(date, onSave) {
   const overlay = openModal(`
     <div class="modal-header">
       <div class="modal-title">${t('manual_food_title')}</div>
-      <button class="icon-btn icon-btn-tile" data-close>${icon('close', 18)}</button>
+      <button class="icon-btn icon-btn-tile" data-close>${icon('close', 20)}</button>
     </div>
     <div class="form-group"><label class="form-label">${t('name')}</label>
       <input type="text" id="mf-name" placeholder="${t('manual_food_ph')}" autofocus></div>
@@ -5790,7 +5820,7 @@ function openManualFoodEntry(date, onSave) {
       <div class="form-group"><label class="form-label">${t('fat_label')} (g)</label>
         <input type="number" inputmode="decimal" id="mf-fat" min="0" placeholder="8"></div>
     </div>
-    <button class="btn btn-primary btn-block" id="mf-save">${icon('plus', 18)} ${t('ai_add_to_log')}</button>
+    <button class="btn btn-primary btn-block" id="mf-save">${icon('plus', 20)} ${t('ai_add_to_log')}</button>
   `);
   overlay.querySelector('#mf-save').addEventListener('click', () => {
     const name = (overlay.querySelector('#mf-name').value || '').trim();
@@ -5817,14 +5847,14 @@ function openSavedFoodPicker(date, onSave) {
   const overlay = openModal(`
     <div class="modal-header">
       <div class="modal-title">${t('add_saved')}</div>
-      <button class="icon-btn icon-btn-tile" data-close>${icon('close', 18)}</button>
+      <button class="icon-btn icon-btn-tile" data-close>${icon('close', 20)}</button>
     </div>
     <div class="search-wrap" style="margin-bottom:10px">
-      ${icon('search', 18)}
+      ${icon('search', 20)}
       <input type="search" id="sf-search" placeholder="${t('search_foods')}">
     </div>
     <div class="picker-list" id="sf-list"></div>
-    <button class="btn btn-ghost btn-block" id="sf-new" style="margin-top:10px">${icon('plus', 18)} ${t('saved_new')}</button>
+    <button class="btn btn-ghost btn-block" id="sf-new" style="margin-top:10px">${icon('plus', 20)} ${t('saved_new')}</button>
   `);
   const listEl = overlay.querySelector('#sf-list');
 
@@ -5887,7 +5917,7 @@ function openCoach(date) {
         <div class="modal-title">${t('coach_title')}</div>
         <div class="modal-subtitle">${t('coach_sub')}</div>
       </div>
-      <button class="icon-btn icon-btn-tile" data-close>${icon('close', 18)}</button>
+      <button class="icon-btn icon-btn-tile" data-close>${icon('close', 20)}</button>
     </div>
     <div class="coach-remaining">
       <span>${t('nutri_left')}: <b class="num">${fmtNum(left.calories)}</b> ${t('cal')}</span>
@@ -5923,10 +5953,10 @@ function openVoiceCapture(date, onSave) {
   const overlay = openModal(`
     <div class="modal-header">
       <div class="modal-title">${t('add_voice')}</div>
-      <button class="icon-btn icon-btn-tile" data-close>${icon('close', 18)}</button>
+      <button class="icon-btn icon-btn-tile" data-close>${icon('close', 20)}</button>
     </div>
     <div class="voice-stage" id="voice-stage">
-      <button class="voice-mic" id="voice-mic" aria-label="${escapeHtml(t('voice_tap'))}">${icon('mic', 24)}</button>
+      <button class="voice-mic" id="voice-mic" aria-label="${escapeHtml(t('voice_tap'))}">${icon('mic', 22)}</button>
       <div class="voice-status" id="voice-status">${t('voice_tap')}</div>
     </div>
     <div class="ai-results" id="voice-results"></div>
@@ -6012,7 +6042,7 @@ function openVoiceCapture(date, onSave) {
           <span class="ai-macro fat"><b class="num" data-m="fat">${fmtNum(it.fat)}</b>g ${t('fat_label')}</span>
         </div>
       </div>`).join('') +
-      `<button class="btn btn-primary btn-block" id="voice-addall">${icon('plus', 18)} ${t('ai_add_all')} (${fmtNum(items.length)})</button>`;
+      `<button class="btn btn-primary btn-block" id="voice-addall">${icon('plus', 20)} ${t('ai_add_all')} (${fmtNum(items.length)})</button>`;
 
     const applyPortion = (card) => {
       const mult = parseFloat(card.dataset.mult) || 1;
@@ -6101,7 +6131,7 @@ function openFoodModal(foodId = null) {
         <div class="modal-title">${existing ? t('edit_food') : t('new_food')}</div>
         <div class="modal-subtitle">${t('food_quick')}</div>
       </div>
-      <button class="icon-btn icon-btn-tile" data-close>${icon('close', 18)}</button>
+      <button class="icon-btn icon-btn-tile" data-close>${icon('close', 20)}</button>
     </div>
 
     <div class="form-group">
@@ -6221,11 +6251,11 @@ function openFoodLibraryModal() {
         <div class="modal-title">${t('food_library_title')}</div>
         <div class="modal-subtitle">${t('food_library_sub')}</div>
       </div>
-      <button class="icon-btn icon-btn-tile" data-close>${icon('close', 18)}</button>
+      <button class="icon-btn icon-btn-tile" data-close>${icon('close', 20)}</button>
     </div>
 
     <div class="search-wrap food-lib-search">
-      ${icon('search', 18)}
+      ${icon('search', 20)}
       <input type="search" id="food-lib-search" placeholder="${t('search_foods')}">
     </div>
 
@@ -6235,7 +6265,7 @@ function openFoodLibraryModal() {
     </div>
 
     <div class="form-actions">
-      <button type="button" class="btn btn-ghost btn-block" id="food-lib-manual">${icon('plus', 18)} ${t('add_manually')}</button>
+      <button type="button" class="btn btn-ghost btn-block" id="food-lib-manual">${icon('plus', 20)} ${t('add_manually')}</button>
     </div>
   `);
 
@@ -6392,7 +6422,7 @@ function renderSleep(el) {
 
     <div class="row-between mb-16">
       <div class="section-title" style="margin:0">${t('history')}</div>
-      <button class="btn btn-primary" id="add-sleep-btn">${icon('plus', 18)} ${t('log')}</button>
+      <button class="btn btn-primary" id="add-sleep-btn">${icon('plus', 20)} ${t('log')}</button>
     </div>
 
     ${list.length === 0
@@ -6429,7 +6459,7 @@ function openSleepModal(sleepId = null) {
         <div class="modal-title">${existing ? t('edit_sleep') : t('log_sleep')}</div>
         <div class="modal-subtitle">${t('sleep_quick')}</div>
       </div>
-      <button class="icon-btn icon-btn-tile" data-close>${icon('close', 18)}</button>
+      <button class="icon-btn icon-btn-tile" data-close>${icon('close', 20)}</button>
     </div>
 
     <div class="form-group">
@@ -6721,7 +6751,7 @@ function renderSettings(el) {
       <div class="section-title" style="margin-top:0">${t('account')}</div>
       <div id="account-body">
         <button class="settings-action-row" style="cursor:default">
-          <div class="settings-action-icon">${icon('globe', 18)}</div>
+          <div class="settings-action-icon">${icon('globe', 20)}</div>
           <div class="settings-action-main">
             <div class="settings-action-title">${t('auth_checking')}</div>
           </div>
@@ -6763,7 +6793,7 @@ function renderSettings(el) {
     <div class="settings-section">
       <div class="section-title">${t('health_section')}</div>
       <button class="settings-action-row" id="health-btn">
-        <div class="settings-action-icon">${icon('heartPulse', 18)}</div>
+        <div class="settings-action-icon">${icon('heartPulse', 20)}</div>
         <div class="settings-action-main">
           <div class="settings-action-title">${t('health_connect')}</div>
           <div class="settings-action-sub">${t('health_connect_sub')}</div>
@@ -6774,7 +6804,7 @@ function renderSettings(el) {
     <div class="settings-section">
       <div class="section-title">${t('remind_title')}</div>
       <button class="settings-action-row" id="reminders-btn">
-        <div class="settings-action-icon">${icon('clock', 18)}</div>
+        <div class="settings-action-icon">${icon('clock', 20)}</div>
         <div class="settings-action-main">
           <div class="settings-action-title">${t('remind_title')}</div>
           <div class="settings-action-sub">${(() => {
@@ -6790,7 +6820,7 @@ function renderSettings(el) {
     <div class="settings-section">
       <div class="section-title">${t('feedback_title')}</div>
       <button class="settings-action-row" id="feedback-btn">
-        <div class="settings-action-icon">${icon('send', 18)}</div>
+        <div class="settings-action-icon icon-mirror">${icon('send', 20)}</div>
         <div class="settings-action-main">
           <div class="settings-action-title">${t('feedback_title')}</div>
           <div class="settings-action-sub">${t('feedback_sub')}</div>
@@ -6801,21 +6831,21 @@ function renderSettings(el) {
     <div class="settings-section">
       <div class="section-title">${t('data')}</div>
       <button class="settings-action-row" id="export-btn">
-        <div class="settings-action-icon">${icon('download', 18)}</div>
+        <div class="settings-action-icon">${icon('download', 20)}</div>
         <div class="settings-action-main">
           <div class="settings-action-title">${t('export_data')}</div>
           <div class="settings-action-sub">${t('export_data_sub')}</div>
         </div>
       </button>
       <button class="settings-action-row" id="import-btn">
-        <div class="settings-action-icon">${icon('upload', 18)}</div>
+        <div class="settings-action-icon">${icon('upload', 20)}</div>
         <div class="settings-action-main">
           <div class="settings-action-title">${t('import_data')}</div>
           <div class="settings-action-sub">${t('import_data_sub')}</div>
         </div>
       </button>
       <button class="settings-action-row" id="reset-btn" style="color:var(--red)">
-        <div class="settings-action-icon" style="background:var(--red-bg);color:var(--red)">${icon('refresh', 18)}</div>
+        <div class="settings-action-icon" style="background:var(--red-bg);color:var(--red)">${icon('refresh', 20)}</div>
         <div class="settings-action-main">
           <div class="settings-action-title">${t('reset_data')}</div>
           <div class="settings-action-sub">${t('reset_data_sub')}</div>
@@ -6826,7 +6856,7 @@ function renderSettings(el) {
     <div class="settings-section">
       <div class="section-title">${t('about_title')}</div>
       <a class="settings-action-row" href="privacy.html?lang=${(DB.prefs.get().lang) || 'en'}" target="_blank" rel="noopener">
-        <div class="settings-action-icon">${icon('info', 18)}</div>
+        <div class="settings-action-icon">${icon('info', 20)}</div>
         <div class="settings-action-main">
           <div class="settings-action-title">${t('privacy_policy')}</div>
           <div class="settings-action-sub">${t('privacy_policy_sub')}</div>
@@ -7080,7 +7110,7 @@ function renderPlanner(el) {
               <span class="rot-slot-actions">
                 <button type="button" class="icon-btn icon-btn-tile" data-up="${i}" aria-label="${t('move_up')}" ${i === 0 ? 'disabled' : ''}>↑</button>
                 <button type="button" class="icon-btn icon-btn-tile" data-down="${i}" aria-label="${t('move_down')}" ${i === cycle.length - 1 ? 'disabled' : ''}>↓</button>
-                <button type="button" class="icon-btn icon-btn-tile" data-edit="${i}" aria-label="${t('edit_workout')}">${icon('edit', 18)}</button>
+                <button type="button" class="icon-btn icon-btn-tile" data-edit="${i}" aria-label="${t('edit_workout')}">${icon('edit', 20)}</button>
               </span>
             </div>
             <div class="rot-slot-ex">${
@@ -7118,8 +7148,8 @@ function renderPlanner(el) {
     </div>
 
     <div style="display:flex;gap:8px;margin-bottom:16px">
-      <button class="btn btn-primary" id="apply-template-btn" style="flex:1">${icon('plus', 18)} ${t('apply_template')}</button>
-      ${cycle.length ? `<button class="btn btn-ghost" id="clear-plan-btn" aria-label="${escapeHtml(t('clear_plan'))}">${icon('trash', 18)}</button>` : ''}
+      <button class="btn btn-primary" id="apply-template-btn" style="flex:1">${icon('plus', 20)} ${t('apply_template')}</button>
+      ${cycle.length ? `<button class="btn btn-ghost" id="clear-plan-btn" aria-label="${escapeHtml(t('clear_plan'))}">${icon('trash', 20)}</button>` : ''}
     </div>
 
     <div class="rot-section">
@@ -7130,7 +7160,7 @@ function renderPlanner(el) {
     <div class="rot-section">
       <div class="rot-section-title">${t('rotation_cycle')}</div>
       <div class="rot-slots">${slotsHtml}</div>
-      <button class="btn btn-ghost btn-block" id="add-slot-btn" style="margin-top:10px">${icon('plus', 18)} ${t('add_workout')}</button>
+      <button class="btn btn-ghost btn-block" id="add-slot-btn" style="margin-top:10px">${icon('plus', 20)} ${t('add_workout')}</button>
     </div>
 
     <div class="rot-section">
@@ -7209,7 +7239,7 @@ function openTemplatesModal() {
         <div class="modal-title">${t('templates_title')}</div>
         <div class="modal-subtitle">${t('templates_subtitle')}</div>
       </div>
-      <button class="icon-btn icon-btn-tile" data-close>${icon('close', 18)}</button>
+      <button class="icon-btn icon-btn-tile" data-close>${icon('close', 20)}</button>
     </div>
     ${cards}
     ${serverCards ? `<div class="modal-subtitle" style="margin:14px 0 8px">${t('ready_made_section')}</div>${serverCards}` : ''}
@@ -7287,7 +7317,7 @@ function openScheduleModal(tmpl) {
         <div class="modal-title">${t('schedule_title')}</div>
         <div class="modal-subtitle">${escapeHtml(tmpl.name)} · <span id="schedule-count" class="num">${fmtNum(training.size)}</span> ${t('schedule_days_label')}</div>
       </div>
-      <button class="icon-btn icon-btn-tile" data-close>${icon('close', 18)}</button>
+      <button class="icon-btn icon-btn-tile" data-close>${icon('close', 20)}</button>
     </div>
 
     <p class="schedule-hint">${t('schedule_hint')}</p>
@@ -7406,9 +7436,9 @@ function openSlotEditorModal(slotIdx) {
           <span class="chosen-num num">${fmtNum(i + 1)}</span>
           <span class="chosen-name">${escapeHtml(nm)}</span>
           <span class="chosen-actions">
-            <button type="button" class="icon-btn icon-btn-tile" data-ord-up="${i}" aria-label="${t('move_up')}" ${i === 0 ? 'disabled' : ''}>${icon('arrowUp', 18)}</button>
-            <button type="button" class="icon-btn icon-btn-tile" data-ord-down="${i}" aria-label="${t('move_down')}" ${i === pickedOrder.length - 1 ? 'disabled' : ''}>${icon('arrowDown', 18)}</button>
-            <button type="button" class="icon-btn icon-btn-tile chosen-del" data-ord-del="${escapeHtml(id)}" aria-label="${t('delete')}">${icon('close', 18)}</button>
+            <button type="button" class="icon-btn icon-btn-tile" data-ord-up="${i}" aria-label="${t('move_up')}" ${i === 0 ? 'disabled' : ''}>${icon('arrowUp', 20)}</button>
+            <button type="button" class="icon-btn icon-btn-tile" data-ord-down="${i}" aria-label="${t('move_down')}" ${i === pickedOrder.length - 1 ? 'disabled' : ''}>${icon('arrowDown', 20)}</button>
+            <button type="button" class="icon-btn icon-btn-tile chosen-del" data-ord-del="${escapeHtml(id)}" aria-label="${t('delete')}">${icon('close', 20)}</button>
           </span>
         </div>`;
     }).join('');
@@ -7459,10 +7489,10 @@ function openSlotEditorModal(slotIdx) {
           <div class="modal-title">${t('pick_exercises')}</div>
           <div class="modal-subtitle" id="picker-count">${fmtNum(pickedOrder.length)}</div>
         </div>
-        <button class="icon-btn icon-btn-tile" id="picker-back" aria-label="${escapeHtml(t('back'))}">${icon('close', 18)}</button>
+        <button class="icon-btn icon-btn-tile" id="picker-back" aria-label="${escapeHtml(t('back'))}">${icon('close', 20)}</button>
       </div>
       <div class="search-wrap" style="margin-bottom:8px">
-        ${icon('search', 18)}
+        ${icon('search', 20)}
         <input type="search" id="picker-search" placeholder="${t('search_exercises')}">
       </div>
       <div class="filter-bar" style="margin: 0 0 10px">${catPills}</div>
@@ -7496,7 +7526,7 @@ function openSlotEditorModal(slotIdx) {
           <div class="modal-title">${escapeHtml(dayLabel || t('add_workout'))}</div>
           <div class="modal-subtitle">${isNew ? t('add_workout') : t('edit_workout')}</div>
         </div>
-        <button class="icon-btn icon-btn-tile" data-close aria-label="${escapeHtml(t('close'))}">${icon('close', 18)}</button>
+        <button class="icon-btn icon-btn-tile" data-close aria-label="${escapeHtml(t('close'))}">${icon('close', 20)}</button>
       </div>
 
       <div class="form-group">
@@ -7676,7 +7706,7 @@ function renderSessionDay(el) {
             <div class="sd-card-name">${escapeHtml(exDisplayName(ex))}</div>
           </div>
           ${isLogged ? `<div class="sd-status-pill">${icon('check', 16)} ${t('logged')}</div>` : ''}
-          <button type="button" class="icon-btn danger sd-remove-ex" data-remove-ex="${ex.id}" aria-label="${escapeHtml(t('remove_from_day'))}">${icon('trash', 18)}</button>
+          <button type="button" class="icon-btn danger sd-remove-ex" data-remove-ex="${ex.id}" aria-label="${escapeHtml(t('remove_from_day'))}">${icon('trash', 20)}</button>
         </div>
 
         <div class="sd-sets-head">
@@ -7688,7 +7718,7 @@ function renderSessionDay(el) {
         <div class="sd-sets" data-ex-sets="${escapeHtml(ex.id)}">${setsRows}</div>
 
         <div class="sd-card-actions">
-          <button type="button" class="btn btn-ghost sd-add-set-btn" data-add-set="${escapeHtml(ex.id)}">${icon('plus', 18)} ${t('add_set')}</button>
+          <button type="button" class="btn btn-ghost sd-add-set-btn" data-add-set="${escapeHtml(ex.id)}">${icon('plus', 20)} ${t('add_set')}</button>
           <button type="button" class="btn btn-primary sd-save-btn${showSave ? '' : ' sd-hidden'}" data-save-ex="${escapeHtml(ex.id)}">${isLogged ? t('update') : t('save')}</button>
         </div>
       </div>
@@ -7723,11 +7753,11 @@ function renderSessionDay(el) {
 
     ${canReorder ? `
     <button type="button" class="sd-reorder-open" id="sd-reorder-open">
-      ${icon('grip', 18)}<span>${t('reorder_exercises')}</span>
+      ${icon('grip', 20)}<span>${t('reorder_exercises')}</span>
     </button>` : ''}
 
     ${totalEx > 0
-      ? `<button type="button" class="sd-start-run" id="sd-start-run">${icon('play', 20)}<span>${t('guided_mode')}</span></button>`
+      ? `<button type="button" class="sd-start-run icon-mirror" id="sd-start-run">${icon('play', 20)}<span>${t('guided_mode')}</span></button>`
       : ''
     }
 
@@ -7736,7 +7766,7 @@ function renderSessionDay(el) {
       : `<div class="sd-list">${exObjs.map(renderExerciseCard).join('')}</div>`
     }
 
-    <button type="button" class="btn btn-ghost btn-block" id="sd-add-ex" style="margin-top:12px">${icon('plus', 18)} ${t('add_exercise')}</button>
+    <button type="button" class="btn btn-ghost btn-block" id="sd-add-ex" style="margin-top:12px">${icon('plus', 20)} ${t('add_exercise')}</button>
   `;
 
   // "Start Workout" → guided one-exercise-at-a-time mode. Carry the chosen date
@@ -8156,7 +8186,7 @@ function renderSessionRun(el) {
              </div>
            </div>`
       }
-      <button type="button" class="btn btn-primary btn-block" data-run-save style="margin-top:16px">${nothing ? `<span class="dir-icon">${icon('back', 18)}</span> ${t('exit_no_save')}` : `${icon('check', 18)} ${t('save_session')}`}</button>
+      <button type="button" class="btn btn-primary btn-block" data-run-save style="margin-top:16px">${nothing ? `<span class="icon-mirror">${icon('back', 20)}</span> ${t('exit_no_save')}` : `${icon('check', 20)} ${t('save_session')}`}</button>
     `;
 
     $('[data-run-back]', el)?.addEventListener('click', () => {
@@ -8213,7 +8243,7 @@ function renderSessionRun(el) {
         <div class="run-set-n num">${i + 1}</div>
         <input type="number" inputmode="numeric" step="1" min="0" placeholder="${phReps}" value="${repsVal}" data-field="reps" aria-label="${t('reps')}">
         <input type="number" inputmode="decimal" step="0.5" min="0" placeholder="${phW}" value="${wDisplay || ''}" data-field="weight" aria-label="${viewContext.runUnit}">
-        <button type="button" class="run-set-done${s.done ? ' done' : ''}" data-done aria-label="${escapeHtml(t('mark_set_done'))}" aria-pressed="${!!s.done}">${icon('check', 18)}</button>
+        <button type="button" class="run-set-done${s.done ? ' done' : ''}" data-done aria-label="${escapeHtml(t('mark_set_done'))}" aria-pressed="${!!s.done}">${icon('check', 20)}</button>
       </div>`;
   }).join('');
 
@@ -8242,11 +8272,11 @@ function renderSessionRun(el) {
       <div class="run-head-done">${t('done_col')}</div>
     </div>
     <div class="run-sets">${setsRows}</div>
-    <button type="button" class="btn btn-ghost run-addset" data-addset>${icon('plus', 18)} ${t('add_set')}</button>
+    <button type="button" class="btn btn-ghost run-addset" data-addset>${icon('plus', 20)} ${t('add_set')}</button>
 
     <div class="run-nav">
-      <button type="button" class="btn btn-ghost run-prev" data-prev ${idx === 0 ? 'disabled' : ''}><span class="dir-icon">${icon('back', 18)}</span> ${t('previous')}</button>
-      <button type="button" class="btn btn-primary run-next" data-next>${isLast ? `${t('finish')} ${icon('check', 18)}` : `${t('next')} <span class="dir-icon">${icon('chevronRight', 18)}</span>`}</button>
+      <button type="button" class="btn btn-ghost run-prev" data-prev ${idx === 0 ? 'disabled' : ''}><span class="icon-mirror">${icon('back', 20)}</span> ${t('previous')}</button>
+      <button type="button" class="btn btn-primary run-next" data-next>${isLast ? `${t('finish')} ${icon('check', 20)}` : `${t('next')} <span class="icon-mirror">${icon('chevronRight', 20)}</span>`}</button>
     </div>
   `;
 
@@ -8449,9 +8479,9 @@ function renderCalendar(el) {
     </div>
 
     <div class="calendar-head">
-      <button class="calendar-nav-btn" id="cal-prev" aria-label="${escapeHtml(t('prev_month'))}">${icon('back', 18)}</button>
+      <button class="calendar-nav-btn" id="cal-prev" aria-label="${escapeHtml(t('prev_month'))}">${icon('back', 20)}</button>
       <div class="calendar-month-label" id="cal-month-label">${escapeHtml(monthLabel)}</div>
-      <button class="calendar-nav-btn" id="cal-next" aria-label="${escapeHtml(t('next_month'))}">${icon('chevronRight', 18)}</button>
+      <button class="calendar-nav-btn" id="cal-next" aria-label="${escapeHtml(t('next_month'))}">${icon('chevronRight', 20)}</button>
     </div>
 
     <div class="calendar-dow-row">${dowLabels}</div>
@@ -8567,7 +8597,7 @@ function openCalendarDayModal(iso) {
       <div>
         <div class="modal-title">${formatDate(iso)}</div>
       </div>
-      <button class="icon-btn icon-btn-tile" data-close>${icon('close', 18)}</button>
+      <button class="icon-btn icon-btn-tile" data-close>${icon('close', 20)}</button>
     </div>
     ${html}
   `);
@@ -8650,8 +8680,8 @@ function renderSupplements(el) {
     <div class="row-between mb-16">
       <div class="section-title" style="margin:0">${t('todays_doses')}</div>
       <div style="display:flex;gap:8px">
-        ${list.length > 0 ? `<button class="btn btn-ghost" id="take-all-btn" ${anyUntaken ? '' : 'disabled style="opacity:.5"'}>${icon('check', 18)} ${t('take_all')}</button>` : ''}
-        <button class="btn btn-primary" id="add-supp-btn">${icon('plus', 18)} ${t('new_supplement')}</button>
+        ${list.length > 0 ? `<button class="btn btn-ghost" id="take-all-btn" ${anyUntaken ? '' : 'disabled style="opacity:.5"'}>${icon('check', 20)} ${t('take_all')}</button>` : ''}
+        <button class="btn btn-primary" id="add-supp-btn">${icon('plus', 20)} ${t('new_supplement')}</button>
       </div>
     </div>
 
@@ -8725,7 +8755,7 @@ function openRemindersModal() {
           <div class="modal-title">${t('remind_title')}</div>
           <div class="modal-subtitle">${t('remind_sub')}</div>
         </div>
-        <button class="icon-btn icon-btn-tile" data-close aria-label="${escapeHtml(t('close'))}">${icon('close', 18)}</button>
+        <button class="icon-btn icon-btn-tile" data-close aria-label="${escapeHtml(t('close'))}">${icon('close', 20)}</button>
       </div>
 
       <button type="button" class="settings-action-row" id="rem-toggle">
@@ -8739,7 +8769,7 @@ function openRemindersModal() {
       <div class="form-group" style="margin-top:16px">
         <label class="form-label">${t('water')}</label>
         <button type="button" class="settings-action-row" id="rem-water">
-          <div class="settings-action-icon">${icon('droplet', 18)}</div>
+          <div class="settings-action-icon">${icon('droplet', 20)}</div>
           <div class="settings-action-main">
             <div class="settings-action-title">${r.water.on ? t('remind_on') : t('remind_off')}</div>
             <div class="settings-action-sub">${escapeHtml(r.water.from)} – ${escapeHtml(r.water.to)} · ${t('remind_every')} ${fmtNum(r.water.everyMin)} ${t('unit_min')}</div>
@@ -8785,7 +8815,7 @@ function openRemindersModal() {
         <label class="form-label">${t('remind_status')}</label>
         <div id="rem-status" class="rem-status"></div>
         <button type="button" class="settings-action-row" id="rem-test" style="margin-top:8px">
-          <div class="settings-action-icon">${icon('send', 18)}</div>
+          <div class="settings-action-icon icon-mirror">${icon('send', 20)}</div>
           <div class="settings-action-main">
             <div class="settings-action-title">${t('remind_test')}</div>
             <div class="settings-action-sub">${t('remind_test_sub')}</div>
@@ -8937,7 +8967,7 @@ function openSupplementModal(id = null) {
       <div>
         <div class="modal-title">${existing ? t('edit_supplement') : t('new_supplement')}</div>
       </div>
-      <button class="icon-btn icon-btn-tile" data-close>${icon('close', 18)}</button>
+      <button class="icon-btn icon-btn-tile" data-close>${icon('close', 20)}</button>
     </div>
 
     ${presetsHtml}
@@ -8967,7 +8997,7 @@ function openSupplementModal(id = null) {
     </div>
 
     <div class="form-actions">
-      ${existing ? `<button type="button" class="btn btn-danger" id="supp-delete" aria-label="${escapeHtml(t('delete'))}">${icon('trash', 18)}</button>` : ''}
+      ${existing ? `<button type="button" class="btn btn-danger" id="supp-delete" aria-label="${escapeHtml(t('delete'))}">${icon('trash', 20)}</button>` : ''}
       <button type="button" class="btn btn-ghost" data-close>${t('cancel')}</button>
       <button type="button" class="btn btn-primary" id="supp-save">${existing ? t('update') : t('save')}</button>
     </div>
@@ -8980,7 +9010,7 @@ function openSupplementModal(id = null) {
     host.innerHTML = times.length
       ? times.slice().sort().map((tm) => `
           <span class="time-chip">${escapeHtml(tm)}
-            <button type="button" class="time-chip-x" data-rm-time="${escapeHtml(tm)}" aria-label="${escapeHtml(t('delete'))}">${icon('close', 12)}</button>
+            <button type="button" class="time-chip-x" data-rm-time="${escapeHtml(tm)}" aria-label="${escapeHtml(t('delete'))}">${icon('close', 16)}</button>
           </span>`).join('')
       : `<span class="time-empty">${t('remind_none')}</span>`;
   };
@@ -9094,7 +9124,7 @@ function renderFoodLog(el) {
             ${e.fat ? `<span class="dot-sep"></span><span><span class="num">${fmtNum(Math.round(e.fat * m * 10) / 10)}</span>g ${t('fat_label')}</span>` : ''}
           </div>
         </div>
-        <button class="icon-btn danger" data-del-food="${escapeHtml(e.id)}" aria-label="${escapeHtml(t('delete'))}">${icon('trash', 18)}</button>
+        <button class="icon-btn danger" data-del-food="${escapeHtml(e.id)}" aria-label="${escapeHtml(t('delete'))}">${icon('trash', 20)}</button>
       </div>
     `;
   }
@@ -9110,9 +9140,9 @@ function renderFoodLog(el) {
       <!-- prev = back(◀), next = chevronRight(▶). These were swapped, so in
            English the "previous day" button pointed forwards. RTL is handled in
            CSS (body[dir="rtl"] .calendar-nav-btn svg), not by swapping icons. -->
-      <button class="calendar-nav-btn" id="day-prev" aria-label="${t('prev_day')}">${icon('back', 18)}</button>
+      <button class="calendar-nav-btn" id="day-prev" aria-label="${t('prev_day')}">${icon('back', 20)}</button>
       <div class="day-nav-label">${escapeHtml(dayLabel)}</div>
-      <button class="calendar-nav-btn" id="day-next" aria-label="${t('next_day')}" ${isToday ? 'disabled style="opacity:0.4"' : ''}>${icon('chevronRight', 18)}</button>
+      <button class="calendar-nav-btn" id="day-next" aria-label="${t('next_day')}" ${isToday ? 'disabled style="opacity:0.4"' : ''}>${icon('chevronRight', 20)}</button>
     </div>
 
     <div class="macro-totals">
@@ -9136,7 +9166,7 @@ function renderFoodLog(el) {
 
     <div class="row-between mb-16">
       <div class="section-title" style="margin:0">${t('logged_items')}</div>
-      <button class="btn btn-primary" id="add-foodlog-btn">${icon('plus', 18)} ${t('add_food_log')}</button>
+      <button class="btn btn-primary" id="add-foodlog-btn">${icon('plus', 20)} ${t('add_food_log')}</button>
     </div>
 
     <div class="data-list" id="food-log-list" style="gap:6px">
@@ -9192,7 +9222,7 @@ function openFoodPickerModal(date) {
     openModal(`
       <div class="modal-header">
         <div><div class="modal-title">${t('empty_food_list')}</div></div>
-        <button class="icon-btn icon-btn-tile" data-close>${icon('close', 18)}</button>
+        <button class="icon-btn icon-btn-tile" data-close>${icon('close', 20)}</button>
       </div>
       <p style="color:var(--text-mute);font-size:13px;margin-bottom:18px">${t('empty_food_list_text')}</p>
       <div class="form-actions">
@@ -9235,12 +9265,12 @@ function openFoodPickerModal(date) {
       <div>
         <div class="modal-title">${t('pick_from_library')}</div>
       </div>
-      <button class="icon-btn icon-btn-tile" data-close>${icon('close', 18)}</button>
+      <button class="icon-btn icon-btn-tile" data-close>${icon('close', 20)}</button>
     </div>
 
     <div class="form-group">
       <div class="search-wrap">
-        ${icon('search', 18)}
+        ${icon('search', 20)}
         <input type="search" id="food-picker-search" placeholder="${t('search_foods')}">
       </div>
     </div>
@@ -9267,7 +9297,7 @@ function openFoodLogEntryModal(date, food) {
         <div class="modal-title">${escapeHtml(food.name)}</div>
         ${food.serving ? `<div class="modal-subtitle">${escapeHtml(food.serving)}</div>` : ''}
       </div>
-      <button class="icon-btn icon-btn-tile" data-close>${icon('close', 18)}</button>
+      <button class="icon-btn icon-btn-tile" data-close>${icon('close', 20)}</button>
     </div>
 
     <div class="form-group">
@@ -9381,7 +9411,7 @@ function showAuthGate(mode) {
         <button type="button" class="auth-lang-btn ${lang === 'ar' ? 'active' : ''}" data-setlang="ar" lang="ar" aria-pressed="${lang === 'ar'}">العربية</button>
         <button type="button" class="auth-lang-btn ${lang === 'en' ? 'active' : ''}" data-setlang="en" lang="en" aria-pressed="${lang === 'en'}">English</button>
       </div>
-      <div class="auth-title cut">THE VAULT</div>
+      <div class="auth-title">${brandLockup('splash')}</div>
       <div class="auth-sub">${up ? t('auth_sub_up') : t('auth_sub_in')}</div>
       <input type="email" id="auth-email" class="auth-input" placeholder="${t('auth_email')}" autocomplete="email" inputmode="email">
       <input type="password" id="auth-password" class="auth-input" placeholder="${t('auth_password')}" autocomplete="${up ? 'new-password' : 'current-password'}">
@@ -9544,7 +9574,7 @@ function showForgotPassword(prefillEmail) {
   const overlay = openModal(`
     <div class="modal-header">
       <div class="modal-title">${t('auth_reset_title')}</div>
-      <button class="icon-btn icon-btn-tile" data-close>${icon('close', 18)}</button>
+      <button class="icon-btn icon-btn-tile" data-close>${icon('close', 20)}</button>
     </div>
     <div class="confirm-text" style="margin-bottom:12px">${t('auth_reset_sub')}</div>
     <input type="email" id="reset-email" class="auth-input" placeholder="${t('auth_email')}" value="${escapeHtml(prefillEmail || '')}" autocomplete="email" inputmode="email">
@@ -9623,7 +9653,7 @@ function showChangePassword() {
   const overlay = openModal(`
     <div class="modal-header">
       <div class="modal-title">${t('change_password')}</div>
-      <button class="icon-btn icon-btn-tile" data-close>${icon('close', 18)}</button>
+      <button class="icon-btn icon-btn-tile" data-close>${icon('close', 20)}</button>
     </div>
     <input type="password" id="cpw-current" class="auth-input" placeholder="${t('change_password_current')}" autocomplete="current-password">
     <input type="password" id="cpw-new" class="auth-input" placeholder="${t('change_password_new')}" autocomplete="new-password">
@@ -9657,7 +9687,7 @@ function showFeedback() {
   const overlay = openModal(`
     <div class="modal-header">
       <div class="modal-title">${t('feedback_title')}</div>
-      <button class="icon-btn icon-btn-tile" data-close>${icon('close', 18)}</button>
+      <button class="icon-btn icon-btn-tile" data-close>${icon('close', 20)}</button>
     </div>
     <div class="confirm-text" style="margin-bottom:12px">${t('feedback_sub')}</div>
     <textarea id="fb-msg" class="auth-input" rows="4" style="resize:vertical;min-height:96px" placeholder="${t('feedback_ph')}"></textarea>
@@ -9717,35 +9747,35 @@ async function populateAccount(el) {
   if (email) {
     body.innerHTML = `
       <div class="settings-action-row" style="cursor:default">
-        <div class="settings-action-icon">${icon('globe', 18)}</div>
+        <div class="settings-action-icon">${icon('globe', 20)}</div>
         <div class="settings-action-main">
           <div class="settings-action-title">${escapeHtml(email)}</div>
           <div class="settings-action-sub">${t('account_synced_sub')}</div>
         </div>
       </div>
       <button class="settings-action-row" id="sync-now-btn">
-        <div class="settings-action-icon">${icon('refresh', 18)}</div>
+        <div class="settings-action-icon">${icon('refresh', 20)}</div>
         <div class="settings-action-main">
           <div class="settings-action-title">${t('sync_now')}</div>
           <div class="settings-action-sub">${t('sync_now_sub')}</div>
         </div>
       </button>
       <button class="settings-action-row" id="change-pw-btn">
-        <div class="settings-action-icon">${icon('settings', 18)}</div>
+        <div class="settings-action-icon">${icon('settings', 20)}</div>
         <div class="settings-action-main">
           <div class="settings-action-title">${t('change_password')}</div>
           <div class="settings-action-sub">${t('change_password_sub')}</div>
         </div>
       </button>
       <button class="settings-action-row" id="logout-btn" style="color:var(--red)">
-        <div class="settings-action-icon dir-icon" style="background:var(--red-bg);color:var(--red)">${icon('back', 18)}</div>
+        <div class="settings-action-icon icon-mirror" style="background:var(--red-bg);color:var(--red)">${icon('back', 20)}</div>
         <div class="settings-action-main">
           <div class="settings-action-title">${t('logout')}</div>
           <div class="settings-action-sub">${t('logout_sub')}</div>
         </div>
       </button>
       <button class="settings-action-row" id="delete-account-btn" style="color:var(--red)">
-        <div class="settings-action-icon" style="background:var(--red-bg);color:var(--red)">${icon('trash', 18)}</div>
+        <div class="settings-action-icon" style="background:var(--red-bg);color:var(--red)">${icon('trash', 20)}</div>
         <div class="settings-action-main">
           <div class="settings-action-title">${t('delete_account')}</div>
           <div class="settings-action-sub">${t('delete_account_sub')}</div>
@@ -9800,7 +9830,7 @@ async function populateAccount(el) {
   } else {
     body.innerHTML = `
       <button class="settings-action-row" id="signin-btn">
-        <div class="settings-action-icon">${icon('globe', 18)}</div>
+        <div class="settings-action-icon">${icon('globe', 20)}</div>
         <div class="settings-action-main">
           <div class="settings-action-title">${t('auth_not_signed')}</div>
           <div class="settings-action-sub">${t('auth_signin_sub')}</div>
@@ -9851,7 +9881,7 @@ function renderCustomExercises(el) {
         <div>
           <h1 class="page-title">${t('my_exercises_short')}</h1>
         </div>
-        <button class="btn btn-primary" id="ce-add">${icon('plus', 18)} ${t('add_custom')}</button>
+        <button class="btn btn-primary" id="ce-add">${icon('plus', 20)} ${t('add_custom')}</button>
       </div>
     </div>
 
@@ -10106,7 +10136,7 @@ function showAnnouncementBanner(config) {
       </div>
     </div>
     <div class="update-banner-actions">
-      <button type="button" class="icon-btn icon-btn-tile" id="announcement-dismiss" aria-label="${escapeHtml(t('close'))}">${icon('close', 18)}</button>
+      <button type="button" class="icon-btn icon-btn-tile" id="announcement-dismiss" aria-label="${escapeHtml(t('close'))}">${icon('close', 20)}</button>
     </div>
   `;
   document.body.appendChild(el);
@@ -10285,7 +10315,7 @@ function showOnboarding() {
     let inner = '';
     if (step === 0) {
       inner = `
-        <div class="onb-wordmark"><span class="cut">${t('app_name')}</span></div>
+        <div class="onb-wordmark">${brandLockup('splash')}</div>
         <div class="onb-title">${t('onb_welcome_title')}</div>
         <div class="onb-sub">${t('onb_welcome_sub')}</div>
         <div class="onb-feats">
@@ -10296,7 +10326,7 @@ function showOnboarding() {
         <button type="button" class="btn btn-primary btn-block" data-next>${t('onb_start')}</button>`;
     } else if (step === 1) {
       inner = `
-        <div class="onb-logo">${icon('settings', 32)}</div>
+        <div class="onb-logo">${icon('settings', 34)}</div>
         <div class="onb-title">${t('onb_unit_title')}</div>
         <div class="onb-sub">${t('onb_unit_sub')}</div>
         <div class="onb-units">
@@ -10309,7 +10339,7 @@ function showOnboarding() {
         <button type="button" class="btn btn-primary btn-block" data-next>${t('next')}</button>`;
     } else {
       inner = `
-        <div class="onb-logo">${icon('target', 32)}</div>
+        <div class="onb-logo">${icon('target', 34)}</div>
         <div class="onb-title">${t('onb_goal_title')}</div>
         <div class="onb-sub">${t('onb_goal_sub')}</div>
         <button type="button" class="btn btn-primary btn-block" data-goal>${t('onb_set_goal')}</button>
