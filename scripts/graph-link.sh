@@ -25,10 +25,27 @@ while [ "$i" -lt 60 ]; do
     sleep 2
     if [ "$(mtime)" != "$before" ]; then
         sleep 3   # let the writer finish flushing
+        # ORDER MATTERS.
+        #  1. graph-methods.js adds the object-literal API nodes graphify's JS
+        #     pass does not emit (DB.plan.workoutForDate and 100+ others) — it
+        #     must run first so the next two steps can see and cluster them.
+        #  2. graph-crossfile.js adds the runtime-global edges.
+        #  3. graph_refine.py re-partitions and re-NAMES, and rewrites
+        #     .graphify_labels.json. That file is keyed by community INDEX, so
+        #     leaving it stale makes the next rebuild reapply old names to
+        #     renumbered communities — which is what put "showCenter" on the
+        #     screens community.
+        node scripts/graph-methods.js >/dev/null 2>&1 || exit 0
         node scripts/graph-crossfile.js >/dev/null 2>&1 || exit 0
+        _PY=$(cat graphify-out/.graphify_python 2>/dev/null)
+        if [ -n "$_PY" ] && [ -x "$_PY" ]; then
+            PYTHONHASHSEED=0 "$_PY" scripts/graph_refine.py >/dev/null 2>&1 || true
+        fi
         # refresh the interactive view so it matches the linked graph
         if command -v graphify >/dev/null 2>&1; then
             graphify export html >/dev/null 2>&1
+        elif [ -n "$_PY" ] && [ -x "$_PY" ]; then
+            "$_PY" -m graphify export html >/dev/null 2>&1
         fi
         exit 0
     fi

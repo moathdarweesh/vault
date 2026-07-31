@@ -1,0 +1,6 @@
+{
+ "backend_admin_scale_rpc|backend_admin_scale_rpc_public_admin_activity|scripts_graph_link": "Backend SQL — admin & ops RPCs",
+ "js_app|js_app_opentemplatesmodal|js_app_startresttimer": "App shell — theme, timers & helpers",
+ "js_app_fmtnum|js_app_renderday|js_app_renderhome": "Training screens & the plan",
+ "admin_definer_rpc_write_path|admin_loadall|admin_showcenter": "Admin console (admin.html)"
+}
