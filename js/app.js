@@ -12,7 +12,7 @@
 // build. The literal below is the fallback (file://, or a stripped query) and is
 // still bumped by `npm run release` — see CLAUDE.md "CACHE WORKFLOW".
 const VAULT_BUILD = (() => {
-  const FALLBACK = 'v228';
+  const FALLBACK = 'v229';
   try {
     const src = (document.currentScript && document.currentScript.src) || '';
     const m = src.match(/[?&]v=(\d+)/);
@@ -897,6 +897,9 @@ const I18N = {
     anyway_tomorrow_sub: 'Moves the plan a full day',
     anyway_keep_rest: 'No, I will finish my rest',
     anyway_moved: 'The plan moved a day forward.',
+    anyway_undone: 'Back to a rest day. The plan is where it was.',
+    anyway_no_exercise: 'No exercise in your list trains that muscle yet.',
+    anyway_undo_cta: 'Undo — back to rest',
     last_7_days: 'The last 7 days',
     day_nothing: 'Nothing recorded on this day.',
     day_body: 'Body',
@@ -1581,6 +1584,9 @@ const I18N = {
     anyway_tomorrow_sub: 'يحرّك الخطة يوم كامل',
     anyway_keep_rest: 'لا، أكمل راحتي',
     anyway_moved: 'تحرّكت الخطة يومًا إلى الأمام.',
+    anyway_undone: 'رجع يوم راحة، والخطة رجعت مكانها.',
+    anyway_no_exercise: 'ما في تمرين بقائمتك يشتغل على هذي العضلة.',
+    anyway_undo_cta: 'تراجع — أرجعه يوم راحة',
     last_7_days: 'آخر ٧ أيام',
     day_nothing: 'لا يوجد شيء مسجَّل في هذا اليوم.',
     day_body: 'الجسم',
@@ -2747,8 +2753,15 @@ function renderHome(el) {
   // the intent, and it is why the capsule radius is allowed here: the identity
   // layer reserves capsules for TRANSIENT chips and forbids them on anything
   // holding state, which this does not.
-  const restChipHtml = `
-    <button class="rest-chip" id="home-rest-toggle" type="button">${t('rest_short')}</button>`;
+  // On a day PULLED INTO the rotation the chip changes job. "Rest" would still
+  // work — setRest clears the extra — but it would describe the destination and
+  // not the fact that this day was moved, so the way back out would be findable
+  // only by someone who already understood the model. The undo says what it is,
+  // and unlike the toast it is still there tomorrow morning.
+  const todayIsExtra = DB.plan.isExtra(now);
+  const restChipHtml = todayIsExtra
+    ? `<button class="rest-chip rest-chip-undo" id="home-undo-extra" type="button">${t('rest_undo')}</button>`
+    : `<button class="rest-chip" id="home-rest-toggle" type="button">${t('rest_short')}</button>`;
   const fullCtaHtml = `
     <button class="hero-cta hero-cta-btn" id="home-start-workout" type="button">
       ${icon('dumbbell', 20)}<span>${t('today_workout')}</span>
@@ -2981,6 +2994,14 @@ function renderHome(el) {
     DB.plan.setRest(new Date(), false);
     showToast(t('rest_today_off'));
     renderView('home');   // NOT renderHome() — it needs its view element
+  });
+  // Undo the pull-forward: today goes back to being a rest day and the whole
+  // rotation slides back with it, because the cycle position is derived from
+  // the date lists rather than stored — so removing the entry restores it.
+  $('#home-undo-extra', el)?.addEventListener('click', () => {
+    DB.plan.setExtra(new Date(), false);
+    showToast(t('anyway_undone'));
+    renderView('home');
   });
   // One delegated listener for all seven chips rather than seven bindings.
   $('.wk-rail', el)?.addEventListener('click', (e) => {
@@ -5635,15 +5656,27 @@ function openTrainAnywaySheet() {
     const mins = sel ? (Number(sel.dataset.mins) || 20) : 20;
     close(() => {
       if (kind === 'full') {
-        // Pulling tomorrow's session forward means today STOPS being a rest day
-        // in the rotation — which is exactly the "moves the plan a full day"
-        // the option warns about. One write, through the same door as everything else.
-        DB.plan.setRest(new Date(), false);
-        showToast(t('anyway_moved'));
+        // Pull today INTO the rotation. It then advances the cycle like any
+        // training day, so today takes the session the next training day was
+        // going to carry and everything after slides forward — the "moves the
+        // plan a full day" the option warns about, actually performed.
+        // This used to call setRest(today, false), which was a no-op: the sheet
+        // only ever opens on a scheduled rest WEEKDAY, and such a day is not in
+        // restDates to begin with. Nothing moved and the session screen it then
+        // opened had no workout on it.
+        DB.plan.setExtra(new Date(), true);
+        showToast(t('anyway_moved'), {
+          actionLabel: t('rest_undo'),
+          onAction: () => {
+            DB.plan.setExtra(new Date(), false);
+            navigate('home');
+            showToast(t('anyway_undone'));
+          },
+        });
         navigate('session-day', { date: todayISO() });
         return;
       }
-      startMinimumSession(kind === 'lag' ? 'one' : 'walk', mins);
+      startMinimumSession(kind === 'lag' ? 'muscles' : 'walk', mins, { muscles: lagging });
     });
   });
 }
@@ -5652,7 +5685,29 @@ function openTrainAnywaySheet() {
 // than a parallel one: a reduced session goes through session-day exactly like a
 // full one, and a walk is a cardio entry. Nothing here invents a second way to
 // write a workout.
-function startMinimumSession(kind, mins) {
+function startMinimumSession(kind, mins, opts) {
+  // "Train a lagging muscle" has to pick BY MUSCLE, not from today's plan. It
+  // used to route through the 'one' branch below, which takes the heaviest lift
+  // out of the CURRENT day's slot — so on a scheduled rest day (the only day
+  // this option is ever offered) the slot was null and the screen opened empty,
+  // and on any other day it would have trained a muscle the plan already covers,
+  // which is the opposite of what the option says.
+  if (kind === 'muscles') {
+    const want = (opts && opts.muscles) || [];
+    const pool = DB.exercises.list().filter((ex) =>
+      getMusclesForExercise(ex).some((m) => want.indexOf(m) !== -1));
+    if (!pool.length) { showToast(t('anyway_no_exercise')); return; }
+    // Familiar first: an exercise with history opens on the user's own numbers
+    // instead of a blank row. bestOneRM is 0 for anything never logged, so this
+    // degrades to "any exercise for that muscle" on a fresh install.
+    const ranked = pool.slice().sort((a, b) => DB.sessions.bestOneRM(b.id) - DB.sessions.bestOneRM(a.id));
+    navigate('session-day', {
+      date: todayISO(),
+      sdOnly: ranked.slice(0, 2).map((e) => e.id),
+      sdMinimum: true,
+    });
+    return;
+  }
   if (kind === 'walk') {
     const type = (DB.cardioTypes.allTypes().find((c) => /walk|مشي/i.test(c.label || c.id)) || {}).id
       || (DB.cardioTypes.allTypes()[0] || {}).id;
@@ -7623,8 +7678,16 @@ function renderSessionDay(el) {
   // leaving the screen drops the filter with the rest of viewContext.
   const sdOnly = Array.isArray(viewContext.sdOnly) ? viewContext.sdOnly : null;
   const planIds = (day?.exerciseIds || []);
-  const exObjs = (sdOnly ? planIds.filter((id) => sdOnly.includes(id)) : planIds)
-    .map((id) => exerciseById[id]).filter(Boolean);
+  // On a day the rotation calls REST there is no plan to narrow, yet the rest
+  // sheet's "train a lagging muscle" route still has to put exercises on screen
+  // — and a lagging muscle is by definition one the plan does not contain, so
+  // it could never have been found by filtering. sdOnly is therefore a FILTER
+  // over the plan when there is one, and the LIST itself when there is not.
+  // Either way it stays a view-level choice: no slot is edited.
+  const sdIds = planIds.length
+    ? (sdOnly ? planIds.filter((id) => sdOnly.includes(id)) : planIds)
+    : (sdOnly || []);
+  const exObjs = sdIds.map((id) => exerciseById[id]).filter(Boolean);
 
   // Per-exercise local state for unsaved edits. Persists across re-renders
   // until the user navigates away.

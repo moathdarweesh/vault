@@ -6896,6 +6896,15 @@ body.theme-light {
   -webkit-tap-highlight-color: transparent;
 }
 .rest-chip:active { background: var(--surface-2); }
+/* The undo variant of the same chip. It carries --warn rather than the accent:
+   this day was MOVED, and the chip's job is to say the plan is not sitting
+   where the schedule put it. Not red — nothing has gone wrong and nothing is
+   being deleted. */
+.rest-chip-undo {
+  border-color: color-mix(in srgb, var(--warn) 45%, transparent);
+  color: var(--warn);
+}
+.rest-chip-undo:active { background: color-mix(in srgb, var(--warn) 13%, transparent); }
 /* THE VISIBLE CHIP IS 27px TALL; THE TARGET IS NOT.
    The spec's geometry (6px padding on 12.5px text) is deliberately small — it
    wants a control that is hard to hit by accident. But "hard to hit by

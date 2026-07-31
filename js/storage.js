@@ -394,7 +394,7 @@ function defaultState() {
     sleep: [],
     // Workout plan — a CONTINUOUS ROTATION: an ordered cycle of workouts rolled
     // across training days (never reset weekly). See migratePlan()/DB.plan.
-    plan: { mode: 'rotation', cycle: [], trainingDays: [], anchor: null, restDates: [], restPromptAt: null },
+    plan: { mode: 'rotation', cycle: [], trainingDays: [], anchor: null, restDates: [], extraDates: [], restPromptAt: null },
     supplements: [],
     // Reminder settings. Times are LOCAL "HH:MM" strings, never timestamps: a
     // reminder means "08:00 wherever you are", so it must survive a timezone
@@ -438,7 +438,12 @@ function defaultNutrition() {
 // it slides by one. Nothing is lost and nothing needs rescheduling — which is
 // the point of a continuous rotation, as opposed to a fixed weekly grid where
 // the same skip would simply forfeit that workout.
-function trainingDaysBetween(anchorStr, D, trainingDays, rest) {
+// `extra` is the MIRROR of `rest`: dates the user pulled INTO the rotation even
+// though their weekday is not a training day. Counting one here is what slides
+// everything after it forward — today takes the workout the next training day
+// was going to carry, that day takes the one after, and the cycle stays intact.
+// It is the same mechanism as a skip, run in the other direction.
+function trainingDaysBetween(anchorStr, D, trainingDays, rest, extra) {
   const a = new Date(anchorStr + 'T00:00:00');
   const a0 = new Date(a.getFullYear(), a.getMonth(), a.getDate());
   const d0 = new Date(D.getFullYear(), D.getMonth(), D.getDate());
@@ -447,7 +452,9 @@ function trainingDaysBetween(anchorStr, D, trainingDays, rest) {
   const cur = new Date(a0);
   let guard = 0;
   while (cur < d0 && guard++ < 4000) {
-    if (trainingDays.indexOf(cur.getDay()) !== -1 && !(rest && rest[isoOf(cur)])) count++;
+    const iso = isoOf(cur);
+    const scheduled = trainingDays.indexOf(cur.getDay()) !== -1 || !!(extra && extra[iso]);
+    if (scheduled && !(rest && rest[iso])) count++;
     cur.setDate(cur.getDate() + 1);
   }
   return count;
@@ -459,13 +466,15 @@ function isoOf(d) {
   return d.getFullYear() + '-' + pad2(d.getMonth() + 1) + '-' + pad2(d.getDate());
 }
 
-// The rest set as a lookup object, tolerating a missing/!array field.
-function restMap(p) {
+// A date list as a lookup object, tolerating a missing/!array field.
+function dateSet(p, field) {
   const out = {};
-  const list = p && Array.isArray(p.restDates) ? p.restDates : [];
+  const list = p && Array.isArray(p[field]) ? p[field] : [];
   for (let i = 0; i < list.length; i++) out[list[i]] = true;
   return out;
 }
+function restMap(p) { return dateSet(p, 'restDates'); }
+function extraMap(p) { return dateSet(p, 'extraDates'); }
 
 // Convert a legacy day-of-week plan grid (or a missing/partial plan) into the
 // rotation model. Distinct workouts in Sun→Sat order (first occurrence wins)
@@ -486,6 +495,7 @@ function migratePlan(plan) {
       // the saved blob on the next write. restDates predates nothing: an existing
       // user simply has no such field, hence the [] default.
       restDates: Array.isArray(plan.restDates) ? plan.restDates.slice() : [],
+      extraDates: Array.isArray(plan.extraDates) ? plan.extraDates.slice() : [],
       restPromptAt: plan.restPromptAt || null,
     };
   }
@@ -500,7 +510,7 @@ function migratePlan(plan) {
       if (!seen[key]) { seen[key] = true; cycle.push({ name: nm, exerciseIds: day.exerciseIds.slice() }); }
     }
   }
-  return { mode: 'rotation', cycle, trainingDays, anchor: todayISO(), restDates: [], restPromptAt: null };
+  return { mode: 'rotation', cycle, trainingDays, anchor: todayISO(), restDates: [], extraDates: [], restPromptAt: null };
 }
 
 // Set when the stored blob could not be parsed. While true the app runs
@@ -778,22 +788,29 @@ const DB = {
   // The workout for a date = cycle[(training days elapsed since anchor) mod cycle.length];
   // rest days (weekday ∉ trainingDays) have no workout. The cycle rolls across weeks — never reset.
   plan: {
-    get() { return STATE.plan || { mode: 'rotation', cycle: [], trainingDays: [], anchor: null, restDates: [], restPromptAt: null }; },
+    get() { return STATE.plan || { mode: 'rotation', cycle: [], trainingDays: [], anchor: null, restDates: [], extraDates: [], restPromptAt: null }; },
 
     // THE single source of truth: what workout (or null=rest) falls on date D.
     workoutForDate(D) {
       const p = STATE.plan;
       if (!p || p.mode !== 'rotation' || !Array.isArray(p.cycle) || !p.cycle.length) return null;
       const td = Array.isArray(p.trainingDays) ? p.trainingDays : [];
-      if (td.indexOf(D.getDay()) === -1) return null;              // scheduled rest weekday
+      const iso = isoOf(D);
+      const extra = extraMap(p);
+      // The weekday check yields to an extra day — that is the ONLY thing that
+      // lets a scheduled rest weekday carry a workout. It used to return here
+      // unconditionally, which is why "train tomorrow's session now" could not
+      // work no matter what it wrote: the answer for today was decided before
+      // any per-date list was consulted.
+      if (td.indexOf(D.getDay()) === -1 && !extra[iso]) return null;   // scheduled rest weekday
       const rest = restMap(p);
-      if (rest[isoOf(D)]) return null;                             // user took this day off
+      if (rest[iso]) return null;                                  // user took this day off
       const anchor = p.anchor || todayISO();
       const a = new Date(anchor + 'T00:00:00');
       const a0 = new Date(a.getFullYear(), a.getMonth(), a.getDate());
       const d0 = new Date(D.getFullYear(), D.getMonth(), D.getDate());
       if (d0 < a0) return null;                                    // before the plan started
-      const elapsed = trainingDaysBetween(anchor, D, td, rest);
+      const elapsed = trainingDaysBetween(anchor, D, td, rest, extra);
       const len = p.cycle.length;
       return p.cycle[((elapsed % len) + len) % len];
     },
@@ -816,6 +833,11 @@ const DB = {
       if (on && at === -1) list.push(iso);
       else if (!on && at !== -1) list.splice(at, 1);
       else return this.isRest(iso);                    // no change, no write
+      // Opposites: declaring a rest clears a day pulled in earlier (see setExtra).
+      if (on && Array.isArray(STATE.plan.extraDates)) {
+        const x = STATE.plan.extraDates.indexOf(iso);
+        if (x !== -1) STATE.plan.extraDates.splice(x, 1);
+      }
       // Unbounded growth would bloat a blob that is synced whole on every save.
       // Only dates from here on can still affect the rotation, and the calendar
       // reads logged sessions rather than this list, so anything older than a
@@ -827,6 +849,39 @@ const DB = {
       return this.isRest(iso);
     },
     toggleRest(D) { return this.setRest(D, !this.isRest(D)); },
+
+    // ----- "training today after all" — the mirror of the two above -----
+    // A weekday that is NOT in the rotation, pulled in for this one date. It
+    // advances the cycle exactly like a normal training day, so the session it
+    // takes is the one the next training day was going to carry and the whole
+    // plan slides forward by a day. Nothing is skipped and nothing is lost.
+    isExtra(D) {
+      const p = STATE.plan;
+      if (!p) return false;
+      return !!extraMap(p)[typeof D === 'string' ? D : isoOf(D)];
+    },
+    setExtra(D, on) {
+      const iso = typeof D === 'string' ? D : isoOf(D);
+      if (!STATE.plan) return false;
+      if (!Array.isArray(STATE.plan.extraDates)) STATE.plan.extraDates = [];
+      const list = STATE.plan.extraDates;
+      const at = list.indexOf(iso);
+      if (on && at === -1) list.push(iso);
+      else if (!on && at !== -1) list.splice(at, 1);
+      else return this.isExtra(iso);                   // no change, no write
+      // The two lists are opposites, so a date must never sit in both: "I am
+      // training today" has to clear "I am not training today", or the rest
+      // entry silently wins in workoutForDate and the pull-forward does nothing.
+      if (on && Array.isArray(STATE.plan.restDates)) {
+        const r = STATE.plan.restDates.indexOf(iso);
+        if (r !== -1) STATE.plan.restDates.splice(r, 1);
+      }
+      list.sort();
+      const cutoff = isoOf(new Date(Date.now() - 365 * 864e5));
+      while (list.length && list[0] < cutoff) list.shift();
+      save();
+      return this.isExtra(iso);
+    },
 
     // ----- the rest-day sheet's once-a-day gate -----
     // The sheet argues a case; arguing it twice in one day turns advice into
@@ -851,6 +906,9 @@ const DB = {
         // and a day the user has already declared off (tomorrow, say) is a fact
         // about their week, not about which template they picked.
         restDates: Array.isArray(STATE.plan && STATE.plan.restDates) ? STATE.plan.restDates.slice() : [],
+        // Carried for the same reason as restDates: a day already pulled into
+        // the rotation is a fact about the user's week, not about the template.
+        extraDates: Array.isArray(STATE.plan && STATE.plan.extraDates) ? STATE.plan.extraDates.slice() : [],
         restPromptAt: (STATE.plan && STATE.plan.restPromptAt) || null,
       };
       save();
@@ -895,7 +953,7 @@ const DB = {
       if (s) { s.exerciseIds = s.exerciseIds.filter((id) => id !== exId); save(); }
     },
     clearAll() {
-      STATE.plan = { mode: 'rotation', cycle: [], trainingDays: [], anchor: todayISO(), restDates: [], restPromptAt: null };
+      STATE.plan = { mode: 'rotation', cycle: [], trainingDays: [], anchor: todayISO(), restDates: [], extraDates: [], restPromptAt: null };
       save();
     },
   },
