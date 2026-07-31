@@ -99,6 +99,40 @@ Every device loads the same live URL, so a bad push reaches everyone at once.
   Connect sessions already import into the cardio log but only rendering HOME ever
   triggered a sync.
 
+### The plan is a CONTINUOUS ROTATION, and its position is DERIVED (v229)
+`plan = {mode, cycle, trainingDays, anchor, restDates, extraDates, restPromptAt}`.
+`workoutForDate(D)` is the single source of truth for "what falls on D (null =
+rest)". It does not store a position: it **counts elapsed training days since
+the anchor** and indexes `cycle`. Everything else follows from that.
+
+- **Two date lists, exact mirrors of each other.** `restDates` = a scheduled day
+  the user declined; it stops advancing the cycle, so the workout it carried
+  lands on the next real training day and everything slides *back*. `extraDates`
+  = a non-training weekday pulled *into* the rotation; it advances the cycle, so
+  today takes the session the next training day was going to carry and
+  everything slides *forward*. A date must never be in both — `setRest` and
+  `setExtra` each clear the other, or the rest entry silently wins in
+  `workoutForDate` and the pull-forward does nothing.
+- **Because the position is derived, undo is free and exact**: removing the list
+  entry restores the previous rotation byte for byte. Do not "optimise" this
+  into a stored cursor.
+- **The weekday check must yield to `extraDates`.** `workoutForDate` used to
+  `return null` on a non-training weekday *before* consulting any per-date list,
+  which is why "train tomorrow's session now" could not work no matter what it
+  wrote — the answer for today was decided before the list was read.
+- ⚠️ **FIVE places rebuild the plan object field by field** — `defaultState`,
+  `migratePlan` (both branches), `plan.get()`'s fallback, `setRotation`,
+  `clearAll`. `migratePlan` runs on **every load**. A field not enumerated in all
+  of them is silently erased from the synced blob on the next write. Adding a
+  sixth plan field means touching all five.
+- Decide rest-ness by calling `workoutForDate`/`isRest`/`isExtra` — **never** by
+  testing `trainingDays.includes(dow)` yourself. That test was correct before
+  `extraDates` and is now wrong on any pulled-forward day.
+- `sdOnly` (session-day) is a **filter** over the day's plan when there is one
+  and the **list itself** when there is not — the "train a lagging muscle" route
+  runs on a rest day, and a lagging muscle is by definition one the plan does not
+  contain, so it could never be reached by filtering.
+
 ### Reminders (v208, repaired in v210) — the only native surface
 Supplement and water reminders. **This is why APK build 8 exists**: a Capacitor
 plugin is a native change, so unlike every release since v109 it does NOT reach
