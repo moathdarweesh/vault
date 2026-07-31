@@ -12,7 +12,7 @@
 // build. The literal below is the fallback (file://, or a stripped query) and is
 // still bumped by `npm run release` — see CLAUDE.md "CACHE WORKFLOW".
 const VAULT_BUILD = (() => {
-  const FALLBACK = 'v225';
+  const FALLBACK = 'v226';
   try {
     const src = (document.currentScript && document.currentScript.src) || '';
     const m = src.match(/[?&]v=(\d+)/);
@@ -876,6 +876,12 @@ const I18N = {
     rotation_cycle: 'Workout cycle',
     add_workout: 'Add workout',
     rotation_preview: 'Next 7 days',
+    min_logged: 'Minimum effort — done',
+    min_logged_sub: '{what} · {n} minutes · streak intact',
+    rest_logged_sub: 'See you tomorrow — same plan',
+    rest_undo: 'Undo',
+    anyway_start_named: 'Start — {name}',
+    anyway_lagging_sub2: '{m} — not in this week’s plan',
     rest_min_go: 'Start — {n} minutes',
     train_anyway: 'I could train today',
     anyway_title: 'Feeling up to it today?',
@@ -885,7 +891,6 @@ const I18N = {
     anyway_lagging: 'A lagging muscle',
     anyway_tomorrow: "Tomorrow's workout, now",
     anyway_tomorrow_sub: 'Moves the plan a full day',
-    anyway_start: 'Start',
     anyway_keep_rest: 'No, I will finish my rest',
     anyway_moved: 'The plan moved a day forward.',
     last_7_days: 'The last 7 days',
@@ -979,14 +984,11 @@ const I18N = {
     no_exercises_picked: 'No exercises picked yet',
     rest_day: 'Rest',
     rest_today_title: 'Today is off',
-    rest_today_sub: 'Your cycle picks up where it left off.',
-    rest_today_next: 'Next up {day} — {name}. Nothing was lost.',
     rest_today_on: 'Today is off. The cycle moves with you.',
     rest_today_off: "Today is back on.",
     rest_short: 'Rest',
     minutes_short: 'm',
     rest_is_the_plan: 'Rest is part of the plan — the muscle grows today, not yesterday.',
-    rest_undo_cta: 'I can train today after all',
     // The sheet speaks in the user's voice, never the app's, and never threatens.
     rest_sheet_title_1: "So you can't train today",
     rest_sheet_body_1: "Understood — not every day is the same. Just keep this in mind: <b>don't take two in a row.</b> The first day is rest; the second is where a lapse begins. Today's streak counts anything you log, so anything at all keeps it.",
@@ -1554,17 +1556,22 @@ const I18N = {
     rotation_cycle: 'دورة التمارين',
     add_workout: 'إضافة تمرين',
     rotation_preview: 'الأيام السبعة القادمة',
+    min_logged: 'أقل مجهود — تم',
+    min_logged_sub: '{what} · {n} دقائق · السلسلة سليمة',
+    rest_logged_sub: 'نشوفك بكرة — بالخطة نفسها',
+    rest_undo: 'تراجع',
+    anyway_start_named: 'ابدأ — {name}',
+    anyway_lagging_sub2: '{m} — ما دخلت خطة الأسبوع',
     rest_min_go: 'ابدأ — {n} دقائق',
-    train_anyway: 'أستطيع التمرّن اليوم',
-    anyway_title: 'تشعر أنك قادر اليوم؟',
-    anyway_body: 'اليوم راحة في الخطة، وهذا مقصود. لكن إن كانت لديك طاقة زائدة فخذ شيئًا خفيفًا — دون أن تسحب من تمرين الغد.',
+    train_anyway: 'ممكن أتمرّن اليوم',
+    anyway_title: 'حاس إنك قادر اليوم؟',
+    anyway_body: 'اليوم راحة بالخطة وهذا مقصود. بس لو عندك طاقة زيادة، خذ شي خفيف — بدون ما تسحب من تمرين بكرة.',
     anyway_cardio: 'كارديو خفيف',
-    anyway_cardio_sub: 'مشي أو دراجة — لا يُتعب العضلة',
+    anyway_cardio_sub: 'مشي أو دراجة — ما يتعب العضلة',
     anyway_lagging: 'عضلة متأخّرة',
-    anyway_tomorrow: 'تمرين الغد من الآن',
-    anyway_tomorrow_sub: 'يحرّك الخطة يومًا كاملًا',
-    anyway_start: 'ابدأ',
-    anyway_keep_rest: 'لا، أُكمل راحتي',
+    anyway_tomorrow: 'تمرين بكرة من الآن',
+    anyway_tomorrow_sub: 'يحرّك الخطة يوم كامل',
+    anyway_keep_rest: 'لا، أكمل راحتي',
     anyway_moved: 'تحرّكت الخطة يومًا إلى الأمام.',
     last_7_days: 'آخر ٧ أيام',
     day_nothing: 'لا يوجد شيء مسجَّل في هذا اليوم.',
@@ -1654,31 +1661,28 @@ const I18N = {
     pick_exercises: 'اختر تمارين',
     no_exercises_picked: 'لم تختر أي تمارين بعد',
     rest_day: 'راحة',
-    rest_today_title: 'اليوم راحة',
-    rest_today_sub: 'دورتك تُكمل من حيث توقّفت.',
-    rest_today_next: 'التالي {day} — {name}. لم يسقط شيء.',
+    rest_today_title: 'يوم راحة',
     rest_today_on: 'اليوم راحة. الدورة تتحرّك معك.',
     rest_today_off: 'عاد اليوم يوم تمرين.',
     rest_short: 'راحة',
     minutes_short: 'د',
     rest_is_the_plan: 'الراحة جزء من الخطة — العضلة تكبر اليوم لا أمس.',
-    rest_undo_cta: 'أستطيع التمرّن اليوم',
-    rest_sheet_title_1: 'إذن لن تستطيع التمرّن اليوم',
-    rest_sheet_body_1: 'مفهوم، وليست الأيام كلها سواء. لكن اجعل هذه في ذهنك: <b>لا تأخذ يومين متتاليين.</b> اليوم الأول راحة، والثاني بداية انقطاع. والسلسلة تُحسب بالتسجيل — فأي شيء مسجَّل يُبقيها.',
-    rest_sheet_title_2: 'هذا ثاني يوم على التوالي',
-    rest_sheet_body_2: 'أخذت راحة أمس. وإن أخذت اليوم كذلك بدأ الانقطاع من هنا — وتصير العودة أثقل من التمرين نفسه.',
-    rest_streak_line: 'سلسلتك {n} يومًا — ويومٌ بلا تسجيل يقطعها',
-    rest_do_what_i_can: 'سأفعل ما بوسعي',
+    rest_sheet_title_1: 'للأسف ما حتقدر تتمرّن اليوم',
+    rest_sheet_body_1: 'مفهوم، الأيام مو كلها زي بعضها. بس خلّ هذي بذهنك: <b>لا تسحب يومين ورا بعض.</b> اليوم الأول راحة، والثاني بداية انقطاع. والسلسلة اليوم تُحسب بالتسجيل — فأي شي مسجّل يبقيها.',
+    rest_sheet_title_2: 'هذا ثاني يوم ورا بعض',
+    rest_sheet_body_2: 'أمس أخذت راحة. لو أخذت اليوم كذلك، الانقطاع يبدأ من هنا — والرجعة تصير أثقل من التمرين نفسه.',
+    rest_streak_line: 'سلسلتك {n} يوم — واليوم بلا تسجيل يقطعها',
+    rest_do_what_i_can: 'راح أعمل الي بوسعي',
     rest_full_rest: 'لا، أحتاج راحة كاملة',
     rest_full_again: 'راحة ثانية — أتحمّل النتيجة',
-    rest_min_title: 'ما الذي تقدر عليه اليوم؟',
-    rest_min_sub: 'اختر أقلّ شيء تستطيع إتمامه. المهمّ ألّا ينكسر الخطّ.',
+    rest_min_title: 'وش تقدر عليه اليوم؟',
+    rest_min_sub: 'اختر أقل شي تقدر تنهيه. المهم ما ينكسر الخط.',
     rest_min_one: 'تمرين واحد',
-    rest_min_one_sub: 'أثقل حركة في الخطة، ٣ مجموعات',
+    rest_min_one_sub: 'أثقل حركة بالخطة، ٣ مجموعات',
     rest_min_half: 'نصف الجلسة',
-    rest_min_half_sub: 'أول تمرينين فقط',
+    rest_min_half_sub: 'أول تمرينين وخلاص',
     rest_min_walk: 'مشي فقط',
-    rest_min_walk_sub: 'يُحتسب كارديو خفيفًا',
+    rest_min_walk_sub: 'يُحسب كارديو خفيف',
     rest_min_logged: 'سُجِّل. السلسلة سليمة.',
     plan_empty: 'خطتك الأسبوعية فاضية',
     plan_empty_sub: 'طبّق قالبًا جاهزًا أو ابنِها يومًا بيوم.',
@@ -2701,8 +2705,25 @@ function renderHome(el) {
   // nothing about rest at all.
   const scheduledRest = !todayIsOff && hasAnyPlan && !hasPlanToday && !DB.plan.workoutForDate(now);
 
+  // SECTION 03 — THE ROW AFTER THE DECISION. A reduced session that has been
+  // logged gets its own state: it is not "today is off", it is "minimum effort,
+  // done", and the spec is explicit that it carries no reproach and no red mark.
+  const minToday = DB.sessions.listAll()
+    .filter((s) => s.date === todayISO() && s.kind === 'minimum');
+
   let heroHtml = '';
-  if (todayIsOff || scheduledRest) {
+  if (minToday.length) {
+    const mins = minToday.length * 10;
+    const what = minToday.length === 1 ? t('rest_min_one') : t('rest_min_half');
+    heroHtml = `
+      <div class="hero-card hero-rest">
+        <div class="hero-eyebrow">${t('rest_day')} · ${escapeHtml(dayName(now.getDay(), true))}</div>
+        <div class="hero-title">${t('min_logged')}</div>
+        <div class="hero-meta">${escapeHtml(
+          t('min_logged_sub').replace('{what}', what).replace('{n}', fmtNum(mins)))}</div>
+      </div>
+    `;
+  } else if (todayIsOff || scheduledRest) {
     // Declined day. Say what it cost — nothing — because the whole reason the
     // rotation is continuous is that a missed day postpones rather than forfeits.
     const nextUp = (() => {
@@ -2718,20 +2739,30 @@ function renderHome(el) {
     // slot turns around and offers the opposite. The solid orange disappears and
     // becomes an outline only — per the spec, "a filled colour promises a task,
     // and today there is no task". The undo stays available for the whole day.
+    // TWO ROWS FROM SECTION 03, and the spec words them differently.
+    //   SCHEDULED — "يوم راحة / لا يوجد عضلات مجدولة", the note, and the outline
+    //     CTA. The solid orange drops to a line: a filled colour promises a
+    //     task and today has none.
+    //   REST LOGGED — "يوم راحة / نشوفك بكرة — بالخطة نفسها" and an Undo that
+    //     stays visible the rest of the day. No reproach, no red mark.
     heroHtml = `
       <div class="hero-card hero-rest">
         <div class="hero-eyebrow">${t('rest_day')} · ${escapeHtml(dayName(now.getDay(), true))}</div>
         <div class="hero-title">${t('rest_today_title')}</div>
-        <div class="hero-meta">${nextUp
-          ? escapeHtml(t('rest_today_next').replace('{day}', nextUp.day).replace('{name}', nextUp.name))
-          : t('rest_today_sub')}</div>
+        <div class="hero-meta">${scheduledRest
+          ? t('rest_day_muscles')
+          : t('rest_logged_sub')}</div>
+        ${scheduledRest ? `
         <div class="rest-note">
-          <span class="rest-note-icon">${icon('moon', 20)}</span>
+          <span class="rest-note-icon">${icon('bed', 22)}</span>
           <span>${t('rest_is_the_plan')}</span>
         </div>
-        <button class="hero-ghost-cta" id="${scheduledRest ? 'home-train-anyway' : 'home-undo-rest'}" type="button">
-          ${icon('dumbbell', 20)}<span>${scheduledRest ? t('train_anyway') : t('rest_undo_cta')}</span>
-        </button>
+        <button class="hero-ghost-cta" id="home-train-anyway" type="button">
+          ${icon('dumbbell', 20)}<span>${t('train_anyway')}</span>
+        </button>` : `
+        <button class="hero-ghost-cta" id="home-undo-rest" type="button">
+          ${icon('refresh', 20)}<span>${t('rest_undo')}</span>
+        </button>`}
       </div>
     `;
   } else if (hasPlanToday) {
@@ -5300,6 +5331,24 @@ function openAddSheet(date, onChange) {
 //   · It appears once a day. Twice turns advice into nuisance, and nuisance gets
 //     ignored. DB.plan.markRestPrompted() is the gate.
 // ===========================================================================
+// The 7 bars the spec puts in the second-day sheet: trained | rest | today.
+// ONE grey for rest, per the spec's own note — two greys read as decoration
+// rather than as data. Deliberately NOT the disc rail from Home: that one is a
+// navigation control, this is a static piece of evidence inside an argument.
+function last7Html() {
+  const trained = new Set([
+    ...DB.sessions.listAll().map((s) => s.date),
+    ...DB.cardio.list().map((c) => c.date),
+  ]);
+  const out = [];
+  for (let back = 6; back >= 0; back--) {
+    const iso = addDaysISO(todayISO(), -back);
+    const cls = back === 0 ? 'today' : (trained.has(iso) ? 'on' : 'rest');
+    out.push(`<i class="${cls}"></i>`);
+  }
+  return out.join('');
+}
+
 function openRestSheet() {
   const app = document.querySelector('.app');
   if (!app) return;
@@ -5322,9 +5371,14 @@ function openRestSheet() {
       <div class="rest-sheet-title">${secondInARow ? t('rest_sheet_title_2') : t('rest_sheet_title_1')}</div>
       <div class="rest-sheet-body">${secondInARow ? t('rest_sheet_body_2') : t('rest_sheet_body_1')}</div>
     </div>
-    ${streak > 0 ? `
+    ${secondInARow ? `
+      <div class="rest-last7">
+        <div class="l7-label">${t('last_7_days')}</div>
+        <div class="last7">${last7Html()}</div>
+      </div>`
+    : streak > 0 ? `
       <div class="rest-streak">
-        ${icon('flame', 22)}
+        ${icon('trophy', 22)}
         <div>${t('rest_streak_line')
           .replace('{n}', `<b class="num">${fmtNum(streak)}</b>`)}</div>
       </div>` : ''}
@@ -5478,7 +5532,8 @@ function openTrainAnywaySheet() {
   const opts = [
     { k: 'cardio', mins: 20, title: t('anyway_cardio'), sub: t('anyway_cardio_sub') },
     ...(lagging.length ? [{ k: 'lag', mins: 15, title: t('anyway_lagging'),
-        sub: lagging.map((m) => t('muscle_' + m, m)).join(' · ') }] : []),
+        sub: t('anyway_lagging_sub2').replace('{m}',
+          lagging.map((m) => t('muscle_' + m, m)).join(' و')) }] : []),
     { k: 'full', mins: 45, title: t('anyway_tomorrow'), sub: t('anyway_tomorrow_sub'), cost: true },
   ];
 
@@ -5502,7 +5557,8 @@ function openTrainAnywaySheet() {
             <span class="min-check">${icon('check', 14)}</span>
           </button>`).join('')}
       </div>
-      <button class="btn btn-primary btn-block" data-go>${t('anyway_start')}</button>
+      <button class="btn btn-primary btn-block" data-go>${
+        t('anyway_start_named').replace('{name}', escapeHtml(opts[0].title))}</button>
       <button class="btn btn-ghost btn-block" data-keep>${t('anyway_keep_rest')}</button>
     </div>`;
 
@@ -5519,6 +5575,9 @@ function openTrainAnywaySheet() {
     const pick = e.target.closest('[data-pick]');
     if (pick) {
       overlay.querySelectorAll('[data-pick]').forEach((b) => b.classList.toggle('sel', b === pick));
+      const go = overlay.querySelector('[data-go]');
+      const nm = pick.querySelector('.min-title');
+      if (go && nm) go.textContent = t('anyway_start_named').replace('{name}', nm.textContent.trim());
       return;
     }
     if (!e.target.closest('[data-go]')) return;

@@ -7225,3 +7225,26 @@ body.theme-light {
   color: var(--accent-text);
   --icon-accent: var(--accent-text);
 }
+
+/* --- the "last 7 days" evidence strip (v226) -------------------------------
+   From APPLY-restday.md, verbatim geometry. This appears ONLY inside the
+   second-day-in-a-row sheet, where it is evidence inside an argument — not the
+   disc rail from Home, which is a navigation control. Two different jobs, two
+   different shapes, on purpose.
+
+   ONE grey for rest, per the spec's own note: two greys read as decoration
+   rather than as data. Today is a dashed gold outline — it has not happened
+   yet, so it is neither filled nor spent. */
+.rest-last7 { margin-bottom: var(--sp-4, 16px); }
+.l7-label { font-size: 12.5px; color: var(--text-dim); margin-bottom: 8px; }
+.last7 { display: flex; gap: 5px; direction: ltr; }
+.last7 i { flex: 1; height: 26px; border-radius: 5px; background: var(--surface-hi); display: block; }
+.last7 i.on    { background: var(--accent); }
+.last7 i.rest  { background: #5d554d; }
+/* The spec's CSS writes `var(--up)` here and calls it "the gold". In THIS
+   codebase --up is the green up/increase semantic (#34d399), so following the
+   token name literally would paint today green and contradict the spec's own
+   copy rule, which names the colour outright: "اليوم الثاني ياخذ الذهبي
+   #e0b341". --gold is exactly that value, so the stated colour wins over a
+   token name that means something else here. */
+.last7 i.today { background: none; border: 1.5px dashed var(--gold); }
