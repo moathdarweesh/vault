@@ -12,7 +12,7 @@
 // build. The literal below is the fallback (file://, or a stripped query) and is
 // still bumped by `npm run release` — see CLAUDE.md "CACHE WORKFLOW".
 const VAULT_BUILD = (() => {
-  const FALLBACK = 'v230';
+  const FALLBACK = 'v231';
   try {
     const src = (document.currentScript && document.currentScript.src) || '';
     const m = src.match(/[?&]v=(\d+)/);
@@ -1137,6 +1137,37 @@ const I18N = {
     pr_weight: 'New PR!',
     pr_orm: 'New PR!',
     pr_both: 'New PR!',
+
+    // ---- Notifications (APPLY-notifications.md §4) -------------------------
+    // Wording rules from the spec, and they are not decoration: title <= 38
+    // chars or the OS truncates it; no exclamation marks, no praise, no threat,
+    // no "tap here" (the action lives in the buttons); "not logged", never
+    // "you missed" — zero guilt language; and the body carries a NUMBER from
+    // the user's own data rather than a motivational sentence.
+    notif_train_title: 'Push — {n} exercises',
+    notif_train_body: 'Last time: {ex} {kg} kg × {reps}.',
+    notif_train_a1: 'Start',
+    notif_train_a2: 'Snooze 1 h',
+    notif_supps_title: '{name} — {dose}',
+    notif_supps_body: 'Dose {i} of {n} today.',
+    notif_supps_a1: 'Taken',
+    notif_supps_a2: 'Skip',
+    notif_water_title: '{cur} of {goal} ml',
+    notif_water_body: '{hours} hours left in your day.',
+    notif_water_a1: '250 ml',
+    notif_water_a2: '500 ml',
+    notif_food_title: '{meal} not logged',
+    notif_food_body: '{kcal} kcal and {p} g protein left.',
+    notif_food_a1: 'Log',
+    notif_food_a2: 'Repeat yesterday',
+    notif_streak_title: '{n}-day streak at risk',
+    notif_streak_body: 'Any logged activity before midnight counts.',
+    notif_streak_a1: 'Minimum',
+    notif_streak_a2: 'Not today',
+    notif_summary_title: '{n} reminders today',
+    notif_perm_title: 'Reminders, on your terms',
+    notif_perm_body: 'Four reminders, all inside your day window, each one switchable on its own.',
+    notif_perm_cta: 'Turn on reminders',
   },
 
   ar: {
@@ -1811,6 +1842,32 @@ const I18N = {
     pr_weight: 'رقم قياسي!',
     pr_orm: 'رقم قياسي!',
     pr_both: 'رقم قياسي!',
+
+    // ---- الإشعارات (APPLY-notifications.md §4) ------------------------------
+    notif_train_title: 'دفع — {n} تمارين',
+    notif_train_body: 'آخر مرة: {ex} {kg} كغم × {reps}.',
+    notif_train_a1: 'ابدأ',
+    notif_train_a2: 'أجّل ساعة',
+    notif_supps_title: '{name} — {dose}',
+    notif_supps_body: 'الجرعة {i} من {n} اليوم.',
+    notif_supps_a1: 'أخذتها',
+    notif_supps_a2: 'تخطَّ',
+    notif_water_title: '{cur} من {goal} مل',
+    notif_water_body: 'بقي {hours} ساعات على نهاية يومك.',
+    notif_water_a1: '٢٥٠ مل',
+    notif_water_a2: '٥٠٠ مل',
+    notif_food_title: '{meal} غير مسجّل',
+    notif_food_body: 'متبقٍّ {kcal} سعرة و{p} غ بروتين.',
+    notif_food_a1: 'سجّل',
+    notif_food_a2: 'كرّر أمس',
+    notif_streak_title: 'سلسلة {n} يوماً على المحك',
+    notif_streak_body: 'أي نشاط مسجّل قبل منتصف الليل يكفي.',
+    notif_streak_a1: 'أقل مجهود',
+    notif_streak_a2: 'لا اليوم',
+    notif_summary_title: '{n} تذكيرات اليوم',
+    notif_perm_title: 'نذكّرك بشروطك',
+    notif_perm_body: 'أربعة تذكيرات فقط، كلها داخل نافذة يومك، وكل واحدة تُطفأ وحدها بأي وقت.',
+    notif_perm_cta: 'فعّل التذكيرات',
   },
 };
 
@@ -1964,6 +2021,190 @@ function resizeImageToDataUrl(file, maxSize = 800, quality = 0.78) {
 let toastTimeout = null;
 // Fully tear the toast down: hide it, drop the interactive state, cancel the
 // timer, and remove any pause/resume listeners left by an action toast. Safe to
+
+// ===========================================================================
+// THE IN-APP NOTIFICATION BAR — APPLY-notifications.md §9
+//
+// When the app is OPEN a reminder must not become a system notification (§5.1);
+// it becomes this. It is also the spec's single template for confirmations and
+// errors, so the only things that vary are the icon and, for an error, the
+// border colour. There is no green success variant by instruction — the icon
+// already carries that — and no close button: three dismiss directions plus the
+// 5s timeout are enough, and a button would steal touch area from the
+// tap-to-open that is the bar's whole purpose.
+//
+// This does NOT replace showToast(). The toast grew an action button (the undo
+// on a pulled-forward day, v229) and this bar is specified with no buttons at
+// all, so folding one into the other would delete an affordance the owner asked
+// for. They coexist: the toast is "you did something, here is the way back";
+// the bar is "here is something you did not ask for right now".
+// ===========================================================================
+
+// One bar on screen at a time (§9.4). Held in a variable rather than queried
+// from the DOM so a replacement can still read the outgoing bar's identity
+// while it is animating away.
+let ntfCurrent = null;
+let ntfTimer = null;
+
+const NTF_ICON = {
+  train: 'dumbbell', supps: 'pill', water: 'droplet',
+  food: 'utensils', streak: 'zap', summary: 'bell',
+  ok: 'check', error: 'info',
+};
+
+/**
+ * @param {{channel?:string, title:string, body?:string,
+ *          kind?:'reminder'|'ok'|'error', onOpen?:function}} p
+ */
+function showNotifBar(p) {
+  const host = document.querySelector('.app');
+  if (!host || !p || !p.title) return;
+
+  const kind = p.kind || 'reminder';
+  const channel = p.channel || (kind === 'error' ? 'error' : 'ok');
+
+  // Same channel, still on screen → swap the words, do not replay the entrance.
+  // Re-animating for a changed number is motion carrying no information, and it
+  // restarts a countdown the reader may be halfway through.
+  if (ntfCurrent && ntfCurrent.el.isConnected && ntfCurrent.channel === channel) {
+    ntfCurrent.el.querySelector('.ntf-title').textContent = p.title;
+    const b = ntfCurrent.el.querySelector('.ntf-body');
+    if (b) b.textContent = p.body || '';
+    ntfCurrent.onOpen = p.onOpen;
+    ntfArmTimer(ntfCurrent);
+    return;
+  }
+
+  const spawn = () => ntfMount(host, p, kind, channel);
+  if (ntfCurrent && ntfCurrent.el.isConnected) {
+    const old = ntfCurrent;
+    ntfCurrent = null;
+    old.spent = true;
+    clearTimeout(ntfTimer);
+    old.el.classList.add('is-swap');
+    old.el.style.transform = 'translateY(-24px)';
+    old.el.style.opacity = '0';
+    setTimeout(() => { old.el.remove(); spawn(); }, 120);
+  } else {
+    spawn();
+  }
+}
+
+function ntfMount(host, p, kind, channel) {
+  clearTimeout(ntfTimer);
+  const el = document.createElement('div');
+  el.className = 'ntf-bar is-enter' + (kind === 'error' ? ' is-error' : '');
+  // An error interrupts; a confirmation must not. `alert` preempts a screen
+  // reader mid-sentence, which is right for "no connection" and wrong for
+  // "saved" — hence two roles rather than one.
+  el.setAttribute('role', kind === 'error' ? 'alert' : 'status');
+  el.setAttribute('aria-live', kind === 'error' ? 'assertive' : 'polite');
+  el.innerHTML =
+    '<span class="ntf-icon">' + icon(NTF_ICON[channel] || 'bell', 22) + '</span>' +
+    '<span class="ntf-text"><span class="ntf-title"></span>' +
+    (p.body ? '<span class="ntf-body"></span>' : '') + '</span>';
+  el.querySelector('.ntf-title').textContent = p.title;
+  if (p.body) el.querySelector('.ntf-body').textContent = p.body;
+  host.appendChild(el);
+
+  const state = { el, channel, onOpen: p.onOpen, spent: false };
+  ntfCurrent = state;
+
+  // Enter from OUTSIDE the top edge, not from just above its resting place: its
+  // own top offset plus its height plus 12. Measured, because the height
+  // depends on whether there is a body line.
+  const rect = el.getBoundingClientRect();
+  const from = -(rect.top + rect.height + 12);
+  el.style.transform = 'translateY(' + from + 'px)';
+  requestAnimationFrame(() => {
+    el.classList.add('is-anim');
+    el.classList.remove('is-enter');
+    el.style.transform = 'translateY(0)';
+    el.style.opacity = '1';
+  });
+
+  ntfBindGesture(state);
+  ntfArmTimer(state);
+  return state;
+}
+
+// 5s — and the countdown STOPS at the first pointerdown and never resumes.
+// Someone who touched the bar is reading it; removing it on a schedule after
+// that is the app overruling them.
+function ntfArmTimer(state) {
+  clearTimeout(ntfTimer);
+  ntfTimer = setTimeout(() => ntfDismiss(state, 'y'), 5000);
+}
+
+function ntfBindGesture(state) {
+  const el = state.el;
+  let x0 = 0, y0 = 0, t0 = 0, dx = 0, ty = 0, dragging = false;
+
+  el.addEventListener('pointerdown', (e) => {
+    if (state.spent) return;
+    clearTimeout(ntfTimer);          // touched → the auto-dismiss is over
+    dragging = true;
+    x0 = e.clientX; y0 = e.clientY; t0 = Date.now();
+    dx = 0; ty = 0;
+    el.classList.remove('is-anim', 'is-return');
+    // Capture, or a fast drag that leaves the element stops delivering moves
+    // and the bar freezes mid-gesture with no pointerup to release it.
+    try { el.setPointerCapture(e.pointerId); } catch (_) {}
+  });
+
+  el.addEventListener('pointermove', (e) => {
+    if (!dragging) return;
+    dx = e.clientX - x0;
+    const raw = e.clientY - y0;
+    // Up follows the finger 1:1; down is resisted to 14% — it moves just enough
+    // to say "not this way" without implying downward is a dismissal.
+    ty = raw < 0 ? raw : raw * 0.14;
+    el.style.transform = 'translate(' + dx + 'px, ' + ty + 'px)';
+    const op = 1 - Math.abs(dx) / 240 - Math.max(0, -ty) / 170;
+    el.style.opacity = String(Math.max(0.15, op));
+  });
+
+  const end = (e) => {
+    if (!dragging) return;
+    dragging = false;
+    try { el.releasePointerCapture(e.pointerId); } catch (_) {}
+    const moved = Math.hypot(dx, e.clientY - y0);
+    // A tap is small AND quick. Distance alone would call a slow deliberate
+    // press a tap; time alone would call a fast flick one.
+    if (moved < 5 && Date.now() - t0 < 400) { ntfOpen(state); return; }
+    // Both directions dismiss, and the threshold does not flip with the UI
+    // language — the gesture is physical, not textual.
+    if (Math.abs(dx) > 90) { ntfDismiss(state, 'x', dx > 0 ? 460 : -460); return; }
+    if (ty < -56) { ntfDismiss(state, 'y'); return; }
+    el.classList.add('is-return');
+    el.style.transform = 'translate(0, 0)';
+    el.style.opacity = '1';
+  };
+  el.addEventListener('pointerup', end);
+  el.addEventListener('pointercancel', end);
+}
+
+function ntfOpen(state) {
+  const fn = state.onOpen;
+  ntfDismiss(state, 'y');
+  if (typeof fn === 'function') { try { fn(); } catch (_) {} }
+}
+
+function ntfDismiss(state, axis, to) {
+  if (!state || state.spent) return;
+  state.spent = true;
+  clearTimeout(ntfTimer);
+  const el = state.el;
+  el.classList.remove('is-anim', 'is-return');
+  el.classList.add(axis === 'x' ? 'is-outx' : 'is-outy');
+  el.style.transform = axis === 'x' ? 'translateX(' + to + 'px)' : 'translateY(-260px)';
+  el.style.opacity = '0';
+  setTimeout(() => {
+    el.remove();
+    if (ntfCurrent === state) ntfCurrent = null;
+  }, axis === 'x' ? 220 : 200);
+}
+
 // call anytime (navigation, view change, before showing a new toast).
 function hideToast() {
   const tEl = $('#toast');

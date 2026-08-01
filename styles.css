@@ -525,6 +525,7 @@ body.rest-active .main { padding-bottom: 104px; }
   to { opacity: 1; transform: translateY(0); }
 }
 
+
 /* =========================================================================
    VAULT TOP BAR (brand header)
    ========================================================================= */
@@ -6460,6 +6461,108 @@ body[dir="rtl"] .variation-select svg { transform: scaleX(-1); }
 .announcement-banner .update-banner-main { flex: 1 1 auto; }
 .announcement-banner .update-banner-actions { margin-inline-start: var(--sp-2); }
 
+/* =========================================================================
+   THE IN-APP NOTIFICATION BAR  (APPLY-notifications.md §9)
+   =========================================================================
+   One bar, one template, for all three kinds the spec names: reminders,
+   confirmations ("workout saved") and errors ("no connection"). Only two things
+   vary — the icon, and the border colour, which goes --red for errors alone.
+   There is deliberately no green success variant: the icon already says it.
+
+   It sits BEFORE the identity layer on purpose. That layer has to stay last
+   (its rules win on source order, not specificity), and these are literal
+   values from the spec rather than tokens, so they need no override from it.
+
+   No close button, by instruction: three dismiss directions plus a 5s timeout
+   are enough, and a button would steal touch area from the tap-to-open that is
+   the bar's whole point. */
+.ntf-bar {
+  position: fixed;
+  /* 8px below the header. --safe-t keeps it off the notch. */
+  top: calc(var(--safe-t, 0px) + 56px + 8px);
+  inset-inline: 16px;
+  margin-inline: auto;
+  max-width: 448px;
+  display: flex;
+  align-items: center;
+  gap: 13px;
+  padding: 14px;
+  background: #17120d;
+  border: 1px solid #2e2822;
+  border-radius: 18px;
+  box-shadow: 0 18px 40px rgba(0, 0, 0, .75);
+  /* Above the content, below the sheets — a sheet is a decision the user is in
+     the middle of, and a reminder must never land on top of it. */
+  z-index: 60;
+  cursor: pointer;
+  /* Both are load-bearing for the gesture: without touch-action the browser
+     claims the vertical drag for scrolling and the pointer events stop
+     arriving, and without user-select a horizontal drag selects the title. */
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-tap-highlight-color: transparent;
+}
+body[dir="rtl"] .ntf-bar { text-align: right; }
+
+.ntf-bar.is-error { border-color: var(--red); }
+
+.ntf-icon {
+  flex: none;
+  width: 36px;
+  height: 36px;
+  border-radius: 12px;
+  background: rgba(255, 106, 0, .13);
+  display: grid;
+  place-items: center;
+  color: var(--accent-text);
+}
+.ntf-icon svg { width: 22px; height: 22px; }
+.ntf-bar.is-error .ntf-icon { background: var(--red-bg); color: var(--red); --icon-accent: var(--red); }
+
+.ntf-text { min-width: 0; flex: 1 1 auto; }
+.ntf-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text);
+  line-height: 1.3;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/* One line, always. The spec caps the body at a single line because the bar is
+   a glance, not a document — the detail is on the screen it opens. */
+.ntf-body {
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: #8f8478;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Entry: down from above the screen edge, not merely from above the bar, so it
+   reads as arriving from outside rather than growing in place. The transform is
+   set from JS because it depends on the measured height. */
+.ntf-bar.is-enter { opacity: 0; }
+.ntf-bar.is-anim { transition: transform 300ms cubic-bezier(.2, .8, .2, 1), opacity 300ms cubic-bezier(.2, .8, .2, 1); }
+.ntf-bar.is-return { transition: transform 260ms cubic-bezier(.2, .8, .2, 1), opacity 260ms cubic-bezier(.2, .8, .2, 1); }
+.ntf-bar.is-outx { transition: transform 220ms cubic-bezier(.2, .8, .2, 1), opacity 220ms cubic-bezier(.2, .8, .2, 1); }
+.ntf-bar.is-outy { transition: transform 200ms cubic-bezier(.2, .8, .2, 1), opacity 200ms cubic-bezier(.2, .8, .2, 1); }
+/* Replacing one bar with another: it leaves faster than it arrived, so the
+   substitution reads as a swap in place rather than two separate events. */
+.ntf-bar.is-swap { transition: transform 120ms ease-in, opacity 120ms ease-in; }
+
+/* The slide is what a vestibular disorder reacts to; the fade is not, and the
+   drag is a deliberate act rather than motion done TO the reader. So the
+   translation goes and everything else stays. */
+@media (prefers-reduced-motion: reduce) {
+  .ntf-bar.is-anim,
+  .ntf-bar.is-return,
+  .ntf-bar.is-outx,
+  .ntf-bar.is-outy,
+  .ntf-bar.is-swap { transition: opacity 200ms linear; }
+}
 /* =========================================================================
    IDENTITY LAYER  (v210)
 
