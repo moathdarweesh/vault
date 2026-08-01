@@ -6593,6 +6593,140 @@ body[dir="rtl"] .ntf-bar { text-align: right; }
 }
 .rot-moved-undo:active { background: color-mix(in srgb, var(--warn) 13%, transparent); }
 
+
+/* =========================================================================
+   NOTIFICATIONS — permission sheet (§7) and settings page (§8)
+   ========================================================================= */
+
+/* --- §7 the permission sheet ------------------------------------------- */
+.ntfp-icon {
+  width: 52px; height: 52px;
+  border-radius: 16px;
+  background: rgba(255, 106, 0, .13);
+  display: grid; place-items: center;
+  color: var(--accent-text);
+  margin-bottom: var(--sp-3);
+}
+.ntfp-title { font-size: 24px; font-weight: 700; color: var(--text); line-height: 1.25; }
+.ntfp-body { font-size: 13.5px; line-height: 1.55; color: var(--text-mute); margin-top: 6px; }
+.ntfp-head { margin-bottom: var(--sp-3); }
+.ntfp-lines { display: flex; flex-direction: column; gap: 10px; margin-bottom: var(--sp-4); }
+.ntfp-line { display: flex; align-items: flex-start; gap: 11px; font-size: 13.5px; line-height: 1.45; color: var(--text-mute); }
+.ntfp-line svg { flex: none; width: 20px; height: 20px; color: var(--accent-text); margin-top: 1px; }
+/* The one filled button on this sheet. Its ink is --accent-ink, not white:
+   white on #ff6a00 measures 2.87:1, which BRAND.md itself rejects. */
+.ntfp-cta { border-radius: 14px; padding: 17px; background: var(--accent); color: var(--accent-ink); }
+
+/* --- §8 the page -------------------------------------------------------- */
+.ntfs-window { padding: var(--sp-4); }
+.ntfs-window-row { display: flex; align-items: center; gap: 12px; margin-top: var(--sp-3); }
+.ntfs-time {
+  flex: 1 1 0;
+  border: 1px solid #2e2822;
+  border-radius: 10px;
+  padding: 11px 0;
+  background: transparent;
+  color: var(--text);
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 16px;               /* 16 or iOS zooms the page on focus */
+  text-align: center;
+}
+.ntfs-window-dash { flex: none; width: 12px; height: 2px; background: var(--text-faint); border-radius: 1px; }
+.ntfs-hint { font-size: 12.5px; line-height: 1.5; color: var(--text-mute); margin-top: var(--sp-3); }
+.ntfs-foot { padding: 0 var(--sp-1); }
+
+.ntfs-list { padding: var(--sp-2) var(--sp-4); }
+/* 1px hairline between rows, inset slightly so it reads as a separator rather
+   than an edge of the card. */
+.ntfs-row + .ntfs-row { border-top: 1px solid #151009; }
+.ntfs-head { display: flex; align-items: center; gap: 13px; padding: 13px 0; }
+.ntfs-icon {
+  flex: none; width: 36px; height: 36px;
+  border-radius: 12px;
+  background: rgba(255, 106, 0, .13);
+  display: grid; place-items: center;
+  color: var(--accent-text);
+}
+.ntfs-main { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+.ntfs-title { font-size: 14px; font-weight: 600; color: var(--text); }
+.ntfs-sub { font-size: 12.5px; line-height: 1.4; color: #8f8478; }
+
+/* An off channel goes quiet in all three parts at once — icon, box and text —
+   so "off" is legible at a glance instead of only from the switch. */
+.ntfs-row.is-off .ntfs-icon { background: #151009; color: #3a322b; }
+.ntfs-row.is-off .ntfs-title { color: #6f665c; }
+.ntfs-row.is-off .ntfs-sub { color: #3a322b; }
+
+.ntfs-switch {
+  flex: none;
+  position: relative;
+  width: 46px; height: 28px;
+  border-radius: 999px;
+  background: var(--surface-3);
+  border: none;
+  cursor: pointer;
+  transition: background .18s;
+  -webkit-tap-highlight-color: transparent;
+}
+.ntfs-switch.on { background: var(--accent); }
+.ntfs-knob {
+  position: absolute; top: 3px; inset-inline-start: 3px;
+  width: 22px; height: 22px;
+  border-radius: 50%;
+  background: var(--text);
+  transition: transform .18s;
+}
+.ntfs-switch.on .ntfs-knob { transform: translateX(18px); background: var(--accent-ink); }
+body[dir="rtl"] .ntfs-switch.on .ntfs-knob { transform: translateX(-18px); }
+/* 44px touch target without growing the 28px control. */
+.ntfs-switch::after { content: ''; position: absolute; inset: -8px -4px; }
+
+.ntfs-body { padding: 0 0 13px; }
+.ntfs-choice { display: flex; flex-wrap: wrap; gap: 8px; }
+.ntfs-opt {
+  padding: 9px 13px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: transparent;
+  color: var(--text-mute);
+  font-family: inherit; font-size: 12.5px; font-weight: 600;
+  cursor: pointer;
+}
+.ntfs-opt.sel { border-color: var(--accent-line); background: var(--accent-soft); color: var(--accent-text); }
+
+.ntfs-doses { display: flex; flex-direction: column; gap: 8px; }
+.ntfs-dose {
+  display: flex; align-items: center; gap: 11px;
+  padding: 9px 11px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+}
+.ntfs-dose .num { flex: none; font-size: 13px; color: var(--text); }
+.ntfs-dose-name { flex: 1 1 auto; min-width: 0; font-size: 13px; color: var(--text-mute); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* Dashed, because it is an invitation to add rather than a committed row. */
+.ntfs-add {
+  display: flex; align-items: center; justify-content: center; gap: 8px;
+  padding: 11px;
+  border: 1px dashed #3a322b;
+  border-radius: 10px;
+  background: transparent;
+  color: var(--text-mute);
+  font-family: inherit; font-size: 13px; font-weight: 600;
+  cursor: pointer;
+}
+
+.ntfs-denied {
+  display: flex; align-items: center; gap: 13px;
+  margin: 0 0 var(--sp-3);
+  padding: 13px;
+  border: 1px solid color-mix(in srgb, var(--red) 40%, transparent);
+  border-radius: var(--radius-md, 14px);
+  background: var(--red-bg);
+}
+.ntfs-denied .ntfs-icon { background: transparent; color: var(--red); --icon-accent: var(--red); }
+.ntfs-denied .ntfs-title { color: var(--red); }
+.settings-action-chev { flex: none; color: var(--text-dim); display: grid; place-items: center; }
+
 /* =========================================================================
    IDENTITY LAYER  (v210)
 

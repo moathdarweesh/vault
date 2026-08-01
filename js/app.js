@@ -12,7 +12,7 @@
 // build. The literal below is the fallback (file://, or a stripped query) and is
 // still bumped by `npm run release` — see CLAUDE.md "CACHE WORKFLOW".
 const VAULT_BUILD = (() => {
-  const FALLBACK = 'v237';
+  const FALLBACK = 'v239';
   try {
     const src = (document.currentScript && document.currentScript.src) || '';
     const m = src.match(/[?&]v=(\d+)/);
@@ -1169,6 +1169,39 @@ const I18N = {
     notif_perm_title: 'Reminders, on your terms',
     notif_perm_body: 'Four reminders, all inside your day window, each one switchable on its own.',
     notif_perm_cta: 'Turn on reminders',
+    // ---- Notifications settings + permission sheet (§7, §8) ---------------
+    notif_settings_title: 'Notifications',
+    notif_settings_of: '{n} of 5',
+    notif_window_title: 'Your day window',
+    notif_window_hint: 'Everything is scheduled inside this. Outside it, supplements and meals wait for the start and water is skipped — there is no separate quiet-hours setting because these hours are it.',
+    notif_ch_train: 'Training',
+    notif_ch_supps: 'Supplements',
+    notif_ch_water: 'Water',
+    notif_ch_food: 'Meals',
+    notif_ch_streak: 'Streak',
+    notif_sum_train_auto: 'Half an hour before your usual time',
+    notif_sum_train_fixed: 'Every training day at {at}',
+    notif_sum_supps: '{n} doses',
+    notif_sum_supps_none: 'No doses yet',
+    notif_sum_water: 'Every {n} h until you reach your goal',
+    notif_sum_food: '{n} min after a meal window ends',
+    notif_sum_streak: 'Only when a streak of 7+ is at risk',
+    notif_sum_off: 'Off',
+    notif_train_mode_fixed: 'A fixed time',
+    notif_train_mode_auto: 'Half an hour before my usual time',
+    notif_supps_add: 'Add a dose',
+    notif_supps_name: 'Name',
+    notif_every_hours: 'Every {n} hours',
+    notif_delay_min: 'After {n} minutes',
+    notif_sys_hint: 'Sound and vibration are the system’s, not the app’s.',
+    notif_sys_open: 'Open system notification settings',
+    notif_denied: 'Blocked by the system',
+    notif_denied_sub: 'Turn notifications back on for VAULT in Android settings, then come back here.',
+    notif_perm_l1: 'Only inside the hours you set.',
+    notif_perm_l2: 'Six a day at most, and fewer in your first two weeks.',
+    notif_perm_l3: 'Every channel switches off on its own.',
+    notif_perm_l4: 'Logging something cancels its reminder.',
+    notif_perm_later: 'Not now',
   },
 
   ar: {
@@ -1870,6 +1903,39 @@ const I18N = {
     notif_perm_title: 'نذكّرك بشروطك',
     notif_perm_body: 'أربعة تذكيرات فقط، كلها داخل نافذة يومك، وكل واحدة تُطفأ وحدها بأي وقت.',
     notif_perm_cta: 'فعّل التذكيرات',
+    // ---- إعدادات الإشعارات وشيت الإذن (§7، §8) ----------------------------
+    notif_settings_title: 'الإشعارات',
+    notif_settings_of: '{n} من 5',   // Latin 5: every figure in the app goes through fmtNum, which is en-US
+    notif_window_title: 'نافذة يومك',
+    notif_window_hint: 'كل شيء يُجدول داخلها. خارجها تنتظر المكمّلات والوجبات حتى بدايتها ويسقط الماء — ولا يوجد إعداد منفصل لساعات الصمت لأن هذه الساعات هي هو.',
+    notif_ch_train: 'التمرين',
+    notif_ch_supps: 'المكمّلات',
+    notif_ch_water: 'الماء',
+    notif_ch_food: 'الوجبات',
+    notif_ch_streak: 'السلسلة',
+    notif_sum_train_auto: 'قبل موعدك المعتاد بنصف ساعة',
+    notif_sum_train_fixed: 'كل يوم تمرين الساعة {at}',
+    notif_sum_supps: '{n} جرعات',
+    notif_sum_supps_none: 'لا جرعات بعد',
+    notif_sum_water: 'كل {n} ساعات حتى تبلغ هدفك',
+    notif_sum_food: 'بعد نهاية نافذة الوجبة بـ{n} دقيقة',
+    notif_sum_streak: 'فقط حين تكون سلسلة ٧ أيام فأكثر على المحك',
+    notif_sum_off: 'مطفأة',
+    notif_train_mode_fixed: 'وقت ثابت',
+    notif_train_mode_auto: 'قبل موعدي المعتاد بنصف ساعة',
+    notif_supps_add: 'أضف جرعة',
+    notif_supps_name: 'الاسم',
+    notif_every_hours: 'كل {n} ساعات',
+    notif_delay_min: 'بعد {n} دقيقة',
+    notif_sys_hint: 'الصوت والاهتزاز من النظام لا من التطبيق.',
+    notif_sys_open: 'افتح إعدادات إشعارات النظام',
+    notif_denied: 'معطّلة من النظام',
+    notif_denied_sub: 'أعِد تفعيل الإشعارات لتطبيق VAULT من إعدادات أندرويد ثم ارجع إلى هنا.',
+    notif_perm_l1: 'داخل الساعات التي تحدّدها وحدها.',
+    notif_perm_l2: 'ستة يومياً بحدّ أقصى، وأقل في أسبوعيك الأولين.',
+    notif_perm_l3: 'كل قناة تُطفأ وحدها.',
+    notif_perm_l4: 'تسجيل الشيء يلغي تذكيره.',
+    notif_perm_later: 'مو الآن',
   },
 };
 
@@ -2024,6 +2090,278 @@ let toastTimeout = null;
 // Fully tear the toast down: hide it, drop the interactive state, cancel the
 // timer, and remove any pause/resume listeners left by an action toast. Safe to
 
+
+
+// ===========================================================================
+// §7 — THE PERMISSION SHEET. One chance, spent deliberately.
+//
+// Not on first open: a permission prompt before the app has done anything for
+// you is a request with no case behind it, and on Android 13+ a dialog
+// dismissed twice is hard-denied FOREVER. So it waits until after the first
+// logged workout, when there is something concrete to remind you about, and it
+// appears exactly once — `asked` is set on the way out either way.
+//
+// requestPermission() fires ONLY from the filled button. "Not now" must not
+// call it: that is the whole point of asking in our own UI first, and a "not
+// now" that burns the OS prompt would be worse than never asking.
+// ===========================================================================
+function openNotifPermSheet() {
+  const app = document.querySelector('.app');
+  if (!app) return;
+  document.getElementById('notif-perm-overlay')?.remove();
+
+  const overlay = document.createElement('div');
+  overlay.id = 'notif-perm-overlay';
+  overlay.className = 'sheet-overlay';
+  const line = (k) => `<div class="ntfp-line">${icon('check', 20)}<span>${t(k)}</span></div>`;
+  overlay.innerHTML = `
+    <div class="add-sheet ntfp-sheet" role="dialog" aria-modal="true"
+         aria-label="${escapeHtml(t('notif_perm_title'))}">
+      <div class="sheet-handle"></div>
+      <div class="ntfp-icon">${icon('bell', 28)}</div>
+      <div class="ntfp-head">
+        <div class="ntfp-title">${t('notif_perm_title')}</div>
+        <div class="ntfp-body">${t('notif_perm_body')}</div>
+      </div>
+      <div class="ntfp-lines">
+        ${line('notif_perm_l1')}${line('notif_perm_l2')}${line('notif_perm_l3')}${line('notif_perm_l4')}
+      </div>
+      <div class="rest-sheet-actions">
+        <button type="button" class="btn btn-primary btn-block ntfp-cta" data-allow>${t('notif_perm_cta')}</button>
+        <button type="button" class="btn btn-ghost btn-block" data-later>${t('notif_perm_later')}</button>
+      </div>
+    </div>`;
+  app.appendChild(overlay);
+  requestAnimationFrame(() => overlay.classList.add('open'));
+
+  const close = () => {
+    // Asked, whichever way it went. The sheet never reappears on its own; the
+    // settings row is the only way back to it.
+    DB.notif.setAsked();
+    overlay.classList.remove('open');
+    setTimeout(() => overlay.remove(), 260);
+  };
+
+  overlay.addEventListener('click', async (e) => {
+    if (e.target === overlay || e.target.closest('[data-later]')) { close(); return; }
+    if (!e.target.closest('[data-allow]')) return;
+    close();
+    try {
+      if (typeof Notification !== 'undefined' && Notification.permission === 'default') {
+        await Notification.requestPermission();
+      }
+    } catch (_) {}
+    // No test notification after enabling, by instruction: the first thing the
+    // feature does must be something the user actually wanted.
+    armNotifications();
+    renderView('home');
+  });
+}
+
+// Called after a session is logged. The gate is `asked`, not a counter, so this
+// is safe to call from every save path.
+function maybeAskNotifPermission() {
+  try {
+    if (DB.notif.get().asked) return;
+    if (typeof Notification === 'undefined') return;
+    if (Notification.permission !== 'default') { DB.notif.setAsked(); return; }
+    if (!DB.sessions.listAll().some((s) => s.sets && s.sets.length)) return;
+    setTimeout(openNotifPermSheet, 700);   // let the save toast land first
+  } catch (_) {}
+}
+
+// ===========================================================================
+// §8 — THE NOTIFICATIONS PAGE. Every channel on one screen.
+//
+// Three things are deliberately absent and each is a rule, not an oversight:
+//   · no quiet-hours setting — quiet hours ARE the outside of the day window,
+//     so a second control would be a second source of truth for one fact;
+//   · no daily cap control — the cap is a guard, and a guard offered as an
+//     option is a guard the user can switch off;
+//   · no sound / priority / master-off — those belong to the OS, and copying
+//     them here creates two switches where the system's always wins.
+// ===========================================================================
+function renderNotifications(el) {
+  const cfg = DB.notif.get();
+  const ch = cfg.channels;
+  const onCount = Object.keys(ch).filter((k) => ch[k].on).length;
+  const denied = (typeof Notification !== 'undefined' && Notification.permission === 'denied');
+
+  const sub = (id) => {
+    if (!ch[id].on) return t('notif_sum_off');
+    switch (id) {
+      case 'train': return ch.train.mode === 'auto'
+        ? t('notif_sum_train_auto')
+        : t('notif_sum_train_fixed').replace('{at}', ch.train.at);
+      case 'supps': return ch.supps.doses.length
+        ? t('notif_sum_supps').replace('{n}', fmtNum(ch.supps.doses.length))
+        : t('notif_sum_supps_none');
+      case 'water': return t('notif_sum_water').replace('{n}', fmtNum(Math.round(ch.water.everyMin / 60)));
+      case 'food': return t('notif_sum_food').replace('{n}', fmtNum(ch.food.delayMin));
+      default: return t('notif_sum_streak');
+    }
+  };
+  const ICONS_FOR = { train: 'dumbbell', supps: 'pill', water: 'droplet', food: 'utensils', streak: 'zap' };
+
+  const row = (id, body) => `
+    <div class="ntfs-row${ch[id].on ? '' : ' is-off'}">
+      <div class="ntfs-head">
+        <span class="ntfs-icon">${icon(ICONS_FOR[id], 22)}</span>
+        <span class="ntfs-main">
+          <span class="ntfs-title">${t('notif_ch_' + id)}</span>
+          <span class="ntfs-sub">${escapeHtml(sub(id))}</span>
+        </span>
+        <button type="button" class="ntfs-switch${ch[id].on ? ' on' : ''}" role="switch"
+                aria-checked="${ch[id].on}" aria-label="${escapeHtml(t('notif_ch_' + id))}"
+                data-toggle="${id}"><span class="ntfs-knob"></span></button>
+      </div>
+      ${ch[id].on && body ? `<div class="ntfs-body">${body}</div>` : ''}
+    </div>`;
+
+  const trainBody = `
+    <div class="ntfs-choice">
+      <button type="button" class="ntfs-opt${ch.train.mode === 'auto' ? ' sel' : ''}" data-train-mode="auto">${t('notif_train_mode_auto')}</button>
+      <button type="button" class="ntfs-opt${ch.train.mode === 'fixed' ? ' sel' : ''}" data-train-mode="fixed">${t('notif_train_mode_fixed')}</button>
+    </div>
+    ${ch.train.mode === 'fixed' ? `<input type="time" class="ntfs-time" value="${escapeHtml(ch.train.at)}" data-train-at>` : ''}`;
+
+  const suppsBody = `
+    <div class="ntfs-doses">
+      ${ch.supps.doses.map((d) => `
+        <div class="ntfs-dose">
+          <span class="num" dir="ltr">${escapeHtml(d.at || '')}</span>
+          <span class="ntfs-dose-name">${escapeHtml(d.name || '')}</span>
+          <button type="button" class="icon-btn" data-rm-dose="${escapeHtml(d.id)}"
+                  aria-label="${escapeHtml(t('delete'))}">${icon('close', 16)}</button>
+        </div>`).join('')}
+      <button type="button" class="ntfs-add" data-add-dose>${icon('plus', 20)} ${t('notif_supps_add')}</button>
+    </div>`;
+
+  const waterBody = `
+    <div class="ntfs-choice">
+      ${[1, 2, 3].map((h) => `<button type="button" class="ntfs-opt${Math.round(ch.water.everyMin / 60) === h ? ' sel' : ''}" data-water-h="${h}">${t('notif_every_hours').replace('{n}', fmtNum(h))}</button>`).join('')}
+    </div>`;
+
+  const foodBody = `
+    <div class="ntfs-choice">
+      ${[30, 60, 90].map((m) => `<button type="button" class="ntfs-opt${ch.food.delayMin === m ? ' sel' : ''}" data-food-m="${m}">${t('notif_delay_min').replace('{n}', fmtNum(m))}</button>`).join('')}
+    </div>`;
+
+  el.innerHTML = `
+    <div class="detail-top">
+      <button class="back-btn" data-goto="settings" aria-label="${escapeHtml(t('back'))}">${icon('back', 20)}</button>
+      <div class="detail-top-title">${t('notif_settings_title')}</div>
+    </div>
+
+    ${denied ? `
+      <div class="ntfs-denied">
+        <span class="ntfs-icon">${icon('bellOff', 22)}</span>
+        <span class="ntfs-main">
+          <span class="ntfs-title">${t('notif_denied')}</span>
+          <span class="ntfs-sub">${t('notif_denied_sub')}</span>
+        </span>
+      </div>` : ''}
+
+    <div class="card ntfs-window">
+      <div class="rot-section-title">${t('notif_window_title')}</div>
+      <div class="ntfs-window-row">
+        <input type="time" class="ntfs-time num" value="${escapeHtml(cfg.window.start)}" data-win="start" aria-label="${escapeHtml(t('notif_window_title'))}">
+        <span class="ntfs-window-dash"></span>
+        <input type="time" class="ntfs-time num" value="${escapeHtml(cfg.window.end)}" data-win="end" aria-label="${escapeHtml(t('notif_window_title'))}">
+      </div>
+      <div class="ntfs-hint">${t('notif_window_hint')}</div>
+    </div>
+
+    <div class="card ntfs-list">
+      ${row('train', trainBody)}
+      ${row('supps', suppsBody)}
+      ${row('water', waterBody)}
+      ${row('food', foodBody)}
+      ${row('streak', '')}
+    </div>
+
+    <div class="ntfs-hint ntfs-foot">${t('notif_sys_hint')}</div>
+    <button class="settings-action-row" id="ntfs-sys">
+      <div class="settings-action-icon">${icon('settings', 20)}</div>
+      <div class="settings-action-main">
+        <div class="settings-action-title">${t('notif_sys_open')}</div>
+      </div>
+    </button>
+  `;
+
+  const redraw = () => { armNotifications(); renderNotifications(el); };
+
+  el.querySelectorAll('[data-toggle]').forEach((b) => b.addEventListener('click', () => {
+    const id = b.dataset.toggle;
+    DB.notif.setChannel(id, { on: !DB.notif.get().channels[id].on });
+    redraw();
+  }));
+  el.querySelectorAll('[data-train-mode]').forEach((b) => b.addEventListener('click', () => {
+    DB.notif.setChannel('train', { mode: b.dataset.trainMode }); redraw();
+  }));
+  el.querySelector('[data-train-at]')?.addEventListener('change', (e) => {
+    if (e.target.value) { DB.notif.setChannel('train', { at: e.target.value }); redraw(); }
+  });
+  el.querySelectorAll('[data-water-h]').forEach((b) => b.addEventListener('click', () => {
+    DB.notif.setChannel('water', { everyMin: Number(b.dataset.waterH) * 60 }); redraw();
+  }));
+  el.querySelectorAll('[data-food-m]').forEach((b) => b.addEventListener('click', () => {
+    DB.notif.setChannel('food', { delayMin: Number(b.dataset.foodM) }); redraw();
+  }));
+  el.querySelectorAll('[data-win]').forEach((i) => i.addEventListener('change', () => {
+    if (i.value) { DB.notif.setWindow({ [i.dataset.win]: i.value }); redraw(); }
+  }));
+  el.querySelectorAll('[data-rm-dose]').forEach((b) => b.addEventListener('click', () => {
+    const doses = DB.notif.get().channels.supps.doses.filter((d) => d.id !== b.dataset.rmDose);
+    DB.notif.setChannel('supps', { doses }); redraw();
+  }));
+  el.querySelector('[data-add-dose]')?.addEventListener('click', () => {
+    openDoseModal((at, name) => {
+      const doses = DB.notif.get().channels.supps.doses.slice();
+      // A dose id must be stable — the notification tag is built from it, so a
+      // regenerated id would let the same dose notify twice in one day.
+      doses.push({ id: 'd' + Date.now().toString(36), at, name });
+      DB.notif.setChannel('supps', { doses });
+      redraw();
+    });
+  });
+  $('#ntfs-sys', el)?.addEventListener('click', () => {
+    // Native only: on the web there is no app-settings page to open, so the row
+    // explains rather than pretending to navigate.
+    if (window.Notify && window.Notify.isNative && window.Notify.isNative()) {
+      try { window.Notify.diagnose && window.Notify.diagnose(); } catch (_) {}
+    }
+    showNotifBar({ kind: 'ok', channel: 'summary', title: t('notif_sys_hint') });
+  });
+}
+
+// A dose is a time plus a name; both are required, so this is a small modal
+// rather than two inline fields that can be left half-filled.
+function openDoseModal(onSave) {
+  const overlay = openModal(`
+    <div class="modal-title">${t('notif_supps_add')}</div>
+    <div class="form-group">
+      <label class="form-label" for="dose-name">${t('notif_supps_name')}</label>
+      <input type="text" class="form-input" id="dose-name" maxlength="40">
+    </div>
+    <div class="form-group">
+      <label class="form-label" for="dose-at">${t('notif_settings_title')}</label>
+      <input type="time" class="form-input num" id="dose-at" value="08:00">
+    </div>
+    <div class="form-actions">
+      <button type="button" class="btn btn-ghost" data-close>${t('cancel')}</button>
+      <button type="button" class="btn btn-primary" data-ok>${t('save')}</button>
+    </div>
+  `);
+  overlay.querySelector('[data-ok]').addEventListener('click', () => {
+    const name = (overlay.querySelector('#dose-name').value || '').trim();
+    const at = overlay.querySelector('#dose-at').value || '';
+    if (!name || !at) return;          // both required; the button just does nothing
+    closeModal();
+    onSave(at, name);
+  });
+  setTimeout(() => overlay.querySelector('#dose-name')?.focus(), 40);
+}
 
 // ===========================================================================
 // NOTIFICATION DELIVERY — APPLY-notifications.md §3.2
@@ -2612,7 +2950,7 @@ function navigate(view, context = {}, opts = {}) {
     planner: 'workouts', 'personal-records': 'workouts', 'muscle-sessions': 'workouts',
     cardio: 'cardio', food: 'food', sleep: 'sleep',
     compare: 'home', settings: 'home', calendar: 'home', supplements: 'home', foodlog: 'food',
-    day: 'home',
+    day: 'home', notifications: 'home',
   };
   const highlightView = navMap[view] || view;
   $$('.nav-btn').forEach((b) => b.classList.toggle('active', b.dataset.view === highlightView));
@@ -2829,6 +3167,7 @@ function renderView(view) {
     case 'planner': renderPlanner(el); break;
     case 'calendar': renderCalendar(el); break;
     case 'supplements': renderSupplements(el); break;
+    case 'notifications': renderNotifications(el); break;
     case 'foodlog': renderFoodLog(el); break;
     case 'session-day': renderSessionDay(el); break;
     case 'session-run': renderSessionRun(el); break;
@@ -7295,6 +7634,18 @@ function renderSettings(el) {
 
     <div class="settings-section">
       <div class="section-title">${t('remind_title')}</div>
+      <button class="settings-action-row" id="notifications-btn">
+        <div class="settings-action-icon">${icon('bell', 20)}</div>
+        <div class="settings-action-main">
+          <div class="settings-action-title">${t('notif_settings_title')}</div>
+          <div class="settings-action-sub">${(() => {
+            const c = DB.notif.get().channels;
+            const n = Object.keys(c).filter((k) => c[k].on).length;
+            return t('notif_settings_of').replace('{n}', fmtNum(n));
+          })()}</div>
+        </div>
+        <span class="icon-mirror settings-action-chev">${icon('chevronRight', 16)}</span>
+      </button>
       <button class="settings-action-row" id="reminders-btn">
         <div class="settings-action-icon">${icon('clock', 20)}</div>
         <div class="settings-action-main">
@@ -7401,6 +7752,7 @@ function renderSettings(el) {
     else showToast(t('health_only_android'));
   });
 
+  $('#notifications-btn', el)?.addEventListener('click', () => navigate('notifications'));
   $('#reminders-btn', el)?.addEventListener('click', async () => {
     // Opening the screen counts as "touching notifications": if reminders are
     // already switched on but the OS permission is missing (revoked in system
@@ -8431,6 +8783,10 @@ function renderSessionDay(el) {
       }
       st.dirty = false;
       renderSessionDay(el);
+      // §7: the permission sheet waits for the FIRST logged workout, so this is
+      // the only place that can raise it. It gates itself on `asked`, so calling
+      // it on every save is correct rather than merely harmless.
+      maybeAskNotifPermission();
     })
   );
 }
