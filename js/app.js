@@ -12,7 +12,7 @@
 // build. The literal below is the fallback (file://, or a stripped query) and is
 // still bumped by `npm run release` — see CLAUDE.md "CACHE WORKFLOW".
 const VAULT_BUILD = (() => {
-  const FALLBACK = 'v239';
+  const FALLBACK = 'v240';
   try {
     const src = (document.currentScript && document.currentScript.src) || '';
     const m = src.match(/[?&]v=(\d+)/);
@@ -1191,6 +1191,7 @@ const I18N = {
     notif_train_mode_auto: 'Half an hour before my usual time',
     notif_supps_add: 'Add a dose',
     notif_supps_name: 'Name',
+    notif_supps_time: 'Time',
     notif_every_hours: 'Every {n} hours',
     notif_delay_min: 'After {n} minutes',
     notif_sys_hint: 'Sound and vibration are the system’s, not the app’s.',
@@ -1925,6 +1926,7 @@ const I18N = {
     notif_train_mode_auto: 'قبل موعدي المعتاد بنصف ساعة',
     notif_supps_add: 'أضف جرعة',
     notif_supps_name: 'الاسم',
+    notif_supps_time: 'الوقت',
     notif_every_hours: 'كل {n} ساعات',
     notif_delay_min: 'بعد {n} دقيقة',
     notif_sys_hint: 'الصوت والاهتزاز من النظام لا من التطبيق.',
@@ -2135,8 +2137,9 @@ function openNotifPermSheet() {
   requestAnimationFrame(() => overlay.classList.add('open'));
 
   const close = () => {
-    // Asked, whichever way it went. The sheet never reappears on its own; the
-    // settings row is the only way back to it.
+    // Asked, whichever way it went. The sheet never reappears on its own — the
+    // "turn on reminders" row on the notifications page is the only way back,
+    // and it is shown exactly while the OS prompt is still winnable.
     DB.notif.setAsked();
     overlay.classList.remove('open');
     setTimeout(() => overlay.remove(), 260);
@@ -2253,6 +2256,15 @@ function renderNotifications(el) {
       <div class="detail-top-title">${t('notif_settings_title')}</div>
     </div>
 
+    ${(!denied && typeof Notification !== 'undefined' && Notification.permission === 'default') ? `
+      <button class="settings-action-row ntfs-enable" id="ntfs-enable">
+        <div class="settings-action-icon">${icon('bell', 20)}</div>
+        <div class="settings-action-main">
+          <div class="settings-action-title">${t('notif_perm_cta')}</div>
+          <div class="settings-action-sub">${t('notif_perm_body')}</div>
+        </div>
+      </button>` : ''}
+
     ${denied ? `
       <div class="ntfs-denied">
         <span class="ntfs-icon">${icon('bellOff', 22)}</span>
@@ -2325,6 +2337,10 @@ function renderNotifications(el) {
       redraw();
     });
   });
+  // The ONLY way back to the OS prompt after "not now". Without it that button
+  // is a one-way door: the sheet never reopens by itself, so a user who
+  // deferred once could never enable reminders from inside the app again.
+  $('#ntfs-enable', el)?.addEventListener('click', () => openNotifPermSheet());
   $('#ntfs-sys', el)?.addEventListener('click', () => {
     // Native only: on the web there is no app-settings page to open, so the row
     // explains rather than pretending to navigate.
@@ -2345,7 +2361,7 @@ function openDoseModal(onSave) {
       <input type="text" class="form-input" id="dose-name" maxlength="40">
     </div>
     <div class="form-group">
-      <label class="form-label" for="dose-at">${t('notif_settings_title')}</label>
+      <label class="form-label" for="dose-at">${t('notif_supps_time')}</label>
       <input type="time" class="form-input num" id="dose-at" value="08:00">
     </div>
     <div class="form-actions">
@@ -5305,6 +5321,7 @@ function openSessionModal(exerciseId, sessionId = null) {
     }
     closeModal();
     renderView(currentView);
+    maybeAskNotifPermission();
   });
 }
 
@@ -8783,9 +8800,11 @@ function renderSessionDay(el) {
       }
       st.dirty = false;
       renderSessionDay(el);
-      // §7: the permission sheet waits for the FIRST logged workout, so this is
-      // the only place that can raise it. It gates itself on `asked`, so calling
-      // it on every save is correct rather than merely harmless.
+      // §7: the permission sheet waits for the FIRST logged workout, so EVERY
+      // save path calls this — there are THREE (here, guided mode's summary and
+      // the exercise-detail modal), and wiring only this one meant a user who
+      // logs through guided mode was never asked, ever. It self-gates on
+      // `asked`, so calling it from all three is correct, not merely harmless.
       maybeAskNotifPermission();
     })
   );
@@ -9063,6 +9082,7 @@ function renderSessionRun(el) {
         if (entry.view === 'session-day' && entry.context) entry.context.sdState = {};
       });
       showToast(t('session_saved'));
+      maybeAskNotifPermission();
       if (!goBack()) navigate('session-day', { dow });
     });
     return;
