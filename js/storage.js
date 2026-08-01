@@ -400,6 +400,9 @@ function defaultState() {
     // reminder means "08:00 wherever you are", so it must survive a timezone
     // change and DST without shifting.
     reminders: { enabled: false, water: { on: false, from: '09:00', to: '21:00', everyMin: 120 } },
+    // Notification config (APPLY-notifications.md §2). The per-day cap ledger
+    // is NOT here — it is device-local; see DB.notif.
+    notif: null,
     supplementLogs: {},
     foodLogs: {},
     water: {}, // per-day water intake in ml, keyed by YYYY-MM-DD
@@ -1545,6 +1548,231 @@ const DB = {
   },
 
   // ----- Reminders -----
+
+  // =========================================================================
+  // NOTIFICATIONS — APPLY-notifications.md §2, §3, §6
+  //
+  // The spec asks for one key, `localStorage['vault.notif.v1']`, holding the
+  // whole thing. It is split here, deliberately, along the line between a
+  // PREFERENCE and a COUNTER:
+  //
+  //   · the config (window, channels) lives in the blob, reached through DB.*
+  //     like everything else. Writing it straight to localStorage would break
+  //     this project's one hard storage rule AND would mean the reminder times
+  //     you set on the phone never reach the web, because only the blob syncs.
+  //   · `day` — today's date, count and sent tags — stays device-local, and
+  //     that is not a shortcut. It is the daily-cap ledger. Syncing it would let
+  //     a cap spent on the phone silence the laptop, which is the opposite of
+  //     what a per-device cap means.
+  //
+  // The SHAPE the spec specifies is kept exactly; only where each half is
+  // written changes.
+  // =========================================================================
+  notif: {
+    DAY_KEY: 'vault.notif.day.v1',
+
+    defaults() {
+      return {
+        asked: false,
+        window: { start: '07:00', end: '23:30' },
+        channels: {
+          train: { on: true, mode: 'auto', at: '09:00', offsetMin: 30 },
+          supps: { on: true, doses: [] },
+          water: { on: true, everyMin: 120 },
+          food: { on: true, delayMin: 60 },
+          streak: { on: true },
+        },
+      };
+    },
+
+    // Same discipline as DB.reminders: get() fixes the shape, every setter
+    // writes the WHOLE object back, so no setter can drop a sibling's field.
+    get() {
+      const d = this.defaults();
+      const n = STATE.notif || {};
+      const c = n.channels || {};
+      return {
+        asked: !!n.asked,
+        window: Object.assign(d.window, n.window || {}),
+        channels: {
+          train: Object.assign(d.channels.train, c.train || {}),
+          supps: Object.assign(d.channels.supps, c.supps || {}, {
+            doses: Array.isArray((c.supps || {}).doses) ? c.supps.doses.slice() : [],
+          }),
+          water: Object.assign(d.channels.water, c.water || {}),
+          food: Object.assign(d.channels.food, c.food || {}),
+          streak: Object.assign(d.channels.streak, c.streak || {}),
+        },
+      };
+    },
+    setAsked() { STATE.notif = Object.assign(this.get(), { asked: true }); save(); },
+    setWindow(patch) {
+      const cur = this.get();
+      STATE.notif = Object.assign(cur, { window: Object.assign(cur.window, patch || {}) });
+      save();
+    },
+    setChannel(id, patch) {
+      const cur = this.get();
+      if (!cur.channels[id]) return;
+      cur.channels[id] = Object.assign(cur.channels[id], patch || {});
+      STATE.notif = cur;
+      save();
+    },
+
+    // ----- today's ledger (device-local, see the note above) ----------------
+    day() {
+      let d = null;
+      try { d = JSON.parse(localStorage.getItem(this.DAY_KEY) || 'null'); } catch (_) { d = null; }
+      const today = todayISO();
+      if (!d || d.date !== today) d = { date: today, count: 0, sent: [] };
+      return d;
+    },
+    _writeDay(d) {
+      try { localStorage.setItem(this.DAY_KEY, JSON.stringify(d)); } catch (_) {}
+    },
+    markSent(tag) {
+      const d = this.day();
+      if (d.sent.indexOf(tag) !== -1) return false;   // the tag IS the dedupe
+      d.sent.push(tag);
+      d.count += 1;
+      this._writeDay(d);
+      return true;
+    },
+    alreadySent(tag) { return this.day().sent.indexOf(tag) !== -1; },
+
+    // The cap is 6, or 3 while the account is under 14 days old — a new user
+    // judges the app by its first week, and six a day in that week reads as
+    // noise before any of it has proved useful. Not exposed as a setting.
+    dailyCap() {
+      const first = (STATE.sessions || []).concat(STATE.cardio || [])
+        .map((s) => s.date).filter(Boolean).sort()[0];
+      if (!first) return 3;
+      const age = Math.floor((Date.now() - new Date(first + 'T00:00:00').getTime()) / 864e5);
+      return age < 14 ? 3 : 6;
+    },
+
+    // ----- the wake window --------------------------------------------------
+    // start > end means it crosses midnight (14:00 -> 06:00), so the test has
+    // to be an OR rather than a range. Getting this wrong silently drops every
+    // reminder for anyone on a night schedule.
+    inWindow(hhmm) {
+      const w = this.get().window;
+      const m = (s) => { const [h, mi] = String(s).split(':').map(Number); return h * 60 + mi; };
+      const t = m(hhmm), a = m(w.start), b = m(w.end);
+      return a <= b ? (t >= a && t <= b) : (t >= a || t <= b);
+    },
+
+    // ----- §3: the schedule -------------------------------------------------
+    // Returns [{ at:'HH:MM', channel, tag, payload }] for TODAY, already past
+    // every guard in §6. It computes and nothing else: no sending, no timers,
+    // no platform knowledge. That is what lets the executor be swapped later
+    // without touching any of this.
+    scheduleAll() {
+      const out = [];
+      const cfg = this.get();
+      const ch = cfg.channels;
+      const today = todayISO();
+      const push = (at, channel, tag, payload) => out.push({ at, channel, tag, payload });
+
+      // -- train ------------------------------------------------------------
+      // Training days only, and never on a scheduled rest day.
+      if (ch.train.on && DB.plan.workoutForDate(new Date())) {
+        let at = ch.train.at || '09:00';
+        if (ch.train.mode === 'auto') {
+          // `createdAt`, not a start time — sessions do not record one. It is
+          // the moment the set was logged, which happens during or right after
+          // the workout, so its time-of-day is the closest thing the data has
+          // to "when do they train". Checked: no session field named startedAt
+          // exists anywhere, so averaging that would have silently found zero
+          // samples and fallen back to 09:00 forever.
+          const times = (STATE.sessions || [])
+            .filter((s) => s.createdAt).slice(-10).map((s) => new Date(s.createdAt))
+            .filter((d) => !isNaN(d));
+          if (times.length >= 3) {
+            const avg = times.reduce((a, d) => a + d.getHours() * 60 + d.getMinutes(), 0) / times.length;
+            const mins = Math.max(0, Math.round(avg) - (Number(ch.train.offsetMin) || 30));
+            at = pad2(Math.floor(mins / 60)) + ':' + pad2(mins % 60);
+          }
+          // Under three logged sessions there is no habit to infer, so the spec
+          // fixes 09:00 rather than averaging one data point into a guess.
+        }
+        push(at, 'train', 'train:' + today, {});
+      }
+
+      // -- supps -------------------------------------------------------------
+      // One per configured dose, at its own time. No time is ever suggested.
+      if (ch.supps.on) {
+        ch.supps.doses.forEach((d, i) => {
+          if (!d || !d.at) return;
+          push(d.at, 'supps', 'supps:' + (d.id || i) + ':' + today,
+            { name: d.name || '', i: i + 1, n: ch.supps.doses.length });
+        });
+      }
+
+      // -- water -------------------------------------------------------------
+      // No goal set → the channel says nothing at all, rather than nagging
+      // toward a number the user never chose.
+      // NOTE: DB.water.goal() is currently the constant GOAL_ML (2500) with no
+      // way for the user to change it, so this guard cannot fire today. It is
+      // written anyway because the spec requires a channel with no target to
+      // stay silent, and the day the goal becomes editable this is already
+      // correct rather than newly wrong.
+      const goal = (DB.water && DB.water.goal) ? DB.water.goal() : 0;
+      if (ch.water.on && goal > 0) {
+        const step = Math.max(30, Number(ch.water.everyMin) || 120);
+        const [sh, sm] = cfg.window.start.split(':').map(Number);
+        const [eh, em] = cfg.window.end.split(':').map(Number);
+        let t = sh * 60 + sm;
+        const end = (eh * 60 + em) + (eh * 60 + em < sh * 60 + sm ? 1440 : 0);
+        let slot = 0;
+        while (t <= end && slot < 5) {          // §3: at most 5
+          const hh = pad2(Math.floor((t % 1440) / 60)) + ':' + pad2(t % 60);
+          push(hh, 'water', 'water:' + today + ':' + slot, { slot });
+          t += step; slot++;
+        }
+      }
+
+      // -- streak -------------------------------------------------------------
+      // 19:30, and all three conditions together: a streak worth protecting,
+      // nothing logged today, and no last-call already sent for training.
+      // computeStreak() lives in app.js, which loads AFTER this file. At call
+      // time it is a global and resolves fine, but guard it so a scheduleAll()
+      // from an early boot path cannot throw on a function that is not there
+      // yet. The spec forbids inventing streak behaviour, so if it is missing
+      // the channel simply says nothing.
+      const streakNow = (typeof computeStreak === 'function') ? computeStreak() : 0;
+      if (ch.streak.on && streakNow >= 7) {
+        push('19:30', 'streak', 'streak:' + today, { n: streakNow });
+      }
+
+      // §6 guards, applied here so no caller can forget one.
+      const cap = this.dailyCap();
+      const d = this.day();
+      const room = Math.max(0, cap - d.count);
+      // Outside the wake window: supps and food defer to window.start, water is
+      // dropped outright, and train/streak were never scheduled outside it.
+      const kept = out.filter((it) => {
+        if (this.alreadySent(it.tag)) return false;
+        if (this.inWindow(it.at)) return true;
+        if (it.channel === 'water') return false;             // dropped, not moved
+        if (it.channel === 'supps' || it.channel === 'food') { it.at = cfg.window.start; return true; }
+        return false;
+      });
+      // Over the cap, water yields first, then food. train/supps/streak never do.
+      const rank = { water: 0, food: 1, train: 9, supps: 9, streak: 9 };
+      kept.sort((a, b) => (b.at < a.at ? 1 : -1));
+      while (kept.length > room) {
+        let victim = -1, worst = 9;
+        for (let i = kept.length - 1; i >= 0; i--) {
+          const r = rank[kept[i].channel];
+          if (r < worst) { worst = r; victim = i; }
+        }
+        if (victim === -1 || worst === 9) break;   // nothing left that may yield
+        kept.splice(victim, 1);
+      }
+      return kept.sort((a, b) => (a.at < b.at ? -1 : 1));
+    },
+  },
   reminders: {
     get() {
       const r = STATE.reminders || {};

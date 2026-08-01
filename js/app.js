@@ -12,7 +12,7 @@
 // build. The literal below is the fallback (file://, or a stripped query) and is
 // still bumped by `npm run release` — see CLAUDE.md "CACHE WORKFLOW".
 const VAULT_BUILD = (() => {
-  const FALLBACK = 'v231';
+  const FALLBACK = 'v232';
   try {
     const src = (document.currentScript && document.currentScript.src) || '';
     const m = src.match(/[?&]v=(\d+)/);
@@ -2021,6 +2021,167 @@ function resizeImageToDataUrl(file, maxSize = 800, quality = 0.78) {
 let toastTimeout = null;
 // Fully tear the toast down: hide it, drop the interactive state, cancel the
 // timer, and remove any pause/resume listeners left by an action toast. Safe to
+
+
+// ===========================================================================
+// NOTIFICATION DELIVERY — APPLY-notifications.md §3.2
+//
+// The spec's shape, and the owner's decision: DB.notif.scheduleAll() is the
+// single source of truth for WHAT and WHEN, and everything platform-specific
+// lives behind this one function. Swapping the mechanism later — a push server,
+// a different native plugin — touches deliver() and nothing above it.
+//
+// No service worker, by decision. index.html unregisters every service worker
+// on load and that block is load-bearing: it is what rescues a device still on
+// a pre-v109 bundled APK. So on the web the reminder arrives while the app is
+// open, as the in-app bar (§5.1's rule, which says exactly that: app open ⇒ no
+// system notification). The §5.2/§5.3 action buttons need a worker and are
+// therefore not built; nothing here pretends otherwise.
+// ===========================================================================
+
+// One timer per scheduled item, cleared wholesale on re-arm so a settings
+// change can never leave an orphan firing the old time.
+let notifTimers = [];
+
+function notifTexts(item) {
+  const p = item.payload || {};
+  const T = (k, vars) => {
+    let s = t('notif_' + item.channel + '_' + k);
+    Object.keys(vars || {}).forEach((n) => { s = s.split('{' + n + '}').join(vars[n]); });
+    return s;
+  };
+  switch (item.channel) {
+    case 'train': {
+      const day = DB.plan.workoutForDate(new Date());
+      const n = (day && day.exerciseIds) ? day.exerciseIds.length : 0;
+      // The template reads "Push — {n} exercises", but "Push" is the NAME of a
+      // workout, not a constant: on a Legs day a hard-coded "Push" would be
+      // wrong data in the one line the user reads at a glance, and §4 requires
+      // the text to carry their own. So the head before the dash is replaced
+      // with today's actual slot name and only the tail is templated.
+      const tail = T('title', { n: fmtNum(n) }).split('—').slice(1).join('—').trim();
+      const name = (day && day.name) ? day.name : '';
+      const title = name ? (name + ' — ' + tail) : T('title', { n: fmtNum(n) });
+      // Last performed set, derived exactly as Home derives it: listAll() is
+      // newest-first and a session's sets stay in performed order, so the last
+      // element of the newest non-empty session IS the set they finished on.
+      const all = DB.sessions.listAll();
+      const ls = all.find((x) => x.sets && x.sets.length);
+      const set = ls ? ls.sets[ls.sets.length - 1] : null;
+      const ex = ls ? DB.exercises.getById(ls.exerciseId) : null;
+      const body = (set && ex)
+        ? T('body', { ex: exDisplayName(ex), kg: fmtNum(set.weight || 0), reps: fmtNum(set.reps || 0) })
+        : '';
+      return { title, body };
+    }
+    case 'supps':
+      return { title: T('title', { name: p.name || '', dose: '' }).replace(/\s*—\s*$/, ''),
+               body: T('body', { i: fmtNum(p.i || 1), n: fmtNum(p.n || 1) }) };
+    case 'water': {
+      const cur = DB.water.get ? DB.water.get(todayISO()) : 0;
+      const goal = DB.water.goal();
+      const endH = Number(String(DB.notif.get().window.end).split(':')[0]);
+      const left = Math.max(0, endH - new Date().getHours());
+      return { title: T('title', { cur: fmtNum(cur), goal: fmtNum(goal) }),
+               body: T('body', { hours: fmtNum(left) }) };
+    }
+    case 'streak':
+      return { title: T('title', { n: fmtNum(p.n || 0) }), body: T('body', {}) };
+    default:
+      return { title: t('notif_summary_title').split('{n}').join('1'), body: '' };
+  }
+}
+
+// Where a notification takes you when tapped — §5.3's destinations, minus the
+// per-button rows, which need the worker we are not registering.
+function notifOpen(channel) {
+  const go = { train: 'session-day', supps: 'supplements', water: 'food', food: 'food', streak: 'home' };
+  const view = go[channel] || 'home';
+  navigate(view, view === 'session-day' ? { date: todayISO() } : undefined);
+}
+
+/**
+ * Deliver ONE scheduled item. The only place that knows about platforms.
+ * @param {{at:string, channel:string, tag:string, payload:object}} item
+ */
+function deliver(item) {
+  if (!item || !item.channel) return;
+  // The channel switch is checked HERE too, not only at schedule time: a user
+  // can turn a channel off in the minutes between arming the timer and its
+  // firing, and the spec is explicit that the switch is honoured before every
+  // single send, without exception.
+  const cfg = DB.notif.get();
+  const ch = cfg.channels[item.channel];
+  if (!ch || !ch.on) return;
+  if (!DB.notif.markSent(item.tag)) return;      // tag already used today
+
+  const { title, body } = notifTexts(item);
+  if (!title) return;
+
+  // App visible → the bar, never a system notification.
+  if (document.visibilityState === 'visible') {
+    showNotifBar({ channel: item.channel, title, body, onOpen: () => notifOpen(item.channel) });
+    return;
+  }
+
+  // Native shell, app not in front → deliberately nothing here.
+  //
+  // A JS setTimeout in a backgrounded WebView is not a reliable alarm; what
+  // actually fires on Android is the OS alarm armed by Notify.sync() through
+  // the Capacitor plugin, which owns the channels, the permissions, the exact
+  // alarm flags and the boot receiver. Trying to also send from here would
+  // either do nothing or double up with the real alarm.
+  //
+  // NOTE this is the seam where "one system" is still half-done: Notify.sync()
+  // currently arms from DB.reminders.schedule(), not DB.notif.scheduleAll().
+  // Re-pointing it is the remaining step, and it is a real piece of work
+  // because notify.js carries hard-won ordering rules (decide before
+  // destroying, check-never-request, report what Android actually holds).
+  if (window.Notify && window.Notify.isNative && window.Notify.isNative()) return;
+
+  // Web, backgrounded, permission already granted. Page-level Notification has
+  // no action buttons — those need a service worker — so it carries the text
+  // and the tap, which is what §5.1 leaves for this case anyway.
+  try {
+    if (typeof Notification !== 'undefined' && Notification.permission === 'granted') {
+      const n = new Notification(title, {
+        body,
+        tag: item.tag,
+        badge: 'icons/badge-96.png',
+        icon: 'icons/cat-' + item.channel + '-192.png',
+        silent: item.channel === 'water' || item.channel === 'food',
+        lang: DB.prefs.get().lang || 'en',
+        dir: (DB.prefs.get().lang === 'ar') ? 'rtl' : 'ltr',
+      });
+      n.onclick = () => { window.focus(); notifOpen(item.channel); n.close(); };
+    }
+  } catch (_) {}
+}
+
+/**
+ * Arm today's remaining reminders. Safe to call as often as you like — it
+ * clears every existing timer first, so a settings change re-arms cleanly
+ * instead of stacking a second set on top of the first.
+ */
+function armNotifications() {
+  notifTimers.forEach(clearTimeout);
+  notifTimers = [];
+  let items = [];
+  try { items = DB.notif.scheduleAll(); } catch (_) { return; }
+  const now = new Date();
+  const nowMin = now.getHours() * 60 + now.getMinutes();
+  items.forEach((it) => {
+    const [h, m] = String(it.at).split(':').map(Number);
+    if (!(h >= 0 && h < 24 && m >= 0 && m < 60)) return;
+    const delay = (h * 60 + m - nowMin) * 60000;
+    // Past due is NOT fired retroactively. A reminder that arrives hours late
+    // is worse than none: it asks for something the moment has passed for, and
+    // it spends one of the day's six on nothing.
+    if (delay <= 0) return;
+    notifTimers.push(setTimeout(() => deliver(it), delay));
+  });
+  return notifTimers.length;
+}
 
 // ===========================================================================
 // THE IN-APP NOTIFICATION BAR — APPLY-notifications.md §9
