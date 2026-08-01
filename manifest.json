@@ -1,6 +1,6 @@
 {
-  "name": "The Vault - Gym Tracker",
-  "short_name": "The Vault",
+  "name": "VAULT - Gym Tracker",
+  "short_name": "VAULT",
   "description": "Personal gym, cardio, food, and sleep tracker with progress comparison.",
   "start_url": "./index.html",
   "scope": "./",

@@ -1,5 +1,5 @@
 // ==========================================================================
-// THE VAULT - Main App
+// VAULT - Main App
 // ==========================================================================
 
 // Single source of truth for the shipped build. Used by the visible build label
@@ -12,7 +12,7 @@
 // build. The literal below is the fallback (file://, or a stripped query) and is
 // still bumped by `npm run release` — see CLAUDE.md "CACHE WORKFLOW".
 const VAULT_BUILD = (() => {
-  const FALLBACK = 'v236';
+  const FALLBACK = 'v237';
   try {
     const src = (document.currentScript && document.currentScript.src) || '';
     const m = src.match(/[?&]v=(\d+)/);
@@ -446,7 +446,7 @@ function dayName(dow, full = false) {
 // ==========================================================================
 const I18N = {
   en: {
-    app_name: 'THE VAULT',
+    app_name: 'VAULT',
     // nav_train labels the Program tab (view id 'workouts'), not the exercise
     // browser — that moved to its own screen. See renderProgram.
     nav_home: 'Home', nav_train: 'Program', nav_cardio: 'Cardio', nav_food: 'Food', nav_sleep: 'Sleep',
@@ -552,20 +552,20 @@ const I18N = {
     remind_sound: 'Sound & vibration',
     remind_sound_on: 'Rings and vibrates', remind_sound_off: 'Silent — drawer only',
     remind_test: 'Send a test alert', remind_test_sub: 'Arrives in about 5 seconds',
-    remind_test_title: 'THE VAULT', remind_test_body: 'Test alert — reminders are working.',
+    remind_test_title: 'VAULT', remind_test_body: 'Test alert — reminders are working.',
     remind_test_sent: 'Test sent — watch your notification bar.',
     remind_test_failed: 'Could not send',
     remind_channel_alert: 'Reminders', remind_channel_quiet: 'Reminders (silent)',
     remind_channel_desc: 'Supplement and water reminders',
     remind_status: 'Status',
     remind_stat_perm_ok: 'Permission granted', remind_stat_perm_no: 'Permission not granted',
-    remind_stat_off: 'Notifications are switched off for THE VAULT in Android settings.',
+    remind_stat_off: 'Notifications are switched off for VAULT in Android settings.',
     remind_stat_queued: 'queued with Android',
     remind_exact_title: 'Exact timing is off',
     remind_exact_sub: 'Android may delay reminders. Tap to allow exact alarms.',
     remind_exact_ok: 'Exact timing allowed',
     remind_battery_title: 'Still nothing arriving?',
-    remind_battery_sub: 'Battery saving can hold reminders back. Settings → Apps → THE VAULT → Battery → Unrestricted. On Samsung also: Settings → Battery → Background usage limits → remove THE VAULT from sleeping apps.',
+    remind_battery_sub: 'Battery saving can hold reminders back. Settings → Apps → VAULT → Battery → Unrestricted. On Samsung also: Settings → Battery → Background usage limits → remove VAULT from sleeping apps.',
     remind_sync_failed: 'Android refused the schedule',
     not_found: 'Not found', not_found_text: 'This exercise no longer exists.',
 
@@ -621,7 +621,7 @@ const I18N = {
     weight_need_more: 'Log at least 2 days to see your trend', weight_placeholder: 'Today’s weight',
     weight_empty_hint: 'Log your weight regularly to track your progress',
     portion_less: 'Smaller portion', portion_more: 'Larger portion',
-    onb_welcome_title: 'Welcome to THE VAULT', onb_welcome_sub: 'Your workouts and nutrition, in one place.',
+    onb_welcome_title: 'Welcome to VAULT', onb_welcome_sub: 'Your workouts and nutrition, in one place.',
     onb_feat_workouts: 'Plan & log every workout', onb_feat_ai: 'AI calories — photo, voice, or barcode',
     onb_feat_progress: 'Track weight, streaks & progress', onb_start: 'Get started',
     onb_unit_title: 'Choose your units', onb_unit_sub: 'You can change this later in Settings.',
@@ -1172,7 +1172,7 @@ const I18N = {
   },
 
   ar: {
-    app_name: 'ذا فولت',
+    app_name: 'فولت',
     nav_home: 'الرئيسية', nav_train: 'برنامجي', nav_cardio: 'كارديو', nav_food: 'الأكل', nav_sleep: 'النوم',
 
     greet_morning: 'صباح الخير', greet_afternoon: 'نهارك سعيد', greet_evening: 'مساء الخير',
@@ -1274,20 +1274,20 @@ const I18N = {
     remind_sound: 'الصوت والاهتزاز',
     remind_sound_on: 'يرنّ ويهتزّ', remind_sound_off: 'صامت — في لوحة الإشعارات فقط',
     remind_test: 'أرسل تنبيهاً تجريبياً', remind_test_sub: 'يصل خلال خمس ثوانٍ تقريباً',
-    remind_test_title: 'THE VAULT', remind_test_body: 'تنبيه تجريبي — التنبيهات تعمل.',
+    remind_test_title: 'VAULT', remind_test_body: 'تنبيه تجريبي — التنبيهات تعمل.',
     remind_test_sent: 'أُرسل التنبيه — راقب شريط الإشعارات.',
     remind_test_failed: 'تعذّر الإرسال',
     remind_channel_alert: 'التنبيهات', remind_channel_quiet: 'التنبيهات (صامتة)',
     remind_channel_desc: 'تنبيهات المكمّلات والماء',
     remind_status: 'الحالة',
     remind_stat_perm_ok: 'الإذن ممنوح', remind_stat_perm_no: 'الإذن غير ممنوح',
-    remind_stat_off: 'التنبيهات موقوفة لتطبيق THE VAULT في إعدادات أندرويد.',
+    remind_stat_off: 'التنبيهات موقوفة لتطبيق VAULT في إعدادات أندرويد.',
     remind_stat_queued: 'مجدولة لدى أندرويد',
     remind_exact_title: 'التوقيت الدقيق متوقّف',
     remind_exact_sub: 'قد يؤخّر أندرويد التنبيهات. اضغط للسماح بالمنبّهات الدقيقة.',
     remind_exact_ok: 'التوقيت الدقيق مسموح',
     remind_battery_title: 'ما زال لا يصلك شيء؟',
-    remind_battery_sub: 'قد يحجز توفير البطارية التنبيهات. الإعدادات ← التطبيقات ← THE VAULT ← البطارية ← بلا قيود. وفي أجهزة سامسونج أيضاً: الإعدادات ← البطارية ← حدود الاستخدام في الخلفية ← أزل THE VAULT من التطبيقات النائمة.',
+    remind_battery_sub: 'قد يحجز توفير البطارية التنبيهات. الإعدادات ← التطبيقات ← VAULT ← البطارية ← بلا قيود. وفي أجهزة سامسونج أيضاً: الإعدادات ← البطارية ← حدود الاستخدام في الخلفية ← أزل VAULT من التطبيقات النائمة.',
     remind_sync_failed: 'رفض أندرويد جدولة التنبيهات',
     not_found: 'غير موجود', not_found_text: 'هذا التمرين لم يعد موجوداً.',
 
@@ -1341,7 +1341,7 @@ const I18N = {
     weight_need_more: 'سجّل يومين على الأقل لرؤية المنحنى', weight_placeholder: 'وزن اليوم',
     weight_empty_hint: 'سجّل وزنك بانتظام لمتابعة تقدّمك',
     portion_less: 'كمية أقل', portion_more: 'كمية أكثر',
-    onb_welcome_title: 'مرحباً بك في THE VAULT', onb_welcome_sub: 'تمارينك وتغذيتك في مكان واحد.',
+    onb_welcome_title: 'مرحباً بك في VAULT', onb_welcome_sub: 'تمارينك وتغذيتك في مكان واحد.',
     onb_feat_workouts: 'خطّط وسجّل كل تمرين', onb_feat_ai: 'سعرات بالذكاء الاصطناعي — صورة أو صوت أو باركود',
     onb_feat_progress: 'تابع الوزن والإنجاز والتقدّم', onb_start: 'لنبدأ',
     onb_unit_title: 'اختر وحدة القياس', onb_unit_sub: 'يمكنك تغييرها لاحقاً من الإعدادات.',
@@ -3352,7 +3352,7 @@ function renderHome(el) {
 
     ${recentHtml}
 
-    <div style="text-align:center;opacity:.4;font-size:12px;margin:24px 0 8px;letter-spacing:.5px">THE VAULT · ${VAULT_BUILD}</div>
+    <div style="text-align:center;opacity:.4;font-size:12px;margin:24px 0 8px;letter-spacing:.5px">VAULT · ${VAULT_BUILD}</div>
   `;
 
   // Count-up the hero/stat numerals (sleep is stored ×10 for one decimal)

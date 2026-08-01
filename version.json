@@ -1,11 +1,11 @@
 {
   "_comment": "Update manifest. `web` is the latest web build — it MUST equal the ?v=N in index.html on every release; js/update.js reads it fresh (no-store) and reloads the entry html so web/CSS/JS updates reach all devices without a reinstall. `apk` only triggers the in-app 'download new APK' banner when apk.build here is GREATER than the versionCode installed on the device. To release a NEW APK: bump android/app/build.gradle versionCode, build, upload to Drive, then set apk.build to that number + apk.url to the new Drive share link + notes, and push.",
-  "web": 236,
+  "web": 237,
   "apk": {
-    "build": 14,
-    "version": "2.3",
+    "build": 15,
+    "version": "2.4",
     "url": "https://raw.githubusercontent.com/moathdarweesh/vault/main/download/THE-VAULT.apk",
-    "notes_ar": "أيقونة الإشعارات صارت علامة V المشقوقة نفسها التي على الويب — كانت ما تزال بلاطة «الشقّ» من إصدار قديم، وهي مورد أصلي لا يصله تحديث الويب أبداً، فيلزمه تثبيت جديد. ومعها هوية AJ الجديدة وشريط تنبيه داخل التطبيق.",
-    "notes_en": "The notification icon is now the same cut-V mark the web uses. It was still the old CUT tile: it is a native resource, so a web update can never reach it and only a reinstall can. Ships with the AJ identity and the in-app notification bar."
+    "notes_ar": "صار اسم التطبيق «فولت» بدل «ذا فولت» — والاسم تحت الأيقونة مورد أصلي لا يصله تحديث الويب، فيلزمه تثبيت جديد. ومعه أيقونة الإشعارات الجديدة (علامة V المشقوقة).",
+    "notes_en": "The app is now called VAULT, not THE VAULT. The name under the icon is a native resource that no web update can reach, so it needs a reinstall. Ships with the new cut-V notification icon."
   }
 }

@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>THE VAULT — لوحة التحكّم</title>
+<title>VAULT — لوحة التحكّم</title>
 <style>
   :root{
     --bg:#08080a; --surface:#141418; --surface-2:#1b1b21; --line:#26262e;
@@ -241,7 +241,7 @@
 
   <div id="login" class="login-wrap">
     <div class="card">
-      <div class="brand"><span class="v">🏋️</span> THE VAULT</div>
+      <div class="brand"><span class="v">🏋️</span> VAULT</div>
       <form id="panel-login" autocomplete="on">
         <h1>لوحة التحكّم</h1>
         <p class="sub">سجّل دخولك بحساب المالك — نفس حسابك في التطبيق.</p>
@@ -275,7 +275,7 @@
 
   <div id="app" class="shell hidden">
     <aside class="sidebar">
-      <div class="side-brand"><span class="v">🏋️</span> THE VAULT</div>
+      <div class="side-brand"><span class="v">🏋️</span> VAULT</div>
       <nav class="nav" id="nav"></nav>
       <div class="side-foot">
         <span class="who2" id="who"></span>
@@ -949,7 +949,7 @@
 
     /* ---------------- export ----------------------------------------------- */
     function exportAll(){
-      var payload={ exported:'THE VAULT admin export', totals:DATA.totals, analytics:DATA.analytics,
+      var payload={ exported:'VAULT admin export', totals:DATA.totals, analytics:DATA.analytics,
         users:DATA.usersList, feedback:DATA.feedback };
       var blob=new Blob([JSON.stringify(payload,null,2)],{type:'application/json'});
       var a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download='vault-export.json'; a.click();
@@ -964,7 +964,7 @@
       'audit_log','admins','food_catalog','preset_plans','app_config','vault_data'];
     async function exportBackup(){
       toast('جارٍ إنشاء النسخة الاحتياطية…');
-      var out={ backup:'THE VAULT full backup', schema:'v4', exported_at:new Date().toISOString(),
+      var out={ backup:'VAULT full backup', schema:'v4', exported_at:new Date().toISOString(),
         note:'يشمل كل الجداول المطبّعة (بصلاحية الأدمِن). vault_data يحتوي صفّك أنت فقط — لا يمكن للأدمِن قراءة مدوّنات المستخدمين الآخرين (RLS)، ومصدر حقيقتهم على أجهزتهم. السكيما نفسها في backend/*.sql بالمستودع.',
         counts:{}, tables:{} }, errs=[];
       for(var i=0;i<BACKUP_TABLES.length;i++){
