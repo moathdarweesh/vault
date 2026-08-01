@@ -12,7 +12,7 @@
 // build. The literal below is the fallback (file://, or a stripped query) and is
 // still bumped by `npm run release` — see CLAUDE.md "CACHE WORKFLOW".
 const VAULT_BUILD = (() => {
-  const FALLBACK = 'v240';
+  const FALLBACK = 'v242';
   try {
     const src = (document.currentScript && document.currentScript.src) || '';
     const m = src.match(/[?&]v=(\d+)/);
@@ -2341,14 +2341,13 @@ function renderNotifications(el) {
   // is a one-way door: the sheet never reopens by itself, so a user who
   // deferred once could never enable reminders from inside the app again.
   $('#ntfs-enable', el)?.addEventListener('click', () => openNotifPermSheet());
-  $('#ntfs-sys', el)?.addEventListener('click', () => {
-    // Native only: on the web there is no app-settings page to open, so the row
-    // explains rather than pretending to navigate.
-    if (window.Notify && window.Notify.isNative && window.Notify.isNative()) {
-      try { window.Notify.diagnose && window.Notify.diagnose(); } catch (_) {}
-    }
-    showNotifBar({ kind: 'ok', channel: 'summary', title: t('notif_sys_hint') });
-  });
+  // The native health check — permission state, what Android actually holds,
+  // exact-alarm status, and a real test notification. Kept because every
+  // failure on this path is INVISIBLE: a refused permission, a muted channel
+  // and a battery optimiser sitting on the alarm all look identical to "the
+  // feature is broken". It is reached only from here now, so there is one
+  // entry point to notifications and one place that schedules them.
+  $('#ntfs-sys', el)?.addEventListener('click', () => openRemindersModal());
 }
 
 // A dose is a time plus a name; both are required, so this is a small modal
@@ -7663,18 +7662,6 @@ function renderSettings(el) {
         </div>
         <span class="icon-mirror settings-action-chev">${icon('chevronRight', 16)}</span>
       </button>
-      <button class="settings-action-row" id="reminders-btn">
-        <div class="settings-action-icon">${icon('clock', 20)}</div>
-        <div class="settings-action-main">
-          <div class="settings-action-title">${t('remind_title')}</div>
-          <div class="settings-action-sub">${(() => {
-            const r = DB.reminders.get();
-            if (!r.enabled) return t('remind_off');
-            const n = DB.reminders.schedule().length;
-            return n ? `${fmtNum(n)} ${t('remind_daily')}` : t('remind_none');
-          })()}</div>
-        </div>
-      </button>
     </div>
 
     <div class="settings-section">
@@ -7770,18 +7757,6 @@ function renderSettings(el) {
   });
 
   $('#notifications-btn', el)?.addEventListener('click', () => navigate('notifications'));
-  $('#reminders-btn', el)?.addEventListener('click', async () => {
-    // Opening the screen counts as "touching notifications": if reminders are
-    // already switched on but the OS permission is missing (revoked in system
-    // settings, or carried over from a build without the plugin), ask here
-    // rather than letting the screen claim everything is fine.
-    try {
-      if (window.Notify && DB.reminders.get().enabled && (await Notify.permissionState()) !== 'granted') {
-        await Notify.gate();
-      }
-    } catch (_) {}
-    openRemindersModal();
-  });
 
   // Feedback / suggestions
   $('#feedback-btn', el)?.addEventListener('click', showFeedback);
@@ -9634,62 +9609,12 @@ function openRemindersModal() {
         <button class="icon-btn icon-btn-tile" data-close aria-label="${escapeHtml(t('close'))}">${icon('close', 20)}</button>
       </div>
 
-      <button type="button" class="settings-action-row" id="rem-toggle">
-        <div class="settings-action-icon">${icon(r.enabled ? 'check' : 'clock', 18)}</div>
-        <div class="settings-action-main">
-          <div class="settings-action-title">${r.enabled ? t('remind_on') : t('remind_off')}</div>
-          <div class="settings-action-sub">${native ? t('remind_native') : t('remind_inapp')}</div>
-        </div>
-      </button>
-
-      <div class="form-group" style="margin-top:16px">
-        <label class="form-label">${t('water')}</label>
-        <button type="button" class="settings-action-row" id="rem-water">
-          <div class="settings-action-icon">${icon('droplet', 20)}</div>
-          <div class="settings-action-main">
-            <div class="settings-action-title">${r.water.on ? t('remind_on') : t('remind_off')}</div>
-            <div class="settings-action-sub">${escapeHtml(r.water.from)} – ${escapeHtml(r.water.to)} · ${t('remind_every')} ${fmtNum(r.water.everyMin)} ${t('unit_min')}</div>
-          </div>
-        </button>
-        ${r.water.on ? `
-          <div class="time-add" style="margin-top:8px">
-            <input type="time" id="rem-from" value="${escapeHtml(r.water.from)}" aria-label="${escapeHtml(t('remind_from'))}">
-            <input type="time" id="rem-to" value="${escapeHtml(r.water.to)}" aria-label="${escapeHtml(t('remind_to'))}">
-            <select id="rem-every" aria-label="${escapeHtml(t('remind_every'))}">
-              ${[60, 90, 120, 180, 240].map((v) => `<option value="${v}" ${v === r.water.everyMin ? 'selected' : ''}>${fmtNum(v)} ${t('unit_min')}</option>`).join('')}
-            </select>
-          </div>` : ''}
-      </div>
-
-      <div class="form-group">
-        <label class="form-label">${t('remind_sound')}</label>
-        <button type="button" class="settings-action-row" id="rem-sound">
-          <div class="settings-action-icon">${icon(r.sound ? 'bell' : 'bellOff', 18)}</div>
-          <div class="settings-action-main">
-            <div class="settings-action-title">${r.sound ? t('remind_sound_on') : t('remind_sound_off')}</div>
-            <div class="settings-action-sub">${t('remind_channel_desc')}</div>
-          </div>
-        </button>
-      </div>
-
-      <div class="form-group">
-        <label class="form-label">${t('supplements_card')}</label>
-        ${supps.length
-          ? `<div class="time-chips">${supps.map((x) => `<span class="time-chip">${escapeHtml(x.name)} · ${escapeHtml((x.times || []).slice().sort().join(' '))}</span>`).join('')}</div>`
-          : `<div class="time-empty">${t('remind_supp_hint')}</div>`}
-      </div>
-
-      <div class="rem-summary">${items.length
-        ? `${fmtNum(items.length)} ${t('remind_daily')}`
-        : t('remind_none')}</div>
-
-      <!-- Everything below exists because every failure on this path is silent:
-           a refused permission, a muted channel, a battery optimiser sitting on
-           the alarm — all three look exactly like "the feature is broken".
-           The status block names the state, the test proves it end to end. -->
-      <div class="form-group">
-        <label class="form-label">${t('remind_status')}</label>
-        <div id="rem-status" class="rem-status"></div>
+      <!-- The master switch and the water schedule USED to live here. They were
+           removed when the schedule moved to DB.notif: sync() no longer reads
+           reminders.enabled or reminders.water, so both controls had become
+           inert — they would have written a value nothing consults and told the
+           user something was on or off when it was neither. Scheduling is the
+           notifications page now; this modal is the native health check only. -->
         <button type="button" class="settings-action-row" id="rem-test" style="margin-top:8px">
           <div class="settings-action-icon icon-mirror">${icon('send', 20)}</div>
           <div class="settings-action-main">
@@ -9778,26 +9703,7 @@ function openRemindersModal() {
 
     // Master switch. Turning it ON asks for the OS permission first (native only)
     // so the user never sees "on" while Android is silently dropping every alarm.
-    $('#rem-toggle')?.addEventListener('click', once(async () => {
-      const next = !DB.reminders.get().enabled;
-      // Every reminder control goes through the same gate, so the OS sheet appears
-      // on whatever the user touches first — not only on this switch.
-      // gate() raises the OS sheet; it does not veto. Reminders still work
-      // in-app without the permission, so refusing it must not disable the
-      // feature — it only means alerts appear when the app is opened.
-      if (next && window.Notify) await Notify.gate();
-      DB.reminders.setEnabled(next);
-      await syncNow();
-      closeModal(); render();
-    }));
 
-    $('#rem-water')?.addEventListener('click', once(async () => {
-      const turningOn = !DB.reminders.get().water.on;
-      if (turningOn && window.Notify) await Notify.gate();
-      DB.reminders.setWater({ on: turningOn });
-      await syncNow();
-      closeModal(); render();
-    }));
 
     // Deliberately NOT wrapped in once(): it re-reads all three inputs on every
     // call, so running it twice just writes the same final state — whereas

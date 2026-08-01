@@ -1,6 +1,6 @@
 // Reminders for THE VAULT.
 //
-// Two delivery paths, one schedule (DB.reminders.schedule()):
+// Two delivery paths, one schedule (DB.notif.scheduleAll()):
 //
 //   NATIVE  — @capacitor/local-notifications, inside the Android shell. Real
 //             alarms that fire with the app closed. Requires a NEW APK, because
@@ -74,15 +74,35 @@
   }
 
   function channelId() {
+    // Still DB.reminders on purpose: `sound` picks WHICH immutable OS channel to
+    // post through, a delivery property. The SCHEDULE moved to DB.notif; this
+    // did not need to, and moving it would mean recreating both channels.
     try { return DB.reminders.get().sound ? CH_ALERT : CH_QUIET; } catch (_) { return CH_ALERT; }
   }
 
+  // Both read the §4 keys, so a reminder reads identically whether it arrives as
+  // an OS notification or as the in-app bar. A {placeholder} with no live value
+  // is stripped rather than printed — a title showing a literal "{n}" is worse
+  // than one without the number.
+  function fill(key, vars) {
+    var out = tr(key);
+    Object.keys(vars || {}).forEach(function (k) {
+      var v = vars[k];
+      if (v !== undefined && v !== null && v !== '') out = out.split('{' + k + '}').join(v);
+    });
+    return out.replace(/\s*\{[a-z]+\}\s*/gi, ' ').replace(/\s{2,}/g, ' ')
+              .replace(/\s*[—-]\s*$/, '').trim();
+  }
   function bodyFor(item) {
-    if (item.kind === 'water') return tr('remind_water_body');
-    return item.dose ? `${item.name} · ${item.dose}` : item.name;
+    var p = (item && item.payload) || {};
+    if (item.channel === 'supps') return fill('notif_supps_body', { i: p.i, n: p.n });
+    if (item.channel === 'train') return '';
+    return fill('notif_' + item.channel + '_body', { n: p.n });
   }
   function titleFor(item) {
-    return item.kind === 'water' ? tr('remind_water_title') : tr('remind_supp_title');
+    var p = (item && item.payload) || {};
+    if (item.channel === 'supps') return fill('notif_supps_title', { name: p.name, dose: '' });
+    return fill('notif_' + item.channel + '_title', { n: p.n });
   }
 
   // ---------------------------------------------------------------- native ---
@@ -159,7 +179,8 @@
       // a fully opaque asset, and Android draws a small icon from its ALPHA
       // channel only, so the status bar showed a featureless white blob. This
       // names the white-on-transparent VAULT mark instead (res/drawable).
-      smallIcon: 'ic_stat_vault',
+      smallIcon: 'ic_stat_vault',   // NEVER per-channel: the small mark is identity
+      largeIcon: 'cat_' + (it.channel || 'summary') + '_192',   // per channel (§1.2)
       iconColor: '#FF6A00',
       // `on` with no date field = repeat daily at this local wall-clock time,
       // which is what survives DST. An absolute timestamp would drift.
@@ -182,7 +203,15 @@
     if (!supported()) return { ok: false, reason: 'unsupported', count: 0 };
     try {
       await ensureChannels();
-      const items = DB.reminders.schedule();
+      // ONE SYSTEM. This used to read DB.reminders.schedule(), so the OS alarms
+      // and the in-app reminders were computed from two different configs: an
+      // Android user could be told about the same dose twice, and a channel
+      // switched off on the notifications page still fired natively.
+      // DB.notif.scheduleAll() is now the only place a reminder is decided, so
+      // its guards — daily cap, wake window, yield order, per-channel switch —
+      // finally apply to the native path too, which they never did before.
+      DB.notif.migrateFromReminders();
+      const items = DB.notif.scheduleAll();
 
       // CHECK, never REQUEST. sync() runs unattended — on boot, after a cloud
       // pull, on every settings change — and on Android 13+ a POST_NOTIFICATIONS
@@ -278,7 +307,7 @@
       scheduled: 0,         // what our own settings say there should be
       sound: true,
     };
-    try { out.scheduled = DB.reminders.schedule().length; } catch (_) {}
+    try { out.scheduled = DB.notif.scheduleAll().length; } catch (_) {}
     try { out.sound = DB.reminders.get().sound; } catch (_) {}
     if (!supported()) return out;
     try { out.osEnabled = (await plugin().areEnabled()).value; } catch (_) {}
@@ -310,11 +339,16 @@
     const day = todayISO();
     const now = new Date();
     const nowMin = now.getHours() * 60 + now.getMinutes();
-    return DB.reminders.schedule().filter((it) => {
+    return DB.notif.scheduleAll().filter((it) => {
       if (it.hour * 60 + it.minute > nowMin) return false;          // not due yet
       if (alreadySeen(day, it.id)) return false;                     // already nagged today
-      if (it.kind === 'water') return DB.water.get(day) < DB.water.goal();
-      return !DB.supplements.isTaken(it.refId, day);
+      // Water is the one channel whose goal the app can check, so it is the one
+      // that can be cancelled by the ACT rather than by the reminder firing.
+      // The spec's doses are free-standing {id, at, name} and carry no taken
+      // state — there is nothing to test — so they fall through to the per-day
+      // dedupe above, which is the honest answer rather than a guessed one.
+      if (it.channel === 'water') return DB.water.get(day) < DB.water.goal();
+      return true;
     });
   }
 

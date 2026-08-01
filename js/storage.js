@@ -1571,6 +1571,36 @@ const DB = {
   notif: {
     DAY_KEY: 'vault.notif.day.v1',
 
+    // ONE-TIME MIGRATION from the v208 DB.reminders config. Without it, "one
+    // system" would silently discard every supplement time and water setting a
+    // user had already configured — they would open the new page and find it
+    // empty. Runs once: the marker is DB.notif existing at all.
+    migrateFromReminders() {
+      if (STATE.notif) return false;
+      let r = null;
+      try { r = DB.reminders.get(); } catch (_) { return false; }
+      const next = this.defaults();
+      if (r && r.enabled) {
+        const doses = [];
+        (STATE.supplements || []).forEach((sup) => {
+          (sup.times || []).forEach((hhmm, i) => {
+            doses.push({ id: 's' + sup.id + '_' + i, at: hhmm, name: sup.name || '' });
+          });
+        });
+        next.channels.supps.doses = doses;
+        next.channels.water.on = !!(r.water && r.water.on);
+        if (r.water && r.water.everyMin) next.channels.water.everyMin = r.water.everyMin;
+        if (r.water && r.water.from) next.window.start = r.water.from;
+        if (r.water && r.water.to) next.window.end = r.water.to;
+        // They had already granted permission for the old system, so do not ask
+        // again — that would spend the one OS prompt on someone who said yes.
+        next.asked = true;
+      }
+      STATE.notif = next;
+      saveLocal();   // a derivation from data already in the blob, not new user data
+      return true;
+    },
+
     defaults() {
       return {
         asked: false,
@@ -1672,7 +1702,15 @@ const DB = {
       const cfg = this.get();
       const ch = cfg.channels;
       const today = todayISO();
-      const push = (at, channel, tag, payload) => out.push({ at, channel, tag, payload });
+      // Every item carries BOTH shapes: `at`/`channel`/`payload` for the in-app
+      // path, and `id`/`hour`/`minute` for the Capacitor plugin, which keys
+      // notifications by INTEGER id. The id is derived from the tag, so it is
+      // stable across runs — a regenerated id would orphan the previous alarm
+      // and leave a duplicate armed.
+      const push = (at, channel, tag, payload) => {
+        const [h, m] = String(at).split(':').map(Number);
+        out.push({ at, channel, tag, payload, id: hashId(tag), hour: h, minute: m });
+      };
 
       // -- train ------------------------------------------------------------
       // Training days only, and never on a scheduled rest day.
