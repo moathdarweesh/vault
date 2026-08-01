@@ -12,7 +12,7 @@
 // build. The literal below is the fallback (file://, or a stripped query) and is
 // still bumped by `npm run release` — see CLAUDE.md "CACHE WORKFLOW".
 const VAULT_BUILD = (() => {
-  const FALLBACK = 'v235';
+  const FALLBACK = 'v236';
   try {
     const src = (document.currentScript && document.currentScript.src) || '';
     const m = src.match(/[?&]v=(\d+)/);
@@ -898,6 +898,7 @@ const I18N = {
     anyway_keep_rest: 'No, I will finish my rest',
     anyway_moved: 'The plan moved a day forward.',
     anyway_undone: 'Back to a rest day. The plan is where it was.',
+    program_moved: 'Today was pulled forward — the cycle moved a day.',
     anyway_no_exercise: 'No exercise in your list trains that muscle yet.',
     anyway_undo_cta: 'Undo — back to rest',
     last_7_days: 'The last 7 days',
@@ -1616,6 +1617,7 @@ const I18N = {
     anyway_keep_rest: 'لا، أكمل راحتي',
     anyway_moved: 'تحرّكت الخطة يومًا إلى الأمام.',
     anyway_undone: 'رجع يوم راحة، والخطة رجعت مكانها.',
+    program_moved: 'سُحب اليوم إلى الأمام — تحرّكت الدورة يوماً.',
     anyway_no_exercise: 'ما في تمرين بقائمتك يشتغل على هذي العضلة.',
     anyway_undo_cta: 'تراجع — أرجعه يوم راحة',
     last_7_days: 'آخر ٧ أيام',
@@ -3155,20 +3157,13 @@ function renderHome(el) {
   // the intent, and it is why the capsule radius is allowed here: the identity
   // layer reserves capsules for TRANSIENT chips and forbids them on anything
   // holding state, which this does not.
-  // On a day PULLED INTO the rotation the chip changes job. "Rest" would still
-  // work — setRest clears the extra — but it would describe the destination and
-  // not the fact that this day was moved, so the way back out would be findable
-  // only by someone who already understood the model. The undo says what it is,
-  // and unlike the toast it is still there tomorrow morning.
-  const todayIsExtra = DB.plan.isExtra(now);
-  const restChipHtml = todayIsExtra
-    // `anyway_undo_cta`, not the bare `rest_undo`. "Undo" alone names the verb
-    // and not the thing — the owner looked at this chip and asked what it was,
-    // which is the only test of a label that counts. It has to say that today
-    // was MOVED and that this puts it back, because the chip is the sole trace
-    // of that state once the toast has gone.
-    ? `<button class="rest-chip rest-chip-undo" id="home-undo-extra" type="button">${t('anyway_undo_cta')}</button>`
-    : `<button class="rest-chip" id="home-rest-toggle" type="button">${t('rest_short')}</button>`;
+  // Home does NOT carry the undo for a pulled-forward day. Undoing one moves the
+  // whole rotation back, which is a PLAN edit, and the Program tab owns the
+  // plan; Home's single job is starting today. The undo lives in the toast for
+  // as long as it is up, and after that under "Where you are" in Program, next
+  // to the cycle position it actually shifted.
+  const restChipHtml =
+    `<button class="rest-chip" id="home-rest-toggle" type="button">${t('rest_short')}</button>`;
   const fullCtaHtml = `
     <button class="hero-cta hero-cta-btn" id="home-start-workout" type="button">
       ${icon('dumbbell', 20)}<span>${t('today_workout')}</span>
@@ -3401,14 +3396,6 @@ function renderHome(el) {
     DB.plan.setRest(new Date(), false);
     showToast(t('rest_today_off'));
     renderView('home');   // NOT renderHome() — it needs its view element
-  });
-  // Undo the pull-forward: today goes back to being a rest day and the whole
-  // rotation slides back with it, because the cycle position is derived from
-  // the date lists rather than stored — so removing the entry restores it.
-  $('#home-undo-extra', el)?.addEventListener('click', () => {
-    DB.plan.setExtra(new Date(), false);
-    showToast(t('anyway_undone'));
-    renderView('home');
   });
   // One delegated listener for all seven chips rather than seven bindings.
   $('.wk-rail', el)?.addEventListener('click', (e) => {
@@ -3969,6 +3956,20 @@ function renderProgram(el) {
           <button class="rot-section-action" data-goto="planner">${icon('edit', 16)} ${t('edit_cycle')}</button>
         </div>
         <div class="cycle-strip">${cycleHtml}</div>
+        ${DB.plan.isExtra(todayISO()) ? `
+          <!-- A day pulled forward shifted THIS strip by one, so the way back
+               belongs beside it rather than on Home. The toast carries the undo
+               while it is up; this is where it goes afterwards, and it stays
+               until the day is over. --warn, not the accent and not red: the
+               plan was moved, nothing went wrong. -->
+          <div class="rot-moved">
+            <span class="rot-moved-icon">${icon('refresh', 20)}</span>
+            <span class="rot-moved-text">${t('program_moved')}</span>
+            <!-- The short label is right HERE, where the line beside it already
+                 says what happened. On Home it was wrong because the chip stood
+                 alone and "Undo" named a verb with no object. -->
+            <button class="btn btn-ghost rot-moved-undo" id="program-undo-extra" type="button">${t('rest_undo')}</button>
+          </div>` : ''}
       </div>
 
       <div class="rot-section">
@@ -4060,6 +4061,16 @@ function renderProgram(el) {
   el.querySelectorAll('[data-muscle]').forEach((b) =>
     b.addEventListener('click', () => navigate('muscle-sessions', { muscleCat: b.dataset.muscle }))
   );
+
+  // Undo a pulled-forward day. The whole rotation slides back with it, and
+  // exactly, because the cycle position is DERIVED from the date lists rather
+  // than stored — removing the entry restores the previous schedule byte for
+  // byte. Re-renders Program, not Home, since this is the screen it changed.
+  $('#program-undo-extra', el)?.addEventListener('click', () => {
+    DB.plan.setExtra(new Date(), false);
+    showToast(t('anyway_undone'));
+    renderView('workouts');
+  });
 }
 
 // ==========================================================================
