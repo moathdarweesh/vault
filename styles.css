@@ -7006,6 +7006,13 @@ body.theme-light {
 .rest-chip-undo {
   border-color: color-mix(in srgb, var(--warn) 45%, transparent);
   color: var(--warn);
+  /* This variant carries a sentence where the base chip carries a word, and
+     .rest-chip sets line-height:1 — so a wrap would put a second line inside a
+     box built for one and clip it. It fits unwrapped at 375px in both
+     languages (measured: 113px of text in 113px of space), which is exactly
+     why the guard is here: there is no slack left for a longer translation or
+     a narrower phone. */
+  white-space: nowrap;
 }
 .rest-chip-undo:active { background: color-mix(in srgb, var(--warn) 13%, transparent); }
 /* THE VISIBLE CHIP IS 27px TALL; THE TARGET IS NOT.

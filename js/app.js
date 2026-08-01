@@ -12,7 +12,7 @@
 // build. The literal below is the fallback (file://, or a stripped query) and is
 // still bumped by `npm run release` — see CLAUDE.md "CACHE WORKFLOW".
 const VAULT_BUILD = (() => {
-  const FALLBACK = 'v232';
+  const FALLBACK = 'v235';
   try {
     const src = (document.currentScript && document.currentScript.src) || '';
     const m = src.match(/[?&]v=(\d+)/);
@@ -3162,7 +3162,12 @@ function renderHome(el) {
   // and unlike the toast it is still there tomorrow morning.
   const todayIsExtra = DB.plan.isExtra(now);
   const restChipHtml = todayIsExtra
-    ? `<button class="rest-chip rest-chip-undo" id="home-undo-extra" type="button">${t('rest_undo')}</button>`
+    // `anyway_undo_cta`, not the bare `rest_undo`. "Undo" alone names the verb
+    // and not the thing — the owner looked at this chip and asked what it was,
+    // which is the only test of a label that counts. It has to say that today
+    // was MOVED and that this puts it back, because the chip is the sole trace
+    // of that state once the toast has gone.
+    ? `<button class="rest-chip rest-chip-undo" id="home-undo-extra" type="button">${t('anyway_undo_cta')}</button>`
     : `<button class="rest-chip" id="home-rest-toggle" type="button">${t('rest_short')}</button>`;
   const fullCtaHtml = `
     <button class="hero-cta hero-cta-btn" id="home-start-workout" type="button">
