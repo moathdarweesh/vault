@@ -62,7 +62,7 @@
   }
 
   // Prompt-driven JSON (no strict schema — gemini-2.5-flash mis-handles the
-  // nested array schema). Mirrors backend/gemini-worker.js.
+  // nested array schema). Mirrors backend/worker/gemini-worker.js.
   const SYSTEM = [
     'You convert a user food message into JSON for a calorie tracker. Output JSON only — no markdown.',
     'List every food or drink mentioned in the message, one object per item — treat each as something the user ate.',

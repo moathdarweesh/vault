@@ -88,7 +88,7 @@ git add -A && git commit && git push
 
 | الشيء | متى يلزم | كيف |
 |---|---|---|
-| **Cloudflare Worker** | عند تعديل `backend/gemini-worker.js` | لصق يدوي في لوحة Cloudflare ثم Deploy |
+| **Cloudflare Worker** | عند تعديل `backend/worker/gemini-worker.js` | لصق يدوي في لوحة Cloudflare ثم Deploy |
 | **قاعدة البيانات** | عند تعديل أي `backend/*.sql` | تشغيل يدوي في محرر Supabase |
 | **APK جديد** | **فقط** عند تعديل أصلي (إذن، إضافة Capacitor، كود جافا/كوتلن) | راجع `docs/ANDROID.md` |
 

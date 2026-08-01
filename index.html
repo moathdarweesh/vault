@@ -13,6 +13,10 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="mobile-web-app-capable" content="yes">
   <title>THE VAULT</title>
+  <!-- Lighthouse flags a missing description as an SEO fail. It is also what a
+       search result and a shared link preview actually show, so the app was
+       being described by whatever text the crawler happened to scrape first. -->
+  <meta name="description" content="THE VAULT — a workout and nutrition tracker. Plan a training rotation, log sets and cardio, scan food barcodes, and track calories, water, sleep and body weight. Works offline, in English and Arabic.">
   <!-- Critical inline paint: black background from the very first frame so a
        slow styles.css load never flashes unstyled white content (FOUC). -->
   <style>html,body{margin:0;background:#000;color:#fff}</style>
@@ -21,8 +25,8 @@
        already cached the favicon keeps serving the OLD mark forever, so an icon
        redesign reaches nobody. `npm run release` rewrites every ?v= in this
        file, so these stay in step automatically. -->
-  <link rel="icon" type="image/svg+xml" href="icons/icon.svg?v=229">
-  <link rel="apple-touch-icon" href="icons/icon.svg?v=229">
+  <link rel="icon" type="image/svg+xml" href="icons/icon.svg?v=230">
+  <link rel="apple-touch-icon" href="icons/icon.svg?v=230">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <!-- Warm the Supabase connection (DNS + TLS) during page load so the first
@@ -34,16 +38,29 @@
   <!-- Must carry the SAME ?v=N that cloud.js appends when it injects this script,
        or the preload warms a different URL and is wasted. `npm run release` bumps
        both (this one by regex, cloud.js by deriving from its own marker). -->
-  <link rel="preload" href="js/vendor/supabase.js?v=229" as="script">
+  <link rel="preload" href="js/vendor/supabase.js?v=230" as="script">
   <!-- The brand kit's three faces, and only three:
          IBM Plex Sans Arabic — the body face, for BOTH scripts (it carries a
            full Latin set, so this replaces the old Inter + Tajawal pair and one
            font now covers an EN/AR app instead of two).
-         Archivo            — the VAULT wordmark ONLY, 900 at .02em tracking
-                              (the CUT spec lists wide tracking as a DON'T).
-         JetBrains Mono     — numerals and technical labels. -->
-  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@300;400;500;600;700&family=Archivo:wght@600;800;900&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="styles.css?v=229">
+         Archivo            — the VAULT wordmark ONLY (.bl-name), at 800.
+         JetBrains Mono     — numerals and technical labels (.num).
+
+       EVERY WEIGHT HERE IS ONE THE CSS ACTUALLY ASKS FOR. Fonts are the single
+       heaviest thing this page loads — 8 files, ~208 KB, 38% of total transfer,
+       more than app.js, styles.css and supabase.js combined — so an unused
+       weight is not a rounding error. Three were being downloaded and never
+       drawn (checked against document.fonts in the running app, not by reading
+       the CSS): IBM Plex 300, and Archivo 600 and 900, both reported
+       "unloaded" with .bl-name as Archivo's only consumer.
+
+       JetBrains 700 is ADDED, not waste: .num elements inherit their weight
+       from the row around them and were resolving to 700/800/900 against a face
+       that only shipped 400 and 500, so 12 of the 14 numbers visible on Home
+       were SYNTHETIC bold — the browser smearing 400 rather than drawing a real
+       bold. With 700 present the heavier steps map to it instead. -->
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@400;500;600;700&family=Archivo:wght@800&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css?v=230">
 </head>
 <body class="theme-dark">
   <div class="app">
@@ -111,21 +128,21 @@
           await Promise.all(regs.map((r) => r.unregister()));
           const keys = await caches.keys();
           await Promise.all(keys.map((k) => caches.delete(k)));
-          if (!sessionStorage.getItem('__cleaned_v229')) {
-            sessionStorage.setItem('__cleaned_v229', '1');
+          if (!sessionStorage.getItem('__cleaned_v230')) {
+            sessionStorage.setItem('__cleaned_v230', '1');
             location.reload();
           }
         }
       }).catch(() => {});
     }
   </script>
-  <script src="js/cloud.js?v=229"></script>
-  <script src="js/storage.js?v=229"></script>
-  <script src="js/tables.js?v=229"></script>
-  <script src="js/app.js?v=229"></script>
-  <script src="js/health.js?v=229"></script>
-  <script src="js/notify.js?v=229"></script>
-  <script src="js/foodai.js?v=229"></script>
-  <script src="js/update.js?v=229"></script>
+  <script src="js/cloud.js?v=230"></script>
+  <script src="js/storage.js?v=230"></script>
+  <script src="js/tables.js?v=230"></script>
+  <script src="js/app.js?v=230"></script>
+  <script src="js/health.js?v=230"></script>
+  <script src="js/notify.js?v=230"></script>
+  <script src="js/foodai.js?v=230"></script>
+  <script src="js/update.js?v=230"></script>
 </body>
 </html>

@@ -18,7 +18,7 @@
 ## 2) إنشاء جدول البيانات
 
 1. من القائمة اليسار → **SQL Editor** → **New query**.
-2. افتح الملف `backend/supabase-setup.sql` وانسخ محتواه كامل والصقه.
+2. افتح الملف `backend/migrations/01_supabase-setup.sql` وانسخ محتواه كامل والصقه.
 3. اضغط **Run** (أو Ctrl+Enter). لازم يطلع **Success**.
 
 ---

@@ -3,7 +3,7 @@
 // just: push that blob up on change, pull it down on login. One row per user
 // in the `vault_data` table, protected by Row Level Security.
 //
-// SETUP: create a free Supabase project, run backend/supabase-setup.sql, then
+// SETUP: create a free Supabase project, run backend/migrations/01_supabase-setup.sql, then
 // paste your Project URL + anon key below. The anon key is PUBLIC and safe to
 // ship — RLS makes sure each user only ever touches their own row.
 (function () {
@@ -604,7 +604,7 @@
   // Insert the user's OWN feedback row (RLS enforces user_id = self). The
   // username is snapshotted so the admin inbox reads well even if it changes.
   // ---- client error reporting ---------------------------------------------
-  // Fire-and-forget crash reporting (backend/client-errors-v9.sql).
+  // Fire-and-forget crash reporting (backend/pending/client-errors-v9.sql).
   //
   // Rules this MUST obey, because it runs on the error path:
   //   * never throw — a reporter that crashes while reporting a crash is worse

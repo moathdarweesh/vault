@@ -86,7 +86,7 @@ Third occurrence of this bug class in the project.
 **`js/app.js:3243`** · **MEDIUM** · effort **S** — `syncExerciseImages()` restores it on the next boot.
 
 ### 2.4 Gemini Worker fails open + has no rate limiting
-**`backend/gemini-worker.js:161` / `:199`** · **MEDIUM** · effort **M** — any non-401/403 is treated as authorized, and the Worker is usable as a general-purpose Gemini relay against your quota.
+**`backend/worker/gemini-worker.js:161` / `:199`** · **MEDIUM** · effort **M** — any non-401/403 is treated as authorized, and the Worker is usable as a general-purpose Gemini relay against your quota.
 
 ### 2.5 Sync tells you it succeeded when it didn't
 **`js/cloud.js:332`** (a failed pull is recorded as successful — stamp advanced, dirty cleared), **`:389`** (failures reported as "Synced"), **`:304`**, **`:383`** · **MEDIUM** each

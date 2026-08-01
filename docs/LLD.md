@@ -720,7 +720,7 @@ flowchart LR
 - **Storage keys are pinned to exactly one path segment** (`array_length(storage.foldername(name),1) = 1`), which blocks `uidA/../uidB/x.jpg` and keeps every object findable under `{uid}/` — which the account-deletion sweep depends on.
 - **`audit_log` has no INSERT policy and no grant**; `public.audit()`'s EXECUTE is revoked from `public`, `anon` **and** `authenticated`. Rows can only be written from inside another definer function.
 
-### 9.3 The AI Worker (`backend/gemini-worker.js`)
+### 9.3 The AI Worker (`backend/worker/gemini-worker.js`)
 
 **Why it exists:** the Gemini API key must never reach the client.
 
