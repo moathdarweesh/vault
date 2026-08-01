@@ -11,7 +11,7 @@
     "release": "node scripts/release.js",
     "release:check": "node scripts/release.js --check",
     "hooks": "git config core.hooksPath .githooks",
-    "pdf": "node scripts/pdf/build-lld-pdf.js LLD.md LLD.pdf"
+    "pdf": "node scripts/pdf/build-lld-pdf.js docs/LLD.md docs/LLD.pdf"
   },
   "dependencies": {
     "@capacitor/android": "^8.4.1",

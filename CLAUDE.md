@@ -4,7 +4,7 @@ A fitness / workout-tracking **PWA**. Vanilla JS, **no build step**, bilingual *
 
 - **Live:** https://moathdarweesh.github.io/vault/ (GitHub Pages, branch `main`)
 - **Repo:** github.com/moathdarweesh/vault
-- **`AUTOMATION.md`** — the maintainer's own Arabic quick-reference for everything that runs automatically (the three `.githooks/` scripts, `npm run release`, the graph rebuild) and everything that does **not** (Worker redeploy, SQL, APK). Keep it in sync when you change any of that.
+- **`docs/AUTOMATION.md`** — the maintainer's own Arabic quick-reference for everything that runs automatically (the three `.githooks/` scripts, `npm run release`, the graph rebuild) and everything that does **not** (Worker redeploy, SQL, APK). Keep it in sync when you change any of that.
 
 ## Stack & key files
 - `index.html` — markup, script wiring, and the cache-version markers.
@@ -223,7 +223,7 @@ The eleven alternate colour skins (forest, ocean, sand, mocha, olive, aurora,
 sunset, nebula, slate, frost, dusk) were **deleted**. Each one defined its own
 accent, so switching away from `dark` quietly dropped the brand — the app did not
 have a look, it had a dropdown. `THEMES` is now `['dark', 'light']` and they are
-the same identity on two surfaces. `BRAND.md` is the authority.
+the same identity on two surfaces. `docs/BRAND.md` is the authority.
 
 - **The rule that generates the rest: *elevation is temperature*.** The page is a
   void, and anything lifted toward the viewer is heated metal, so the surface ramp
@@ -272,7 +272,7 @@ One face for text, one for the mark, one for figures. The Google Fonts link in
 ### The mark is THE CUT (v216) — there is no symbol
 The Claude Design spec "Vault Logo CUT" replaced both earlier marks. A single
 horizontal line shears the name: a **slot** in the surface colour with an
-**accent hairline** inside it. Two layers, never one. `BRAND.md` §1 is the law;
+**accent hairline** inside it. Two layers, never one. `docs/BRAND.md` §1 is the law;
 the short version:
 
 - Slot **7%** of the type size, floor **2px**. Hairline **1.5px** minimum.
@@ -433,7 +433,7 @@ The app is going multi-user. Alongside the legacy `vault_data` blob (still the l
 
 ## Hardening pass (v189–v190) — invariants added by the 2026-07-25 codebase review
 
-Full findings + verification in `CODEBASE_REVIEW.md`. The load-bearing rules:
+Full findings + verification in `docs/CODEBASE_REVIEW.md`. The load-bearing rules:
 
 - **`saveLocal()` vs `save()` (`js/storage.js`).** `save()` flags the blob dirty for cloud sync; `saveLocal()` does not. **Housekeeping writes must use `saveLocal()`** — the Health Connect cache, the global-catalog merge, the onboarding flag. They run *before* `bootSync`'s pull resolves, and flagging them dirty manufactured a false `'conflict'` whose "Keep this device" branch force-pushes over a **newer** cloud blob (skipping both the empty-blob guard and the version compare). If you add a write that the device re-derives for itself, it belongs in `saveLocal()`.
 - **READ-ONLY mode.** If the stored blob fails to parse, `loadState()` no longer overwrites it with `defaultState()`. It quarantines a copy at `gym_tracker_v1__corrupt`, sets `STATE_LOAD_FAILED`, and `writeStore()` refuses every write until a *deliberate* replacement (cloud pull / restore / reset) clears it via `reloadState()`. Never "fix" this by writing defaults.

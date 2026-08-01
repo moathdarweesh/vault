@@ -11,8 +11,8 @@ const path = require('path');
 const { marked } = require('marked');
 const puppeteer = require('puppeteer-core');
 
-const SRC = process.argv[2] || 'C:/Users/moath/vault/LLD.md';
-const OUT = process.argv[3] || 'C:/Users/moath/vault/LLD.pdf';
+const SRC = process.argv[2] || 'C:/Users/moath/vault/docs/LLD.md';
+const OUT = process.argv[3] || 'C:/Users/moath/vault/docs/LLD.pdf';
 const CHROME = 'C:/Program Files/Google/Chrome/Application/chrome.exe';
 const HERE = __dirname;
 
