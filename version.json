@@ -2,10 +2,10 @@
   "_comment": "Update manifest. `web` is the latest web build — it MUST equal the ?v=N in index.html on every release; js/update.js reads it fresh (no-store) and reloads the entry html so web/CSS/JS updates reach all devices without a reinstall. `apk` only triggers the in-app 'download new APK' banner when apk.build here is GREATER than the versionCode installed on the device. To release a NEW APK: bump android/app/build.gradle versionCode, build, upload to Drive, then set apk.build to that number + apk.url to the new Drive share link + notes, and push.",
   "web": 236,
   "apk": {
-    "build": 13,
-    "version": "2.2",
+    "build": 14,
+    "version": "2.3",
     "url": "https://raw.githubusercontent.com/moathdarweesh/vault/main/download/THE-VAULT.apk",
-    "notes_ar": "هوية جديدة: الشقّ. خط أفقي واحد يشقّ الاسم — لا رمز ولا شعار جانبي. أيقونة التطبيق صارت حرف V مشقوقاً، وأيقونة الإشعارات صارت الشقّ وحده (كانت الأشرطة الخمسة)، وأُضيفت أيقونة مطابقة لنظام الأيقونات الملوّنة في أندرويد ١٣ فأحدث.",
-    "notes_en": "New identity: THE CUT. One horizontal line shears the name — no symbol, no logo beside it. The app icon is now a cut V, the notification icon is the slot alone (it was the five bars), and a matching themed-icon layer was added for Android 13+."
+    "notes_ar": "أيقونة الإشعارات صارت علامة V المشقوقة نفسها التي على الويب — كانت ما تزال بلاطة «الشقّ» من إصدار قديم، وهي مورد أصلي لا يصله تحديث الويب أبداً، فيلزمه تثبيت جديد. ومعها هوية AJ الجديدة وشريط تنبيه داخل التطبيق.",
+    "notes_en": "The notification icon is now the same cut-V mark the web uses. It was still the old CUT tile: it is a native resource, so a web update can never reach it and only a reinstall can. Ships with the AJ identity and the in-app notification bar."
   }
 }

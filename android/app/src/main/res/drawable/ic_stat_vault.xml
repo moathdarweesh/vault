@@ -9,30 +9,53 @@
   which is a fully-opaque multi-colour system asset. Flattened to alpha it is a
   featureless white blob, which is why the reminder never looked like ours.
 
-  THE GLYPH IS THE SLOT MARK, not the letter. The Claude Design spec "Vault Logo
-  CUT", section 02 SCALE, drops the letterform below 48px and lets the slot BE
-  the mark: a tile with one slot cut out of it. This icon renders at roughly
-  18px in a status bar, far under that threshold, so the letter would only turn
-  to mud here. The spec names this exact surface as one the slot mark serves.
+  THE GLYPH IS THE V-AND-SLOT, and it is the SAME geometry as the web badge in
+  `icons/badge-96.png`: APPLY-notifications.md §1.1 specifies exactly these three
+  subpaths. One glyph on both platforms, so a reminder looks the same on the
+  phone as it does in a desktop browser.
 
-  It was the five bars until now, which was the pre-CUT identity.
+  This file has now been three different marks. It was the five bars, then the
+  CUT tile (a rounded square with a slot cut out of it) at v216, and that one
+  was already stale: the wordmark became the AJ lockup at v227 and this did not
+  follow, because it CANNOT follow. It is a native resource — it changes only
+  when someone edits this file and rebuilds.
 
-  ALPHA-ONLY MEANS THE SLOT MUST BE A HOLE, not a painted bar: anything drawn
-  gets tinted, so a "black" slot would come out the same colour as the tile.
-  android:fillType="evenOdd" makes the inner subpath subtract from the outer.
+  ALPHA-ONLY MEANS THE SLOT MUST BE A HOLE, not a painted bar — anything drawn
+  gets tinted, so a "black" slot comes out the same colour as the ink and the
+  cut disappears. Here that is free rather than fiddly: the gap between the
+  upper arms (ending y 10.6) and the lower chevron (starting y 13.4) is empty
+  canvas, not a shape, so there is nothing to tint and no evenOdd needed.
 
-  GEOMETRY: the spec's small tiles carry a corner radius of 25% and a slot 60%
-  of the tile wide. The canvas is 24dp but a status bar wants a 1dp margin, so
-  the tile is 22dp on (1,1)..(23,23) with r=5.5, and the slot is 13.2 across
-  (60% of 22) and 2.5 tall, centred. 2.5 clears the spec's 2px floor.
+  INK BOX: x 2.6..21.4, y 3.4..20.6 — inside the 2..22 safe area, which leaves
+  the ~1dp margin a status bar wants at its ~18px render size.
+
+  ⚠️ BAKED INTO THE APK. Editing this changes nothing for anyone until a new APK
+  is built AND installed; `git push` cannot deliver a native resource. Verify a
+  build by DECOMPILING, never by checking that a file with this name exists —
+  that check is what missed the launcher-icon bug for three releases. Run
+  `aapt2 dump xmltree` against the built APK, passing this path with its file
+  flag, and read the actual pathData.
+
+  (The flag is described rather than written out because it starts with two
+  hyphens, and two hyphens are illegal inside an XML comment. Writing it here
+  literally is what failed this very build the first time — the same trap that
+  briefly broke icon.svg with `-` `-bg` in its comment.)
 -->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     android:width="24dp"
     android:height="24dp"
     android:viewportWidth="24"
     android:viewportHeight="24">
+    <!-- left arm of the V -->
     <path
         android:fillColor="#FFFFFFFF"
-        android:fillType="evenOdd"
-        android:pathData="M6.5,1h11a5.5,5.5 0 0 1 5.5,5.5v11a5.5,5.5 0 0 1 -5.5,5.5h-11a5.5,5.5 0 0 1 -5.5,-5.5v-11a5.5,5.5 0 0 1 5.5,-5.5zM5.4,10.75h13.2v2.5h-13.2z" />
+        android:pathData="M2.6,3.4H7.2L10.1,10.6H5.5Z" />
+    <!-- right arm -->
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M16.8,3.4H21.4L18.5,10.6H13.9Z" />
+    <!-- lower chevron, below the slot -->
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M6.7,13.4H11.3L12,15.2L12.7,13.4H17.3L14.4,20.6H9.6Z" />
 </vector>
