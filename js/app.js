@@ -12,7 +12,7 @@
 // build. The literal below is the fallback (file://, or a stripped query) and is
 // still bumped by `npm run release` — see CLAUDE.md "CACHE WORKFLOW".
 const VAULT_BUILD = (() => {
-  const FALLBACK = 'v242';
+  const FALLBACK = 'v243';
   try {
     const src = (document.currentScript && document.currentScript.src) || '';
     const m = src.match(/[?&]v=(\d+)/);
@@ -7691,8 +7691,8 @@ function renderSettings(el) {
           <div class="settings-action-sub">${t('import_data_sub')}</div>
         </div>
       </button>
-      <button class="settings-action-row" id="reset-btn" style="color:var(--red)">
-        <div class="settings-action-icon" style="background:var(--red-bg);color:var(--red)">${icon('refresh', 20)}</div>
+      <button class="settings-action-row is-danger" id="reset-btn">
+        <div class="settings-action-icon">${icon('refresh', 20)}</div>
         <div class="settings-action-main">
           <div class="settings-action-title">${t('reset_data')}</div>
           <div class="settings-action-sub">${t('reset_data_sub')}</div>
@@ -10549,14 +10549,14 @@ async function populateAccount(el) {
           <div class="settings-action-sub">${t('change_password_sub')}</div>
         </div>
       </button>
-      <button class="settings-action-row" id="logout-btn" style="color:var(--red)">
+      <button class="settings-action-row is-danger" id="logout-btn">
         <div class="settings-action-icon icon-mirror" style="background:var(--red-bg);color:var(--red)">${icon('back', 20)}</div>
         <div class="settings-action-main">
           <div class="settings-action-title">${t('logout')}</div>
           <div class="settings-action-sub">${t('logout_sub')}</div>
         </div>
       </button>
-      <button class="settings-action-row" id="delete-account-btn" style="color:var(--red)">
+      <button class="settings-action-row is-danger" id="delete-account-btn">
         <div class="settings-action-icon" style="background:var(--red-bg);color:var(--red)">${icon('trash', 20)}</div>
         <div class="settings-action-main">
           <div class="settings-action-title">${t('delete_account')}</div>

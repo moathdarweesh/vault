@@ -5413,18 +5413,34 @@ body[dir="rtl"] .variation-select svg { transform: scaleX(-1); }
   border-color: var(--border-hi);
 }
 
+/* APPLY-vault.md §4 (settings) with ICON-RULES §5: a 36px box, radius 12, and a
+   background DERIVED FROM THE ICON'S OWN COLOUR at 13% — not an independent
+   surface. color-mix off currentColor is what makes that automatic: give a row's
+   icon a different colour and its tile follows, so the two can never disagree.
+   It was a flat --surface-2 tile at 40px with muted ink, which is why every row
+   looked the same whatever it did. */
 .settings-action-icon {
-  width: 40px;
-  height: 40px;
+  width: 36px;
+  height: 36px;
   border-radius: 12px;
-  background: var(--surface-2);
+  color: var(--accent-text);
+  background: color-mix(in srgb, currentColor 13%, transparent);
   display: flex;
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
-  color: var(--text-mute);
 }
 .settings-action-icon svg { width: 22px; height: 22px; }
+
+/* DESTRUCTIVE ROWS: red on the title and the icon, and nowhere else. Painting
+   the whole row red — which is what `style="color:var(--red)"` on the button
+   did — dragged the DESCRIPTION red too, so the sentence explaining what the
+   action does shouted as loudly as the action itself. The spec is explicit that
+   the subtitle stays grey. */
+.settings-action-row.is-danger { color: var(--text); }
+.settings-action-row.is-danger .settings-action-title { color: var(--red); }
+.settings-action-row.is-danger .settings-action-icon { color: var(--red); }
+.settings-action-row.is-danger .settings-action-sub { color: var(--text-mute); }
 
 .settings-action-main { flex: 1; min-width: 0; }
 
