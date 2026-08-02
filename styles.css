@@ -4639,15 +4639,21 @@ body[dir="rtl"] .picker-row { text-align: right; }
 .macro-tracks { display: flex; flex-direction: column; gap: 14px; }
 .macro-track-head { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 5px; }
 .macro-track-name { font-size: 13px; font-weight: 800; }
-.macro-track-name.pro { color: var(--cat-chest); }
-.macro-track-name.carb { color: var(--cat-legs); }
-.macro-track-name.fat { color: var(--cat-shoulders); }
+.macro-track-name.pro { color: var(--accent-text); }
+.macro-track-name.carb, .macro-track-name.fat { color: var(--text-mute); }
 .macro-track-nums { font-size: 12px; color: var(--text-dim); font-weight: 600; }
 .macro-track-bar { height: 8px; border-radius: 999px; background: var(--surface-3); overflow: hidden; }
 .macro-track-fill { display: block; height: 100%; border-radius: 999px; transition: width 0.6s cubic-bezier(0.22, 1, 0.36, 1); }
-.macro-track-fill.pro { background: var(--cat-chest); }
-.macro-track-fill.carb { background: var(--cat-legs); }
-.macro-track-fill.fat { background: var(--cat-shoulders); }
+/* APPLY-vault.md §4 (nutrition): protein orange, the other two grey. These were
+   --cat-chest / --cat-legs / --cat-shoulders — the MUSCLE HEATMAP palette,
+   borrowed for macros, so three unrelated hues implied the three were equally
+   important and none of them meant anything here. Protein is the one macro this
+   app actually asks you to hit, so it is the one that gets the accent; carbs and
+   fat are context and recede. */
+.macro-track-fill.pro { background: var(--accent); }
+.macro-track-fill.carb { background: var(--text-dim); }
+.macro-track-fill.fat { background: var(--surface-3); }
+/* (the label rules live with the other .macro-track-name rules above) */
 .macro-track-left { font-size: 11px; color: var(--text-mute); margin-top: 4px; font-weight: 600; }
 .macro-track-left .over { color: var(--danger, #ef4444); }
 
