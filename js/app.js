@@ -12,7 +12,7 @@
 // build. The literal below is the fallback (file://, or a stripped query) and is
 // still bumped by `npm run release` — see CLAUDE.md "CACHE WORKFLOW".
 const VAULT_BUILD = (() => {
-  const FALLBACK = 'v243';
+  const FALLBACK = 'v245';
   try {
     const src = (document.currentScript && document.currentScript.src) || '';
     const m = src.match(/[?&]v=(\d+)/);
@@ -7265,7 +7265,38 @@ function renderSleep(el) {
       </div>
     </div>
 
-    ${latest && latest.stages ? sleepStagesHtml(latest) : ''}
+    ${latest ? `
+      <!-- APPLY-vault.md §4: ONE card carries last night — duration in 34px
+           mono, then the stage bar, then the times. Then two small cards, deep
+           and efficiency. The three stat boxes above stay: they answer "how am
+           I doing lately", which is a different question from "how was last
+           night" and is what the rest of the list is about. -->
+      <div class="card sleep-hero">
+        <div class="sleep-hero-label">${t('last_night')}</div>
+        <div class="sleep-hero-dur num" dir="ltr">${formatDuration(latest.durationMinutes)}</div>
+        ${latest.stages ? sleepStagesHtml(latest, { compact: true }) : ''}
+        <div class="sleep-hero-times">
+          ${icon('moon', 16)}<span class="num" dir="ltr">${formatTime12(latest.sleepTime)}</span>
+          <span aria-hidden="true">→</span>
+          <span class="num" dir="ltr">${formatTime12(latest.wakeTime)}</span>
+        </div>
+      </div>
+      ${latest.stages ? (() => {
+        const q = sleepQuality(latest.stages);
+        const deepMin = latest.stages.deep || 0;
+        return `
+          <div class="sleep-mini">
+            <div class="card sleep-mini-card">
+              <div class="sleep-mini-label">${t('sleep_deep')}</div>
+              <div class="sleep-mini-value num" dir="ltr">${formatDuration(deepMin)}</div>
+            </div>
+            <div class="card sleep-mini-card">
+              <div class="sleep-mini-label">${t('sleep_efficiency')}</div>
+              <div class="sleep-mini-value num" dir="ltr">${q ? q.efficiency + '%' : '—'}</div>
+            </div>
+          </div>`;
+      })() : ''}
+    ` : ''}
 
     <div class="row-between mb-16">
       <div class="section-title" style="margin:0">${t('history')}</div>

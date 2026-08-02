@@ -4527,10 +4527,47 @@ body[dir="rtl"] .picker-row { text-align: right; }
 .sleep-quality.q-fair { background: rgba(251, 191, 36, 0.16); color: #fbbf24; }
 .sl-bar { display: flex; height: 12px; border-radius: 999px; overflow: hidden; background: var(--surface-3); }
 .sl-seg { display: block; height: 100%; }
-.sl-seg.deep  { background: #6366f1; }
-.sl-seg.rem   { background: #22d3ee; }
-.sl-seg.light { background: #60a5fa; }
-.sl-seg.awake { background: #fbbf24; }
+/* APPLY-vault.md §4 (sleep): orange for deep, mid grey for light, dark grey for
+   awake. These were indigo / cyan / blue / amber — four colours from no palette
+   this app owns, on the one screen a user checks half-asleep. The point of the
+   ramp is that DEEP is the thing worth having, so it takes the accent and
+   everything else recedes.
+   REM is not named by the spec (its mock showed three stages) but our data has
+   it, and dropping the segment would discard real information. It sits in the
+   accent family at reduced strength: still "good sleep", visibly not deep. */
+.sl-seg.deep  { background: var(--accent); }
+.sl-seg.rem   { background: color-mix(in srgb, var(--accent) 55%, var(--surface-3)); }
+.sl-seg.light { background: var(--text-dim); }
+.sl-seg.awake { background: var(--surface-3); }
+.sl-dot.deep  { background: var(--accent); }
+.sl-dot.rem   { background: color-mix(in srgb, var(--accent) 55%, var(--surface-3)); }
+.sl-dot.light { background: var(--text-dim); }
+.sl-dot.awake { background: var(--surface-3); }
+
+/* The one card the screen opens on: last night, big enough to read at a glance.
+   34px is the ladder's top rung and the spec's number. */
+.sleep-hero { padding: var(--sp-4); margin-bottom: var(--sp-3); }
+.sleep-hero-label { font-size: 12.5px; font-weight: 600; color: var(--text-mute); }
+.sleep-hero-dur {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 34px; font-weight: 700; line-height: 1.1;
+  color: var(--text); margin: 6px 0 var(--sp-3);
+}
+/* Two classes deep, because the hero passes {compact:true} to reuse the bar
+   without its legend, and `.sl-bar-wrap .sl-bar` pins that to 6px. A 6px ribbon
+   under a 34px numeral reads as a hairline; this is the card's second element,
+   so it gets the full height. */
+.sleep-hero .sl-bar-wrap .sl-bar { height: 12px; }
+.sleep-hero .sl-bar-wrap { margin-top: 0; }
+.sleep-hero-times {
+  display: flex; align-items: center; gap: 10px;
+  margin-top: var(--sp-3); font-size: 13px; color: var(--text-mute);
+}
+.sleep-hero-times .num { color: var(--text); }
+.sleep-mini { display: grid; grid-template-columns: 1fr 1fr; gap: var(--sp-3); margin-bottom: var(--sp-4); }
+.sleep-mini-card { padding: var(--sp-4); }
+.sleep-mini-label { font-size: 12.5px; font-weight: 600; color: var(--text-mute); }
+.sleep-mini-value { font-family: 'JetBrains Mono', monospace; font-size: 22px; font-weight: 700; color: var(--text); margin-top: 5px; }
 .sl-bar-wrap { margin-top: 7px; }
 .sl-bar-wrap .sl-bar { height: 6px; }
 .sl-legend { display: grid; grid-template-columns: repeat(2, 1fr); gap: 6px 14px; margin-top: 12px; }
