@@ -6786,6 +6786,66 @@ body[dir="rtl"] .ntfs-switch.on .ntfs-knob { transform: translateX(-18px); }
 .ntfs-denied .ntfs-title { color: var(--red); }
 .settings-action-chev { flex: none; color: var(--text-dim); display: grid; place-items: center; }
 
+
+/* =========================================================================
+   PROGRESS — APPLY-vault.md §4
+   ========================================================================= */
+.pg-card { padding: var(--sp-4); margin-bottom: var(--sp-3); }
+.pg-head { display: flex; align-items: baseline; justify-content: space-between; gap: var(--sp-3); margin-bottom: var(--sp-3); }
+.pg-head .rot-section-title { margin-bottom: 0; }
+.pg-delta { font-size: 13px; font-weight: 700; color: var(--text-mute); }
+/* Losing weight is not automatically the good direction, so neither arrow gets
+   --up or --red. The number states the change; the user knows their goal. */
+.pg-delta.up, .pg-delta.down { color: var(--text); }
+
+.pg-bars {
+  display: flex; align-items: flex-end; gap: 6px;
+  height: 96px;
+  padding: 0 2px;
+}
+/* THE AGE RAMP. --age runs 0 (oldest) to 1 (newest), set per bar in JS, and the
+   colour is mixed from it: the newest bar is full accent and each older one
+   steps back toward the surface. Ten bars in one colour would make the oldest
+   reading shout as loudly as today's, which is the opposite of a trend. */
+.pg-bar {
+  flex: 1 1 0;
+  min-width: 0;
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--accent) calc(var(--age) * 100%), var(--surface-3));
+  transition: height 0.5s cubic-bezier(0.22, 1, 0.36, 1);
+}
+.pg-scale { display: flex; justify-content: space-between; margin-top: 9px; font-size: 11px; color: var(--text-dim); }
+
+.pg-two { display: grid; grid-template-columns: 1fr 1fr; gap: var(--sp-3); margin-bottom: var(--sp-3); }
+.pg-mini { padding: var(--sp-4); }
+.pg-mini-label { font-size: 12.5px; font-weight: 600; color: var(--text-mute); }
+.pg-mini-value { font-family: 'JetBrains Mono', monospace; font-size: 24px; font-weight: 700; color: var(--text); margin-top: 5px; line-height: 1.1; }
+.pg-mini-unit { font-size: 11px; color: var(--text-dim); margin-top: 2px; }
+
+/* LAST on the screen, and the only thing here wearing --up: a streak is pure
+   achievement, which is what that token is reserved for. The accent stays with
+   actions. The light line above the border is the spec's device — a highlight
+   along the top edge, so the card reads as lit from above rather than filled. */
+.pg-streak {
+  position: relative;
+  display: flex; align-items: center; gap: 13px;
+  padding: var(--sp-4);
+  margin-bottom: var(--sp-4);
+  border-color: color-mix(in srgb, var(--up) 34%, transparent);
+  background: color-mix(in srgb, var(--up) 8%, var(--surface-1));
+  overflow: hidden;
+}
+.pg-streak::before {
+  content: '';
+  position: absolute; top: 0; left: 12%; right: 12%;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, color-mix(in srgb, var(--up) 85%, transparent), transparent);
+}
+.pg-streak-icon { flex: none; display: grid; place-items: center; color: var(--up); --icon-accent: var(--up); }
+.pg-streak-main { display: flex; align-items: baseline; gap: 8px; }
+.pg-streak-value { font-family: 'JetBrains Mono', monospace; font-size: 28px; font-weight: 700; color: var(--up); line-height: 1; }
+.pg-streak-label { font-size: 13px; font-weight: 600; color: var(--text-mute); }
+
 /* =========================================================================
    IDENTITY LAYER  (v210)
 

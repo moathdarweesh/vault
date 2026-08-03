@@ -12,7 +12,7 @@
 // build. The literal below is the fallback (file://, or a stripped query) and is
 // still bumped by `npm run release` — see CLAUDE.md "CACHE WORKFLOW".
 const VAULT_BUILD = (() => {
-  const FALLBACK = 'v246';
+  const FALLBACK = 'v248';
   try {
     const src = (document.currentScript && document.currentScript.src) || '';
     const m = src.match(/[?&]v=(\d+)/);
@@ -1192,6 +1192,9 @@ const I18N = {
     notif_supps_add: 'Add a dose',
     notif_supps_name: 'Name',
     notif_supps_time: 'Time',
+    pg_volume_30d: 'Volume · 30 days',
+    pg_sessions_30d: 'Sessions · 30 days',
+    pg_days_unit: 'days',
     notif_every_hours: 'Every {n} hours',
     notif_delay_min: 'After {n} minutes',
     notif_sys_hint: 'Sound and vibration are the system’s, not the app’s.',
@@ -1927,6 +1930,9 @@ const I18N = {
     notif_supps_add: 'أضف جرعة',
     notif_supps_name: 'الاسم',
     notif_supps_time: 'الوقت',
+    pg_volume_30d: 'الحجم · 30 يوماً',
+    pg_sessions_30d: 'الجلسات · 30 يوماً',
+    pg_days_unit: 'يوم',
     notif_every_hours: 'كل {n} ساعات',
     notif_delay_min: 'بعد {n} دقيقة',
     notif_sys_hint: 'الصوت والاهتزاز من النظام لا من التطبيق.',
@@ -7403,6 +7409,110 @@ function openSleepModal(sleepId = null) {
 // ==========================================================================
 // COMPARE
 // ==========================================================================
+
+// ==========================================================================
+// PROGRESS — APPLY-vault.md §4 ("التقدّم")
+//
+// The spec describes a progress screen with three things: ten weight bars that
+// age from grey to orange, two cards (training volume, monthly count), and the
+// streak card LAST in --up with a light line above its border.
+//
+// No such screen existed. Weight was a line chart inside a modal, volume lived
+// on the Program tab and the streak on Home — the three facts that answer "am I
+// getting anywhere" were in three different places, none of them together. This
+// puts them on `compare`, which is already the app's progress screen (reached
+// from Home, titled "compare", and about change over time) rather than adding a
+// fourth destination that would duplicate all three.
+//
+// THE RAMP IS THE POINT: the newest bar is the accent and each older one steps
+// back toward the surface. A flat set of ten bars makes the oldest reading as
+// loud as today's, which is the opposite of what a trend is for.
+// ==========================================================================
+function progressSectionHtml() {
+  const all = DB.bodyweight.list();          // oldest → newest
+  const pts = all.slice(-10);                // the spec's ten
+  const streak = computeStreak();
+
+  let weightHtml = '';
+  if (pts.length >= 2) {
+    const kgs = pts.map((p) => p.kg);
+    const min = Math.min(...kgs), max = Math.max(...kgs);
+    // A flat span would divide by zero AND draw ten identical bars; give it a
+    // floor so a steady weight reads as steady rather than as missing data.
+    const span = Math.max(0.1, max - min);
+    const first = kgs[0], last = kgs[kgs.length - 1];
+    const delta = Math.round((last - first) * 10) / 10;
+    const bars = pts.map((p, i) => {
+      // 28%..100% of the track: even the lowest point keeps a visible stub, so
+      // ten bars read as a series rather than as one bar and nine gaps.
+      const h = 28 + ((p.kg - min) / span) * 72;
+      const age = pts.length === 1 ? 1 : i / (pts.length - 1);   // 0 oldest → 1 newest
+      return `<span class="pg-bar" style="height:${h.toFixed(1)}%;--age:${age.toFixed(3)}"
+                    title="${escapeHtml(formatDate(p.date))} · ${fmtWeight(p.kg)}"></span>`;
+    }).join('');
+    weightHtml = `
+      <div class="card pg-card">
+        <div class="pg-head">
+          <span class="rot-section-title">${t('bodyweight')}</span>
+          <span class="pg-delta ${delta > 0 ? 'up' : delta < 0 ? 'down' : ''} num" dir="ltr">${
+            delta > 0 ? '+' : ''}${fmtWeight(Math.abs(delta) === 0 ? 0 : delta)} ${unitLabel()}</span>
+        </div>
+        <div class="pg-bars">${bars}</div>
+        <div class="pg-scale">
+          <span class="num" dir="ltr">${escapeHtml(formatDateShort(pts[0].date))}</span>
+          <span class="num" dir="ltr">${escapeHtml(formatDateShort(pts[pts.length - 1].date))}</span>
+        </div>
+      </div>`;
+  }
+
+  // Volume and count for the last 30 days — the spec's two cards.
+  const since = addDaysISO(todayISO(), -30);
+  const recent = DB.sessions.listAll().filter((s) => s.date >= since);
+  let volume = 0;
+  recent.forEach((s) => (s.sets || []).forEach((set) => {
+    volume += (Number(set.weight) || 0) * (Number(set.reps) || 0);
+  }));
+  const monthCount = new Set(recent.filter((s) => (s.sets || []).length).map((s) => s.date)).size;
+
+  const cardsHtml = `
+    <div class="pg-two">
+      <div class="card pg-mini">
+        <div class="pg-mini-label">${t('pg_volume_30d')}</div>
+        <div class="pg-mini-value num" dir="ltr">${fmtNum(Math.round(volume))}</div>
+        <div class="pg-mini-unit">${unitLabel()}</div>
+      </div>
+      <div class="card pg-mini">
+        <div class="pg-mini-label">${t('pg_sessions_30d')}</div>
+        <div class="pg-mini-value num" dir="ltr">${fmtNum(monthCount)}</div>
+        <div class="pg-mini-unit">${t('pg_days_unit')}</div>
+      </div>
+    </div>`;
+
+
+  return weightHtml + cardsHtml;
+}
+
+// Rendered LAST on the screen, below the week-over-week tabs — the spec says the
+// streak card is the final thing, and inside the progress block it would have
+// sat fourth of seven. The weight bars stay at the top because they are the
+// headline; the streak is the closing note.
+//
+// The spec calls this "the GOLDEN streak card" and then names --up, which is
+// green here. The token wins over the adjective, exactly as it did for the
+// rest-day sheet: a named token is unambiguous and a colour word is not.
+function progressStreakHtml() {
+  const streak = computeStreak();
+  if (streak <= 0) return '';
+  return `
+    <div class="card pg-streak">
+      <span class="pg-streak-icon">${icon('zap', 22)}</span>
+      <span class="pg-streak-main">
+        <span class="pg-streak-value num" dir="ltr">${fmtNum(streak)}</span>
+        <span class="pg-streak-label">${streak === 1 ? t('streak_one_day') : t('streak_days')}</span>
+      </span>
+    </div>`;
+}
+
 function renderCompare(el) {
   const tab = viewContext.compareTab || 'workouts';
 
@@ -7431,8 +7541,10 @@ function renderCompare(el) {
       <p class="page-subtitle">${t('compare_subtitle')}</p>
     </div>
 
+    ${progressSectionHtml()}
     ${tabsHtml}
     ${contentHtml}
+    ${progressStreakHtml()}
   `;
 
   el.querySelectorAll('[data-compare-tab]').forEach((b) =>
