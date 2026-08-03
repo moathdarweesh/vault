@@ -3842,11 +3842,16 @@ body[dir="rtl"] .planner-day-head { text-align: right; }
 }
 .run-set-row input:focus { border-color: var(--accent-text); background: var(--surface-1); }
 .run-set-row.done input { border-color: var(--accent-line); background: var(--accent-soft); }
+/* APPLY-vault.md §4: the completed set is a 26px ORANGE square with a BLACK
+   check; incomplete is a grey outline and nothing else. It was a 46px tile —
+   nearly twice the size — which made the column of checkboxes the loudest thing
+   on a screen whose subject is the numbers beside them. --accent-ink (#1a0800)
+   is the black: white on #ff6a00 measures 2.87:1, which BRAND.md rejects. */
 .run-set-done {
-  width: 46px;
-  height: 46px;
-  border-radius: 12px;
-  background: var(--surface-2);
+  width: 26px;
+  height: 26px;
+  border-radius: 8px;
+  background: transparent;
   border: 1px solid var(--border);
   color: var(--text-dim);
   display: inline-flex;
@@ -3855,9 +3860,21 @@ body[dir="rtl"] .planner-day-head { text-align: right; }
   cursor: pointer;
   transition: transform var(--dur-press) var(--ease), background 0.15s, color 0.15s, border-color 0.15s;
 }
-.run-set-done svg { width: 28px; height: 28px; }
+.run-set-done svg { width: 16px; height: 16px; }   /* the ladder's rung for a box under 30px */
 .run-set-done:active { transform: scale(var(--press-scale)); }
-.run-set-done.done { background: var(--accent); border-color: var(--accent-text); color: var(--accent-ink); }
+.run-set-done.done { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+/* Incomplete is the BASE rule above (transparent), not a `:not(.done)` rule.
+   That is not style preference: with `:not()` the browser kept matching the
+   incomplete rule after the class flipped, so a set marked done stayed
+   transparent until something forced a reflow — verified, and a reflow fixed
+   it. Making `.done` a plain override of the base state removes the
+   invalidation edge entirely. The old filled --surface-2 is gone regardless:
+   it made an empty checkbox read as a state rather than as an absence. */
+/* The square shrank to 26px, so give it back a 44px touch area without growing
+   the mark. */
+.run-set-done { position: relative; }
+.run-set-done::after { content: ''; position: absolute; inset: -9px; }
+.run-rest { width: 100%; height: 46px; margin-top: 18px; font-weight: 700; }
 .run-addset { margin-top: 12px; font-size: 13px; }
 
 .run-nav { display: flex; gap: 10px; margin-top: 22px; }
