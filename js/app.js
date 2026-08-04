@@ -12,7 +12,7 @@
 // build. The literal below is the fallback (file://, or a stripped query) and is
 // still bumped by `npm run release` — see CLAUDE.md "CACHE WORKFLOW".
 const VAULT_BUILD = (() => {
-  const FALLBACK = 'v251';
+  const FALLBACK = 'v252';
   try {
     const src = (document.currentScript && document.currentScript.src) || '';
     const m = src.match(/[?&]v=(\d+)/);
@@ -559,6 +559,7 @@ const I18N = {
     remind_channel_desc: 'Supplement and water reminders',
     remind_status: 'Status',
     remind_stat_perm_ok: 'Permission granted', remind_stat_perm_no: 'Permission not granted',
+    remind_stat_mismatch: 'Android is holding {a} of the {b} we scheduled',
     remind_stat_off: 'Notifications are switched off for VAULT in Android settings.',
     remind_stat_queued: 'queued with Android',
     remind_exact_title: 'Exact timing is off',
@@ -1366,6 +1367,7 @@ const I18N = {
     remind_channel_desc: 'تنبيهات المكمّلات والماء',
     remind_status: 'الحالة',
     remind_stat_perm_ok: 'الإذن ممنوح', remind_stat_perm_no: 'الإذن غير ممنوح',
+    remind_stat_mismatch: 'أندرويد يحتفظ بـ{a} من {b} جدولناها',
     remind_stat_off: 'التنبيهات موقوفة لتطبيق VAULT في إعدادات أندرويد.',
     remind_stat_queued: 'مجدولة لدى أندرويد',
     remind_exact_title: 'التوقيت الدقيق متوقّف',
@@ -10043,11 +10045,6 @@ function renderSupplements(el) {
 // this screen never becomes a second place to define them.
 function openRemindersModal() {
   const render = () => {
-    const r = DB.reminders.get();
-    const items = DB.reminders.schedule();
-    const supps = DB.supplements.list().filter((x) => (x.times || []).length);
-    const native = !!(window.Notify && Notify.isNative());
-
     openModal(`
       <div class="modal-header">
         <div>
@@ -10062,30 +10059,29 @@ function openRemindersModal() {
            reminders.enabled or reminders.water, so both controls had become
            inert — they would have written a value nothing consults and told the
            user something was on or off when it was neither. Scheduling is the
-           notifications page now; this modal is the native health check only. -->
-        <button type="button" class="settings-action-row" id="rem-test" style="margin-top:8px">
-          <div class="settings-action-icon icon-mirror">${icon('send', 20)}</div>
-          <div class="settings-action-main">
-            <div class="settings-action-title">${t('remind_test')}</div>
-            <div class="settings-action-sub">${t('remind_test_sub')}</div>
-          </div>
-        </button>
-      </div>
+           notifications page now; this modal is the native health check only.
+
+           THE STATUS BOX BELOW WAS MISSING. paintStatus() has always begun by
+           looking up #rem-status and bailing when it is absent — and when the
+           two controls were deleted, the element went with them. So the screen
+           whose entire job is to explain why a reminder never arrived rendered
+           a title, a test button, and nothing else. Every diagnosis it computes
+           — permission state, what Android actually holds, the exact-alarm fix,
+           the battery hint — was thrown away at that first line. -->
+      <div class="rem-status" id="rem-status"></div>
+
+      <button type="button" class="settings-action-row" id="rem-test" style="margin-top:8px">
+        <div class="settings-action-icon icon-mirror">${icon('send', 20)}</div>
+        <div class="settings-action-main">
+          <div class="settings-action-title">${t('remind_test')}</div>
+          <div class="settings-action-sub">${t('remind_test_sub')}</div>
+        </div>
+      </button>
 
       <div class="form-actions">
         <button type="button" class="btn btn-primary btn-block" data-close>${t('done')}</button>
       </div>
     `);
-
-    // Re-schedule, and SAY SO when Android refuses. The old code discarded the
-    // result, so a rejected schedule left the UI reading "on" forever.
-    const syncNow = async () => {
-      if (!window.Notify) return;
-      const res = await Notify.sync();
-      if (res && !res.ok && res.reason !== 'unsupported' && res.reason !== 'denied') {
-        showToast(`${t('remind_sync_failed')} · ${res.reason}`);
-      }
-    };
 
     // Filled after paint: diagnose() has to cross the native bridge.
     const paintStatus = async () => {
@@ -10098,6 +10094,16 @@ function openRemindersModal() {
         d.permission === 'granted' ? t('remind_stat_perm_ok') : t('remind_stat_perm_no')}</div>`);
       if (d.native && d.pending !== null) {
         rows.push(`<div class="rem-status-row ${d.pending ? 'ok' : ''}">${fmtNum(d.pending)} ${t('remind_stat_queued')}</div>`);
+        // What we INTENDED vs what Android is holding. The two diverge whenever
+        // the OS silently drops part of a schedule, and a screen that reports
+        // only the intention looks healthy while nothing is armed. `+1` is the
+        // test notification's own slot, which sync() never sweeps.
+        if (d.scheduled && d.pending < d.scheduled) {
+          rows.push(`<div class="rem-status-row bad">${escapeHtml(
+            t('remind_stat_mismatch').replace('{a}', fmtNum(d.pending)).replace('{b}', fmtNum(d.scheduled)))}</div>`);
+        }
+        rows.push(`<div class="rem-status-row">${escapeHtml(
+          t('notif_arm_days').replace('{n}', fmtNum(d.armDays || 7)))}</div>`);
       }
       // The single biggest reason a reminder never arrives. From Android 14 the
       // "Alarms & reminders" permission is DENIED by default, and the plugin then
@@ -10134,12 +10140,6 @@ function openRemindersModal() {
     let busy = false;
     const once = (fn) => async (...a) => { if (busy) return; busy = true; try { await fn(...a); } finally { busy = false; } };
 
-    $('#rem-sound')?.addEventListener('click', once(async () => {
-      DB.reminders.setSound(!DB.reminders.get().sound);
-      await syncNow();   // the channel decides the sound, so the schedule must move to it
-      closeModal(); render();
-    }));
-
     // gate() is the ONLY prompt in this tap; Notify.test() then merely checks.
     // Asking twice in one press is how two dismissals — a permanent hard-deny on
     // Android 13+ — come out of a single button.
@@ -10147,25 +10147,13 @@ function openRemindersModal() {
       if (window.Notify) await Notify.gate();
       const res = window.Notify ? await Notify.test() : { ok: false, reason: 'unsupported' };
       showToast(res.ok ? t('remind_test_sent') : `${t('remind_test_failed')} · ${res.reason}`);
+      // The test lands in the log, so re-read the status: `pending` moved.
+      paintStatus();
     }));
-
-    // Master switch. Turning it ON asks for the OS permission first (native only)
-    // so the user never sees "on" while Android is silently dropping every alarm.
-
-
-    // Deliberately NOT wrapped in once(): it re-reads all three inputs on every
-    // call, so running it twice just writes the same final state — whereas
-    // dropping the second `change` would silently lose an edit the user made
-    // while the first was still awaiting the native bridge.
-    const push = async () => {
-      const from = $('#rem-from')?.value, to = $('#rem-to')?.value, every = Number($('#rem-every')?.value);
-      if (!from || !to) return;
-      // A window that ends before it starts yields zero alarms; keep it sane.
-      DB.reminders.setWater({ from, to: (to > from ? to : from), everyMin: every });
-      await syncNow();
-      closeModal(); render();
-    };
-    ['#rem-from', '#rem-to', '#rem-every'].forEach((sel) => $(sel)?.addEventListener('change', push));
+    // The handlers for #rem-sound and #rem-from/#rem-to/#rem-every used to sit
+    // here. Their elements were deleted with the controls, so every one of them
+    // was an `?.` against null — silently binding nothing. They are gone rather
+    // than left as three more no-ops that read like working code.
   };
   render();
 }

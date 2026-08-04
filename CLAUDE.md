@@ -35,7 +35,7 @@ A fitness / workout-tracking **PWA**. Vanilla JS, **no build step**, bilingual *
 npm run release          # bump every marker + verify, then commit all files together
 ```
 
-**Current version: v251.** APK: build 15 / v2.4.
+**Current version: v252.** APK: build 15 / v2.4.
 
 `scripts/release.js` rewrites all **16** markers and then re-reads them from disk to confirm; it exits non-zero if any disagree. The markers are `?v=N` in `index.html` (×14 — every script and stylesheet, the `js/vendor/supabase.js` preload, and **both `icons/icon.svg` links**), the `__cleaned_vN` sessionStorage key, the `FALLBACK` literal in `app.js`, and `version.json` → `web`. The count is derived, not hard-coded, so adding a marker is safe — just keep this sentence honest.
 

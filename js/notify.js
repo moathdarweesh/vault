@@ -177,7 +177,15 @@
       // channel only, so the status bar showed a featureless white blob. This
       // names the white-on-transparent VAULT mark instead (res/drawable).
       smallIcon: 'ic_stat_vault',   // NEVER per-channel: the small mark is identity
-      largeIcon: 'cat_' + (it.channel || 'summary') + '_192',   // per channel (§1.2)
+      // Per channel (§1.2). These resolve to res/drawable/cat_<channel>_192.png,
+      // which UNTIL NOW DID NOT EXIST: the generator writes them to icons/ with
+      // HYPHENS (cat-train-192.png) for the web Notification path, and
+      // build-www only copies icons/ into www/. Android needs underscores and
+      // needs them in res/drawable, so getLargeIcon() was calling
+      // decodeResource(res, 0) and getting null on every notification — silently,
+      // because a missing large icon is not an error. Copied in now, but they are
+      // a NATIVE resource: this one reaches nobody until a new APK is installed.
+      largeIcon: 'cat_' + (it.channel || 'summary') + '_192',
       iconColor: '#FF6A00',
       // AN ABSOLUTE, DATED TRIGGER — not `{on:{hour,minute}}`.
       //
