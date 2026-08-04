@@ -1,6 +1,36 @@
 {
- "backend_admin_scale_rpc|backend_admin_scale_rpc_public_admin_activity|scripts_graph_link": "Backend SQL — admin & ops RPCs",
- "js_app|js_app_opentemplatesmodal|js_app_startresttimer": "App shell — theme, timers & helpers",
- "js_app_fmtnum|js_app_renderday|js_app_renderhome": "Training screens & the plan",
- "admin_definer_rpc_write_path|admin_loadall|admin_showcenter": "Admin console (admin.html)"
+  "_comment": "Curated community names for graph_refine.py. Keyed by a CONTENT SIGNATURE — the three highest-degree member ids, sorted and joined by '|' — not by community index, because re-clustering renumbers indices and an index-keyed name lands on whichever group happens to be numbered that way next time. Lives in scripts/ and not graphify-out/, because that directory is gitignored and a curated name written there is lost on a fresh clone. Anything not listed here still gets an accurate mechanical name ('{file} · {hub}'), which is honest but rarely useful: t() is the most-connected symbol in the app, so it wins 'hub' in several unrelated communities and they all came out called 'app.js · t'.",
+
+  "backend_admin_scale_rpc|backend_admin_scale_rpc_public_admin_activity|scripts_graph_link": "Backend SQL — admin & ops RPCs",
+  "js_app|js_app_opentemplatesmodal|js_app_startresttimer": "App shell — theme, timers & helpers",
+  "js_app_fmtnum|js_app_renderday|js_app_renderhome": "Training screens & the plan",
+  "admin_definer_rpc_write_path|admin_loadall|admin_showcenter": "Admin console (admin.html)",
+
+  "js_notify|js_notify_js_notify|js_storage_db_notif": "Notifications — schedule, text & delivery",
+  "js_app_fmtnum|js_app_renderhome|js_storage_todayiso": "Home, the day view & the rotation",
+  "js_app_showonboarding|js_storage_db_prefs_get|js_update": "Onboarding, prefs & the update checker",
+  "js_health|js_health_pull|js_health_sync": "Health Connect bridge (JS)",
+  "android_app_src_main_java_com_moath_thevault_healthconnectplugin_healthconnectplugin|android_app_src_main_java_com_moath_thevault_healthconnectplugin_healthconnectplugin_clientornull|plugincall": "Health Connect native plugin (Kotlin)",
+
+  "js_cloud_getsession|js_cloud_js_cloud|js_cloud_sb": "Cloud auth & account",
+  "js_cloud_bootsync|js_cloud_pull|js_cloud_push": "Cloud sync — push, pull & conflict",
+  "js_app_afterlogin|js_app_showauthgate|js_app_showconflictdialog": "Login flow & the blocking gates",
+  "js_cloud_onlocalchange|js_tables|js_tables_projectall": "The one-way mirror (tables.js)",
+  "js_app_goback|js_cloud|js_cloud_backupexerciseimage": "Exercise-image backup & the SDK loader",
+
+  "js_app_renderexercisedetail|js_app_renderview|js_app_unitlabel": "Exercise screens & the session editor",
+  "js_app_emptystate|js_app_renderprogram|js_app_rendersleep": "Program, sleep, cardio & compare screens",
+  "js_app_navigate|js_app_rendercalendar|js_app_rendersessionrun": "Router, calendar & the rest timer",
+  "js_app_openfoodlibrarymodal|js_app_rendernotifications|js_storage_db": "DB entry points — food library, notification settings, backup",
+
+  "js_app_opensupplementmodal|js_app_rendersupplements|js_storage_db_supplements": "Supplements",
+  "js_storage_db_sessions|js_storage_db_sessions_beststats|js_storage_db_sessions_listbyexercise": "Sessions & personal records (DB.sessions)",
+  "js_app_convertweighttostorage|js_app_openweightsheet|js_storage_db_bodyweight": "Body weight",
+  "js_app_backupexerciseimagefor|js_storage_db_exercises|js_storage_db_exercises_update": "Exercises & custom images",
+  "js_storage_db_cardiotypes|js_storage_db_cardiotypes_add|js_storage_db_cardiotypes_alltypes": "Cardio types",
+
+  "scripts_pdf_build_lld_pdf|scripts_pdf_build_lld_pdf_body|scripts_pdf_build_lld_pdf_buildhtml": "LLD PDF builder",
+  "githooks_post_commit|githooks_post_commit__entry|githooks_post_commit_graphify_changed": "Git hook — post-commit",
+  "githooks_post_checkout|githooks_post_checkout__entry|githooks_post_checkout_graphify_rebuild_log": "Git hook — post-checkout",
+  "scripts_graph_refine|scripts_graph_refine_clean_name|scripts_graph_refine_main": "Graph community refiner"
 }
