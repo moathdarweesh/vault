@@ -7,7 +7,8 @@
   "admin_definer_rpc_write_path|admin_loadall|admin_showcenter": "Admin console (admin.html)",
 
   "js_notify|js_notify_js_notify|js_storage_db_notif": "Notifications — schedule, text & delivery",
-  "js_app_fmtnum|js_app_renderhome|js_storage_todayiso": "Home, the day view & the rotation",
+  "js_storage_db_plan|js_storage_db_plan_addexercisetoslot|js_storage_db_plan_get": "The rotation API (DB.plan)",
+  "js_app_fmtnum|js_app_renderhome|js_storage_todayiso": "Home & the day view (older partition)",
   "js_app_showonboarding|js_storage_db_prefs_get|js_update": "Onboarding, prefs & the update checker",
   "js_health|js_health_pull|js_health_sync": "Health Connect bridge (JS)",
   "android_app_src_main_java_com_moath_thevault_healthconnectplugin_healthconnectplugin|android_app_src_main_java_com_moath_thevault_healthconnectplugin_healthconnectplugin_clientornull|plugincall": "Health Connect native plugin (Kotlin)",
@@ -28,6 +29,17 @@
   "js_app_convertweighttostorage|js_app_openweightsheet|js_storage_db_bodyweight": "Body weight",
   "js_app_backupexerciseimagefor|js_storage_db_exercises|js_storage_db_exercises_update": "Exercises & custom images",
   "js_storage_db_cardiotypes|js_storage_db_cardiotypes_add|js_storage_db_cardiotypes_alltypes": "Cardio types",
+
+  "js_app_escapehtml|js_app_icon|js_app_rendersessionday": "Notification UI — page, bar & permission sheet",
+  "js_app_ntfarmtimer|js_app_ntfbindgesture|js_app_ntfmount": "The in-app notification bar (gesture)",
+  "js_app_renderday|js_app_renderhome|js_storage_todayiso": "Home, the day view & the rotation",
+  "js_app_fmtnum|js_app_renderexercisedetail|js_app_unitlabel": "Exercise detail, weight & personal records",
+  "js_app_openmodal|js_app_showtoast|js_app_t": "UI primitives — t, toast, modal & settings",
+  "js_app_navigate|js_app_rendersessionrun|js_app_renderview": "Router & the exercise/session screens",
+  "js_app_populateaccount|js_app_showauthgate|js_app_showconflictdialog": "Login flow & the blocking gates",
+  "js_app_openfoodlibrarymodal|js_app_openfoodmodal|js_storage_db": "Food library & notification delivery",
+  "js_app_goback|js_app_showusernamegate|js_cloud_js_cloud": "Cloud account & the SDK loader",
+  "js_storage_db_sessions|js_storage_db_sessions_bestonerm|js_storage_db_sessions_prsnapshot": "Sessions & personal records (DB.sessions)",
 
   "scripts_pdf_build_lld_pdf|scripts_pdf_build_lld_pdf_body|scripts_pdf_build_lld_pdf_buildhtml": "LLD PDF builder",
   "githooks_post_commit|githooks_post_commit__entry|githooks_post_commit_graphify_changed": "Git hook — post-commit",
