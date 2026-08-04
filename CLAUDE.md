@@ -29,13 +29,52 @@ A fitness / workout-tracking **PWA**. Vanilla JS, **no build step**, bilingual *
 - **Escape untrusted data** rendered into `innerHTML` with `escapeHtml()` — exercise/food names, and anything from cloud sync / imported backups / AI responses are untrusted.
 - No new dependencies, no build step. Free-first (the maintainer prioritizes free tools/services).
 
+### Minification: DECIDED NO (v253) — settled with measurement, do not re-open
+The open question was whether to strip comments/whitespace from the shipped
+bundle. It is closed, and the numbers are recorded here so it is not
+re-litigated on intuition.
+
+**The saving is real but nearly worthless, because the app is LATENCY-bound, not
+bandwidth-bound.** Measured against the live site over h2:
+
+| | |
+|---|---|
+| Median TTFB per asset | **215 ms** |
+| Median body-download per asset | **3 ms** |
+| `app.js` — 162 KB on the wire | 159 ms waiting, **30 ms** transferring |
+| `update.js` — 3.9 KB on the wire | 228 ms waiting, **2 ms** transferring |
+| Total time moving bytes, all 10 assets | **~226 ms** of a 1,950 ms load |
+
+A 4 KB file and a 162 KB file cost within 20% of the same wall-clock, because
+almost all of it is GitHub Pages' time-to-first-byte. Stripping comments would
+cut 114 KB gzipped (301 KB → 187 KB, 38%) — which touches at most ~86 ms of that
+226 ms, and less again in wall-clock because h2 downloads them in parallel.
+Call it 1–2% of load time.
+
+Against that: GitHub Pages serves the branch **directly, with no CI**, so a
+build artifact would have to be committed. That converts this project's most
+expensive documented failure — `ea6c74e`, "the change reached nobody" — into a
+strictly worse one: the change reaches everyone, but it is the OLD code. The
+`?v=N` hook guards one marker; it would now also have to guard "is dist/ built
+from this source".
+
+For the record, if this is ever revisited: the right shape is NOT a minifier.
+It is blanking comment lines while KEEPING the newlines — that captured 93% of a
+full strip's saving (114 KB of 123 KB) with byte-identical line numbers, so
+stack traces stay accurate and no source map is needed.
+
+**The actual bottleneck, if load time is ever worth attacking: the request
+COUNT.** Ten assets × ~215 ms TTFB, and the tail (`update.js`, finishing at
+1,945 ms) is what gates DOMContentLoaded at 1,950 ms. Fewer files or a host with
+a faster TTFB — not fewer bytes.
+
 ## CACHE WORKFLOW — now automated. **Do not bump by hand.**
 
 ```bash
 npm run release          # bump every marker + verify, then commit all files together
 ```
 
-**Current version: v252.** APK: build 15 / v2.4.
+**Current version: v253.** APK: build 15 / v2.4.
 
 `scripts/release.js` rewrites all **16** markers and then re-reads them from disk to confirm; it exits non-zero if any disagree. The markers are `?v=N` in `index.html` (×14 — every script and stylesheet, the `js/vendor/supabase.js` preload, and **both `icons/icon.svg` links**), the `__cleaned_vN` sessionStorage key, the `FALLBACK` literal in `app.js`, and `version.json` → `web`. The count is derived, not hard-coded, so adding a marker is safe — just keep this sentence honest.
 

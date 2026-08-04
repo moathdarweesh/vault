@@ -4262,6 +4262,47 @@ body[dir="rtl"] .picker-row { text-align: right; }
 }
 .calendar-cell.lvl-4 { background: var(--accent); color: var(--accent-ink); border-color: var(--accent-text); }
 
+/* --- Plan state: a day pulled INTO the rotation, or one declined out of it ---
+   Both change what every later day carries (the cycle position is derived from
+   elapsed training days, not stored) and neither was visible anywhere.
+
+   A corner TICK, not a ring: `.today` already owns the inset ring, and a day can
+   easily be both. A bar rather than a dot, because the identity layer's device 5
+   is the bar and device 4 forbids circles.
+
+   --warn for moved and --text-dim for a taken rest, on purpose: pulling a day
+   forward alters the schedule and is worth a colour; taking the rest you were
+   offered is ordinary and should not look like a warning. */
+.calendar-cell.is-moved::after,
+.calendar-cell.is-skipped::after {
+  content: '';
+  position: absolute;
+  top: 4px;
+  inset-inline-end: 4px;
+  width: 3px;
+  height: 9px;
+  border-radius: 1.5px;
+}
+.calendar-cell.is-moved::after   { background: var(--warn); }
+.calendar-cell.is-skipped::after { background: var(--text-dim); }
+/* On the two loudest heat levels the cell is already accent-filled, so the tick
+   needs to sit against that rather than against the surface. */
+.calendar-cell.lvl-4.is-moved::after { background: var(--accent-ink); }
+
+/* Only rendered when the month actually contains one of the marks. */
+.cal-plan-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-4);
+  margin-top: calc(var(--sp-2) * -1);
+  margin-bottom: var(--sp-4);
+}
+.cal-plan-legend:empty { display: none; }
+.cal-plan-key { display: flex; align-items: center; gap: 7px; font-size: 12px; color: var(--text-mute); }
+.cal-plan-tick { flex: none; width: 3px; height: 11px; border-radius: 1.5px; }
+.cal-plan-tick.moved   { background: var(--warn); }
+.cal-plan-tick.skipped { background: var(--text-dim); }
+
 .calendar-legend {
   display: flex;
   align-items: center;
@@ -7623,6 +7664,13 @@ body.theme-light {
 /* Today is outlined; the day being VIEWED is filled. Two different questions —
    "which is today" and "which am I looking at" — so two different signals. */
 .wk-chip.is-today .wk-disc { border-color: var(--accent-line); }
+/* Plan state on the disc's BORDER; what actually happened stays in the dots
+   below. Declared after `is-today` deliberately — same specificity, so source
+   order decides, and on a day that is both, "this day was moved" is the more
+   informative of the two. A dashed edge for a taken rest reads as a gap in the
+   run without shouting; --warn for a pulled-forward day, matching .rot-moved. */
+.wk-chip.is-moved .wk-disc { border-color: var(--warn); }
+.wk-chip.is-skipped .wk-disc { border-style: dashed; border-color: var(--text-dim); }
 .wk-chip.is-active .wk-disc { background: var(--accent); border-color: var(--accent); }
 .wk-chip.is-active .wk-num { color: var(--accent-ink); }
 .wk-chip.is-active .wk-dow { color: var(--accent-text); }

@@ -12,7 +12,7 @@
 // build. The literal below is the fallback (file://, or a stripped query) and is
 // still bumped by `npm run release` — see CLAUDE.md "CACHE WORKFLOW".
 const VAULT_BUILD = (() => {
-  const FALLBACK = 'v252';
+  const FALLBACK = 'v253';
   try {
     const src = (document.currentScript && document.currentScript.src) || '';
     const m = src.match(/[?&]v=(\d+)/);
@@ -1241,6 +1241,11 @@ const I18N = {
     notif_cap_none: 'No limit',
     notif_arm_days: 'Armed for the next {n} days',
     notif_arm_hint: 'Open the app at least once a week to keep them armed.',
+    // The rotation's two per-date lists, finally visible on the calendar and the
+    // 7-day rail. "Moved in" / "Rest taken", not "extra" / "skipped" — the words
+    // describe what the user DID, and neither carries a verdict.
+    day_moved_in: 'Moved in',
+    day_rest_taken: 'Rest taken',
     pg_volume_30d: 'Volume · 30 days',
     pg_sessions_30d: 'Sessions · 30 days',
     pg_days_unit: 'days',
@@ -2024,6 +2029,8 @@ const I18N = {
     notif_cap_none: 'بلا حدّ',
     notif_arm_days: 'مُجهّزة لـ{n} أيام قادمة',
     notif_arm_hint: 'افتح التطبيق مرة أسبوعياً على الأقل لتبقى مُجهّزة.',
+    day_moved_in: 'يوم مُقدَّم',
+    day_rest_taken: 'راحة مأخوذة',
     pg_volume_30d: 'الحجم · 30 يوماً',
     pg_sessions_30d: 'الجلسات · 30 يوماً',
     pg_days_unit: 'يوم',
@@ -4875,11 +4882,25 @@ function weekStrip(activeIso = null, variant = '') {
     const trained = sessionDates.has(iso);
     const ate = (DB.foodLogs.listForDate(iso) || []).length > 0;
     const didCardio = cardioDates.has(iso);
-    const cls = [back === 0 ? 'is-today' : '', activeIso === iso ? 'is-active' : ''].filter(Boolean).join(' ');
+    // The rotation is CONTINUOUS and its position is derived, so a day that was
+    // pulled forward or declined changes what every later day carries — and
+    // until now nothing anywhere said so. The disc's border carries plan state;
+    // the dots below carry what actually happened. Two questions, two signals.
+    const moved = DB.plan.isExtra(iso);
+    const skipped = !moved && DB.plan.isRest(iso);
+    const cls = [
+      back === 0 ? 'is-today' : '',
+      activeIso === iso ? 'is-active' : '',
+      moved ? 'is-moved' : '',
+      skipped ? 'is-skipped' : '',
+    ].filter(Boolean).join(' ');
+    // The state goes in the LABEL too, not only in a colour — the border is the
+    // whole signal here, and a border is invisible to a screen reader.
+    const stateLabel = moved ? ' · ' + t('day_moved_in') : skipped ? ' · ' + t('day_rest_taken') : '';
     chips.push(`
       <button class="wk-chip${cls ? ' ' + cls : ''}" data-day="${iso}"
               ${activeIso === iso ? 'aria-current="date"' : ''}
-              aria-label="${escapeHtml(formatDate(iso))}">
+              aria-label="${escapeHtml(formatDate(iso) + stateLabel)}">
         <span class="wk-dow">${escapeHtml(dayName(dd.getDay(), false))}</span>
         <span class="wk-disc">
           <span class="wk-num num">${fmtNum(dd.getDate())}</span>
@@ -9763,7 +9784,16 @@ function renderCalendar(el) {
       const iso = `${ctx.year}-${String(ctx.month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
       const lvl = lvlFor(byDate[iso] || 0);
       const isToday = today.getFullYear() === ctx.year && today.getMonth() === ctx.month && today.getDate() === day;
-      return `<button class="calendar-cell lvl-${lvl} ${isToday ? 'today' : ''}" data-day-iso="${iso}">${fmtNum(day)}</button>`;
+      // A pulled-forward or declined day is the only thing on this grid that is
+      // about the PLAN rather than about what was logged, so it gets a corner
+      // tick rather than another ring — `today` already owns the inset ring, and
+      // a day can be both.
+      const moved = DB.plan.isExtra(iso);
+      const skipped = !moved && DB.plan.isRest(iso);
+      const mark = moved ? ' is-moved' : skipped ? ' is-skipped' : '';
+      const label = formatDate(iso) + (moved ? ' · ' + t('day_moved_in') : skipped ? ' · ' + t('day_rest_taken') : '');
+      return `<button class="calendar-cell lvl-${lvl}${isToday ? ' today' : ''}${mark}"
+              data-day-iso="${iso}" aria-label="${escapeHtml(label)}">${fmtNum(day)}</button>`;
     }).join('');
     return empties + cells;
   }
@@ -9797,6 +9827,11 @@ function renderCalendar(el) {
       <span class="calendar-legend-dot" style="background:var(--accent)"></span>
       <span>+</span>
     </div>
+
+    <!-- A mark nobody can decode is decoration. Only rendered when the month
+         actually contains one, so a user who has never moved a day never sees a
+         legend for a thing they have never done. -->
+    <div class="cal-plan-legend" id="cal-plan-legend"></div>
   `;
 
   function repaintMonth() {
@@ -9805,7 +9840,25 @@ function renderCalendar(el) {
     if (label) label.textContent = new Date(ctx.year, ctx.month, 1)
       .toLocaleDateString((DB.prefs.get().lang || 'en') === 'ar' ? 'ar-u-nu-latn' : 'en-US', { month: 'long', year: 'numeric' });
     if (grid) grid.innerHTML = buildGrid();
+    paintPlanLegend();
   }
+
+  // Derived from the grid that was just built, so the legend can never claim a
+  // mark the month does not contain.
+  function paintPlanLegend() {
+    const box = $('#cal-plan-legend', el);
+    const grid = $('#calendar-grid', el);
+    if (!box || !grid) return;
+    const rows = [];
+    if (grid.querySelector('.is-moved')) {
+      rows.push(`<span class="cal-plan-key"><i class="cal-plan-tick moved"></i>${escapeHtml(t('day_moved_in'))}</span>`);
+    }
+    if (grid.querySelector('.is-skipped')) {
+      rows.push(`<span class="cal-plan-key"><i class="cal-plan-tick skipped"></i>${escapeHtml(t('day_rest_taken'))}</span>`);
+    }
+    box.innerHTML = rows.join('');
+  }
+  paintPlanLegend();
 
   $('#cal-prev', el).addEventListener('click', () => {
     if (ctx.month === 0) { ctx.month = 11; ctx.year -= 1; } else ctx.month -= 1;
