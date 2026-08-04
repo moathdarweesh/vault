@@ -1,6 +1,6 @@
 # THE VAULT — Low-Level Design
 
-**Version of record:** web `v217` · APK `build 13 / v2.2`
+**Version of record:** web `v254` · APK `build 16 / v2.5`
 **Status:** living document. Every claim below was read out of the source, not inferred.
 **Audience:** anyone who has to change this system without breaking it.
 
@@ -20,7 +20,7 @@ Each layer section follows the same shape:
 | **Invariants** | Rules that MUST hold, each with its reason. Breaking one of these is how the system fails. |
 | **Failure modes** | How the layer degrades, and what it does about it. |
 
-Line references are `file:line` against the v217 tree. They rot; the identifiers do not. When they disagree, trust the identifier and re-find the line.
+Line references are `file:line` against the v254 tree. They rot; the identifiers do not. When they disagree, trust the identifier and re-find the line.
 
 ---
 
@@ -128,7 +128,7 @@ js/cloud.js → js/storage.js → js/tables.js → js/app.js
 
 ---
 
-## 3. L2 — Persistence / Domain State (`js/storage.js`, 1882 lines)
+## 3. L2 — Persistence / Domain State (`js/storage.js`, 2643 lines)
 
 ### 3.1 Responsibility
 
@@ -193,13 +193,13 @@ whole and dead credential material should not keep travelling to the cloud.
 
 ### 3.4 Public surface — `window.DB`
 
-**15 namespaces** plus 6 top-level methods and `DB.reload`.
+**16 namespaces** plus 6 top-level methods and `DB.reload`.
 
 | Namespace | Key methods |
 |---|---|
 | *(top level)* | `getAll()`, `exportJSON()`, `importJSON(json)`, `resetAll()`, `_validateBlob(d)`, `_idsSafe(d)`, `reload()` |
 | `prefs` | `get`, `setLang`, `setTheme`, `setUnit`, `setTranslateExercises`, `onboarded`, `setOnboarded` |
-| `plan` | `get`, **`workoutForDate(D)`**, `isRest`, `setRest`, `toggleRest`, `setRotation`, `setTrainingDays`, `addSlot`, `removeSlot`, `moveSlot`, `setSlotName`, `setSlotExercises`, `addExerciseToSlot`, `removeExerciseFromSlot`, `clearAll` |
+| `plan` | `get`, **`workoutForDate(D)`**, `isRest`, `setRest`, `toggleRest`, **`isExtra`**, **`setExtra`**, `setRotation`, `setTrainingDays`, `addSlot`, `removeSlot`, `moveSlot`, `setSlotName`, `setSlotExercises`, `addExerciseToSlot`, `removeExerciseFromSlot`, `clearAll` |
 | `exercises` | `list`, `getById`, `add`, `update`, `remove`, `setInMyList`, `mergeGlobal` |
 | `sessions` | `listAll`, `listByExercise`, `lastForExercise`, `get`, `add`, `update`, `remove`, `bestStats`, `bestOneRM`, `prSnapshot` |
 | `cardio` | `list`, `add`, `update`, `remove`, `importFromHealth` |
@@ -211,7 +211,8 @@ whole and dead credential material should not keep travelling to the cloud.
 | `water` | `get`, `goal`, `add` |
 | `bodyweight` | `list`, `latest`, `log`, `remove` |
 | `nutrition` | `get`, `hasTargets`, `compute`, `setProfile`, `setTargets`, `clear` |
-| `reminders` | `get`, `setEnabled`, `setSound`, `setWater`, **`schedule()`** |
+| `notif` | **`scheduleForDate(iso, opts)`**, `scheduleAll`, **`scheduleAhead(days)`**, **`text(item, mode)`**, `destFor`, `get`, `setWindow`, `setChannel`, `setCap`, `syncSuppDoses`, `dailyCap`, `inWindow`, `day`, `markSent`, `alreadySent`, `logAdd`, `logList`, `logForDate`, `unseenCount`, `logClear`, `armedSet`, `armedGet`, `migrateFromReminders` |
+| `reminders` | `get` only — read-only legacy (v254). Its setters and `schedule()` were removed; `get()` survives because `sound` picks the OS channel and `migrateFromReminders()` still reads the pre-v210 shape. |
 | `health` | `get`, `setData`, `isHidden`, `toggle` |
 
 ### 3.5 The rotation model
@@ -246,6 +247,24 @@ after:   Sun Push · Mon Pull · Tue OFF  · Wed Legs · Thu Push · Fri Pull ·
 
 Verified in the running app, including a sparse 3-day training week (`A,B,A` → `OFF,A,B`),
 lossless undo, and no duplicate `restDates` entries.
+
+**`extraDates` is the exact mirror of `restDates`** — a weekday *not* in the rotation, pulled in
+for one date. It **advances** the cycle, so today takes the session the next training day was going
+to carry and everything after slides *forward*. A date must never sit in both lists: `setRest` and
+`setExtra` each clear the other, or the rest entry silently wins in `workoutForDate` and the
+pull-forward does nothing at all.
+
+> **The weekday check must yield to `extraDates`.** `workoutForDate` used to `return null` on a
+> non-training weekday *before* consulting any per-date list — so "train tomorrow's session now"
+> could not work no matter what it wrote, because the answer for today was decided before the list
+> was read.
+
+Because the position is **derived** rather than stored, undo is free and exact: removing the list
+entry restores the previous rotation byte for byte. Do not "optimise" this into a stored cursor.
+
+Both lists are surfaced since v253 — the disc border on the 7-day rail and a corner tick on the
+calendar, `--warn` for a day moved in and `--text-dim` for a rest taken. Until then a pull-forward
+changed what every later day carried and **nothing on any dated screen said so**.
 
 ### 3.6 Control flows
 
@@ -416,7 +435,7 @@ schema so the admin console can query it. It is **never read back by the app**.
 
 ---
 
-## 6. L5 — UI / View & Router (`js/app.js`, 9513 lines)
+## 6. L5 — UI / View & Router (`js/app.js`, 11645 lines)
 
 ### 6.1 The router
 
@@ -479,8 +498,9 @@ button is invalid HTML and its click would bubble into starting the workout the 
 
 ### 6.4 i18n
 
-- Two objects, `I18N.en` (:448) and `I18N.ar` (:1092). **756 keys each, zero asymmetry** (verified mechanically).
-- `t(key, fallback)` falls back **en → key name**, so a miss shows raw `snake_case` rather than blank. Loud by design.
+- Two objects, `I18N.en` and `I18N.ar`. **829 keys each, zero asymmetry** (verified mechanically, both directions).
+- `t(key, fallback)` falls back **en → key name**, so a miss shows raw `snake_case` rather than blank. Loud by design — and that is what makes pruning safe to verify: render every view and every modal in both languages and assert nothing key-shaped appears on screen.
+- **75 dead keys were removed at v254** (11% of the dictionary, 150 definitions). 28 of them shared a physical line with a *live* key, so the prune had to parse each line into pairs and rebuild it from the survivors rather than delete lines. The `notif_*_a1`/`_a2` action labels are among the dead and can never be revived: they name notification buttons that require a service worker, which `index.html` deliberately unregisters.
 - A language switch must go through `setUiLanguage()`, never `applyLang()` alone — `applyLang` only sets `dir`/`lang` and rewrites `[data-t]`, and app.js emits **zero** `data-t` attributes. Everything else is baked at render time.
 
 ### 6.5 Invariants
@@ -506,7 +526,7 @@ button is invalid HTML and its click would bubble into starting the workout the 
 
 ---
 
-## 7. L6 — Design System / Presentation (`styles.css` ~6859 lines, `BRAND.md`)
+## 7. L6 — Design System / Presentation (`styles.css` ~7787 lines, `BRAND.md`)
 
 ### 7.1 Token resolution
 
@@ -623,7 +643,8 @@ needs no bundled asset.
 
 **`sync()` — the four rules that make it safe:**
 
-1. **Decide before destroying.** The permission check and the "is there anything to arm?" check both run **before any cancel**. Cancelling first looks harmless because a re-arm follows — but a cloud pull restoring `enabled:false`, or a momentary permission loss, would wipe every live alarm and arm nothing.
+1. **Decide before destroying.** The permission check and the "is there anything to arm?" check both run **before any cancel**. Cancelling first looks harmless because a re-arm follows — but a momentary permission loss, or a blob caught mid-pull, would wipe every live alarm and arm nothing.
+   > The empty case leaked through this until v251: the guard was `if (!allowed && items.length)`, so a schedule that legitimately came back empty (cap spent, every tag already sent, state not yet loaded) fell into the orphan sweep, cancelled everything, and returned `ok`. Nothing **configured** is a real instruction to cancel; nothing **computed** while channels are still on is a transient, and the safe failure is to leave the previous schedule alone.
 2. **Cancel only orphans.** `wanted` = item ids + `TEST_ID`; only pending ids **outside** that set are cancelled. `cancel()` calls `dismissVisibleNotification()`, so cancelling an id about to be re-scheduled pulls the notification **out of the shade** and costs the user an unread reminder on every app open.
 3. **CHECK, never REQUEST.** `sync()` runs unattended, and on Android 13+ a `POST_NOTIFICATIONS` dialog dismissed **twice** is hard-denied **forever**. Asking a second time inside the same tap is how two dismissals happen from one button press. Requesting belongs to `gate()`, only ever reached from a tap.
    > A hard denial is **unrecoverable from inside the app** — the OS stops showing the sheet entirely. `gate()` detects this (a `'denied'` state *before* we asked) and toasts a "go to settings" message instead of re-prompting, because a re-prompt would do nothing.
@@ -631,10 +652,40 @@ needs no bundled asset.
 
 Other load-bearing details:
 
-- **`second: 0` inside `schedule.on` is load-bearing.** `DateMatch.buildNextTriggerTime` zeroes only the millisecond, so an omitted second bakes in whatever second `sync()` ran at, and `postponeTriggerIfNeeded` compares with `<=`, pushing a same-minute alarm a **full day** forward.
+- **Seconds and milliseconds are pinned to 0** by `DB.notif._dateOf()`. `postponeTriggerIfNeeded` compares with `<=`, so a stray second from whenever `sync()` happened to run can push an alarm a **full day** forward. (Pre-v251 this was `second: 0` inside `schedule.on`; the reason is unchanged, only where it is enforced.)
 - **`TEST_ID = 2000000001`** sits outside `hashId()`'s range (`% 2000000000`), so a test can never collide with a real reminder — and is in `wanted` so it is never swept away.
 - **The small icon must be an alpha-only silhouette.** Android draws small icons from the alpha channel and tints them; the plugin's fallback is fully opaque and flattens to a featureless white blob.
-- **`Notify.sync()` is called on every foreground**, not just at boot: when the plugin re-arms a fired daily repeat it uses `RTC` (not `RTC_WAKEUP`, `allowWhileIdle` dropped), which Doze can defer a long way. Only the *initial* arming takes the wakeup-capable path.
+- **`largeIcon` needs `res/drawable/cat_<channel>_192`** — underscores, in Android resources. The generator writes the same art to `icons/` with **hyphens** for the web `Notification` path, and `build-www` copies `icons/` into `www/` only. Until v252 those drawables did not exist at all, so `getLargeIcon()` called `decodeResource(res, 0)` and got `null` on every notification, silently, because a missing large icon is not an error.
+- **`Notify.sync()` is called on every foreground**, not just at boot — and since v251 that is what keeps reminders alive at all, because the alarms are dated one-shots across a 7-day horizon rather than open-ended repeats.
+
+#### 8.2.1 The v251 rebuild — schedule, text, and the log
+
+**One text builder.** `DB.notif.text(item, mode)` in `js/storage.js` is the only place a reminder's words are decided, and every path calls it. There used to be two: `notifTexts()` in app.js read live `DB` data but was reachable **only** from the in-app bar, while `titleFor`/`bodyFor` in notify.js read only `item.payload`, passed just `{n}`, and then **stripped** any placeholder they could not fill — and *that* one fed the OS notifications, the web notifications and the catch-up. `'{cur} of {goal} ml'` was therefore delivered to phones reading literally **"of ml"**.
+
+> The rule that keeps it gone: **nothing is stripped.** Each branch fills every placeholder its key declares, and where a value is genuinely unavailable it selects a *different key* (`_plan`, `_first`, `_done`, `_nop`). A stray `{` in the output is now a visible defect. The regression test is one line — assert no `{` in any `text()` output across the horizon.
+
+**Per-date scheduling.** `scheduleForDate(iso, opts)` is the single source of truth, and it is per-**date** because every condition it applies is a property of a specific day: is it a training day, is the streak unextended, has the goal already been met. `scheduleAll()` is a today shim; `scheduleAhead(days)` is what the native path arms.
+
+`schedule: { at: <absolute Date> }`, **not** `{ on: { hour, minute } }`. An open-ended daily repeat cannot express "not on Thursday", so alarms armed from one day's answers went on firing through rest days and through a broken streak until some foreground re-synced. The trade-off is real and stated in `CLAUDE.md`: **dated alarms expire**, so a week without opening the app stops reminders until it is opened.
+
+> The shape change is also what made the history possible. A repeat never leaves `getPending()`, so "did it fire?" was unobservable; a one-shot disappears when it fires, which is what `Notify.reconcile()` compares the armed manifest against.
+
+**Guard order inside `scheduleForDate`** — channel switch → that date's conditions → already-satisfied (day 0) → window deferral via `_setAt` → **past-due (before the cap is counted)** → `alreadySent` → cap trim → water distributed into the room that is left.
+
+- `_setAt()` is the **only** writer of `at`/`hour`/`minute`. They were previously set in two places, and the out-of-window deferral rewrote only `at` — so a deferred dose armed the OS alarm for the original, out-of-window time.
+- Water is **distributed evenly inside the window**, not stepped from its start. The old loop stopped after 5 slots and died mid-afternoon; raising that cap did not help either, because the daily cap then evicted the *latest* slots and truncated coverage back to the morning by another route.
+
+**Two device-local stores**, for the reason the day ledger already used, plus one more — they record what **this device showed**, and a reminder delivered on the phone was never seen on the laptop:
+
+| Key | Holds |
+|---|---|
+| `vault.notif.day.v1` | today's cap ledger + sent tags; resets at local midnight |
+| `vault.notif.log.v1` | rolling 120 delivered notifications, with the **rendered** text |
+| `vault.notif.armed.v1` | what `sync()` last handed the OS, for `reconcile()` |
+
+The log stores rendered text rather than key+vars: the notification really did say that, and re-rendering later would rewrite history when a template or the UI language changed.
+
+**`reconcile()` runs before `sync()`**, and must — `sync()` rewrites the manifest that `reconcile()` reads. Its primary source is `getDeliveredNotifications()`; the manifest fallback is inference and cannot distinguish "delivered" from "Doze ate it", which is why `path` is recorded and never shown to the user.
 
 ### 8.3 Android icon resources
 
