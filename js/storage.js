@@ -1570,6 +1570,32 @@ const DB = {
   // =========================================================================
   notif: {
     DAY_KEY: 'vault.notif.day.v1',
+    // The delivered-notification LOG. Device-local for the same reason the day
+    // ledger is, and one more: it records what THIS DEVICE actually showed. A
+    // reminder that arrived on the phone was never seen on the laptop, so
+    // syncing the log would make the laptop's history a lie. Config syncs
+    // (a time set on the phone must reach the web); the record of what was
+    // shown does not.
+    LOG_KEY: 'vault.notif.log.v1',
+    LOG_MAX: 120,
+    // What sync() last armed, so a foreground can tell which of those alarms
+    // fired while the app was dead. See Notify.reconcile().
+    ARMED_KEY: 'vault.notif.armed.v1',
+    // How many days ahead the native path arms. Owner's choice.
+    //
+    // This is the number that replaced an UNBOUNDED daily repeat. `{on:{hour,
+    // minute}}` repeats forever at a wall-clock time, but every condition was
+    // evaluated for the day it was armed — so the training alarm fired on rest
+    // days and the streak alarm fired on a broken streak, until the next
+    // foreground. Concrete dated alarms can express "not on Thursday"; a
+    // repeat cannot. The cost is that they EXPIRE: go this many days without
+    // opening the app and reminders stop until you do.
+    ARM_DAYS: 7,
+    // A runaway guard, not a policy. 7 days x a cap of 6 is 42; Android drops a
+    // schedule that gets silly rather than erroring, so cap it well above the
+    // real worst case and trim from the FURTHEST day first.
+    MAX_ARMED: 60,
+    MAX_WATER_SLOTS: 12,
 
     // ONE-TIME MIGRATION from the v208 DB.reminders config. Without it, "one
     // system" would silently discard every supplement time and water setting a
@@ -1605,11 +1631,21 @@ const DB = {
       return {
         asked: false,
         window: { start: '07:00', end: '23:30' },
+        // 'auto' keeps the derived 3-then-6 ramp. A number overrides it; 'none'
+        // removes the ceiling entirely. Exposed on the settings page by the
+        // owner's decision — a guard that silently drops reminders is a guard
+        // the user experiences as "it doesn't work".
+        cap: 'auto',
         channels: {
           train: { on: true, mode: 'auto', at: '09:00', offsetMin: 30 },
           supps: { on: true, doses: [] },
           water: { on: true, everyMin: 120 },
-          food: { on: true, delayMin: 60 },
+          // `meals` mirrors `supps.doses` exactly — {id, at, name} — because the
+          // owner sets the times. That is also what finally gives {meal} a data
+          // source: the app has no meal-window concept anywhere (the only
+          // "meal" string in the codebase is a food-CATEGORY label), so this
+          // template could never have been filled from anything else.
+          food: { on: true, meals: [] },
           streak: { on: true },
         },
       };
@@ -1621,8 +1657,13 @@ const DB = {
       const d = this.defaults();
       const n = STATE.notif || {};
       const c = n.channels || {};
+      // `cap` arrived after the first shipped shape, so an older blob has no
+      // field at all — which must read as 'auto', not as 0.
+      let cap = n.cap;
+      if (cap !== 'none' && !(Number(cap) > 0)) cap = 'auto';
       return {
         asked: !!n.asked,
+        cap,
         window: Object.assign(d.window, n.window || {}),
         channels: {
           train: Object.assign(d.channels.train, c.train || {}),
@@ -1630,12 +1671,53 @@ const DB = {
             doses: Array.isArray((c.supps || {}).doses) ? c.supps.doses.slice() : [],
           }),
           water: Object.assign(d.channels.water, c.water || {}),
-          food: Object.assign(d.channels.food, c.food || {}),
+          // The old shape was {on, delayMin} — a delay after a "meal window"
+          // that never existed in the app. It is dropped rather than migrated:
+          // there is no time to derive from it. `on` carries over untouched, so
+          // a user who switched the channel off stays switched off.
+          food: Object.assign(d.channels.food, c.food || {}, {
+            meals: Array.isArray((c.food || {}).meals) ? c.food.meals.slice() : [],
+          }),
           streak: Object.assign(d.channels.streak, c.streak || {}),
         },
       };
     },
     setAsked() { STATE.notif = Object.assign(this.get(), { asked: true }); save(); },
+    setCap(v) {
+      const cur = this.get();
+      cur.cap = (v === 'none' || Number(v) > 0) ? v : 'auto';
+      STATE.notif = cur;
+      save();
+    },
+
+    // Project a supplement's OWN times into the dose list.
+    //
+    // There were two supplement-time UIs writing to two different stores: the
+    // supplement editor wrote `sup.times`, which the scheduler never reads, and
+    // the notifications page wrote channels.supps.doses, which it does. So a
+    // time set on the supplement itself did nothing at all — it saved, it
+    // displayed, and it never notified.
+    //
+    // Derived doses are marked `auto` and are replaced wholesale on every save,
+    // so editing or deleting a time on the supplement is reflected exactly.
+    // Doses added by hand on the notifications page carry no `auto` flag and are
+    // never touched. They come out LINKED, which is what lets them fall silent
+    // once the supplement is ticked off for the day.
+    syncSuppDoses(suppId, name, times) {
+      if (!suppId) return;
+      const cur = this.get();
+      const kept = cur.channels.supps.doses.filter((d) => {
+        if (d.suppId === suppId) return false;
+        // Also sweep the un-linked ids minted by migrateFromReminders(), or the
+        // migrated copy and the derived one would both fire for the same dose.
+        return String(d.id || '').indexOf('s' + suppId + '_') !== 0;
+      });
+      (times || []).forEach((at) => {
+        if (!at) return;
+        kept.push({ id: 's' + suppId + '_' + at, at, name: name || '', suppId, auto: true });
+      });
+      this.setChannel('supps', { doses: kept });
+    },
     setWindow(patch) {
       const cur = this.get();
       STATE.notif = Object.assign(cur, { window: Object.assign(cur.window, patch || {}) });
@@ -1673,11 +1755,18 @@ const DB = {
     // The cap is 6, or 3 while the account is under 14 days old — a new user
     // judges the app by its first week, and six a day in that week reads as
     // noise before any of it has proved useful. Not exposed as a setting.
-    dailyCap() {
+    dailyCap(iso) {
+      const set = this.get().cap;
+      if (set === 'none') return Infinity;
+      if (Number(set) > 0) return Number(set);
       const first = (STATE.sessions || []).concat(STATE.cardio || [])
         .map((s) => s.date).filter(Boolean).sort()[0];
       if (!first) return 3;
-      const age = Math.floor((Date.now() - new Date(first + 'T00:00:00').getTime()) / 864e5);
+      // Measured against the DAY BEING SCHEDULED, not against now: arming a week
+      // ahead crosses the 14-day line, and a day on the far side of it deserves
+      // the cap it will actually have when it arrives.
+      const on = this._dateOf(iso || todayISO()).getTime();
+      const age = Math.floor((on - this._dateOf(first).getTime()) / 864e5);
       return age < 14 ? 3 : 6;
     },
 
@@ -1687,34 +1776,132 @@ const DB = {
     // reminder for anyone on a night schedule.
     inWindow(hhmm) {
       const w = this.get().window;
-      const m = (s) => { const [h, mi] = String(s).split(':').map(Number); return h * 60 + mi; };
-      const t = m(hhmm), a = m(w.start), b = m(w.end);
+      const t = this._min(hhmm), a = this._min(w.start), b = this._min(w.end);
       return a <= b ? (t >= a && t <= b) : (t >= a || t <= b);
     },
 
+    // ----- small shared helpers ---------------------------------------------
+
+    _min(hhmm) {
+      const p = String(hhmm).split(':');
+      return (Number(p[0]) || 0) * 60 + (Number(p[1]) || 0);
+    },
+    _hhmm(min) {
+      const m = ((Math.round(min) % 1440) + 1440) % 1440;
+      return pad2(Math.floor(m / 60)) + ':' + pad2(m % 60);
+    },
+
+    // The ONE writer of at/hour/minute. They used to be set in two places — the
+    // item was built with all three, then the out-of-window deferral rewrote
+    // only `at`. The in-app path reads `at` and the native path reads
+    // hour/minute, so a deferred dose armed the OS alarm for the ORIGINAL time,
+    // outside the window it had just been moved out of. One writer means they
+    // can no longer disagree.
+    _setAt(it, hhmm) {
+      it.at = hhmm;
+      it.hour = Math.floor(this._min(hhmm) / 60);
+      it.minute = this._min(hhmm) % 60;
+      return it;
+    },
+
+    // Numeric constructor, deliberately. `new Date('2026-08-04')` parses as UTC
+    // and `toISOString()` converts back — both shift the day for anyone east of
+    // UTC, which is the bug class CLAUDE.md records happening three times.
+    _dateOf(iso, h, m) {
+      const p = String(iso).split('-');
+      return new Date(Number(p[0]), Number(p[1]) - 1, Number(p[2]), h || 0, m || 0, 0, 0);
+    },
+
+    // Same definition computeStreak() uses: any session or cardio row on that
+    // calendar day.
+    _activityOn(iso) {
+      if ((STATE.sessions || []).some((s) => s.date === iso)) return true;
+      return (STATE.cardio || []).some((c) => c.date === iso);
+    },
+
+    // Consecutive active days ending the day BEFORE `iso`.
+    //
+    // Not computeStreak(): that one counts today when today has activity, so
+    // asking it "is the streak at risk?" on a day you already trained returns a
+    // healthy number and the last-call alarm fires anyway. What the streak
+    // channel needs is the run that is standing there UNEXTENDED — which is
+    // exactly the run ending yesterday.
+    _streakEndingBefore(iso) {
+      let n = 0;
+      let cur = addDaysISO(iso, -1);
+      while (this._activityOn(cur) && n < 3650) { n += 1; cur = addDaysISO(cur, -1); }
+      return n;
+    },
+
+    // Pull a fixed time inside the wake window. Without this, a user whose day
+    // ends at 18:00 is scheduled a 19:30 streak reminder and then has it dropped
+    // by the window guard — the channel is on, configured, and silent forever.
+    _clampToWindow(hhmm) {
+      const w = this.get().window;
+      const a = this._min(w.start), b = this._min(w.end), t = this._min(hhmm);
+      if (a > b) return hhmm;                    // crosses midnight: almost everything is inside
+      if (t >= a && t <= b) return hhmm;
+      return this._hhmm(t > b ? Math.max(a, b - 30) : a);
+    },
+
+    // Where a reminder takes you when tapped. ONE map — it used to exist twice,
+    // and the copy in notify.js keyed off `it.kind`, a field these items have
+    // never carried, so every catch-up tap silently went to `supplements`.
+    destFor(channel) {
+      const map = {
+        train: { view: 'session-day', context: { date: todayISO() } },
+        supps: { view: 'supplements' },
+        water: { view: 'food' },
+        food: { view: 'food' },
+        streak: { view: 'home' },
+      };
+      return map[channel] || { view: 'home' };
+    },
+
     // ----- §3: the schedule -------------------------------------------------
-    // Returns [{ at:'HH:MM', channel, tag, payload }] for TODAY, already past
-    // every guard in §6. It computes and nothing else: no sending, no timers,
-    // no platform knowledge. That is what lets the executor be swapped later
-    // without touching any of this.
-    scheduleAll() {
+    //
+    // Returns the reminders for ONE calendar date, already past every guard in
+    // §6. It computes and nothing else: no sending, no timers, no platform
+    // knowledge. That is what lets the executor be swapped without touching any
+    // of this.
+    //
+    // PER DATE, not "today", and that is the whole point. Every condition here
+    // — is it a training day, is the streak unextended, has the goal been met —
+    // is a property of a SPECIFIC day. The native path used to arm an unbounded
+    // daily repeat from a single day's answers, so a Monday rest day inherited
+    // Sunday's training alarm forever.
+    //
+    // opts.includePast / opts.includeSent relax the two guards that only make
+    // sense for "what is still coming". Notify.missed() asks the opposite
+    // question and passes includePast — so there is one code path, not two that
+    // can drift.
+    scheduleForDate(iso, opts) {
+      const o = opts || {};
       const out = [];
       const cfg = this.get();
       const ch = cfg.channels;
       const today = todayISO();
+      const isToday = iso === today;
+      const D = this._dateOf(iso);
+      const dayOffset = Math.round((D.getTime() - this._dateOf(today).getTime()) / 864e5);
+      const now = new Date();
+      const nowMin = now.getHours() * 60 + now.getMinutes();
+
       // Every item carries BOTH shapes: `at`/`channel`/`payload` for the in-app
       // path, and `id`/`hour`/`minute` for the Capacitor plugin, which keys
-      // notifications by INTEGER id. The id is derived from the tag, so it is
-      // stable across runs — a regenerated id would orphan the previous alarm
-      // and leave a duplicate armed.
+      // notifications by INTEGER id. The id is derived from the tag, and the tag
+      // carries the DATE and the TIME rather than an index — so it is stable
+      // across runs and across a re-distribution, which is what lets a re-sync
+      // REPLACE an alarm instead of orphaning it and arming a duplicate.
       const push = (at, channel, tag, payload) => {
-        const [h, m] = String(at).split(':').map(Number);
-        out.push({ at, channel, tag, payload, id: hashId(tag), hour: h, minute: m });
+        out.push(this._setAt({ date: iso, dayOffset, channel, tag, payload, id: hashId(tag) }, at));
       };
 
       // -- train ------------------------------------------------------------
-      // Training days only, and never on a scheduled rest day.
-      if (ch.train.on && DB.plan.workoutForDate(new Date())) {
+      // Training days only, and never on a scheduled rest day — asked of THIS
+      // date, so a rest day genuinely produces nothing.
+      const workout = DB.plan.workoutForDate(D);
+      if (ch.train.on && workout) {
         let at = ch.train.at || '09:00';
         if (ch.train.mode === 'auto') {
           // `createdAt`, not a start time — sessions do not record one. It is
@@ -1729,12 +1916,13 @@ const DB = {
           if (times.length >= 3) {
             const avg = times.reduce((a, d) => a + d.getHours() * 60 + d.getMinutes(), 0) / times.length;
             const mins = Math.max(0, Math.round(avg) - (Number(ch.train.offsetMin) || 30));
-            at = pad2(Math.floor(mins / 60)) + ':' + pad2(mins % 60);
+            at = this._hhmm(mins);
           }
           // Under three logged sessions there is no habit to infer, so the spec
           // fixes 09:00 rather than averaging one data point into a guess.
         }
-        push(at, 'train', 'train:' + today, {});
+        push(this._clampToWindow(at), 'train', 'train:' + iso,
+          { name: workout.name || '', n: (workout.exerciseIds || []).length });
       }
 
       // -- supps -------------------------------------------------------------
@@ -1742,63 +1930,66 @@ const DB = {
       if (ch.supps.on) {
         ch.supps.doses.forEach((d, i) => {
           if (!d || !d.at) return;
-          push(d.at, 'supps', 'supps:' + (d.id || i) + ':' + today,
-            { name: d.name || '', i: i + 1, n: ch.supps.doses.length });
+          // A dose linked to a real supplement goes quiet once it is ticked off.
+          // This is the promise on the permission sheet — "logging something
+          // cancels its reminder" — finally being true for more than water.
+          if (isToday && d.suppId && DB.supplements.isTaken(d.suppId, iso)) return;
+          push(d.at, 'supps', 'supps:' + (d.id || i) + ':' + iso,
+            { name: d.name || '', i: i + 1, n: ch.supps.doses.length, suppId: d.suppId || null });
         });
       }
 
-      // -- water -------------------------------------------------------------
-      // No goal set → the channel says nothing at all, rather than nagging
-      // toward a number the user never chose.
-      // NOTE: DB.water.goal() is currently the constant GOAL_ML (2500) with no
-      // way for the user to change it, so this guard cannot fire today. It is
-      // written anyway because the spec requires a channel with no target to
-      // stay silent, and the day the goal becomes editable this is already
-      // correct rather than newly wrong.
-      const goal = (DB.water && DB.water.goal) ? DB.water.goal() : 0;
-      if (ch.water.on && goal > 0) {
-        const step = Math.max(30, Number(ch.water.everyMin) || 120);
-        const [sh, sm] = cfg.window.start.split(':').map(Number);
-        const [eh, em] = cfg.window.end.split(':').map(Number);
-        let t = sh * 60 + sm;
-        const end = (eh * 60 + em) + (eh * 60 + em < sh * 60 + sm ? 1440 : 0);
-        let slot = 0;
-        while (t <= end && slot < 5) {          // §3: at most 5
-          const hh = pad2(Math.floor((t % 1440) / 60)) + ':' + pad2(t % 60);
-          push(hh, 'water', 'water:' + today + ':' + slot, { slot });
-          t += step; slot++;
+      // -- food --------------------------------------------------------------
+      // Times the owner sets, exactly like a supplement dose. Silent with no
+      // calorie target — a "you have N kcal left" with no N is the defect this
+      // whole rebuild exists to remove — and silent once today's target is met.
+      if (ch.food.on && DB.nutrition.hasTargets()) {
+        const goalKcal = Number((DB.nutrition.get().targets || {}).calories) || 0;
+        const eaten = isToday ? (DB.foodLogs.totalsForDate(iso).calories || 0) : 0;
+        if (!isToday || eaten < goalKcal) {
+          ch.food.meals.forEach((m, i) => {
+            if (!m || !m.at) return;
+            push(m.at, 'food', 'food:' + (m.id || i) + ':' + iso,
+              { name: m.name || '', i: i + 1, n: ch.food.meals.length });
+          });
         }
       }
 
       // -- streak -------------------------------------------------------------
-      // 19:30, and all three conditions together: a streak worth protecting,
-      // nothing logged today, and no last-call already sent for training.
-      // computeStreak() lives in app.js, which loads AFTER this file. At call
-      // time it is a global and resolves fine, but guard it so a scheduleAll()
-      // from an early boot path cannot throw on a function that is not there
-      // yet. The spec forbids inventing streak behaviour, so if it is missing
-      // the channel simply says nothing.
-      const streakNow = (typeof computeStreak === 'function') ? computeStreak() : 0;
-      if (ch.streak.on && streakNow >= 7) {
-        push('19:30', 'streak', 'streak:' + today, { n: streakNow });
+      // All the conditions the old comment promised and only one of which was
+      // implemented: a streak worth protecting, NOTHING LOGGED TODAY, and a time
+      // that is actually inside the user's own window. Today only — whether a
+      // future day will be "at risk" is unknowable, and arming it would be a
+      // guess dressed as a fact.
+      if (ch.streak.on && isToday && !this._activityOn(iso)) {
+        const run = this._streakEndingBefore(iso);
+        if (run >= 7) push(this._clampToWindow('19:30'), 'streak', 'streak:' + iso, { n: run });
       }
 
       // §6 guards, applied here so no caller can forget one.
-      const cap = this.dailyCap();
-      const d = this.day();
-      const room = Math.max(0, cap - d.count);
-      // Outside the wake window: supps and food defer to window.start, water is
-      // dropped outright, and train/streak were never scheduled outside it.
       const kept = out.filter((it) => {
-        if (this.alreadySent(it.tag)) return false;
-        if (this.inWindow(it.at)) return true;
-        if (it.channel === 'water') return false;             // dropped, not moved
-        if (it.channel === 'supps' || it.channel === 'food') { it.at = cfg.window.start; return true; }
-        return false;
+        if (isToday && !o.includeSent && this.alreadySent(it.tag)) return false;
+        // Outside the wake window: supps and food defer to window.start (via
+        // _setAt, so hour/minute move with it), everything else is dropped.
+        if (!this.inWindow(it.at)) {
+          if (it.channel !== 'supps' && it.channel !== 'food') return false;
+          this._setAt(it, cfg.window.start);
+        }
+        // Past due is dropped BEFORE the cap is counted. It used to be dropped
+        // by the caller, after — so opening the app in the evening spent the
+        // whole day's allowance on reminders whose moment had already gone.
+        if (isToday && !o.includePast && this._min(it.at) <= nowMin) return false;
+        return true;
       });
-      // Over the cap, water yields first, then food. train/supps/streak never do.
-      const rank = { water: 0, food: 1, train: 9, supps: 9, streak: 9 };
-      kept.sort((a, b) => (b.at < a.at ? 1 : -1));
+
+      // Over the cap, food yields first; train/supps/streak never do. (Water is
+      // not in this list because it is no longer generate-then-trim — see below.)
+      // noCap lets the notifications page compute how many were HELD BACK, by
+      // asking the same question twice. Without it the cap does its work
+      // invisibly, which is a large part of why the schedule felt broken.
+      const cap = o.noCap ? Infinity : this.dailyCap(iso);
+      const room = Math.max(0, cap - (isToday && !o.noCap ? this.day().count : 0));
+      const rank = { food: 1, train: 9, supps: 9, streak: 9 };
       while (kept.length > room) {
         let victim = -1, worst = 9;
         for (let i = kept.length - 1; i >= 0; i--) {
@@ -1808,7 +1999,265 @@ const DB = {
         if (victim === -1 || worst === 9) break;   // nothing left that may yield
         kept.splice(victim, 1);
       }
-      return kept.sort((a, b) => (a.at < b.at ? -1 : 1));
+
+      // -- water --------------------------------------------------------------
+      // Water yields to every other channel, so it is generated LAST, into
+      // whatever room is left. It is also DISTRIBUTED rather than stepped.
+      //
+      // The old loop stepped from window.start and stopped after 5, which with
+      // the defaults died at 15:00 and never reached the 23:30 the user had set.
+      // Raising the 5 could not fix it either: the cap then evicted the LATEST
+      // slots first, truncating coverage back to the morning by another route.
+      // Distributing n slots evenly inside the window means whatever count
+      // survives still covers the whole day, which is the thing the user asked
+      // for when they set the window.
+      const goal = (DB.water && DB.water.goal) ? DB.water.goal() : 0;
+      if (ch.water.on && goal > 0 && !(isToday && DB.water.get(iso) >= goal)) {
+        const a = this._min(cfg.window.start), b = this._min(cfg.window.end);
+        const span = (b >= a) ? (b - a) : (b + 1440 - a);
+        const step = Math.max(30, Number(ch.water.everyMin) || 120);
+        const free = Math.max(0, room - kept.length);
+        const n = Math.min(Math.max(1, Math.round(span / step)), this.MAX_WATER_SLOTS, free);
+        const waterStart = out.length;   // where water begins IN `out`, not in `kept`
+        for (let k = 1; k <= n; k++) {
+          // Deliberately strictly INSIDE the window: a reminder at the exact
+          // minute the day starts is noise, and one at the minute it ends is
+          // too late to act on. Rounded to 5 so it reads as a time, not a
+          // computation.
+          const at = this._hhmm(a + Math.round((span * k) / (n + 1) / 5) * 5);
+          const tag = 'water:' + iso + ':' + at;
+          if (isToday && !o.includeSent && this.alreadySent(tag)) continue;
+          if (isToday && !o.includePast && this._min(at) <= nowMin) continue;
+          push(at, 'water', tag, { slot: k, n });
+        }
+        // push() appends to `out`, not `kept` — move the new ones across.
+        out.slice(waterStart).forEach((it) => kept.push(it));
+      }
+
+      return kept.sort((x, y) => (x.at < y.at ? -1 : x.at > y.at ? 1 : 0));
+    },
+
+    // Back-compat: everything that only ever meant "today".
+    scheduleAll(opts) { return this.scheduleForDate(todayISO(), opts); },
+
+    // What the NATIVE path arms: today plus the next `days` days, each computed
+    // with its own conditions. Trimmed from the FURTHEST day first, so losing
+    // the tail costs day 7 and never day 1.
+    scheduleAhead(days) {
+      const n = Math.max(0, days == null ? this.ARM_DAYS : days);
+      let all = [];
+      for (let i = 0; i <= n; i++) {
+        try { all = all.concat(this.scheduleForDate(addDaysISO(todayISO(), i))); } catch (_) {}
+      }
+      if (all.length > this.MAX_ARMED) {
+        all.sort((a, b) => (a.dayOffset - b.dayOffset) || (a.at < b.at ? -1 : 1));
+        all = all.slice(0, this.MAX_ARMED);
+      }
+      return all;
+    },
+
+    // ----- §4: the words ----------------------------------------------------
+    //
+    // ONE builder, and every delivery path calls it. There used to be two: this
+    // logic (in app.js) which read live DB data, and a second in notify.js which
+    // read only `item.payload` and then STRIPPED any placeholder it could not
+    // fill. The second one fed the OS notifications, the web notifications and
+    // the catch-up — i.e. everything that actually reached a phone — so
+    // '{cur} of {goal} ml' arrived reading literally "of ml", and
+    // '{hours} hours left in your day' arrived at 09:00 with no number in it.
+    //
+    // THE RULE THAT KEEPS IT GONE: nothing is stripped. Every branch fills every
+    // placeholder its key declares, and where a value is genuinely unavailable
+    // it selects a DIFFERENT key rather than passing a template with a hole. A
+    // stray '{' in the output is now a visible defect instead of a swallowed
+    // one — which is exactly how the old one hid for so long.
+    _fill(key, vars) {
+      const tr = (typeof t === 'function') ? t : (k) => k;
+      let s = tr(key);
+      Object.keys(vars || {}).forEach((k) => { s = s.split('{' + k + '}').join(vars[k]); });
+      return s;
+    },
+
+    /**
+     * @param {object} item  one item from scheduleForDate()
+     * @param {'live'|'plan'} [mode]  defaults from the item's own date.
+     *   'live' — today. Read the user's numbers as they stand right now.
+     *   'plan' — a day armed in advance. Its words are baked when the alarm is
+     *            set, so they must be true at ANY hour of that day: the plan,
+     *            the target, never "as of now" arithmetic.
+     * @returns {{title:string, body:string}}
+     */
+    text(item, mode) {
+      const tr = (typeof t === 'function') ? t : (k) => k;
+      const num = (typeof fmtNum === 'function') ? fmtNum : ((n) => String(n));
+      const it = item || {};
+      const p = it.payload || {};
+      const iso = it.date || todayISO();
+      const live = (mode || (iso === todayISO() ? 'live' : 'plan')) === 'live';
+      const F = (k, v) => this._fill(k, v || {});
+
+      switch (it.channel) {
+        case 'train': {
+          // "Push" used to be baked into the template, which is simply wrong
+          // data on a Legs day — in the one line the user reads at a glance.
+          const day = p.name != null ? null : DB.plan.workoutForDate(this._dateOf(iso));
+          const name = p.name || (day && day.name) || tr('notif_ch_train');
+          const n = p.n != null ? p.n : ((day && day.exerciseIds) ? day.exerciseIds.length : 0);
+          const title = F('notif_train_title', { name, n: num(n) });
+          if (!live) return { title, body: F('notif_train_body_plan', { n: num(n) }) };
+          // Last performed set, derived exactly as Home derives it: listAll() is
+          // newest-first and a session's sets stay in performed order, so the
+          // last element of the newest non-empty session IS the set they
+          // finished on.
+          const ls = DB.sessions.listAll().find((x) => x.sets && x.sets.length);
+          const set = ls ? ls.sets[ls.sets.length - 1] : null;
+          const ex = ls ? DB.exercises.getById(ls.exerciseId) : null;
+          if (!set || !ex) return { title, body: F('notif_train_body_first', {}) };
+          const exName = (typeof exDisplayName === 'function') ? exDisplayName(ex) : (ex.name || '');
+          return { title, body: F('notif_train_body', { ex: exName, kg: num(set.weight || 0), reps: num(set.reps || 0) }) };
+        }
+
+        case 'supps':
+          return {
+            title: F('notif_supps_title', { name: p.name || tr('notif_ch_supps') }),
+            body: F('notif_supps_body', { i: num(p.i || 1), n: num(p.n || 1) }),
+          };
+
+        case 'water': {
+          const goal = DB.water.goal();
+          const cup = DB.water.CUP_ML || 250;
+          if (!live) {
+            return {
+              title: F('notif_water_title_plan', { goal: num(goal) }),
+              body: F('notif_water_body_plan', { cups: num(Math.ceil(goal / cup)) }),
+            };
+          }
+          const cur = DB.water.get(iso);
+          const left = Math.max(0, goal - cur);
+          const title = F('notif_water_title', { cur: num(cur), goal: num(goal) });
+          // No {hours}, by removal rather than by fixing the number. The old
+          // sentence talked about time running out and was scheduled for the
+          // MORNING; millilitres left is true at any hour, and it is the thing
+          // the reminder is actually asking for.
+          if (left <= 0) return { title, body: F('notif_water_body_done', {}) };
+          return { title, body: F('notif_water_body', { left: num(left), cups: num(Math.ceil(left / cup)) }) };
+        }
+
+        case 'food': {
+          const meal = p.name || tr('notif_ch_food');
+          const tg = DB.nutrition.get().targets || {};
+          const goalK = Math.round(Number(tg.calories) || 0);
+          const goalP = Math.round(Number(tg.protein) || 0);
+          if (!live) {
+            return {
+              title: F('notif_food_title_plan', { meal, kcal: num(goalK) }),
+              body: F('notif_food_body_plan', { p: num(goalP) }),
+            };
+          }
+          const tot = DB.foodLogs.totalsForDate(iso);
+          const kcal = Math.max(0, Math.round(goalK - (tot.calories || 0)));
+          const prot = Math.max(0, Math.round(goalP - (tot.protein || 0)));
+          const title = F('notif_food_title', { meal, kcal: num(kcal) });
+          if (prot <= 0) return { title, body: F('notif_food_body_nop', {}) };
+          return { title, body: F('notif_food_body', { p: num(prot) }) };
+        }
+
+        case 'streak':
+          return {
+            title: F('notif_streak_title', { n: num(p.n || 0) }),
+            body: F('notif_streak_body', {}),
+          };
+
+        default:
+          return { title: F('notif_summary_title', { n: num(1) }), body: '' };
+      }
+    },
+
+    // ----- the delivered-notification log -----------------------------------
+    //
+    // What this device actually SHOWED, so the notifications page can answer
+    // "what did I get?" — a question nothing in the app could answer before,
+    // because the only two records were per-day dedupe sets that both reset at
+    // midnight. Device-local for the reason stated at LOG_KEY.
+    //
+    // Every write path funnels through logAdd, which dedupes on `tag`: the paths
+    // race by design (the OS alarm fires AND a foreground reconciles it), and
+    // one reminder must appear once.
+    _readLog() {
+      try {
+        const v = JSON.parse(localStorage.getItem(this.LOG_KEY) || '[]');
+        return Array.isArray(v) ? v : [];
+      } catch (_) { return []; }
+    },
+    _writeLog(list) {
+      try { localStorage.setItem(this.LOG_KEY, JSON.stringify(list.slice(0, this.LOG_MAX))); } catch (_) {}
+    },
+    logAdd(rec) {
+      // Must never throw: it is called from inside notification delivery, and a
+      // logging failure that breaks the reminder is worse than no log.
+      try {
+        if (!rec || !rec.tag) return null;
+        const list = this._readLog();
+        if (list.some((x) => x.tag === rec.tag)) return null;
+        const full = {
+          id: 'l' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
+          tag: rec.tag,
+          date: rec.date || todayISO(),
+          at: rec.at || '',
+          ts: rec.ts || Date.now(),
+          channel: rec.channel || 'summary',
+          title: rec.title || '',
+          body: rec.body || '',
+          // Stored, not re-rendered later: the notification really did say this,
+          // and a record that re-renders would silently rewrite history when a
+          // template or the UI language changes.
+          lang: rec.lang || ((DB.prefs.get().lang) || 'en'),
+          path: rec.path || 'bar',
+          seen: !!rec.seen,
+        };
+        list.unshift(full);
+        this._writeLog(list);
+        return full;
+      } catch (_) { return null; }
+    },
+    logList(limit) {
+      const l = this._readLog();
+      return limit ? l.slice(0, limit) : l;
+    },
+    logForDate(iso) { return this._readLog().filter((x) => x.date === iso); },
+    logHas(tag) { return this._readLog().some((x) => x.tag === tag); },
+    logMarkSeen(id) {
+      const l = this._readLog();
+      let hit = false;
+      l.forEach((x) => { if (x.id === id && !x.seen) { x.seen = true; hit = true; } });
+      if (hit) this._writeLog(l);
+    },
+    logMarkAllSeen() {
+      const l = this._readLog();
+      if (!l.some((x) => !x.seen)) return;
+      l.forEach((x) => { x.seen = true; });
+      this._writeLog(l);
+    },
+    unseenCount() { return this._readLog().filter((x) => !x.seen).length; },
+    logClear() { try { localStorage.removeItem(this.LOG_KEY); } catch (_) {} },
+
+    // The manifest of what sync() last handed to the OS. Reconciliation compares
+    // it against getPending() to learn which alarms fired while the app was
+    // dead — only possible because the alarms are one-shots now: a daily repeat
+    // never leaves getPending(), so "did it fire?" was unobservable.
+    armedSet(list) {
+      try {
+        localStorage.setItem(this.ARMED_KEY, JSON.stringify((list || []).map((it) => ({
+          tag: it.tag, id: it.id, date: it.date, at: it.at, channel: it.channel,
+          title: it.title || '', body: it.body || '', lang: it.lang || '',
+        }))));
+      } catch (_) {}
+    },
+    armedGet() {
+      try {
+        const v = JSON.parse(localStorage.getItem(this.ARMED_KEY) || '[]');
+        return Array.isArray(v) ? v : [];
+      } catch (_) { return []; }
     },
   },
   reminders: {

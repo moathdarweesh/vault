@@ -5952,7 +5952,15 @@ body[dir="rtl"] .variation-select svg { transform: scaleX(-1); }
    :root (see Design tokens block at the top).
    ========================================================================= */
 
-/* --- Unified card surface: one background, one border, one radius --- */
+/* --- Unified card surface: one background, one border, one radius ---
+   `.card` is in this list, and its absence was a real defect rather than a
+   stylistic choice: it was used as a class in the markup of THREE screens —
+   sleep (.sleep-hero, .sleep-mini-card), progress (.pg-card, .pg-mini) and
+   notifications (.ntfs-window, .ntfs-list) — and had NO rule anywhere in this
+   file. Every one of those "cards" declared padding only and rendered flat on
+   the page background. Each of them relies on this block for its surface, so
+   none double-declares one. */
+.card,
 .stat-tile, .bento-card, .session-card, .data-row, .tool-card,
 .compare-card, .today-plan, .muscle-heatmap, .cta-card {
   background: var(--card-bg);
@@ -5963,7 +5971,9 @@ body[dir="rtl"] .variation-select svg { transform: scaleX(-1); }
 /* Exercise image cards get a rounder corner than the other cards (this rule wins
    over the grouped --card-radius above by coming later). */
 .bento-card { border-radius: var(--radius-lg); }
-/* Unified padding — image-full .bento-card is intentionally excluded */
+/* Unified padding — image-full .bento-card is intentionally excluded.
+   `.card` is NOT here: its consumers each set their own padding, and adding it
+   would double the inset on all six of them. */
 .stat-tile, .tool-card, .compare-card, .today-plan, .muscle-heatmap, .cta-card {
   padding: var(--card-pad);
 }
@@ -6563,10 +6573,15 @@ body[dir="rtl"] .variation-select svg { transform: scaleX(-1); }
   align-items: center;
   gap: 13px;
   padding: 14px;
-  background: #17120d;
-  border: 1px solid #2e2822;
+  /* Tokens, not the spec's literals. Those literals are the DARK values, so in
+     light mode this landed a near-black bar with grey-on-dark body text on the
+     bone-coloured page. It keeps an explicit border for the .cta-floating
+     reason: it is position:fixed over scrolling content, and an inset bevel
+     cannot lift it off the page. */
+  background: var(--surface-2);
+  border: 1px solid var(--border-hi);
   border-radius: 18px;
-  box-shadow: 0 18px 40px rgba(0, 0, 0, .75);
+  box-shadow: var(--elev-3);
   /* Above the content, below the sheets — a sheet is a decision the user is in
      the middle of, and a reminder must never land on top of it. */
   z-index: 60;
@@ -6588,7 +6603,7 @@ body[dir="rtl"] .ntf-bar { text-align: right; }
   width: 36px;
   height: 36px;
   border-radius: 12px;
-  background: rgba(255, 106, 0, .13);
+  background: var(--accent-soft);
   display: grid;
   place-items: center;
   color: var(--accent-text);
@@ -6611,7 +6626,7 @@ body[dir="rtl"] .ntf-bar { text-align: right; }
 .ntf-body {
   font-size: 12.5px;
   line-height: 1.5;
-  color: #8f8478;
+  color: var(--text-mute);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -6698,7 +6713,10 @@ body[dir="rtl"] .ntf-bar { text-align: right; }
 .ntfs-window-row { display: flex; align-items: center; gap: 12px; margin-top: var(--sp-3); }
 .ntfs-time {
   flex: 1 1 0;
-  border: 1px solid #2e2822;
+  /* A border MEANS interactive (identity device 1), and this is an input — so
+     it keeps one. Tokenised: the literal was a dark value and vanished into the
+     bone page in light mode. */
+  border: 1px solid var(--border-hi);
   border-radius: 10px;
   padding: 11px 0;
   background: transparent;
@@ -6714,24 +6732,26 @@ body[dir="rtl"] .ntf-bar { text-align: right; }
 .ntfs-list { padding: var(--sp-2) var(--sp-4); }
 /* 1px hairline between rows, inset slightly so it reads as a separator rather
    than an edge of the card. */
-.ntfs-row + .ntfs-row { border-top: 1px solid #151009; }
+.ntfs-row + .ntfs-row { border-top: 1px solid var(--border); }
 .ntfs-head { display: flex; align-items: center; gap: 13px; padding: 13px 0; }
 .ntfs-icon {
   flex: none; width: 36px; height: 36px;
   border-radius: 12px;
-  background: rgba(255, 106, 0, .13);
+  background: var(--accent-soft);
   display: grid; place-items: center;
   color: var(--accent-text);
 }
 .ntfs-main { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
 .ntfs-title { font-size: 14px; font-weight: 600; color: var(--text); }
-.ntfs-sub { font-size: 12.5px; line-height: 1.4; color: #8f8478; }
+.ntfs-sub { font-size: 12.5px; line-height: 1.4; color: var(--text-mute); }
 
 /* An off channel goes quiet in all three parts at once — icon, box and text —
-   so "off" is legible at a glance instead of only from the switch. */
-.ntfs-row.is-off .ntfs-icon { background: #151009; color: #3a322b; }
-.ntfs-row.is-off .ntfs-title { color: #6f665c; }
-.ntfs-row.is-off .ntfs-sub { color: #3a322b; }
+   so "off" is legible at a glance instead of only from the switch. All three
+   were dark literals: in light mode the "off" state painted a near-black tile
+   with near-black text on the bone page, i.e. louder than the ON state. */
+.ntfs-row.is-off .ntfs-icon { background: var(--surface-3); color: var(--text-dim); }
+.ntfs-row.is-off .ntfs-title { color: var(--text-dim); }
+.ntfs-row.is-off .ntfs-sub { color: var(--text-dim); }
 
 .ntfs-switch {
   flex: none;
@@ -6779,11 +6799,16 @@ body[dir="rtl"] .ntfs-switch.on .ntfs-knob { transform: translateX(-18px); }
 }
 .ntfs-dose .num { flex: none; font-size: 13px; color: var(--text); }
 .ntfs-dose-name { flex: 1 1 auto; min-width: 0; font-size: 13px; color: var(--text-mute); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-/* Dashed, because it is an invitation to add rather than a committed row. */
+/* A dose wired to a real supplement, so it can fall silent once that supplement
+   is ticked off. Marked because the two behave differently. */
+.ntfs-dose-link { flex: none; display: grid; place-items: center; width: 20px; height: 20px; border-radius: 6px; background: var(--accent-soft); color: var(--accent-text); }
+.ntfs-dose-link svg { width: 14px; height: 14px; }
+/* Dashed, because it is an invitation to add rather than a committed row —
+   the same reasoning as .bento-add, and now the same token. */
 .ntfs-add {
   display: flex; align-items: center; justify-content: center; gap: 8px;
   padding: 11px;
-  border: 1px dashed #3a322b;
+  border: 1px dashed var(--accent-line);
   border-radius: 10px;
   background: transparent;
   color: var(--text-mute);
@@ -6864,6 +6889,119 @@ body[dir="rtl"] .ntfs-switch.on .ntfs-knob { transform: translateX(-18px); }
 .pg-streak-label { font-size: 13px; font-weight: 600; color: var(--text-mute); }
 
 /* =========================================================================
+   THE NOTIFICATIONS ACTIVITY SECTIONS — "Today" and "Earlier"
+   =========================================================================
+   The reminders that arrived, and the ones still to come, on one timeline.
+   Nothing like this existed: the app kept two per-day dedupe sets that both
+   reset at midnight, so "what did I get?" had no answer anywhere.
+
+   The upcoming rows are the load-bearing part. They render the EXACT text the
+   reminder will carry, at the exact minute, straight through the same
+   DB.notif.text() the delivery paths use — so a wrong schedule or a broken
+   sentence is visible here before it ever reaches a phone. The defect this
+   whole rebuild started from ("of ml", at 09:00) would have been unmissable on
+   this screen.
+
+   It sits BEFORE the identity layer, which must stay last. */
+.ntfa-group { padding: var(--sp-2) var(--sp-4) var(--sp-4); }
+.ntfa-day + .ntfa-day { margin-top: var(--sp-3); }
+
+/* The small caps label inside a card. NOT .section-title (which draws its own
+   rule line) and not .rot-section-title (which belongs to the card's outside):
+   one section-header system per screen, and this is a label within one. */
+.ntfa-label {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: var(--tracking-caps);
+  text-transform: uppercase;
+  color: var(--text-dim);
+  padding-top: var(--sp-3);
+  padding-bottom: var(--sp-1);
+}
+
+.ntfa-item {
+  position: relative;
+  display: flex;
+  align-items: flex-start;
+  gap: 11px;
+  padding: 10px 0;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+.ntfa-item + .ntfa-item { border-top: 1px solid var(--border); }
+
+/* A BAR, not a dot — identity device 4 forbids circles, and device 5 makes the
+   short bar the app's own tick. Filled accent while it is still ahead of you,
+   faint once it has happened. */
+.ntfa-node {
+  flex: none;
+  width: 2px;
+  height: 10px;
+  margin-top: 6px;
+  border-radius: 1px;
+  background: var(--text-faint);
+}
+.ntfa-item.is-upcoming .ntfa-node { background: var(--accent-text); }
+
+.ntfa-time {
+  flex: none;
+  min-width: 42px;
+  font-size: 12px;
+  color: var(--text-mute);
+  padding-top: 2px;
+}
+.ntfa-icon {
+  flex: none;
+  width: 28px; height: 28px;
+  border-radius: 9px;
+  display: grid; place-items: center;
+  background: var(--accent-soft);
+  color: var(--accent-text);
+}
+.ntfa-icon svg { width: 18px; height: 18px; }
+
+.ntfa-main { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.ntfa-title { font-size: 13.5px; font-weight: 600; color: var(--text); line-height: 1.35; }
+/* Two lines, not one: unlike the bar, this screen IS the place to read the whole
+   sentence — the number in it is the point. */
+.ntfa-body { font-size: 12.5px; line-height: 1.45; color: var(--text-mute); }
+
+/* Pulled back so "has not happened yet" is legible without a label. Calibrated
+   against --surface-3, the worst surface these land on. */
+.ntfa-item.is-upcoming .ntfa-icon { background: var(--surface-3); color: var(--text-mute); --icon-accent: var(--text-mute); }
+.ntfa-item.is-upcoming .ntfa-title { color: var(--text-mute); font-weight: 500; }
+.ntfa-item.is-upcoming .ntfa-body { color: var(--text-dim); }
+
+.ntfa-empty { padding: var(--sp-3) 0; font-size: 13px; color: var(--text-dim); }
+.ntfa-empty-title { font-size: 14px; font-weight: 600; color: var(--text-mute); margin-bottom: 4px; }
+.ntfa-empty-text { font-size: 12.5px; line-height: 1.5; color: var(--text-dim); }
+
+/* What the daily limit held back, and why. A guard that deletes silently is a
+   guard the user experiences as a broken feature. --warn, not --red: nothing
+   went wrong, a rule was applied. */
+.ntfa-held {
+  display: flex; align-items: center; gap: 8px;
+  margin-top: var(--sp-3);
+  padding: 9px 11px;
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--warn) 12%, transparent);
+  color: var(--warn);
+  --icon-accent: var(--warn);
+  font-size: 12.5px;
+  line-height: 1.4;
+}
+.ntfa-held svg { flex: none; width: 16px; height: 16px; }
+
+/* The unread mark on the Settings row. A SQUARE, for the no-circles rule. */
+.ntfs-badge {
+  flex: none;
+  width: 8px; height: 8px;
+  border-radius: 2px;
+  background: var(--accent);
+  margin-inline-start: auto;
+}
+
+/* =========================================================================
    IDENTITY LAYER  (v210)
 
    The authority for the five devices that make this app recognisable as THE
@@ -6900,6 +7038,7 @@ body[dir="rtl"] .ntfs-switch.on .ntfs-knob { transform: translateX(-18px); }
    breath, or it loses its edge and gains nothing. */
 body { --card-border: 0; }
 
+.card,
 .data-row, .session-card, .cta-card, .compare-card, .today-plan,
 .muscle-heatmap, .rot-slot, .ms-card, .last-set-card, .sleep-detail,
 .nutri-hero, .hero-card, .stat-cell, .tool-pod {
@@ -6916,9 +7055,13 @@ body { --card-border: 0; }
    personal-record session — `border: 0` resets border-style to none, which makes
    a surviving border-color declaration paint nothing.
    .cta-floating is `position: fixed` over scrolling content: an inset hairline
-   cannot lift it off the page, so it keeps its own outline and drop shadow. */
+   cannot lift it off the page, so it keeps its own outline and drop shadow.
+   .pg-streak is the same trap as .session-card.pr and had already fallen into
+   it: it declared border-color with no border-style, so it painted nothing even
+   before `.card` joined the reset above. */
 .bento-card { border: 1px solid var(--border); }
 .session-card.pr { border: 1px solid var(--accent-line); }
+.card.pg-streak { border: 1px solid color-mix(in srgb, var(--up) 34%, transparent); }
 .cta-card.cta-floating {
   border: 1px solid rgba(var(--accent-rgb), 0.3);
   box-shadow: var(--elev-3);

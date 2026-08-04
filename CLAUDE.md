@@ -35,7 +35,7 @@ A fitness / workout-tracking **PWA**. Vanilla JS, **no build step**, bilingual *
 npm run release          # bump every marker + verify, then commit all files together
 ```
 
-**Current version: v215.** APK: build 12 / v2.1.
+**Current version: v251.** APK: build 15 / v2.4.
 
 `scripts/release.js` rewrites all **16** markers and then re-reads them from disk to confirm; it exits non-zero if any disagree. The markers are `?v=N` in `index.html` (×14 — every script and stylesheet, the `js/vendor/supabase.js` preload, and **both `icons/icon.svg` links**), the `__cleaned_vN` sessionStorage key, the `FALLBACK` literal in `app.js`, and `version.json` → `web`. The count is derived, not hard-coded, so adding a marker is safe — just keep this sentence honest.
 
@@ -133,26 +133,108 @@ the anchor** and indexes `cycle`. Everything else follows from that.
   runs on a rest day, and a lagging muscle is by definition one the plan does not
   contain, so it could never be reached by filtering.
 
-### Reminders (v208, repaired in v210) — the only native surface
-Supplement and water reminders. **This is why APK build 8 exists**: a Capacitor
-plugin is a native change, so unlike every release since v109 it does NOT reach
-installed users from a `git push` — they must install the new APK.
+### Notifications (v208 → rebuilt at v251) — the only native surface
+Training, supplement, water, meal and streak reminders, plus the page that shows
+them. **This is why APK build 8 exists**: a Capacitor plugin is a native change,
+so unlike every release since v109 it does NOT reach installed users from a
+`git push` — they must install the new APK. The v251 rebuild needs **no new
+APK**: no new plugin, no new permission, and both `addListener` hooks plus
+`getDeliveredNotifications()` are already in the installed build.
 
-- `DB.reminders.schedule()` in `js/storage.js` is the **single source of truth**:
-  it turns settings into a concrete list of daily alarms. Both delivery paths read
-  it, so they can never disagree about what was due. Times are local `"HH:MM"`
-  strings, never timestamps — a reminder means "08:00 wherever you are", which is
-  what survives a timezone change and DST.
+#### The v251 rebuild — what was actually wrong
+The owner's report was "the settings and the timed sentences are all wrong, not
+scheduled correctly, and the text isn't tied to my numbers". All of it was true.
+Fifteen defects; these five are the ones with lessons in them:
+
+1. **TWO message builders.** `notifTexts()` in app.js read live `DB` data and was
+   reachable only from the in-app bar. `titleFor`/`bodyFor` in notify.js read
+   only `item.payload`, passed just `{n}`, and then **stripped** every unfilled
+   `{placeholder}` — and *that* one fed the OS notifications, the web
+   notifications and the catch-up, i.e. everything that reaches a phone. So the
+   water reminder arrived titled literally **"of ml"** with a body reading
+   "hours left in your day", at 09:00. **Now `DB.notif.text(item, mode)` in
+   storage.js is the only builder** (storage.js loads before both consumers;
+   `t`/`fmtNum`/`computeStreak` resolve at call time — guard with `typeof`).
+   **`fill()` is deleted and nothing is stripped**: each branch fills every
+   placeholder its key declares, and where a value is unavailable it selects a
+   *different key* (`_plan`, `_first`, `_done`, `_nop`). A stray `{` in the
+   output is now a visible defect. The regression test is one line — assert no
+   `{` in any `text()` output across the horizon.
+2. **The alarms were unbounded daily repeats** (`schedule: {on:{hour,minute}}`)
+   armed from conditions evaluated for ONE day, so the training alarm fired on
+   rest days and the streak alarm on a broken streak. **Now dated one-shots**
+   (`schedule:{at}`) from `scheduleAhead(ARM_DAYS=7)`, one per day with that
+   day's own answers. Trade-off, and it is real: **dated alarms EXPIRE** — seven
+   days without opening the app and reminders stop. Every foreground re-arms and
+   pushes the horizon back out. This shape change is also what made the history
+   possible: a repeat never leaves `getPending()`, so "did it fire?" was
+   unobservable; a one-shot disappears when it fires.
+3. **`armNotifications()` was never called at boot.** Its only callers were the
+   permission sheet and the settings redraw, so a normal session armed zero
+   in-app timers — and on the web, where there is no OS alarm, that meant
+   reminders did not exist at all. It is in `init()` and on `visibilitychange`
+   now, and it also runs `migrateFromReminders()`, which was likewise stranded
+   behind `sync()`'s native-only bail and so had never run on the web.
+4. **`markSent()` was called before the display decision**, so a native
+   backgrounded delivery burnt the tag and a slot of the daily cap while showing
+   nothing. Split: `alreadySent()` reads up front, `markSent()` spends at each
+   real display site.
+5. **Two supplement-time UIs wrote to two stores.** The supplement editor wrote
+   `sup.times`, which the scheduler has never read. `DB.notif.syncSuppDoses()`
+   projects them into `channels.supps.doses` as **linked** doses (`suppId`), so
+   they schedule *and* fall silent once `DB.supplements.isTaken()` says so.
+
+- **`DB.notif.scheduleForDate(iso, opts)` is the single source of truth**, and it
+  is per-DATE on purpose: every condition it applies (is it a training day, is
+  the streak unextended, has the goal been met) is a property of a specific day.
+  `scheduleAll()` is a today shim; `scheduleAhead(n)` is what the native path
+  arms. `opts.includePast` is the ONLY difference between "what is coming" and
+  `Notify.missed()`, so the two answers cannot drift. `opts.noCap` lets the page
+  show what the cap held back.
+- **`_setAt()` is the only writer of `at`/`hour`/`minute`.** They used to be set
+  in two places, and the window-deferral rewrote only `at` — so a deferred dose
+  armed the OS alarm for the original, out-of-window time. One writer, no drift.
+- **Water is distributed, not stepped.** The old loop stepped from `window.start`
+  and stopped after 5, dying at 15:00 and never reaching the 23:30 the user set.
+  Raising the 5 does not fix it: the cap then evicts the LATEST slots, truncating
+  coverage back to the morning by another route. It is generated last, into
+  whatever room is left, spread evenly *inside* the window.
+- **The daily cap is a SETTING now** (`cfg.cap`: `'auto'` | number | `'none'`).
+  It was withheld on "a guard offered as an option is a guard the user can switch
+  off" — but a guard that silently deletes reminders is one the user experiences
+  as a broken feature, and they cannot tell those apart. The page also names what
+  it held back.
+- **Times are local `"HH:MM"` strings, never timestamps** — a reminder means
+  "08:00 wherever you are", which is what survives a timezone change and DST.
+  `_dateOf()` builds Dates with the **numeric** constructor: `new Date('2026-08-04')`
+  parses as UTC, which is the bug class this codebase has hit three times.
 - `js/notify.js` has two paths. **Native**: `@capacitor/local-notifications`,
-  real alarms with the app closed, scheduled with `{ on: { hour, minute, second: 0 } }`
-  so they repeat daily at wall-clock time. **`second: 0` is load-bearing** —
-  `DateMatch.buildNextTriggerTime` zeroes only the millisecond, so an omitted
-  second bakes in whatever second `sync()` ran at, and `postponeTriggerIfNeeded`
-  compares with `<=`, pushing a same-minute alarm a FULL DAY forward. **In-app**: everywhere else (web, and any
-  shell older than build 8) it catches up on open — anything due earlier today and
-  not logged is surfaced once as a toast, deduped per day in `vault_reminder_seen`.
+  real alarms with the app closed. Seconds and ms are pinned to 0 — this is the
+  same load-bearing detail the old `second: 0` carried, because
+  `postponeTriggerIfNeeded` compares with `<=` and a stray second can push an
+  alarm a FULL DAY forward. **In-app**: everywhere else (web, and any shell older
+  than build 8) it catches up on open — deduped per day in `vault_reminder_seen`.
   The in-app path is not a downgrade; it answers "what did I miss?" and stays
-  useful on the APK.
+  useful on the APK. Its gate used to be `DB.reminders.get().enabled`, a v208
+  flag that defaults false and is now written by nothing, so catch-up was dead
+  for anyone who configured the new page.
+
+#### The log and the page
+- **`vault.notif.log.v1`** (device-local, rolling 120) is what this device
+  actually SHOWED. Device-local for the `DAY_KEY` reason plus one more: a
+  reminder delivered on the phone was never seen on the laptop, so syncing it
+  would make the laptop's history a lie. It stores the **rendered** text — the
+  notification really did say that, and re-rendering later would rewrite history
+  when a template or the UI language changed.
+- **`vault.notif.armed.v1`** is the manifest of what `sync()` handed the OS.
+  `Notify.reconcile()` (foreground, **before** `sync()` — sync rewrites the
+  manifest) compares it against `getPending()` to learn what fired while the app
+  was dead. Primary source is `getDeliveredNotifications()`; the manifest
+  fallback is inference and cannot tell "delivered" from "Doze ate it", which is
+  why `path` is recorded and never shown.
+- The notifications view is **one page, three sections**: Today (arrived +
+  coming up, the latter rendered through the same `DB.notif.text()` so you read
+  the exact words at the exact minute), Earlier, then Settings.
 - `sync()` cancels everything and re-schedules, rather than diffing — that is how
   you avoid an orphan alarm for a deleted supplement. Call it after ANY change to
   times or settings. Three rules it must keep:

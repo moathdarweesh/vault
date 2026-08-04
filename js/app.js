@@ -12,7 +12,7 @@
 // build. The literal below is the fallback (file://, or a stripped query) and is
 // still bumped by `npm run release` — see CLAUDE.md "CACHE WORKFLOW".
 const VAULT_BUILD = (() => {
-  const FALLBACK = 'v250';
+  const FALLBACK = 'v251';
   try {
     const src = (document.currentScript && document.currentScript.src) || '';
     const m = src.match(/[?&]v=(\d+)/);
@@ -1145,20 +1145,37 @@ const I18N = {
     // no "tap here" (the action lives in the buttons); "not logged", never
     // "you missed" — zero guilt language; and the body carries a NUMBER from
     // the user's own data rather than a motivational sentence.
-    notif_train_title: 'Push — {n} exercises',
+    // '{name}' is the workout slot's OWN name. The template used to bake the
+    // word "Push", which is wrong data on a Legs day, in the one line the user
+    // reads at a glance.
+    notif_train_title: '{name} — {n} exercises',
     notif_train_body: 'Last time: {ex} {kg} kg × {reps}.',
+    // Used when there is no previous set to quote, and when the alarm was armed
+    // days ahead and "last time" would be stale by the hour it fires. A branch
+    // picks a different key; it never passes a template with an empty hole.
+    notif_train_body_first: 'Your first logged session starts here.',
+    notif_train_body_plan: '{n} exercises in this session.',
     notif_train_a1: 'Start',
     notif_train_a2: 'Snooze 1 h',
-    notif_supps_title: '{name} — {dose}',
+    notif_supps_title: '{name}',
     notif_supps_body: 'Dose {i} of {n} today.',
     notif_supps_a1: 'Taken',
     notif_supps_a2: 'Skip',
     notif_water_title: '{cur} of {goal} ml',
-    notif_water_body: '{hours} hours left in your day.',
+    // NOT "{hours} hours left in your day" — that sentence talked about time
+    // running out and was scheduled for the MORNING. Millilitres left is true
+    // at any hour, and it is what the reminder is actually asking for.
+    notif_water_body: '{left} ml to go — about {cups} cups.',
+    notif_water_body_done: 'Goal reached for today.',
+    notif_water_title_plan: 'Water — {goal} ml today',
+    notif_water_body_plan: 'About {cups} cups across your day.',
     notif_water_a1: '250 ml',
     notif_water_a2: '500 ml',
-    notif_food_title: '{meal} not logged',
-    notif_food_body: '{kcal} kcal and {p} g protein left.',
+    notif_food_title: '{meal} — {kcal} kcal left',
+    notif_food_body: '{p} g protein still to go.',
+    notif_food_body_nop: 'Protein target already met.',
+    notif_food_title_plan: '{meal} — {kcal} kcal',
+    notif_food_body_plan: '{p} g protein is the day’s target.',
     notif_food_a1: 'Log',
     notif_food_a2: 'Repeat yesterday',
     notif_streak_title: '{n}-day streak at risk',
@@ -1167,7 +1184,7 @@ const I18N = {
     notif_streak_a2: 'Not today',
     notif_summary_title: '{n} reminders today',
     notif_perm_title: 'Reminders, on your terms',
-    notif_perm_body: 'Four reminders, all inside your day window, each one switchable on its own.',
+    notif_perm_body: 'Five reminders, all inside your day window, each one switchable on its own.',
     notif_perm_cta: 'Turn on reminders',
     // ---- Notifications settings + permission sheet (§7, §8) ---------------
     notif_settings_title: 'Notifications',
@@ -1183,8 +1200,10 @@ const I18N = {
     notif_sum_train_fixed: 'Every training day at {at}',
     notif_sum_supps: '{n} doses',
     notif_sum_supps_none: 'No doses yet',
-    notif_sum_water: 'Every {n} h until you reach your goal',
-    notif_sum_food: '{n} min after a meal window ends',
+    notif_sum_water: 'About every {n} h, spread across your window',
+    notif_sum_food: '{n} meal times',
+    notif_sum_food_none: 'No meal times yet',
+    notif_sum_food_notarget: 'Silent until you set a calorie target',
     notif_sum_streak: 'Only when a streak of 7+ is at risk',
     notif_sum_off: 'Off',
     notif_train_mode_fixed: 'A fixed time',
@@ -1192,18 +1211,46 @@ const I18N = {
     notif_supps_add: 'Add a dose',
     notif_supps_name: 'Name',
     notif_supps_time: 'Time',
+    notif_supps_link: 'Supplement',
+    notif_supps_link_none: 'Not linked',
+    notif_supps_link_hint: 'Linked doses go quiet once you tick that supplement off.',
+    notif_food_add: 'Add a meal time',
+    notif_food_name: 'Meal',
+    // ---- The activity sections (the page the owner asked for) --------------
+    notif_today: 'Today',
+    notif_arrived: 'Arrived',
+    notif_upcoming: 'Coming up',
+    notif_up_hint: 'Wording updates with your numbers.',
+    notif_up_empty: 'Nothing else scheduled today.',
+    notif_history: 'Earlier',
+    notif_show_more: 'Show all',
+    notif_log_empty_title: 'Nothing yet',
+    notif_log_empty_text: 'Reminders you receive appear here, with the exact words they carried.',
+    notif_clear_log: 'Clear history',
+    notif_clear_log_sub: 'Removes the record on this device only.',
+    notif_cleared: 'History cleared',
+    notif_yesterday: 'Yesterday',
+    notif_unseen: '{n} new',
+    notif_dropped: '{n} held back — over your daily limit',
+    // ---- The daily limit, now a setting rather than a silent guard ---------
+    notif_cap_title: 'Daily limit',
+    notif_cap_hint: 'Once this many have arrived, the rest of the day stays quiet. Water yields first, then meals.',
+    notif_cap_auto: 'Auto',
+    notif_cap_auto_sub: 'Three a day at first, six once you have two weeks of history',
+    notif_cap_none: 'No limit',
+    notif_arm_days: 'Armed for the next {n} days',
+    notif_arm_hint: 'Open the app at least once a week to keep them armed.',
     pg_volume_30d: 'Volume · 30 days',
     pg_sessions_30d: 'Sessions · 30 days',
     pg_days_unit: 'days',
     run_rest_90: 'Rest 90s',
     notif_every_hours: 'Every {n} hours',
-    notif_delay_min: 'After {n} minutes',
     notif_sys_hint: 'Sound and vibration are the system’s, not the app’s.',
     notif_sys_open: 'Open system notification settings',
     notif_denied: 'Blocked by the system',
     notif_denied_sub: 'Turn notifications back on for VAULT in Android settings, then come back here.',
     notif_perm_l1: 'Only inside the hours you set.',
-    notif_perm_l2: 'Six a day at most, and fewer in your first two weeks.',
+    notif_perm_l2: 'A daily limit you set yourself, low by default.',
     notif_perm_l3: 'Every channel switches off on its own.',
     notif_perm_l4: 'Logging something cancels its reminder.',
     notif_perm_later: 'Not now',
@@ -1884,20 +1931,33 @@ const I18N = {
     pr_both: 'رقم قياسي!',
 
     // ---- الإشعارات (APPLY-notifications.md §4) ------------------------------
-    notif_train_title: 'دفع — {n} تمارين',
+    // {name} اسم حصّة اليوم نفسها. كان القالب يخبز كلمة «دفع» حرفياً، وهي
+    // معلومة خاطئة في يوم أرجل — في السطر الوحيد الذي يُقرأ بلمحة.
+    notif_train_title: '{name} — {n} تمارين',
     notif_train_body: 'آخر مرة: {ex} {kg} كغم × {reps}.',
+    notif_train_body_first: 'أول جلسة مسجّلة تبدأ من هنا.',
+    notif_train_body_plan: '{n} تمارين في هذه الحصّة.',
     notif_train_a1: 'ابدأ',
     notif_train_a2: 'أجّل ساعة',
-    notif_supps_title: '{name} — {dose}',
+    notif_supps_title: '{name}',
     notif_supps_body: 'الجرعة {i} من {n} اليوم.',
     notif_supps_a1: 'أخذتها',
     notif_supps_a2: 'تخطَّ',
     notif_water_title: '{cur} من {goal} مل',
-    notif_water_body: 'بقي {hours} ساعات على نهاية يومك.',
+    // ليست «بقي {hours} ساعات على نهاية يومك» — تلك الجملة تتحدّث عن وقت ينفد
+    // وكانت مجدولة صباحاً. المتبقّي بالملّيلتر صحيح في أي ساعة، وهو ما يطلبه
+    // التذكير فعلاً.
+    notif_water_body: 'بقي {left} مل — نحو {cups} أكواب.',
+    notif_water_body_done: 'تحقّق هدف اليوم.',
+    notif_water_title_plan: 'الماء — {goal} مل اليوم',
+    notif_water_body_plan: 'نحو {cups} أكواب عبر يومك.',
     notif_water_a1: '٢٥٠ مل',
     notif_water_a2: '٥٠٠ مل',
-    notif_food_title: '{meal} غير مسجّل',
-    notif_food_body: 'متبقٍّ {kcal} سعرة و{p} غ بروتين.',
+    notif_food_title: '{meal} — بقي {kcal} سعرة',
+    notif_food_body: 'ومتبقٍّ {p} غ بروتين.',
+    notif_food_body_nop: 'تحقّق هدف البروتين.',
+    notif_food_title_plan: '{meal} — {kcal} سعرة',
+    notif_food_body_plan: '{p} غ بروتين هدف اليوم.',
     notif_food_a1: 'سجّل',
     notif_food_a2: 'كرّر أمس',
     notif_streak_title: 'سلسلة {n} يوماً على المحك',
@@ -1906,7 +1966,7 @@ const I18N = {
     notif_streak_a2: 'لا اليوم',
     notif_summary_title: '{n} تذكيرات اليوم',
     notif_perm_title: 'نذكّرك بشروطك',
-    notif_perm_body: 'أربعة تذكيرات فقط، كلها داخل نافذة يومك، وكل واحدة تُطفأ وحدها بأي وقت.',
+    notif_perm_body: 'خمسة تذكيرات فقط، كلها داخل نافذة يومك، وكل واحدة تُطفأ وحدها بأي وقت.',
     notif_perm_cta: 'فعّل التذكيرات',
     // ---- إعدادات الإشعارات وشيت الإذن (§7، §8) ----------------------------
     notif_settings_title: 'الإشعارات',
@@ -1922,8 +1982,10 @@ const I18N = {
     notif_sum_train_fixed: 'كل يوم تمرين الساعة {at}',
     notif_sum_supps: '{n} جرعات',
     notif_sum_supps_none: 'لا جرعات بعد',
-    notif_sum_water: 'كل {n} ساعات حتى تبلغ هدفك',
-    notif_sum_food: 'بعد نهاية نافذة الوجبة بـ{n} دقيقة',
+    notif_sum_water: 'كل {n} ساعات تقريباً، موزّعة على نافذتك',
+    notif_sum_food: '{n} مواعيد وجبات',
+    notif_sum_food_none: 'لا مواعيد وجبات بعد',
+    notif_sum_food_notarget: 'صامتة حتى تحدّد هدف السعرات',
     notif_sum_streak: 'فقط حين تكون سلسلة ٧ أيام فأكثر على المحك',
     notif_sum_off: 'مطفأة',
     notif_train_mode_fixed: 'وقت ثابت',
@@ -1931,21 +1993,49 @@ const I18N = {
     notif_supps_add: 'أضف جرعة',
     notif_supps_name: 'الاسم',
     notif_supps_time: 'الوقت',
+    notif_supps_link: 'المكمّل',
+    notif_supps_link_none: 'غير مرتبطة',
+    notif_supps_link_hint: 'الجرعة المرتبطة تصمت حين تؤشّر على ذلك المكمّل.',
+    notif_food_add: 'أضف موعد وجبة',
+    notif_food_name: 'الوجبة',
+    // ---- أقسام النشاط (الصفحة التي طلبها المالك) --------------------------
+    notif_today: 'اليوم',
+    notif_arrived: 'وصلت',
+    notif_upcoming: 'قادمة',
+    notif_up_hint: 'تتغيّر الصياغة مع أرقامك.',
+    notif_up_empty: 'لا شيء آخر مجدول اليوم.',
+    notif_history: 'سابقاً',
+    notif_show_more: 'اعرض الكل',
+    notif_log_empty_title: 'لا شيء بعد',
+    notif_log_empty_text: 'التذكيرات التي تصلك تظهر هنا بنصّها كما وصلت تماماً.',
+    notif_clear_log: 'امسح السجل',
+    notif_clear_log_sub: 'يمسح السجل على هذا الجهاز وحده.',
+    notif_cleared: 'مُسح السجل',
+    notif_yesterday: 'أمس',
+    notif_unseen: '{n} جديدة',
+    notif_dropped: 'أُمسك {n} — تجاوز حدّك اليومي',
+    // ---- الحدّ اليومي: صار إعداداً بدل حارس صامت --------------------------
+    notif_cap_title: 'الحدّ اليومي',
+    notif_cap_hint: 'حين يصل هذا العدد يهدأ باقي اليوم. الماء يتنازل أولاً ثم الوجبات.',
+    notif_cap_auto: 'تلقائي',
+    notif_cap_auto_sub: 'ثلاثة يومياً في البداية، وستة بعد أسبوعين من السجل',
+    notif_cap_none: 'بلا حدّ',
+    notif_arm_days: 'مُجهّزة لـ{n} أيام قادمة',
+    notif_arm_hint: 'افتح التطبيق مرة أسبوعياً على الأقل لتبقى مُجهّزة.',
     pg_volume_30d: 'الحجم · 30 يوماً',
     pg_sessions_30d: 'الجلسات · 30 يوماً',
     pg_days_unit: 'يوم',
     run_rest_90: 'راحة ٩٠ ثانية',
     notif_every_hours: 'كل {n} ساعات',
-    notif_delay_min: 'بعد {n} دقيقة',
     notif_sys_hint: 'الصوت والاهتزاز من النظام لا من التطبيق.',
     notif_sys_open: 'افتح إعدادات إشعارات النظام',
     notif_denied: 'معطّلة من النظام',
     notif_denied_sub: 'أعِد تفعيل الإشعارات لتطبيق VAULT من إعدادات أندرويد ثم ارجع إلى هنا.',
     notif_perm_l1: 'داخل الساعات التي تحدّدها وحدها.',
-    notif_perm_l2: 'ستة يومياً بحدّ أقصى، وأقل في أسبوعيك الأولين.',
+    notif_perm_l2: 'حدّ يومي تضبطه بنفسك، ومنخفض افتراضياً.',
     notif_perm_l3: 'كل قناة تُطفأ وحدها.',
     notif_perm_l4: 'تسجيل الشيء يلغي تذكيره.',
-    notif_perm_later: 'مو الآن',
+    notif_perm_later: 'ليس الآن',
   },
 };
 
@@ -2182,21 +2272,148 @@ function maybeAskNotifPermission() {
 }
 
 // ===========================================================================
-// §8 — THE NOTIFICATIONS PAGE. Every channel on one screen.
+// §8 — THE NOTIFICATIONS PAGE. One screen, three sections, in this order:
 //
-// Three things are deliberately absent and each is a rule, not an oversight:
+//   TODAY     what already arrived, and what is still coming — the latter shown
+//             with the EXACT words it will carry, at the exact minute. That is
+//             the answer to "they are not scheduled correctly": you can read
+//             the schedule instead of inferring it from what shows up.
+//   EARLIER   the rolling history, which did not exist at all before. The only
+//             two records the app kept were per-day dedupe sets that both reset
+//             at midnight, so nothing could ever answer "what did I get?".
+//   SETTINGS  the controls.
+//
+// Two things stay deliberately absent:
 //   · no quiet-hours setting — quiet hours ARE the outside of the day window,
 //     so a second control would be a second source of truth for one fact;
-//   · no daily cap control — the cap is a guard, and a guard offered as an
-//     option is a guard the user can switch off;
 //   · no sound / priority / master-off — those belong to the OS, and copying
 //     them here creates two switches where the system's always wins.
+//
+// The daily cap is no longer among them. It was withheld on the reasoning that
+// "a guard offered as an option is a guard the user can switch off" — but a
+// guard that silently deletes reminders is a guard the user experiences as a
+// broken feature, and they cannot tell the two apart. It is a control now, and
+// TODAY names what it held back.
 // ===========================================================================
+
+// "Show everything" for the history section. Module-level so a redraw inside the
+// page (a toggle, a new dose) does not silently collapse a list the user just
+// expanded.
+let notifLogExpanded = false;
+
+const NTF_CHANNEL_ICON = {
+  train: 'dumbbell', supps: 'pill', water: 'droplet',
+  food: 'utensils', streak: 'zap', summary: 'bell',
+};
+
+// today / yesterday / the date. A log grouped by raw ISO strings reads as data;
+// this reads as a diary, which is what the section is.
+function notifDayLabel(iso) {
+  if (iso === todayISO()) return t('notif_today');
+  if (iso === addDaysISO(todayISO(), -1)) return t('notif_yesterday');
+  return formatDate(iso);
+}
+
+// One row, used by both the arrived list and the coming-up list. `upcoming`
+// pulls it back visually: it has not happened yet, and it must not read as
+// though it has.
+function notifItemHtml(o) {
+  return `
+    <div class="ntfa-item${o.upcoming ? ' is-upcoming' : ''}"${o.channel ? ` data-open-ch="${escapeHtml(o.channel)}"` : ''}${o.logId ? ` data-log="${escapeHtml(o.logId)}"` : ''}>
+      <span class="ntfa-node"></span>
+      <span class="ntfa-time num" dir="ltr">${escapeHtml(o.at || '')}</span>
+      <span class="ntfa-icon">${icon(NTF_CHANNEL_ICON[o.channel] || 'bell', 18)}</span>
+      <span class="ntfa-main">
+        <span class="ntfa-title">${escapeHtml(o.title || '')}</span>
+        ${o.body ? `<span class="ntfa-body">${escapeHtml(o.body)}</span>` : ''}
+      </span>
+    </div>`;
+}
+
+// TODAY. Everything here is derived at render time from the same two sources
+// the delivery paths use — the log and scheduleForDate — so the page cannot
+// describe a schedule the app is not actually running.
+function notifTodayHtml() {
+  const today = todayISO();
+  const arrived = DB.notif.logForDate(today);
+
+  let upcoming = [];
+  let dropped = 0;
+  try {
+    upcoming = DB.notif.scheduleForDate(today);
+    // The same question without the ceiling. The difference is what the cap ate,
+    // and naming it is the difference between a quiet guard and a broken app.
+    dropped = Math.max(0, DB.notif.scheduleForDate(today, { noCap: true }).length - upcoming.length);
+  } catch (_) {}
+
+  const arrivedHtml = arrived.map((r) => notifItemHtml({
+    at: r.at, channel: r.channel, title: r.title, body: r.body, logId: r.id,
+  })).join('');
+
+  const upcomingHtml = upcoming.map((it) => {
+    let txt = { title: '', body: '' };
+    try { txt = DB.notif.text(it); } catch (_) {}
+    return notifItemHtml({ at: it.at, channel: it.channel, title: txt.title, body: txt.body, upcoming: true });
+  }).join('');
+
+  return `
+    <div class="rot-section-title">${t('notif_today')}</div>
+    <div class="card ntfa-group">
+      ${arrived.length ? `<div class="ntfa-label">${t('notif_arrived')}</div>${arrivedHtml}` : ''}
+      <div class="ntfa-label">${t('notif_upcoming')}</div>
+      ${upcoming.length ? upcomingHtml : `<div class="ntfa-empty">${t('notif_up_empty')}</div>`}
+      ${upcoming.length ? `<div class="ntfs-hint">${t('notif_up_hint')}</div>` : ''}
+      ${dropped ? `<div class="ntfa-held">${icon('info', 16)} ${escapeHtml(t('notif_dropped').replace('{n}', fmtNum(dropped)))}</div>` : ''}
+    </div>`;
+}
+
+// EARLIER. Grouped by day, newest first, today excluded (it is the section
+// above). Seven groups then "show all" — a history that opens fully expanded is
+// a wall, and one that cannot expand is a tease.
+function notifHistoryHtml() {
+  const today = todayISO();
+  const all = DB.notif.logList().filter((r) => r.date !== today);
+  if (!all.length) {
+    return `
+      <div class="rot-section-title">${t('notif_history')}</div>
+      <div class="card ntfa-group">
+        <div class="ntfa-empty">
+          <div class="ntfa-empty-title">${t('notif_log_empty_title')}</div>
+          <div class="ntfa-empty-text">${t('notif_log_empty_text')}</div>
+        </div>
+      </div>`;
+  }
+  const days = [];
+  all.forEach((r) => { if (days.indexOf(r.date) === -1) days.push(r.date); });
+  const shown = notifLogExpanded ? days : days.slice(0, 7);
+  const groups = shown.map((d) => `
+    <div class="ntfa-day">
+      <div class="ntfa-label">${escapeHtml(notifDayLabel(d))}</div>
+      ${all.filter((r) => r.date === d).map((r) => notifItemHtml({
+        at: r.at, channel: r.channel, title: r.title, body: r.body, logId: r.id,
+      })).join('')}
+    </div>`).join('');
+
+  return `
+    <div class="rot-section-title">${t('notif_history')}</div>
+    <div class="card ntfa-group">
+      ${groups}
+      ${shown.length < days.length ? `<button type="button" class="ntfs-add" id="ntfa-more">${t('notif_show_more')}</button>` : ''}
+    </div>
+    <button class="settings-action-row is-danger" id="ntfa-clear">
+      <div class="settings-action-icon">${icon('trash', 20)}</div>
+      <div class="settings-action-main">
+        <div class="settings-action-title">${t('notif_clear_log')}</div>
+        <div class="settings-action-sub">${t('notif_clear_log_sub')}</div>
+      </div>
+    </button>`;
+}
+
 function renderNotifications(el) {
   const cfg = DB.notif.get();
   const ch = cfg.channels;
-  const onCount = Object.keys(ch).filter((k) => ch[k].on).length;
   const denied = (typeof Notification !== 'undefined' && Notification.permission === 'denied');
+  const hasTargets = DB.nutrition.hasTargets();
 
   const sub = (id) => {
     if (!ch[id].on) return t('notif_sum_off');
@@ -2208,11 +2425,18 @@ function renderNotifications(el) {
         ? t('notif_sum_supps').replace('{n}', fmtNum(ch.supps.doses.length))
         : t('notif_sum_supps_none');
       case 'water': return t('notif_sum_water').replace('{n}', fmtNum(Math.round(ch.water.everyMin / 60)));
-      case 'food': return t('notif_sum_food').replace('{n}', fmtNum(ch.food.delayMin));
+      // Says out loud why it is silent. This channel had a full settings row, a
+      // delay picker and translated text for a notification that no code path
+      // could ever produce — it was configurable and mute.
+      case 'food':
+        if (!hasTargets) return t('notif_sum_food_notarget');
+        return ch.food.meals.length
+          ? t('notif_sum_food').replace('{n}', fmtNum(ch.food.meals.length))
+          : t('notif_sum_food_none');
       default: return t('notif_sum_streak');
     }
   };
-  const ICONS_FOR = { train: 'dumbbell', supps: 'pill', water: 'droplet', food: 'utensils', streak: 'zap' };
+  const ICONS_FOR = NTF_CHANNEL_ICON;
 
   const row = (id, body) => `
     <div class="ntfs-row${ch[id].on ? '' : ' is-off'}">
@@ -2236,27 +2460,34 @@ function renderNotifications(el) {
     </div>
     ${ch.train.mode === 'fixed' ? `<input type="time" class="ntfs-time" value="${escapeHtml(ch.train.at)}" data-train-at>` : ''}`;
 
-  const suppsBody = `
+  // Doses and meal times are the same shape — {id, at, name} — so they get the
+  // same editor. A dose can additionally be LINKED to a real supplement, which
+  // is what lets it go quiet once that supplement is ticked off for the day.
+  const timeList = (list, rmAttr, addAttr, addLabel) => `
     <div class="ntfs-doses">
-      ${ch.supps.doses.map((d) => `
+      ${list.map((d) => `
         <div class="ntfs-dose">
           <span class="num" dir="ltr">${escapeHtml(d.at || '')}</span>
           <span class="ntfs-dose-name">${escapeHtml(d.name || '')}</span>
-          <button type="button" class="icon-btn" data-rm-dose="${escapeHtml(d.id)}"
+          ${d.suppId ? `<span class="ntfs-dose-link" title="${escapeHtml(t('notif_supps_link_hint'))}">${icon('check', 14)}</span>` : ''}
+          <button type="button" class="icon-btn" ${rmAttr}="${escapeHtml(d.id)}"
                   aria-label="${escapeHtml(t('delete'))}">${icon('close', 16)}</button>
         </div>`).join('')}
-      <button type="button" class="ntfs-add" data-add-dose>${icon('plus', 20)} ${t('notif_supps_add')}</button>
+      <button type="button" class="ntfs-add" ${addAttr}>${icon('plus', 20)} ${addLabel}</button>
     </div>`;
+
+  const suppsBody = timeList(ch.supps.doses, 'data-rm-dose', 'data-add-dose', t('notif_supps_add'));
 
   const waterBody = `
     <div class="ntfs-choice">
       ${[1, 2, 3].map((h) => `<button type="button" class="ntfs-opt${Math.round(ch.water.everyMin / 60) === h ? ' sel' : ''}" data-water-h="${h}">${t('notif_every_hours').replace('{n}', fmtNum(h))}</button>`).join('')}
     </div>`;
 
-  const foodBody = `
-    <div class="ntfs-choice">
-      ${[30, 60, 90].map((m) => `<button type="button" class="ntfs-opt${ch.food.delayMin === m ? ' sel' : ''}" data-food-m="${m}">${t('notif_delay_min').replace('{n}', fmtNum(m))}</button>`).join('')}
-    </div>`;
+  const foodBody = hasTargets
+    ? timeList(ch.food.meals, 'data-rm-meal', 'data-add-meal', t('notif_food_add'))
+    : `<div class="ntfs-hint">${t('notif_sum_food_notarget')}</div>`;
+
+  const capOpt = (val, label) => `<button type="button" class="ntfs-opt${String(cfg.cap) === String(val) ? ' sel' : ''}" data-cap="${val}">${label}</button>`;
 
   el.innerHTML = `
     <div class="detail-top">
@@ -2282,8 +2513,14 @@ function renderNotifications(el) {
         </span>
       </div>` : ''}
 
+    ${notifTodayHtml()}
+
+    ${notifHistoryHtml()}
+
+    <div class="rot-section-title">${t('settings_title')}</div>
+
     <div class="card ntfs-window">
-      <div class="rot-section-title">${t('notif_window_title')}</div>
+      <div class="ntfa-label">${t('notif_window_title')}</div>
       <div class="ntfs-window-row">
         <input type="time" class="ntfs-time num" value="${escapeHtml(cfg.window.start)}" data-win="start" aria-label="${escapeHtml(t('notif_window_title'))}">
         <span class="ntfs-window-dash"></span>
@@ -2300,6 +2537,18 @@ function renderNotifications(el) {
       ${row('streak', '')}
     </div>
 
+    <div class="card ntfs-window">
+      <div class="ntfa-label">${t('notif_cap_title')}</div>
+      <div class="ntfs-choice">
+        ${capOpt('auto', t('notif_cap_auto'))}
+        ${capOpt(6, fmtNum(6))}
+        ${capOpt(10, fmtNum(10))}
+        ${capOpt('none', t('notif_cap_none'))}
+      </div>
+      <div class="ntfs-hint">${cfg.cap === 'auto' ? t('notif_cap_auto_sub') + ' — ' : ''}${t('notif_cap_hint')}</div>
+    </div>
+
+    <div class="ntfs-hint ntfs-foot">${escapeHtml(t('notif_arm_days').replace('{n}', fmtNum(DB.notif.ARM_DAYS)))} · ${t('notif_arm_hint')}</div>
     <div class="ntfs-hint ntfs-foot">${t('notif_sys_hint')}</div>
     <button class="settings-action-row" id="ntfs-sys">
       <div class="settings-action-icon">${icon('settings', 20)}</div>
@@ -2308,6 +2557,9 @@ function renderNotifications(el) {
       </div>
     </button>
   `;
+
+  // Opening the page IS reading it, so nothing stays "new" behind you.
+  try { DB.notif.logMarkAllSeen(); } catch (_) {}
 
   const redraw = () => { armNotifications(); renderNotifications(el); };
 
@@ -2325,8 +2577,10 @@ function renderNotifications(el) {
   el.querySelectorAll('[data-water-h]').forEach((b) => b.addEventListener('click', () => {
     DB.notif.setChannel('water', { everyMin: Number(b.dataset.waterH) * 60 }); redraw();
   }));
-  el.querySelectorAll('[data-food-m]').forEach((b) => b.addEventListener('click', () => {
-    DB.notif.setChannel('food', { delayMin: Number(b.dataset.foodM) }); redraw();
+  el.querySelectorAll('[data-cap]').forEach((b) => b.addEventListener('click', () => {
+    const v = b.dataset.cap;
+    DB.notif.setCap(v === 'auto' || v === 'none' ? v : Number(v));
+    redraw();
   }));
   el.querySelectorAll('[data-win]').forEach((i) => i.addEventListener('change', () => {
     if (i.value) { DB.notif.setWindow({ [i.dataset.win]: i.value }); redraw(); }
@@ -2336,14 +2590,38 @@ function renderNotifications(el) {
     DB.notif.setChannel('supps', { doses }); redraw();
   }));
   el.querySelector('[data-add-dose]')?.addEventListener('click', () => {
-    openDoseModal((at, name) => {
+    openTimeEntryModal({ kind: 'supps' }, (entry) => {
       const doses = DB.notif.get().channels.supps.doses.slice();
-      // A dose id must be stable — the notification tag is built from it, so a
+      // The id must be stable — the notification tag is built from it, so a
       // regenerated id would let the same dose notify twice in one day.
-      doses.push({ id: 'd' + Date.now().toString(36), at, name });
+      doses.push(entry);
       DB.notif.setChannel('supps', { doses });
       redraw();
     });
+  });
+  el.querySelectorAll('[data-rm-meal]').forEach((b) => b.addEventListener('click', () => {
+    const meals = DB.notif.get().channels.food.meals.filter((m) => m.id !== b.dataset.rmMeal);
+    DB.notif.setChannel('food', { meals }); redraw();
+  }));
+  el.querySelector('[data-add-meal]')?.addEventListener('click', () => {
+    openTimeEntryModal({ kind: 'food' }, (entry) => {
+      const meals = DB.notif.get().channels.food.meals.slice();
+      meals.push(entry);
+      DB.notif.setChannel('food', { meals });
+      redraw();
+    });
+  });
+  // Tapping a logged or upcoming reminder goes where the reminder itself would
+  // have gone — same destFor map, so the page and the notification agree.
+  el.querySelectorAll('[data-open-ch]').forEach((r) => r.addEventListener('click', () => {
+    notifOpen(r.dataset.openCh);
+  }));
+  $('#ntfa-more', el)?.addEventListener('click', () => { notifLogExpanded = true; renderNotifications(el); });
+  $('#ntfa-clear', el)?.addEventListener('click', () => {
+    DB.notif.logClear();
+    notifLogExpanded = false;
+    try { showToast(t('notif_cleared')); } catch (_) {}
+    renderNotifications(el);
   });
   // The ONLY way back to the OS prompt after "not now". Without it that button
   // is a one-way door: the sheet never reopens by itself, so a user who
@@ -2358,13 +2636,31 @@ function renderNotifications(el) {
   $('#ntfs-sys', el)?.addEventListener('click', () => openRemindersModal());
 }
 
-// A dose is a time plus a name; both are required, so this is a small modal
-// rather than two inline fields that can be left half-filled.
-function openDoseModal(onSave) {
+// A time plus a name — for a supplement dose and for a meal alike, because they
+// are the same record ({id, at, name}) and deserve the same editor rather than
+// two that can drift.
+//
+// For a dose there is one more field: an optional link to a real supplement.
+// That link is what makes "logging something cancels its reminder" true for
+// more than water — scheduleForDate drops a linked dose once DB.supplements
+// says it was taken. It is a PICKER, never a name match: matching by name is
+// silently wrong the moment a supplement is renamed.
+function openTimeEntryModal(opts, onSave) {
+  const isSupp = opts.kind === 'supps';
+  const supps = isSupp ? DB.supplements.list() : [];
   const overlay = openModal(`
-    <div class="modal-title">${t('notif_supps_add')}</div>
+    <div class="modal-title">${isSupp ? t('notif_supps_add') : t('notif_food_add')}</div>
+    ${isSupp && supps.length ? `
+      <div class="form-group">
+        <label class="form-label" for="dose-link">${t('notif_supps_link')}</label>
+        <select class="form-input" id="dose-link">
+          <option value="">${escapeHtml(t('notif_supps_link_none'))}</option>
+          ${supps.map((s) => `<option value="${escapeHtml(s.id)}">${escapeHtml(s.name || '')}</option>`).join('')}
+        </select>
+        <div class="ntfs-hint">${t('notif_supps_link_hint')}</div>
+      </div>` : ''}
     <div class="form-group">
-      <label class="form-label" for="dose-name">${t('notif_supps_name')}</label>
+      <label class="form-label" for="dose-name">${isSupp ? t('notif_supps_name') : t('notif_food_name')}</label>
       <input type="text" class="form-input" id="dose-name" maxlength="40">
     </div>
     <div class="form-group">
@@ -2376,14 +2672,23 @@ function openDoseModal(onSave) {
       <button type="button" class="btn btn-primary" data-ok>${t('save')}</button>
     </div>
   `);
+  const link = overlay.querySelector('#dose-link');
+  const nameInput = overlay.querySelector('#dose-name');
+  // Picking a supplement fills the name, so the common case is one choice and
+  // not two. Typing over it afterwards is still allowed — the link is what the
+  // schedule uses, the name is only what the notification says.
+  link?.addEventListener('change', () => {
+    const s = supps.find((x) => x.id === link.value);
+    if (s && !nameInput.value.trim()) nameInput.value = s.name || '';
+  });
   overlay.querySelector('[data-ok]').addEventListener('click', () => {
-    const name = (overlay.querySelector('#dose-name').value || '').trim();
+    const name = (nameInput.value || '').trim();
     const at = overlay.querySelector('#dose-at').value || '';
     if (!name || !at) return;          // both required; the button just does nothing
     closeModal();
-    onSave(at, name);
+    onSave({ id: 'd' + Date.now().toString(36), at, name, suppId: (link && link.value) || null });
   });
-  setTimeout(() => overlay.querySelector('#dose-name')?.focus(), 40);
+  setTimeout(() => nameInput?.focus(), 40);
 }
 
 // ===========================================================================
@@ -2406,61 +2711,21 @@ function openDoseModal(onSave) {
 // change can never leave an orphan firing the old time.
 let notifTimers = [];
 
-function notifTexts(item) {
-  const p = item.payload || {};
-  const T = (k, vars) => {
-    let s = t('notif_' + item.channel + '_' + k);
-    Object.keys(vars || {}).forEach((n) => { s = s.split('{' + n + '}').join(vars[n]); });
-    return s;
-  };
-  switch (item.channel) {
-    case 'train': {
-      const day = DB.plan.workoutForDate(new Date());
-      const n = (day && day.exerciseIds) ? day.exerciseIds.length : 0;
-      // The template reads "Push — {n} exercises", but "Push" is the NAME of a
-      // workout, not a constant: on a Legs day a hard-coded "Push" would be
-      // wrong data in the one line the user reads at a glance, and §4 requires
-      // the text to carry their own. So the head before the dash is replaced
-      // with today's actual slot name and only the tail is templated.
-      const tail = T('title', { n: fmtNum(n) }).split('—').slice(1).join('—').trim();
-      const name = (day && day.name) ? day.name : '';
-      const title = name ? (name + ' — ' + tail) : T('title', { n: fmtNum(n) });
-      // Last performed set, derived exactly as Home derives it: listAll() is
-      // newest-first and a session's sets stay in performed order, so the last
-      // element of the newest non-empty session IS the set they finished on.
-      const all = DB.sessions.listAll();
-      const ls = all.find((x) => x.sets && x.sets.length);
-      const set = ls ? ls.sets[ls.sets.length - 1] : null;
-      const ex = ls ? DB.exercises.getById(ls.exerciseId) : null;
-      const body = (set && ex)
-        ? T('body', { ex: exDisplayName(ex), kg: fmtNum(set.weight || 0), reps: fmtNum(set.reps || 0) })
-        : '';
-      return { title, body };
-    }
-    case 'supps':
-      return { title: T('title', { name: p.name || '', dose: '' }).replace(/\s*—\s*$/, ''),
-               body: T('body', { i: fmtNum(p.i || 1), n: fmtNum(p.n || 1) }) };
-    case 'water': {
-      const cur = DB.water.get ? DB.water.get(todayISO()) : 0;
-      const goal = DB.water.goal();
-      const endH = Number(String(DB.notif.get().window.end).split(':')[0]);
-      const left = Math.max(0, endH - new Date().getHours());
-      return { title: T('title', { cur: fmtNum(cur), goal: fmtNum(goal) }),
-               body: T('body', { hours: fmtNum(left) }) };
-    }
-    case 'streak':
-      return { title: T('title', { n: fmtNum(p.n || 0) }), body: T('body', {}) };
-    default:
-      return { title: t('notif_summary_title').split('{n}').join('1'), body: '' };
-  }
-}
+// The text builder that used to live here has moved to DB.notif.text().
+//
+// It was the GOOD one — it read live DB data — but it was only ever reachable
+// from the in-app bar, while notify.js carried a second, poorer builder that fed
+// every notification that actually reached a phone. Two builders for one
+// sentence. It lives in storage.js now because that file loads before both
+// app.js and notify.js, so both can call it.
 
 // Where a notification takes you when tapped — §5.3's destinations, minus the
-// per-button rows, which need the worker we are not registering.
+// per-button rows, which need the worker we are not registering. The map itself
+// is DB.notif.destFor(), because notify.js needs the same answer and its own
+// copy had drifted into keying off a field these items never carried.
 function notifOpen(channel) {
-  const go = { train: 'session-day', supps: 'supplements', water: 'food', food: 'food', streak: 'home' };
-  const view = go[channel] || 'home';
-  navigate(view, view === 'session-day' ? { date: todayISO() } : undefined);
+  const d = DB.notif.destFor(channel);
+  navigate(d.view, d.context);
 }
 
 /**
@@ -2476,30 +2741,42 @@ function deliver(item) {
   const cfg = DB.notif.get();
   const ch = cfg.channels[item.channel];
   if (!ch || !ch.on) return;
-  if (!DB.notif.markSent(item.tag)) return;      // tag already used today
+  // READ, not consume. markSent() both tests and spends the tag, and it used to
+  // be called here — before the visibility test and before the native
+  // early-return below. On a native shell with the app backgrounded that burned
+  // the tag AND a slot of the daily cap while displaying absolutely nothing, and
+  // the OS alarm that did the real notifying recorded neither. The spend now
+  // happens at each actual display site.
+  if (DB.notif.alreadySent(item.tag)) return;
+  // The water goal can be met between arming the timer and its firing. Re-check
+  // here so a met goal drops the reminder WITHOUT spending the tag — a later
+  // slot is then unaffected if the user somehow undoes the log.
+  if (item.channel === 'water' && DB.water.get(todayISO()) >= DB.water.goal()) return;
 
-  const { title, body } = notifTexts(item);
+  const { title, body } = DB.notif.text(item);
   if (!title) return;
+
+  const record = (path) => DB.notif.logAdd({
+    tag: item.tag, date: item.date || todayISO(), at: item.at,
+    channel: item.channel, title, body, path,
+  });
 
   // App visible → the bar, never a system notification.
   if (document.visibilityState === 'visible') {
+    if (!DB.notif.markSent(item.tag)) return;    // the atomic compare-and-set
+    record('bar');
     showNotifBar({ channel: item.channel, title, body, onOpen: () => notifOpen(item.channel) });
     return;
   }
 
-  // Native shell, app not in front → deliberately nothing here.
-  //
-  // A JS setTimeout in a backgrounded WebView is not a reliable alarm; what
-  // actually fires on Android is the OS alarm armed by Notify.sync() through
-  // the Capacitor plugin, which owns the channels, the permissions, the exact
-  // alarm flags and the boot receiver. Trying to also send from here would
-  // either do nothing or double up with the real alarm.
-  //
-  // NOTE this is the seam where "one system" is still half-done: Notify.sync()
-  // currently arms from DB.reminders.schedule(), not DB.notif.scheduleAll().
-  // Re-pointing it is the remaining step, and it is a real piece of work
-  // because notify.js carries hard-won ordering rules (decide before
-  // destroying, check-never-request, report what Android actually holds).
+  // Native shell, app not in front → deliberately nothing here, and NOTHING
+  // SPENT. The tag and the cap slot survive for the OS alarm that will actually
+  // deliver this, which is armed by Notify.sync() through the Capacitor plugin
+  // — the thing that owns the channels, the permissions, the exact-alarm flags
+  // and the boot receiver. A JS setTimeout in a backgrounded WebView is not an
+  // alarm; sending from here would either do nothing or double up with the real
+  // one. The delivery is recorded instead by the plugin's own listener and by
+  // Notify.reconcile() on the next foreground.
   if (window.Notify && window.Notify.isNative && window.Notify.isNative()) return;
 
   // Web, backgrounded, permission already granted. Page-level Notification has
@@ -2507,6 +2784,8 @@ function deliver(item) {
   // and the tap, which is what §5.1 leaves for this case anyway.
   try {
     if (typeof Notification !== 'undefined' && Notification.permission === 'granted') {
+      if (!DB.notif.markSent(item.tag)) return;
+      record('web');
       const n = new Notification(title, {
         body,
         tag: item.tag,
@@ -2529,7 +2808,16 @@ function deliver(item) {
 function armNotifications() {
   notifTimers.forEach(clearTimeout);
   notifTimers = [];
+  // The one-time v208 migration used to run ONLY from inside Notify.sync(),
+  // after its `if (!supported()) return` bail — so on the web it never ran at
+  // all: STATE.notif stayed null forever while get() kept handing back
+  // un-persisted defaults, and every supplement time the user had already
+  // configured was silently discarded. This function runs at boot on EVERY
+  // platform, and the migration is idempotent (`if (STATE.notif) return false`).
+  try { DB.notif.migrateFromReminders(); } catch (_) {}
   let items = [];
+  // Today only. A setTimeout cannot outlive the session, so there is nothing to
+  // gain from the multi-day horizon here — that is the native path's job.
   try { items = DB.notif.scheduleAll(); } catch (_) { return; }
   const now = new Date();
   const nowMin = now.getHours() * 60 + now.getMinutes();
@@ -7802,9 +8090,12 @@ function renderSettings(el) {
           <div class="settings-action-sub">${(() => {
             const c = DB.notif.get().channels;
             const n = Object.keys(c).filter((k) => c[k].on).length;
-            return t('notif_settings_of').replace('{n}', fmtNum(n));
+            const unseen = (() => { try { return DB.notif.unseenCount(); } catch (_) { return 0; } })();
+            const base = t('notif_settings_of').replace('{n}', fmtNum(n));
+            return unseen ? base + ' · ' + escapeHtml(t('notif_unseen').replace('{n}', fmtNum(unseen))) : base;
           })()}</div>
         </div>
+        ${(() => { try { return DB.notif.unseenCount() ? '<span class="ntfs-badge"></span>' : ''; } catch (_) { return ''; } })()}
         <span class="icon-mirror settings-action-chev">${icon('chevronRight', 16)}</span>
       </button>
     </div>
@@ -10002,14 +10293,22 @@ function openSupplementModal(id = null) {
     const name = $('#supp-name').value.trim();
     const dose = $('#supp-dose').value.trim();
     if (!name) { showToast(t('enter_name')); return; }
+    let suppId = existing ? existing.id : null;
     if (existing) {
       DB.supplements.update(existing.id, { name, dose, color: pickedColor, times });
       showToast(t('updated'));
     } else {
-      DB.supplements.add({ name, dose, color: pickedColor, times });
+      const created = DB.supplements.add({ name, dose, color: pickedColor, times });
+      suppId = created && created.id;
       showToast(t('saved'));
     }
+    // The times set HERE now actually schedule. They used to be written to
+    // `sup.times`, which the scheduler has never read — the notifications page
+    // wrote to a different list — so a time set on a supplement saved, showed in
+    // the UI, and silently never fired.
+    try { DB.notif.syncSuppDoses(suppId, name, times); } catch (_) {}
     // Times changed → the alarm set is stale. No-op off-native.
+    try { armNotifications(); } catch (_) {}
     try { if (window.Notify) Notify.sync(); } catch (_) {}
     closeModal();
     renderView(currentView);
@@ -10022,6 +10321,12 @@ function openSupplementModal(id = null) {
         text: t('delete_supplement_text'),
         onConfirm: () => {
           DB.supplements.remove(existing.id);
+          // Drop its derived doses too, or the supplement is gone and its
+          // reminders keep arriving — an orphan alarm for a deleted thing is
+          // exactly what sync()'s full-replace exists to prevent.
+          try { DB.notif.syncSuppDoses(existing.id, '', []); } catch (_) {}
+          try { armNotifications(); } catch (_) {}
+          try { if (window.Notify) Notify.sync(); } catch (_) {}
           closeModal();
           showToast(t('deleted'));
           renderView(currentView);
@@ -11332,8 +11637,25 @@ function showOnboarding() {
   // catchUp() surfaces anything that came due earlier today and was not done —
   // which is the ONLY delivery available on web and on any shell built before
   // the notifications plugin landed. Deferred so neither blocks first paint.
+  //
+  // armNotifications() is here because it was in NEITHER boot path. Its only two
+  // callers were the permission sheet's Allow button and the notifications
+  // page's redraw, so a normal session armed exactly zero in-app timers: the bar
+  // could not appear, and on the web — where there is no OS alarm — that meant
+  // reminders simply did not exist. It also runs the v208 migration, which was
+  // similarly stranded behind sync()'s native-only bail.
   setTimeout(() => {
-    try { if (window.Notify) { Notify.sync(); Notify.catchUp(); } } catch (_) {}
+    try { armNotifications(); } catch (_) {}
+    // reconcile() before sync(), and chained rather than merely ordered: sync()
+    // rewrites the armed manifest that reconcile() reads to work out what fired
+    // while the app was closed.
+    try {
+      if (window.Notify) {
+        Promise.resolve(Notify.reconcile()).catch(() => {}).then(() => {
+          try { Notify.sync(); Notify.catchUp(); } catch (_) {}
+        });
+      }
+    } catch (_) {}
   }, 1500);
 
   // When the app is re-foregrounded (common on the APK — Android keeps it warm),
@@ -11373,7 +11695,22 @@ function showOnboarding() {
     // Only the INITIAL arming goes through the wakeup-capable path. Re-syncing
     // on every foreground keeps every reminder on that first-fire path, so the
     // degraded repeat is rarely the one that has to deliver.
-    try { if (window.Notify) { Notify.sync(); Notify.catchUp(); } } catch (_) {}
+    //
+    // It is also what keeps the dated alarms alive: they are one-shots across a
+    // 7-day horizon, so every foreground pushes the horizon back out and re-bakes
+    // TODAY's text against the user's current numbers.
+    //
+    // reconcile() runs FIRST, and must: sync() rewrites the armed manifest, and
+    // reconcile reads that manifest to work out which alarms fired while the app
+    // was dead. Reversed, every one of those deliveries is lost from the log.
+    try { armNotifications(); } catch (_) {}
+    try {
+      if (window.Notify) {
+        Promise.resolve(Notify.reconcile()).catch(() => {}).then(() => {
+          try { Notify.sync(); Notify.catchUp(); } catch (_) {}
+        });
+      }
+    } catch (_) {}
     try { if (window.VaultUpdate && VaultUpdate.checkWeb) VaultUpdate.checkWeb(); } catch (_) {}
     // Re-resolve the calendar day on every foreground.
     try {
