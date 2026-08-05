@@ -2,10 +2,10 @@
   "_comment": "Update manifest. `web` is the latest web build — it MUST equal the ?v=N in index.html on every release; js/update.js reads it fresh (no-store) and reloads the entry html so web/CSS/JS updates reach all devices without a reinstall. `apk` only triggers the in-app 'download new APK' banner when apk.build here is GREATER than the versionCode installed on the device. To release a NEW APK: bump android/app/build.gradle versionCode, build, upload to Drive, then set apk.build to that number + apk.url to the new Drive share link + notes, and push.",
   "web": 258,
   "apk": {
-    "build": 17,
-    "version": "2.6",
+    "build": 18,
+    "version": "2.7",
     "url": "https://raw.githubusercontent.com/moathdarweesh/vault/main/download/THE-VAULT.apk",
-    "notes_ar": "إصلاح شريط الحالة: التطبيق كان يرسم تحت الساعة والبطارية والشبكة لأن أندرويد ١٥ فما فوق يفرض الرسم من الحافة إلى الحافة. هذا التثبيت يُرجع الشريط مكانه. ومعه إشعارات كبسولية تأتي من أعلى الصفحة.",
-    "notes_en": "Status bar fix: the app was drawing underneath the clock, battery and signal because Android 15+ enforces edge-to-edge layout. This install puts the bar back. Ships with the capsule notification bar that arrives at the top of the page."
+    "notes_ar": "ضبط شريط الحالة نهائياً: البناء السابق كان يحسب الهامش العلوي مرتين فيتضخّم الشريط. الآن كابستور وحده يتولّى الهوامش، ولون أيقونات الشريط صار يتبع ثيم التطبيق لا وضع الهاتف — وهذا سبب اختفائه أصلاً على الأجهزة المضبوطة على الوضع الفاتح.",
+    "notes_en": "Status bar settled: the previous build paid the top inset twice, which is why the strip looked oversized. Capacitor now owns insets alone, and the bar icon colour follows VAULT theme rather than the phone night mode — which is why it vanished on phones set to light mode."
   }
 }
