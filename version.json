@@ -1,11 +1,11 @@
 {
   "_comment": "Update manifest. `web` is the latest web build — it MUST equal the ?v=N in index.html on every release; js/update.js reads it fresh (no-store) and reloads the entry html so web/CSS/JS updates reach all devices without a reinstall. `apk` only triggers the in-app 'download new APK' banner when apk.build here is GREATER than the versionCode installed on the device. To release a NEW APK: bump android/app/build.gradle versionCode, build, upload to Drive, then set apk.build to that number + apk.url to the new Drive share link + notes, and push.",
-  "web": 256,
+  "web": 257,
   "apk": {
-    "build": 16,
-    "version": "2.5",
+    "build": 17,
+    "version": "2.6",
     "url": "https://raw.githubusercontent.com/moathdarweesh/vault/main/download/THE-VAULT.apk",
-    "notes_ar": "إشعارات جديدة كلياً: النص صار مربوطاً بأرقامك (كم مل بقي، كم سعرة بقيت)، والجدولة صارت يوماً بيوم فلا تذكير تمرين في يوم راحة. وصفحة إشعارات تعرض ما وصلك وما سيصل بنصه الفعلي. هذا التثبيت يجلب أيقونة لكل نوع إشعار — وهي مورد أصلي لا يصله تحديث الويب.",
-    "notes_en": "Rebuilt notifications: the text now carries your real numbers (ml left, kcal left), and scheduling is per-day so no training reminder lands on a rest day. Plus a notifications page showing what arrived and what is coming, in its actual words. This install adds a per-channel notification icon — a native resource no web update can reach."
+    "notes_ar": "إصلاح شريط الحالة: التطبيق كان يرسم تحت الساعة والبطارية والشبكة لأن أندرويد ١٥ فما فوق يفرض الرسم من الحافة إلى الحافة. هذا التثبيت يُرجع الشريط مكانه. ومعه إشعارات كبسولية تأتي من أعلى الصفحة.",
+    "notes_en": "Status bar fix: the app was drawing underneath the clock, battery and signal because Android 15+ enforces edge-to-edge layout. This install puts the bar back. Ships with the capsule notification bar that arrives at the top of the page."
   }
 }

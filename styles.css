@@ -6617,8 +6617,18 @@ body[dir="rtl"] .variation-select svg { transform: scaleX(-1); }
   max-width: 448px;
   display: flex;
   align-items: center;
-  gap: 13px;
-  padding: 14px;
+  gap: 12px;
+  /* A CAPSULE, by the owner's instruction — and it does not break identity
+     device 4 ("no circles"), it lands in the exception that rule states itself:
+     "capsules are for TRANSIENT chips only; anything that holds STATE gets the
+     machined corner". This bar is the most transient thing in the app — five
+     seconds, no state, gone on a swipe.
+     Asymmetric padding is what the shape forces: at the pill's ends the arc
+     eats the corners, so the text side needs clearance the icon side does not
+     (the 36px icon well sits inside the left arc on its own). Logical
+     properties, so RTL mirrors it for free. */
+  padding: 10px;
+  padding-inline-end: 22px;
   /* Tokens, not the spec's literals. Those literals are the DARK values, so in
      light mode this landed a near-black bar with grey-on-dark body text on the
      bone-coloured page. It keeps an explicit border for the .cta-floating
@@ -6626,7 +6636,7 @@ body[dir="rtl"] .variation-select svg { transform: scaleX(-1); }
      cannot lift it off the page. */
   background: var(--surface-2);
   border: 1px solid var(--border-hi);
-  border-radius: 18px;
+  border-radius: var(--radius-pill, 999px);
   box-shadow: var(--elev-3);
   /* Above the content, below the sheets — a sheet is a decision the user is in
      the middle of, and a reminder must never land on top of it. */
@@ -6644,11 +6654,14 @@ body[dir="rtl"] .ntf-bar { text-align: right; }
 
 .ntf-bar.is-error { border-color: var(--red); }
 
+/* Round, to sit concentric inside the capsule's end. A 12px rounded square
+   against a 999px arc reads as two different shapes fighting; the well has to
+   follow the container it is nested in. */
 .ntf-icon {
   flex: none;
   width: 36px;
   height: 36px;
-  border-radius: 12px;
+  border-radius: 50%;
   background: var(--accent-soft);
   display: grid;
   place-items: center;

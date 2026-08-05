@@ -74,7 +74,7 @@ a faster TTFB — not fewer bytes.
 npm run release          # bump every marker + verify, then commit all files together
 ```
 
-**Current version: v256.** APK: build 16 / v2.5.
+**Current version: v257.** APK: build 17 / v2.6.
 
 `scripts/release.js` rewrites all **16** markers and then re-reads them from disk to confirm; it exits non-zero if any disagree. The markers are `?v=N` in `index.html` (×14 — every script and stylesheet, the `js/vendor/supabase.js` preload, and **both `icons/icon.svg` links**), the `__cleaned_vN` sessionStorage key, the `FALLBACK` literal in `app.js`, and `version.json` → `web`. The count is derived, not hard-coded, so adding a marker is safe — just keep this sentence honest.
 
