@@ -1,13 +1,8 @@
 package com.moath.thevault;
 
 import android.graphics.Color;
+import android.os.Build;
 import android.os.Bundle;
-import android.view.View;
-
-import androidx.core.graphics.Insets;
-import androidx.core.view.ViewCompat;
-import androidx.core.view.WindowInsetsCompat;
-import androidx.core.view.WindowInsetsControllerCompat;
 
 import com.getcapacitor.BridgeActivity;
 
@@ -17,53 +12,66 @@ public class MainActivity extends BridgeActivity {
         // Must register before super.onCreate so the bridge knows the plugin.
         registerPlugin(HealthConnectPlugin.class);
         super.onCreate(savedInstanceState);
-        applySystemBarInsets();
+        applyLegacyBarColors();
     }
 
     /**
-     * Keep the app out from under the status bar.
+     * DO NOT re-add a window-insets listener here. CAPACITOR ALREADY OWNS INSETS.
      *
-     * targetSdkVersion is 36, and from Android 15 edge-to-edge is ENFORCED — the
-     * window is laid out behind the system bars whether the app asks for it or
-     * not, and from Android 16 the opt-out flag is ignored entirely. So the app
-     * was drawing underneath the clock, battery and signal icons.
+     * `com.getcapacitor.plugin.SystemBars` is a CORE plugin registered
+     * unconditionally (Bridge.java:658), and it installs its own
+     * OnApplyWindowInsetsListener on `getWebView().getParent()`. Its
+     * `insetsHandling` defaults to "css" (SystemBars.java:58) and
+     * capacitor.config.json declares no override, so the framework's contract is
+     * that the WEB layer owns layout through env(safe-area-inset-*) — which
+     * styles.css already does at 16 call sites, and index.html:10 already sets
+     * viewport-fit=cover.
      *
-     * The CSS side already accounts for this: `.app` pads by
-     * `env(safe-area-inset-top)`. But that only works if the WebView is actually
-     * TOLD the inset, which is what this listener guarantees — it pads the
-     * content view by the real system-bar insets, so the web layer starts below
-     * the status bar regardless of what `env()` reports.
+     * v257 added a listener here anyway, on android.R.id.content — the PARENT of
+     * the view Capacitor listens on. Two different views, so it did not replace
+     * Capacitor's, it STACKED on it, and every inset was paid twice: a
+     * status-bar's height of native padding plus `.main { padding-top:
+     * var(--safe-t) }` on top. That is the "you made the status bar strip a bit
+     * big" report.
      *
-     * No new dependency: androidx.core ships with Capacitor already, whereas the
-     * usual fix (@capacitor/status-bar) would have been a new plugin.
+     * Padding the WebView is the wrong shape here regardless: `.bottom-nav`
+     * deliberately EXTENDS its own surface into the gesture area
+     * (`height: calc(var(--nav-h) + var(--safe-b))`, styles.css:585). Native
+     * padding lifts the whole WebView instead and leaves a dead strip below the
+     * bar — which is exactly what a well-built app does not look like.
+     *
+     * ICON APPEARANCE IS NOT SET HERE EITHER, and must not be. v257 called
+     * setAppearanceLightStatusBars() synchronously in onCreate; that is dead
+     * code. SystemBars.initSystemBars() runs during super.onCreate and posts its
+     * setStyle() through Bridge.executeOnMainThread, which is
+     * `new Handler(getMainLooper()).post(...)` — it ALWAYS posts, never runs
+     * inline. So Capacitor's call lands after onCreate returns and overwrites
+     * anything set here.
+     *
+     * The appearance is owned in two places instead:
+     *   · capacitor.config.json -> plugins.SystemBars.style, the cold-start default
+     *   · applyTheme() in js/app.js, which follows VAULT's OWN theme.
+     * That second one is the real fix for the original bug: Capacitor's DEFAULT
+     * style resolves from the OS NIGHT MODE (SystemBars.getStyleForTheme reads
+     * UI_MODE_NIGHT_MASK), and this project has no values-night, so a phone in
+     * system-light mode painted DARK icons over VAULT's #000000 page. The status
+     * bar was never hidden — it was camouflaged.
      */
-    private void applySystemBarInsets() {
-        final View content = findViewById(android.R.id.content);
-        if (content == null) return;
-
-        // The strip behind each system bar shows the window background, so it has
-        // to be the app's own black or it reads as a grey band above the page.
-        getWindow().setStatusBarColor(Color.BLACK);
-        getWindow().setNavigationBarColor(Color.BLACK);
-
-        // LIGHT icons (white clock/battery). `false` means "do not use DARK
-        // icons" — and the page underneath is #000000. Getting this backwards is
-        // exactly how a status bar becomes invisible rather than merely
-        // overlapped: black icons on a black page.
-        WindowInsetsControllerCompat controller =
-                new WindowInsetsControllerCompat(getWindow(), content);
-        controller.setAppearanceLightStatusBars(false);
-        controller.setAppearanceLightNavigationBars(false);
-
-        ViewCompat.setOnApplyWindowInsetsListener(content, (v, windowInsets) -> {
-            Insets bars = windowInsets.getInsets(
-                    WindowInsetsCompat.Type.systemBars() | WindowInsetsCompat.Type.displayCutout());
-            v.setPadding(bars.left, bars.top, bars.right, bars.bottom);
-            // Returned UNCONSUMED on purpose: the keyboard (ime) inset still has
-            // to reach the WebView, or `windowSoftInputMode=adjustResize` stops
-            // lifting the focused field above the keyboard.
-            return windowInsets;
-        });
-        ViewCompat.requestApplyInsets(content);
+    private void applyLegacyBarColors() {
+        // Android 14 and below ONLY. From Android 15 (targetSdk is 36)
+        // edge-to-edge is enforced, the bars are forced transparent, and both
+        // setters are deprecated no-ops — so on the versions this file exists
+        // for, these do nothing at all. Below 15 the window still fits system
+        // windows and these paint a real bar: black, to match --bg (#000000).
+        //
+        // Known residual, accepted: on Android <= 14 with VAULT in LIGHT theme
+        // this is a black bar under dark icons. Neither SystemBars (no
+        // background-colour API) nor MainActivity can fix that without adding
+        // @capacitor/status-bar, and no new dependency is worth it for a case
+        // the enforced-edge-to-edge bug never touches.
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.VANILLA_ICE_CREAM) {
+            getWindow().setStatusBarColor(Color.BLACK);
+            getWindow().setNavigationBarColor(Color.BLACK);
+        }
     }
 }

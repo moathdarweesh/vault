@@ -12,7 +12,7 @@
 // build. The literal below is the fallback (file://, or a stripped query) and is
 // still bumped by `npm run release` — see CLAUDE.md "CACHE WORKFLOW".
 const VAULT_BUILD = (() => {
-  const FALLBACK = 'v257';
+  const FALLBACK = 'v258';
   try {
     const src = (document.currentScript && document.currentScript.src) || '';
     const m = src.match(/[?&]v=(\d+)/);
@@ -1982,6 +1982,29 @@ function applyTheme(theme) {
   // is the bone ground. Keep these two in step with styles.css and with the
   // static <meta> in index.html, which covers the frames before this runs.
   if (meta) meta.setAttribute('content', theme === 'light' ? '#faf5f0' : '#000000');
+  // The <meta> above only reaches BROWSERS. Inside the APK the Android status
+  // and gesture bars are driven by Capacitor's built-in SystemBars plugin,
+  // whose DEFAULT style resolves from the OS NIGHT MODE — not from ours.
+  //
+  // That mismatch is the whole "the status bar disappeared" report: VAULT picks
+  // its own theme, so a phone set to system-light got DARK icons painted over
+  // VAULT's #000000 page. The bar was never hidden, it was camouflaged. Only we
+  // know which theme is actually on screen, so only we can answer this.
+  //
+  // 'DARK' means a DARK BAR BACKGROUND, i.e. LIGHT icons — the inverse of what
+  // the name suggests. Verified in SystemBars.java: it maps to
+  // setAppearanceLightStatusBars(!style.equals("DARK")).
+  //
+  // No-op off-native. It also STICKS: setStyle stores the resolved value and
+  // re-applies that (never DEFAULT) on a configuration change, so rotating the
+  // phone or toggling the OS theme cannot take the bar back.
+  try {
+    const sb = window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.SystemBars;
+    if (sb && sb.setStyle) {
+      const p = sb.setStyle({ style: theme === 'light' ? 'LIGHT' : 'DARK' });
+      if (p && p.catch) p.catch(() => {});
+    }
+  } catch (_) {}
 }
 
 function applyLang(lang) {

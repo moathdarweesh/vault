@@ -516,6 +516,15 @@ body.rest-active .main { padding-bottom: 104px; }
 .view {
   display: none;
   padding: 0 16px 8px;
+  /* Landscape on a notched phone puts the cutout down one SIDE, and the app
+     sets no screenOrientation — so content could sit under it. Only two other
+     selectors in this file consult the horizontal insets, and the native pad
+     that used to cover this case is being removed (Capacitor owns insets; see
+     MainActivity).
+     max() makes this a strict no-op wherever the inset is 0 — desktop, PWA,
+     every portrait phone — so the browser case is byte-identical. */
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
   animation: fadeUp var(--dur) var(--ease);
 }
 .view.active { display: block; }
