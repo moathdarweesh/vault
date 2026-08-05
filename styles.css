@@ -6604,8 +6604,14 @@ body[dir="rtl"] .variation-select svg { transform: scaleX(-1); }
    the bar's whole point. */
 .ntf-bar {
   position: fixed;
-  /* 8px below the header. --safe-t keeps it off the notch. */
-  top: calc(var(--safe-t, 0px) + 56px + 8px);
+  /* At the very TOP of the page, by the owner's instruction. It used to sit
+     8px below the 56px header, which made it read as part of the page instead
+     of as something arriving over it.
+     --safe-t stays and is not "below": that is the notch/status bar inset, and
+     without it the bar renders underneath the system clock on a phone.
+     z-index 60 already clears the sticky header (.detail-top is 20), so nothing
+     else has to move for this. */
+  top: calc(var(--safe-t, 0px) + 8px);
   inset-inline: 16px;
   margin-inline: auto;
   max-width: 448px;
