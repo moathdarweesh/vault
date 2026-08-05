@@ -44,6 +44,9 @@ file on a database that already has it is safe.
 | 09 | `hardening-v5.sql` | `feedback_user_idx` + the `vault_data` grant double-lock (anon revoked, `authenticated` narrowed to the four DML verbs). |
 | 10 | `ban-rls.sql` | `is_banned()` + RESTRICTIVE policies, so a ban holds at the database instead of only in the client. |
 | 11 | `client-errors-v9.sql` | `client_errors` — insert-own / select-own / admin-select / admin-delete, **no UPDATE policy for anyone**, a 20-per-hour DB-side rate cap in a BEFORE-INSERT trigger, and the `is_admin()`-gated 30-day prune RPC. Applied + verified live 2026-08-05. |
+| 12 | `ban-rls-v10.sql` | Extends the ban past the blob: RESTRICTIVE INSERT/UPDATE policies on the mirror tables, the `exercise-images` bucket, and `profiles` (so a banned account cannot re-brand). SELECT and DELETE stay open, so a blocked user can still export and erase their own data. Applied + verified live 2026-08-05. |
+| 13 | `launch-hardening.sql` | ~5 MB `vault_data` size cap (BEFORE trigger) + server-side `feedback.username` snapshot, which stops a crafted insert displaying any @handle in the admin inbox. Applied + verified live 2026-08-05. |
+| 14 | `hardening-v8.sql` | Revokes the implicit PUBLIC/anon EXECUTE on `admin_user_stats()`/`admin_activity()` and pins `search_path` on every SECURITY DEFINER function missing it. Applied + verified live 2026-08-05. |
 
 > ⚠️ **Keep `image/svg+xml` OUT of the `exercise-images` mime allowlist,
 > permanently.** It is what rejects an active-content SVG arriving from a
@@ -51,13 +54,7 @@ file on a database that already has it is safe.
 
 ## 2) Not yet applied — `pending/`
 
-Reviewed and ready; the owner runs them. Order matters only where noted.
-
-| File | What it does | Note |
-|---|---|---|
-| `launch-hardening.sql` | Rejects a `vault_data` blob over ~5 MB, plus abuse limits RLS cannot express. | |
-| `hardening-v8.sql` | Revokes PUBLIC execute and pins `search_path` on the definer RPCs. | **Depends on `unverified/admin-scale-rpc.sql`** — settle that first, or this hardens functions that may not exist. |
-| `ban-rls-v10.sql` | Extends the ban to the mirror tables, storage and profiles. | Needs `10_ban-rls.sql`. |
+**Empty.** Everything written has been applied; 11–14 went in on 2026-08-05.
 
 ## 3) State unknown — `unverified/`
 
