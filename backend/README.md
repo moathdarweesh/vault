@@ -43,6 +43,7 @@ file on a database that already has it is safe.
 | 08 | `storage-images-v6.sql` | The private `exercise-images` bucket and its owner-only policies. |
 | 09 | `hardening-v5.sql` | `feedback_user_idx` + the `vault_data` grant double-lock (anon revoked, `authenticated` narrowed to the four DML verbs). |
 | 10 | `ban-rls.sql` | `is_banned()` + RESTRICTIVE policies, so a ban holds at the database instead of only in the client. |
+| 11 | `client-errors-v9.sql` | `client_errors` — insert-own / select-own / admin-select / admin-delete, **no UPDATE policy for anyone**, a 20-per-hour DB-side rate cap in a BEFORE-INSERT trigger, and the `is_admin()`-gated 30-day prune RPC. Applied + verified live 2026-08-05. |
 
 > ⚠️ **Keep `image/svg+xml` OUT of the `exercise-images` mime allowlist,
 > permanently.** It is what rejects an active-content SVG arriving from a
@@ -54,7 +55,6 @@ Reviewed and ready; the owner runs them. Order matters only where noted.
 
 | File | What it does | Note |
 |---|---|---|
-| `client-errors-v9.sql` | `client_errors` table + admin-read policies, 20/hour DB-side cap, 30-day prune RPC. | Needs `05_admin-v2.sql` for `is_admin()`. |
 | `launch-hardening.sql` | Rejects a `vault_data` blob over ~5 MB, plus abuse limits RLS cannot express. | |
 | `hardening-v8.sql` | Revokes PUBLIC execute and pins `search_path` on the definer RPCs. | **Depends on `unverified/admin-scale-rpc.sql`** — settle that first, or this hardens functions that may not exist. |
 | `ban-rls-v10.sql` | Extends the ban to the mirror tables, storage and profiles. | Needs `10_ban-rls.sql`. |
