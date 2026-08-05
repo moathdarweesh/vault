@@ -12,7 +12,7 @@
 // build. The literal below is the fallback (file://, or a stripped query) and is
 // still bumped by `npm run release` — see CLAUDE.md "CACHE WORKFLOW".
 const VAULT_BUILD = (() => {
-  const FALLBACK = 'v254';
+  const FALLBACK = 'v255';
   try {
     const src = (document.currentScript && document.currentScript.src) || '';
     const m = src.match(/[?&]v=(\d+)/);
@@ -1188,7 +1188,6 @@ const I18N = {
     pg_volume_30d: 'Volume · 30 days',
     pg_sessions_30d: 'Sessions · 30 days',
     pg_days_unit: 'days',
-    run_rest_90: 'Rest 90s',
     notif_every_hours: 'Every {n} hours',
     notif_sys_hint: 'Sound and vibration are the system’s, not the app’s.',
     notif_sys_open: 'Open system notification settings',
@@ -1912,7 +1911,6 @@ const I18N = {
     pg_volume_30d: 'الحجم · 30 يوماً',
     pg_sessions_30d: 'الجلسات · 30 يوماً',
     pg_days_unit: 'يوم',
-    run_rest_90: 'راحة ٩٠ ثانية',
     notif_every_hours: 'كل {n} ساعات',
     notif_sys_hint: 'الصوت والاهتزاز من النظام لا من التطبيق.',
     notif_sys_open: 'افتح إعدادات إشعارات النظام',
@@ -9462,23 +9460,20 @@ function renderSessionRun(el) {
     <div class="run-sets">${setsRows}</div>
     <button type="button" class="btn btn-ghost run-addset" data-addset>${icon('plus', 20)} ${t('add_set')}</button>
 
-    <!-- APPLY-vault.md §4 wants two buttons at the foot of this screen: rest 90s
-         secondary, finish filled. The rest control did not exist here at all —
-         startRestTimer() was already written and simply unreachable from the one
-         screen you actually rest on. It sits ABOVE the nav row rather than
-         inside it, because prev/next is how you move between exercises in
-         guided mode and replacing them with rest/finish would leave no way to
-         advance. "Finish" is already the filled button: run-next reads Finish
-         and stays .btn-primary on the last exercise. -->
-    <button type="button" class="btn btn-ghost run-rest" data-rest-90>${icon('clock', 20)} ${t('run_rest_90')}</button>
-
+    <!-- NO manual "rest 90s" button here, by the owner's call and on the
+         evidence. APPLY-vault.md §4 asks for one, and v250 added it on the
+         reasoning that startRestTimer() was "unreachable from the one screen you
+         actually rest on". That reasoning was simply wrong: ticking a set done
+         ALREADY starts the timer (see the [data-done] handler below), which is
+         the moment a rest actually begins. The button asked the user to state
+         something the app had already inferred from the action they just took.
+         "Finish" remains the filled button: run-next reads Finish and stays
+         .btn-primary on the last exercise. -->
     <div class="run-nav">
       <button type="button" class="btn btn-ghost run-prev" data-prev ${idx === 0 ? 'disabled' : ''}><span class="icon-mirror">${icon('back', 20)}</span> ${t('previous')}</button>
       <button type="button" class="btn btn-primary run-next" data-next>${isLast ? `${t('finish')} ${icon('check', 20)}` : `${t('next')} <span class="icon-mirror">${icon('chevronRight', 20)}</span>`}</button>
     </div>
   `;
-
-  el.querySelector('[data-rest-90]')?.addEventListener('click', () => startRestTimer(90));
 
   // Photo zoom
   el.querySelectorAll('.sd-thumb-zoom').forEach((thumb) => {

@@ -407,7 +407,17 @@
     });
   }
 
-  // One toast, for the oldest outstanding item — never a queue of them.
+  // ONE BAR, for the oldest outstanding item — never a queue of them.
+  //
+  // This used to raise a TOAST with an "open" action label, which broke every
+  // rule §9 sets for a reminder: it rose from the BOTTOM, it carried a visible
+  // "open" button, and it could not be swiped away. Those rules are already
+  // implemented — in showNotifBar — and this path simply was not using it.
+  //
+  // The distinction the two components exist for makes it obvious which is
+  // right: the toast is "you did something, here is the way back"; the bar is
+  // "here is something you did not ask for right now". A missed reminder is the
+  // second one by definition.
   function catchUp() {
     // The gate used to be `DB.reminders.get().enabled` — a v208 flag that
     // defaults to false and is now written by nothing. A user who configured
@@ -426,8 +436,18 @@
     const dest = DB.notif.destFor(it.channel);
     const go = () => { try { navigate(dest.view, dest.context); } catch (_) {} };
     DB.notif.logAdd({ tag: it.tag, date: it.date, at: it.at, channel: it.channel, title, body, path: 'catchup' });
-    // A real system notification when the browser has granted it; the toast is
-    // the fallback, and is all a WebView without permission can do.
+    // catchUp() runs at boot and on foreground, so the app is BY DEFINITION
+    // open — which is §5.1's case exactly: app visible ⇒ the bar, never a
+    // system notification. Down from the top, tap to open, swipe either way to
+    // dismiss, no button and no label.
+    try {
+      if (typeof showNotifBar === 'function') {
+        showNotifBar({ channel: it.channel, title, body, onOpen: go });
+        return;
+      }
+    } catch (_) {}
+    // Only reachable if the app is genuinely backgrounded on the web, where a
+    // page-level Notification is the one thing left that can surface.
     try {
       if (!supported() && typeof Notification !== 'undefined' && Notification.permission === 'granted') {
         const n = new Notification(title, { body, tag: 'vault-' + it.id });
@@ -435,9 +455,7 @@
         return;
       }
     } catch (_) {}
-    try {
-      showToast(`${title} · ${body}`, { actionLabel: tr('open'), onAction: go });
-    } catch (_) {}
+    try { showToast(`${title} · ${body}`, { actionLabel: tr('open'), onAction: go }); } catch (_) {}
   }
 
   // ------------------------------------------------------------ reconcile ---
