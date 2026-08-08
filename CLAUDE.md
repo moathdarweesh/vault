@@ -11,7 +11,10 @@ A fitness / workout-tracking **PWA**. Vanilla JS, **no build step**, bilingual *
 - `js/app.js` (~190KB) — ALL views/rendering, the router `navigate(view, ctx, opts)`, and the two EN/AR translation objects. Use `Grep` to find a function; don't assume from names.
 - `js/storage.js` — the `DB.*` localStorage API (all persistence). `MACHINE_SEED`, name-match migrations.
 - `js/cloud.js` — Supabase email/password auth + whole-blob sync to a per-user `vault_data` row (RLS-protected). Uses the **publishable** key only (never service-role). Loads before app.js. Also: `getUsername/checkUsername/setUsername` (the mandatory-handle feature) and `getClient` (for tables.js).
-- `js/tables.js` — the **"mirror"**: additively projects the local blob into the normalized schema-v2 tables (best-effort, one-way, idempotent, RLS-scoped). Never affects local logging. Loads after storage.js. **⚠️ ADDITIVE-ONLY: it only upserts — it never DELETEs or writes `deleted_at`, so rows deleted locally live on in the tables. The mirror can therefore drift from the blob; it is analytics-only and NOT safe for the app to read back until delete/tombstone propagation + a reconcile pass are added** (flagged by the DB-department audit, 2026-07-11).
+- `js/tables.js` — the **"mirror"**: additively projects the local blob into the normalized schema-v2 tables (best-effort, one-way, idempotent, RLS-scoped). Never affects local logging. Loads after storage.js. It RECONCILES as well as upserts (v259): after projecting, it deletes the user's own rows that the blob no longer has, for `workout_sessions` (sets cascade), `cardio_logs`, `food_logs`, `sleep_logs`, `supplements` (logs cascade), `foods`, `plan_days` (its exercises cascade) and `cardio_types`.
+  - **`exercises` is deliberately NOT reconciled.** Deleting a row there cascades into `user_exercise_prefs`, which carries `custom_image_path` — the durable pointer to user-uploaded exercise photos, the field whose absence once made those images unrecoverable. A few ghost rows in an analytics-only mirror is the cheaper side of that trade.
+  - **Two id lists are DERIVED FROM THE NETWORK and their deletes are gated on the lookup having succeeded** (`catalogOk`, `cardioTypesOk`). Until v259 both catalog SELECTs discarded `error`, so a transient 5xx was indistinguishable from an empty catalog: every seed exercise unresolved, `sessions` came out empty, `blobLooksReal` stayed true on the user's food/sleep rows, the empty id list made the `.not('id','in',...)` filter vanish, and the delete degraded to **wiping that user's entire mirrored workout history**. Same chain for `cardio_types` -> `cardio_logs`. Verified by driving `projectAll` with a recording mock client.
+  - Still one-way and analytics-only: the app does not read these tables back.
 - `js/foodai.js` — AI calorie chat. Posts `{text}` to a **Cloudflare Worker** (`backend/worker/gemini-worker.js`) that holds the Gemini key server-side. The key never ships to the client.
 - `js/health.js` — Health Connect bridge (Capacitor, no-op on web).
 - `js/update.js` — native-shell update checker. No-op on web (web is always latest via the live URL). On the APK it compares the installed `versionCode` (via `@capacitor/app` `App.getInfo().build`) against `version.json` → `apk.build`; if a newer APK exists, shows the dismissible "download" banner linking to Drive. Best-effort, never blocks the app.
@@ -74,7 +77,7 @@ a faster TTFB — not fewer bytes.
 npm run release          # bump every marker + verify, then commit all files together
 ```
 
-**Current version: v258.** APK: build 18 / v2.7.
+**Current version: v259.** APK: build 18 / v2.7.
 
 `scripts/release.js` rewrites all **16** markers and then re-reads them from disk to confirm; it exits non-zero if any disagree. The markers are `?v=N` in `index.html` (×14 — every script and stylesheet, the `js/vendor/supabase.js` preload, and **both `icons/icon.svg` links**), the `__cleaned_vN` sessionStorage key, the `FALLBACK` literal in `app.js`, and `version.json` → `web`. The count is derived, not hard-coded, so adding a marker is safe — just keep this sentence honest.
 

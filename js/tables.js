@@ -99,12 +99,32 @@
       // --- resolve the shared exercise catalog: local name -> global id ------
       // Seed exercises have local ids that differ from the global catalog ids;
       // remap them by (lowercased) name. Custom exercises keep their own id.
+      //
+      // `error` USED TO BE DISCARDED HERE — only `data` was destructured — and
+      // that was a live data-loss path, not a tidiness problem. A failed query
+      // returns {data: null, error}, which is indistinguishable from an empty
+      // catalog once the error is thrown away. Empty catalog means every
+      // NON-CUSTOM exercise resolves to null at `exIdMap`, which means the
+      // sessions loop skips every one of them, which means `sessions` comes out
+      // EMPTY — while `blobLooksReal` stays true on the strength of the user's
+      // food and sleep rows. The reconcile at the bottom of this file then runs
+      // with an empty id list, skips its `.not('id','in',...)` filter, and
+      // degrades to "delete every workout_sessions row for this user" — sets
+      // cascading with them. One transient 5xx was enough.
+      //
+      // catalogOk is the gate. It is true only when the query SUCCEEDED and
+      // returned rows, and no session delete may run without it.
       const nameToGlobal = {};
+      let catalogOk = false;
       try {
-        const { data: cat } = await client
+        const { data: cat, error } = await client
           .from('exercises').select('id,name').is('owner_id', null);
-        (cat || []).forEach((r) => { if (r && r.name) nameToGlobal[String(r.name).toLowerCase()] = r.id; });
-      } catch (_) {}
+        if (error) summary['catalog:exercises'] = 'ERR: ' + error.message;
+        else if (cat && cat.length) {
+          catalogOk = true;
+          cat.forEach((r) => { if (r && r.name) nameToGlobal[String(r.name).toLowerCase()] = r.id; });
+        } else summary['catalog:exercises'] = 'empty';
+      } catch (e) { summary['catalog:exercises'] = 'ERR: ' + ((e && e.message) || String(e)); }
 
       const exList = Array.isArray(b.exercises) ? b.exercises : [];
       const exIdMap = {};                 // local exercise id -> server id (or null)
@@ -159,11 +179,25 @@
       });
 
       // --- valid cardio types (built-in globals + this user's customs) -------
+      //
+      // The SAME swallowed-error trap as the exercise catalog above, and worse
+      // here: the BUILT-IN cardio slugs exist ONLY in this query's result. The
+      // blob has no copy of them — storage.js keeps them in the CARDIO_TYPES
+      // const and STATE.cardioTypes holds customs only. So one failed SELECT
+      // unresolves essentially every cardio log for essentially every user, and
+      // `cardioLogs` comes out empty next to a `blobLooksReal` that is still
+      // true. cardioTypesOk gates the cardio delete on the query having actually
+      // worked.
       const validCardioTypes = new Set();
+      let cardioTypesOk = false;
       try {
-        const { data: ct } = await client.from('cardio_types').select('id');
-        (ct || []).forEach((r) => r && r.id && validCardioTypes.add(r.id));
-      } catch (_) {}
+        const { data: ct, error } = await client.from('cardio_types').select('id');
+        if (error) summary['catalog:cardio_types'] = 'ERR: ' + error.message;
+        else if (ct && ct.length) {
+          cardioTypesOk = true;
+          ct.forEach((r) => r && r.id && validCardioTypes.add(r.id));
+        } else summary['catalog:cardio_types'] = 'empty';
+      } catch (e) { summary['catalog:cardio_types'] = 'ERR: ' + ((e && e.message) || String(e)); }
       const customCardioTypes = (b.cardioTypes || [])
         .filter((t) => t && t.id)
         .map((t) => {
@@ -356,21 +390,56 @@
         sessions.length || cardioLogs.length || foodLogs.length ||
         sleepLogs.length || supplements.length
       );
-      const reconcile = async (table, ids) => {
+      //
+      // `opts.owner` and `opts.key` exist because the tables are NOT uniform:
+      // exercises/cardio_types are scoped by `owner_id` (global catalog rows
+      // carry NULL there, and NULL never equals a value, so those are excluded
+      // automatically), and plan_days has NO `id` column at all — its key is the
+      // composite (user_id, day_of_week). Reusing the id/user_id assumptions on
+      // either would have deleted nothing at best and the wrong rows at worst.
+      const reconcile = async (table, keys, opts) => {
+        const o = opts || {};
         if (!blobLooksReal) return;   // never mass-delete from an empty/unloaded blob
-        if (ids.length > 2000) return;
+        if (keys.length > 2000) return;
         try {
-          let q = client.from(table).delete().eq('user_id', userId);
-          if (ids.length) q = q.not('id', 'in', '(' + ids.join(',') + ')');
+          let q = client.from(table).delete().eq(o.owner || 'user_id', userId);
+          if (keys.length) q = q.not(o.key || 'id', 'in', '(' + keys.join(',') + ')');
           const { error } = await q;
           if (error) summary['reconcile:' + table] = 'ERR: ' + error.message;
         } catch (_) {}
       };
       if (!blobLooksReal) summary.reconcile = 'skipped (local blob has no user data)';
-      await reconcile('workout_sessions', sessions.map((s) => s.id)); // sets cascade
-      await reconcile('cardio_logs', cardioLogs.map((c) => c.id));
+
+      // GATED on the catalog queries above having actually SUCCEEDED. These two
+      // id lists are the only ones DERIVED FROM THE NETWORK: an exercise or a
+      // cardio type that could not be resolved silently drops its rows, so an
+      // empty list here can mean "the user deleted everything" OR "a lookup
+      // failed" — and the second reading, acted on, wipes real history.
+      if (catalogOk) await reconcile('workout_sessions', sessions.map((s) => s.id)); // sets cascade
+      else summary['reconcile:workout_sessions'] = 'skipped (exercise catalog unavailable)';
+      if (cardioTypesOk) await reconcile('cardio_logs', cardioLogs.map((c) => c.id));
+      else summary['reconcile:cardio_logs'] = 'skipped (cardio types unavailable)';
+
+      // Everything below derives from PURELY LOCAL blob data with no network
+      // lookup in the path, so an empty list is an honest "the user has none of
+      // these" rather than a failure wearing the same clothes.
       await reconcile('food_logs', foodLogs.map((f) => f.id));
       await reconcile('sleep_logs', sleepLogs.map((s) => s.id));
+      await reconcile('supplements', supplements.map((s) => s.id));       // logs cascade
+      await reconcile('foods', foods.map((f) => f.id));
+      await reconcile('plan_days', planDays.map((d) => d.day_of_week), { key: 'day_of_week' });
+      await reconcile('cardio_types', customCardioTypes.map((t) => t.id), { owner: 'owner_id' });
+
+      // `exercises` IS DELIBERATELY NOT RECONCILED, and this is a decision, not
+      // an omission. Deleting a row there CASCADES into user_exercise_prefs,
+      // which carries `custom_image_path` — the pointer to the durable copy of
+      // the user's own uploaded exercise photos. That is the field whose absence
+      // once made those images UNRECOVERABLE for the owner (see CLAUDE.md), and
+      // this is the same class of bug that did it: a momentarily incomplete blob
+      // widening a delete. The entire prize on the other side is a few ghost
+      // rows in an analytics-only mirror. Not a trade worth making.
+      // Its children (plan_day_exercises, user_exercise_prefs) are reachable by
+      // cascade from plan_days instead, which carries no image pointer.
 
       return { ok: true, userId, summary };
     } catch (e) {
