@@ -12,7 +12,7 @@
 // build. The literal below is the fallback (file://, or a stripped query) and is
 // still bumped by `npm run release` — see CLAUDE.md "CACHE WORKFLOW".
 const VAULT_BUILD = (() => {
-  const FALLBACK = 'v259';
+  const FALLBACK = 'v260';
   try {
     const src = (document.currentScript && document.currentScript.src) || '';
     const m = src.match(/[?&]v=(\d+)/);
@@ -666,6 +666,12 @@ const I18N = {
     protein_g: 'Protein (g)', carbs_g: 'Carbs (g)',
     cal: 'cal', protein_label: 'protein', carbs_label: 'carbs', fat_label: 'fat',
     ai_chat_title: 'Calorie Chat', ai_chat_sub: 'Tell me what you ate — I log the calories',
+    // Pasting a nutrition table: the figures are already there, so they are
+    // USED, not re-estimated. See parseMacroText in js/foodai.js.
+    ai_pasted_meal: 'Meal',
+    ai_used_your_numbers: 'Used your numbers — nothing was estimated.',
+    ai_untracked: '{fields} are not tracked by the app, so they were not saved.',
+    ai_nut_cholesterol: 'Cholesterol', ai_nut_sodium: 'Sodium',
     ai_chat_placeholder: 'e.g. breakfast: eggs & bread, lunch: a burger',
     ai_add_all: 'Add all',
     ai_need_key: 'A free Google Gemini API key is needed (one-time).',
@@ -1418,6 +1424,10 @@ const I18N = {
     protein_g: 'بروتين (جم)', carbs_g: 'كارب (جم)',
     cal: 'سعرة', protein_label: 'بروتين', carbs_label: 'كارب', fat_label: 'دهون',
     ai_chat_title: 'شات السعرات', ai_chat_sub: 'أخبرني بما تناولت — وأنا أسجّل السعرات',
+    ai_pasted_meal: 'وجبة',
+    ai_used_your_numbers: 'استُخدمت أرقامك كما هي — لم يُقدَّر شيء.',
+    ai_untracked: '{fields} لا يتتبّعها التطبيق، فلم تُحفظ.',
+    ai_nut_cholesterol: 'الكوليسترول', ai_nut_sodium: 'الصوديوم',
     ai_chat_placeholder: 'مثلاً: الفطور بيض وخبز، والغدا برجر',
     ai_add_all: 'أضف الكل',
     ai_need_key: 'يلزم مفتاح Google Gemini مجاني (لمرة واحدة).',

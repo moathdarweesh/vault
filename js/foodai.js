@@ -116,10 +116,17 @@
   }
 
   // Clean one food item.
-  function normalizeItem(d) {
+  function normalizeItem(d, keepDecimals) {
     // Clamp to a sane range (calories ≤ 10000, macros ≤ 2000) so a bad/injected
     // value can't corrupt the user's totals.
-    const clamp = (v, max) => Math.min(max, Math.max(0, Math.round(Number(v) || 0)));
+    //
+    // keepDecimals is for figures the USER supplied verbatim (a pasted label).
+    // Rounding an estimate is honest — the model's "35.5" was never precise. But
+    // rounding a number someone copied off a package to 36 quietly contradicts
+    // the one thing this path promises, which is that their figures are used as
+    // written. One decimal, because that is the precision labels actually carry.
+    const round = keepDecimals ? ((n) => Math.round(n * 10) / 10) : Math.round;
+    const clamp = (v, max) => Math.min(max, Math.max(0, round(Number(v) || 0)));
     const calories = clamp(d && d.calories, 10000);
     const protein = clamp(d && d.protein, 2000);
     const carbs = clamp(d && d.carbs, 2000);
@@ -137,12 +144,100 @@
     let raw = [];
     if (Array.isArray(data.items)) raw = data.items;
     else if (data && (data.name !== undefined || data.calories !== undefined)) raw = [data];
-    return { items: raw.map(normalizeItem).filter(isRealFood) };
+    // `(d) => normalizeItem(d)`, NOT `.map(normalizeItem)`. map passes the INDEX
+    // as the second argument, which normalizeItem now reads as `keepDecimals` —
+    // so a bare reference would round item 0 and keep decimals on every item
+    // after it. A model estimate is never precise enough to deserve a decimal.
+    return { items: raw.map((d) => normalizeItem(d)).filter(isRealFood) };
   }
 
-  // Public entry — checks the cache first so the SAME text always returns the
-  // SAME macros, then falls back to the model and caches the result.
+  // ==========================================================================
+  // PASTED NUTRITION LABELS — read the numbers, do not re-guess them.
+  //
+  // When the text ALREADY carries the figures (a copied nutrition table, a label
+  // photographed and OCR'd elsewhere, a reply from another app), sending it to
+  // the model is worse than useless: it costs a round trip, it can come back
+  // with DIFFERENT numbers than the ones on the page, and it needs a network.
+  // The user asked for exactly this — "let me write the calories and it just
+  // computes them" — so an explicit figure wins over an estimate, always.
+  //
+  // Handles the shape a real paste actually has: markdown table pipes, the "~"
+  // approximation sign, colons, newlines, Arabic and English labels, Arabic-Indic
+  // digits, and units written as جم / غ / g / mg / ملغ.
+  //
+  // NOTE ON CHOLESTEROL AND SODIUM: they are parsed only so they can be REPORTED
+  // as untracked. DB.foodLogs stores six fields — name, servings, calories,
+  // protein, carbs, fat — and nothing else. Silently swallowing two numbers the
+  // user deliberately typed would be worse than saying so.
+  // ==========================================================================
+  const AR_DIGITS = /[٠-٩۰-۹]/g;
+  function westernDigits(s) {
+    return String(s).replace(AR_DIGITS, (d) => {
+      const c = d.charCodeAt(0);
+      return String(c >= 0x06F0 ? c - 0x06F0 : c - 0x0660);
+    });
+  }
+
+  // Longest-first so "كربوهيدرات" cannot be shadowed by a shorter alias, and so
+  // "سعرات حرارية" matches before "سعرات".
+  const MACRO_LABELS = [
+    ['calories', ['سعرات حرارية', 'سعرة حرارية', 'السعرات', 'سعرات', 'سعره', 'سعرة', 'طاقة', 'calories', 'calorie', 'energy', 'kcal', 'cal']],
+    ['protein',  ['البروتين', 'بروتين', 'protein', 'prot']],
+    // "carbs" before "carb"; Arabic spellings vary in the ه/ة and the ي.
+    ['carbs',    ['الكربوهيدرات', 'كربوهيدرات', 'كاربوهيدرات', 'نشويات', 'carbohydrates', 'carbohydrate', 'carbs', 'carb']],
+    ['fat',      ['الدهون', 'دهون', 'دهن', 'الدهنيات', 'fats', 'fat']],
+    // Parsed to be reported, never stored.
+    ['cholesterol', ['كوليسترول', 'كولسترول', 'cholesterol']],
+    ['sodium',      ['الصوديوم', 'صوديوم', 'ملح', 'sodium', 'salt']],
+  ];
+
+  function parseMacroText(raw) {
+    if (!raw) return null;
+    const text = westernDigits(raw).toLowerCase();
+    const found = {};
+    MACRO_LABELS.forEach(([key, aliases]) => {
+      if (found[key] !== undefined) return;
+      for (const alias of aliases) {
+        // label, then anything that is not a digit or a minus (pipes, colons,
+        // "~", "≈", spaces, dashes), then the number. Capped so a label cannot
+        // reach across a whole table and steal the NEXT row's figure.
+        const re = new RegExp(alias.toLowerCase().replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '[^0-9\\-\\n]{0,12}([0-9]+(?:[.,][0-9]+)?)');
+        const m = text.match(re);
+        if (m) { found[key] = parseFloat(m[1].replace(',', '.')); break; }
+      }
+    });
+    // Calories are the signal. Without an explicit calorie figure this is a
+    // description ("two eggs and toast"), which is the model's job, not ours.
+    if (!(found.calories > 0)) return null;
+
+    // A name, if the paste carried one: the first line that holds no digits and
+    // no macro label. Otherwise a neutral label rather than a wrong guess.
+    let name = '';
+    westernDigits(raw).split('\n').some((line) => {
+      const clean = line.replace(/[|*#>_`~-]/g, ' ').trim();
+      if (!clean || /[0-9]/.test(clean)) return false;
+      if (MACRO_LABELS.some(([, al]) => al.some((a) => clean.toLowerCase().includes(a.toLowerCase())))) return false;
+      name = clean.slice(0, 80);
+      return true;
+    });
+
+    const item = normalizeItem({
+      name: name || tr('ai_pasted_meal'),
+      calories: found.calories,
+      protein: found.protein,
+      carbs: found.carbs,
+      fat: found.fat,
+    }, true);   // the user's own figures — do not round them away
+    // Whatever the app cannot store, named so the caller can say so out loud.
+    const untracked = ['cholesterol', 'sodium'].filter((k) => found[k] > 0);
+    return { items: [item], parsed: 'local', untracked };
+  }
+
+  // Public entry — an explicit figure in the text wins, then the cache (so the
+  // SAME text always returns the SAME macros), then the model.
   async function analyze(text) {
+    const local = parseMacroText(text);
+    if (local) return local;
     const cached = cacheGet(text);
     if (cached) return { items: cached };
     const result = await analyzeUncached(text);
@@ -344,7 +439,7 @@
         });
       }
       // Render the cards (or a decline) for one query — shared by text + photo.
-      const showResult = (id, qHtml, items, box) => {
+      const showResult = (id, qHtml, items, box, meta) => {
         const p = document.getElementById(id + '-p');
         if (!items.length) {
           if (p) p.innerHTML = qHtml + `<span class="ai-decline">${tr('ai_not_food')}</span>`;
@@ -356,7 +451,21 @@
           const addAll = items.length > 1
             ? `<button class="btn btn-ghost btn-block ai-add-all" data-addall="${id}">${ic('plus', 15)} ${tr('ai_add_all')} (${fmtNum(items.length)})</button>`
             : '';
-          if (p) p.outerHTML = `<div class="ai-pending">${qHtml}</div>` + cards + addAll;
+          // Two notes, and only when they are true. The first says the figures
+          // are the user's OWN — nothing was estimated, so the numbers on the
+          // card are the numbers they typed. The second names anything the app
+          // cannot store, because quietly dropping a value someone deliberately
+          // entered is the kind of small lie that costs trust.
+          let note = '';
+          if (meta && meta.parsed === 'local') {
+            note += `<div class="ai-note">${ic('check', 14)} ${tr('ai_used_your_numbers')}</div>`;
+            if (meta.untracked && meta.untracked.length) {
+              const names = meta.untracked.map((k) => tr('ai_nut_' + k));
+              note += `<div class="ai-note ai-note-warn">${ic('info', 14)} ${esc(
+                tr('ai_untracked').replace('{fields}', joinNames ? joinNames(names) : names.join(', ')))}</div>`;
+            }
+          }
+          if (p) p.outerHTML = `<div class="ai-pending">${qHtml}</div>` + note + cards + addAll;
           bindAdds();
         }
         box.scrollTop = box.scrollHeight;
@@ -376,8 +485,8 @@
           box.insertAdjacentHTML('beforeend', `<div class="ai-pending" id="${id}-p">${qHtml}<span class="ai-dots">${tr('ai_analyzing')}</span></div>`);
           box.scrollTop = box.scrollHeight;
           try {
-            const { items } = await window.FoodAI.analyze(text);
-            showResult(id, qHtml, items, box);
+            const res = await window.FoodAI.analyze(text);
+            showResult(id, qHtml, res.items, box, res);
           } catch (e) {
             const p = document.getElementById(id + '-p');
             if (p) p.innerHTML = qHtml + `<span class="ai-err">${esc(friendlyErr(e))}</span>`;
