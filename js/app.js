@@ -12,7 +12,7 @@
 // build. The literal below is the fallback (file://, or a stripped query) and is
 // still bumped by `npm run release` — see CLAUDE.md "CACHE WORKFLOW".
 const VAULT_BUILD = (() => {
-  const FALLBACK = 'v265';
+  const FALLBACK = 'v266';
   try {
     const src = (document.currentScript && document.currentScript.src) || '';
     const m = src.match(/[?&]v=(\d+)/);
@@ -708,6 +708,8 @@ const I18N = {
     delete_account_sub: 'Permanently erase your account and all data',
     delete_account_confirm: 'This permanently deletes your account and ALL your data — workouts, nutrition, health, images — from every device and the cloud. This cannot be undone.',
     deleting_account: 'Deleting your account…',
+    delete_images_inspect_error: 'Could not inspect your stored images — nothing was deleted. Please try again.',
+    delete_images_cleanup_error: 'Your account was deleted, but stored images could not be removed. Please try again.',
     privacy_policy: 'Privacy Policy & Terms',
     privacy_policy_sub: 'How your data is used',
     about_title: 'About',
@@ -1456,6 +1458,8 @@ const I18N = {
     delete_account_sub: 'محو حسابك وكل بياناتك نهائياً',
     delete_account_confirm: 'سيُحذف حسابك وكل بياناتك نهائياً — التمارين والتغذية والصحة والصور — من كل الأجهزة والسحابة. لا يمكن التراجع.',
     deleting_account: 'جارٍ حذف حسابك…',
+    delete_images_inspect_error: 'تعذّر فحص صورك المخزّنة — لم يُحذف أي شيء. حاول مجدداً.',
+    delete_images_cleanup_error: 'حُذف حسابك، لكن تعذّر حذف الصور المخزّنة. حاول مجدداً.',
     privacy_policy: 'سياسة الخصوصية والشروط',
     privacy_policy_sub: 'كيف تُستخدم بياناتك',
     about_title: 'حول التطبيق',
@@ -5086,7 +5090,8 @@ function openNewExerciseModal(exerciseId = null, opts = {}) {
 
   function previewHtml() {
     if (pickedImage) {
-      return `<img src="${pickedImage}" alt="">`;
+      const src = exerciseImgSrc({ customImage: pickedImage });
+      if (src) return `<img src="${escapeHtml(src)}" alt="">`;
     }
     return icon('apple', 22);
   }
@@ -10836,7 +10841,7 @@ async function populateAccount(el) {
           try {
             await Cloud.deleteAccount();
             location.reload();   // fresh, empty state → auth gate
-          } catch (e) { showToast((e && e.message) || t('ai_error')); }
+          } catch (e) { showToast(e && e.message ? t(e.message, e.message) : t('ai_error')); }
         },
       });
     });

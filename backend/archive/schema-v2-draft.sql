@@ -1,3 +1,9 @@
+do $archive_guard$
+begin
+  raise exception 'ARCHIVED DRAFT: do not execute any part of schema-v2-draft.sql';
+end
+$archive_guard$;
+
 -- ============================================================================
 -- THE VAULT — schema v2 DRAFT (normalized, multi-user + social)
 -- ============================================================================
@@ -400,6 +406,14 @@ create trigger trg_healthprefs_touch before update on public.health_prefs
 -- ============================================================================
 -- 9. SOCIAL  (friends, coaching)
 -- ============================================================================
+do $archive_social_guard$
+begin
+  -- This second tripwire covers the plausible partial paste that starts at the
+  -- deferred social section and therefore never sees the file-level guard.
+  raise exception 'ARCHIVED DRAFT: build social tables in a new RLS-complete migration';
+end
+$archive_social_guard$;
+
 -- Friend request / friendship. One row per pair, direction preserved so the
 -- addressee can accept/decline. status: pending -> accepted (or blocked).
 -- RLS intent:

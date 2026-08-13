@@ -5,6 +5,11 @@
 
 const STORAGE_KEY = 'gym_tracker_v1';
 const SCHEMA_VERSION = 1;
+const ENTITY_ID_RE = /^[A-Za-z0-9_-]{1,64}$/;
+
+function entityIdSafe(value) {
+  return typeof value === 'string' && ENTITY_ID_RE.test(value);
+}
 
 // Image slugs reference the free-exercise-db on GitHub.
 // URL pattern: https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/{slug}/0.jpg
@@ -1309,9 +1314,11 @@ const DB = {
   // an id like `"><img onerror=...>` from a hand-crafted import/backup would be an
   // attribute-breakout XSS. App-generated ids are always [A-Za-z0-9_-]; anything
   // else can only come from a tampered file, so we refuse the whole import.
+  _idSafe(value) {
+    return entityIdSafe(value);
+  },
   _idsSafe(data) {
-    const ID = /^[A-Za-z0-9_-]{1,64}$/;
-    const ok = (v) => v == null || (typeof v === 'string' && ID.test(v));
+    const ok = (v) => v == null || this._idSafe(v);
     const listOk = (arr, keys) => !Array.isArray(arr) || arr.every((r) => !r || keys.every((k) => ok(r[k])));
     if (!listOk(data.exercises, ['id'])) return false;
     if (!listOk(data.sessions, ['id', 'exerciseId'])) return false;

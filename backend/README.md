@@ -55,7 +55,9 @@ file on a database that already has it is safe.
 
 ## 2) Not yet applied — `pending/`
 
-**Empty.** Everything written has been applied: 11–14 on 2026-08-05, 15 on 2026-08-13.
+| # | File | What it establishes |
+|---|---|---|
+| 16 | `security-audit-repairs-v12.sql` | Repairs the confirmed-live account-erasure FK failure; re-pins the three weakly pinned definer functions; downgrades/revokes the client-error trigger surface; bans client-error inserts; and drops `migration_v2` on fresh/re-run paths. **NOT APPLIED — review and run the file's pre-flight first.** |
 
 ## 3) State unknown — `unverified/`
 

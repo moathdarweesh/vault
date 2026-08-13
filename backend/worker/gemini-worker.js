@@ -163,12 +163,18 @@ const SUPABASE_ANON = 'sb_publishable_ZBR2VENMP2O_K2YTMePCsw_NfLC9FSI';
 //   - 429 (auth endpoint throttled)  → allow. This is NOT a statement about the
 //     token: Supabase is rate-limiting us, and treating it as "invalid" would
 //     lock a legitimate signed-in user out of AI during a traffic spike. Rate
-//     limited by token below, so it cannot be used as a bypass.
+//     limited by Cloudflare's caller IP below, not by an unverified token.
 //   - 5xx or a network error         → allow. This is the case the fail-open was
 //     written for: a genuine Supabase outage must not take AI down for real users.
 //
 // Returns { allowed, userId } — the id is what the rate limiter below keys on, so
 // one authenticated account cannot drain the shared Gemini quota for everyone.
+function outageRateKey(request) {
+  // Cloudflare supplies/overwrites this header at the edge. Unlike bearer-token
+  // suffixes, a caller cannot mint a fresh bucket by changing request text.
+  return 'outage-ip:' + (request.headers.get('CF-Connecting-IP') || 'unknown');
+}
+
 async function callerAllowed(request) {
   const auth = request.headers.get('Authorization') || '';
   const token = auth.startsWith('Bearer ') ? auth.slice(7).trim() : '';
@@ -187,19 +193,20 @@ async function callerAllowed(request) {
       try { const u = await r.json(); userId = (u && u.id) || null; } catch (_) {}
       return { allowed: true, userId };
     }
-    // 5xx → Supabase is unwell, not the caller. Allow, but rate limit by token so
-    // an outage window still cannot be used as an unlimited relay.
-    return { allowed: true, userId: 'tok:' + token.slice(-24) };
+    // 429/5xx → Supabase is unwell, not the caller. Keep the availability
+    // tradeoff, but share one bucket per edge-observed IP so rotating arbitrary
+    // bearer junk cannot turn the outage into an unlimited Gemini relay.
+    return { allowed: true, userId: outageRateKey(request) };
   } catch (_) {
-    return { allowed: true, userId: 'tok:' + token.slice(-24) };  // unreachable → allow
+    return { allowed: true, userId: outageRateKey(request) };  // unreachable → capped allow
   }
 }
 
 // Per-caller rate limit. Best-effort and dependency-free: the counter lives in the
-// Worker isolate, so it is per-PoP and resets on cold start — it will not stop a
-// determined distributed attacker, but it does stop the realistic case (one
-// account, scripted, looping) from draining the shared Gemini quota, and it costs
-// nothing and needs no KV binding or extra service.
+// Worker isolate, so every isolate/PoP has a separate bucket and a cold start
+// resets it. It will not stop a distributed or multi-PoP attacker from spending
+// the shared Gemini key; durable global enforcement needs KV/Durable Objects or
+// another shared store. It does cap the realistic one-caller loop at no extra cost.
 const RATE_MAX = 30;              // requests per window per caller
 const RATE_WINDOW_MS = 60 * 1000; // 1 minute
 const rateBuckets = new Map();

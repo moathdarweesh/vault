@@ -782,43 +782,63 @@
     } catch (_) {}
   }
 
-  // GDPR / Play right-to-erasure. Sweeps the user's Storage objects (no DB
-  // cascade covers the bucket), then the delete_own_account() RPC removes the
-  // auth user + every row keyed to their uid (cascades), then we sign out and
-  // wipe local. Throws on any hard failure so the UI can report it.
+  // GDPR / Play right-to-erasure. Inventory Storage while the account is known
+  // live, delete the account, then sweep the inventoried objects with the JWT
+  // already in memory. The old sweep-first order destroyed photos before an RPC
+  // failure left the account alive — an unrecoverable half-delete. Throws on any
+  // hard failure so the UI can report it.
   async function deleteAccount() {
     const c = sb();
     if (!c) throw new Error('offline');
     const s = await getSession();
     const uid = s && s.user && s.user.id;
     if (!uid) throw new Error('not signed in');
-    // 1) Sweep the user's own image objects (owner RLS).
+    // 1) Inventory the user's image objects (owner RLS), but do not delete yet.
     //
-    // NOT best-effort any more. Storage objects are NOT covered by the account
-    // cascade, so swallowing a failure here deletes the account while leaving the
-    // user's photos sitting in the bucket — with the row that pointed at them
-    // gone, nothing will ever clean them up, and the user was told their data was
-    // erased. We retry once, then ABORT: the account still exists at this point,
-    // so aborting is recoverable (the user simply tries again) whereas proceeding
-    // is not.
-    let sweepErr = null;
+    // A failed list must abort before the RPC: deleting an account without knowing
+    // which non-cascading objects it owns would strand images with no cleanup path.
+    let imagePaths = null;
+    let listErr = null;
     for (let attempt = 0; attempt < 2; attempt++) {
       try {
-        const { data: files, error: listErr } = await c.storage.from(IMAGE_BUCKET).list(uid, { limit: 1000 });
-        if (listErr) throw new Error(listErr.message);
-        if (files && files.length) {
-          const { error: rmErr } = await c.storage.from(IMAGE_BUCKET).remove(files.map((f) => uid + '/' + f.name));
-          if (rmErr) throw new Error(rmErr.message);
+        const found = [];
+        for (let offset = 0; ; offset += 1000) {
+          const { data: files, error } = await c.storage.from(IMAGE_BUCKET).list(uid, { limit: 1000, offset });
+          if (error) throw new Error(error.message);
+          (files || []).forEach((f) => found.push(uid + '/' + f.name));
+          if (!files || files.length < 1000) break;
         }
-        sweepErr = null;
+        imagePaths = found;
+        listErr = null;
         break;
-      } catch (e) { sweepErr = e; }
+      } catch (e) { listErr = e; }
     }
-    if (sweepErr) throw new Error('could not remove your stored images — nothing was deleted, please try again');
-    // 2) Delete the account + all data (cascades) via the definer RPC.
+    if (listErr || !imagePaths) throw new Error('delete_images_inspect_error');
+    // 2) Delete the account + database data via the definer RPC. This must
+    // happen before the irreversible Storage sweep below.
     const { error } = await c.rpc('delete_own_account');
     if (error) throw new Error(error.message || 'delete failed');
-    // 3) End the session + clear the device.
+    // 3) The signed JWT remains usable by Storage RLS for this request even
+    // though its auth.users row is gone. A failure here can leave orphaned
+    // objects, but it can no longer leave destroyed images on a live account.
+    let sweepErr = null;
+    if (imagePaths.length) {
+      const pending = imagePaths.slice();
+      for (let attempt = 0; attempt < 2; attempt++) {
+        try {
+          while (pending.length) {
+            const batch = pending.slice(0, 1000);
+            const { error: rmErr } = await c.storage.from(IMAGE_BUCKET).remove(batch);
+            if (rmErr) throw new Error(rmErr.message);
+            pending.splice(0, batch.length);
+          }
+          sweepErr = null;
+          break;
+        } catch (e) { sweepErr = e; }
+      }
+    }
+    if (sweepErr) throw new Error('delete_images_cleanup_error');
+    // 4) End the session + clear the device.
     try { await c.auth.signOut(); } catch (_) {}
     clearLocalUserData();
   }

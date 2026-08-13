@@ -401,9 +401,25 @@
         const o = opts || {};
         if (!blobLooksReal) return;   // never mass-delete from an empty/unloaded blob
         if (keys.length > 2000) return;
+        // PostgREST's `in` value is a filter-language string, not a bound array.
+        // Most ids above have already gone through toUuid(), but cardio type ids
+        // come straight from the blob. Reuse the import/cloud charset gate before
+        // joining them so a future caller cannot smuggle filter syntax here. The
+        // numeric plan-day key is the one intentional non-id list.
+        const safeKeys = o.key === 'day_of_week'
+          ? keys.filter((key) => Number.isInteger(key) && key >= 0 && key <= 6)
+          : keys.filter((key) => DB._idSafe && DB._idSafe(key));
+        if (safeKeys.length !== keys.length) {
+          // 'ERR: ' prefix on purpose — the boot fingerprint treats only an
+          // ERR-prefixed summary value as "this run was partial, do not record
+          // it as fully mirrored". A skip IS partial, so without the prefix the
+          // run would be banked as clean and never retried.
+          summary['reconcile:' + table] = 'ERR: skipped (unsafe local key)';
+          return;   // filtering must never widen this into an own-row mass delete
+        }
         try {
           let q = client.from(table).delete().eq(o.owner || 'user_id', userId);
-          if (keys.length) q = q.not(o.key || 'id', 'in', '(' + keys.join(',') + ')');
+          if (safeKeys.length) q = q.not(o.key || 'id', 'in', '(' + safeKeys.join(',') + ')');
           const { error } = await q;
           if (error) summary['reconcile:' + table] = 'ERR: ' + error.message;
         } catch (_) {}
