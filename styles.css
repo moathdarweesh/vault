@@ -4407,19 +4407,40 @@ body[dir="rtl"] .picker-row { text-align: right; }
 .macro-track-head { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 5px; }
 .macro-track-name { font-size: 13px; font-weight: 800; }
 .macro-track-name.pro { color: var(--accent-text); }
-.macro-track-name.carb, .macro-track-name.fat { color: var(--text-mute); }
+/* The label carries its bar's hue, so the pairing is learnable without reading
+   the numbers. These are TEXT, so they are held to 4.5:1 against the card (not
+   the 3:1 the bars need): dark 6.48 / 8.68 / 8.16, light 6.07 / 5.80 / 6.21. */
+.macro-track-name.carb { color: var(--water); }
+.macro-track-name.fat  { color: var(--green); }
 .macro-track-nums { font-size: 12px; color: var(--text-dim); font-weight: 600; }
 .macro-track-bar { height: 8px; border-radius: 999px; background: var(--surface-3); overflow: hidden; }
 .macro-track-fill { display: block; height: 100%; border-radius: 999px; transition: width 0.6s cubic-bezier(0.22, 1, 0.36, 1); }
-/* APPLY-vault.md §4 (nutrition): protein orange, the other two grey. These were
-   --cat-chest / --cat-legs / --cat-shoulders — the MUSCLE HEATMAP palette,
-   borrowed for macros, so three unrelated hues implied the three were equally
-   important and none of them meant anything here. Protein is the one macro this
-   app actually asks you to hit, so it is the one that gets the accent; carbs and
-   fat are context and recede. */
-.macro-track-fill.pro { background: var(--accent); }
-.macro-track-fill.carb { background: var(--text-dim); }
-.macro-track-fill.fat { background: var(--surface-3); }
+/* THREE DISTINCT HUES — owner's decision (v267), reversing the note below.
+   Keep them. The earlier rule was "protein orange, the other two grey", on the
+   argument that only protein is a target you must hit. In practice that made the
+   bars unreadable at a glance: you could not tell how far along carbs or fat
+   were without reading the numbers, and the fat bar was invisible outright (it
+   was painted --surface-3, the exact colour of its own empty track, 1.00:1 in
+   BOTH themes at any width).
+
+   The trio was chosen by measurement, not taste: CIE76 deltaE between every pair,
+   worst pair wins. orange/blue/green scores 91.7 — orange/blue/amber only 50.8,
+   because --warn sits ~20 degrees of hue from --accent and reads as the same
+   colour in an 8px bar. Every one of the three clears 3:1 against the track in
+   both themes (dark 5.91 / 7.92 / 7.45, light 4.91 / 4.70 / 5.03), and all three
+   tokens are theme-aware pairs, so no per-theme override is needed.
+
+   Superseded note, kept so the reasoning is not lost: these were once
+   --cat-chest / --cat-legs / --cat-shoulders, the MUSCLE HEATMAP palette
+   borrowed for macros — that was wrong because it reused meaning from another
+   screen, which is a different objection from the one that produced the greys. */
+/* --accent-text, not --accent: the two are the SAME orange in dark mode, but in
+   light mode raw --accent measures 2.27:1 on this track — below the 3:1 floor a
+   solid indicator needs — while --accent-text is the theme-aware pair the label
+   above already uses, at 4.91:1. One token, both themes, no theme override. */
+.macro-track-fill.pro { background: var(--accent-text); }
+.macro-track-fill.carb { background: var(--water); }
+.macro-track-fill.fat { background: var(--green); }
 /* (the label rules live with the other .macro-track-name rules above) */
 .macro-track-left { font-size: 11px; color: var(--text-mute); margin-top: 4px; font-weight: 600; }
 .macro-track-left .over { color: var(--danger, #ef4444); }
