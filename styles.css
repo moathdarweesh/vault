@@ -5405,8 +5405,7 @@ body[dir="rtl"] .bento-card.wide .bento-added-stripe { left: 14px; }
    control in the first-run flow. The app used to ASK, twice: its own pre-login
    language gate, then onboarding's step 0 seconds later. Now the language is
    guessed from the phone's locale and this quietly corrects it.
-   Mirrors .auth-seg's shape (same card, same radii) rather than inventing a
-   second segmented style. Labels stay in their own script in both languages. */
+   Labels stay in their own script in both languages. */
 .auth-lang {
   align-self: flex-end;        /* trailing corner: right in LTR, left in RTL */
   display: flex;

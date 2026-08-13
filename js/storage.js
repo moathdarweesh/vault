@@ -368,6 +368,10 @@ function detectLang() {
   } catch (_) { return 'en'; }
 }
 
+// A factory, not one shared object: restDates/extraDates are mutated in place,
+// so sharing their arrays would let one plan contaminate every later reset.
+const RESET_PLAN_TAIL = () => ({ restDates: [], extraDates: [], restPromptAt: null });
+
 
 function defaultState() {
   return {
@@ -409,7 +413,7 @@ function defaultState() {
     sleep: [],
     // Workout plan — a CONTINUOUS ROTATION: an ordered cycle of workouts rolled
     // across training days (never reset weekly). See migratePlan()/DB.plan.
-    plan: { mode: 'rotation', cycle: [], trainingDays: [], anchor: null, restDates: [], extraDates: [], restPromptAt: null },
+    plan: { mode: 'rotation', cycle: [], trainingDays: [], anchor: null, ...RESET_PLAN_TAIL() },
     supplements: [],
     // Reminder settings. Times are LOCAL "HH:MM" strings, never timestamps: a
     // reminder means "08:00 wherever you are", so it must survive a timezone
@@ -528,7 +532,7 @@ function migratePlan(plan) {
       if (!seen[key]) { seen[key] = true; cycle.push({ name: nm, exerciseIds: day.exerciseIds.slice() }); }
     }
   }
-  return { mode: 'rotation', cycle, trainingDays, anchor: todayISO(), restDates: [], extraDates: [], restPromptAt: null };
+  return { mode: 'rotation', cycle, trainingDays, anchor: todayISO(), ...RESET_PLAN_TAIL() };
 }
 
 // Set when the stored blob could not be parsed. While true the app runs
@@ -806,7 +810,7 @@ const DB = {
   // The workout for a date = cycle[(training days elapsed since anchor) mod cycle.length];
   // rest days (weekday ∉ trainingDays) have no workout. The cycle rolls across weeks — never reset.
   plan: {
-    get() { return STATE.plan || { mode: 'rotation', cycle: [], trainingDays: [], anchor: null, restDates: [], extraDates: [], restPromptAt: null }; },
+    get() { return STATE.plan || { mode: 'rotation', cycle: [], trainingDays: [], anchor: null, ...RESET_PLAN_TAIL() }; },
 
     // THE single source of truth: what workout (or null=rest) falls on date D.
     workoutForDate(D) {
@@ -978,7 +982,7 @@ const DB = {
       if (s) { s.exerciseIds = s.exerciseIds.filter((id) => id !== exId); save(); }
     },
     clearAll() {
-      STATE.plan = { mode: 'rotation', cycle: [], trainingDays: [], anchor: todayISO(), restDates: [], extraDates: [], restPromptAt: null };
+      STATE.plan = { mode: 'rotation', cycle: [], trainingDays: [], anchor: todayISO(), ...RESET_PLAN_TAIL() };
       save();
     },
   },
@@ -1516,8 +1520,8 @@ const DB = {
       save();
     },
     // Best stats across all sessions of an exercise
-    bestStats(exerciseId) {
-      const list = this.listByExercise(exerciseId);
+    bestStats(exerciseId, sessions) {
+      const list = sessions || this.listByExercise(exerciseId);
       let maxWeight = 0;
       let maxReps = 0;
       let maxVolume = 0;
@@ -1537,9 +1541,9 @@ const DB = {
     // Returns the best Epley 1RM (kg) across all sets of all sessions for an
     // exercise. Must scan raw per-set values because maxWeight and maxReps in
     // bestStats() can come from DIFFERENT sets, making the naive product wrong.
-    bestOneRM(exerciseId) {
+    bestOneRM(exerciseId, sessions) {
       let best = 0;
-      this.listByExercise(exerciseId).forEach((s) => {
+      (sessions || this.listByExercise(exerciseId)).forEach((s) => {
         (s.sets || []).forEach((set) => {
           if (set.reps > 0 && set.weight > 0) {
             const orm = set.weight * (1 + set.reps / 30);
@@ -1575,8 +1579,9 @@ const DB = {
     // times the cost of this single grouping pass on a real-sized log, on the
     // three screens that do exactly that: Program's top records, Personal
     // Records, and the exercise grid (which rebuilds on every filter tap and
-    // every keystroke). The per-exercise functions stay as they are for the
-    // single-exercise callers — the save paths — where one scan beats a map.
+    // every keystroke). The per-exercise functions keep their fetch fallback
+    // for single-exercise callers, while a caller already holding that exercise's
+    // sessions can pass the array and avoid paying for the same filter again.
     statsByExercise() {
       const idx = Object.create(null);
       STATE.sessions.forEach((s) => {

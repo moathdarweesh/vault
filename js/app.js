@@ -12,7 +12,7 @@
 // build. The literal below is the fallback (file://, or a stripped query) and is
 // still bumped by `npm run release` — see CLAUDE.md "CACHE WORKFLOW".
 const VAULT_BUILD = (() => {
-  const FALLBACK = 'v264';
+  const FALLBACK = 'v265';
   try {
     const src = (document.currentScript && document.currentScript.src) || '';
     const m = src.match(/[?&]v=(\d+)/);
@@ -455,6 +455,7 @@ const I18N = {
     max_weight: 'Max Weight', max_reps: 'Max Reps', sessions_n: 'Sets',
     exercise: 'exercise', exercises: 'exercises',
     history: 'History',
+    show_more: 'Show more',
     no_sessions: 'No sets yet',
     total_sets: 'Total Sets',
     pr: 'PR',
@@ -1203,6 +1204,7 @@ const I18N = {
     max_weight: 'أقصى وزن', max_reps: 'أقصى تكرار', sessions_n: 'المجموعات',
     exercise: 'تمرين', exercises: 'تمارين',
     history: 'السجل',
+    show_more: 'عرض المزيد',
     no_sessions: 'لا توجد مجموعات',
     total_sets: 'مجموع المجموعات',
     pr: 'رقم قياسي',
@@ -1981,6 +1983,13 @@ function setUiLanguage(lang) {
 // ==========================================================================
 function $(sel, root = document) { return root.querySelector(sel); }
 function $$(sel, root = document) { return Array.from(root.querySelectorAll(sel)); }
+function debounce(fn, ms) {
+  let timer = null;
+  return (...args) => {
+    clearTimeout(timer);
+    timer = setTimeout(() => fn(...args), ms);
+  };
+}
 
 function escapeHtml(str) {
   if (str == null) return '';
@@ -4702,11 +4711,10 @@ function renderExercises(el) {
   });
 
   // Debounced search → grid-only update (was a full view re-render per keystroke)
-  let searchTimer = null;
+  const updateWorkoutSearch = debounce(updateWorkoutGrid, 150);
   $('#workout-search', el)?.addEventListener('input', (e) => {
     viewContext.workoutQuery = e.target.value;
-    clearTimeout(searchTimer);
-    searchTimer = setTimeout(updateWorkoutGrid, 150);
+    updateWorkoutSearch();
   });
 
   el.querySelectorAll('[data-filter]').forEach((btn) =>
@@ -5042,9 +5050,9 @@ function openReorderSheet(slotIdx, onDone) {
   });
 }
 
-// Add an exercise to a rotation cycle SLOT (slotIdx). Two ways: pick from the
-// library (opens the slot editor) or create a brand-new custom exercise.
-function openAddExerciseChooser(slotIdx) {
+// Add an exercise to a rotation cycle SLOT (slotIdx). When onAdd is supplied,
+// both choices feed a view-level selection instead and leave the plan alone.
+function openAddExerciseChooser(slotIdx, onAdd) {
   openModal(`
     <div class="modal-header">
       <div><div class="modal-title">${t('add_exercise')}</div></div>
@@ -5056,12 +5064,13 @@ function openAddExerciseChooser(slotIdx) {
     </div>
   `);
   // Both replace this chooser via openModal — no explicit close needed.
-  $('#ch-from-lib').addEventListener('click', () => openSlotEditorModal(slotIdx));
+  $('#ch-from-lib').addEventListener('click', () => openSlotEditorModal(slotIdx, onAdd));
   $('#ch-new-ex').addEventListener('click', () => {
     openNewExerciseModal(null, {
       onCreated: (ex) => {
         if (!ex || !ex.id) return;
-        if (slotIdx != null && slotIdx >= 0) DB.plan.addExerciseToSlot(slotIdx, ex.id);
+        if (typeof onAdd === 'function') onAdd(ex.id);
+        else if (slotIdx != null && slotIdx >= 0) DB.plan.addExerciseToSlot(slotIdx, ex.id);
       },
     });
   });
@@ -5196,8 +5205,9 @@ function renderExerciseDetail(el, exerciseId) {
   }
 
   const sessions = DB.sessions.listByExercise(exerciseId);
-  const stats = DB.sessions.bestStats(exerciseId);
-  const best1rm = DB.sessions.bestOneRM(exerciseId); // Est. 1RM (kg), 0 if none
+  const stats = DB.sessions.bestStats(exerciseId, sessions);
+  const best1rm = DB.sessions.bestOneRM(exerciseId, sessions); // Est. 1RM (kg), 0 if none
+  const visibleSessions = viewContext.exerciseHistoryExpanded ? sessions : sessions.slice(0, 30);
 
   let prSessionId = null;
   let prWeight = 0;
@@ -5229,7 +5239,7 @@ function renderExerciseDetail(el, exerciseId) {
       </div>
     `;
 
-  const sessionsHtml = sessions.map((s) => {
+  const sessionsHtml = visibleSessions.map((s) => {
     const volume = s.sets.reduce((tt, x) => tt + x.reps * x.weight, 0);
     const isPR = s.id === prSessionId;
     const setsHtml = s.sets.map((set, i) => {
@@ -5307,7 +5317,7 @@ function renderExerciseDetail(el, exerciseId) {
       </button>
     </div>
 
-    ${chartHtmlForExercise(exerciseId)}
+    ${chartHtmlForExercise(exerciseId, sessions)}
 
     <div class="row-between mb-16">
       <div class="section-title" style="margin:0">${t('history')}</div>
@@ -5320,7 +5330,20 @@ function renderExerciseDetail(el, exerciseId) {
     }
   `;
 
+  if (visibleSessions.length < sessions.length) {
+    const showMore = document.createElement('button');
+    showMore.type = 'button';
+    showMore.className = 'btn btn-ghost btn-block';
+    showMore.id = 'show-more-sessions';
+    showMore.textContent = t('show_more');
+    $('.session-list', el).after(showMore);
+  }
+
   $('#add-session-btn', el).addEventListener('click', () => openSessionModal(exerciseId));
+  $('#show-more-sessions', el)?.addEventListener('click', () => {
+    viewContext.exerciseHistoryExpanded = true;
+    renderExerciseDetail(el, exerciseId);
+  });
 
 
   el.querySelectorAll('[data-edit-session]').forEach((b) =>
@@ -6912,14 +6935,12 @@ function openSavedFoodPicker(date, onSave) {
       if (typeof onSave === 'function') onSave();
     }));
   }
-  // Same 150ms debounce as the other two search fields — draw() rebuilds the
-  // whole list, and a per-keystroke rebuild is the defect already fixed in the
-  // exercise browser.
-  let sfTimer = null;
+  // draw() rebuilds the whole list, so a per-keystroke rebuild repeats the same
+  // expensive work for every character.
+  const drawSavedFoodSearch = debounce(draw, 150);
   overlay.querySelector('#sf-search').addEventListener('input', (e) => {
     query = e.target.value;
-    clearTimeout(sfTimer);
-    sfTimer = setTimeout(draw, 150);
+    drawSavedFoodSearch();
   });
   overlay.querySelector('#sf-new').addEventListener('click', () => { closeModal(); openFoodLibraryModal(); });
   draw();
@@ -7405,13 +7426,14 @@ function sleepStagesHtml(entry, opts) {
 
 function renderSleep(el) {
   const list = DB.sleep.list();
+  const visibleSleep = viewContext.sleepHistoryExpanded ? list : list.slice(0, 30);
   const last7 = list.slice(0, 7);
   const avgMin = last7.length > 0
     ? Math.round(last7.reduce((s, x) => s + x.durationMinutes, 0) / last7.length)
     : 0;
   const latest = list[0];
 
-  const items = list.map((s) => `
+  const items = visibleSleep.map((s) => `
     <div class="data-row">
       <div class="data-icon sleep">${icon('bed', 20)}</div>
       <div class="data-main">
@@ -7500,7 +7522,20 @@ function renderSleep(el) {
   `;
 
   // Single add button: the labeled "Log" button (the top-bar + was a duplicate).
+  if (visibleSleep.length < list.length) {
+    const showMore = document.createElement('button');
+    showMore.type = 'button';
+    showMore.className = 'btn btn-ghost btn-block';
+    showMore.id = 'show-more-sleep';
+    showMore.textContent = t('show_more');
+    $('.data-list', el).after(showMore);
+  }
+
   $('#add-sleep-btn', el).addEventListener('click', () => openSleepModal());
+  $('#show-more-sleep', el)?.addEventListener('click', () => {
+    viewContext.sleepHistoryExpanded = true;
+    renderSleep(el);
+  });
   el.querySelectorAll('[data-edit-sleep]').forEach((b) =>
     b.addEventListener('click', () => openSleepModal(b.dataset.editSleep))
   );
@@ -8142,9 +8177,9 @@ function renderSettings(el) {
 // ==========================================================================
 // Chart + Variations helpers (used in exercise detail)
 // ==========================================================================
-function chartHtmlForExercise(exerciseId) {
+function chartHtmlForExercise(exerciseId, sessions) {
   // Plot max weight across the most recent up to 10 sessions (chronological order)
-  const sessions = DB.sessions.listByExercise(exerciseId);
+  sessions = sessions || DB.sessions.listByExercise(exerciseId);
   if (sessions.length < 2) {
     return `
       <div class="chart-card">
@@ -8497,14 +8532,16 @@ function openScheduleModal(tmpl) {
 }
 
 // Edit ONE workout in the rotation cycle. slotIdx = number (edit cycle[i]) or
-// null/undefined (create a new workout appended to the cycle).
-function openSlotEditorModal(slotIdx) {
+// null/undefined (create a new workout appended to the cycle). onAdd switches
+// the library sheet to one view-level pick, bypassing that plan save entirely.
+function openSlotEditorModal(slotIdx, onAdd) {
   const cycle = (DB.plan.get() || {}).cycle || [];
   const isNew = (slotIdx == null || slotIdx < 0 || !cycle[slotIdx]);
   const slot = isNew ? { name: '', exerciseIds: [] } : cycle[slotIdx];
+  const addOnly = typeof onAdd === 'function';
   // Ordered list of picked exercise ids — the order IS the exercise order the
   // user will train in (guided mode walks it top-to-bottom), so it's reorderable.
-  let pickedOrder = [...(slot.exerciseIds || [])];
+  let pickedOrder = addOnly ? [] : [...(slot.exerciseIds || [])];
   const hasPick = (id) => pickedOrder.indexOf(id) !== -1;
   let dayLabel = slot.name || '';
   let pickerQuery = '';
@@ -8540,6 +8577,12 @@ function openSlotEditorModal(slotIdx) {
     container.querySelectorAll('[data-pick]').forEach((b) =>
       b.addEventListener('click', () => {
         const id = b.dataset.pick;
+        if (addOnly) {
+          onAdd(id);
+          closeModal();
+          renderView(currentView);
+          return;
+        }
         const at = pickedOrder.indexOf(id);
         if (at !== -1) pickedOrder.splice(at, 1);   // unpick
         else pickedOrder.push(id);                  // pick → appended to the end
@@ -8633,15 +8676,13 @@ function openSlotEditorModal(slotIdx) {
     `);
 
     renderPickerList();
-    // Debounced, the same 150ms the exercise browser already uses. Un-debounced,
-    // a six-letter query rebuilt this whole list six times — and the list can
-    // carry a few hundred entries, some with base64 photos, so each rebuild
-    // re-parses a large HTML string and re-decodes those data URIs.
-    let pickerTimer = null;
+    // A six-letter query otherwise rebuilds this whole list six times — and the
+    // list can carry a few hundred entries, some with base64 photos, so each
+    // rebuild re-parses a large HTML string and re-decodes those data URIs.
+    const renderPickerSearch = debounce(renderPickerList, 150);
     $('#picker-search').addEventListener('input', (e) => {
       pickerQuery = e.target.value;
-      clearTimeout(pickerTimer);
-      pickerTimer = setTimeout(renderPickerList, 150);
+      renderPickerSearch();
     });
     document.querySelectorAll('[data-pick-cat]').forEach((b) =>
       b.addEventListener('click', () => {
@@ -8651,9 +8692,9 @@ function openSlotEditorModal(slotIdx) {
         renderPickerList();
       })
     );
-    // Both paths return to the editor rather than closing outright — the user is
-    // mid-edit and has unsaved name/order changes held in this closure.
-    const back = () => openEditor();
+    // Plan edits return to the editor because its name/order changes are still
+    // unsaved; a view-level picker has no editor state to return to.
+    const back = () => addOnly ? closeModal() : openEditor();
     $('#picker-back').addEventListener('click', back);
     $('#picker-done').addEventListener('click', back);
   }
@@ -8717,7 +8758,8 @@ function openSlotEditorModal(slotIdx) {
     renderView(currentView);
   }
 
-  openEditor();
+  if (addOnly) openPickerSheet();
+  else openEditor();
 }
 
 // ==========================================================================
@@ -8746,12 +8788,13 @@ function renderSessionDay(el) {
   // On a day the rotation calls REST there is no plan to narrow, yet the rest
   // sheet's "train a lagging muscle" route still has to put exercises on screen
   // — and a lagging muscle is by definition one the plan does not contain, so
-  // it could never have been found by filtering. sdOnly is therefore a FILTER
-  // over the plan when there is one, and the LIST itself when there is not.
-  // Either way it stays a view-level choice: no slot is edited.
-  const sdIds = planIds.length
-    ? (sdOnly ? planIds.filter((id) => sdOnly.includes(id)) : planIds)
-    : (sdOnly || []);
+  // it could never have been found by filtering. sdOnly starts as a FILTER over
+  // the plan when there is one, but view-level additions can be outside that
+  // plan and append after its selected ids. On a rest day the list is the whole
+  // selection. Either way no slot is edited.
+  const sdIds = sdOnly
+    ? planIds.filter((id) => sdOnly.includes(id)).concat(sdOnly.filter((id) => !planIds.includes(id)))
+    : planIds;
   const exObjs = sdIds.map((id) => exerciseById[id]).filter(Boolean);
 
   // Per-exercise local state for unsaved edits. Persists across re-renders
@@ -8869,7 +8912,7 @@ function renderSessionDay(el) {
             <div class="sd-card-name">${escapeHtml(exDisplayName(ex))}</div>
           </div>
           ${isLogged ? `<div class="sd-status-pill">${icon('check', 16)} ${t('logged')}</div>` : ''}
-          <button type="button" class="icon-btn danger sd-remove-ex" data-remove-ex="${ex.id}" aria-label="${escapeHtml(t('remove_from_day'))}">${icon('trash', 20)}</button>
+          <button type="button" class="icon-btn danger sd-remove-ex" data-remove-ex="${escapeHtml(ex.id)}" aria-label="${escapeHtml(t('remove_from_day'))}">${icon('trash', 20)}</button>
         </div>
 
         <div class="sd-sets-head">
@@ -8953,7 +8996,10 @@ function renderSessionDay(el) {
 
   // Add an exercise: offer two choices — pick from the library, or create a
   // brand-new custom exercise (which is then added straight to this day).
-  $('#sd-add-ex', el)?.addEventListener('click', () => openAddExerciseChooser(slotIdx));
+  $('#sd-add-ex', el)?.addEventListener('click', () => openAddExerciseChooser(slotIdx, sdOnly ? (exId) => {
+    const live = Array.isArray(viewContext.sdOnly) ? viewContext.sdOnly : [];
+    if (!live.includes(exId)) viewContext.sdOnly = live.concat(exId);
+  } : null));
 
   // Tap (or keyboard-activate) an exercise photo thumbnail to open it
   // full-screen. Made keyboard/SR reachable as a button.
@@ -8995,14 +9041,15 @@ function renderSessionDay(el) {
     }
   });
 
-  // Remove one exercise from this day, inline. Clears its unsaved set state so
-  // it doesn't linger, then re-renders. Logged sessions in history are kept.
+  // A filtered day drops the exercise from that view-level selection; a full
+  // day edits its real cycle slot. Logged sessions in history are kept.
   $('#sd-reorder-open', el)?.addEventListener('click', () => openReorderSheet(slotIdx, () => renderSessionDay(el)));
 
   el.querySelectorAll('[data-remove-ex]').forEach((b) =>
     b.addEventListener('click', () => {
       const exId = b.dataset.removeEx;
-      DB.plan.removeExerciseFromSlot(slotIdx, exId);
+      if (sdOnly) viewContext.sdOnly = sdOnly.filter((id) => id !== exId);
+      else DB.plan.removeExerciseFromSlot(slotIdx, exId);
       delete viewContext.sdState[exId];
       showToast(t('exercise_removed'));
       renderSessionDay(el);
@@ -9225,15 +9272,15 @@ function renderSessionRun(el) {
   const dow = runDateObj.getDay();   // header label = the date's weekday
   const day = DB.plan.workoutForDate(runDateObj);
   const exerciseById = Object.fromEntries(DB.exercises.list().map((e) => [e.id, e]));
-  // Same shape as renderSessionDay's sdOnly: a FILTER over the plan when there
-  // is one, the LIST itself when the rotation calls this date a rest day and the
-  // user chose exercises anyway. Both screens must resolve to the same set, or
-  // the run walks a different workout than the one its button was sitting on.
+  // Same shape as renderSessionDay's sdOnly: selected plan ids keep plan order,
+  // while view-level additions outside the plan append. Both screens must
+  // resolve to the same set, or the run walks a different workout than the one
+  // its button was sitting on.
   const runOnly = Array.isArray(viewContext.runOnly) ? viewContext.runOnly : null;
   const runPlanIds = (day?.exerciseIds || []);
-  const runIds = runPlanIds.length
-    ? (runOnly ? runPlanIds.filter((id) => runOnly.includes(id)) : runPlanIds)
-    : (runOnly || []);
+  const runIds = runOnly
+    ? runPlanIds.filter((id) => runOnly.includes(id)).concat(runOnly.filter((id) => !runPlanIds.includes(id)))
+    : runPlanIds;
   const exObjs = runIds.map((id) => exerciseById[id]).filter(Boolean);
   const totalEx = exObjs.length;
 
@@ -9277,17 +9324,26 @@ function renderSessionRun(el) {
   // Persist one exercise's sets to the DB (add or update by date). Idempotent —
   // called when leaving an exercise and again on the final save, so a workout is
   // never lost if the app is closed mid-session.
-  function commitExercise(exId) {
+  function commitExercise(exId, opts = {}) {
     const st = viewContext.runState[exId];
     if (!st) return false;
     const cleaned = st.sets
       .map((s) => ({ reps: Number(s.reps) || 0, weight: Number(s.weight) || 0 }))
       .filter((s) => s.reps > 0 || s.weight > 0);
-    if (cleaned.length === 0) return false;
     let existingId = st.savedSessionId;
     if (!existingId) {
       const existing = DB.sessions.listByExercise(exId).find((s) => s.date === viewContext.runDate);
       if (existing) existingId = existing.id;
+    }
+    if (cleaned.length === 0) {
+      if (opts.removeEmpty && existingId) {
+        DB.sessions.remove(existingId);
+        st.savedSessionId = null;
+        delete st.prMsg;
+        return true;
+      }
+      if (opts.warnEmpty) showToast(t('add_at_least_one'));
+      return false;
     }
     // Snapshot the personal best BEFORE writing — the other two logging paths
     // (openSessionModal, renderSessionDay) both do this, but guided mode never
@@ -9486,6 +9542,15 @@ function renderSessionRun(el) {
     </div>
   `;
 
+  // A logged one-set session must still expose its set delete: that explicit
+  // trash tap is the user's way to remove the session, with Undo below.
+  if (st.sets.length === 1 && st.savedSessionId) {
+    const deleteLast = $('[data-del-set]', el);
+    deleteLast?.classList.remove('is-hidden');
+    deleteLast?.removeAttribute('tabindex');
+    deleteLast?.removeAttribute('aria-hidden');
+  }
+
   // Photo zoom
   el.querySelectorAll('.sd-thumb-zoom').forEach((thumb) => {
     thumb.setAttribute('role', 'button');
@@ -9524,7 +9589,7 @@ function renderSessionRun(el) {
       // the value is committed and focus leaves, which is exactly "typed it and
       // moved to something else". `blur` covers the case where the value did not
       // change but the row was completed by other means.
-      inp.addEventListener('change', () => commitExercise(ex.id));
+      inp.addEventListener('change', () => commitExercise(ex.id, { warnEmpty: true }));
       inp.addEventListener('blur', () => commitExercise(ex.id));
     });
     // ✓ Done → mark the set complete + start the rest timer. If the row is still
@@ -9551,22 +9616,23 @@ function renderSessionRun(el) {
       // Ticking a set is the strongest "I finished this" signal in the screen,
       // and it can fill the row from the ghost values without any field being
       // touched — so it must persist on its own, not wait for a blur.
-      commitExercise(ex.id);
+      commitExercise(ex.id, { warnEmpty: true });
     });
-    // Delete this set (only shown when more than one set exists). Offer an Undo
-    // so an accidental tap is instantly recoverable — the removed set is put
-    // back at its original position.
+    // Delete this set and persist immediately. A logged one-set exercise can be
+    // removed this way too; Undo puts it back at its original position.
     row.querySelector('[data-del-set]')?.addEventListener('click', () => {
-      if (st.sets.length <= 1) return;
+      if (st.sets.length <= 1 && !st.savedSessionId) return;
       const removed = st.sets[i];
       const removedAt = i;
       st.sets.splice(i, 1);
+      commitExercise(ex.id, { removeEmpty: true });
       renderSessionRun(el);
       showToast(t('set_deleted'), {
         actionLabel: t('undo'),
         onAction: () => {
           const at = Math.min(removedAt, st.sets.length);
           st.sets.splice(at, 0, removed);
+          commitExercise(ex.id);
           renderSessionRun(el);
         },
       });
