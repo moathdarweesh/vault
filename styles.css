@@ -7129,236 +7129,6 @@ body[dir="rtl"] .ntfs-switch.on .ntfs-knob { transform: translateX(-18px); }
   margin-inline-start: auto;
 }
 
-/* =========================================================================
-   IDENTITY LAYER  (v210)
-
-   The authority for the five devices that make this app recognisable as THE
-   VAULT rather than as a dark template. It sits last on purpose: these rules
-   are meant to WIN over the component rules above, and keeping them in one
-   readable place is how the identity stays checkable instead of dissolving
-   back into 6,000 lines of one-off values.
-
-   The devices:
-     1. The machined edge   — fill separates, a border MEANS interactive
-     2. The 2:1 corner law  — a container's radius is twice its leaf's
-     3. Readable text       — the decorative token stays decorative
-     4. No circles          — straight edges, butt caps, mitre joins
-     5. The bar tick        — one bar of the field, stamped on every section
-     6. Duotone icons       — two filled masses, recoloured by state
-     7. THE CUT (v216)      — a slot through the name, and the whole identity
-
-   ON DEVICE 7 SUPERSEDING THE OLD MARK. Until v215 the mark was the five bars
-   and the app icon was a V. That is two marks competing for the same job, and
-   the Claude Design spec "Vault Logo CUT" replaced both: there is no symbol at
-   all now, only the name with a slot cut through it. The bars survive as
-   TEXTURE (the pinstripe on the app icon, the tick in device 5) and as nothing
-   else. Do not reintroduce them as a logo. */
-
-/* --- 1. THE MACHINED EDGE ------------------------------------------------
-   An outline on all four sides of everything is the signature of a UI that was
-   assembled rather than designed — and here it was doing ALL the work, because
-   --surface-1 used to equal --bg exactly (1.00:1), so every card was an
-   invisible fill held together by a hairline. Now the fill separates on its
-   own and the border is free to carry meaning. */
-/* --card-border is the alias the "Unified card surface" block above feeds to
-   nine card components; zeroing it is what actually drops the outlines. Every
-   surface that consumes it therefore has to be handed the elevation in the same
-   breath, or it loses its edge and gains nothing. */
-body { --card-border: 0; }
-
-.card,
-.data-row, .session-card, .cta-card, .compare-card, .today-plan,
-.muscle-heatmap, .rot-slot, .ms-card, .last-set-card, .sleep-detail,
-.nutri-hero, .hero-card, .stat-cell, .tool-pod {
-  border: 0;
-  box-shadow: var(--elev-1);
-}
-
-/* THREE EXCEPTIONS, all for the same reason — a border now MEANS something, so
-   anything whose border was carrying meaning has to get it back explicitly.
-
-   .bento-card keeps a plain edge: its inset:0 .bento-card-bg child paints
-   straight over an inset bevel, so dropping the border left it with no edge.
-   .session-card.pr keeps the accent edge that is the ONLY thing marking a
-   personal-record session — `border: 0` resets border-style to none, which makes
-   a surviving border-color declaration paint nothing.
-   .cta-floating is `position: fixed` over scrolling content: an inset hairline
-   cannot lift it off the page, so it keeps its own outline and drop shadow.
-   .pg-streak is the same trap as .session-card.pr and had already fallen into
-   it: it declared border-color with no border-style, so it painted nothing even
-   before `.card` joined the reset above. */
-.bento-card { border: 1px solid var(--border); }
-.session-card.pr { border: 1px solid var(--accent-line); }
-.card.pg-streak { border: 1px solid color-mix(in srgb, var(--up) 34%, transparent); }
-.cta-card.cta-floating {
-  border: 1px solid rgba(var(--accent-rgb), 0.3);
-  box-shadow: var(--elev-3);
-}
-
-/* .bento-add is the one exception: its dashed accent outline IS the affordance
-   ("this slot is empty, add one"), not scaffolding. It also carries no photo,
-   so the scrim .bento-card::after paints for white-on-image text has nothing to
-   sit on — in light mode it laid a near-black gradient under dark ink and the
-   card measured 1.02:1. Both fixed here rather than by weakening the rule. */
-.bento-add { border: 1px dashed var(--accent-line); }
-.bento-add::after { content: none; }
-
-/* Those rules transitioned border-color, which is now a no-op. */
-.cta-card, .compare-card {
-  transition: transform var(--dur-press) var(--ease), box-shadow var(--dur) var(--ease);
-}
-
-/* A border is now a SIGNAL: it marks what you can act on, and nothing else in
-   the app gets one. Scanning a screen and knowing which rectangles are
-   touchable with no colour involved is the usability half of the idea. */
-.search-wrap input, .time-add input[type="time"], .time-add select,
-.btn-ghost, .icon-square, .filter-pill, .time-chip, .mode-option {
-  border: 1px solid var(--border-hi);
-}
-
-/* --- 2. THE 2:1 CORNER LAW -----------------------------------------------
-   Was 10 / 14 / 16 / 22 — four values, off any grid, chosen one at a time.
-   BRAND fixes every one of the 53 icons at outer rx=2 / inner rx=1; the UI now
-   obeys the same law, so a container's radius is ALWAYS exactly twice that of
-   whatever it contains. An 8px well inside a 16px card reads as concentric;
-   a 12px well inside a 14px card reads as an accident. */
-:root, body.theme-dark, body.theme-light {
-  --radius-sm:  8px;    /* leaf:      buttons, badges, icon wells */
-  --radius:    16px;    /* container: cards, rows, tiles */
-  --radius-md: 16px;    /* alias, so no existing call site breaks */
-  --radius-lg: 24px;    /* outer:     bento cards, sheets, modals */
-}
-.data-row       { border-radius: var(--radius); }
-.data-icon      { border-radius: var(--radius-sm); }
-.rot-slot       { border-radius: var(--radius); }
-.rot-slot-num   { border-radius: var(--radius-sm); }
-.ms-thumb, .picker-row-thumb { border-radius: var(--radius-sm); }
-.modal          { border-radius: var(--radius-lg) var(--radius-lg) 0 0; }
-
-/* --- 3. TEXT THAT HAS TO BE READ ----------------------------------------
-   --text-faint is decorative by definition and measures ~1.4:1 in light mode
-   on purpose — but five rules were using it for text a user actually reads,
-   including the privacy-policy link on the login gate and the Health Connect
-   instruction sentence. Decorative token, readable role: the role wins. */
-.auth-legal, .auth-dev-skip, .health-hint, .health-card-empty, .ai-dots {
-  color: var(--text-dim);
-}
-
-/* --- 4. NO CIRCLES -------------------------------------------------------
-   The mark is five straight bars with butt caps and mitre joins; a 999px
-   capsule and a circular FAB contradict the whole icon language and are the
-   two most reproduced shapes in mobile UI. BRAND already forbids this exact
-   element (rounded rectangles, medium-to-small, never a large circular FAB)
-   and the nav had been shipping a 54px circle on every screen. The shrink also
-   stops the FAB out-weighting the .btn-primary it competes with. */
-.home-center-icon {
-  width: 56px;
-  height: 40px;
-  border-radius: var(--radius-sm);
-  margin-top: -10px;
-  box-shadow: 0 6px 18px rgba(var(--accent-rgb), 0.30), 0 0 0 3px var(--bg);
-}
-body.theme-light .home-center-icon {
-  box-shadow: 0 6px 18px rgba(var(--accent-rgb), 0.30), 0 0 0 3px var(--bg);
-}
-.nav-btn.home-center.active .home-center-icon {
-  box-shadow: 0 8px 22px rgba(var(--accent-rgb), 0.45), 0 0 0 3px var(--bg);
-}
-/* Capsules are for TRANSIENT chips only. Anything that holds STATE gets the
-   machined corner. */
-.filter-pill { border-radius: var(--radius-sm); }
-/* 13px, not --radius-sm: the icon spec fixes the active tab's pill at 13 around
-   a 32px box. Written as a literal because no token holds that value, and this
-   declaration has to live HERE — the same selector earlier in the file is
-   overridden by this layer, so setting it there would have changed nothing. */
-.nav-btn.active:not(.home-center)::before { border-radius: 13px; }
-
-/* --- 5. THE FIVE-BAR TICK -----------------------------------------------
-   The only device that puts the actual MARK into the interface rather than just
-   its colour, so the identity is present on screens carrying no logo. One bar of
-   the vault door, at the mark's own 2-unit stroke width. Costs zero bytes — no
-   asset, no dependency. */
-:root { --bar-w: 2px; }
-
-/* Section headers: the full-width hairline rule becomes ONE bar of the mark —
-   a tick stamped ahead of the label, not an underline. It works in RTL for
-   free because it is a flex child at the start. --text-faint is exactly its
-   sanctioned role: decorative, never a value anyone reads. */
-.section-title::after { content: none; }
-.section-title::before {
-  content: '';
-  flex: 0 0 auto;
-  width: var(--bar-w);
-  height: 12px;
-  background: var(--text-faint);
-}
-/* .rot-section-title deliberately does NOT get the tick: BRAND keeps the two
-   section-header systems distinguishable, and giving both the same mark
-   removes the only cue that tells them apart. */
-
-/* --- 6. DUOTONE ICONS (v211) --------------------------------------------
-   The icon set is FILLED, in two layers: the base takes `currentColor` (so a
-   glyph keeps following whatever colour its container already sets — nothing
-   about the v210 colour work changes) and the accent layer takes
-   `--icon-accent`. A state change therefore recolours a MASS rather than a 2px
-   line, which is what makes an active tab read instantly.
-
-   NOTE — three deliberate departures from the design doc's CSS, each measured:
-
-   1. It proposed a bare `svg { color: var(--text-mute); }`. That sets colour ON
-      every svg, which BEATS inheritance — so the glyph inside .btn-primary, the
-      home FAB and every accent chip would have gone grey, and the rules under it
-      existed only to repair that. Icons inherit here instead, which is already
-      correct app-wide.
-   2. It targeted `.tab-btn`; this app's bottom bar is `.nav-btn` (`.tab-btn`
-      matches nothing). Same for `.is-disabled`.
-   3. The accent defaults to `--accent-text`, not `--accent`. As a GRAPHIC mass
-      #ff6a00 measures 2.65:1 on the light page and 2.81:1 on a light card —
-      under the 3:1 WCAG minimum for non-text graphics. `--accent-text` is the
-      brand orange in dark and #a34400 in light (4.91-6.07:1), which is exactly
-      the token that exists for "accent that has to stay legible". */
-body { --icon-accent: var(--accent-text); }
-
-/* On a solid accent FILL the accent layer would be orange on orange — invisible.
-   There the duotone collapses to a single mass in the container's own ink.
-   These six are the complete live set (found by walking every rendered svg and
-   testing its container's background, not by guessing). */
-.home-center-icon, .hero-cta, .btn-primary, .food-fab, .nutri-setup-icon {
-  --icon-accent: currentColor;
-}
-
-/* Only the ACTIVE tab leads. An inactive one keeps the second tone so the glyph
-   still reads as two masses, but pulled back into the muted range. */
-.nav-btn:not(.active) { --icon-accent: var(--text-dim); }
-
-/* .nav-btn.active sets `color: var(--accent-text)` for the LABEL — which would
-   also paint the glyph's base layer, making base and accent identical and
-   flattening the duotone exactly where it matters most. Give that one glyph a
-   neutral base back, so the active tab reads as a light mass with an orange
-   cut through it while its label stays orange. Scoped to a single element on
-   purpose: setting `color` on an svg overrides inheritance, so it is only ever
-   safe where the difference is the point. (.home-center is excluded — it sits
-   on an accent FILL and is handled above.) */
-.nav-btn.active:not(.home-center) > svg { color: var(--text); }
-
-/* Disabled: one flat tone, no accent to suggest something is still live.
-   --text-faint was the obvious choice and is wrong: it is the DECORATIVE token
-   and measures 1.33:1 in light mode, which made the calendar's next-day arrow
-   effectively invisible rather than merely unavailable. --text-dim held back by
-   opacity reads as "off" in both modes while staying perceivable. */
-[disabled] { color: var(--text-dim); --icon-accent: var(--text-dim); }
-[disabled] svg { opacity: 0.45; }
-
-/* Destructive controls carry their own pair. */
-.icon-btn.danger, #reset-btn { color: var(--red); --icon-accent: var(--red); }
-
-
-.hero-rest {
-  cursor: default;
-  border-style: dashed;
-}
-.hero-rest .hero-title { color: var(--text-mute); }
-
 /* --- THE REST CHIP + THE REST-DAY SHEET (v218-219) -----------------------
    From the Claude Design spec "Vault Rest Day", option A.
 
@@ -7885,3 +7655,252 @@ body.theme-light {
 .wk-compact .wk-chip { min-height: 0; pointer-events: none; }
 .l7-label { font-size: 12.5px; color: var(--text-dim); margin-bottom: 8px; }
 .rest-last7 { margin-bottom: var(--sp-4, 16px); }
+
+/* =========================================================================
+   ^^^ EVERYTHING ABOVE, THEN THE IDENTITY LAYER BELOW. ^^^
+
+   The layer was moved back here in v262. It had drifted into the MIDDLE of the
+   file: ~500 lines of v218-v227 component CSS (the rest chip and rest sheet, the
+   reorder rows, the week rail, the brand lockup, and the late token block) had
+   been appended AFTER it over time.
+
+   That matters because the layer's authority is PURE SOURCE ORDER — its rules
+   carry the same (0,1,0) specificity as the component rules they correct, so
+   anything below it silently wins. The file says so in three places, and the
+   drift it exists to prevent had already shipped inside those blocks: day-name
+   labels at 10px and 9px, under the documented 11px floor, invisible to a layer
+   that could no longer reach them.
+
+   KEEP THIS BLOCK LAST. Append new component CSS ABOVE this banner, never below
+   it.
+   ========================================================================= */
+/* =========================================================================
+   IDENTITY LAYER  (v210)
+
+   The authority for the five devices that make this app recognisable as THE
+   VAULT rather than as a dark template. It sits last on purpose: these rules
+   are meant to WIN over the component rules above, and keeping them in one
+   readable place is how the identity stays checkable instead of dissolving
+   back into 6,000 lines of one-off values.
+
+   The devices:
+     1. The machined edge   — fill separates, a border MEANS interactive
+     2. The 2:1 corner law  — a container's radius is twice its leaf's
+     3. Readable text       — the decorative token stays decorative
+     4. No circles          — straight edges, butt caps, mitre joins
+     5. The bar tick        — one bar of the field, stamped on every section
+     6. Duotone icons       — two filled masses, recoloured by state
+     7. THE CUT (v216)      — a slot through the name, and the whole identity
+
+   ON DEVICE 7 SUPERSEDING THE OLD MARK. Until v215 the mark was the five bars
+   and the app icon was a V. That is two marks competing for the same job, and
+   the Claude Design spec "Vault Logo CUT" replaced both: there is no symbol at
+   all now, only the name with a slot cut through it. The bars survive as
+   TEXTURE (the pinstripe on the app icon, the tick in device 5) and as nothing
+   else. Do not reintroduce them as a logo. */
+
+/* --- 1. THE MACHINED EDGE ------------------------------------------------
+   An outline on all four sides of everything is the signature of a UI that was
+   assembled rather than designed — and here it was doing ALL the work, because
+   --surface-1 used to equal --bg exactly (1.00:1), so every card was an
+   invisible fill held together by a hairline. Now the fill separates on its
+   own and the border is free to carry meaning. */
+/* --card-border is the alias the "Unified card surface" block above feeds to
+   nine card components; zeroing it is what actually drops the outlines. Every
+   surface that consumes it therefore has to be handed the elevation in the same
+   breath, or it loses its edge and gains nothing. */
+body { --card-border: 0; }
+
+.card,
+.data-row, .session-card, .cta-card, .compare-card, .today-plan,
+.muscle-heatmap, .rot-slot, .ms-card, .last-set-card, .sleep-detail,
+.nutri-hero, .hero-card, .stat-cell, .tool-pod {
+  border: 0;
+  box-shadow: var(--elev-1);
+}
+
+/* THREE EXCEPTIONS, all for the same reason — a border now MEANS something, so
+   anything whose border was carrying meaning has to get it back explicitly.
+
+   .bento-card keeps a plain edge: its inset:0 .bento-card-bg child paints
+   straight over an inset bevel, so dropping the border left it with no edge.
+   .session-card.pr keeps the accent edge that is the ONLY thing marking a
+   personal-record session — `border: 0` resets border-style to none, which makes
+   a surviving border-color declaration paint nothing.
+   .cta-floating is `position: fixed` over scrolling content: an inset hairline
+   cannot lift it off the page, so it keeps its own outline and drop shadow.
+   .pg-streak is the same trap as .session-card.pr and had already fallen into
+   it: it declared border-color with no border-style, so it painted nothing even
+   before `.card` joined the reset above. */
+.bento-card { border: 1px solid var(--border); }
+.session-card.pr { border: 1px solid var(--accent-line); }
+.card.pg-streak { border: 1px solid color-mix(in srgb, var(--up) 34%, transparent); }
+.cta-card.cta-floating {
+  border: 1px solid rgba(var(--accent-rgb), 0.3);
+  box-shadow: var(--elev-3);
+}
+
+/* .bento-add is the one exception: its dashed accent outline IS the affordance
+   ("this slot is empty, add one"), not scaffolding. It also carries no photo,
+   so the scrim .bento-card::after paints for white-on-image text has nothing to
+   sit on — in light mode it laid a near-black gradient under dark ink and the
+   card measured 1.02:1. Both fixed here rather than by weakening the rule. */
+.bento-add { border: 1px dashed var(--accent-line); }
+.bento-add::after { content: none; }
+
+/* Those rules transitioned border-color, which is now a no-op. */
+.cta-card, .compare-card {
+  transition: transform var(--dur-press) var(--ease), box-shadow var(--dur) var(--ease);
+}
+
+/* A border is now a SIGNAL: it marks what you can act on, and nothing else in
+   the app gets one. Scanning a screen and knowing which rectangles are
+   touchable with no colour involved is the usability half of the idea. */
+.search-wrap input, .time-add input[type="time"], .time-add select,
+.btn-ghost, .icon-square, .filter-pill, .time-chip, .mode-option {
+  border: 1px solid var(--border-hi);
+}
+
+/* --- 2. THE 2:1 CORNER LAW -----------------------------------------------
+   Was 10 / 14 / 16 / 22 — four values, off any grid, chosen one at a time.
+   BRAND fixes every one of the 53 icons at outer rx=2 / inner rx=1; the UI now
+   obeys the same law, so a container's radius is ALWAYS exactly twice that of
+   whatever it contains. An 8px well inside a 16px card reads as concentric;
+   a 12px well inside a 14px card reads as an accident. */
+:root, body.theme-dark, body.theme-light {
+  --radius-sm:  8px;    /* leaf:      buttons, badges, icon wells */
+  --radius:    16px;    /* container: cards, rows, tiles */
+  --radius-md: 16px;    /* alias, so no existing call site breaks */
+  --radius-lg: 24px;    /* outer:     bento cards, sheets, modals */
+}
+.data-row       { border-radius: var(--radius); }
+.data-icon      { border-radius: var(--radius-sm); }
+.rot-slot       { border-radius: var(--radius); }
+.rot-slot-num   { border-radius: var(--radius-sm); }
+.ms-thumb, .picker-row-thumb { border-radius: var(--radius-sm); }
+.modal          { border-radius: var(--radius-lg) var(--radius-lg) 0 0; }
+
+/* --- 3. TEXT THAT HAS TO BE READ ----------------------------------------
+   --text-faint is decorative by definition and measures ~1.4:1 in light mode
+   on purpose — but five rules were using it for text a user actually reads,
+   including the privacy-policy link on the login gate and the Health Connect
+   instruction sentence. Decorative token, readable role: the role wins. */
+.auth-legal, .auth-dev-skip, .health-hint, .health-card-empty, .ai-dots {
+  color: var(--text-dim);
+}
+
+/* --- 4. NO CIRCLES -------------------------------------------------------
+   The mark is five straight bars with butt caps and mitre joins; a 999px
+   capsule and a circular FAB contradict the whole icon language and are the
+   two most reproduced shapes in mobile UI. BRAND already forbids this exact
+   element (rounded rectangles, medium-to-small, never a large circular FAB)
+   and the nav had been shipping a 54px circle on every screen. The shrink also
+   stops the FAB out-weighting the .btn-primary it competes with. */
+.home-center-icon {
+  width: 56px;
+  height: 40px;
+  border-radius: var(--radius-sm);
+  margin-top: -10px;
+  box-shadow: 0 6px 18px rgba(var(--accent-rgb), 0.30), 0 0 0 3px var(--bg);
+}
+body.theme-light .home-center-icon {
+  box-shadow: 0 6px 18px rgba(var(--accent-rgb), 0.30), 0 0 0 3px var(--bg);
+}
+.nav-btn.home-center.active .home-center-icon {
+  box-shadow: 0 8px 22px rgba(var(--accent-rgb), 0.45), 0 0 0 3px var(--bg);
+}
+/* Capsules are for TRANSIENT chips only. Anything that holds STATE gets the
+   machined corner. */
+.filter-pill { border-radius: var(--radius-sm); }
+/* 13px, not --radius-sm: the icon spec fixes the active tab's pill at 13 around
+   a 32px box. Written as a literal because no token holds that value, and this
+   declaration has to live HERE — the same selector earlier in the file is
+   overridden by this layer, so setting it there would have changed nothing. */
+.nav-btn.active:not(.home-center)::before { border-radius: 13px; }
+
+/* --- 5. THE FIVE-BAR TICK -----------------------------------------------
+   The only device that puts the actual MARK into the interface rather than just
+   its colour, so the identity is present on screens carrying no logo. One bar of
+   the vault door, at the mark's own 2-unit stroke width. Costs zero bytes — no
+   asset, no dependency. */
+:root { --bar-w: 2px; }
+
+/* Section headers: the full-width hairline rule becomes ONE bar of the mark —
+   a tick stamped ahead of the label, not an underline. It works in RTL for
+   free because it is a flex child at the start. --text-faint is exactly its
+   sanctioned role: decorative, never a value anyone reads. */
+.section-title::after { content: none; }
+.section-title::before {
+  content: '';
+  flex: 0 0 auto;
+  width: var(--bar-w);
+  height: 12px;
+  background: var(--text-faint);
+}
+/* .rot-section-title deliberately does NOT get the tick: BRAND keeps the two
+   section-header systems distinguishable, and giving both the same mark
+   removes the only cue that tells them apart. */
+
+/* --- 6. DUOTONE ICONS (v211) --------------------------------------------
+   The icon set is FILLED, in two layers: the base takes `currentColor` (so a
+   glyph keeps following whatever colour its container already sets — nothing
+   about the v210 colour work changes) and the accent layer takes
+   `--icon-accent`. A state change therefore recolours a MASS rather than a 2px
+   line, which is what makes an active tab read instantly.
+
+   NOTE — three deliberate departures from the design doc's CSS, each measured:
+
+   1. It proposed a bare `svg { color: var(--text-mute); }`. That sets colour ON
+      every svg, which BEATS inheritance — so the glyph inside .btn-primary, the
+      home FAB and every accent chip would have gone grey, and the rules under it
+      existed only to repair that. Icons inherit here instead, which is already
+      correct app-wide.
+   2. It targeted `.tab-btn`; this app's bottom bar is `.nav-btn` (`.tab-btn`
+      matches nothing). Same for `.is-disabled`.
+   3. The accent defaults to `--accent-text`, not `--accent`. As a GRAPHIC mass
+      #ff6a00 measures 2.65:1 on the light page and 2.81:1 on a light card —
+      under the 3:1 WCAG minimum for non-text graphics. `--accent-text` is the
+      brand orange in dark and #a34400 in light (4.91-6.07:1), which is exactly
+      the token that exists for "accent that has to stay legible". */
+body { --icon-accent: var(--accent-text); }
+
+/* On a solid accent FILL the accent layer would be orange on orange — invisible.
+   There the duotone collapses to a single mass in the container's own ink.
+   These six are the complete live set (found by walking every rendered svg and
+   testing its container's background, not by guessing). */
+.home-center-icon, .hero-cta, .btn-primary, .food-fab, .nutri-setup-icon {
+  --icon-accent: currentColor;
+}
+
+/* Only the ACTIVE tab leads. An inactive one keeps the second tone so the glyph
+   still reads as two masses, but pulled back into the muted range. */
+.nav-btn:not(.active) { --icon-accent: var(--text-dim); }
+
+/* .nav-btn.active sets `color: var(--accent-text)` for the LABEL — which would
+   also paint the glyph's base layer, making base and accent identical and
+   flattening the duotone exactly where it matters most. Give that one glyph a
+   neutral base back, so the active tab reads as a light mass with an orange
+   cut through it while its label stays orange. Scoped to a single element on
+   purpose: setting `color` on an svg overrides inheritance, so it is only ever
+   safe where the difference is the point. (.home-center is excluded — it sits
+   on an accent FILL and is handled above.) */
+.nav-btn.active:not(.home-center) > svg { color: var(--text); }
+
+/* Disabled: one flat tone, no accent to suggest something is still live.
+   --text-faint was the obvious choice and is wrong: it is the DECORATIVE token
+   and measures 1.33:1 in light mode, which made the calendar's next-day arrow
+   effectively invisible rather than merely unavailable. --text-dim held back by
+   opacity reads as "off" in both modes while staying perceivable. */
+[disabled] { color: var(--text-dim); --icon-accent: var(--text-dim); }
+[disabled] svg { opacity: 0.45; }
+
+/* Destructive controls carry their own pair. */
+.icon-btn.danger, #reset-btn { color: var(--red); --icon-accent: var(--red); }
+
+
+.hero-rest {
+  cursor: default;
+  border-style: dashed;
+}
+.hero-rest .hero-title { color: var(--text-mute); }
+

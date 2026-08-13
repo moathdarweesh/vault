@@ -77,7 +77,7 @@ a faster TTFB — not fewer bytes.
 npm run release          # bump every marker + verify, then commit all files together
 ```
 
-**Current version: v261.** APK: build 18 / v2.7.
+**Current version: v262.** APK: build 18 / v2.7.
 
 `scripts/release.js` rewrites all **16** markers and then re-reads them from disk to confirm; it exits non-zero if any disagree. The markers are `?v=N` in `index.html` (×14 — every script and stylesheet, the `js/vendor/supabase.js` preload, and **both `icons/icon.svg` links**), the `__cleaned_vN` sessionStorage key, the `FALLBACK` literal in `app.js`, and `version.json` → `web`. The count is derived, not hard-coded, so adding a marker is safe — just keep this sentence honest.
 
@@ -367,6 +367,7 @@ the same identity on two surfaces. `docs/BRAND.md` is the authority.
   the runtime backstop for a pref arriving from the cloud mid-session.
 - **`applyTheme()`'s `<meta name="theme-color">` must track `--bg` exactly**
   (`#000000` / `#faf5f0`) or the phone paints a seam above the app.
+- **The IDENTITY LAYER must stay PHYSICALLY LAST in `styles.css`** — it drifted into the middle of the file over v218–v227 (about 500 lines of component CSS ended up appended after it) and was moved back at v262. Its authority is pure SOURCE ORDER at equal (0,1,0) specificity, so anything below it silently wins; the drift it exists to prevent had already shipped inside those blocks (day labels at 10/9px, under the 11px floor). **Append new component CSS ABOVE the banner that now marks the boundary, never below it.** The move was verified inert: 504 computed-style fingerprints across every element of all 20 views in both themes, zero changed.
 - **The IDENTITY LAYER at the end of `styles.css` is the authority** for the four
   devices that make the app recognisable — the machined edge (fill separates, a
   border MEANS interactive), the 2:1 corner law, no circles, and the five-bar
