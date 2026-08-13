@@ -47,7 +47,7 @@ file on a database that already has it is safe.
 | 12 | `ban-rls-v10.sql` | Extends the ban past the blob: RESTRICTIVE INSERT/UPDATE policies on the mirror tables, the `exercise-images` bucket, and `profiles`. SELECT and DELETE stay open, so a blocked user can still export and erase their own data. Applied + verified live 2026-08-05. **Incomplete — see 15.** Its hand-written table array named 5 tables that do not exist and omitted 4 that do, and the loop `continue`d past the missing ones in silence, so it created 11 policy pairs where this table claimed 16. |
 | 13 | `launch-hardening.sql` | ~5 MB `vault_data` size cap (BEFORE trigger) + server-side `feedback.username` snapshot, which stops a crafted insert displaying any @handle in the admin inbox. Applied + verified live 2026-08-05. |
 | 14 | `hardening-v8.sql` | Revokes the implicit PUBLIC/anon EXECUTE on `admin_user_stats()`/`admin_activity()` and pins `search_path` on every SECURITY DEFINER function missing it. Applied + verified live 2026-08-05. |
-| 15 | `ban-rls-completion-v11.sql` | Closes 12's gap: ban INSERT/UPDATE on the four tables it missed (`exercises`, `cardio_types`, `foods`, `user_prefs`), a ban on `profiles` INSERT (12 restricted UPDATE only, so a banned user could delete their own profile row and insert a new one under a fresh @handle), and the revoke/grant double-lock `client_errors` never got. Raises instead of skipping a missing table, and its VERIFY asserts the policy COUNT rather than mere existence — the check that would have caught 12. **NOT YET APPLIED.** |
+| 15 | `ban-rls-completion-v11.sql` | Closes 12's gap: ban INSERT/UPDATE on the four tables it missed (`exercises`, `cardio_types`, `foods`, `user_prefs`), a ban on `profiles` INSERT (12 restricted UPDATE only, so a banned user could delete their own profile row and insert a new one under a fresh @handle), and the revoke/grant double-lock `client_errors` never got. Raises instead of skipping a missing table, and its VERIFY asserts the policy COUNT rather than mere existence — the check that would have caught 12. Applied + verified live 2026-08-13: tables carrying a ban pair went 14 -> 18, all four missing tables show ins=1/upd=1, `profiles_ban_insert` exists, and `client_errors` grants are exactly `authenticated: SELECT, INSERT` with nothing for `anon`. |
 
 > ⚠️ **Keep `image/svg+xml` OUT of the `exercise-images` mime allowlist,
 > permanently.** It is what rejects an active-content SVG arriving from a
@@ -55,17 +55,25 @@ file on a database that already has it is safe.
 
 ## 2) Not yet applied — `pending/`
 
-**`migrations/15_ban-rls-completion-v11.sql` is written and reviewed but NOT applied.**
-Everything else has been applied; 11–14 went in on 2026-08-05. 15 needs a signed-in
-Supabase SQL editor; it is idempotent and transaction-wrapped, and its VERIFY block
-states its own pass condition for each of the four queries.
+**Empty.** Everything written has been applied: 11–14 on 2026-08-05, 15 on 2026-08-13.
 
 ## 3) State unknown — `unverified/`
 
-These were written and committed, but nothing in git or the docs records whether
-they were ever run. **Check the live database before running any of them** — all
-four are idempotent, so a re-run is safe, but knowing the real state matters more
-than the run itself.
+**Checked live on 2026-08-13.** Three of the four are already applied; only
+`perf-indexes.sql` is genuinely missing. The "How to check" column is kept so the
+result can be re-confirmed rather than trusted. Verdicts below are from that run.
+
+| File | Verdict (2026-08-13) |
+|---|---|
+| `admin-scale-rpc.sql` | **APPLIED** — both `admin_user_stats()` and `admin_activity()` exist. Consistent with `14_hardening-v8.sql` having revoked EXECUTE on them inside one transaction, which could not have succeeded otherwise. Move it into `migrations/`. |
+| `delete-own-account.sql` | **APPLIED** — `delete_own_account()` exists. ⚠️ This makes the FK-RESTRICT abort a LIVE defect, not a hypothetical one: `workout_sessions.exercise_id` and `cardio_logs.cardio_type_id` are `ON DELETE RESTRICT` while their parents cascade from `auth.users`, so any user with a custom exercise or cardio type that has logs should hit a foreign-key violation — after `Cloud.deleteAccount()` has already swept their Storage images. |
+| `perf-indexes.sql` | **NOT APPLIED** — `workout_sessions_performed_idx` does not exist. |
+| `vault-data-version.sql` | **APPLIED** — `vault_data.version` exists, `bump_vault_data_version()` exists, and `vault_data` carries both `trg_vault_data_size` and `trg_vault_data_version`. `max(version)` was **590**, so it is not merely present but actively incrementing. The optimistic-concurrency path in `js/cloud.js` (six read sites) is therefore backed by real server state, not an assumption. Move it into `migrations/`. |
+
+Also confirmed in the same run: the `migration_v2` staging schema (unminimized cross-user
+PII, no RLS) is **absent**, so M-9 is a latent re-run hazard only.
+
+Original checks, kept for re-confirmation:
 
 | File | What it does | How to check |
 |---|---|---|
