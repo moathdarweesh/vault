@@ -198,10 +198,13 @@
     MACRO_LABELS.forEach(([key, aliases]) => {
       if (found[key] !== undefined) return;
       for (const alias of aliases) {
-        // label, then anything that is not a digit or a minus (pipes, colons,
-        // "~", "≈", spaces, dashes), then the number. Capped so a label cannot
-        // reach across a whole table and steal the NEXT row's figure.
-        const re = new RegExp(alias.toLowerCase().replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '[^0-9\\-\\n]{0,12}([0-9]+(?:[.,][0-9]+)?)');
+        // label, then SEPARATORS ONLY (pipes, colons, "~", "≈", spaces), then
+        // the number. Capped so a label cannot reach across a whole table and
+        // steal the next row's figure — and letters are excluded in any script,
+        // because a gap that may hold a word is prose, not a table cell. Without
+        // that, "how many calories in 100g rice?" parsed as a 100-kcal meal and
+        // was logged with the model never called.
+        const re = new RegExp(alias.toLowerCase().replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '[^\\p{L}0-9\\n]{0,12}([0-9]+(?:[.,][0-9]+)?)', 'u');
         const m = text.match(re);
         if (m) { found[key] = parseFloat(m[1].replace(',', '.')); break; }
       }
@@ -209,6 +212,11 @@
     // Calories are the signal. Without an explicit calorie figure this is a
     // description ("two eggs and toast"), which is the model's job, not ours.
     if (!(found.calories > 0)) return null;
+    // And one figure alone is not a table. A nutrition panel always names a
+    // second macro next to its calories; a sentence that happens to contain the
+    // word "calories" and a number does not. Requiring the pair is what keeps
+    // this parser to the paste it was built for instead of hijacking chat.
+    if (!['protein', 'carbs', 'fat', 'cholesterol', 'sodium'].some((k) => found[k] > 0)) return null;
 
     // A name, if the paste carried one: the first line that holds no digits and
     // no macro label. Otherwise a neutral label rather than a wrong guess.

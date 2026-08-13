@@ -6,7 +6,7 @@
  *   node scripts/check-release.js
  *
  * WHY THIS AND NOT JUST scripts/release.js --check
- * `--check` only proves the 12 markers agree with EACH OTHER. It cannot catch the
+ * `--check` only proves the 16 markers agree with EACH OTHER. It cannot catch the
  * failure that has actually occurred in this repo (commit ea6c74e, "v150"): a
  * commit that edited js/app.js and nothing else, after the v150 markers had
  * already been consumed by an earlier commit. Every marker still agreed — they

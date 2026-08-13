@@ -534,7 +534,6 @@ body.rest-active .main { padding-bottom: 104px; }
   to { opacity: 1; transform: translateY(0); }
 }
 
-
 /* =========================================================================
    VAULT TOP BAR (brand header)
    ========================================================================= */
@@ -1010,45 +1009,11 @@ body.theme-light input[type="date"], body.theme-light input[type="time"] { color
   margin-bottom: 18px;
 }
 
-/* .streak-banner / .streak-icon / .streak-text / .streak-number /
-   .streak-label were deleted in v210: zero occurrences in js/app.js or
-   index.html. The Home streak lives in .streak-chip further down. */
-
-/* Stat grid */
-.stat-grid {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 10px;
-  margin-bottom: 18px;
-}
-
-.stat-tile {
-  background: var(--surface-1);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  padding: 16px 16px 18px;
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  text-align: start;  /* was `left` with no RTL override */
-  position: relative;
-  overflow: hidden;
-  transition: transform 0.12s ease, border-color 0.15s;
-}
-
 .stat-tile-head {
   display: flex;
   align-items: center;
   justify-content: space-between;
   margin-bottom: 10px;
-}
-
-.stat-tile-label {
-  font-size: 11px;
-  font-weight: 700;
-  color: var(--text-mute);
-  text-transform: uppercase;
-  letter-spacing: 0.12em;
 }
 
 .stat-tile-icon {
@@ -1063,22 +1028,6 @@ body.theme-light input[type="date"], body.theme-light input[type="time"] { color
 }
 
 .stat-tile-icon svg { width: 16px; height: 16px; }
-
-.stat-tile-value {
-  font-size: 28px;
-  font-weight: 900;
-  letter-spacing: -0.04em;
-  line-height: 1;
-  font-variant-numeric: tabular-nums;
-}
-
-.stat-tile-value .unit {
-  font-size: 13px;
-  font-weight: 700;
-  color: var(--text-mute);
-  margin-left: 3px;
-  letter-spacing: -0.01em;
-}
 
 .stat-tile-sub {
   margin-top: 6px;
@@ -1491,29 +1440,6 @@ body[dir="rtl"] .bento-card-content { text-align: right; }
   padding: 18px 20px;
 }
 
-.bento-card-cat {
-  position: absolute;
-  top: 10px;
-  right: 10px;
-  padding: 3px 9px;
-  background: rgba(var(--scrim-rgb), 0.72);
-  backdrop-filter: blur(8px);
-  border: 1px solid var(--border-hi);
-  border-radius: var(--radius-pill);
-  font-size: 11px;
-  font-weight: 800;
-  text-transform: uppercase;
-  letter-spacing: 0.1em;
-  z-index: 3;
-}
-
-.bento-card.wide .bento-card-cat {
-  top: 16px;
-  right: 16px;
-  padding: 4px 12px;
-  font-size: 11px;
-}
-
 /* Top-right exercise name chip on bento cards */
 .bento-card-name-tag {
   position: absolute;
@@ -1578,25 +1504,6 @@ body[dir="rtl"] .bento-card.wide .bento-card-name-tag { left: 14px; }
 .bento-card-cat-mini.Core     { color: #fda4af; }
 .bento-card-cat-mini.Other    { color: #cbd5e1; }
 
-.bento-card-name {
-  font-size: 16px;
-  font-weight: 900;
-  letter-spacing: -0.02em;
-  color: #ffffff;
-  line-height: 1.18;
-  text-shadow:
-    0 1px 2px rgba(0, 0, 0, 0.9),
-    0 2px 8px rgba(0, 0, 0, 0.6);
-  word-break: break-word;
-}
-
-.bento-card.wide .bento-card-name {
-  font-size: 28px;
-  letter-spacing: -0.03em;
-  margin-bottom: 6px;
-  line-height: 1.05;
-}
-
 .bento-card-meta {
   margin-top: 5px;
   font-size: 11px;
@@ -1612,15 +1519,6 @@ body[dir="rtl"] .bento-card.wide .bento-card-name-tag { left: 14px; }
   max-width: 70%;
   line-height: 1.5;
 }
-
-/* Pill category colors when shown on card (applied to bento-card-cat) */
-.bento-card-cat.Chest    { color: var(--cat-chest); }
-.bento-card-cat.Back     { color: var(--cat-back); }
-.bento-card-cat.Legs     { color: var(--cat-legs); }
-.bento-card-cat.Shoulders{ color: var(--cat-shoulders); }
-.bento-card-cat.Arms     { color: var(--cat-arms); }
-.bento-card-cat.Core     { color: var(--cat-core); }
-.bento-card-cat.Other    { color: var(--cat-other); }
 
 /* PR chip on bento card */
 .bento-pr {
@@ -2840,42 +2738,6 @@ body.rest-active .toast { bottom: calc(var(--nav-h) + var(--safe-b) + 120px); }
 }
 .toast-action:active { transform: scale(var(--press-scale)); opacity: 0.7; }
 
-/* =========================================================================
-   TOOLS SECTION (cards on Home for Plan/Calendar/Supplements/Food Log)
-   ========================================================================= */
-.tools-grid {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 10px;
-  margin-bottom: 18px;
-}
-
-.tool-card {
-  background: var(--surface-1);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  padding: 14px;
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 10px;
-  text-align: left;
-  width: 100%;
-  transition: transform 0.12s ease, border-color 0.15s;
-}
-
-.tool-card-icon {
-  width: 38px;
-  height: 38px;
-  border-radius: 10px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: var(--accent-soft);
-  color: var(--accent-text);
-}
-.tool-card-icon svg { width: 22px; height: 22px; }
-
 .tool-card-title {
   font-size: 14px;
   font-weight: 800;
@@ -2888,63 +2750,22 @@ body.rest-active .toast { bottom: calc(var(--nav-h) + var(--safe-b) + 120px); }
   margin-top: 2px;
 }
 
-body[dir="rtl"] .tool-card { text-align: right; align-items: flex-end; }
-
 /* =========================================================================
-   TODAY'S PLAN CARD (Home)
+   REMOVED IN v264 — verified dead, deleted rather than left to rot:
+   .streak-banner/.streak-icon/.streak-text/.streak-number/.streak-label
+   (Home v2, v78) · .stat-grid/.stat-tile* · .tools-grid/.tool-card*
+   .today-plan* (the card itself; the CHIP below outlived it and is now used
+   for template comparison, app.js) · the drag-and-drop planner
+   (.planner-list/.planner-ex-*/.drop-target/body.planner-dragging — replaced
+   by the ↑/↓ .rot-slot* rows in v229) · bare .bento-card-cat/.bento-card-name
+   (superseded by the -mini/-tag variants) · .auth-logo (the login header
+   renders brandLockup('splash') now) · .variation-* (the Alternatives feature,
+   whose data table, renderer and click handler were all deleted with it) ·
+   .mt-8/.mt-16/.mb-8/.mb-20 (only .mb-16 was ever used).
+   Every one was confirmed by matching the exact class token against all of
+   js/*.js, index.html and admin.html — not by prefix, which is what made
+   .bento-card-cat separable from the live .bento-card-cat-mini.
    ========================================================================= */
-.today-plan {
-  background: var(--surface-1);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-md);
-  padding: 16px 18px;
-  margin-bottom: 18px;
-  position: relative;
-  overflow: hidden;
-}
-
-.today-plan-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: 10px;
-}
-
-.today-plan-eyebrow {
-  font-size: 11px;
-  font-weight: 800;
-  color: var(--accent-text);
-  text-transform: uppercase;
-  letter-spacing: 0.16em;
-}
-
-.today-plan-day {
-  font-size: 11px;
-  color: var(--text-mute);
-  font-weight: 700;
-}
-
-.today-plan-name {
-  font-size: 22px;
-  font-weight: 900;
-  letter-spacing: -0.025em;
-  margin-bottom: 8px;
-  line-height: 1.1;
-}
-
-.today-plan-meta {
-  font-size: 13px;
-  color: var(--text-mute);
-  margin-bottom: 14px;
-}
-
-.today-plan-exercises {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-  margin-bottom: 14px;
-}
-
 .today-plan-chip {
   background: var(--surface-2);
   border: 1px solid var(--border);
@@ -2953,11 +2774,6 @@ body[dir="rtl"] .tool-card { text-align: right; align-items: flex-end; }
   border-radius: 999px;
   font-size: 11px;
   font-weight: 600;
-}
-
-.today-plan-rest {
-  text-align: center;
-  padding: 24px 12px;
 }
 
 .today-plan-rest-title {
@@ -2970,31 +2786,12 @@ body[dir="rtl"] .tool-card { text-align: right; align-items: flex-end; }
   font-size: 12px;
   color: var(--text-mute);
 }
-
 /* =========================================================================
-   PLANNER VIEW
+   PLANNER VIEW — the ↑/↓ rotation editor (v229). Its header comment went with
+   the drag-and-drop rules it introduced; these are the parts that survived.
    ========================================================================= */
-.planner-list {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.planner-day {
-  background: var(--surface-1);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  padding: 14px 16px;
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  width: 100%;
-  text-align: left;
-  cursor: pointer;
-  transition: transform 0.12s, border-color 0.15s;
-}
 /* The controls inside keep their own cursors (drag handles, remove/add). */
-.planner-day-grip, .planner-ex-grip { cursor: grab; }
+.planner-day-grip{ cursor: grab; }
 
 /* ---- Schedule picker (choose training days when applying a template) ---- */
 .schedule-hint {
@@ -3203,16 +3000,6 @@ body[dir="rtl"] .tool-card { text-align: right; align-items: flex-end; }
 .rot-slot-actions { flex-shrink: 0; display: flex; gap: 4px; }
 .rot-slot-ex { display: flex; flex-wrap: wrap; gap: 5px; }
 
-.planner-day:active {
-  transform: scale(0.99);
-  border-color: var(--border-hi);
-}
-
-.planner-day.today {
-  border-color: var(--accent-line);
-  background: var(--surface-1);
-}
-
 .planner-day-head {
   display: flex;
   align-items: center;
@@ -3227,7 +3014,6 @@ body[dir="rtl"] .tool-card { text-align: right; align-items: flex-end; }
   flex-shrink: 0;
   background: var(--text-faint);
 }
-.planner-day.has-plan .planner-day-dot { background: var(--accent); }
 
 .planner-day-main {
   flex: 1;
@@ -3242,8 +3028,6 @@ body[dir="rtl"] .tool-card { text-align: right; align-items: flex-end; }
   letter-spacing: 0.12em;
   margin-bottom: 3px;
 }
-
-.planner-day.today .planner-day-name { color: var(--accent-text); }
 
 .planner-day-title {
   font-size: 15px;
@@ -3342,8 +3126,6 @@ body[dir="rtl"] .tool-card { text-align: right; align-items: flex-end; }
   color: var(--green);
 }
 
-body[dir="rtl"] .planner-day { text-align: right; }
-
 /* ---- Planner: per-day exercise rows + drag & drop ---- */
 .planner-day-head { display: flex; align-items: center; gap: 8px; width: 100%; }
 
@@ -3389,9 +3171,6 @@ body[dir="rtl"] .planner-day { text-align: right; }
   transform: scale(1.02);
 }
 
-/* The source day card, dimmed while its ghost is being dragged */
-.planner-day.day-drag-source { opacity: 0.4; }
-
 .planner-day-add {
   flex-shrink: 0;
   width: 34px;
@@ -3411,14 +3190,6 @@ body[dir="rtl"] .planner-day { text-align: right; }
   color: var(--accent-text);
 }
 
-.planner-ex-list {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  padding-top: 10px;
-  border-top: 1px solid var(--border);
-}
-
 .planner-empty-hint {
   font-size: 12px;
   /* --text-dim: this is a sentence the user reads, not a decorative bar. */
@@ -3426,104 +3197,6 @@ body[dir="rtl"] .planner-day { text-align: right; }
   font-weight: 600;
   padding: 4px 2px;
 }
-
-.planner-ex-row {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 7px 8px;
-  border-radius: 10px;
-  background: var(--surface-2);
-  border: 1px solid var(--border);
-}
-
-.planner-ex-grip {
-  flex-shrink: 0;
-  width: 32px;
-  height: 32px;
-  margin: -4px -2px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: var(--text-faint);
-  cursor: grab;
-  touch-action: none;
-}
-.planner-ex-grip:active { cursor: grabbing; color: var(--text-mute); }
-
-.planner-ex-cat {
-  width: 5px;
-  height: 22px;
-  border-radius: 3px;
-  flex-shrink: 0;
-  background: var(--text-faint);
-}
-.planner-ex-cat[data-cat="Chest"] { background: var(--cat-chest); }
-.planner-ex-cat[data-cat="Back"]  { background: var(--cat-back); }
-.planner-ex-cat[data-cat="Legs"]  { background: var(--cat-legs); }
-.planner-ex-cat[data-cat="Shoulders"] { background: var(--cat-shoulders); }
-.planner-ex-cat[data-cat="Arms"]  { background: var(--cat-arms); }
-.planner-ex-cat[data-cat="Core"]  { background: var(--cat-core); }
-
-.planner-ex-name {
-  flex: 1;
-  font-size: 13px;
-  font-weight: 700;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.planner-ex-remove {
-  flex-shrink: 0;
-  width: 26px;
-  height: 26px;
-  border-radius: 8px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: var(--text-faint);
-  background: transparent;
-  border: none;
-}
-.planner-ex-remove:active {
-  color: var(--red);
-  background: var(--surface-1);
-}
-
-/* The floating clone that follows the finger/cursor */
-.planner-ex-ghost {
-  position: fixed;
-  z-index: 9999;
-  pointer-events: none;
-  margin: 0;
-  box-shadow: var(--elev-2);
-  border-color: var(--accent-line) !important;
-  background: var(--surface-1);
-  opacity: 0.97;
-  transform: scale(1.03);
-}
-
-/* The gap that opens up where the row will land */
-.planner-ex-placeholder {
-  height: 38px;
-  border-radius: 10px;
-  border: 2px dashed var(--accent-line);
-  background: var(--accent-soft);
-}
-
-.planner-day.drop-target {
-  border-color: var(--accent-text);
-  background: linear-gradient(180deg, var(--accent-soft), transparent 70%), var(--surface-1);
-}
-
-body.planner-dragging {
-  -webkit-user-select: none;
-  user-select: none;
-}
-body.planner-dragging .planner-day-head { cursor: grabbing; }
-
-body[dir="rtl"] .planner-ex-row,
 body[dir="rtl"] .planner-day-head { text-align: right; }
 
 /* =========================================================================
@@ -5387,73 +5060,6 @@ body[dir="rtl"] .bento-card.wide .bento-added-stripe { left: 14px; }
 }
 .train-add-btn svg { width: 20px; height: 20px; }
 
-/* Variation list (compact rows shown on the exercise detail page) */
-.variation-list {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-
-.variation-row {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 10px 12px;
-  background: var(--surface-1);
-  border: 1px solid var(--border);
-  border-radius: 10px;
-  transition: border-color 0.15s, background 0.15s;
-}
-
-.variation-row:hover { border-color: var(--border-hi); }
-
-.variation-cat-dot {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  flex-shrink: 0;
-  background: var(--text-faint);
-}
-.variation-cat-dot[data-cat="Chest"]    { background: var(--cat-chest, #ec4899); }
-.variation-cat-dot[data-cat="Back"]     { background: var(--cat-back, #3b82f6); }
-.variation-cat-dot[data-cat="Legs"]     { background: var(--cat-legs, #10b981); }
-.variation-cat-dot[data-cat="Shoulders"]{ background: var(--cat-shoulders, #8b5cf6); }
-.variation-cat-dot[data-cat="Arms"]     { background: var(--cat-arms, #f59e0b); }
-.variation-cat-dot[data-cat="Core"]     { background: var(--cat-core, #f43f5e); }
-.variation-cat-dot[data-cat="Other"]    { background: var(--cat-other, #94a3b8); }
-
-.variation-name {
-  flex: 1;
-  font-size: 14px;
-  font-weight: 700;
-  color: var(--text);
-  letter-spacing: -0.01em;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  min-width: 0;
-}
-
-.variation-select {
-  flex-shrink: 0;
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  padding: 6px 12px;
-  background: var(--accent-soft);
-  color: var(--accent-text);
-  border: 1px solid var(--accent-line);
-  border-radius: 8px;
-  font-size: 12px;
-  font-weight: 800;
-  letter-spacing: 0.01em;
-  transition: background 0.12s, transform 0.1s;
-}
-.variation-select:hover { background: var(--accent); color: var(--accent-ink); }
-.variation-select:active { transform: scale(0.96); }
-.variation-select svg { width: 16px; height: 16px; }
-body[dir="rtl"] .variation-select svg { transform: scaleX(-1); }
-
 .bento-card.wide .bento-toggle {
   top: 16px;
   left: 16px;
@@ -5614,12 +5220,7 @@ body[dir="rtl"] .variation-select svg { transform: scaleX(-1); }
   justify-content: space-between;
   align-items: center;
 }
-
-.mt-8 { margin-top: 8px; }
-.mt-16 { margin-top: 16px; }
-.mb-8 { margin-bottom: 8px; }
 .mb-16 { margin-bottom: 16px; }
-.mb-20 { margin-bottom: 20px; }
 
 /* "Synced from watch" badge in the sleep log */
 .src-badge {
@@ -5909,17 +5510,6 @@ body[dir="rtl"] .variation-select svg { transform: scaleX(-1); }
 .weight-card-add svg { width: 20px; height: 20px; }
 .weight-row-del svg { width: 16px; height: 16px; }
 .ai-portion-btn svg { width: 16px; height: 16px; }
-.auth-logo {
-  width: 64px;
-  height: 64px;
-  margin: 0 auto 18px;
-  border-radius: var(--radius-md, 16px);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: var(--accent-soft, var(--surface-2));
-  color: var(--accent-text);
-}
 .auth-title {
   font-size: 26px;
   font-weight: 900;
@@ -6050,9 +5640,8 @@ body[dir="rtl"] .variation-select svg { transform: scaleX(-1); }
    file. Every one of those "cards" declared padding only and rendered flat on
    the page background. Each of them relies on this block for its surface, so
    none double-declares one. */
-.card,
-.stat-tile, .bento-card, .session-card, .data-row, .tool-card,
-.compare-card, .today-plan, .muscle-heatmap, .cta-card {
+.card, .bento-card, .session-card, .data-row,
+.compare-card, .muscle-heatmap, .cta-card {
   background: var(--card-bg);
   border: var(--card-border);
   border-radius: var(--card-radius);
@@ -6063,8 +5652,8 @@ body[dir="rtl"] .variation-select svg { transform: scaleX(-1); }
 .bento-card { border-radius: var(--radius-lg); }
 /* Unified padding — image-full .bento-card is intentionally excluded.
    `.card` is NOT here: its consumers each set their own padding, and adding it
-   would double the inset on all six of them. */
-.stat-tile, .tool-card, .compare-card, .today-plan, .muscle-heatmap, .cta-card {
+   would double the inset on every one of them. */
+.compare-card, .muscle-heatmap, .cta-card {
   padding: var(--card-pad);
 }
 .data-row, .session-card {
@@ -6075,11 +5664,10 @@ body[dir="rtl"] .variation-select svg { transform: scaleX(-1); }
 .macro-chip { border-radius: var(--chip-radius); }
 
 /* --- Global press feedback: one scale, everywhere tappable --- */
-.nav-btn:active, .btn:active, .stat-tile:active, .tool-card:active,
+.nav-btn:active, .btn:active,
 .session-card:active, .heat-cell:active,
 .calendar-cell:active, .bento-card:active, .compare-card:active,
-.cta-card:active, .filter-pill:active,
-.planner-day:active, .settings-action-row:active {
+.cta-card:active, .filter-pill:active, .settings-action-row:active {
   transform: scale(var(--press-scale));
 }
 /* Session-day card: feedback on the real tap targets (name → history,
@@ -6090,7 +5678,8 @@ body[dir="rtl"] .variation-select svg { transform: scaleX(-1); }
 .sd-thumb-zoom:active { transform: scale(var(--press-scale)); }
 .sd-card-name[role="button"]:focus-visible,
 .sd-thumb-zoom:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
-.stat-tile:active, .tool-card:active, .bento-card:active,
+
+.bento-card:active,
 .compare-card:active, .cta-card:active, .session-card:active {
   border-color: var(--border-hi);
 }
@@ -6821,7 +6410,6 @@ body[dir="rtl"] .ntf-bar { text-align: right; }
 }
 .rot-moved-undo:active { background: color-mix(in srgb, var(--warn) 13%, transparent); }
 
-
 /* =========================================================================
    NOTIFICATIONS — permission sheet (§7) and settings page (§8)
    ========================================================================= */
@@ -6964,7 +6552,6 @@ body[dir="rtl"] .ntfs-switch.on .ntfs-knob { transform: translateX(-18px); }
 .ntfs-denied .ntfs-icon { background: transparent; color: var(--red); --icon-accent: var(--red); }
 .ntfs-denied .ntfs-title { color: var(--red); }
 .settings-action-chev { flex: none; color: var(--text-dim); display: grid; place-items: center; }
-
 
 /* =========================================================================
    PROGRESS — APPLY-vault.md §4
@@ -7721,7 +7308,7 @@ body.theme-light {
 body { --card-border: 0; }
 
 .card,
-.data-row, .session-card, .cta-card, .compare-card, .today-plan,
+.data-row, .session-card, .cta-card, .compare-card,
 .muscle-heatmap, .rot-slot, .ms-card, .last-set-card, .sleep-detail,
 .nutri-hero, .hero-card, .stat-cell, .tool-pod {
   border: 0;
@@ -7905,7 +7492,6 @@ body { --icon-accent: var(--accent-text); }
 
 /* Destructive controls carry their own pair. */
 .icon-btn.danger, #reset-btn { color: var(--red); --icon-accent: var(--red); }
-
 
 .hero-rest {
   cursor: default;

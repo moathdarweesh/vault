@@ -856,12 +856,16 @@ const DB = {
         const x = STATE.plan.extraDates.indexOf(iso);
         if (x !== -1) STATE.plan.extraDates.splice(x, 1);
       }
-      // Unbounded growth would bloat a blob that is synced whole on every save.
-      // Only dates from here on can still affect the rotation, and the calendar
-      // reads logged sessions rather than this list, so anything older than a
-      // year is dead weight. Sorted so the prune is a cheap prefix drop.
+      // Unbounded growth would bloat a blob that is synced whole on every save,
+      // but the cutoff CANNOT be a rolling year. The position in the cycle is
+      // derived by walking from the plan's ANCHOR, so a rest date from three
+      // years ago is still counted on every render — dropping it makes that day
+      // count as elapsed again and shifts today and every future day forward by
+      // one slot, with the entry that would undo it already deleted. Only dates
+      // before the anchor are unreachable by the walk, and only those are safe
+      // to drop. Sorted so the prune is a cheap prefix drop.
       list.sort();
-      const cutoff = isoOf(new Date(Date.now() - 365 * 864e5));
+      const cutoff = STATE.plan.anchor || todayISO();
       while (list.length && list[0] < cutoff) list.shift();
       save();
       return this.isRest(iso);
@@ -894,8 +898,11 @@ const DB = {
         const r = STATE.plan.restDates.indexOf(iso);
         if (r !== -1) STATE.plan.restDates.splice(r, 1);
       }
+      // Anchor-relative, not a rolling year — see the note in setRest(). A
+      // dropped extraDate is counted the same way in reverse: the walk stops
+      // seeing a day it used to count, and everything after it slides back.
       list.sort();
-      const cutoff = isoOf(new Date(Date.now() - 365 * 864e5));
+      const cutoff = STATE.plan.anchor || todayISO();
       while (list.length && list[0] < cutoff) list.shift();
       save();
       return this.isExtra(iso);
@@ -1560,6 +1567,45 @@ const DB = {
       });
       return { maxWeight, bestORM, sessionCount: sessions.length };
     },
+    // ONE pass over every session, grouped by exercise, carrying everything
+    // bestStats() and prSnapshot() return. Those three each re-filter the WHOLE
+    // session list for one exercise — and listByExercise() sorts the match too,
+    // which none of them need — so a screen asking about every exercise ran one
+    // full scan plus one throwaway sort PER exercise. Measured at roughly fifty
+    // times the cost of this single grouping pass on a real-sized log, on the
+    // three screens that do exactly that: Program's top records, Personal
+    // Records, and the exercise grid (which rebuilds on every filter tap and
+    // every keystroke). The per-exercise functions stay as they are for the
+    // single-exercise callers — the save paths — where one scan beats a map.
+    statsByExercise() {
+      const idx = Object.create(null);
+      STATE.sessions.forEach((s) => {
+        let e = idx[s.exerciseId];
+        if (!e) e = idx[s.exerciseId] = this.emptyStats();
+        e.sessionCount += 1;
+        let vol = 0;
+        (s.sets || []).forEach((set) => {
+          const w = Number(set.weight) || 0, r = Number(set.reps) || 0;
+          if (w > e.maxWeight) e.maxWeight = w;
+          if (r > e.maxReps) e.maxReps = r;
+          vol += r * w;
+          e.totalSets += 1;
+          // Epley, per SET: maxWeight and maxReps can come from different sets,
+          // so the product of the two maxima is not a real lift.
+          if (r > 0 && w > 0) {
+            const orm = w * (1 + r / 30);
+            if (orm > e.bestORM) e.bestORM = orm;
+          }
+        });
+        if (vol > e.maxVolume) e.maxVolume = vol;
+      });
+      return idx;
+    },
+    // The zero row, so a caller can look up an exercise with no sessions at all
+    // without a null test at every use site.
+    emptyStats() {
+      return { maxWeight: 0, maxReps: 0, maxVolume: 0, totalSets: 0, sessionCount: 0, bestORM: 0 };
+    },
   },
 
   // ----- Reminders -----
@@ -1722,7 +1768,12 @@ const DB = {
       if (!suppId) return;
       const cur = this.get();
       const kept = cur.channels.supps.doses.filter((d) => {
-        if (d.suppId === suppId) return false;
+        // Sweep only what THIS function owns: the doses it derived last time,
+        // which it is about to rebuild. The `auto` test is load-bearing — on
+        // `d.suppId === suppId` alone, a dose the user typed on the reminders
+        // page and merely LINKED to this supplement was deleted the next time
+        // they edited that supplement, silently and with no way back.
+        if (d.auto && d.suppId === suppId) return false;
         // Also sweep the un-linked ids minted by migrateFromReminders(), or the
         // migrated copy and the derived one would both fire for the same dose.
         return String(d.id || '').indexOf('s' + suppId + '_') !== 0;
@@ -1854,7 +1905,17 @@ const DB = {
     _clampToWindow(hhmm) {
       const w = this.get().window;
       const a = this._min(w.start), b = this._min(w.end), t = this._min(hhmm);
-      if (a > b) return hhmm;                    // crosses midnight: almost everything is inside
+      if (a > b) {
+        // Crosses midnight (22:00 -> 06:00). Inside is t >= a OR t <= b, so the
+        // OUTSIDE band is (b, a) — the WIDEST part of the day, not the narrowest.
+        // Returning hhmm unchanged here handed the window guard a 09:00 that it
+        // then dropped, leaving the train and streak channels switched on,
+        // configured, and permanently silent for anyone on a night schedule.
+        if (t >= a || t <= b) return hhmm;
+        // Outside: snap to whichever edge is nearer around the clock, keeping the
+        // same 30-minute lead before the window closes that the day case uses.
+        return (t - b) <= (a - t) ? this._hhmm(Math.max(0, b - 30)) : this._hhmm(a);
+      }
       if (t >= a && t <= b) return hhmm;
       return this._hhmm(t > b ? Math.max(a, b - 30) : a);
     },
@@ -2574,16 +2635,33 @@ function dateLocale() {
   try { return (STATE && STATE.prefs && STATE.prefs.lang === 'ar') ? 'ar-u-nu-latn' : 'en-US'; }
   catch (_) { return 'en-US'; }
 }
+// toLocaleDateString rebuilds the whole Intl.DateTimeFormat machinery on every
+// call — measured at ~55µs against ~3.5µs for a reused formatter's .format(),
+// and these two run once per row on screens that render hundreds of rows (an
+// exercise's full history, the sleep log). Cached by locale so switching the UI
+// language still switches the month names; two entries is the whole cache.
+const DATE_FMT = { long: {}, short: {} };
+function dateFmt(kind) {
+  const loc = dateLocale();
+  let f = DATE_FMT[kind][loc];
+  if (!f) {
+    const opts = kind === 'long'
+      ? { month: 'short', day: 'numeric', year: 'numeric' }
+      : { month: 'short', day: 'numeric' };
+    try { f = new Intl.DateTimeFormat(loc, opts); }
+    catch (_) { f = new Intl.DateTimeFormat('en-US', opts); }
+    DATE_FMT[kind][loc] = f;
+  }
+  return f;
+}
 function formatDate(iso) {
   if (!iso) return '';
-  const d = new Date(iso + 'T00:00:00');
-  return d.toLocaleDateString(dateLocale(), { month: 'short', day: 'numeric', year: 'numeric' });
+  return dateFmt('long').format(new Date(iso + 'T00:00:00'));
 }
 
 function formatDateShort(iso) {
   if (!iso) return '';
-  const d = new Date(iso + 'T00:00:00');
-  return d.toLocaleDateString(dateLocale(), { month: 'short', day: 'numeric' });
+  return dateFmt('short').format(new Date(iso + 'T00:00:00'));
 }
 
 function daysAgo(iso) {

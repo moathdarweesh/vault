@@ -12,7 +12,7 @@
 // build. The literal below is the fallback (file://, or a stripped query) and is
 // still bumped by `npm run release` — see CLAUDE.md "CACHE WORKFLOW".
 const VAULT_BUILD = (() => {
-  const FALLBACK = 'v263';
+  const FALLBACK = 'v264';
   try {
     const src = (document.currentScript && document.currentScript.src) || '';
     const m = src.match(/[?&]v=(\d+)/);
@@ -194,54 +194,6 @@ function setServerPresetPlans(rows) {
   } catch (_) { SERVER_PRESET_PLANS = []; }
 }
 
-// Exercise variations - alternative names for similar movements (case-sensitive name lookup)
-const EXERCISE_VARIATIONS = {
-  'Bench Press': ['Dumbbell Press', 'Incline Bench Press', 'Push Up', 'Chest Press Machine'],
-  'Squat': ['Front Squat', 'Leg Press Machine', 'Hack Squat Machine', 'Smith Machine Squat'],
-  'Deadlift': ['Romanian Deadlift', 'T-Bar Row Machine', 'Barbell Row'],
-  'Overhead Press': ['Shoulder Press Machine', 'Smith Machine Shoulder Press', 'Lateral Raise'],
-  'Barbell Row': ['Seated Row Machine', 'Lat Pulldown Machine', 'Iso-Lateral Row', 'Dumbbell Row'],
-  'Pull Up': ['Lat Pulldown Machine', 'Seated Row Machine', 'Iso-Lateral Row'],
-  'Lat Pulldown Machine': ['Pull Up', 'Iso-Lateral Row', 'Seated Row Machine'],
-  'Seated Row Machine': ['Barbell Row', 'Iso-Lateral Row', 'Lat Pulldown Machine'],
-  'Leg Press Machine': ['Squat', 'Hack Squat Machine', 'Lunges'],
-  'Leg Curl Machine': ['Seated Leg Curl', 'Romanian Deadlift'],
-  'Leg Extension Machine': ['Squat', 'Hack Squat Machine'],
-  'Hack Squat Machine': ['Squat', 'Leg Press Machine', 'Front Squat'],
-  'Dumbbell Press': ['Bench Press', 'Incline Bench Press', 'Chest Press Machine'],
-  'Incline Bench Press': ['Bench Press', 'Incline Chest Press Machine', 'Dumbbell Press'],
-  'Dumbbell Fly': ['Pec Deck Machine', 'Cable Crossover'],
-  'Cable Crossover': ['Pec Deck Machine', 'Dumbbell Fly'],
-  'Pec Deck Machine': ['Dumbbell Fly', 'Cable Crossover'],
-  'Lateral Raise': ['Lateral Raise Machine', 'Cable Upright Row', 'Front Raise', 'Shoulder Press Machine'],
-  'Lateral Raise Machine': ['Lateral Raise', 'Cable Upright Row', 'Shoulder Press Machine'],
-  'Front Raise': ['Lateral Raise', 'Overhead Press'],
-  'Rear Delt Fly': ['Rear Delt Fly Machine', 'Face Pull'],
-  'Rear Delt Fly Machine': ['Rear Delt Fly', 'Face Pull'],
-  'Shrugs': ['Cable Shrug'],
-  'Barbell Curl': ['EZ Bar Curl', 'Dumbbell Curl', 'Hammer Curl', 'Preacher Curl Machine', 'Cable Curl'],
-  'EZ Bar Curl': ['Barbell Curl', 'Preacher Curl Machine', 'Reverse Curl'],
-  'Dumbbell Curl': ['Barbell Curl', 'Incline Dumbbell Curl', 'Hammer Curl', 'Concentration Curl'],
-  'Incline Dumbbell Curl': ['Dumbbell Curl', 'Spider Curl', 'Concentration Curl'],
-  'Concentration Curl': ['Dumbbell Curl', 'Spider Curl', 'Preacher Curl Machine'],
-  'Spider Curl': ['Concentration Curl', 'Preacher Curl Machine', 'Incline Dumbbell Curl'],
-  'Reverse Curl': ['Barbell Curl', 'Hammer Curl'],
-  'Chin-Up': ['Pull Up', 'Lat Pulldown Machine', 'Barbell Curl'],
-  'Preacher Curl Machine': ['Barbell Curl', 'EZ Bar Curl', 'Dumbbell Curl', 'Cable Curl'],
-  'Hammer Curl': ['Dumbbell Curl', 'Reverse Curl', 'Barbell Curl'],
-  'Tricep Pushdown': ['Overhead Cable Triceps', 'Tricep Extension', 'Triceps Dip Machine'],
-  'Tricep Extension': ['Tricep Pushdown', 'Overhead Cable Triceps'],
-  'Triceps Dip Machine': ['Tricep Pushdown', 'Tricep Extension', 'Dips'],
-  'Dips': ['Triceps Dip Machine', 'Tricep Pushdown', 'Bench Press'],
-  'Plank': ['Crunches', 'Leg Raise', 'Russian Twist'],
-  'Crunches': ['Ab Crunch Machine', 'Leg Raise', 'Russian Twist'],
-  'Ab Crunch Machine': ['Crunches', 'Leg Raise', 'Russian Twist'],
-  'Calf Raise': ['Seated Calf Raise', 'Calf Raise Machine'],
-  'Romanian Deadlift': ['Deadlift', 'Leg Curl Machine', 'Seated Leg Curl'],
-  'Push Up': ['Bench Press', 'Dumbbell Press'],
-  'Hip Abductor Machine': ['Hip Adductor Machine', 'Squat'],
-  'Hip Adductor Machine': ['Hip Abductor Machine', 'Squat'],
-};
 
 // ==========================================================================
 // Muscle groups — anterior / posterior mapping
@@ -1037,26 +989,16 @@ const I18N = {
     food_history: 'Food log',
     today_totals: 'Today',
     add_food_log: 'Add Food',
-    pick_from_library: 'Pick from your list',
-    add_to_log: 'Add to Log',
     no_food_logged: 'No food logged today',
     no_food_logged_text: 'Tap "Add Food" and pick from your reference list.',
     servings: 'Servings',
-    calories_per_serving: 'Calories per serving',
-    protein_per_serving: 'Protein per serving (g)',
-    carbs_per_serving: 'Carbs per serving (g)',
     food_added: 'Food logged',
     food_removed: 'Removed',
     take_all: 'Take all',
     all_taken: 'All marked as taken',
-    empty_food_list: 'Your reference list is empty',
-    empty_food_list_text: 'Go to Food and add your foods first.',
-    go_to_food: 'Go to Food',
     prev_day: 'Previous day', next_day: 'Next day',
 
     // Variations (in exercise detail)
-    variations: 'Alternatives',
-    variations_sub: 'Similar moves that hit the same muscles.',
 
     // Chart
     progress_chart: 'Progress',
@@ -1782,25 +1724,15 @@ const I18N = {
     food_history: 'سجل الأكل',
     today_totals: 'اليوم',
     add_food_log: 'أضف أكل',
-    pick_from_library: 'اختر من قائمتك',
-    add_to_log: 'أضف للسجل',
     no_food_logged: 'ما سجّلت أكل اليوم',
     no_food_logged_text: 'اضغط "أضف أكل" واختر من قائمتك المرجعية.',
     servings: 'عدد الحصص',
-    calories_per_serving: 'السعرات لكل حصة',
-    protein_per_serving: 'البروتين لكل حصة (جم)',
-    carbs_per_serving: 'الكارب لكل حصة (جم)',
     food_added: 'تم التسجيل',
     food_removed: 'تم الحذف',
     take_all: 'أخذ الكل',
     all_taken: 'تم تحديد الكل كمأخوذ',
-    empty_food_list: 'قائمتك المرجعية فاضية',
-    empty_food_list_text: 'روح لـ "الأكل" وضيف أكلاتك أول.',
-    go_to_food: 'روح للأكل',
     prev_day: 'يوم سابق', next_day: 'يوم تالي',
 
-    variations: 'تمارين بديلة',
-    variations_sub: 'حركات مشابهة تضرب نفس العضلات.',
 
     progress_chart: 'التقدم',
     max_weight_per_session: 'أقصى وزن لكل جلسة',
@@ -2123,7 +2055,6 @@ function resizeImageToDataUrl(file, maxSize = 800, quality = 0.78) {
 let toastTimeout = null;
 // Fully tear the toast down: hide it, drop the interactive state, cancel the
 // timer, and remove any pause/resume listeners left by an action toast. Safe to
-
 
 
 // ===========================================================================
@@ -3117,10 +3048,13 @@ function brandLockup(size = 'header') {
   const plateW = Math.round(plateH * (10 / 15) * 10) / 10;   // the spec's 10x15 aspect
   const sub = Math.round(v * 0.5 * 10) / 10;
   const gap = Math.round(v * 0.57 * 10) / 10;
-  // Rule 5: below VAULT 10 the sub-word stops being legible even in mono, so it
-  // is dropped rather than shrunk. Both shipped sizes clear it; the guard is
-  // here so a future one cannot quietly ship an unreadable TRAIN.
-  const showSub = v >= 10;
+  // Rule 5 + the 11px floor: below legibility the sub-word is dropped rather
+  // than shrunk. The guard tested `v` — the VAULT size — instead of `sub`, the
+  // size that actually renders, so the header (VAULT 11 → TRAIN 5.5) shipped an
+  // illegible 5.5px smudge on five screens in both languages and both themes,
+  // while the comment claimed it was protected. Test what renders: splash keeps
+  // TRAIN at 16px, the header drops it.
+  const showSub = sub >= 11;
   return `
     <div dir="ltr" class="brand-lockup brand-${size}" style="gap:${gap}px">
       <svg viewBox="1.5 6 8 12" width="${plateW}" height="${plateH}" aria-hidden="true">
@@ -3181,9 +3115,6 @@ function navigate(view, context = {}, opts = {}) {
   currentView = view;
   viewContext = context;
 
-  // The Food view mounts a floating AI-chat bar on `.app`; clear it on every
-  // navigation so it never lingers over other views (renderFood re-mounts it).
-  if (typeof unmountFoodAiBar === 'function') unmountFoodAiBar();
   document.querySelector('.img-lightbox')?.remove();
   // The food add-sheet lives on `.app` (not #modal-root) — clear it too so it
   // never lingers over another view after a nav.
@@ -3572,13 +3503,6 @@ function computeStreak(sessions, cardio) {
   return streak;
 }
 
-function totalVolumeThisWeek() {
-  const { thisStart, thisEnd } = weekRanges();
-  const sessions = DB.sessions.listAll().filter((s) => inRangeISO(s.date, thisStart, thisEnd));
-  let total = 0;
-  sessions.forEach((s) => s.sets.forEach((x) => { total += x.reps * x.weight; }));
-  return Math.round(total);
-}
 
 function weekRanges() {
   const thisStart = startOfWeek(new Date());
@@ -4338,9 +4262,13 @@ async function syncExerciseImages() {
   if (healed) { try { renderView(currentView); } catch (_) {} }
 }
 
-function bentoCardHtml(ex, i, { showPR = true, toggle = null } = {}) {
+// `stats` lets a caller rendering MANY cards hand in a row from one
+// DB.sessions.statsByExercise() pass — without it every card re-scans the whole
+// session list, and this grid rebuilds on every filter tap and every keystroke.
+// Omitted for a one-off card, where a single scan is cheaper than a map.
+function bentoCardHtml(ex, i, { showPR = true, toggle = null, stats = null } = {}) {
   const isWide = i % 5 === 0;
-  const stats = DB.sessions.bestStats(ex.id);
+  if (!stats) stats = DB.sessions.bestStats(ex.id);
   const machineSvg = ex.machineType ? machineSvgFor(ex.machineType) : '';
   const url = exerciseImgSrc(ex);
   const initials = escapeHtml(initialsOf(exDisplayName(ex)));
@@ -4528,11 +4456,14 @@ function renderProgram(el) {
   }).join('');
 
   // ---- Top records (same filter as the full PR screen) ---------------------
+  // One grouping pass instead of one full session scan per exercise — see
+  // DB.sessions.statsByExercise(). This screen asks about the whole catalog.
+  const prIndex = DB.sessions.statsByExercise();
   const prRows = DB.exercises.list()
     .map((ex) => {
       if (!ex) return null;
-      const snap = DB.sessions.prSnapshot(ex.id);
-      if (snap.sessionCount === 0 || snap.maxWeight === 0) return null;
+      const snap = prIndex[ex.id];
+      if (!snap || snap.sessionCount === 0 || snap.maxWeight === 0) return null;
       return { ex, snap };
     })
     .filter(Boolean)
@@ -4735,7 +4666,9 @@ function renderExercises(el) {
     // Keep cards as an ARRAY so the "add" card can be spliced after the first
     // card without string-searching for '</button>' (which would break the day
     // a card gains a nested control).
-    const cards = filtered.map((ex, i) => bentoCardHtml(ex, i));
+    const gridStats = DB.sessions.statsByExercise();
+    const cards = filtered.map((ex, i) =>
+      bentoCardHtml(ex, i, { stats: gridStats[ex.id] || DB.sessions.emptyStats() }));
 
     const addCard = `
       <button class="bento-card bento-add" id="add-exercise-btn">
@@ -5389,9 +5322,6 @@ function renderExerciseDetail(el, exerciseId) {
 
   $('#add-session-btn', el).addEventListener('click', () => openSessionModal(exerciseId));
 
-  el.querySelectorAll('[data-goto-alt]').forEach((b) =>
-    b.addEventListener('click', () => navigate('exercise-detail', { exerciseId: b.dataset.gotoAlt }))
-  );
 
   el.querySelectorAll('[data-edit-session]').forEach((b) =>
     b.addEventListener('click', () => openSessionModal(exerciseId, b.dataset.editSession))
@@ -5993,33 +5923,6 @@ function setServerFoodCatalog(rows) {
 function allFoodPresets() { return SERVER_FOOD_PRESETS.length ? FOOD_PRESETS.concat(SERVER_FOOD_PRESETS) : FOOD_PRESETS; }
 function allFoodCatOrder() { return SERVER_FOOD_PRESETS.length ? FOOD_CAT_ORDER.concat(['more']) : FOOD_CAT_ORDER; }
 
-// The AI-chat CTA floats above the bottom nav. It is mounted on `.app`
-// (a sibling of the nav) rather than inside the Food view, because the view
-// carries a `fadeUp` transform — and a transformed ancestor turns any
-// position:fixed descendant into position:absolute, which would misplace it.
-function unmountFoodAiBar() {
-  document.querySelector('.app > #food-ai-cta')?.remove();
-}
-function mountFoodAiBar() {
-  const app = document.querySelector('.app');
-  if (!app) return;
-  unmountFoodAiBar();
-  const bar = document.createElement('button');
-  bar.className = 'cta-card cta-floating';
-  bar.id = 'food-ai-cta';
-  bar.innerHTML = `
-    <div class="cta-card-icon">${icon('sparkle', 20)}</div>
-    <div style="flex:1;min-width:0">
-      <div class="cta-card-title">${t('ai_chat_title')}</div>
-      <div class="cta-card-sub">${t('ai_chat_sub')}</div>
-    </div>
-    <div class="cta-card-chev">${icon('chevronRight', 20)}</div>
-  `;
-  bar.addEventListener('click', () => {
-    if (window.FoodAI) window.FoodAI.open(typeof todayISO === 'function' ? todayISO() : null);
-  });
-  app.appendChild(bar);
-}
 
 // The Food tab is now a DAILY NUTRITION DASHBOARD: today's targets, what's been
 // eaten, and — the thing the user asked to see front and centre — what's still
@@ -8313,37 +8216,6 @@ function chartHtmlForExercise(exerciseId) {
   `;
 }
 
-function variationsHtmlForExercise(ex) {
-  // Look up by name; fallback to 3 random others in same category
-  let names = EXERCISE_VARIATIONS[ex.name];
-  const all = DB.exercises.list();
-  let alts = [];
-
-  if (names && names.length > 0) {
-    const byName = Object.fromEntries(all.map((e) => [e.name, e]));
-    alts = names.map((n) => byName[n]).filter(Boolean).filter((e) => e.id !== ex.id);
-  }
-
-  if (alts.length === 0) {
-    alts = all.filter((e) => e.category === ex.category && e.id !== ex.id).slice(0, 3);
-  }
-
-  if (alts.length === 0) return '';
-
-  const rows = alts.slice(0, 5).map((alt) => `
-    <div class="variation-row">
-      <span class="variation-cat-dot" data-cat="${escapeHtml(alt.category)}"></span>
-      <span class="variation-name">${escapeHtml(alt.name)}</span>
-      <button type="button" class="variation-select" data-goto-alt="${escapeHtml(alt.id)}" aria-label="${escapeHtml(t('select'))}">${t('select')} ${icon('chevronRight', 16)}</button>
-    </div>
-  `).join('');
-
-  return `
-    <div class="section-title">${t('variations')}</div>
-    <p style="font-size:12px;color:var(--text-mute);margin-top:-6px;margin-bottom:10px">${t('variations_sub')}</p>
-    <div class="variation-list" style="margin-bottom:18px">${rows}</div>
-  `;
-}
 
 // ==========================================================================
 // PLANNER VIEW
@@ -8540,11 +8412,6 @@ function openScheduleModal(tmpl) {
     : [0, 1, 2, 3, 4, 5, 6];
   const training = new Set(defaults);
 
-  // Selected training days (in Sun..Sat order) → workout assigned cyclically.
-  function assignment() {
-    const sel = dayOrder.filter((d) => training.has(d));
-    return sel.map((dow, i) => ({ dow, workout: workouts[i % M] }));
-  }
 
   function renderPreview() {
     const box = $('#schedule-preview');
@@ -8923,6 +8790,22 @@ function renderSessionDay(el) {
       if (cached.savedSessionId && !DB.sessions.get(cached.savedSessionId)) {
         cached.savedSessionId = null;
       }
+      // The mirror case, and the dangerous one: a session APPEARED while we were
+      // away. Guided mode logs through its own commitExercise, and the run's back
+      // arrow returns here with the SAME context object, so this cache still says
+      // "not logged" and still holds the values pre-filled from last week. The
+      // card would then show those old sets with a live Save button, and Save
+      // resolves the session by date — overwriting the workout just logged.
+      // Adopt the row: its values too when the card is clean, its id alone when
+      // the user has an unsaved edit here (their typing is not ours to discard,
+      // but the screen must stop claiming the day is unlogged).
+      if (!cached.savedSessionId) {
+        const fresh = todaySessionFor(exId);
+        if (fresh) {
+          if (!cached.dirty) cached.sets = fresh.sets.map((s) => ({ reps: s.reps, weight: s.weight }));
+          cached.savedSessionId = fresh.id;
+        }
+      }
       return cached;
     }
     const today = todaySessionFor(exId);
@@ -9051,8 +8934,19 @@ function renderSessionDay(el) {
 
   // "Start Workout" → guided one-exercise-at-a-time mode. Carry the chosen date
   // and unit so the run logs against the same day/unit the user picked here.
+  // The subset and the "minimum" tag travel with it: navigate() replaces
+  // viewContext wholesale, so anything not named here is dropped. Without them
+  // the run re-derived the day from the plan — on a rest day reached through
+  // "train a lagging muscle" that plan is null, so the button led straight to a
+  // "rest day, no workout" screen, and out of the reduced-session route it
+  // reopened the whole day and logged it as a full one.
   $('#sd-start-run', el)?.addEventListener('click', () =>
-    navigate('session-run', { date: viewContext.sdDate, unit: viewContext.sdUnit })
+    navigate('session-run', {
+      date: viewContext.sdDate,
+      unit: viewContext.sdUnit,
+      runOnly: sdOnly,
+      runMinimum: !!viewContext.sdMinimum,
+    })
   );
 
   // ----- Bindings -----
@@ -9331,7 +9225,16 @@ function renderSessionRun(el) {
   const dow = runDateObj.getDay();   // header label = the date's weekday
   const day = DB.plan.workoutForDate(runDateObj);
   const exerciseById = Object.fromEntries(DB.exercises.list().map((e) => [e.id, e]));
-  const exObjs = (day?.exerciseIds || []).map((id) => exerciseById[id]).filter(Boolean);
+  // Same shape as renderSessionDay's sdOnly: a FILTER over the plan when there
+  // is one, the LIST itself when the rotation calls this date a rest day and the
+  // user chose exercises anyway. Both screens must resolve to the same set, or
+  // the run walks a different workout than the one its button was sitting on.
+  const runOnly = Array.isArray(viewContext.runOnly) ? viewContext.runOnly : null;
+  const runPlanIds = (day?.exerciseIds || []);
+  const runIds = runPlanIds.length
+    ? (runOnly ? runPlanIds.filter((id) => runOnly.includes(id)) : runPlanIds)
+    : (runOnly || []);
+  const exObjs = runIds.map((id) => exerciseById[id]).filter(Boolean);
   const totalEx = exObjs.length;
 
   // Persist run state across re-renders (until navigation replaces viewContext).
@@ -9394,7 +9297,14 @@ function renderSessionRun(el) {
     if (existingId && DB.sessions.update(existingId, { date: viewContext.runDate, sets: cleaned })) {
       st.savedSessionId = existingId;
     } else {
-      const created = DB.sessions.add({ exerciseId: exId, date: viewContext.runDate, sets: cleaned });
+      // Tagged 'minimum' when the run inherited a reduced day from the rest-day
+      // sheet, matching renderSessionDay's save path — otherwise the same
+      // reduced workout counts as a full one purely because it was logged
+      // through guided mode instead of the cards.
+      const created = DB.sessions.add({
+        exerciseId: exId, date: viewContext.runDate, sets: cleaned,
+        kind: viewContext.runMinimum ? 'minimum' : undefined,
+      });
       st.savedSessionId = created.id;
     }
     // Stash rather than toast: a mid-workout toast would fight the rest-timer bar
@@ -9851,84 +9761,6 @@ function renderCalendar(el) {
   });
 }
 
-function openCalendarDayModal(iso) {
-  const sessions = DB.sessions.listAll().filter((s) => s.date === iso);
-  const cardio = DB.cardio.list().filter((c) => c.date === iso);
-  const sleep = DB.sleep.list().find((s) => s.date === iso);
-  const exById = Object.fromEntries(DB.exercises.list().map((e) => [e.id, e]));
-
-  let html = '';
-  if (sessions.length > 0) {
-    html += `<div class="section-title" style="margin-top:0">${t('workouts_day')}</div>`;
-    html += '<div class="data-list">';
-    sessions.forEach((s) => {
-      const ex = exById[s.exerciseId];
-      const totalSets = s.sets.length;
-      const maxW = Math.max(0, ...s.sets.map((x) => x.weight));
-      html += `
-        <div class="data-row">
-          <div class="data-icon workout">${icon('dumbbell', 20)}</div>
-          <div class="data-main">
-            <div class="data-title">${escapeHtml(ex ? ex.name : '?')}</div>
-            <div class="data-meta">
-              <span class="num">${fmtNum(totalSets)} ${t('sets').toLowerCase()}</span>
-              ${maxW > 0 ? `<span class="dot-sep"></span><span class="num">${fmtWeight(maxW)} ${unitLabel()}</span>` : ''}
-            </div>
-          </div>
-        </div>
-      `;
-    });
-    html += '</div>';
-  }
-
-  if (cardio.length > 0) {
-    html += `<div class="section-title">${t('cardio_day')}</div><div class="data-list">`;
-    cardio.forEach((c) => {
-      html += `
-        <div class="data-row">
-          <div class="data-icon ${escapeHtml(c.type)}">${icon(c.type === 'cycling' ? 'bike' : c.type === 'walking' ? 'walk' : 'treadmill', 20)}</div>
-          <div class="data-main">
-            <div class="data-title">${escapeHtml(t(c.type))}</div>
-            <div class="data-meta">
-              <span class="num">${fmtNum(c.duration)} ${t('minutes').toLowerCase()}</span>
-              <span class="dot-sep"></span>
-              <span class="num">${fmtNum(c.calories)} ${t('cal')}</span>
-            </div>
-          </div>
-        </div>
-      `;
-    });
-    html += '</div>';
-  }
-
-  if (sleep) {
-    html += `<div class="section-title">${t('sleep_day')}</div><div class="data-list">`;
-    html += `
-      <div class="data-row">
-        <div class="data-icon sleep">${icon('bed', 20)}</div>
-        <div class="data-main">
-          <div class="data-title">${formatTime12(sleep.sleepTime)} → ${formatTime12(sleep.wakeTime)}</div>
-          <div class="data-meta"><span class="num">${formatDuration(sleep.durationMinutes)}</span></div>
-        </div>
-      </div>
-    `;
-    html += '</div>';
-  }
-
-  if (!html) {
-    html = emptyState({ iconName: 'calendar', title: t('no_activity_day'), text: '' });
-  }
-
-  openModal(`
-    <div class="modal-header">
-      <div>
-        <div class="modal-title">${formatDate(iso)}</div>
-      </div>
-      <button class="icon-btn icon-btn-tile" data-close>${icon('close', 20)}</button>
-    </div>
-    ${html}
-  `);
-}
 
 // ==========================================================================
 // SUPPLEMENTS VIEW
@@ -10473,133 +10305,6 @@ function renderFoodLog(el) {
     }
     refreshTotals();
     showToast(t('food_removed'));
-  });
-}
-
-function openFoodPickerModal(date) {
-  const foods = DB.foods.list();
-  if (foods.length === 0) {
-    openModal(`
-      <div class="modal-header">
-        <div><div class="modal-title">${t('empty_food_list')}</div></div>
-        <button class="icon-btn icon-btn-tile" data-close>${icon('close', 20)}</button>
-      </div>
-      <p style="color:var(--text-mute);font-size:13px;margin-bottom:18px">${t('empty_food_list_text')}</p>
-      <div class="form-actions">
-        <button type="button" class="btn btn-ghost" data-close>${t('cancel')}</button>
-        <button type="button" class="btn btn-primary" id="goto-food-btn">${t('go_to_food')}</button>
-      </div>
-    `);
-    $('#goto-food-btn').addEventListener('click', () => { closeModal(); navigate('food'); });
-    return;
-  }
-
-  let pickerQuery = '';
-  function renderList() {
-    const list = pickerQuery
-      ? foods.filter((f) => f.name.toLowerCase().includes(pickerQuery.toLowerCase()))
-      : foods;
-    const container = $('#food-picker-list');
-    if (!container) return;
-    container.innerHTML = list.map((f) => `
-      <button type="button" class="picker-row" data-pick-food="${f.id}">
-        <span class="picker-row-cat" style="background:var(--cat-arms)"></span>
-        <span class="picker-row-name">
-          ${escapeHtml(f.name)}
-          ${f.serving ? `<span style="color:var(--text-mute);font-weight:500;font-size:11px"> · ${escapeHtml(f.serving)}</span>` : ''}
-        </span>
-        <span style="font-size:11px;color:var(--text-mute);font-weight:600" class="num">${fmtNum(f.calories)} ${t('cal')}</span>
-      </button>
-    `).join('');
-
-    container.querySelectorAll('[data-pick-food]').forEach((b) =>
-      b.addEventListener('click', () => {
-        const food = foods.find((x) => x.id === b.dataset.pickFood);
-        if (food) openFoodLogEntryModal(date, food);
-      })
-    );
-  }
-
-  openModal(`
-    <div class="modal-header">
-      <div>
-        <div class="modal-title">${t('pick_from_library')}</div>
-      </div>
-      <button class="icon-btn icon-btn-tile" data-close>${icon('close', 20)}</button>
-    </div>
-
-    <div class="form-group">
-      <div class="search-wrap">
-        ${icon('search', 20)}
-        <input type="search" id="food-picker-search" placeholder="${t('search_foods')}">
-      </div>
-    </div>
-
-    <div class="picker-list" id="food-picker-list"></div>
-  `);
-
-  renderList();
-  $('#food-picker-search').addEventListener('input', (e) => {
-    pickerQuery = e.target.value;
-    renderList();
-  });
-}
-
-function openFoodLogEntryModal(date, food) {
-  let servings = 1;
-  let calories = food.calories;
-  let protein = food.protein;
-  let carbs = food.carbs;
-
-  openModal(`
-    <div class="modal-header">
-      <div>
-        <div class="modal-title">${escapeHtml(food.name)}</div>
-        ${food.serving ? `<div class="modal-subtitle">${escapeHtml(food.serving)}</div>` : ''}
-      </div>
-      <button class="icon-btn icon-btn-tile" data-close>${icon('close', 20)}</button>
-    </div>
-
-    <div class="form-group">
-      <label class="form-label">${t('servings')}</label>
-      <input type="number" inputmode="decimal" id="fl-servings" step="0.5" min="0.5" value="1">
-    </div>
-
-    <div class="form-row">
-      <div class="form-group">
-        <label class="form-label">${t('calories_per_serving')}</label>
-        <input type="number" inputmode="decimal" id="fl-cal" step="1" min="0" value="${numAttr(food.calories)}">
-      </div>
-      <div class="form-group">
-        <label class="form-label">${t('protein_per_serving')}</label>
-        <input type="number" inputmode="decimal" id="fl-pro" step="0.1" min="0" value="${numAttr(food.protein)}">
-      </div>
-    </div>
-
-    <div class="form-group">
-      <label class="form-label">${t('carbs_per_serving')}</label>
-      <input type="number" inputmode="decimal" id="fl-carb" step="0.1" min="0" value="${numAttr(food.carbs)}">
-    </div>
-
-    <div class="form-actions">
-      <button type="button" class="btn btn-ghost" data-close>${t('cancel')}</button>
-      <button type="button" class="btn btn-primary" id="fl-save">${t('add_to_log')}</button>
-    </div>
-  `);
-
-  $('#fl-save').addEventListener('click', () => {
-    servings = Number($('#fl-servings').value) || 1;
-    calories = Number($('#fl-cal').value) || 0;
-    protein = Number($('#fl-pro').value) || 0;
-    carbs = Number($('#fl-carb').value) || 0;
-    DB.foodLogs.add(date, {
-      foodId: food.id,
-      name: food.name,
-      servings, calories, protein, carbs,
-    });
-    closeModal();
-    showToast(t('food_added'));
-    renderView(currentView);
   });
 }
 
@@ -11247,11 +10952,13 @@ function renderPersonalRecords(el) {
   const exercises = DB.exercises.list();
 
   // Build rows: skip exercises with no sessions or bodyweight-only (maxWeight === 0); null-guard orphan ids
+  // One grouping pass for the whole catalog — see DB.sessions.statsByExercise().
+  const prIndex = DB.sessions.statsByExercise();
   const rows = exercises
     .map((ex) => {
       if (!ex) return null;
-      const snap = DB.sessions.prSnapshot(ex.id);
-      if (snap.sessionCount === 0) return null;
+      const snap = prIndex[ex.id];
+      if (!snap || snap.sessionCount === 0) return null;
       if (snap.maxWeight === 0) return null; // bodyweight-only exercises (push-ups, pull-ups, etc.)
       return { ex, snap };
     })
