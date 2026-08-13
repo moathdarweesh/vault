@@ -257,7 +257,15 @@
       // leave the previous schedule alone.
       const cfgNow = DB.notif.get();
       const anyOn = Object.keys(cfgNow.channels).some((k) => cfgNow.channels[k].on);
-      if (!items.length && anyOn) return { ok: false, reason: 'empty', count: 0 };
+      const emptyBail = !items.length && anyOn;
+      // NOTE the bail happens AFTER the orphan sweep below, not before it. When
+      // it returned here directly, deleting your last supplement left that
+      // supplement's alarms armed for the full 7-day horizon: scheduleAhead()
+      // correctly returned nothing, the bail fired, and the sweep that would
+      // have cancelled the now-orphaned ids never ran — so a deleted dose kept
+      // notifying for a week. The sweep is computable with an empty list (the
+      // wanted set is just TEST_ID) and only ever REMOVES ids we no longer want,
+      // so it is safe in exactly the case the bail exists to protect.
 
       // CANCEL ONLY WHAT WILL NOT BE RE-ARMED. `cancel()` calls
       // dismissVisibleNotification(), so it does not just drop the alarm — it
@@ -271,6 +279,11 @@
       const pending = await plugin().getPending();
       const orphans = ((pending && pending.notifications) || []).filter((n) => !wanted.has(n.id));
       if (orphans.length) await plugin().cancel({ notifications: orphans.map((n) => ({ id: n.id })) });
+      // The transient-empty bail lands HERE, after the sweep. The manifest is
+      // deliberately NOT cleared: this is the "we computed nothing but channels
+      // are still on" case, so the previous schedule is left believed-armed and
+      // reconcile() can still account for whatever fired.
+      if (emptyBail) return { ok: false, reason: 'empty', count: 0 };
       if (!items.length) { DB.notif.armedSet([]); return { ok: true, count: 0 }; }
       // notificationFor() stamps title/body/lang onto each item as it builds it,
       // so the manifest is written AFTER the map, not before.
@@ -473,6 +486,21 @@
   // and it never appeared", and a user who swipes the shade clears the primary
   // source. That is why `path` is recorded — it keeps the distinction for
   // debugging — and why it is not shown to the user, who cannot act on it.
+  // Recording a delivery must ALSO spend its tag in the day ledger. Until v261
+  // it did not, and the two consequences both showed:
+  //   · missed() re-offered a reminder the OS had already delivered, so the user
+  //     saw the same thing twice — once as a system notification while the app
+  //     was closed, then again as the in-app bar on open;
+  //   · native deliveries never counted toward the daily cap, so the cap only
+  //     ever constrained the web path.
+  // markSent() is the compare-and-set: it returns false if the tag was already
+  // spent, so calling it here is safe from either path and cannot double-count.
+  const recordDelivery = (m, path, seen) => {
+    const rec = DB.notif.logAdd(Object.assign({}, m, { path, seen: !!seen }));
+    if (rec) { try { DB.notif.markSent(m.tag); } catch (_) {} }
+    return rec;
+  };
+
   async function reconcile() {
     if (!supported()) return 0;
     let added = 0;
@@ -486,7 +514,7 @@
         const d = await plugin().getDeliveredNotifications();
         ((d && d.notifications) || []).forEach((n) => {
           const m = byId[n.id];
-          if (m && DB.notif.logAdd(Object.assign({}, m, { path: 'os' }))) added += 1;
+          if (m && recordDelivery(m, 'os')) added += 1;
         });
       }
     } catch (_) {}
@@ -501,7 +529,7 @@
         const h = Number(String(m.at).split(':')[0]) || 0;
         const mi = Number(String(m.at).split(':')[1]) || 0;
         if (DB.notif._dateOf(m.date, h, mi).getTime() > now) return;   // not due yet
-        if (DB.notif.logAdd(Object.assign({}, m, { path: 'reconciled' }))) added += 1;
+        if (recordDelivery(m, 'reconciled')) added += 1;
       });
     } catch (_) {}
     return added;
@@ -524,7 +552,7 @@
     try {
       plugin().addListener('localNotificationReceived', (n) => {
         const m = DB.notif.armedGet().find((x) => x.id === (n && n.id));
-        if (m) DB.notif.logAdd(Object.assign({}, m, { path: 'os' }));
+        if (m) recordDelivery(m, 'os');
       });
     } catch (_) {}
     try {
@@ -532,7 +560,7 @@
         const id = e && e.notification && e.notification.id;
         const m = DB.notif.armedGet().find((x) => x.id === id);
         if (!m) return;
-        const rec = DB.notif.logAdd(Object.assign({}, m, { path: 'os', seen: true }));
+        const rec = recordDelivery(m, 'os', true);
         if (!rec) { try { DB.notif.logList().forEach((r) => { if (r.tag === m.tag) DB.notif.logMarkSeen(r.id); }); } catch (_) {} }
         const dest = DB.notif.destFor(m.channel);
         try { navigate(dest.view, dest.context); } catch (_) {}

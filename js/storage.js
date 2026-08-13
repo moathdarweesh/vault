@@ -312,6 +312,21 @@ function uid() {
 // brand on every switch). Settings offers that pair and nothing else.
 function pad2(n) { return String(n).padStart(2, '0'); }
 
+// Comparators for ISO date / timestamp strings.
+//
+// These are ASCII and fixed-width, so `<` and `>` order them EXACTLY as
+// localeCompare does — at roughly a tenth of the cost, because localeCompare
+// routes every single comparison through the ICU collator. Sorting 2,000
+// sessions makes ~22,000 comparisons, and these lists are re-sorted on most
+// renders, so it is the multiplier under every other hot path in the app.
+//
+// NAMES DELIBERATELY STILL USE localeCompare (supplements, exercises, foods).
+// Those are user-facing strings that are frequently Arabic, where code-point
+// order is simply wrong — "ياسمين" would sort after "أحمد" by accident rather
+// than by alphabet. Speed is not worth a mis-sorted list the user reads.
+function isoAsc(a, b) { return a < b ? -1 : a > b ? 1 : 0; }
+function isoDesc(a, b) { return a < b ? 1 : a > b ? -1 : 0; }
+
 // Small stable integer id from a string — the native notification plugin keys
 // everything by int, and reusing the same id lets a re-sync REPLACE an alarm
 // instead of stacking a duplicate.
@@ -1144,7 +1159,7 @@ const DB = {
       });
       return Object.values(map)
         .filter((m) => !excludeKeys.has(m.key))
-        .sort((a, b) => (b.count - a.count) || (b.last || '').localeCompare(a.last || ''))
+        .sort((a, b) => (b.count - a.count) || isoDesc(a.last || '', b.last || ''))
         .slice(0, limit)
         .map((m) => ({
           foodId: m.entry.foodId || null,
@@ -1163,7 +1178,7 @@ const DB = {
   // ===== Body weight log — one entry per day, kg canonical =====
   bodyweight: {
     list() {
-      return (STATE.bodyweight || []).slice().sort((a, b) => a.date.localeCompare(b.date));
+      return (STATE.bodyweight || []).slice().sort((a, b) => isoAsc(a.date, b.date));
     },
     latest() {
       const l = this.list();
@@ -1445,11 +1460,11 @@ const DB = {
     listByExercise(exerciseId) {
       return STATE.sessions
         .filter((s) => s.exerciseId === exerciseId)
-        .sort((a, b) => b.date.localeCompare(a.date) || b.createdAt.localeCompare(a.createdAt));
+        .sort((a, b) => isoDesc(a.date, b.date) || isoDesc(a.createdAt, b.createdAt));
     },
     listAll() {
       return [...STATE.sessions].sort(
-        (a, b) => b.date.localeCompare(a.date) || b.createdAt.localeCompare(a.createdAt)
+        (a, b) => isoDesc(a.date, b.date) || isoDesc(a.createdAt, b.createdAt)
       );
     },
     lastForExercise(exerciseId, excludeId = null) {
@@ -2301,7 +2316,7 @@ const DB = {
   // ----- Cardio -----
   cardio: {
     list() {
-      return [...STATE.cardio].sort((a, b) => b.date.localeCompare(a.date));
+      return [...STATE.cardio].sort((a, b) => isoDesc(a.date, b.date));
     },
     add({ type, date, duration, calories }) {
       const entry = {
@@ -2440,7 +2455,7 @@ const DB = {
   // ----- Sleep -----
   sleep: {
     list() {
-      return [...STATE.sleep].sort((a, b) => b.date.localeCompare(a.date));
+      return [...STATE.sleep].sort((a, b) => isoDesc(a.date, b.date));
     },
     latest() {
       return this.list()[0] || null;

@@ -468,11 +468,81 @@
     }, wait);
   }
 
+  // ------------------------------------------------------------------------
+  // BOOT GATE — skip the projection entirely when nothing has changed.
+  //
+  // The boot run used to be unconditional, and it is the single most expensive
+  // thing this file does: it re-serialises the WHOLE blob (readBlob is a
+  // stringify + re-parse of multi-megabyte state, base64 exercise photos
+  // included) on the main thread, then serially awaits upserts of every session,
+  // every set and every log in 500-row chunks, then 8 reconcile round-trips —
+  // all to re-write rows that are already identical on the server. On a phone
+  // with a couple of years of history that lands right around first
+  // interaction, every single app open.
+  //
+  // The fingerprint is deliberately CHEAP and deliberately NOT a content hash of
+  // the blob: hashing megabytes to avoid uploading them would just move the
+  // main-thread cost. It uses the counts and the newest timestamps the app
+  // already maintains, which change on any add/edit/delete, plus the signed-in
+  // uid so switching accounts always re-projects.
+  //
+  // Stored device-locally: it describes what THIS device last successfully
+  // pushed, so syncing it would let one device's success silence another's
+  // pending work. Same reasoning as the notification day ledger.
+  const FP_KEY = 'vault.mirror.fp.v1';
+  function fingerprint(uid) {
+    try {
+      const b = readBlob();
+      if (!b) return null;
+      const n = (a) => (Array.isArray(a) ? a.length : 0);
+      const newest = (a, f) => {
+        let m = '';
+        (Array.isArray(a) ? a : []).forEach((x) => { const v = x && x[f]; if (v && v > m) m = v; });
+        return m;
+      };
+      return [
+        uid,
+        n(b.sessions), newest(b.sessions, 'createdAt'), newest(b.sessions, 'date'),
+        n(b.cardio), newest(b.cardio, 'date'),
+        n(b.sleep), newest(b.sleep, 'date'),
+        n(b.supplements), n(b.exercises), n(b.foods), n(b.cardioTypes),
+        Object.keys(b.foodLogs || {}).length,
+        // the food log is date-keyed, so its newest key plus that day's length
+        // moves whenever anything is added or removed from it
+        (Object.keys(b.foodLogs || {}).sort().pop() || ''),
+        n((b.foodLogs || {})[Object.keys(b.foodLogs || {}).sort().pop()]),
+        JSON.stringify(b.plan || null).length,
+      ].join('|');
+    } catch (_) { return null; }
+  }
+
   window.Tables = { projectAll, scheduleProject };
 
   // Initial projection a few seconds after boot, once the login/sync settles.
   // Best-effort: no-ops if logged out.
   try {
-    setTimeout(() => { projectAll().catch(() => {}); }, 4500);
+    setTimeout(async () => {
+      try {
+        let uid = null;
+        try { const s = window.Cloud && Cloud.getSession && await Cloud.getSession(); uid = s && s.user && s.user.id; } catch (_) {}
+        if (!uid) return;                       // logged out — projectAll would no-op anyway
+        const fp = fingerprint(uid);
+        let prev = null;
+        try { prev = localStorage.getItem(FP_KEY); } catch (_) {}
+        // A null fingerprint means we could not read the blob at all; project
+        // rather than skip, because "unknown" must never look like "unchanged".
+        if (fp && prev === fp) return;
+        const res = await projectAll();
+        // Record ONLY on a CLEAN success. `ok: true` alone is not enough: the
+        // upserts are best-effort, so a failed chunk lands in `summary` as an
+        // 'ERR: …' string while the run still reports ok. Recording the
+        // fingerprint then would mark half-pushed data as fully mirrored and
+        // skip the retry on the next open. A skip or an error must leave the old
+        // fingerprint in place.
+        const clean = !!(res && res.ok) &&
+          !Object.values(res.summary || {}).some((v) => typeof v === 'string' && v.indexOf('ERR') === 0);
+        if (clean && fp) { try { localStorage.setItem(FP_KEY, fp); } catch (_) {} }
+      } catch (_) {}
+    }, 4500);
   } catch (_) {}
 })();

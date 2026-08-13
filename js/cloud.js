@@ -404,22 +404,64 @@
     if (remote === null || !remoteHasData(remote)) return pushed();
     // Cloud has data AND this device has its own data, first time → ask the user.
     if (!isLinked(uid) && localHasData()) return 'conflict';
+    // ALREADY-LINKED devices need the same question asked a different way. The
+    // guard above only covers a FIRST link, so a device that was linked before
+    // fell straight through to applyRemote — and then setDirty(false) marked the
+    // edits it had just destroyed as synced.
+    //
+    // That is reachable two ways, and the second is not exotic:
+    //   · the offline grace path — a wasLinked device with local data keeps
+    //     training with no session, and every save flags dirty via lastUid;
+    //   · LOGOUT WHEN THE PUSH FAILED — app.js deliberately skips
+    //     clearLocalUserData() there to preserve the unpushed blob, so `linked`
+    //     and `dirty` both survive. The very next sign-in then overwrote exactly
+    //     the data that fail-closed logout had just protected.
+    // bootSync has always made this check; the interactive sign-in path is the
+    // one that did not, and afterLogin calls THIS, not bootSync.
+    if (isLinked(uid) && isDirty(uid) && localHasData()) return 'conflict';
     if (applyRemote(remote)) { setStamp(uid, remote.updatedAt); setVersion(uid, remote.version); setDirty(uid, false); markLinked(uid); return "pulled"; }
-    return pushed();
+    // applyRemote FAILED on a blob that demonstrably has data (remoteHasData
+    // passed above), so this is a broken import, not an empty cloud. Pushing
+    // here would overwrite the very copy we failed to read. Report offline and
+    // leave both sides untouched.
+    return 'offline';
   }
   // Conflict resolution choices (first link only).
+  // Returns 'ok' | 'failed'. The caller must not report success on 'failed':
+  // this is the user's explicit "keep the account's data" decision, and a silent
+  // no-op leaves it unexecuted while a later logout push clobbers the very copy
+  // they chose to keep.
   async function chooseCloud() {
-    const s = await getSession(); if (!s) return;
+    const s = await getSession(); if (!s) return 'failed';
     let remote;
-    try { remote = await pull(); } catch (_) { return; }
-    // Only commit to "cloud wins" if the cloud actually had data to apply.
-    if (applyRemote(remote)) { setStamp(s.user.id, remote.updatedAt); setVersion(s.user.id, remote.version); setDirty(s.user.id, false); markLinked(s.user.id); }
-    else { await push(); markLinked(s.user.id); } // cloud was empty → keep local
+    try { remote = await pull(); } catch (_) { return 'failed'; }
+    if (remote === undefined) return 'failed';
+    if (applyRemote(remote)) {
+      setStamp(s.user.id, remote.updatedAt); setVersion(s.user.id, remote.version);
+      setDirty(s.user.id, false); markLinked(s.user.id);
+      return 'ok';
+    }
+    // applyRemote returned false. That is TWO different situations and they used
+    // to be conflated into "cloud was empty → keep local", which then pushed:
+    //   · the cloud really is empty  → seeding it from this device is correct;
+    //   · the import FAILED on a blob that has data → pushing overwrites the
+    //     account data the user just explicitly chose to keep. That is the
+    //     opposite of what they asked for, and it is unrecoverable.
+    if (!remoteHasData(remote)) {
+      const r = await push();
+      if (r !== 'ok') return 'failed';
+      markLinked(s.user.id);
+      return 'ok';
+    }
+    return 'failed';
   }
   async function chooseLocal() {
-    const s = await getSession(); if (!s) return;
+    const s = await getSession(); if (!s) return 'failed';
     // Explicit user override ("my device wins") — force past the empty-blob guard.
-    await push({ force: true }); markLinked(s.user.id);
+    let r; try { r = await push({ force: true }); } catch (_) { r = 'error'; }
+    if (r !== 'ok') return 'failed';
+    markLinked(s.user.id);
+    return 'ok';
   }
 
   // Background sync on app boot for an already-linked, logged-in device. Uses a

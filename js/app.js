@@ -12,7 +12,7 @@
 // build. The literal below is the fallback (file://, or a stripped query) and is
 // still bumped by `npm run release` — see CLAUDE.md "CACHE WORKFLOW".
 const VAULT_BUILD = (() => {
-  const FALLBACK = 'v260';
+  const FALLBACK = 'v261';
   try {
     const src = (document.currentScript && document.currentScript.src) || '';
     const m = src.match(/[?&]v=(\d+)/);
@@ -668,6 +668,7 @@ const I18N = {
     ai_chat_title: 'Calorie Chat', ai_chat_sub: 'Tell me what you ate — I log the calories',
     // Pasting a nutrition table: the figures are already there, so they are
     // USED, not re-estimated. See parseMacroText in js/foodai.js.
+    img_error: 'Image error',
     ai_pasted_meal: 'Meal',
     ai_used_your_numbers: 'Used your numbers — nothing was estimated.',
     ai_untracked: '{fields} are not tracked by the app, so they were not saved.',
@@ -1424,6 +1425,7 @@ const I18N = {
     protein_g: 'بروتين (جم)', carbs_g: 'كارب (جم)',
     cal: 'سعرة', protein_label: 'بروتين', carbs_label: 'كارب', fat_label: 'دهون',
     ai_chat_title: 'شات السعرات', ai_chat_sub: 'أخبرني بما تناولت — وأنا أسجّل السعرات',
+    img_error: 'خطأ في الصورة',
     ai_pasted_meal: 'وجبة',
     ai_used_your_numbers: 'استُخدمت أرقامك كما هي — لم يُقدَّر شيء.',
     ai_untracked: '{fields} لا يتتبّعها التطبيق، فلم تُحفظ.',
@@ -2055,6 +2057,20 @@ function escapeHtml(str) {
     .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
 }
 
+/**
+ * A numeric value safe to drop into an HTML ATTRIBUTE, for fields that are
+ * numbers by contract but arrive from somewhere untrusted — the synced blob, an
+ * imported backup, an AI response. Escaping would also work, but coercion is
+ * stricter: a number field can only ever be a number, so nothing survives that
+ * could break out of the quotes in the first place.
+ * Empty in, empty out, so a blank set row still renders as blank.
+ */
+function numAttr(v) {
+  if (v === '' || v == null) return '';
+  const n = Number(v);
+  return Number.isFinite(n) ? String(n) : '';
+}
+
 function initialsOf(str) {
   const parts = (str || '').trim().split(/\s+/).filter(Boolean);
   if (parts.length === 0) return '?';
@@ -2479,7 +2495,18 @@ function renderNotifications(el) {
   // Opening the page IS reading it, so nothing stays "new" behind you.
   try { DB.notif.logMarkAllSeen(); } catch (_) {}
 
-  const redraw = () => { armNotifications(); renderNotifications(el); };
+  // Notify.sync() as well as armNotifications(), and that omission was the whole
+  // point of this page failing quietly: armNotifications only re-arms the IN-APP
+  // setTimeout path. The OS alarms are armed by sync(), across a 7-day horizon —
+  // so switching a channel off, moving the window, or adding a dose left the
+  // NATIVE schedule running the OLD settings until some later foreground
+  // happened to re-sync. The supplement editor has always called sync() on save;
+  // the page dedicated to notification settings did not.
+  const redraw = () => {
+    armNotifications();
+    try { if (window.Notify) Notify.sync(); } catch (_) {}
+    renderNotifications(el);
+  };
 
   el.querySelectorAll('[data-toggle]').forEach((b) => b.addEventListener('click', () => {
     const id = b.dataset.toggle;
@@ -3516,9 +3543,13 @@ function checkPR(exerciseId, prior, newSets) {
   return t('pr_orm') + ' ' + t('pr_est_orm') + ' ' + fmtWeight(Math.round(postBest.bestORM)) + unitLabel();
 }
 
-function computeStreak() {
-  const sessions = DB.sessions.listAll();
-  const cardio = DB.cardio.list();
+// `sessions`/`cardio` are OPTIONAL and exist only so a caller that already holds
+// those arrays can hand them over instead of paying for another copy+sort — this
+// is called from renderHome, which has both in scope. Order is irrelevant here
+// (everything goes straight into a Set of dates), so an unsorted array is fine.
+function computeStreak(sessions, cardio) {
+  sessions = sessions || DB.sessions.listAll();
+  cardio = cardio || DB.cardio.list();
   const activeDates = new Set();
   sessions.forEach((s) => activeDates.add(s.date));
   cardio.forEach((c) => activeDates.add(c.date));
@@ -3620,7 +3651,7 @@ function renderHome(el) {
     .filter((s) => s.date === todayISO())
     .reduce((sum, s) => sum + (s.durationMinutes || 0), 0);
 
-  const streak = computeStreak();
+  const streak = computeStreak(allSessions, allCardio);
   // First-run / empty signal — used to suppress the "wall of zeros" on Home.
   const hasAnyActivity = allSessions.length > 0 || allCardio.length > 0 || !!lastSleep;
 
@@ -3737,7 +3768,7 @@ function renderHome(el) {
       ${icon('dumbbell', 20)}<span>${t('today_workout')}</span>
     </button>`;
 
-  const weekStripHtml = weekStrip();
+  const weekStripHtml = weekStrip(null, '', allSessions, allCardio);
 
   // TWO KINDS OF REST DAY, and they are not the same thing.
   //   · DECLINED  — the plan had a workout and the user said no. The way out is
@@ -3752,7 +3783,9 @@ function renderHome(el) {
   // SECTION 03 — THE ROW AFTER THE DECISION. A reduced session that has been
   // logged gets its own state: it is not "today is off", it is "minimum effort,
   // done", and the spec is explicit that it carries no reproach and no red mark.
-  const minToday = DB.sessions.listAll()
+  // allSessions is already in hand from the top of this render — listAll()
+  // here was a fourth full copy+sort of the same array for a single filter.
+  const minToday = allSessions
     .filter((s) => s.date === todayISO() && s.kind === 'minimum');
 
   let heroHtml = '';
@@ -4781,9 +4814,12 @@ function renderExercises(el) {
 // `variant` = 'compact' shrinks it for use INSIDE a sheet, where it is evidence
 // rather than navigation. Same function, same data, same dots — the handoff is
 // explicit that no second seven-day strip may exist in this project.
-function weekStrip(activeIso = null, variant = '') {
-  const sessionDates = new Set(DB.sessions.listAll().map((s) => s.date));
-  const cardioDates = new Set(DB.cardio.list().map((c) => c.date));
+// `sessions`/`cardio` are optional for the same reason as computeStreak: both
+// only become a Set of dates, so order does not matter and a caller holding the
+// arrays should not pay for a second copy+sort.
+function weekStrip(activeIso = null, variant = '', sessions, cardio) {
+  const sessionDates = new Set((sessions || DB.sessions.listAll()).map((s) => s.date));
+  const cardioDates = new Set((cardio || DB.cardio.list()).map((c) => c.date));
   const chips = [];
   for (let back = 6; back >= 0; back--) {
     const iso = addDaysISO(todayISO(), -back);
@@ -4975,7 +5011,13 @@ function renderDay(el) {
   });
 
   el.querySelectorAll('[data-goto]').forEach((b) =>
-    b.addEventListener('click', () => {
+    b.addEventListener('click', (e) => {
+      // stopPropagation is load-bearing. There is a GLOBAL delegated
+      // [data-goto] handler on document (see the router), so without this both
+      // fire: this one navigates with the day's date context, and the global one
+      // immediately navigates AGAIN with no context — wiping it. "Open" on a
+      // past day therefore landed on today's food log instead of that day's.
+      e.stopPropagation();
       const v = b.dataset.goto;
       // The food log owns its own date context; hand it this day, not today.
       navigate(v, v === 'foodlog' ? { foodLog: { date: iso } } : {});
@@ -5176,7 +5218,7 @@ function openNewExerciseModal(exerciseId = null, opts = {}) {
       pickedImage = dataUrl;
       refreshPreview();
     } catch (err) {
-      showToast('Image error');
+      showToast(t('img_error'));
     }
   }
   $('#ex-image-pick').addEventListener('click', () => $('#ex-image-file').click());
@@ -5425,8 +5467,12 @@ function openSessionModal(exerciseId, sessionId = null) {
       return `
       <div class="set-edit-row" data-set-index="${i}">
         <div class="set-edit-n num">${i + 1}</div>
-        <input type="number" inputmode="numeric" step="1" min="0" placeholder="0" value="${s.reps || ''}" data-field="reps">
-        <input type="number" inputmode="decimal" step="0.5" min="0" placeholder="0" value="${wDisplay || ''}" data-field="weight">
+        <!-- numAttr, not the raw value: both fields come from the synced blob or
+             an imported backup, and an unquoted-breakout string here would land
+             inside an ATTRIBUTE in innerHTML. A number input can only hold a
+             number, so coercing is both stricter and simpler than escaping. -->
+        <input type="number" inputmode="numeric" step="1" min="0" placeholder="0" value="${numAttr(s.reps)}" data-field="reps">
+        <input type="number" inputmode="decimal" step="0.5" min="0" placeholder="0" value="${numAttr(wDisplay)}" data-field="weight">
         <button type="button" class="set-remove" data-remove-set="${i}" aria-label="${escapeHtml(t('delete'))}">${icon('close', 16)}</button>
       </div>
       `;
@@ -5488,7 +5534,7 @@ function openSessionModal(exerciseId, sessionId = null) {
 
     <div class="form-group">
       <label class="form-label">${t('date')}</label>
-      <input type="date" id="session-date" value="${initialDate}">
+      <input type="date" id="session-date" value="${escapeHtml(initialDate)}">
     </div>
 
     <div class="form-group">
@@ -5585,9 +5631,14 @@ function renderCardio(el) {
           <div class="data-meta">
             <span>${escapeHtml(daysAgoLocalized(c.date))}</span>
             <span class="dot-sep"></span>
-            <span class="num">${c.duration} ${t('minutes').toLowerCase()}</span>
+            <!-- Coerced, not interpolated raw. These arrive from the synced
+                 blob and from imported backups, both of which CLAUDE.md names
+                 as untrusted, and they land in innerHTML — so a string field
+                 carrying markup would execute. A number field can only ever be
+                 a number; forcing that is stricter than escaping and cheaper. -->
+            <span class="num">${fmtNum(Math.round(Number(c.duration) || 0))} ${t('minutes').toLowerCase()}</span>
             <span class="dot-sep"></span>
-            <span class="num">${c.calories} ${t('cal')}</span>
+            <span class="num">${fmtNum(Math.round(Number(c.calories) || 0))} ${t('cal')}</span>
           </div>
         </div>
         <div class="data-actions">
@@ -5703,17 +5754,17 @@ function openCardioModal(cardioId = null) {
 
     <div class="form-group">
       <label class="form-label">${t('date')}</label>
-      <input type="date" id="cardio-date" value="${existing ? existing.date : todayISO()}">
+      <input type="date" id="cardio-date" value="${escapeHtml(existing ? existing.date : todayISO())}">
     </div>
 
     <div class="form-row">
       <div class="form-group">
         <label class="form-label">${t('duration_min')}</label>
-        <input type="number" inputmode="numeric" id="cardio-duration" step="1" min="0" value="${existing ? existing.duration : ''}" placeholder="30">
+        <input type="number" inputmode="numeric" id="cardio-duration" step="1" min="0" value="${numAttr(existing && existing.duration)}" placeholder="30">
       </div>
       <div class="form-group">
         <label class="form-label">${t('calories')}</label>
-        <input type="number" inputmode="numeric" id="cardio-calories" step="1" min="0" value="${existing ? existing.calories : ''}" placeholder="250">
+        <input type="number" inputmode="numeric" id="cardio-calories" step="1" min="0" value="${numAttr(existing && existing.calories)}" placeholder="250">
       </div>
     </div>
 
@@ -6773,11 +6824,11 @@ function openCalculatorModal(onSave) {
         ${seg('sex', [{ v: 'male', label: t('calc_male') }, { v: 'female', label: t('calc_female') }], p.sex)}</div>
       <div class="calc-grid">
         <div class="form-group"><label class="form-label">${t('calc_age')}</label>
-          <input type="number" inputmode="numeric" id="c-age" min="10" max="100" value="${p.age || ''}" placeholder="25"></div>
+          <input type="number" inputmode="numeric" id="c-age" min="10" max="100" value="${numAttr(p.age)}" placeholder="25"></div>
         <div class="form-group"><label class="form-label">${t('calc_height')}</label>
-          <input type="number" inputmode="numeric" id="c-height" min="100" max="230" value="${p.heightCm || ''}" placeholder="175"></div>
+          <input type="number" inputmode="numeric" id="c-height" min="100" max="230" value="${numAttr(p.heightCm)}" placeholder="175"></div>
         <div class="form-group"><label class="form-label">${t('calc_weight')}</label>
-          <input type="number" inputmode="decimal" id="c-weight" min="30" max="300" value="${p.weightKg || ''}" placeholder="75"></div>
+          <input type="number" inputmode="decimal" id="c-weight" min="30" max="300" value="${numAttr(p.weightKg)}" placeholder="75"></div>
       </div>
       <div class="form-group"><label class="form-label">${t('calc_activity')}</label>
         ${seg('activity', activities.map((a) => ({ v: a, label: t('activity_' + a) })), p.activity)}</div>
@@ -6793,13 +6844,13 @@ function openCalculatorModal(onSave) {
     return `
       <div class="calc-grid calc-grid-2">
         <div class="form-group"><label class="form-label">${t('calories')}</label>
-          <input type="number" inputmode="numeric" id="m-cal" min="0" value="${curTargets.calories || ''}" placeholder="2200"></div>
+          <input type="number" inputmode="numeric" id="m-cal" min="0" value="${numAttr(curTargets.calories)}" placeholder="2200"></div>
         <div class="form-group"><label class="form-label">${t('protein_label')} (g)</label>
-          <input type="number" inputmode="numeric" id="m-pro" min="0" value="${curTargets.protein || ''}" placeholder="160"></div>
+          <input type="number" inputmode="numeric" id="m-pro" min="0" value="${numAttr(curTargets.protein)}" placeholder="160"></div>
         <div class="form-group"><label class="form-label">${t('carbs_label')} (g)</label>
-          <input type="number" inputmode="numeric" id="m-carb" min="0" value="${curTargets.carbs || ''}" placeholder="220"></div>
+          <input type="number" inputmode="numeric" id="m-carb" min="0" value="${numAttr(curTargets.carbs)}" placeholder="220"></div>
         <div class="form-group"><label class="form-label">${t('fat_label')} (g)</label>
-          <input type="number" inputmode="numeric" id="m-fat" min="0" value="${curTargets.fat || ''}" placeholder="60"></div>
+          <input type="number" inputmode="numeric" id="m-fat" min="0" value="${numAttr(curTargets.fat)}" placeholder="60"></div>
       </div>
       <button class="btn btn-primary btn-block" id="calc-save-manual">${t('save')}</button>
       <button type="button" class="calc-switch" id="to-calc">${t('calc_use_calc')}</button>
@@ -6958,7 +7009,15 @@ function openSavedFoodPicker(date, onSave) {
       if (typeof onSave === 'function') onSave();
     }));
   }
-  overlay.querySelector('#sf-search').addEventListener('input', (e) => { query = e.target.value; draw(); });
+  // Same 150ms debounce as the other two search fields — draw() rebuilds the
+  // whole list, and a per-keystroke rebuild is the defect already fixed in the
+  // exercise browser.
+  let sfTimer = null;
+  overlay.querySelector('#sf-search').addEventListener('input', (e) => {
+    query = e.target.value;
+    clearTimeout(sfTimer);
+    sfTimer = setTimeout(draw, 150);
+  });
   overlay.querySelector('#sf-new').addEventListener('click', () => { closeModal(); openFoodLibraryModal(); });
   draw();
 }
@@ -7217,7 +7276,7 @@ function openFoodModal(foodId = null) {
     <div class="form-row">
       <div class="form-group">
         <label class="form-label">${t('amount_label')}</label>
-        <input type="number" inputmode="decimal" id="food-amount" step="1" min="0" value="${baseAmount}" placeholder="100">
+        <input type="number" inputmode="decimal" id="food-amount" step="1" min="0" value="${numAttr(baseAmount)}" placeholder="100">
       </div>
       <div class="form-group">
         <label class="form-label">${t('serving_unit_label')}</label>
@@ -7228,22 +7287,22 @@ function openFoodModal(foodId = null) {
     <div class="form-row">
       <div class="form-group">
         <label class="form-label">${t('calories')}</label>
-        <input type="number" inputmode="decimal" id="food-cal" step="1" min="0" value="${existing ? existing.calories : ''}" placeholder="165">
+        <input type="number" inputmode="decimal" id="food-cal" step="1" min="0" value="${numAttr(existing && existing.calories)}" placeholder="165">
       </div>
       <div class="form-group">
         <label class="form-label">${t('protein_g')}</label>
-        <input type="number" inputmode="decimal" id="food-pro" step="0.1" min="0" value="${existing ? existing.protein : ''}" placeholder="31">
+        <input type="number" inputmode="decimal" id="food-pro" step="0.1" min="0" value="${numAttr(existing && existing.protein)}" placeholder="31">
       </div>
     </div>
 
     <div class="form-row">
       <div class="form-group">
         <label class="form-label">${t('carbs_g')}</label>
-        <input type="number" inputmode="decimal" id="food-carb" step="0.1" min="0" value="${existing ? existing.carbs : ''}" placeholder="0">
+        <input type="number" inputmode="decimal" id="food-carb" step="0.1" min="0" value="${numAttr(existing && existing.carbs)}" placeholder="0">
       </div>
       <div class="form-group">
         <label class="form-label">${t('fat_label')} (g)</label>
-        <input type="number" inputmode="decimal" id="food-fat" step="0.1" min="0" value="${existing ? (existing.fat || '') : ''}" placeholder="0">
+        <input type="number" inputmode="decimal" id="food-fat" step="0.1" min="0" value="${numAttr(existing && existing.fat)}" placeholder="0">
       </div>
     </div>
 
@@ -7570,17 +7629,17 @@ function openSleepModal(sleepId = null) {
 
     <div class="form-group">
       <label class="form-label">${t('date')}</label>
-      <input type="date" id="sleep-date" value="${existing ? existing.date : todayISO()}">
+      <input type="date" id="sleep-date" value="${escapeHtml(existing ? existing.date : todayISO())}">
     </div>
 
     <div class="form-row">
       <div class="form-group">
         <label class="form-label">${t('sleep_time')}</label>
-        <input type="time" id="sleep-start" value="${existing ? existing.sleepTime : '23:00'}">
+        <input type="time" id="sleep-start" value="${escapeHtml(existing ? existing.sleepTime : '23:00')}">
       </div>
       <div class="form-group">
         <label class="form-label">${t('wake_time')}</label>
-        <input type="time" id="sleep-end" value="${existing ? existing.wakeTime : '07:00'}">
+        <input type="time" id="sleep-end" value="${escapeHtml(existing ? existing.wakeTime : '07:00')}">
       </div>
     </div>
 
@@ -8707,7 +8766,16 @@ function openSlotEditorModal(slotIdx) {
     `);
 
     renderPickerList();
-    $('#picker-search').addEventListener('input', (e) => { pickerQuery = e.target.value; renderPickerList(); });
+    // Debounced, the same 150ms the exercise browser already uses. Un-debounced,
+    // a six-letter query rebuilt this whole list six times — and the list can
+    // carry a few hundred entries, some with base64 photos, so each rebuild
+    // re-parses a large HTML string and re-decodes those data URIs.
+    let pickerTimer = null;
+    $('#picker-search').addEventListener('input', (e) => {
+      pickerQuery = e.target.value;
+      clearTimeout(pickerTimer);
+      pickerTimer = setTimeout(renderPickerList, 150);
+    });
     document.querySelectorAll('[data-pick-cat]').forEach((b) =>
       b.addEventListener('click', () => {
         pickerCategory = b.dataset.pickCat;
@@ -8903,8 +8971,8 @@ function renderSessionDay(el) {
       return `
         <div class="sd-set-row" data-ex="${escapeHtml(ex.id)}" data-set="${i}">
           <div class="sd-set-n num">${i + 1}</div>
-          <input type="number" inputmode="numeric" step="1" min="0" placeholder="0" value="${s.reps || ''}" data-field="reps" aria-label="${t('reps')}">
-          <input type="number" inputmode="decimal" step="0.5" min="0" placeholder="0" value="${wDisplay || ''}" data-field="weight" aria-label="${viewContext.sdUnit}">
+          <input type="number" inputmode="numeric" step="1" min="0" placeholder="0" value="${numAttr(s.reps)}" data-field="reps" aria-label="${escapeHtml(t('reps'))}">
+          <input type="number" inputmode="decimal" step="0.5" min="0" placeholder="0" value="${numAttr(wDisplay)}" data-field="weight" aria-label="${escapeHtml(viewContext.sdUnit)}">
           <button type="button" class="sd-set-remove" data-remove-set aria-label="${escapeHtml(t('delete'))}">${icon('close', 16)}</button>
         </div>
       `;
@@ -8954,8 +9022,8 @@ function renderSessionDay(el) {
 
     <div class="sd-toolbar">
       <div class="form-group" style="flex:1;margin:0">
-        <label class="form-label" for="sd-date" style="font-size:10px">${t('date')}</label>
-        <input type="date" id="sd-date" value="${viewContext.sdDate}">
+        <label class="form-label" for="sd-date">${t('date')}</label>
+        <input type="date" id="sd-date" value="${escapeHtml(viewContext.sdDate)}">
       </div>
       <div class="modal-unit-toggle" role="group" aria-label="${escapeHtml(t('unit'))}">
         <button type="button" data-sd-unit="kg" aria-pressed="${viewContext.sdUnit === 'kg'}" class="${viewContext.sdUnit === 'kg' ? 'active' : ''}">KG</button>
@@ -9460,8 +9528,8 @@ function renderSessionRun(el) {
       <div class="run-set-row${s.done ? ' done' : ''}" data-set="${i}">
         <button type="button" class="run-set-del${st.sets.length > 1 ? '' : ' is-hidden'}" data-del-set aria-label="${escapeHtml(t('delete'))}"${st.sets.length > 1 ? '' : ' tabindex="-1" aria-hidden="true"'}>${icon('trash', 16)}</button>
         <div class="run-set-n num">${i + 1}</div>
-        <input type="number" inputmode="numeric" step="1" min="0" placeholder="${phReps}" value="${repsVal}" data-field="reps" aria-label="${t('reps')}">
-        <input type="number" inputmode="decimal" step="0.5" min="0" placeholder="${phW}" value="${wDisplay || ''}" data-field="weight" aria-label="${viewContext.runUnit}">
+        <input type="number" inputmode="numeric" step="1" min="0" placeholder="${numAttr(phReps)}" value="${numAttr(repsVal)}" data-field="reps" aria-label="${escapeHtml(t('reps'))}">
+        <input type="number" inputmode="decimal" step="0.5" min="0" placeholder="${numAttr(phW)}" value="${numAttr(wDisplay)}" data-field="weight" aria-label="${escapeHtml(viewContext.runUnit)}">
         <button type="button" class="run-set-done${s.done ? ' done' : ''}" data-done aria-label="${escapeHtml(t('mark_set_done'))}" aria-pressed="${!!s.done}">${icon('check', 20)}</button>
       </div>`;
   }).join('');
@@ -9645,20 +9713,16 @@ function renderCalendar(el) {
 
   const monthDate = new Date(ctx.year, ctx.month, 1);
   const firstDow = monthDate.getDay();
-  const daysInMonth = new Date(ctx.year, ctx.month + 1, 0).getDate();
   const monthLabel = monthDate.toLocaleDateString(
     (DB.prefs.get().lang || 'en') === 'ar' ? 'ar-u-nu-latn' : 'en-US',
     { month: 'long', year: 'numeric' }
   );
 
-  // Compute sets-per-day for this month
-  const setsByDate = {};
-  DB.sessions.listAll().forEach((s) => {
-    const d = new Date(s.date + 'T00:00:00');
-    if (d.getFullYear() === ctx.year && d.getMonth() === ctx.month) {
-      setsByDate[s.date] = (setsByDate[s.date] || 0) + s.sets.length;
-    }
-  });
+  // The sets-per-day map that used to be built HERE was dead: buildGrid()
+  // computes its own `byDate`, and nothing ever read this one. It cost a full
+  // listAll() copy+sort plus one Date allocation per session on every open —
+  // for a value that was thrown away. `firstDow`/`daysInMonth` went with it for
+  // the same reason: buildGrid recomputes both.
 
   function lvlFor(count) {
     if (count <= 0) return 0;
@@ -9677,12 +9741,15 @@ function renderCalendar(el) {
     const first = new Date(ctx.year, ctx.month, 1);
     const firstDowN = first.getDay();
     const daysN = new Date(ctx.year, ctx.month + 1, 0).getDate();
+    // One un-sorted pass, matched on the ISO string's own prefix. listAll()
+    // copies and sorts, and neither matters here — a date-keyed bucket does not
+    // care about order — and a Date per session just to read back the month it
+    // was already spelling out is work the string does for free.
+    const monthPrefix = `${ctx.year}-${String(ctx.month + 1).padStart(2, '0')}-`;
     const byDate = {};
-    DB.sessions.listAll().forEach((s) => {
-      const d = new Date(s.date + 'T00:00:00');
-      if (d.getFullYear() === ctx.year && d.getMonth() === ctx.month) {
-        byDate[s.date] = (byDate[s.date] || 0) + s.sets.length;
-      }
+    (DB.getAll().sessions || []).forEach((s) => {
+      if (!s || !s.date || s.date.lastIndexOf(monthPrefix, 0) !== 0) return;
+      byDate[s.date] = (byDate[s.date] || 0) + ((s.sets && s.sets.length) || 0);
     });
     const empties = Array.from({ length: firstDowN }, () => `<div class="calendar-cell empty"></div>`).join('');
     const cells = Array.from({ length: daysN }, (_, i) => {
@@ -10501,17 +10568,17 @@ function openFoodLogEntryModal(date, food) {
     <div class="form-row">
       <div class="form-group">
         <label class="form-label">${t('calories_per_serving')}</label>
-        <input type="number" inputmode="decimal" id="fl-cal" step="1" min="0" value="${food.calories}">
+        <input type="number" inputmode="decimal" id="fl-cal" step="1" min="0" value="${numAttr(food.calories)}">
       </div>
       <div class="form-group">
         <label class="form-label">${t('protein_per_serving')}</label>
-        <input type="number" inputmode="decimal" id="fl-pro" step="0.1" min="0" value="${food.protein}">
+        <input type="number" inputmode="decimal" id="fl-pro" step="0.1" min="0" value="${numAttr(food.protein)}">
       </div>
     </div>
 
     <div class="form-group">
       <label class="form-label">${t('carbs_per_serving')}</label>
-      <input type="number" inputmode="decimal" id="fl-carb" step="0.1" min="0" value="${food.carbs}">
+      <input type="number" inputmode="decimal" id="fl-carb" step="0.1" min="0" value="${numAttr(food.carbs)}">
     </div>
 
     <div class="form-actions">
@@ -10838,8 +10905,22 @@ function showConflictDialog() {
     </div>
   `, { variant: 'confirm' });
   const finish = () => { closeModal(); hideAuthGate(); refreshAfterSync(); showToast(t('synced')); ensureUsername(); };
-  overlay.querySelector('[data-keep="cloud"]').addEventListener('click', async () => { await Cloud.chooseCloud(); finish(); });
-  overlay.querySelector('[data-keep="local"]').addEventListener('click', async () => { await Cloud.chooseLocal(); finish(); });
+  // Both branches used to call finish() unconditionally, so a chooseCloud that
+  // silently failed still said "Synced" — leaving the user's explicit "keep the
+  // account's data" decision UNEXECUTED while a later logout push clobbered the
+  // very copy they chose to keep. On failure the dialog stays open so the choice
+  // can be made again, and the toast tells the truth.
+  const run = async (fn, btn) => {
+    btn.disabled = true;
+    let r; try { r = await fn(); } catch (_) { r = 'failed'; }
+    btn.disabled = false;
+    if (r === 'ok') finish();
+    else showToast(t('auth_err_network'));
+  };
+  const cloudBtn = overlay.querySelector('[data-keep="cloud"]');
+  const localBtn = overlay.querySelector('[data-keep="local"]');
+  cloudBtn.addEventListener('click', () => run(Cloud.chooseCloud, cloudBtn));
+  localBtn.addEventListener('click', () => run(Cloud.chooseLocal, localBtn));
 }
 
 function showChangePassword() {
@@ -11616,7 +11697,13 @@ function showOnboarding() {
   // morning) they keep showing — and logging to — YESTERDAY until something forces
   // a re-render. Views with a user-CHOSEN date (session-day, session-run) are
   // deliberately excluded: their date is an explicit choice, not "today".
-  const DATE_DERIVED_VIEWS = ['home', 'food', 'foodlog'];
+  // `supplements` and `notifications` belong here too, and their absence was a
+  // real bug rather than an omission of tidiness: renderSupplements derives
+  // `todayIso` from todayISO() at RENDER time and every tick writes to that
+  // captured date, so a phone left open overnight recorded the morning's doses
+  // against YESTERDAY. The notifications page reads today's log and today's
+  // remaining schedule the same way.
+  const DATE_DERIVED_VIEWS = ['home', 'food', 'foodlog', 'supplements', 'notifications'];
   let __lastActiveDay = todayISO();
 
   // GOING AWAY is the other half of the guided-run auto-save. Android can kill a

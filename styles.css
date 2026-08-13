@@ -935,9 +935,14 @@ body.theme-light input[type="date"], body.theme-light input[type="time"] { color
   flex: 1;
 }
 
+/* Logical properties, not physical. `left`/`padding-left` had no
+   body[dir="rtl"] override, so in Arabic the magnifier sat on the WRONG side of
+   the field and the 42px well it needs was reserved on the empty side — the
+   icon overlapped the text the user was typing. inset-inline-start mirrors for
+   free, which is the rule this file states for exactly this case. */
 .search-wrap svg {
   position: absolute;
-  left: 14px;
+  inset-inline-start: 14px;
   top: 50%;
   transform: translateY(-50%);
   width: 18px;
@@ -947,7 +952,8 @@ body.theme-light input[type="date"], body.theme-light input[type="time"] { color
 }
 
 .search-wrap input {
-  padding-left: 42px;
+  padding-inline-start: 42px;
+  padding-inline-end: 14px;
   background: var(--surface-1);
   border-radius: 12px;
 }
@@ -3649,7 +3655,11 @@ body[dir="rtl"] .planner-day-head { text-align: right; }
   border: 1px solid var(--border);
   border-radius: 10px;
   color: var(--text);
-  font-size: 15px;
+  /* 16, not 15 — the one declared override that undercut the global input rule.
+     Pinch-zoom is enabled app-wide, so any input under 16px makes iOS zoom the
+     whole page on focus (see the viewport note in index.html), and these are
+     the reps/weight fields a user focuses more than anything else. */
+  font-size: 16px;
   font-weight: 700;
   text-align: center;
   font-variant-numeric: tabular-nums;
@@ -4496,7 +4506,13 @@ body[dir="rtl"] .picker-row { text-align: right; }
 .ai-input-row input {
   width: 100%; padding: 12px 14px; border-radius: 12px;
   border: 1px solid var(--border); background: var(--surface-2);
-  color: var(--text); font-size: 14px;
+  color: var(--text);
+  /* NO font-size here — it inherits the global `input, select, textarea` 16px,
+     and that 16 is functional rather than typographic: pinch-zoom is enabled
+     app-wide (WCAG 1.4.4), so anything under 16px makes iOS zoom the viewport
+     the moment a field takes focus and leaves the page zoomed. This rule
+     declared 14px, which is the food chat's own text input — one of the two
+     most-typed-in fields in the app. */
 }
 .ai-results {
   display: flex; flex-direction: column; gap: 12px;
@@ -4508,7 +4524,10 @@ body[dir="rtl"] .picker-row { text-align: right; }
 }
 .ai-q { font-weight: 800; }
 .ai-dots { color: var(--text-faint); font-size: 12px; }
-.ai-err { color: #f87171; font-size: 12px; }
+/* var(--red), not the literal: light mode deliberately darkens that token, and
+   the literal is the DARK calibration — so the one line explaining why the AI
+   failed rendered at roughly 2.5:1 on the near-white chat surface. */
+.ai-err { color: var(--red); font-size: 12px; }
 .ai-decline { color: var(--text-mute); font-size: 12px; font-weight: 600; }
 .ai-card {
   background: var(--surface-2); border: 1px solid var(--border);
@@ -4730,10 +4749,10 @@ body[dir="rtl"] .picker-row { text-align: right; }
 }
 .water-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 10px; }
 .water-title { display: flex; align-items: center; gap: 7px; font-size: 14px; font-weight: 700; color: var(--text); }
-.water-title svg { color: #38bdf8; }
+.water-title svg { color: var(--water); }
 .water-nums { font-size: 13px; color: var(--text-dim); font-weight: 600; white-space: nowrap; }
 .water-bar { height: 8px; border-radius: 999px; background: var(--surface-3); overflow: hidden; }
-.water-fill { display: block; height: 100%; border-radius: 999px; background: linear-gradient(90deg, #0ea5e9, #38bdf8); transition: width 0.5s cubic-bezier(0.22, 1, 0.36, 1); }
+.water-fill { display: block; height: 100%; border-radius: 999px; background: linear-gradient(90deg, var(--water-2), var(--water)); transition: width 0.5s cubic-bezier(0.22, 1, 0.36, 1); }
 .water-actions { display: flex; gap: 8px; margin-top: 12px; }
 .water-cup {
   flex: 1; padding: 10px 8px; border-radius: var(--radius-sm);
@@ -4929,8 +4948,14 @@ body[dir="rtl"] .picker-row { text-align: right; }
    VOICE CAPTURE
    ========================================================================= */
 .voice-stage { display: flex; flex-direction: column; align-items: center; gap: 12px; padding: 12px 0 6px; }
+/* A rounded RECT, not a 64px circle. Identity device 4 removed a 54px circle
+   from the nav for this exact reason, and BRAND.md plus the owner's standing
+   instruction are explicit: rounded rectangles, medium-to-small, never a large
+   circular FAB. This was the biggest circle left in the app, and it was the
+   primary control of its own sheet. Proportioned like the corrected
+   .home-center-icon (56x40): wider than tall, radius from the token family. */
 .voice-mic {
-  width: 64px; height: 64px; border-radius: 50%; cursor: pointer;
+  width: 72px; height: 52px; border-radius: var(--radius); cursor: pointer;
   display: flex; align-items: center; justify-content: center;
   background: var(--surface-3); color: var(--text); border: 1px solid var(--border-hi);
   appearance: none; -webkit-appearance: none; transition: transform 0.15s;
@@ -4939,8 +4964,15 @@ body[dir="rtl"] .picker-row { text-align: right; }
    (~97%) — pin it so the glyph sits clearly smaller than the circle. */
 .voice-mic svg { width: 28px; height: 28px; }
 .voice-mic:active { transform: scale(0.94); }
-.voice-mic.recording { background: #ef4444; color: #fff; border-color: #ef4444; animation: voice-pulse 1.4s ease-in-out infinite; }
-@keyframes voice-pulse { 0%, 100% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.5); } 50% { box-shadow: 0 0 0 13px rgba(239, 68, 68, 0); } }
+/* --red, not a raw #ef4444: the token is the one the rest of the app already
+   uses for "stop / destructive", and it carries a light-mode calibration the
+   literal did not. --accent-ink as the glyph, for the same 2.87:1 reason white
+   fails everywhere else on a saturated fill. */
+.voice-mic.recording { background: var(--red); color: var(--accent-ink); border-color: var(--red); animation: voice-pulse 1.4s ease-in-out infinite; }
+@keyframes voice-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--red) 50%, transparent); }
+  50%      { box-shadow: 0 0 0 13px color-mix(in srgb, var(--red) 0%, transparent); }
+}
 .voice-status { font-size: 14px; font-weight: 600; color: var(--text-mute); text-align: center; min-height: 20px; padding: 0 12px; }
 
 /* Barcode scanner */
@@ -6579,7 +6611,12 @@ body[dir="rtl"] .variation-select svg { transform: scaleX(-1); }
 }
 .update-banner-get {
   background: var(--accent);
-  color: #fff;
+  /* --accent-ink, NOT white. White on #ff6a00 measures 2.87:1 — the same figure
+     BRAND.md rejects and that .ntfp-cta already calls out — and this literal was
+     mode-invariant, so it failed in dark AND light. It matters more here than
+     almost anywhere: this is the one control that moves a user off a broken
+     build onto a fixed one. */
+  color: var(--accent-ink);
 }
 .update-banner-later:active,
 .update-banner-get:active { transform: scale(var(--press-scale, 0.97)); }
@@ -7485,12 +7522,22 @@ body { --icon-accent: var(--accent-text); }
   --warn: #e0b341;
   --accent-dim: #2a1a0c;     /* the split's quiet half, against a black page */
   --accent-quiet: #c9a888;   /* its label */
+  /* Water is the one card that is deliberately NOT accent-coloured — it reads
+     as water. It shipped as two raw blues with no light-mode counterpart, so on
+     the bone ground the droplet that identifies the card measured ~2.1:1 and
+     the fill — the only reading of "how much so far" — sat under the 3:1 floor
+     for non-text graphics. Same treatment as --gold above: same hue, darkened
+     in light until it clears. */
+  --water: #38bdf8;          /* the icon + the fill's light end */
+  --water-2: #0ea5e9;        /* the fill's dark end */
 }
 body.theme-light {
   --gold: #7a5a05;
   --warn: #8a5a00;   /* the handoff's light value, verbatim */
   --accent-dim: var(--surface-3);
   --accent-quiet: var(--text-mute);
+  --water: #0369a1;
+  --water-2: #075985;
 }
 
 /* --- the rest chip (spec option C, superseding the v218 split bar) --------
@@ -7702,7 +7749,10 @@ body.theme-light {
   border: 0; background: none; color: var(--text-dim);
   font-family: inherit; cursor: pointer; -webkit-tap-highlight-color: transparent;
 }
-.wk-dow { font-size: 10px; font-weight: 600; letter-spacing: .03em; }
+/* 11px is the app-wide floor ("nothing renders below 11px", v200) — these are
+   day names the user actually reads to pick a day, not decoration. This and the
+   compact variant below shipped at 10/9px because the rail postdates that sweep. */
+.wk-dow { font-size: 11px; font-weight: 600; letter-spacing: .03em; }
 .wk-disc {
   width: 34px; height: 34px; border-radius: 50%;
   display: grid; place-items: center;
@@ -7831,7 +7881,7 @@ body.theme-light {
 .wk-compact { padding: 8px 4px; gap: 2px; }
 .wk-compact .wk-disc { width: 26px; height: 26px; }
 .wk-compact .wk-num { font-size: 12px; }
-.wk-compact .wk-dow { font-size: 9px; }
+.wk-compact .wk-dow { font-size: 11px; }
 .wk-compact .wk-chip { min-height: 0; pointer-events: none; }
 .l7-label { font-size: 12.5px; color: var(--text-dim); margin-bottom: 8px; }
 .rest-last7 { margin-bottom: var(--sp-4, 16px); }
