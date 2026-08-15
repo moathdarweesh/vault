@@ -7288,6 +7288,20 @@ body.theme-light {
 .l7-label { font-size: 12.5px; color: var(--text-dim); margin-bottom: 8px; }
 .rest-last7 { margin-bottom: var(--sp-4, 16px); }
 
+/* The rest-day hero. It sat BELOW the identity layer until v269 — the one thing
+   the banner below forbids — and it was broken by the very ordering it relied on:
+   the layer sets `border: 0` on .hero-card, and this card is
+   `class="hero-card hero-rest"`, so the shorthand zeroed the WIDTH while this rule
+   restored only the STYLE. Measured: border-top-style dashed, border-top-width 0px,
+   in both themes. It has never painted a dashed edge.
+   Declared in full and at (0,2,0) so it beats .hero-card on specificity rather than
+   on source order, which is what lets it live above the layer at all. */
+.hero-card.hero-rest {
+  cursor: default;
+  border: 1px dashed var(--border-hi);
+}
+.hero-card.hero-rest .hero-title { color: var(--text-mute); }
+
 /* =========================================================================
    ^^^ EVERYTHING ABOVE, THEN THE IDENTITY LAYER BELOW. ^^^
 
@@ -7529,9 +7543,4 @@ body { --icon-accent: var(--accent-text); }
 /* Destructive controls carry their own pair. */
 .icon-btn.danger, #reset-btn { color: var(--red); --icon-accent: var(--red); }
 
-.hero-rest {
-  cursor: default;
-  border-style: dashed;
-}
-.hero-rest .hero-title { color: var(--text-mute); }
 
