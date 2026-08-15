@@ -47,11 +47,31 @@ file on a database that already has it is safe.
 | 12 | `ban-rls-v10.sql` | Extends the ban past the blob: RESTRICTIVE INSERT/UPDATE policies on the mirror tables, the `exercise-images` bucket, and `profiles`. SELECT and DELETE stay open, so a blocked user can still export and erase their own data. Applied + verified live 2026-08-05. **Incomplete — see 15.** Its hand-written table array named 5 tables that do not exist and omitted 4 that do, and the loop `continue`d past the missing ones in silence, so it created 11 policy pairs where this table claimed 16. |
 | 13 | `launch-hardening.sql` | ~5 MB `vault_data` size cap (BEFORE trigger) + server-side `feedback.username` snapshot, which stops a crafted insert displaying any @handle in the admin inbox. Applied + verified live 2026-08-05. |
 | 14 | `hardening-v8.sql` | Revokes the implicit PUBLIC/anon EXECUTE on `admin_user_stats()`/`admin_activity()` and pins `search_path` on every SECURITY DEFINER function missing it. Applied + verified live 2026-08-05. |
+| 16 | `security-audit-repairs-v12.sql` | Rewrites `delete_own_account()` to delete the caller's children explicitly in FK-safe order — the old one relied on the `auth.users` cascade, which hits `ON DELETE RESTRICT` from `workout_sessions.exercise_id`/`cardio_logs.cardio_type_id`. Also re-pins `admin_user_stats`/`admin_activity`/`snapshot_feedback_username` from `search_path=public` to `''`, makes `client_errors_rate_cap` SECURITY INVOKER, adds the `client_errors` ban policy, and drops `migration_v2` behind a raise-guard. Applied + verified live 2026-08-13. |
+| 17 | `cross-tenant-write-guards-v13.sql` | 8 RESTRICTIVE guards so a row cannot reference another user's custom exercise/cardio type; all 12 predicates permit the global catalog (`owner_id is null`). Adds `workout_sessions_performed_idx`. Refuses to apply if any cross-tenant row already exists. Applied + verified live 2026-08-13. |
 | 15 | `ban-rls-completion-v11.sql` | Closes 12's gap: ban INSERT/UPDATE on the four tables it missed (`exercises`, `cardio_types`, `foods`, `user_prefs`), a ban on `profiles` INSERT (12 restricted UPDATE only, so a banned user could delete their own profile row and insert a new one under a fresh @handle), and the revoke/grant double-lock `client_errors` never got. Raises instead of skipping a missing table, and its VERIFY asserts the policy COUNT rather than mere existence — the check that would have caught 12. Applied + verified live 2026-08-13: tables carrying a ban pair went 14 -> 18, all four missing tables show ins=1/upd=1, `profiles_ban_insert` exists, and `client_errors` grants are exactly `authenticated: SELECT, INSERT` with nothing for `anon`. |
 
 > ⚠️ **Keep `image/svg+xml` OUT of the `exercise-images` mime allowlist,
 > permanently.** It is what rejects an active-content SVG arriving from a
 > poisoned imported backup.
+
+## ⚠️ VERIFY BY CALLING, NOT BY READING THE CATALOG
+
+Migration 16 nearly shipped a defect that **every catalog-reading check passed**.
+It qualified `pg_catalog.coalesce(...)` — but COALESCE is SQL *grammar*, not a
+function: `select count(*) from pg_proc where proname='coalesce'` returns **0** on
+this server, so it cannot be schema-qualified. plpgsql only raw-parses a body at
+CREATE time, so the file applied clean, COMMITted, and passed every `pg_proc` /
+`pg_policies` / `pg_get_functiondef` check — and both admin RPCs would have thrown
+on their first real call. `admin.html` maps an RPC error to `[]` with no banner, so
+the console would have shown all users at zero and read as "nobody uses the app".
+
+The same trap applies to GREATEST, LEAST, NULLIF, CASE and CAST.
+
+**Every migration that defines or replaces a function must end by CALLING it.**
+Reading `pg_proc` proves the function EXISTS. Only calling it proves it RUNS. See
+migration 16's VERIFY 8 for the pattern — a guard raising `not authorized` is a
+PASS, because it proves the body parsed and executed.
 
 ## 2) Not yet applied — `pending/`
 

@@ -145,7 +145,7 @@ begin
     ),
     st as (
       select ws.user_id, pg_catalog.count(*)::bigint as sets,
-             pg_catalog.coalesce(pg_catalog.sum(x.reps * x.weight), 0)::numeric as volume
+             coalesce(pg_catalog.sum(x.reps * x.weight), 0)::numeric as volume
       from public.workout_sets x
       join public.workout_sessions ws on ws.id = x.session_id
       group by ws.user_id
@@ -178,13 +178,13 @@ begin
     )
   select
     i.user_id,
-    pg_catalog.coalesce(s.sessions, 0),
-    pg_catalog.coalesce(st.sets, 0),
-    pg_catalog.coalesce(st.volume, 0),
-    pg_catalog.coalesce(f.foods, 0),
-    pg_catalog.coalesce(sl.sleeps, 0),
-    pg_catalog.coalesce(c.cardio, 0),
-    pg_catalog.coalesce(cx.custom, 0),
+    coalesce(s.sessions, 0),
+    coalesce(st.sets, 0),
+    coalesce(st.volume, 0),
+    coalesce(f.foods, 0),
+    coalesce(sl.sleeps, 0),
+    coalesce(c.cardio, 0),
+    coalesce(cx.custom, 0),
     s.last_session
   from ids i
   left join s  on s.user_id  = i.user_id
@@ -219,8 +219,8 @@ begin
       where ws.performed_on >= current_date - 7
     ),
     'top_ex', (
-      select pg_catalog.coalesce(pg_catalog.jsonb_agg(t), '[]'::jsonb) from (
-        select e.name as name, pg_catalog.coalesce(e.category::text, 'Other') as cat,
+      select coalesce(pg_catalog.jsonb_agg(t), '[]'::jsonb) from (
+        select e.name as name, coalesce(e.category::text, 'Other') as cat,
                pg_catalog.count(*)::int as n
         from public.workout_sessions ws
         join public.exercises e on e.id = ws.exercise_id
@@ -230,8 +230,8 @@ begin
       ) t
     ),
     'cat_dist', (
-      select pg_catalog.coalesce(pg_catalog.jsonb_object_agg(d.cat, d.n), '{}'::jsonb) from (
-        select pg_catalog.coalesce(e.category::text, 'Other') as cat,
+      select coalesce(pg_catalog.jsonb_object_agg(d.cat, d.n), '{}'::jsonb) from (
+        select coalesce(e.category::text, 'Other') as cat,
                pg_catalog.count(*)::int as n
         from public.workout_sessions ws
         join public.exercises e on e.id = ws.exercise_id
@@ -239,9 +239,9 @@ begin
       ) d
     ),
     'recent', (
-      select pg_catalog.coalesce(pg_catalog.jsonb_agg(r), '[]'::jsonb) from (
+      select coalesce(pg_catalog.jsonb_agg(r), '[]'::jsonb) from (
         select ws.user_id, e.name as ex,
-               pg_catalog.coalesce(e.category::text, 'Other') as cat,
+               coalesce(e.category::text, 'Other') as cat,
                ws.performed_on as date
         from public.workout_sessions ws
         left join public.exercises e on e.id = ws.exercise_id
@@ -316,6 +316,19 @@ create policy client_errors_ban_insert on public.client_errors
 --    live is a verified no-op; a fresh sequential apply drops the staging copy
 --    of cross-user blob/image PII after migration 04's cutover has completed.
 -- ----------------------------------------------------------------------------
+-- Fails LOUD, not silent. This is the file's only destructive statement, and a
+-- silent skip is exactly what hid migration 12's gap for three releases. The
+-- schema was confirmed ABSENT live on 2026-07-17 and again on 2026-08-13, so the
+-- expected path is "raises nothing because there is nothing to drop". If it ever
+-- DOES exist, that is a fact worth stopping for -- it holds unminimized
+-- cross-user PII -- not something to cascade away inside a routine migration.
+do $$
+begin
+  if exists (select 1 from pg_catalog.pg_namespace where nspname = 'migration_v2') then
+    raise exception 'migration_v2 exists on live; confirm out-of-band before dropping cross-user PII';
+  end if;
+end $$;
+
 drop schema if exists migration_v2 cascade;
 
 commit;
@@ -406,3 +419,27 @@ where n.nspname = 'public' and p.proname = 'delete_own_account'
 --   (select pg_catalog.count(*) from auth.users where id = '<uid>'::uuid)
 -- ) as total_rows; -- PASS: 0
 -- ============================================================================
+
+-- ============================================================================
+-- VERIFY 8 -- THE FUNCTIONAL SMOKE TEST. Run as the owner, AFTER committing.
+--
+-- Add because this file already shipped one defect that every catalog-reading
+-- check passed: `pg_catalog.coalesce(...)`. COALESCE is SQL GRAMMAR, not a
+-- function -- `select count(*) from pg_proc where proname='coalesce'` returns 0
+-- on this server -- so it cannot be schema-qualified. plpgsql only raw-parses a
+-- body at CREATE time, so the file applied clean, committed, and passed
+-- VERIFY 1-7, and both RPCs would then have thrown on their first real call.
+-- admin.html maps an RPC error to [] with no banner, so the console would have
+-- shown all eight users at zero and read as "nobody uses the app".
+--
+-- Reading pg_proc proves a function EXISTS. Only calling it proves it RUNS.
+-- Never again verify one of these files without executing what it defines.
+--
+-- Note: both bodies open with `if not public.is_admin() then raise exception`,
+-- and auth.uid() is null for the SQL-editor role, so these are expected to raise
+-- 'not authorized'. THAT IS A PASS -- it proves the body parsed and executed.
+-- A 42883 "function ... does not exist" or a parse error is a FAIL.
+-- ============================================================================
+-- select public.admin_user_stats();   -- PASS: raises 'not authorized'
+-- select public.admin_activity();     -- PASS: raises 'not authorized'
+-- select public.delete_own_account(); -- PASS: raises 'not authenticated'
