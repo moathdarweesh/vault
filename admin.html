@@ -363,7 +363,15 @@
           var u=s&&s.data&&s.data.session?s.data.session.user:null;
           meId=u?u.id:null;
           $('#who').textContent=u?u.email:'';
-          showApp(); buildNav(); await loadAll(); showCenter(curCenter);
+          showApp(); buildNav();
+          // Retention is owner-driven because pg_cron is not guaranteed on the
+          // project plan. Run once per verified admin login; failure must not
+          // make the control console unavailable.
+          try{
+            var prune=await sb.rpc('admin_prune_client_errors',{p_days:30});
+            if(prune.error) console.warn('[admin] client-error prune failed:',prune.error.message||prune.error);
+          }catch(pruneErr){ console.warn('[admin] client-error prune failed:',pruneErr); }
+          await loadAll(); showCenter(curCenter);
         }else{
           await sb.auth.signOut();
           msg.className='msg err'; msg.textContent='هذا الحساب ليس أدمِن. لوحة التحكّم للمالك فقط.'; showLogin();

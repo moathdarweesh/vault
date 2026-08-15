@@ -4410,7 +4410,7 @@ body[dir="rtl"] .picker-row { text-align: right; }
 /* The label carries its bar's hue, so the pairing is learnable without reading
    the numbers. These are TEXT, so they are held to 4.5:1 against the card (not
    the 3:1 the bars need): dark 6.48 / 8.68 / 8.16, light 6.07 / 5.80 / 6.21. */
-.macro-track-name.carb { color: var(--water); }
+.macro-track-name.carb { color: var(--carb); }
 .macro-track-name.fat  { color: var(--green); }
 .macro-track-nums { font-size: 12px; color: var(--text-dim); font-weight: 600; }
 .macro-track-bar { height: 8px; border-radius: 999px; background: var(--surface-3); overflow: hidden; }
@@ -4424,11 +4424,17 @@ body[dir="rtl"] .picker-row { text-align: right; }
    BOTH themes at any width).
 
    The trio was chosen by measurement, not taste: CIE76 deltaE between every pair,
-   worst pair wins. orange/blue/green scores 91.7 — orange/blue/amber only 50.8,
-   because --warn sits ~20 degrees of hue from --accent and reads as the same
-   colour in an 8px bar. Every one of the three clears 3:1 against the track in
-   both themes (dark 5.91 / 7.92 / 7.45, light 4.91 / 4.70 / 5.03), and all three
-   tokens are theme-aware pairs, so no per-theme override is needed.
+   worst pair wins, scored in BOTH themes because a pair that separates in dark
+   can collapse in light. Carbs went blue first and that was wrong — the water
+   card sits directly below these tracks, so a blue carb bar read as a second
+   water bar. Rescored against protein, fat and both water tones: magenta 72.3,
+   violet 46.3, red 24.6, amber 23.1. Magenta won by more than the runner-up's
+   whole margin. See --carb for why the amber and red numbers are light-mode
+   failures rather than dark-mode ones.
+
+   Every one of the three clears 3:1 against the track in both themes
+   (dark 5.91 / 6.90 / 7.45, light 4.91 / 5.01 / 5.03), and all three are
+   theme-aware token pairs, so no per-theme override is needed.
 
    Superseded note, kept so the reasoning is not lost: these were once
    --cat-chest / --cat-legs / --cat-shoulders, the MUSCLE HEATMAP palette
@@ -4439,7 +4445,7 @@ body[dir="rtl"] .picker-row { text-align: right; }
    solid indicator needs — while --accent-text is the theme-aware pair the label
    above already uses, at 4.91:1. One token, both themes, no theme override. */
 .macro-track-fill.pro { background: var(--accent-text); }
-.macro-track-fill.carb { background: var(--water); }
+.macro-track-fill.carb { background: var(--carb); }
 .macro-track-fill.fat { background: var(--green); }
 /* (the label rules live with the other .macro-track-name rules above) */
 .macro-track-left { font-size: 11px; color: var(--text-mute); margin-top: 4px; font-weight: 600; }
@@ -6916,6 +6922,15 @@ body[dir="rtl"] .ntfs-switch.on .ntfs-knob { transform: translateX(-18px); }
      in light until it clears. */
   --water: #38bdf8;          /* the icon + the fill's light end */
   --water-2: #0ea5e9;        /* the fill's dark end */
+  /* Carbs. A blue was the obvious pick and was WRONG: the water card sits
+     directly under the macro tracks on the same screen, so a blue carb bar read
+     as a second water bar. Chosen by CIE76 deltaE against protein, fat AND both
+     water tones, scoring the worst pair in BOTH themes -- magenta 72.3, violet
+     46.3, amber 23.1, red 24.6. Amber and red look fine in dark and collapse in
+     light, where protein darkens to #a34400 and closes on them; that is why the
+     light value is measured, not derived. Same hue both themes, darkened here
+     until it clears, exactly like --water above. */
+  --carb: #e879f9;
 }
 body.theme-light {
   --gold: #7a5a05;
@@ -6924,6 +6939,7 @@ body.theme-light {
   --accent-quiet: var(--text-mute);
   --water: #0369a1;
   --water-2: #075985;
+  --carb: #a21caf;
 }
 
 /* --- the rest chip (spec option C, superseding the v218 split bar) --------

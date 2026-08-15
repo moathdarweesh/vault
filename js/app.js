@@ -12,7 +12,7 @@
 // build. The literal below is the fallback (file://, or a stripped query) and is
 // still bumped by `npm run release` — see CLAUDE.md "CACHE WORKFLOW".
 const VAULT_BUILD = (() => {
-  const FALLBACK = 'v267';
+  const FALLBACK = 'v268';
   try {
     const src = (document.currentScript && document.currentScript.src) || '';
     const m = src.match(/[?&]v=(\d+)/);
@@ -6449,8 +6449,9 @@ function openRestSheet() {
     // "The heaviest movement in the plan" — by best estimated 1RM, which is the
     // only ranking the app already knows. Falls back to plan order when nothing
     // has been logged yet.
+    const exerciseStats = DB.sessions.statsByExercise();
     const heaviest = exObjs.slice().sort(
-      (a, b) => DB.sessions.bestOneRM(b.id) - DB.sessions.bestOneRM(a.id))[0] || exObjs[0];
+      (a, b) => (exerciseStats[b.id]?.bestORM || 0) - (exerciseStats[a.id]?.bestORM || 0))[0] || exObjs[0];
     const opts = [];
     if (heaviest) {
       opts.push({ k: 'one', mins: 10, icon: 'dumbbell',
@@ -6683,7 +6684,9 @@ function startMinimumSession(kind, mins, opts) {
     // Familiar first: an exercise with history opens on the user's own numbers
     // instead of a blank row. bestOneRM is 0 for anything never logged, so this
     // degrades to "any exercise for that muscle" on a fresh install.
-    const ranked = pool.slice().sort((a, b) => DB.sessions.bestOneRM(b.id) - DB.sessions.bestOneRM(a.id));
+    const exerciseStats = DB.sessions.statsByExercise();
+    const ranked = pool.slice().sort(
+      (a, b) => (exerciseStats[b.id]?.bestORM || 0) - (exerciseStats[a.id]?.bestORM || 0));
     navigate('session-day', {
       date: todayISO(),
       sdOnly: ranked.slice(0, 2).map((e) => e.id),
@@ -6707,8 +6710,9 @@ function startMinimumSession(kind, mins, opts) {
 
   let only;
   if (kind === 'one') {
+    const exerciseStats = DB.sessions.statsByExercise();
     const byBest = ids.slice().sort(
-      (a, b) => DB.sessions.bestOneRM(b) - DB.sessions.bestOneRM(a));
+      (a, b) => (exerciseStats[b]?.bestORM || 0) - (exerciseStats[a]?.bestORM || 0));
     only = [byBest[0]];
   } else {
     only = ids.slice(0, 2);

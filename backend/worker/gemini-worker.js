@@ -166,9 +166,13 @@ const SUPABASE_ANON = 'sb_publishable_ZBR2VENMP2O_K2YTMePCsw_NfLC9FSI';
 //     limited by Cloudflare's caller IP below, not by an unverified token.
 //   - 5xx or a network error         → allow. This is the case the fail-open was
 //     written for: a genuine Supabase outage must not take AI down for real users.
+//   - a 200 with no usable user id   → allow through the same IP bucket. A
+//     malformed success body is not proof that the caller's token is invalid,
+//     but it must never create an unlimited null-key path.
 //
 // Returns { allowed, userId } — the id is what the rate limiter below keys on, so
 // one authenticated account cannot drain the shared Gemini quota for everyone.
+// During an auth-service anomaly, userId carries the edge-observed IP key instead.
 function outageRateKey(request) {
   // Cloudflare supplies/overwrites this header at the edge. Unlike bearer-token
   // suffixes, a caller cannot mint a fresh bucket by changing request text.
@@ -191,7 +195,7 @@ async function callerAllowed(request) {
     if (r.ok) {
       let userId = null;
       try { const u = await r.json(); userId = (u && u.id) || null; } catch (_) {}
-      return { allowed: true, userId };
+      return { allowed: true, userId: userId || outageRateKey(request) };
     }
     // 429/5xx → Supabase is unwell, not the caller. Keep the availability
     // tradeoff, but share one bucket per edge-observed IP so rotating arbitrary
@@ -211,7 +215,7 @@ const RATE_MAX = 30;              // requests per window per caller
 const RATE_WINDOW_MS = 60 * 1000; // 1 minute
 const rateBuckets = new Map();
 function rateLimited(userId) {
-  if (!userId) return false;
+  if (!userId) return true; // invariant guard: an allowed caller must have a key
   const now = Date.now();
   const b = rateBuckets.get(userId);
   if (!b || now - b.start >= RATE_WINDOW_MS) {
