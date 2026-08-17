@@ -12,7 +12,7 @@
 // build. The literal below is the fallback (file://, or a stripped query) and is
 // still bumped by `npm run release` — see CLAUDE.md "CACHE WORKFLOW".
 const VAULT_BUILD = (() => {
-  const FALLBACK = 'v271';
+  const FALLBACK = 'v272';
   try {
     const src = (document.currentScript && document.currentScript.src) || '';
     const m = src.match(/[?&]v=(\d+)/);
@@ -7092,8 +7092,13 @@ function openManualFoodEntry(date, onSave) {
   $q.addEventListener('input', debounce(applyQuick, 250));
   $q.addEventListener('change', applyQuick);
 
+  // NO applyQuick() here. It used to run on save "to catch a paste that never
+  // fired input" — but it unconditionally rewrites all four macro boxes, so it
+  // threw away any figure the user had typed or corrected by hand, and with
+  // "keep in my foods" ticked by default the reverted values were saved too and
+  // came back on every later one-tap log. The input and change listeners above
+  // already cover the paste case; a paste that fires neither cannot exist.
   overlay.querySelector('#mf-save').addEventListener('click', () => {
-    applyQuick();                                  // catch a paste that never fired input
     const name = (F.name.value || '').trim();
     if (!name) { showToast(t('enter_name')); return; }
     const macros = {

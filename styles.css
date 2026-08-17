@@ -2756,7 +2756,7 @@ body.rest-active .toast { bottom: calc(var(--nav-h) + var(--safe-b) + 120px); }
    (Home v2, v78) · .stat-grid/.stat-tile* · .tools-grid/.tool-card*
    .today-plan* (the card itself; the CHIP below outlived it and is now used
    for template comparison, app.js) · the drag-and-drop planner
-   (.planner-list/.planner-ex-*/.drop-target/body.planner-dragging — replaced
+   (.planner-list/.planner-ex-(all)/.drop-target/body.planner-dragging — replaced
    by the ↑/↓ .rot-slot* rows in v229) · bare .bento-card-cat/.bento-card-name
    (superseded by the -mini/-tag variants) · .auth-logo (the login header
    renders brandLockup('splash') now) · .variation-* (the Alternatives feature,

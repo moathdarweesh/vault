@@ -212,8 +212,13 @@
     // between them, then assign greedily from the tightest pair outward, never
     // reusing a number. Nearest-unclaimed, not nearest.
     const numbers = [];
-    for (const m of text.matchAll(/[0-9]+(?:[.,][0-9]+)?/gu)) {
-      numbers.push({ v: parseFloat(m[0].replace(',', '.')), s: m.index, e: m.index + m[0].length });
+    // A separator followed by EXACTLY three digits (and no fourth) is a thousands
+    // group, not a decimal point: "1,200 calories" was read as 1.2 kcal and logged
+    // that way, under the banner that says nothing was estimated. Strip those
+    // first, then a remaining [.,] with one or two digits is a real decimal.
+    for (const m of text.matchAll(/[0-9]+(?:[.,][0-9]{3}(?![0-9]))*(?:[.,][0-9]{1,2}(?![0-9]))?/gu)) {
+      const raw = m[0].replace(/[.,]([0-9]{3})(?![0-9])/g, '$1').replace(',', '.');
+      numbers.push({ v: parseFloat(raw), s: m.index, e: m.index + m[0].length });
     }
     // A gap may hold separators (pipes, colons, "~", "≈", spaces) but never a
     // word — a gap that could hold a word is prose, not a table cell. That is
@@ -221,7 +226,12 @@
     // One unit word is allowed between a number and the label that follows it
     // ("55 جرام بروتين", "30 g protein").
     const SEP_ONLY = /^[^\p{L}0-9\n]{0,12}$/u;
-    const UNIT_THEN_SEP = /^\s*(g|gm|gr|kg|mg|kcal|cal|غ|جم|جرام|غرام|قرام|ملغ|كيلو)?[^\p{L}0-9\n]{0,3}$/u;
+    // `[^\S\n]*`, NOT `\s*`: \s includes the newline, so a number could bind
+    // FORWARD across a line break while SEP_ONLY (which excludes \n) refused to
+    // bind backward across one. That asymmetry is what made
+    // "Protein 15\nCarbs 14\nFat 39\nCalories 540" report 39 calories — the 39
+    // on the previous line was nearer to "Calories" than its own 540.
+    const UNIT_THEN_SEP = /^[^\S\n]*(g|gm|gr|kg|mg|kcal|cal|غ|جم|جرام|غرام|قرام|ملغ|كيلو)?[^\p{L}0-9\n]{0,3}$/u;
     const pairs = [];
     MACRO_LABELS.forEach(([key, aliases]) => {
       aliases.forEach((alias) => {
@@ -238,16 +248,27 @@
               // own length. Without this, "18 جرام بروتين 15 جرام دهون" gave
               // protein 15: the 15 sat one space after the label and outranked
               // the 18 that the phrase actually measures.
-              if (m) pairs.push({ key, ni, d: m[1] ? -1 : between.length });
+              if (m) pairs.push({ key, ni, rank: m[1] ? 0 : 2, d: between.length });
             } else if (le <= n.s) {                // label ... number
               const between = text.slice(le, n.s);
-              if (SEP_ONLY.test(between)) pairs.push({ key, ni, d: between.length });
+              if (SEP_ONLY.test(between)) pairs.push({ key, ni, rank: 1, d: between.length });
             }
           });
         }
       });
     });
-    pairs.sort((x, y) => x.d - y.d);
+    // DIRECTION OUTRANKS DISTANCE, and distance only breaks ties within a rank.
+    //   0 — a number carrying its own unit, then the label ("18 جرام بروتين").
+    //       The phrase names its own measure; nothing binds tighter.
+    //   1 — label then number ("Calories: 540", "سعرات | ~276"). How every
+    //       nutrition panel is written, so it beats a bare number that merely
+    //       happens to sit closer on the other side.
+    //   2 — bare number then label ("1000 سعرة"). Real, but the weakest claim.
+    // Scoring by raw gap alone read "calories 250 fat 8 carbs 30 protein 12" as
+    // protein 30 / carbs 8 — every value shifted one label to the left, because
+    // each label's own number was one space away in BOTH directions and the tie
+    // fell whichever way the scan happened to reach first.
+    pairs.sort((x, y) => (x.rank - y.rank) || (x.d - y.d));
     const usedNum = new Set();
     pairs.forEach((p) => {
       if (found[p.key] !== undefined || usedNum.has(p.ni)) return;
