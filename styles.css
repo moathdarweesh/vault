@@ -7302,6 +7302,75 @@ body.theme-light {
 }
 .hero-card.hero-rest .hero-title { color: var(--text-mute); }
 
+/* --- Photo note + one-line manual entry (v270) ---------------------------
+   Logical properties throughout, so both read correctly in RTL. Radii come
+   from the tokens rather than literals, so the identity layer below stays the
+   only place that decides shape. */
+.ai-note-wrap {
+  display: flex;
+  gap: 8px;
+  margin-top: 8px;
+  align-items: center;
+}
+.ai-note {
+  flex: 1 1 auto;
+  min-width: 0;                /* or a long placeholder pushes the button out */
+  font-size: 16px;             /* the input floor — never below it, iOS zooms */
+  padding: 10px 12px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  background: var(--surface-2);
+  color: var(--text);
+}
+.ai-note:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.ai-note-go {
+  flex: none;
+  padding: 10px 16px;
+  border-radius: var(--radius-sm);
+  border: 0;
+  background: var(--accent);
+  color: var(--accent-ink);
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.ai-note-go:active { transform: scale(var(--press-scale)); }
+.ai-note-hint {
+  font-size: 12px;
+  color: var(--text-mute);
+  margin-top: 6px;
+  line-height: 1.5;
+}
+.form-hint {
+  font-size: 12px;
+  color: var(--text-mute);
+  margin-top: 6px;
+  line-height: 1.5;
+}
+.form-hint.ok { color: var(--green); }
+.mf-keep {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 4px 0 14px;
+  font-size: 14px;
+  color: var(--text-mute);
+  cursor: pointer;
+}
+.mf-keep input { inline-size: 18px; block-size: 18px; accent-color: var(--accent); flex: none; }
+#mf-quick {
+  inline-size: 100%;
+  font-size: 16px;
+  padding: 10px 12px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  background: var(--surface-2);
+  color: var(--text);
+  resize: vertical;
+  font-family: inherit;
+}
+#mf-quick:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+
 /* =========================================================================
    ^^^ EVERYTHING ABOVE, THEN THE IDENTITY LAYER BELOW. ^^^
 

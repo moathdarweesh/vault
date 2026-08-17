@@ -12,7 +12,7 @@
 // build. The literal below is the fallback (file://, or a stripped query) and is
 // still bumped by `npm run release` — see CLAUDE.md "CACHE WORKFLOW".
 const VAULT_BUILD = (() => {
-  const FALLBACK = 'v269';
+  const FALLBACK = 'v270';
   try {
     const src = (document.currentScript && document.currentScript.src) || '';
     const m = src.match(/[?&]v=(\d+)/);
@@ -708,6 +708,16 @@ const I18N = {
     delete_account_sub: 'Permanently erase your account and all data',
     delete_account_confirm: 'This permanently deletes your account and ALL your data — workouts, nutrition, health, images — from every device and the cloud. This cannot be undone.',
     deleting_account: 'Deleting your account…',
+    mf_quick_label: 'Write it in one line',
+    mf_quick_ph: 'e.g. ful 1000 calories and 55 g protein',
+    mf_quick_hint: 'Type the numbers and the boxes below fill themselves.',
+    mf_quick_ok: 'Read your numbers — nothing was estimated.',
+    mf_quick_none: 'No calories found yet — keep typing, or fill the boxes below.',
+    mf_keep_label: 'Save to my foods for next time',
+    mf_added_and_kept: 'Added, and saved to your foods',
+    ai_photo_note_ph: 'Describe it (optional)',
+    ai_photo_analyze: 'Analyze',
+    ai_photo_note_hint: 'What is in it, how it was cooked, the oil — or exact calories if you know them.',
     delete_images_inspect_error: 'Could not inspect your stored images — nothing was deleted. Please try again.',
     delete_images_cleanup_error: 'Your account was deleted, but stored images could not be removed. Please try again.',
     privacy_policy: 'Privacy Policy & Terms',
@@ -1458,6 +1468,16 @@ const I18N = {
     delete_account_sub: 'محو حسابك وكل بياناتك نهائياً',
     delete_account_confirm: 'سيُحذف حسابك وكل بياناتك نهائياً — التمارين والتغذية والصحة والصور — من كل الأجهزة والسحابة. لا يمكن التراجع.',
     deleting_account: 'جارٍ حذف حسابك…',
+    mf_quick_label: 'اكتبها في سطر واحد',
+    mf_quick_ph: 'مثال: فول 1000 سعرة و55 جم بروتين',
+    mf_quick_hint: 'اكتب الأرقام وتُملأ الحقول بالأسفل تلقائياً.',
+    mf_quick_ok: 'قُرئت أرقامك كما هي دون أي تقدير.',
+    mf_quick_none: 'لم يُعثر على سعرات بعد — أكمل الكتابة أو املأ الحقول بالأسفل.',
+    mf_keep_label: 'احفظها في أطعمتي للمرّات القادمة',
+    mf_added_and_kept: 'أُضيفت وحُفظت في أطعمتك',
+    ai_photo_note_ph: 'اشرح الصورة (اختياري)',
+    ai_photo_analyze: 'حلّل',
+    ai_photo_note_hint: 'ما مكوّناتها، وكيف طُهيت، والزيت المستخدم — أو السعرات الدقيقة إن كنت تعرفها.',
     delete_images_inspect_error: 'تعذّر فحص صورك المخزّنة — لم يُحذف أي شيء. حاول مجدداً.',
     delete_images_cleanup_error: 'حُذف حسابك، لكن تعذّر حذف الصور المخزّنة. حاول مجدداً.',
     privacy_policy: 'سياسة الخصوصية والشروط',
@@ -6869,6 +6889,9 @@ function openManualFoodEntry(date, onSave) {
       <div class="modal-title">${t('manual_food_title')}</div>
       <button class="icon-btn icon-btn-tile" data-close>${icon('close', 20)}</button>
     </div>
+    <div class="form-group"><label class="form-label">${t('mf_quick_label')}</label>
+      <textarea id="mf-quick" rows="2" placeholder="${escapeHtml(t('mf_quick_ph'))}"></textarea>
+      <div class="form-hint" id="mf-quick-hint">${t('mf_quick_hint')}</div></div>
     <div class="form-group"><label class="form-label">${t('name')}</label>
       <input type="text" id="mf-name" placeholder="${t('manual_food_ph')}" autofocus></div>
     <div class="calc-grid calc-grid-2">
@@ -6881,20 +6904,60 @@ function openManualFoodEntry(date, onSave) {
       <div class="form-group"><label class="form-label">${t('fat_label')} (g)</label>
         <input type="number" inputmode="decimal" id="mf-fat" min="0" placeholder="8"></div>
     </div>
+    <label class="mf-keep"><input type="checkbox" id="mf-keep" checked>
+      <span>${t('mf_keep_label')}</span></label>
     <button class="btn btn-primary btn-block" id="mf-save">${icon('plus', 20)} ${t('ai_add_to_log')}</button>
   `);
+
+  const $q = overlay.querySelector('#mf-quick');
+  const $hint = overlay.querySelector('#mf-quick-hint');
+  const F = {
+    name: overlay.querySelector('#mf-name'), cal: overlay.querySelector('#mf-cal'),
+    pro: overlay.querySelector('#mf-pro'), carb: overlay.querySelector('#mf-carb'),
+    fat: overlay.querySelector('#mf-fat'),
+  };
+  // Write the whole thing in one line and let it fill the boxes. This reuses the
+  // SAME parser the chat uses (FoodAI.parseText), so "فول 1000 سعرة و55 جرام
+  // بروتين" lands here identically — no second set of rules to drift apart, and
+  // nothing is sent anywhere: it is pure local text matching.
+  const applyQuick = () => {
+    const raw = $q.value || '';
+    if (!raw.trim()) { $hint.textContent = t('mf_quick_hint'); $hint.classList.remove('ok'); return; }
+    const parsed = (window.FoodAI && FoodAI.parseText) ? FoodAI.parseText(raw) : null;
+    const it = parsed && parsed.items && parsed.items[0];
+    if (!it) { $hint.textContent = t('mf_quick_none'); $hint.classList.remove('ok'); return; }
+    if (!F.name.value.trim() && it.name) F.name.value = it.name;
+    F.cal.value = it.calories || '';
+    F.pro.value = it.protein || '';
+    F.carb.value = it.carbs || '';
+    F.fat.value = it.fat || '';
+    $hint.textContent = t('mf_quick_ok');
+    $hint.classList.add('ok');
+  };
+  $q.addEventListener('input', debounce(applyQuick, 250));
+  $q.addEventListener('change', applyQuick);
+
   overlay.querySelector('#mf-save').addEventListener('click', () => {
-    const name = (overlay.querySelector('#mf-name').value || '').trim();
+    applyQuick();                                  // catch a paste that never fired input
+    const name = (F.name.value || '').trim();
     if (!name) { showToast(t('enter_name')); return; }
-    DB.foodLogs.add(date, {
-      name, servings: 1,
-      calories: Number(overlay.querySelector('#mf-cal').value) || 0,
-      protein: Number(overlay.querySelector('#mf-pro').value) || 0,
-      carbs: Number(overlay.querySelector('#mf-carb').value) || 0,
-      fat: Number(overlay.querySelector('#mf-fat').value) || 0,
-      source: 'manual',
-    });
-    closeModal(); showToast(t('ai_added'));
+    const macros = {
+      calories: Number(F.cal.value) || 0,
+      protein: Number(F.pro.value) || 0,
+      carbs: Number(F.carb.value) || 0,
+      fat: Number(F.fat.value) || 0,
+    };
+    DB.foodLogs.add(date, { name, servings: 1, ...macros, source: 'manual' });
+    // Keep it for next time, so the same meal is one tap from the saved picker
+    // instead of being retyped. Skipped when an identically-named food already
+    // exists, or the list fills with duplicates of whatever you eat most.
+    let kept = false;
+    if (overlay.querySelector('#mf-keep').checked) {
+      const dup = DB.foods.list().some((f) => f.name.trim().toLowerCase() === name.toLowerCase());
+      if (!dup) { DB.foods.add({ name, serving: '', ...macros }); kept = true; }
+    }
+    closeModal();
+    showToast(kept ? t('mf_added_and_kept') : t('ai_added'));
     if (typeof onSave === 'function') onSave();
   });
 }

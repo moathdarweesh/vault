@@ -195,19 +195,64 @@
     if (!raw) return null;
     const text = westernDigits(raw).toLowerCase();
     const found = {};
+    // MATCHING, and why it is not a regex per label.
+    //
+    // People write the number on EITHER side of its label:
+    //   label first  — "سعرات 1000"  / "calories: 500"   (a pasted table)
+    //   number first — "1000 سعرة"   / "500 calories"    (a sentence)
+    // Only the table form used to parse, so "أكلت فول فيه 1000 سعرة و55 جرام
+    // بروتين" — the way anyone actually types it — fell through to the model and
+    // came back re-estimated, throwing away the numbers the user had just given.
+    //
+    // Accepting both directions per label independently is not enough: in
+    // "سعرات 1000 بروتين 55" the 1000 sits one space from BOTH labels, so each
+    // regex claims it and protein comes out as 1000. The real rule is that a
+    // number belongs to exactly ONE label. So: collect every number and every
+    // label occurrence with positions, score each legal pairing by the gap
+    // between them, then assign greedily from the tightest pair outward, never
+    // reusing a number. Nearest-unclaimed, not nearest.
+    const numbers = [];
+    for (const m of text.matchAll(/[0-9]+(?:[.,][0-9]+)?/gu)) {
+      numbers.push({ v: parseFloat(m[0].replace(',', '.')), s: m.index, e: m.index + m[0].length });
+    }
+    // A gap may hold separators (pipes, colons, "~", "≈", spaces) but never a
+    // word — a gap that could hold a word is prose, not a table cell. That is
+    // what stops "how many calories in 100g rice?" parsing as a 100-kcal meal.
+    // One unit word is allowed between a number and the label that follows it
+    // ("55 جرام بروتين", "30 g protein").
+    const SEP_ONLY = /^[^\p{L}0-9\n]{0,12}$/u;
+    const UNIT_THEN_SEP = /^\s*(g|gm|gr|kg|mg|kcal|cal|غ|جم|جرام|غرام|قرام|ملغ|كيلو)?[^\p{L}0-9\n]{0,3}$/u;
+    const pairs = [];
     MACRO_LABELS.forEach(([key, aliases]) => {
-      if (found[key] !== undefined) return;
-      for (const alias of aliases) {
-        // label, then SEPARATORS ONLY (pipes, colons, "~", "≈", spaces), then
-        // the number. Capped so a label cannot reach across a whole table and
-        // steal the next row's figure — and letters are excluded in any script,
-        // because a gap that may hold a word is prose, not a table cell. Without
-        // that, "how many calories in 100g rice?" parsed as a 100-kcal meal and
-        // was logged with the model never called.
-        const re = new RegExp(alias.toLowerCase().replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '[^\\p{L}0-9\\n]{0,12}([0-9]+(?:[.,][0-9]+)?)', 'u');
-        const m = text.match(re);
-        if (m) { found[key] = parseFloat(m[1].replace(',', '.')); break; }
-      }
+      aliases.forEach((alias) => {
+        const a = alias.toLowerCase();
+        for (let i = text.indexOf(a); i !== -1; i = text.indexOf(a, i + 1)) {
+          const ls = i, le = i + a.length;
+          numbers.forEach((n, ni) => {
+            if (n.e <= ls) {                       // number ... label
+              const between = text.slice(n.e, ls);
+              const m = between.match(UNIT_THEN_SEP);
+              // A UNIT between the number and the label is the STRONGEST binding
+              // there is — "18 جرام بروتين" names its own measure — so it ranks
+              // ahead of bare adjacency instead of being penalised by the unit's
+              // own length. Without this, "18 جرام بروتين 15 جرام دهون" gave
+              // protein 15: the 15 sat one space after the label and outranked
+              // the 18 that the phrase actually measures.
+              if (m) pairs.push({ key, ni, d: m[1] ? -1 : between.length });
+            } else if (le <= n.s) {                // label ... number
+              const between = text.slice(le, n.s);
+              if (SEP_ONLY.test(between)) pairs.push({ key, ni, d: between.length });
+            }
+          });
+        }
+      });
+    });
+    pairs.sort((x, y) => x.d - y.d);
+    const usedNum = new Set();
+    pairs.forEach((p) => {
+      if (found[p.key] !== undefined || usedNum.has(p.ni)) return;
+      found[p.key] = numbers[p.ni].v;
+      usedNum.add(p.ni);
     });
     // Calories are the signal. Without an explicit calorie figure this is a
     // description ("two eggs and toast"), which is the model's job, not ours.
@@ -228,6 +273,30 @@
       name = clean.slice(0, 80);
       return true;
     });
+    // A ONE-LINE entry has no clean line to take — "فول مدمس 1000 سعرة و55 جرام
+    // بروتين" is all one line and every line holds a digit, so the loop above
+    // finds nothing and the meal used to be filed as the generic "وجبة". Strip
+    // out what the parser already consumed — the numbers, the macro labels and
+    // the units — and whatever words are left ARE the food's name.
+    if (!name) {
+      const units = 'g|gm|gr|kg|mg|kcal|cal|غ|جم|جرام|غرام|قرام|ملغ|كيلو';
+      let rest = westernDigits(raw);
+      MACRO_LABELS.forEach(([, aliases]) => {
+        // longest alias first, or "سعرات" leaves "حرارية" stranded behind
+        [...aliases].sort((a, b) => b.length - a.length).forEach((a) => {
+          rest = rest.replace(new RegExp(a.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'gi'), ' ');
+        });
+      });
+      rest = rest
+        .replace(/[0-9]+(?:[.,][0-9]+)?/g, ' ')
+        .replace(new RegExp('(?:^|\\s)(?:' + units + ')(?![\\p{L}0-9])', 'giu'), ' ')
+        .replace(/[|*#>_`~\-،,.:؛;()\[\]]/g, ' ')
+        // leftover connectors that are not part of a dish name
+        .replace(/(?:^|\s)(?:و|في|فيه|فيها|من|مع|اكلت|أكلت|شربت|and|with|of|ate|had|drank|approx|about|~|≈)(?=\s|$)/giu, ' ')
+        .replace(/\s+/g, ' ')
+        .trim();
+      if (rest.length >= 2) name = rest.slice(0, 80);
+    }
 
     const item = normalizeItem({
       name: name || tr('ai_pasted_meal'),
@@ -285,11 +354,19 @@
   // Instruction sent WITH a photo. Tells the model to estimate the actual
   // PORTION from visual cues (so we don't need a worker redeploy — the worker
   // just forwards this text + the image to Gemini).
-  function imagePrompt() {
+  // `note` is what the USER typed about their own photo. A picture cannot show
+  // what is inside a dish, how it was cooked, or the oil in it, and guessing at
+  // those is where a photo estimate goes most wrong. When the user says it, it
+  // OUTRANKS the model's reading of the image -- they were holding the plate.
+  function imagePrompt(note) {
     let lang = 'en';
     try { lang = (DB && DB.prefs && DB.prefs.get().lang) || 'en'; } catch (_) {}
     return [
       'Look at this food photo. Identify every distinct food and drink.',
+      note ? ('The person who took this photo describes it as: "' + String(note).slice(0, 400) +
+              '". TREAT THAT AS GROUND TRUTH: it may name the dish, the ingredients, the cooking method, ' +
+              'the oil used, or the portion. Where it conflicts with what you think you see, FOLLOW THE ' +
+              'DESCRIPTION. If it states explicit calories or macros, use those numbers exactly.') : '',
       'ESTIMATE THE AMOUNT actually shown using visual cues — plate/bowl size, utensils, hands, the container, the number of pieces, and the visible volume/thickness.',
       'Calculate calories and macros for THAT estimated amount — not a generic single serving.',
       'Put the estimated amount inside each item\'s name (e.g. "2 slices pizza", "grilled chicken ~200g", "rice ~1.5 cup").',
@@ -299,14 +376,14 @@
 
   // Analyze a food PHOTO. `image` = { mimeType, data(base64) }. Not cached
   // (every photo is unique).
-  async function analyzeImage(image) {
-    if (useProxy()) return analyzeViaProxy(imagePrompt(), image);
+  async function analyzeImage(image, note) {
+    if (useProxy()) return analyzeViaProxy(imagePrompt(note), image);
     const key = getKey();
     if (!key) throw new Error(tr('ai_need_key'));
     const body = {
       systemInstruction: { parts: [{ text: SYSTEM }] },
       contents: [{ parts: [
-        { text: imagePrompt() },
+        { text: imagePrompt(note) },
         { inline_data: { mime_type: image.mimeType, data: image.data } },
       ] }],
       generationConfig: { responseMimeType: 'application/json', temperature: 0 },
@@ -540,16 +617,42 @@
               qHtml = `<img class="ai-photo-thumb" src="${pic.dataUrl}" alt="">`;
               image = pic.image;
             } catch (_) {}
-            box.insertAdjacentHTML('beforeend', `<div class="ai-pending" id="${id}-p">${qHtml}<span class="ai-dots">${tr('ai_analyzing')}</span></div>`);
+            // OFFER TO EXPLAIN THE PHOTO before spending the call. A picture
+            // cannot show what is inside a dish, how it was cooked, or the oil
+            // in it, and that is exactly where a photo estimate goes wrong. So
+            // the shot lands with a note box and an analyse button; the note is
+            // optional and Enter or the button sends either way.
+            box.insertAdjacentHTML('beforeend',
+              `<div class="ai-pending ai-photo-ask" id="${id}-p">${qHtml}
+                 <div class="ai-note-wrap">
+                   <input type="text" class="ai-note" id="${id}-note" placeholder="${esc(tr('ai_photo_note_ph'))}" maxlength="400">
+                   <button class="ai-note-go" id="${id}-go">${esc(tr('ai_photo_analyze'))}</button>
+                 </div>
+                 <div class="ai-note-hint">${esc(tr('ai_photo_note_hint'))}</div>
+               </div>`);
             box.scrollTop = box.scrollHeight;
-            try {
-              if (!image) throw new Error(tr('ai_error'));
-              const { items } = await window.FoodAI.analyzeImage(image);
-              showResult(id, qHtml, items, box);
-            } catch (e) {
-              const p = document.getElementById(id + '-p');
-              if (p) p.innerHTML = qHtml + `<span class="ai-err">${esc(friendlyErr(e))}</span>`;
-            }
+            const noteEl = document.getElementById(id + '-note');
+            const goEl = document.getElementById(id + '-go');
+            if (noteEl) noteEl.focus();
+            let sent = false;
+            const go = async () => {
+              if (sent) return;                    // double-tap must not spend two calls
+              sent = true;
+              const note = (noteEl && noteEl.value || '').trim();
+              const shown = note ? `${qHtml}<span class="ai-q">${esc(note)}</span>` : qHtml;
+              const p0 = document.getElementById(id + '-p');
+              if (p0) { p0.classList.remove('ai-photo-ask'); p0.innerHTML = `${shown}<span class="ai-dots">${tr('ai_analyzing')}</span>`; }
+              try {
+                if (!image) throw new Error(tr('ai_error'));
+                const { items } = await window.FoodAI.analyzeImage(image, note);
+                showResult(id, shown, items, box);
+              } catch (e) {
+                const p = document.getElementById(id + '-p');
+                if (p) p.innerHTML = shown + `<span class="ai-err">${esc(friendlyErr(e))}</span>`;
+              }
+            };
+            if (goEl) goEl.addEventListener('click', go);
+            if (noteEl) noteEl.addEventListener('keydown', (e) => { if (e.key === 'Enter') go(); });
           });
         }
       }
@@ -704,5 +807,10 @@
     return { items: toItems(parsed).items, transcript: parsed.transcript || '' };
   }
 
-  window.FoodAI = { open, openPhoto, analyze, analyzeImage, analyzeAudio, ask, getKey, setKey, hasKey };
+  // parseText is parseMacroText exposed deliberately: the manual entry form
+  // fills its boxes with it, and it must be the SAME rules the chat uses or the
+  // two drift into disagreeing about the same sentence. Pure local matching —
+  // it sends nothing anywhere.
+  window.FoodAI = { open, openPhoto, analyze, analyzeImage, analyzeAudio, ask, getKey, setKey, hasKey,
+                    parseText: parseMacroText };
 })();
