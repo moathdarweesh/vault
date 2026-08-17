@@ -1,6 +1,6 @@
 # THE VAULT — Low-Level Design
 
-**Version of record:** web `v268` · APK `build 18 / v2.7`
+**Version of record:** web `v271` · APK `build 18 / v2.7`
 **Status:** living document. Every claim below was read out of the source, not inferred.
 **Audience:** anyone who has to change this system without breaking it.
 
@@ -20,7 +20,7 @@ Each layer section follows the same shape:
 | **Invariants** | Rules that MUST hold, each with its reason. Breaking one of these is how the system fails. |
 | **Failure modes** | How the layer degrades, and what it does about it. |
 
-Line references are `file:line` against the v268 tree. They rot; the identifiers do not. When they disagree, trust the identifier and re-find the line.
+Line references are `file:line` against the v271 tree. They rot; the identifiers do not. When they disagree, trust the identifier and re-find the line.
 
 ---
 
@@ -111,8 +111,8 @@ js/cloud.js → js/storage.js → js/tables.js → js/app.js
 
 | Global | Defined in | Consumers (call sites) |
 |---|---|---|
-| `DB` | `js/storage.js` | app.js ×241, health.js ×20, notify.js ×10, cloud.js ×5, tables.js ×4, foodai.js ×3, update.js ×1 |
-| `Cloud` | `js/cloud.js` | app.js ×62, tables.js ×7, foodai.js ×2, storage.js ×1 |
+| `DB` | `js/storage.js` | app.js ×322, health.js ×20, notify.js ×33, cloud.js ×5, tables.js ×4, foodai.js ×3, update.js ×1 |
+| `Cloud` | `js/cloud.js` | app.js ×47, tables.js ×7, foodai.js ×2, storage.js ×1 |
 | `Notify` | `js/notify.js` | app.js ×18 |
 | `FoodAI` | `js/foodai.js` | app.js ×8 |
 | `Health` | `js/health.js` | app.js ×4 |
@@ -437,7 +437,7 @@ schema so the admin console can query it. It is **never read back by the app**.
 
 ---
 
-## 6. L5 — UI / View & Router (`js/app.js`, 11542 lines)
+## 6. L5 — UI / View & Router (`js/app.js`, 11760 lines)
 
 ### 6.1 The router
 
@@ -469,7 +469,7 @@ Every view function follows the same five steps:
 
 1. Read everything synchronously from `DB.*` — **no async, no loading state**.
 2. Build one template literal: `t('…')` raw (authored, trusted), `escapeHtml(…)` around **every**
-   DB / cloud / AI-derived value (273 call sites), `icon(name, size)` inlining SVG.
+   DB / cloud / AI-derived value (274 call sites), `icon(name, size)` inlining SVG.
 3. `el.innerHTML = …` in one shot.
 4. Re-bind listeners on the fresh nodes, **root-scoped**: `$('#id', el)?.addEventListener(…)`.
 5. Hot paths use one delegated listener + a partial rebuild instead of a full re-render.
@@ -528,7 +528,7 @@ button is invalid HTML and its click would bubble into starting the workout the 
 
 ---
 
-## 7. L6 — Design System / Presentation (`styles.css` ~7537 lines, `BRAND.md`)
+## 7. L6 — Design System / Presentation (`styles.css` ~7615 lines, `BRAND.md`)
 
 ### 7.1 Token resolution
 
@@ -882,7 +882,7 @@ evening date comes back as **the next day**. This has shipped three times.
 | Concern | Control |
 |---|---|
 | XSS via entity ids | `_idsSafe` on **both** untrusted entry points — ids reach `data-*` attributes. |
-| XSS via content | `escapeHtml()` on every non-literal value (273 sites). |
+| XSS via content | `escapeHtml()` on every non-literal value (274 sites). |
 | Broken numeric HTML attribute | `numAttr()` (21 sites) — **coercion, not escaping**. A value bound for an unquoted numeric attribute (`value=`, `width=`) is forced to a finite number or the empty string, so a non-numeric one cannot reach the attribute at all rather than reaching it escaped. |
 | XSS via uploaded SVG | `image/svg+xml` permanently excluded from the storage mime allowlist. |
 | Prototype pollution | `hasOwnProperty.call` on the theme map. |
