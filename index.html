@@ -25,8 +25,8 @@
        already cached the favicon keeps serving the OLD mark forever, so an icon
        redesign reaches nobody. `npm run release` rewrites every ?v= in this
        file, so these stay in step automatically. -->
-  <link rel="icon" type="image/svg+xml" href="icons/icon.svg?v=272">
-  <link rel="apple-touch-icon" href="icons/icon.svg?v=272">
+  <link rel="icon" type="image/svg+xml" href="icons/icon.svg?v=273">
+  <link rel="apple-touch-icon" href="icons/icon.svg?v=273">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <!-- Warm the Supabase connection (DNS + TLS) during page load so the first
@@ -38,7 +38,7 @@
   <!-- Must carry the SAME ?v=N that cloud.js appends when it injects this script,
        or the preload warms a different URL and is wasted. `npm run release` bumps
        both (this one by regex, cloud.js by deriving from its own marker). -->
-  <link rel="preload" href="js/vendor/supabase.js?v=272" as="script">
+  <link rel="preload" href="js/vendor/supabase.js?v=273" as="script">
   <!-- The brand kit's three faces, and only three:
          IBM Plex Sans Arabic — the body face, for BOTH scripts (it carries a
            full Latin set, so this replaces the old Inter + Tajawal pair and one
@@ -60,7 +60,7 @@
        were SYNTHETIC bold — the browser smearing 400 rather than drawing a real
        bold. With 700 present the heavier steps map to it instead. -->
   <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@400;500;600;700&family=Archivo:wght@800&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="styles.css?v=272">
+  <link rel="stylesheet" href="styles.css?v=273">
 </head>
 <body class="theme-dark">
   <div class="app">
@@ -129,21 +129,21 @@
           await Promise.all(regs.map((r) => r.unregister()));
           const keys = await caches.keys();
           await Promise.all(keys.map((k) => caches.delete(k)));
-          if (!sessionStorage.getItem('__cleaned_v272')) {
-            sessionStorage.setItem('__cleaned_v272', '1');
+          if (!sessionStorage.getItem('__cleaned_v273')) {
+            sessionStorage.setItem('__cleaned_v273', '1');
             location.reload();
           }
         }
       }).catch(() => {});
     }
   </script>
-  <script src="js/cloud.js?v=272"></script>
-  <script src="js/storage.js?v=272"></script>
-  <script src="js/tables.js?v=272"></script>
-  <script src="js/app.js?v=272"></script>
-  <script src="js/health.js?v=272"></script>
-  <script src="js/notify.js?v=272"></script>
-  <script src="js/foodai.js?v=272"></script>
-  <script src="js/update.js?v=272"></script>
+  <script src="js/cloud.js?v=273"></script>
+  <script src="js/storage.js?v=273"></script>
+  <script src="js/tables.js?v=273"></script>
+  <script src="js/app.js?v=273"></script>
+  <script src="js/health.js?v=273"></script>
+  <script src="js/notify.js?v=273"></script>
+  <script src="js/foodai.js?v=273"></script>
+  <script src="js/update.js?v=273"></script>
 </body>
 </html>

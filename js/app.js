@@ -12,7 +12,7 @@
 // build. The literal below is the fallback (file://, or a stripped query) and is
 // still bumped by `npm run release` — see CLAUDE.md "CACHE WORKFLOW".
 const VAULT_BUILD = (() => {
-  const FALLBACK = 'v272';
+  const FALLBACK = 'v273';
   try {
     const src = (document.currentScript && document.currentScript.src) || '';
     const m = src.match(/[?&]v=(\d+)/);
@@ -4409,8 +4409,19 @@ function renderProgram(el) {
 
   // ---- Next training days (rest days omitted — the planner's preview shows the
   // raw 7-day roll including rest; here only the days you actually train). -----
+  //
+  // The row count is YOUR week, not a constant. It was hard-coded to 4, so a
+  // five-day schedule rendered four rows and the fifth weekday switched on in the
+  // planner simply never appeared — this strip contradicted both the toggles two
+  // screens away and the "/ 5" denominator printed directly below it.
+  //
+  // trainingDays.length is the very number "This week" divides by (weekPlanned,
+  // below), so the two can no longer disagree. A cycle with no weekday switched
+  // on falls back to 4, finds nothing — workoutForDate returns null on every
+  // date — and the section drops out instead of printing an empty titled box.
+  const wantDays = Math.min(7, (plan.trainingDays || []).length || 4);
   const nextDays = [];
-  for (let i = 0; i < 28 && nextDays.length < 4; i++) {
+  for (let i = 0; i < 28 && nextDays.length < wantDays; i++) {
     const d = new Date(now); d.setDate(now.getDate() + i);
     const w = DB.plan.workoutForDate(d);
     if (w) nextDays.push({ iso: addDaysISO(todayISO(), i), dow: d.getDay(), w, isToday: i === 0 });
@@ -4537,10 +4548,11 @@ function renderProgram(el) {
           </div>` : ''}
       </div>
 
+      ${nextDays.length ? `
       <div class="rot-section">
         <div class="rot-section-title">${t('program_next')}</div>
         <div class="schedule-preview">${nextHtml}</div>
-      </div>
+      </div>` : ''}
     `}
 
     <!-- Every block below is a .rot-section with a .rot-section-title. It used to
