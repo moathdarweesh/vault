@@ -609,21 +609,7 @@ body.rest-active .main { padding-bottom: 104px; }
 /* While the on-screen keyboard is open (body.keyboard-open is toggled by
    setupKeyboardHandling), slide the bottom nav down out of the way so it can't
    rise up on top of the field being edited. */
-/* THE GUIDED RUN IS THE EXCEPTION. Every set is two number fields, so the
-   keyboard is up for almost the whole workout — and the rule below made the
-   bar both invisible AND pointer-events:none for that entire time, which is
-   what "I cannot move around the app unless I leave guided mode" means.
-
-   Safe to exempt precisely here: .bottom-nav is IN FLOW (flex:none inside
-   .app), so it never overlays the field being edited — hiding it only
-   reclaimed vertical space. The focused input is scrolled into view by
-   setupKeyboardHandling regardless, so keeping the row costs one bar height
-   of scroll and buys back every tab.
-
-   Written as :not() on the SAME selector rather than a later override so it
-   also cancels the negative margin-bottom, which a plain override could not
-   undo without restating it. */
-body.keyboard-open:not([data-view="session-run"]) .bottom-nav {
+body.keyboard-open .bottom-nav {
   transform: translateY(140%);
   opacity: 0;
   pointer-events: none;
@@ -3432,6 +3418,20 @@ body[dir="rtl"] .planner-day-head { text-align: right; }
 .sd-start-run:active { transform: scale(var(--press-scale)); }
 
 /* ── Guided workout run screen (session-run) ──────────────────────────── */
+/* FOCUS MODE: no tabs. Deliberate — the guided run is one exercise at a time,
+   and the way out is the back arrow in .detail-top while .run-nav moves you
+   through the workout. .bottom-nav is in flow, so this also gives the set list
+   the bar's height back instead of merely hiding it. */
+body[data-view="session-run"] .bottom-nav { display: none; }
+
+/* The one line in the conflict dialog that names what is about to be lost.
+   --warn, not --danger: nothing has gone wrong, but one of the two buttons
+   below it discards work and the user is entitled to know which. */
+.conflict-warn {
+  color: var(--warn, var(--accent-text));
+  font-weight: 700;
+}
+
 .run-progress { margin: 4px 0 18px; }
 .run-progress-track {
   height: 6px;
@@ -3490,6 +3490,12 @@ body[dir="rtl"] .planner-day-head { text-align: right; }
   line-height: 1.1;
 }
 .run-stat.is-best .run-stat-value { color: var(--accent-text); }
+.run-stat-reps {
+  margin-top: 2px;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text-dim);
+}
 .run-stat-unit {
   font-size: 11px;
   font-weight: 700;
@@ -3535,6 +3541,16 @@ body[dir="rtl"] .planner-day-head { text-align: right; }
   letter-spacing: -0.02em;
   color: var(--text);
   margin: 0;
+  /* FOCUS MODE MEANS NOTHING MOVES. A one-line name followed by a two-line one
+     shifted every row below it by a whole line each time you tapped Next. Two
+     lines are always reserved and never exceeded, so the set rows sit at the
+     same height for every exercise in the workout. */
+  line-height: 1.15;
+  min-height: 2.3em;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
 }
 .run-last { font-size: 13px; color: var(--text-mute); font-weight: 600; }
 .run-last-sets { color: var(--text); font-weight: 800; }

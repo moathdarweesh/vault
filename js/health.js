@@ -139,6 +139,16 @@
   // shows up in the records, not just the home cards. Deduped inside storage.
   function applyToLogs(data) {
     if (!data || typeof DB === 'undefined') return;
+    // WAIT FOR THE FIRST CLOUD RECONCILIATION. These two writes go through
+    // DB.*.save(), which flags the synced blob dirty — correctly, they are real
+    // user data. But at boot this runs before bootSync's pull has resolved, and
+    // a blob that is dirty for a reason the user never caused turns the next
+    // reconciliation into a conflict dialog they cannot explain. Skipping is
+    // free: silentSync() runs again on every foreground, so the import lands a
+    // moment later with the same data and no race.
+    try {
+      if (window.Cloud && Cloud.isSettled && !Cloud.isSettled()) return;
+    } catch (_) { /* no cloud layer at all → nothing to race */ }
     try { if (DB.sleep && DB.sleep.importFromHealth) DB.sleep.importFromHealth(data.sleep); } catch (_) { /* ignore */ }
     try { if (DB.cardio && DB.cardio.importFromHealth) DB.cardio.importFromHealth(data.exerciseSessions); } catch (_) { /* ignore */ }
   }

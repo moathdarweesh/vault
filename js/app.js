@@ -12,7 +12,7 @@
 // build. The literal below is the fallback (file://, or a stripped query) and is
 // still bumped by `npm run release` — see CLAUDE.md "CACHE WORKFLOW".
 const VAULT_BUILD = (() => {
-  const FALLBACK = 'v274';
+  const FALLBACK = 'v275';
   try {
     const src = (document.currentScript && document.currentScript.src) || '';
     const m = src.match(/[?&]v=(\d+)/);
@@ -911,6 +911,15 @@ const I18N = {
     of_word: 'of',
     last_time: 'Last time',
     first_time_no_record: 'First time — no record yet',
+    sync_conflict_toast: 'This device has changes the cloud does not',
+    sync_resolve: 'Resolve',
+    sync_unsynced: 'Not backed up yet',
+    sync_restore_title: 'Restore the copy from before the last sync?',
+    sync_restore_text: 'A snapshot of this device was taken automatically just before the last sync replaced it. Restoring puts it back and uploads it.',
+    sync_restore: 'Restore',
+    sync_restored: 'Restored from the pre-sync copy',
+    sync_restore_failed: 'Could not restore',
+    conflict_warn_cloud: 'Keeping the cloud copy discards the changes made on this device.',
     run_best_weight: 'Best ever',
     run_last_weight: 'Last session',
     ai_edit_values: 'Edit values',
@@ -1670,6 +1679,15 @@ const I18N = {
     of_word: 'من',
     last_time: 'آخر مرة',
     first_time_no_record: 'أول مرة — لا يوجد سجل بعد',
+    sync_conflict_toast: 'في هذا الجهاز تعديلات لم تصل السحابة',
+    sync_resolve: 'حلّها',
+    sync_unsynced: 'لم تُرفَع بعد',
+    sync_restore_title: 'استعادة النسخة السابقة للمزامنة؟',
+    sync_restore_text: 'أُخذت نسخة من هذا الجهاز تلقائياً قبل أن تستبدلها آخر مزامنة. الاستعادة تُرجعها وترفعها.',
+    sync_restore: 'استعادة',
+    sync_restored: 'تمت الاستعادة من نسخة ما قبل المزامنة',
+    sync_restore_failed: 'تعذّرت الاستعادة',
+    conflict_warn_cloud: 'الاحتفاظ بنسخة السحابة يتخلّى عن التعديلات التي جرت على هذا الجهاز.',
     run_best_weight: 'أعلى وزن',
     run_last_weight: 'آخر وزن',
     ai_edit_values: 'تعديل القِيَم',
@@ -2992,7 +3010,10 @@ function showToast(msg, opts) {
 // ==========================================================================
 // Modal System
 // ==========================================================================
-function openModal(innerHtml, { variant = 'sheet' } = {}) {
+// dismissible:false is for a dialog that MUST be answered — currently only the
+// sync conflict, where walking away leaves the device in a state whose next
+// launch can silently overwrite real data.
+function openModal(innerHtml, { variant = 'sheet', dismissible = true } = {}) {
   const root = $('#modal-root');
   root.innerHTML = `
     <div class="modal-overlay ${variant === 'confirm' ? 'confirm-overlay' : ''}">
@@ -3003,7 +3024,9 @@ function openModal(innerHtml, { variant = 'sheet' } = {}) {
     </div>
   `;
   const overlay = root.querySelector('.modal-overlay');
+  overlay.dataset.dismissible = dismissible ? '1' : '0';
   overlay.addEventListener('click', (e) => {
+    if (!dismissible) return;
     if (e.target === overlay) closeModal();
   });
   overlay.querySelectorAll('[data-close]').forEach((el) => {
@@ -3025,7 +3048,11 @@ function openModal(innerHtml, { variant = 'sheet' } = {}) {
   // interactive — so a keyboard user can silently operate the obscured screen.
   const FOCUSABLE = 'a[href],button:not([disabled]),input:not([disabled]),select:not([disabled]),textarea:not([disabled]),[tabindex]:not([tabindex="-1"])';
   __modalKeydown = (e) => {
-    if (e.key === 'Escape') { e.preventDefault(); closeModal(); return; }
+    if (e.key === 'Escape') {
+      // A dialog that must be answered ignores Escape as well as the backdrop.
+      if (overlay.dataset.dismissible === '0') { e.preventDefault(); return; }
+      e.preventDefault(); closeModal(); return;
+    }
     if (e.key !== 'Tab') return;
     const items = [...overlay.querySelectorAll(FOCUSABLE)].filter((n) => n.offsetParent !== null);
     if (!items.length) return;
@@ -3245,6 +3272,27 @@ window.addEventListener('popstate', () => {
 // The cloud layer blocked a push that would have wiped a data-ful cloud backup
 // with an empty local blob (e.g. right after a Reset). Reassure the user their
 // backup is intact instead of leaving the divergence silent.
+// A push was REFUSED because the row moved ahead of this device (another device,
+// or this one after a missed pull). cloud.js correctly declines to clobber the
+// newer copy — but it dispatched that decision to NOBODY, so the only place a
+// conflict ever surfaced was bootSync at the next COLD start, which on a
+// live-URL shell can be days away. In between, every push conflicts identically
+// and the user is told nothing.
+//
+// NOT a modal: this can fire mid-set. A toast that offers the resolution, and a
+// latch so the settings screen can keep showing it after the toast is gone.
+let __conflictPending = false;
+window.addEventListener('vault:push-conflict', () => {
+  __conflictPending = true;
+  try {
+    showToast(t('sync_conflict_toast'), {
+      actionLabel: t('sync_resolve'),
+      duration: 8000,
+      onAction: () => showConflictDialog(),
+    });
+  } catch (_) {}
+});
+
 window.addEventListener('vault:push-blocked', () => {
   try { showToast(t('cloud_backup_kept')); } catch (_) {}
 });
@@ -3297,10 +3345,17 @@ function exportBackupFile() {
 // we are deliberately running READ-ONLY. Either way the user MUST be told: the
 // silent version of this looks like a working app that saves nothing, and every
 // set logged afterwards is lost on reload.
-let __storageAlerted = false;
+// ONE alert per session was wrong. A full store does not heal itself: every
+// write after the first keeps failing, and every one of them was silent — the
+// app looked like it was working and saved nothing, which is exactly the
+// "sometimes what I added disappears" report. Throttled, not spent: quiet for a
+// minute so a render loop cannot spam, then it speaks again, because the next
+// set the user logs is being lost too.
+let __storageAlertedAt = 0;
 window.addEventListener('vault:save-failed', (e) => {
-  if (__storageAlerted) return;      // one alert per session, not one per keystroke
-  __storageAlerted = true;
+  const now = Date.now();
+  if (now - __storageAlertedAt < 60000) return;
+  __storageAlertedAt = now;
   const quota = !!(e && e.detail && e.detail.quota);
   try {
     confirmDialog({
@@ -3443,6 +3498,9 @@ document.addEventListener('keydown', (e) => {
   const lb = document.querySelector('.img-lightbox');
   if (lb) { lb.remove(); return; }
   const root = $('#modal-root');
+  // The GLOBAL Escape handler is a second door into closeModal() and would have
+  // walked straight past the modal's own guard.
+  if (root && root.querySelector('.modal-overlay[data-dismissible="0"]')) return;
   if (root && root.innerHTML.trim()) closeModal();
 });
 
@@ -9652,39 +9710,51 @@ function renderSessionRun(el) {
   // exercise-detail screen uses, so the guided screen can never quote a number
   // that page contradicts.
   //
-  // Deliberately the top weight of the last session rather than its last set:
-  // a drop set ends light, and "last weight" answering 40 after a 90 top set
-  // would read as a regression that never happened.
+  // Rendered ONLY when there is history: on a first-ever exercise two cells
+  // reading "—" are noise.
   //
-  // Rendered ONLY when there is history. On a first-ever exercise two cells
-  // reading "—" are noise, and lastPerfLine already says "first time".
+  // These two cells REPLACED the old "Last time: 10×70 · 9×72.5" strip (the
+  // owner: "this bar is not important now that we added the others"). Its
+  // builder went with it — the .run-last CSS at styles.css is now unreferenced
+  // and deliberately retained.
+  // The heaviest set of a list, with the reps that were done AT that weight —
+  // NOT bestStats().maxReps, which is the most reps in any set and can belong to
+  // a completely different, lighter one ("80 kg × 15" when the 15 was a 40 kg
+  // set). Ties on weight go to the higher rep count, because 80×8 beats 80×6.
+  function topSet(sets) {
+    return (sets || []).reduce((b, x) => {
+      const w = Number(x.weight) || 0, r = Number(x.reps) || 0;
+      if (w <= 0 && r <= 0) return b;
+      return (!b || w > b.w || (w === b.w && r > b.r)) ? { w, r } : b;
+    }, null);
+  }
+
   function runStatsHtml(exId) {
-    const last = DB.sessions.lastForExercise(exId);
-    if (!last) return '';
-    const best = DB.sessions.bestStats(exId);
-    const lastTop = Math.max(0, ...(last.sets || []).map((x) => Number(x.weight) || 0));
-    if (!(best.maxWeight > 0) && !(lastTop > 0)) return '';
+    const all = DB.sessions.listByExercise(exId);
+    // Best EVER: the heaviest single set across every session on record.
+    const best = all.reduce((b, s) => {
+      const t2 = topSet(s.sets);
+      if (!t2) return b;
+      return (!b || t2.w > b.w || (t2.w === b.w && t2.r > b.r)) ? t2 : b;
+    }, null);
+    // Last: the heaviest set of the most recent session — not its LAST set. A
+    // drop set ends light, and "last weight 40" after a 90 top set reads as a
+    // regression that never happened.
+    const lastSession = DB.sessions.lastForExercise(exId);
+    const last = lastSession ? topSet(lastSession.sets) : null;
     const u = viewContext.runUnit.toUpperCase();
-    const cell = (label, val, cls) => `
+    const cell = (label, ts, cls) => `
       <div class="run-stat ${cls}">
         <div class="run-stat-label">${label}</div>
-        <div class="run-stat-value num">${val > 0 ? fmtNum(convDisplay(val)) : '—'}<span class="run-stat-unit">${val > 0 ? u : ''}</span></div>
+        <div class="run-stat-value num">${ts && ts.w > 0 ? fmtNum(convDisplay(ts.w)) : '—'}<span class="run-stat-unit">${ts && ts.w > 0 ? u : ''}</span></div>
+        <div class="run-stat-reps">${ts && ts.r > 0 ? `<span class="num">${fmtNum(ts.r)}</span> ${t('reps')}` : '&nbsp;'}</div>
       </div>`;
     return `<div class="run-stats">
-      ${cell(t('run_best_weight'), best.maxWeight, 'is-best')}
-      ${cell(t('run_last_weight'), lastTop, '')}
+      ${cell(t('run_best_weight'), best, 'is-best')}
+      ${cell(t('run_last_weight'), last, '')}
     </div>`;
   }
 
-  function lastPerfLine(exId) {
-    const last = DB.sessions.lastForExercise(exId);
-    if (!last) return `<div class="run-last run-last--empty">${t('first_time_no_record')}</div>`;
-    const u = viewContext.runUnit.toUpperCase();
-    const parts = last.sets
-      .map((s) => `${fmtNum(s.reps)}×${fmtNum(convDisplay(s.weight))}`)
-      .join('  ·  ');
-    return `<div class="run-last">${t('last_time')}: <span class="run-last-sets num">${parts}</span> <span class="run-last-unit">${u}</span></div>`;
-  }
 
   // Guard: plan emptied while away.
   if (totalEx === 0) {
@@ -9818,7 +9888,6 @@ function renderSessionRun(el) {
       ${mediaHtml}
       <h1 class="run-ex-name">${escapeHtml(exDisplayName(ex))}</h1>
       ${runStatsHtml(ex.id)}
-      ${lastPerfLine(ex.id)}
     </div>
 
     <div class="run-sets-head">
@@ -10971,15 +11040,29 @@ async function afterLogin() {
 }
 
 function showConflictDialog() {
+  // THREE things were wrong with this dialog, and all three pointed the same way.
+  //
+  // 1. "Keep the cloud copy" was .btn-primary — the filled, visually default
+  //    action — and it is the DESTRUCTIVE one for the person who is looking at
+  //    this box, because they are here precisely for having unsynced local
+  //    edits. Neither option is primary now; the choice is genuinely two-sided,
+  //    and the cloud branch carries an explicit line saying what it discards.
+  // 2. It was dismissible by backdrop tap and by Escape. Dismissing establishes
+  //    no baseline, so the next launch could pull straight over the local data
+  //    with nothing recorded to stop it. It now stays until answered.
+  // 3. Either answer was unrecoverable. cloud.js snapshots the local blob
+  //    immediately before any overwrite, so a wrong answer is undoable from
+  //    Settings.
   const overlay = openModal(`
     <div class="confirm-title">${t('conflict_title')}</div>
     <div class="confirm-text">${t('conflict_text')}</div>
+    <div class="confirm-text conflict-warn">${t('conflict_warn_cloud')}</div>
     <div class="form-actions" style="flex-direction:column;gap:8px">
-      <button type="button" class="btn btn-primary btn-block" data-keep="cloud">${t('conflict_cloud')}</button>
       <button type="button" class="btn btn-ghost btn-block" data-keep="local">${t('conflict_local')}</button>
+      <button type="button" class="btn btn-ghost btn-block" data-keep="cloud">${t('conflict_cloud')}</button>
     </div>
-  `, { variant: 'confirm' });
-  const finish = () => { closeModal(); hideAuthGate(); refreshAfterSync(); showToast(t('synced')); ensureUsername(); };
+  `, { variant: 'confirm', dismissible: false });
+  const finish = () => { __conflictPending = false; closeModal(); hideAuthGate(); refreshAfterSync(); showToast(t('synced')); ensureUsername(); };
   // Both branches used to call finish() unconditionally, so a chooseCloud that
   // silently failed still said "Synced" — leaving the user's explicit "keep the
   // account's data" decision UNEXECUTED while a later logout push clobbered the
@@ -11106,9 +11189,30 @@ async function populateAccount(el) {
         <div class="settings-action-icon">${icon('refresh', 20)}</div>
         <div class="settings-action-main">
           <div class="settings-action-title">${t('sync_now')}</div>
-          <div class="settings-action-sub">${t('sync_now_sub')}</div>
+          <!-- The sub-line is the honest one now. isDirty/getStamp were never
+               exported from cloud.js, so NO screen could tell the user their
+               last set was still only on this phone; the app could only ever
+               say "synced" after a button press and nothing in between. -->
+          <div class="settings-action-sub">${(() => {
+            const st = (window.Cloud && Cloud.syncState) ? Cloud.syncState() : null;
+            if (st && st.dirty) return t('sync_unsynced');
+            if (st && st.stamp) return `${t('sync_now_sub')} · ${escapeHtml(formatDateShort(st.stamp.slice(0, 10)))}`;
+            return t('sync_now_sub');
+          })()}</div>
         </div>
       </button>
+      ${(() => {
+        const rec = (window.Cloud && Cloud.recoveryInfo) ? Cloud.recoveryInfo() : null;
+        if (!rec) return '';
+        return `
+      <button class="settings-action-row" id="sync-restore-btn">
+        <div class="settings-action-icon">${icon('refresh', 20)}</div>
+        <div class="settings-action-main">
+          <div class="settings-action-title">${t('sync_restore')}</div>
+          <div class="settings-action-sub">${escapeHtml(formatDateShort(String(rec.at).slice(0, 10)))}</div>
+        </div>
+      </button>`;
+      })()}
       <button class="settings-action-row" id="change-pw-btn">
         <div class="settings-action-icon">${icon('settings', 20)}</div>
         <div class="settings-action-main">
@@ -11141,6 +11245,21 @@ async function populateAccount(el) {
             await Cloud.deleteAccount();
             location.reload();   // fresh, empty state → auth gate
           } catch (e) { showToast(e && e.message ? t(e.message, e.message) : t('ai_error')); }
+        },
+      });
+    });
+    // Undo for the one action in the app that replaces everything at once.
+    $('#sync-restore-btn', el)?.addEventListener('click', () => {
+      confirmDialog({
+        title: t('sync_restore_title'),
+        text: t('sync_restore_text'),
+        confirmLabel: t('sync_restore'),
+        variant: 'danger',
+        onConfirm: async () => {
+          let ok = false;
+          try { ok = await Cloud.restoreRecovery(); } catch (_) { ok = false; }
+          showToast(ok ? t('sync_restored') : t('sync_restore_failed'));
+          if (ok) { refreshAfterSync(); renderView(currentView); }
         },
       });
     });
@@ -11780,6 +11899,22 @@ function showOnboarding() {
   // captured date, so a phone left open overnight recorded the morning's doses
   // against YESTERDAY. The notifications page reads today's log and today's
   // remaining schedule the same way.
+  // One place that acts on a background sync result, so foreground and reconnect
+  // can never disagree about what "pulled" or "conflict" means. Quiet by design:
+  // no toast on success — this fires whenever the app is opened, and "Synced"
+  // every time is noise. Only a conflict, which needs an answer, speaks up.
+  async function syncResume() {
+    if (!window.Cloud || !Cloud.resume) return;
+    let r; try { r = await Cloud.resume(); } catch (_) { return; }
+    if (r === 'pulled') refreshAfterSync();
+    else if (r === 'conflict') showConflictDialog();
+  }
+  // "Sync resumes when you reconnect" — app.js has promised this to the user in
+  // both languages since the offline grace path was written, and NOTHING
+  // implemented it: there was no online listener anywhere in the repo. Now there
+  // is, so the sentence is true.
+  window.addEventListener('online', () => { try { syncResume(); } catch (_) {} });
+
   const DATE_DERIVED_VIEWS = ['home', 'food', 'foodlog', 'supplements', 'notifications'];
   let __lastActiveDay = todayISO();
 
@@ -11796,8 +11931,18 @@ function showOnboarding() {
     } catch (_) {}
   });
 
+  // COMING BACK TO THE APP IS A SYNC POINT. It was not one: Cloud.bootSync() ran
+  // exactly once per COLD start, and this is a live-URL Capacitor shell, so a
+  // phone that is merely backgrounded never resynced at all. Everything logged
+  // since the last cold start sat on the device — which is the "saving does not
+  // reach the cloud" half of the report — and a conflict could not be discovered
+  // either, because discovering one requires a pull.
+  //
+  // Cloud.resume() is throttled (20s) and returns early when offline, so this is
+  // safe to hang off an event that fires on every glance at the phone.
   document.addEventListener('visibilitychange', () => {
     if (document.visibilityState !== 'visible') return;
+    try { syncResume(); } catch (_) {}
     try { bootCatalog(); } catch (_) {}
     // Re-check on foreground: a reminder may have come due while the app slept.
     //

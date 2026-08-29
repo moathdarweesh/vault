@@ -213,6 +213,57 @@
   const getVersion = (uid) => { try { const v = localStorage.getItem(verKey(uid)); return v == null ? null : Number(v); } catch (_) { return null; } };
   const setVersion = (uid, v) => { try { if (typeof v === 'number' && isFinite(v)) localStorage.setItem(verKey(uid), String(v)); } catch (_) {} };
 
+  // ---- LAST-RESORT RECOVERY -----------------------------------------------
+  // applyRemote() overwrites the WHOLE local blob. Every guard around it is an
+  // attempt to be sure that is safe, and the audit found two ways to reach it
+  // when it is not (a dismissed first-link dialog; a conflict resolved with
+  // "keep the cloud copy" while local edits were stranded). Guards can be wrong;
+  // a copy cannot. One snapshot, taken immediately before the overwrite, kept
+  // under its own key so a wrong answer stays recoverable instead of final.
+  //
+  // ONE slot on purpose: this is an undo for the overwrite that just happened,
+  // not a backup history. Keeping several would multiply a 40 KB blob against
+  // the same localStorage quota whose exhaustion is itself a data-loss path.
+  const RECOVERY_KEY = 'vault_pre_sync_backup';
+  function snapshotLocal(reason) {
+    try {
+      const raw = exportRaw();
+      // Nothing worth keeping, and never overwrite a good snapshot with an
+      // empty one — the empty store IS the case you need the snapshot for.
+      if (!raw || raw.length < 3) return false;
+      let blob; try { blob = JSON.parse(raw); } catch (_) { return false; }
+      if (!blobHasUserData(blob)) return false;
+      localStorage.setItem(RECOVERY_KEY, JSON.stringify({
+        at: new Date().toISOString(), reason: String(reason || ''), raw: raw,
+      }));
+      return true;
+    } catch (_) { return false; }   // quota/private mode — never block the sync
+  }
+  // { at, reason, bytes } or null. Deliberately does NOT return the payload:
+  // the UI only needs to know a rescue exists and when it was taken.
+  function recoveryInfo() {
+    try {
+      const rec = JSON.parse(localStorage.getItem(RECOVERY_KEY) || 'null');
+      if (!rec || !rec.raw) return null;
+      return { at: rec.at || '', reason: rec.reason || '', bytes: rec.raw.length };
+    } catch (_) { return null; }
+  }
+  // Put the snapshot back and push it. Returns true only if BOTH the local
+  // restore and the upload succeeded — a restore that stays on one device is
+  // half a rescue, and the next pull would undo it.
+  async function restoreRecovery() {
+    let rec;
+    try { rec = JSON.parse(localStorage.getItem(RECOVERY_KEY) || 'null'); } catch (_) { return false; }
+    if (!rec || !rec.raw) return false;
+    // Swap: the blob we are about to replace becomes the new snapshot, so an
+    // accidental restore is itself undoable.
+    snapshotLocal('pre-restore');
+    if (!importRaw(rec.raw)) return false;
+    const s = await getSession();
+    if (s) { setDirty(s.user.id, true); try { await push({ force: true }); } catch (_) {} }
+    return true;
+  }
+
   // Compare two ISO timestamps by real time, NOT string order — Supabase returns
   // `+00:00` microsecond timestamps while the client writes `...Z` ms timestamps,
   // so a lexicographic `>` would be wrong. Returns true if `a` is strictly newer.
@@ -350,6 +401,85 @@
   // Debounced push fired by storage.js save() after any local change.
   let pushTimer = null;
   let syncing = false; // suppress pushes while we are restoring from cloud
+
+  // ---- RETRY ---------------------------------------------------------------
+  // The debounce used to be the only automatic push, it fired ONCE per change,
+  // and it discarded its own failure (`push().catch(() => {})`). One dropped
+  // packet in the gym and the set stayed on the phone until the next COLD start
+  // — while the app had already told the user, in their own language, that
+  // "sync resumes when you reconnect".
+  //
+  // Only TRANSIENT outcomes are retried. A 'conflict' must NOT be: the remote
+  // genuinely moved ahead and retrying would just conflict again. That one is
+  // surfaced to the user instead (see the vault:push-conflict listener).
+  const RETRY_MS = [4000, 15000, 60000, 180000];
+  let retryTimer = null;
+  let retryStep = 0;
+  function cancelRetry() { clearTimeout(retryTimer); retryTimer = null; retryStep = 0; }
+  function scheduleRetry() {
+    if (retryTimer) return;                       // one chain, not one per edit
+    const wait = RETRY_MS[Math.min(retryStep, RETRY_MS.length - 1)];
+    retryStep++;
+    retryTimer = setTimeout(() => { retryTimer = null; runPush(); }, wait);
+  }
+  // The single place a background push is fired and its outcome acted on.
+  async function runPush() {
+    if (syncing) return 'busy';
+    let r;
+    try { r = await push(); } catch (_) { r = 'error'; }
+    if (r === 'ok') cancelRetry();
+    else if (r === 'nosession' || r === 'error') scheduleRetry();
+    // 'blocked' and 'conflict' are decisions, not failures — leave them alone.
+    return r;
+  }
+
+  // ---- HAS THIS SESSION RECONCILED YET? -----------------------------------
+  // A device-derived import (Health Connect writes watch sessions straight into
+  // the blob) that lands BEFORE the first pull resolves flags the blob dirty.
+  // bootSync then sees `remoteNewer && isDirty` and reports a CONFLICT the user
+  // never caused — and the answer that "keeps this device" force-pushes over a
+  // genuinely newer cloud copy, skipping the empty-blob guard and the version
+  // compare. storage.js:758 documents this exact chain; the fix had been applied
+  // only to health.setData(), while sleep/cardio importFromHealth still call
+  // save() one line away.
+  //
+  // saveLocal() is NOT the fix for those two: a watch workout is real user data
+  // and has to reach the other devices. The race is the problem, so the import
+  // waits for the reconciliation instead of being silenced.
+  let syncSettled = false;
+  function isSettled() {
+    // Never linked → there is no cloud copy to race, so nothing to wait for.
+    if (!getLastUid()) return true;
+    return syncSettled;
+  }
+  async function bootSync() {
+    try { return await bootSyncCore(); } finally { syncSettled = true; }
+  }
+  async function resolveOnLogin() {
+    try { return await resolveOnLoginCore(); } finally { syncSettled = true; }
+  }
+
+  // ---- RESUME --------------------------------------------------------------
+  // Called when the app comes back to the foreground or the connection returns.
+  // bootSync() already encodes the whole decision (pull / push / ask), and it is
+  // the ONLY thing that can repair a stale version — via the pull branch. It ran
+  // exactly once per cold start, which on a live-URL Capacitor shell can be days
+  // apart, so a phone that had been backgrounded never resynced at all.
+  let resuming = false;
+  let lastResumeAt = 0;
+  async function resume(opts) {
+    const force = !!(opts && opts.force);
+    if (resuming) return 'busy';
+    if (typeof navigator !== 'undefined' && navigator.onLine === false) return 'offline';
+    const now = Date.now();
+    // Throttled: visibilitychange fires on every glance at the phone, and each
+    // resume is a network round trip. The manual "Sync now" button passes force.
+    if (!force && now - lastResumeAt < 20000) return 'throttled';
+    lastResumeAt = now;
+    resuming = true;
+    try { return await bootSync(); } catch (_) { return 'offline'; }
+    finally { resuming = false; }
+  }
   async function onLocalChange() {
     if (syncing) return;
     // Mark unpushed changes DIRTY FIRST, using the last-linked uid — BEFORE any
@@ -361,7 +491,9 @@
     const s = await getSession(); if (!s) return; // only push when logged in
     setDirty(s.user.id, true); // (same uid in the normal case)
     clearTimeout(pushTimer);
-    pushTimer = setTimeout(() => { push().catch(() => {}); }, 1200);
+    // runPush(), not push().catch(() => {}): the failure has to start a retry
+    // chain instead of vanishing.
+    pushTimer = setTimeout(() => { runPush(); }, 1200);
     // Also project the change into the normalized tables (best-effort mirror).
     if (window.Tables && Tables.scheduleProject) Tables.scheduleProject();
   }
@@ -370,6 +502,9 @@
   // local store with an empty cloud blob. Returns true only if it applied.
   function applyRemote(remote) {
     if (!remoteHasData(remote)) return false;
+    // BEFORE the overwrite, not after: importRaw() replaces the stored blob, so
+    // once it has run there is nothing left to copy.
+    snapshotLocal('applyRemote');
     syncing = true;
     clearTimeout(pushTimer);            // cancel any pending echo push
     // PROPAGATE the import result. importRaw() returns false when the remote blob
@@ -389,7 +524,7 @@
   //   'pushed'   — cloud was empty, seeded it from this device
   //   'pulled'   — replaced local with cloud data
   //   'conflict' — first link AND both sides have data; caller must ask
-  async function resolveOnLogin() {
+  async function resolveOnLoginCore() {
     const s = await getSession(); if (!s) return 'offline';
     const uid = s.user.id;
     let remote;
@@ -469,7 +604,7 @@
   //   - remote newer & no local edits  → pull
   //   - remote newer & local edits too  → conflict (let the user choose)
   //   - otherwise                       → push our local up
-  async function bootSync() {
+  async function bootSyncCore() {
     const s = await getSession(); if (!s) return 'offline';
     const uid = s.user.id;
     let remote;
@@ -846,7 +981,16 @@
   window.Cloud = {
     configured, ensureSdk, getSession, currentEmail,
     signUp, signIn, signOut, changePassword, resetPassword, onPasswordRecovery,
-    pull, push, onLocalChange,
+    pull, push, onLocalChange, resume,
+    snapshotLocal, recoveryInfo, restoreRecovery, isSettled,
+    // Read-only view of this device's sync state, so the UI can finally SAY
+    // "you have changes that have not reached the cloud" — neither flag was
+    // exported before, which is why no screen could show it.
+    syncState: () => {
+      const uid = getLastUid();
+      if (!uid) return { linked: false, dirty: false, stamp: '', version: null };
+      return { linked: isLinked(uid), dirty: isDirty(uid), stamp: getStamp(uid), version: getVersion(uid) };
+    },
     resolveOnLogin, chooseCloud, chooseLocal, bootSync, applyRemote,
     localHasData, // so the UI can tell an empty device from one that already has data
     // Has this device EVER been signed in and linked to an account? Used by the
