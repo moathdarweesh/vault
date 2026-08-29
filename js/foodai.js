@@ -184,7 +184,7 @@
     ['calories', ['سعرات حرارية', 'سعرة حرارية', 'السعرات', 'سعرات', 'سعره', 'سعرة', 'طاقة', 'calories', 'calorie', 'energy', 'kcal', 'cal']],
     ['protein',  ['البروتين', 'بروتين', 'protein', 'prot']],
     // "carbs" before "carb"; Arabic spellings vary in the ه/ة and the ي.
-    ['carbs',    ['الكربوهيدرات', 'كربوهيدرات', 'كاربوهيدرات', 'نشويات', 'carbohydrates', 'carbohydrate', 'carbs', 'carb']],
+    ['carbs',    ['الكربوهيدرات', 'الكاربوهيدرات', 'كربوهيدرات', 'كاربوهيدرات', 'نشويات', 'الكارب', 'كارب', 'carbohydrates', 'carbohydrate', 'carbs', 'carb']],
     ['fat',      ['الدهون', 'دهون', 'دهن', 'الدهنيات', 'fats', 'fat']],
     // Parsed to be reported, never stored.
     ['cholesterol', ['كوليسترول', 'كولسترول', 'cholesterol']],
@@ -459,12 +459,25 @@
           <button type="button" class="ai-portion-btn" data-step="-1" aria-label="${tr('portion_less')}">${ic('minus', 16)}</button>
           <span class="ai-portion-val"><span class="num">1</span>×</span>
           <button type="button" class="ai-portion-btn" data-step="1" aria-label="${tr('portion_more')}">${ic('plus', 16)}</button>
+          <button type="button" class="ai-edit-toggle" data-edit-card aria-label="${tr('ai_edit_values')}">${ic('edit', 16)}</button>
         </div>
         <div class="ai-macros">
           <span class="ai-macro cal"><b class="num" data-m="cal">${fmtNum(r.calories)}</b>${tr('cal')}</span>
           <span class="ai-macro pro"><b class="num" data-m="pro">${fmtNum(r.protein)}</b>g ${tr('protein_label')}</span>
           <span class="ai-macro carb"><b class="num" data-m="carb">${fmtNum(r.carbs)}</b>g ${tr('carbs_label')}</span>
           <span class="ai-macro fat"><b class="num" data-m="fat">${fmtNum(r.fat)}</b>g ${tr('fat_label')}</span>
+          <span class="ai-edited-pill">${tr('ai_edited')}</span>
+        </div>
+        <!-- The estimate is a starting point, not a verdict. type="number" with
+             a plain value attribute and NO localized digits: an <input type=number>
+             silently rejects Arabic-Indic numerals, which would blank the field
+             the moment it rendered in Arabic. -->
+        <div class="ai-edit">
+          <label class="ai-edit-f"><span>${tr('cal')}</span><input type="number" inputmode="numeric" step="1" min="0" data-e="cal"></label>
+          <label class="ai-edit-f"><span>${tr('protein_label')}</span><input type="number" inputmode="decimal" step="0.1" min="0" data-e="pro"></label>
+          <label class="ai-edit-f"><span>${tr('carbs_label')}</span><input type="number" inputmode="decimal" step="0.1" min="0" data-e="carb"></label>
+          <label class="ai-edit-f"><span>${tr('fat_label')}</span><input type="number" inputmode="decimal" step="0.1" min="0" data-e="fat"></label>
+          <button type="button" class="btn btn-ghost ai-edit-done" data-edit-done>${tr('ai_edit_done')}</button>
         </div>
         <button class="btn btn-primary btn-block ai-add" data-add="${id}">${ic('plus', 15)} ${tr('ai_add_to_log')}</button>
       </div>`;
@@ -618,6 +631,74 @@
             card.dataset.mult = mult;
             applyPortion(card);
           });
+
+          // ----- CORRECT THE ESTIMATE ---------------------------------------
+          // The portion stepper can only scale all four macros together. It
+          // cannot say "the calories are right but it was 55 g of protein, not
+          // 30" — and that is the correction people actually need to make.
+          //
+          // logItem() reads results[cid], NOT the card, so a change that only
+          // touched the DOM would show the corrected number and log the AI's.
+          // Every write below goes to BOTH, and results[cid] is the same object
+          // reference stored at showResult(), so "Add all" picks it up too.
+          const MACRO_FIELD = { cal: 'calories', pro: 'protein', carb: 'carbs', fat: 'fat' };
+          const baseOf = (c, k) => Number(c.dataset['b' + k]) || 0;
+
+          // Opening the editor FOLDS the multiplier into the bases once, so the
+          // four boxes show exactly what will be logged. Folding per keystroke
+          // instead would rescale the three fields the user had not touched.
+          const openEdit = (card) => {
+            const mult = parseFloat(card.dataset.mult) || 1;
+            if (mult !== 1) {
+              ['cal', 'pro', 'carb', 'fat'].forEach((k) => {
+                const v = k === 'cal'
+                  ? Math.round(baseOf(card, k) * mult)
+                  : Math.round(baseOf(card, k) * mult * 10) / 10;
+                card.dataset['b' + k] = v;
+                const it = results[card.dataset.result];
+                if (it) it[MACRO_FIELD[k]] = v;
+              });
+              card.dataset.mult = 1;
+            }
+            card.querySelectorAll('.ai-edit input[data-e]').forEach((inp) => {
+              inp.value = String(baseOf(card, inp.dataset.e));
+            });
+            card.classList.add('is-editing');
+            applyPortion(card);
+            const first = card.querySelector('.ai-edit input[data-e]');
+            if (first) setTimeout(() => { first.focus(); first.select(); }, 40);
+          };
+
+          resultsBox.addEventListener('click', (e) => {
+            const card = e.target.closest('.ai-card');
+            if (!card) return;
+            if (e.target.closest('[data-edit-card]')) {
+              if (card.classList.contains('is-editing')) card.classList.remove('is-editing');
+              else openEdit(card);
+              return;
+            }
+            if (e.target.closest('[data-edit-done]')) card.classList.remove('is-editing');
+          });
+
+          resultsBox.addEventListener('input', (e) => {
+            const inp = e.target.closest('.ai-edit input[data-e]');
+            if (!inp) return;
+            const card = inp.closest('.ai-card');
+            if (!card) return;
+            const k = inp.dataset.e;
+            // An empty box means "still typing", not "zero" — leave the stored
+            // value alone until there is a number, or the row would flash 0
+            // between clearing the field and typing the replacement.
+            if (inp.value.trim() === '') return;
+            let v = parseFloat(inp.value);
+            if (!isFinite(v) || v < 0) return;
+            v = k === 'cal' ? Math.round(v) : Math.round(v * 10) / 10;
+            card.dataset['b' + k] = v;
+            const it = results[card.dataset.result];
+            if (it) { it[MACRO_FIELD[k]] = v; it.edited = true; }
+            card.classList.add('is-edited');
+            applyPortion(card);
+          });
         }
 
         // Photo → calories
@@ -705,6 +786,11 @@
     function markAdded(b) {
       b.disabled = true;
       b.innerHTML = ic('check', 15) + ' ' + tr('ai_added');
+      // The row is in the log now. Leaving the pencil live would invite an edit
+      // that changes the card and not the entry just created — a logged row is
+      // corrected in the food log, not here.
+      const card = b.closest('.ai-card');
+      if (card) { card.classList.remove('is-editing'); card.classList.add('is-added'); }
     }
 
     function bindAdds() {

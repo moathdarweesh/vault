@@ -12,7 +12,7 @@
 // build. The literal below is the fallback (file://, or a stripped query) and is
 // still bumped by `npm run release` — see CLAUDE.md "CACHE WORKFLOW".
 const VAULT_BUILD = (() => {
-  const FALLBACK = 'v273';
+  const FALLBACK = 'v274';
   try {
     const src = (document.currentScript && document.currentScript.src) || '';
     const m = src.match(/[?&]v=(\d+)/);
@@ -911,6 +911,11 @@ const I18N = {
     of_word: 'of',
     last_time: 'Last time',
     first_time_no_record: 'First time — no record yet',
+    run_best_weight: 'Best ever',
+    run_last_weight: 'Last session',
+    ai_edit_values: 'Edit values',
+    ai_edit_done: 'Done',
+    ai_edited: 'Edited',
     resting: 'Rest',
     skip: 'Skip',
     previous: 'Previous',
@@ -1665,6 +1670,11 @@ const I18N = {
     of_word: 'من',
     last_time: 'آخر مرة',
     first_time_no_record: 'أول مرة — لا يوجد سجل بعد',
+    run_best_weight: 'أعلى وزن',
+    run_last_weight: 'آخر وزن',
+    ai_edit_values: 'تعديل القِيَم',
+    ai_edit_done: 'تم',
+    ai_edited: 'مُعدَّل',
     resting: 'راحة',
     skip: 'تخطّي',
     previous: 'السابق',
@@ -3159,6 +3169,10 @@ function navigate(view, context = {}, opts = {}) {
   if (typeof hideToast === 'function') hideToast();
 
   $$('.view').forEach((v) => v.classList.toggle('active', v.dataset.view === view));
+  // Publish the active view on <body>: .bottom-nav is a SIBLING of <main>, so
+  // nothing rooted at .view can select it, and the guided-run screen needs to
+  // opt out of the keyboard-open nav hide (see styles.css).
+  document.body.dataset.view = view;
 
   // Which bottom-nav tab stays lit on a child screen. Everything reached FROM the
   // Program tab points back at it — the rotation editor and the records list moved
@@ -5214,6 +5228,12 @@ function openNewExerciseModal(exerciseId = null, opts = {}) {
     const name = $('#ex-name').value.trim();
     const category = $('#ex-category').value;
     if (!name) { showToast(t('enter_name')); return; }
+    // Editing a custom exercise has ALWAYS been possible — from its own detail
+    // screen and from "My exercises". Neither is on the path you take to create
+    // one: the chooser drops you straight back into the planner, so the exercise
+    // you just typed a name for had no way back to that name. This carries the
+    // way back with it, at the one moment the user is certainly looking for it.
+    let justCreatedId = null;
     if (existing) {
       DB.exercises.update(existing.id, { name, category, customImage: pickedImage });
       backupExerciseImageFor(existing.id, pickedImage); // durable copy, best-effort
@@ -5222,10 +5242,19 @@ function openNewExerciseModal(exerciseId = null, opts = {}) {
       const created = DB.exercises.add({ name, category, customImage: pickedImage });
       backupExerciseImageFor(created.id, pickedImage); // durable copy, best-effort
       if (typeof opts.onCreated === 'function') opts.onCreated(created);
-      showToast(t('exercise_added'));
+      justCreatedId = created.id;
     }
     closeModal();
     renderView(currentView);
+    // AFTER closeModal: showToast() calls hideToast() first, and closing the
+    // modal re-renders the view — raising the toast before either would show it
+    // for an instant and then lose its listeners with the old DOM.
+    if (justCreatedId) {
+      showToast(t('exercise_added'), {
+        actionLabel: t('edit'),
+        onAction: () => openNewExerciseModal(justCreatedId),
+      });
+    }
   });
 
   setTimeout(() => $('#ex-name')?.focus(), 60);
@@ -9617,6 +9646,36 @@ function renderSessionRun(el) {
     return true;
   }
 
+  // The two numbers the owner asked for, above the set-by-set recall: the
+  // heaviest weight this exercise has EVER been trained at, and the heaviest
+  // from the most recent session. Both are read from the same helpers the
+  // exercise-detail screen uses, so the guided screen can never quote a number
+  // that page contradicts.
+  //
+  // Deliberately the top weight of the last session rather than its last set:
+  // a drop set ends light, and "last weight" answering 40 after a 90 top set
+  // would read as a regression that never happened.
+  //
+  // Rendered ONLY when there is history. On a first-ever exercise two cells
+  // reading "—" are noise, and lastPerfLine already says "first time".
+  function runStatsHtml(exId) {
+    const last = DB.sessions.lastForExercise(exId);
+    if (!last) return '';
+    const best = DB.sessions.bestStats(exId);
+    const lastTop = Math.max(0, ...(last.sets || []).map((x) => Number(x.weight) || 0));
+    if (!(best.maxWeight > 0) && !(lastTop > 0)) return '';
+    const u = viewContext.runUnit.toUpperCase();
+    const cell = (label, val, cls) => `
+      <div class="run-stat ${cls}">
+        <div class="run-stat-label">${label}</div>
+        <div class="run-stat-value num">${val > 0 ? fmtNum(convDisplay(val)) : '—'}<span class="run-stat-unit">${val > 0 ? u : ''}</span></div>
+      </div>`;
+    return `<div class="run-stats">
+      ${cell(t('run_best_weight'), best.maxWeight, 'is-best')}
+      ${cell(t('run_last_weight'), lastTop, '')}
+    </div>`;
+  }
+
   function lastPerfLine(exId) {
     const last = DB.sessions.lastForExercise(exId);
     if (!last) return `<div class="run-last run-last--empty">${t('first_time_no_record')}</div>`;
@@ -9758,6 +9817,7 @@ function renderSessionRun(el) {
     <div class="run-ex">
       ${mediaHtml}
       <h1 class="run-ex-name">${escapeHtml(exDisplayName(ex))}</h1>
+      ${runStatsHtml(ex.id)}
       ${lastPerfLine(ex.id)}
     </div>
 

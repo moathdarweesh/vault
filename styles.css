@@ -609,7 +609,21 @@ body.rest-active .main { padding-bottom: 104px; }
 /* While the on-screen keyboard is open (body.keyboard-open is toggled by
    setupKeyboardHandling), slide the bottom nav down out of the way so it can't
    rise up on top of the field being edited. */
-body.keyboard-open .bottom-nav {
+/* THE GUIDED RUN IS THE EXCEPTION. Every set is two number fields, so the
+   keyboard is up for almost the whole workout — and the rule below made the
+   bar both invisible AND pointer-events:none for that entire time, which is
+   what "I cannot move around the app unless I leave guided mode" means.
+
+   Safe to exempt precisely here: .bottom-nav is IN FLOW (flex:none inside
+   .app), so it never overlays the field being edited — hiding it only
+   reclaimed vertical space. The focused input is scrolled into view by
+   setupKeyboardHandling regardless, so keeping the row costs one bar height
+   of scroll and buys back every tab.
+
+   Written as :not() on the SAME selector rather than a later override so it
+   also cancels the negative margin-bottom, which a plain override could not
+   undo without restating it. */
+body.keyboard-open:not([data-view="session-run"]) .bottom-nav {
   transform: translateY(140%);
   opacity: 0;
   pointer-events: none;
@@ -3441,6 +3455,48 @@ body[dir="rtl"] .planner-day-head { text-align: right; }
   letter-spacing: 0.04em;
 }
 
+/* Best-ever and last-session weight, above the set-by-set recall. Two cells,
+   not four: this sits between the exercise name and the input rows the user
+   came here to fill, and anything more turns the working screen into a
+   dashboard. Rounded rectangles per the identity rule — no circles. */
+.run-stats {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  width: 100%;
+  margin: 2px 0 2px;
+}
+.run-stat {
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 9px 10px;
+  text-align: center;
+}
+/* The all-time best is the one number worth an accent; giving both an accent
+   would make neither read as the target. */
+.run-stat.is-best { border-color: var(--accent-soft, var(--border-hi)); }
+.run-stat-label {
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  color: var(--text-dim);
+  margin-bottom: 3px;
+}
+.run-stat-value {
+  font-size: 20px;
+  font-weight: 800;
+  color: var(--text);
+  line-height: 1.1;
+}
+.run-stat.is-best .run-stat-value { color: var(--accent-text); }
+.run-stat-unit {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--text-dim);
+  margin-inline-start: 3px;
+}
+
 .run-ex {
   display: flex;
   flex-direction: column;
@@ -4226,6 +4282,79 @@ body[dir="rtl"] .picker-row { text-align: right; }
 .ai-macro b { color: var(--text); margin-inline-end: 2px; }
 /* Portion stepper on an AI result card — adjust the estimate before logging */
 .ai-portion { display: flex; align-items: center; gap: 10px; align-self: flex-start; }
+
+/* ── Correcting an AI estimate ─────────────────────────────────────────
+   The stepper scales all four macros together; this is for the other case,
+   where one number is simply wrong ("the calories are right, but that was
+   55 g of protein"). Same rounded-rectangle language as the rest.
+   Only ONE of .ai-macros / .ai-edit is ever displayed, so the card does not
+   jump in height between reading and correcting. */
+.ai-edit-toggle {
+  width: 30px; height: 30px;
+  display: inline-flex; align-items: center; justify-content: center;
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  background: var(--surface-2);
+  color: var(--text-dim);
+  margin-inline-start: 2px;
+}
+.ai-edit-toggle:active { transform: scale(0.92); }
+.ai-card.is-editing .ai-edit-toggle {
+  border-color: var(--accent-soft, var(--border-hi));
+  color: var(--accent-text);
+}
+/* Committed to the log — the pencil would now edit a card, not the entry. */
+.ai-card.is-added .ai-edit-toggle,
+.ai-card.is-added .ai-portion-btn { display: none; }
+
+.ai-edit { display: none; }
+.ai-card.is-editing .ai-edit {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+.ai-card.is-editing .ai-macros { display: none; }
+.ai-edit-f { display: flex; flex-direction: column; gap: 4px; }
+.ai-edit-f > span {
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.03em;
+  color: var(--text-dim);
+}
+.ai-edit-f > input {
+  width: 100%;
+  height: 42px;
+  padding: 0 10px;
+  border: 1px solid var(--border);
+  border-radius: 11px;
+  background: var(--surface-3);
+  color: var(--text);
+  font-size: 15px;
+  font-weight: 800;
+  /* The value is what gets logged — centre it so the four read as a row of
+     numbers rather than four separate left-aligned form fields. */
+  text-align: center;
+}
+.ai-edit-f > input:focus {
+  outline: none;
+  border-color: var(--accent-soft, var(--border-hi));
+}
+.ai-edit-done { grid-column: 1 / -1; height: 40px; font-weight: 800; }
+
+/* Shown only once a value has actually been changed, so the card never
+   claims an edit the user did not make. */
+.ai-edited-pill {
+  display: none;
+  align-items: center;
+  padding: 3px 8px;
+  border-radius: 8px;
+  background: var(--surface-3);
+  border: 1px solid var(--border-hi);
+  color: var(--text-dim);
+  font-size: 11px;
+  font-weight: 800;
+}
+.ai-card.is-edited .ai-edited-pill { display: inline-flex; }
 .ai-portion-btn {
   width: 34px; height: 34px; border-radius: 10px; cursor: pointer;
   display: flex; align-items: center; justify-content: center;
