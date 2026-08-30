@@ -422,6 +422,11 @@ function defaultState() {
     notif: null,
     supplementLogs: {},
     foodLogs: {},
+    // Saved meal bundles — "my usual breakfast" as one tap. Each item is a
+    // frozen copy of the food at save time, NOT a reference into STATE.foods:
+    // renaming or deleting a saved food must not silently rewrite history a
+    // bundle was built from.
+    mealBundles: [],
     water: {}, // per-day water intake in ml, keyed by YYYY-MM-DD
     bodyweight: [], // [{ date:'YYYY-MM-DD', kg }] — one entry per day
     // Nutrition targets. `mode:'off'` → the Food page shows the "set up your
@@ -573,6 +578,7 @@ function loadState() {
     parsed.foodLogs = parsed.foodLogs || {};
     parsed.water = parsed.water || {};
     parsed.bodyweight = Array.isArray(parsed.bodyweight) ? parsed.bodyweight : [];
+    parsed.mealBundles = Array.isArray(parsed.mealBundles) ? parsed.mealBundles : [];
     // Nutrition targets (added later) — backfill for existing users.
     if (!parsed.nutrition || typeof parsed.nutrition !== 'object') {
       parsed.nutrition = defaultNutrition();
@@ -2479,6 +2485,39 @@ const DB = {
   },
 
   // ----- Foods (reference list only) -----
+  // ----- Meal bundles ("my usual breakfast" in one tap) -----
+  mealBundles: {
+    list() { return [...(STATE.mealBundles || [])]; },
+    add({ name, items }) {
+      const clean = (Array.isArray(items) ? items : [])
+        .map((it) => ({
+          name: String((it && it.name) || '').trim() || '—',
+          servings: Number(it && it.servings) || 1,
+          calories: Number(it && it.calories) || 0,
+          protein: Number(it && it.protein) || 0,
+          carbs: Number(it && it.carbs) || 0,
+          fat: Number(it && it.fat) || 0,
+        }))
+        .filter((it) => it.calories > 0 || it.protein > 0 || it.carbs > 0 || it.fat > 0);
+      if (!clean.length) return null;
+      const bundle = {
+        id: uid(),
+        name: String(name || '').trim() || 'وجبة',
+        items: clean,
+        createdAt: new Date().toISOString(),
+      };
+      if (!Array.isArray(STATE.mealBundles)) STATE.mealBundles = [];
+      STATE.mealBundles.push(bundle);
+      save();
+      return bundle;
+    },
+    remove(id) {
+      if (!Array.isArray(STATE.mealBundles)) return;
+      const at = STATE.mealBundles.findIndex((b) => b.id === id);
+      if (at !== -1) { STATE.mealBundles.splice(at, 1); save(); }
+    },
+  },
+
   foods: {
     list() {
       return [...STATE.foods].sort((a, b) => a.name.localeCompare(b.name));

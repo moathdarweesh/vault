@@ -12,7 +12,7 @@
 // build. The literal below is the fallback (file://, or a stripped query) and is
 // still bumped by `npm run release` — see CLAUDE.md "CACHE WORKFLOW".
 const VAULT_BUILD = (() => {
-  const FALLBACK = 'v278';
+  const FALLBACK = 'v279';
   try {
     const src = (document.currentScript && document.currentScript.src) || '';
     const m = src.match(/[?&]v=(\d+)/);
@@ -920,6 +920,24 @@ const I18N = {
     ai_capture: 'Take a photo',
     ai_capture_sub: 'Camera or gallery',
     run_best_weight: 'Best ever',
+    sug_label: 'Suggested today',
+    sug_up_reason: 'You hit {r} reps last time — add weight, restart at {t}',
+    sug_rep_reason: 'Same weight — aim for one more rep',
+    sug_hold_reason: 'Hold this weight until you reach {t} clean reps',
+    sug_applied: 'Suggestion filled into the next set',
+    tab_saved_foods: 'Foods',
+    tab_bundles: 'My meals',
+    bundle_new: 'New meal',
+    bundle_name_ph: 'Meal name — e.g. My usual breakfast',
+    bundle_pick_hint: 'Pick from what you logged on this day:',
+    bundle_none_today: 'Nothing logged on this day yet — log the items once, then save them here as one meal.',
+    bundle_save: 'Save meal',
+    bundle_saved: 'Meal saved',
+    bundle_deleted: 'Meal deleted',
+    bundle_added: '{name} added — {n} items',
+    bundle_items: 'items',
+    bundle_empty: 'No saved meals yet. Log a day\'s items, then save them as one meal.',
+    stats_open_chart: 'Open full progress',
     run_last_weight: 'Last session',
     ai_edit_values: 'Edit values',
     ai_edit_done: 'Done',
@@ -1687,6 +1705,24 @@ const I18N = {
     ai_capture: 'التقط صورة',
     ai_capture_sub: 'الكاميرا أو المعرض',
     run_best_weight: 'أعلى وزن',
+    sug_label: 'اقتراح اليوم',
+    sug_up_reason: 'بلغت {r} تكرارات آخر مرة — زد الوزن وابدأ من {t}',
+    sug_rep_reason: 'نفس الوزن — حاول تكراراً إضافياً',
+    sug_hold_reason: 'ثبّت هذا الوزن حتى تبلغ {t} تكرارات نظيفة',
+    sug_applied: 'وُضع الاقتراح في المجموعة التالية',
+    tab_saved_foods: 'أطعمة',
+    tab_bundles: 'وجباتي',
+    bundle_new: 'وجبة جديدة',
+    bundle_name_ph: 'اسم الوجبة — مثلاً: فطوري المعتاد',
+    bundle_pick_hint: 'اختر من أصناف هذا اليوم المسجّلة:',
+    bundle_none_today: 'لا أصناف مسجّلة في هذا اليوم بعد — سجّلها مرة واحدة ثم احفظها هنا كوجبة.',
+    bundle_save: 'حفظ الوجبة',
+    bundle_saved: 'حُفظت الوجبة',
+    bundle_deleted: 'حُذفت الوجبة',
+    bundle_added: 'أُضيفت {name} — {n} أصناف',
+    bundle_items: 'أصناف',
+    bundle_empty: 'لا وجبات محفوظة بعد. سجّل أصناف يوم ثم احفظها كوجبة واحدة.',
+    stats_open_chart: 'افتح التقدّم الكامل',
     run_last_weight: 'آخر وزن',
     ai_edit_values: 'تعديل القِيَم',
     ai_edit_done: 'تم',
@@ -7225,12 +7261,17 @@ function openManualFoodEntry(date, onSave) {
 // ===========================================================================
 function openSavedFoodPicker(date, onSave) {
   let query = '';
+  let tab = 'foods';
   const overlay = openModal(`
     <div class="modal-header">
       <div class="modal-title">${t('add_saved')}</div>
       <button class="icon-btn icon-btn-tile" data-close>${icon('close', 20)}</button>
     </div>
-    <div class="search-wrap" style="margin-bottom:10px">
+    <div class="sfp-tabs" role="tablist">
+      <button type="button" class="sfp-tab on" data-tab="foods" role="tab">${t('tab_saved_foods')}</button>
+      <button type="button" class="sfp-tab" data-tab="bundles" role="tab">${t('tab_bundles')}</button>
+    </div>
+    <div class="search-wrap" id="sf-search-wrap" style="margin-bottom:10px">
       ${icon('search', 20)}
       <input type="search" id="sf-search" placeholder="${t('search_foods')}">
     </div>
@@ -7238,6 +7279,83 @@ function openSavedFoodPicker(date, onSave) {
     <button class="btn btn-ghost btn-block" id="sf-new" style="margin-top:10px">${icon('plus', 20)} ${t('saved_new')}</button>
   `);
   const listEl = overlay.querySelector('#sf-list');
+
+  // ---- "My meals" — several foods, one tap (فطوري المعتاد) -----------------
+  function drawBundles() {
+    const bundles = DB.mealBundles.list();
+    if (!bundles.length) {
+      listEl.innerHTML = `<div class="calc-preview-hint" style="text-align:center;padding:18px">${t('bundle_empty')}</div>`;
+      return;
+    }
+    listEl.innerHTML = bundles.map((b) => {
+      const kcal = b.items.reduce((n, it) => n + it.calories * (it.servings || 1), 0);
+      return `
+      <div class="bundle-card" data-bundle="${escapeHtml(b.id)}">
+        <div class="bundle-main">
+          <div class="bundle-name">${escapeHtml(b.name)}</div>
+          <div class="bundle-meta"><span class="num">${fmtNum(b.items.length)}</span> ${t('bundle_items')} · <span class="num">${fmtNum(Math.round(kcal))}</span> ${t('cal')}</div>
+        </div>
+        <button type="button" class="btn btn-primary bundle-add" data-log-bundle="${escapeHtml(b.id)}">${icon('plus', 16)}</button>
+        <button type="button" class="icon-btn danger bundle-del" data-del-bundle="${escapeHtml(b.id)}" aria-label="${escapeHtml(t('delete'))}">${icon('trash', 16)}</button>
+      </div>`;
+    }).join('');
+    listEl.querySelectorAll('[data-log-bundle]').forEach((btn) => btn.addEventListener('click', () => {
+      const b = DB.mealBundles.list().find((x) => x.id === btn.dataset.logBundle);
+      if (!b) return;
+      // Itemized, not summed: each food lands as its own log row so the day's
+      // list stays editable piece by piece, exactly as if tapped one by one.
+      b.items.forEach((it) => DB.foodLogs.add(date, {
+        name: it.name, servings: it.servings || 1,
+        calories: it.calories, protein: it.protein, carbs: it.carbs, fat: it.fat,
+        source: 'bundle',
+      }));
+      showToast(t('bundle_added').replace('{name}', b.name).replace('{n}', fmtNum(b.items.length)));
+      if (typeof onSave === 'function') onSave();
+    }));
+    listEl.querySelectorAll('[data-del-bundle]').forEach((btn) => btn.addEventListener('click', () => {
+      confirmDialog({
+        title: t('delete') + '؟', text: '', confirmLabel: t('delete'), variant: 'danger',
+        onConfirm: () => { DB.mealBundles.remove(btn.dataset.delBundle); showToast(t('bundle_deleted')); drawBundles(); },
+      });
+    }));
+  }
+
+  // Creating a bundle starts from what THIS day already holds: log the items
+  // once by any path (chat, photo, barcode, manual), then keep them as one
+  // meal. A picker over the whole food library would be a second, worse form.
+  function openBundleCreator() {
+    const todays = DB.foodLogs.listForDate(date) || [];
+    const inner = todays.length
+      ? `<div class="calc-preview-hint" style="margin-bottom:8px">${t('bundle_pick_hint')}</div>
+         <div class="bundle-pick">${todays.map((e, i) => `
+           <label class="bundle-pick-row">
+             <input type="checkbox" checked data-pick="${i}">
+             <span class="bundle-pick-name">${escapeHtml(e.name)}</span>
+             <span class="bundle-pick-kcal num">${fmtNum(Math.round((e.calories || 0) * (e.servings || 1)))} ${t('cal')}</span>
+           </label>`).join('')}</div>
+         <input type="text" id="bundle-name" class="input" placeholder="${escapeHtml(t('bundle_name_ph'))}" maxlength="60" style="margin:10px 0">
+         <button class="btn btn-primary btn-block" id="bundle-save">${t('bundle_save')}</button>`
+      : `<div class="calc-preview-hint" style="text-align:center;padding:18px">${t('bundle_none_today')}</div>`;
+    const ov2 = openModal(`
+      <div class="modal-header">
+        <div class="modal-title">${t('bundle_new')}</div>
+        <button class="icon-btn icon-btn-tile" data-close>${icon('close', 20)}</button>
+      </div>${inner}`);
+    const saveBtn = ov2.querySelector('#bundle-save');
+    if (saveBtn) saveBtn.addEventListener('click', () => {
+      const items = [...ov2.querySelectorAll('[data-pick]')]
+        .filter((c) => c.checked)
+        .map((c) => todays[Number(c.dataset.pick)])
+        .filter(Boolean);
+      if (!items.length) return;
+      const name = ov2.querySelector('#bundle-name').value.trim();
+      const made = DB.mealBundles.add({ name, items });
+      closeModal();
+      showToast(made ? t('bundle_saved') : t('ai_error'));
+      // Back into the picker, on the meals tab, so the new bundle is visible.
+      openSavedFoodPicker(date, onSave);
+    });
+  }
 
   function draw() {
     const q = query.toLowerCase();
@@ -7271,7 +7389,20 @@ function openSavedFoodPicker(date, onSave) {
     query = e.target.value;
     drawSavedFoodSearch();
   });
-  overlay.querySelector('#sf-new').addEventListener('click', () => { closeModal(); openFoodLibraryModal(); });
+  const newBtn = overlay.querySelector('#sf-new');
+  newBtn.addEventListener('click', () => {
+    if (tab === 'bundles') { openBundleCreator(); return; }
+    closeModal(); openFoodLibraryModal();
+  });
+  overlay.querySelectorAll('.sfp-tab').forEach((b) => b.addEventListener('click', () => {
+    tab = b.dataset.tab;
+    overlay.querySelectorAll('.sfp-tab').forEach((x) => x.classList.toggle('on', x === b));
+    overlay.querySelector('#sf-search-wrap').style.display = tab === 'bundles' ? 'none' : '';
+    newBtn.innerHTML = tab === 'bundles'
+      ? icon('plus', 20) + ' ' + t('bundle_new')
+      : icon('plus', 20) + ' ' + t('saved_new');
+    if (tab === 'bundles') drawBundles(); else draw();
+  }));
   draw();
 }
 
@@ -9726,6 +9857,41 @@ function renderSessionRun(el) {
     }, null);
   }
 
+  // ---- Next-weight suggestion — double progression, not blind adding ------
+  // The owner's brief: a REASONED suggestion, not 'add weight because time
+  // passed'. Double progression in the 8–12 hypertrophy range, judged on the
+  // TOP set of the last session (same topSet the two cells above use):
+  //   · reached 12+   → the weight is beaten: +2.5 kg, restart at 8 reps.
+  //   · 8–11          → the weight still has room: same weight, one more rep.
+  //   · under 8       → the last increase hasn't been absorbed: hold the
+  //                     weight until 8 clean reps. Suggesting MORE weight
+  //                     here is how people get stuck grinding triples.
+  // 2.5 kg regardless of lift: it is the smallest real-world plate pair, and
+  // guessing 'compound vs isolation' from a free-text exercise name would be
+  // the un-reasoned part.
+  function runSuggest(exId) {
+    const last = DB.sessions.lastForExercise(exId);
+    const top = last ? topSet(last.sets) : null;
+    if (!top || !(top.w > 0) || !(top.r > 0)) return null;
+    const LO = 8, HI = 12;
+    if (top.r >= HI) return { w: Math.round((top.w + 2.5) * 2) / 2, r: LO, key: 'sug_up_reason', vars: { r: top.r, t: LO } };
+    if (top.r >= LO) return { w: top.w, r: top.r + 1, key: 'sug_rep_reason', vars: { t: top.r + 1 } };
+    return { w: top.w, r: LO, key: 'sug_hold_reason', vars: { t: LO } };
+  }
+
+  function runSuggestHtml(exId) {
+    const g = runSuggest(exId);
+    if (!g) return '';
+    const u = viewContext.runUnit.toUpperCase();
+    const reason = Object.entries(g.vars).reduce((txt, [k, v]) => txt.replace('{' + k + '}', fmtNum(v)), t(g.key));
+    return `
+      <button type="button" class="run-suggest" data-sug-w="${g.w}" data-sug-r="${g.r}">
+        <span class="run-suggest-label">${t('sug_label')}</span>
+        <span class="run-suggest-figure num" dir="ltr">${fmtNum(convDisplay(g.w))}<b>${u}</b> × ${fmtNum(g.r)}</span>
+        <span class="run-suggest-why">${reason}</span>
+      </button>`;
+  }
+
   function runStatsHtml(exId) {
     const all = DB.sessions.listByExercise(exId);
     // Best EVER: the heaviest single set across every session on record.
@@ -9760,10 +9926,15 @@ function renderSessionRun(el) {
         ` : '<span class="run-stat-empty">—</span>'}</div>
       </div>`;
     };
-    return `<div class="run-stats">
+    // The progress chart the owner asked to reach "from an easy place" has
+    // existed on exercise-detail all along (chartHtmlForExercise). The easy
+    // place is THIS strip: the two numbers people already look at are now the
+    // door to the full history — instead of a second chart crowding the one
+    // screen that must stay still.
+    return `<button type="button" class="run-stats" data-open-detail="${exId}" aria-label="${escapeHtml(t('stats_open_chart'))}">
       ${cell(t('run_best_weight'), best, 'is-best')}
       ${cell(t('run_last_weight'), last, '')}
-    </div>`;
+    </button>`;
   }
 
 
@@ -9899,6 +10070,7 @@ function renderSessionRun(el) {
       ${mediaHtml}
       <h1 class="run-ex-name">${escapeHtml(exDisplayName(ex))}</h1>
       ${runStatsHtml(ex.id)}
+      ${runSuggestHtml(ex.id)}
     </div>
 
     <div class="run-sets-head">
@@ -9945,6 +10117,32 @@ function renderSessionRun(el) {
     thumb.addEventListener('keydown', (e) => {
       if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); open(e); }
     });
+  });
+
+  // Tapping the suggestion writes it into the first open set — as a TARGET the
+  // user edits after actually lifting, exactly like the ghost placeholders.
+  // Weight goes through the same kg conversion the manual input path uses.
+  const statsBtn = $('.run-stats[data-open-detail]', el);
+  if (statsBtn) statsBtn.addEventListener('click', () =>
+    navigate('exercise-detail', { exerciseId: statsBtn.dataset.openDetail }));
+
+  const sugBtn = $('.run-suggest', el);
+  if (sugBtn) sugBtn.addEventListener('click', () => {
+    const w = parseFloat(sugBtn.dataset.sugW);
+    const r = parseInt(sugBtn.dataset.sugR, 10);
+    if (!isFinite(w) || !isFinite(r)) return;
+    let at = st.sets.findIndex((x) => !x.done && (x.reps === '' || x.reps == null) && (x.weight === '' || x.weight == null));
+    if (at === -1) at = st.sets.findIndex((x) => !x.done);
+    if (at === -1) return;                       // everything already done
+    st.sets[at].weight = w;                      // state holds kg
+    st.sets[at].reps = r;
+    const row = el.querySelector('.run-set-row[data-set="' + at + '"]');
+    if (row) {
+      const wi = row.querySelector('[data-field="weight"]'); if (wi) wi.value = String(convDisplay(w));
+      const ri = row.querySelector('[data-field="reps"]');   if (ri) ri.value = String(r);
+    }
+    commitExercise(ex.id);
+    showToast(t('sug_applied'));
   });
 
   // Set inputs → write to state as the user types. Tapping an input selects its

@@ -3465,6 +3465,52 @@ body[data-view="session-run"] .bottom-nav { display: none; }
   gap: 8px;
   width: 100%;
   margin: 2px 0 2px;
+  /* now a <button> (one tap → the full progress chart on exercise-detail) */
+  background: none;
+  border: none;
+  padding: 0;
+  text-align: inherit;
+  color: inherit;
+  font: inherit;
+}
+.run-stats:active .run-stat { border-color: var(--border-hi); }
+
+/* ── "Suggested today" — double progression, one tap to apply ──────────── */
+.run-suggest {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px dashed var(--accent-soft, var(--border-hi));
+  border-radius: 14px;
+  background: var(--surface-2);
+  color: var(--text);
+}
+.run-suggest:active { transform: scale(0.985); }
+.run-suggest-label {
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  color: var(--accent-text);
+}
+.run-suggest-figure {
+  font-size: 18px;
+  font-weight: 900;
+  line-height: 1.1;
+  font-variant-numeric: tabular-nums;
+}
+.run-suggest-figure b {
+  font-size: 11px;
+  font-weight: 800;
+  color: var(--text-mute);
+  margin: 0 2px;
+}
+.run-suggest-why {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text-dim);
 }
 .run-stat {
   background: var(--surface-2);
@@ -4256,6 +4302,81 @@ body[dir="rtl"] .picker-row { text-align: right; }
 .macro-total.fat .macro-total-value { color: var(--cat-shoulders); }
 
 /* ---- AI calorie chat ---- */
+/* ── Saved picker: أطعمة | وجباتي ──────────────────────────────────────── */
+.sfp-tabs {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 10px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 4px;
+}
+.sfp-tab {
+  flex: 1;
+  height: 36px;
+  border: none;
+  border-radius: 9px;
+  background: none;
+  color: var(--text-dim);
+  font-size: 13px;
+  font-weight: 800;
+}
+.sfp-tab.on { background: var(--surface-3); color: var(--text); }
+
+.bundle-card {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: var(--surface-2);
+  margin-bottom: 8px;
+}
+.bundle-main { flex: 1; min-width: 0; }
+.bundle-name {
+  font-size: 14px;
+  font-weight: 800;
+  color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.bundle-meta { font-size: 12px; font-weight: 700; color: var(--text-dim); margin-top: 2px; }
+.bundle-add {
+  width: 40px;
+  height: 36px;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.bundle-del { flex: none; }
+
+.bundle-pick { display: flex; flex-direction: column; gap: 6px; max-height: 40vh; overflow-y: auto; }
+.bundle-pick-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 10px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface-2);
+}
+.bundle-pick-row input[type="checkbox"] { width: 18px; height: 18px; accent-color: var(--accent); }
+.bundle-pick-name {
+  flex: 1;
+  min-width: 0;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.bundle-pick-kcal { font-size: 12px; font-weight: 700; color: var(--text-dim); }
+
 .ai-input-row input {
   width: 100%; padding: 12px 14px; border-radius: 12px;
   border: 1px solid var(--border); background: var(--surface-2);
