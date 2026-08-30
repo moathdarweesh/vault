@@ -11,11 +11,6 @@
   const PROXY_URL = 'https://vault-calories.moathdarweesh2000.workers.dev';
 
   // Free-tier model (direct-key path only; the proxy tries several). Keep the
-  // full flash model — the lite variant is too weak and echoes the examples.
-  const MODEL = 'gemini-2.5-flash';
-  const endpoint = (key) =>
-    `https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:generateContent?key=${encodeURIComponent(key)}`;
-
   const tr = (k) => (typeof t === 'function' ? t(k) : k);
   const ic = (n, s) => (typeof icon === 'function' ? icon(n, s || 20) : '');
   const esc = (s) => (typeof escapeHtml === 'function' ? escapeHtml(s) : String(s));
@@ -30,11 +25,6 @@
     }
     return m || tr('ai_error');
   }
-
-  const KEY_STORE = 'gemini_api_key';
-  const getKey = () => { try { return localStorage.getItem(KEY_STORE) || ''; } catch (_) { return ''; } };
-  const setKey = (v) => { try { localStorage.setItem(KEY_STORE, (v || '').trim()); } catch (_) {} };
-  const hasKey = () => !!getKey();
 
   // ---- result cache --------------------------------------------------------
   // The model RE-ESTIMATES on every call, so the same meal can come back with
@@ -76,7 +66,6 @@
     'Example: "مرحبا كيفك" -> {"items":[]}',
   ].join(' ');
 
-  const useProxy = () => !!PROXY_URL;
   // Attach the signed-in user's Supabase access token so the Worker can require an
   // authenticated caller (blocks anonymous quota/cost abuse). Best-effort: logged
   // out or pre-token we omit it, and the Worker is designed to fall open on any
@@ -92,8 +81,6 @@
     return h;
   }
   // Ready to chat = either a backend proxy is configured, or the user saved a key.
-  const ready = () => useProxy() || hasKey();
-
   // Call the backend proxy (no key in the app) and return the macros. `image`
   // is an optional { mimeType, data(base64) } for photo-based analysis.
   async function analyzeViaProxy(text, image) {
@@ -343,33 +330,17 @@
     return result;
   }
 
-  // Call Gemini and return { name, calories, protein, carbs, fat }.
+  // Call the Worker and return { name, calories, protein, carbs, fat }.
+  //
+  // v277: the personal-API-key path that used to follow this line is GONE, and
+  // not because it was tidied — it was UNREACHABLE. useProxy() compared a
+  // hardcoded constant, so the moment the Cloudflare Worker became the fixed
+  // route (and every user has an account that authenticates to it), the key
+  // panel, localStorage key store, and four direct-to-Google fallbacks could
+  // never run again. Deleting them also deletes the only UI in the app that
+  // ever invited a user to paste a secret.
   async function analyzeUncached(text) {
-    if (useProxy()) return analyzeViaProxy(text);
-    const key = getKey();
-    if (!key) throw new Error(tr('ai_need_key'));
-    const body = {
-      systemInstruction: { parts: [{ text: SYSTEM }] },
-      contents: [{ parts: [{ text: String(text) }] }],
-      generationConfig: { responseMimeType: 'application/json', temperature: 0 },
-    };
-    const res = await fetch(endpoint(key), {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body),
-    });
-    if (!res.ok) {
-      let msg = 'HTTP ' + res.status;
-      try { const e = await res.json(); msg = (e.error && e.error.message) || msg; } catch (_) {}
-      throw new Error(msg);
-    }
-    const data = await res.json();
-    const partText = data && data.candidates && data.candidates[0] &&
-      data.candidates[0].content && data.candidates[0].content.parts &&
-      data.candidates[0].content.parts[0] && data.candidates[0].content.parts[0].text;
-    if (!partText) throw new Error(tr('ai_no_result'));
-    const cleaned = String(partText).trim().replace(/^```(?:json)?/i, '').replace(/```$/, '').trim();
-    return toItems(JSON.parse(cleaned));
+    return analyzeViaProxy(text);
   }
 
   // Instruction sent WITH a photo. Tells the model to estimate the actual
@@ -398,32 +369,7 @@
   // Analyze a food PHOTO. `image` = { mimeType, data(base64) }. Not cached
   // (every photo is unique).
   async function analyzeImage(image, note) {
-    if (useProxy()) return analyzeViaProxy(imagePrompt(note), image);
-    const key = getKey();
-    if (!key) throw new Error(tr('ai_need_key'));
-    const body = {
-      systemInstruction: { parts: [{ text: SYSTEM }] },
-      contents: [{ parts: [
-        { text: imagePrompt(note) },
-        { inline_data: { mime_type: image.mimeType, data: image.data } },
-      ] }],
-      generationConfig: { responseMimeType: 'application/json', temperature: 0 },
-    };
-    const res = await fetch(endpoint(key), {
-      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
-    });
-    if (!res.ok) {
-      let msg = 'HTTP ' + res.status;
-      try { const e = await res.json(); msg = (e.error && e.error.message) || msg; } catch (_) {}
-      throw new Error(msg);
-    }
-    const data = await res.json();
-    const partText = data && data.candidates && data.candidates[0] &&
-      data.candidates[0].content && data.candidates[0].content.parts &&
-      data.candidates[0].content.parts[0] && data.candidates[0].content.parts[0].text;
-    if (!partText) throw new Error(tr('ai_no_result'));
-    const cleaned = String(partText).trim().replace(/^```(?:json)?/i, '').replace(/```$/, '').trim();
-    return toItems(JSON.parse(cleaned));
+    return analyzeViaProxy(imagePrompt(note), image);
   }
 
   // Downscale a picked image file to a JPEG (max 1024px, q0.7) so the upload
@@ -501,19 +447,6 @@
   }
   function cardMult(card) { return card ? (parseFloat(card.dataset.mult) || 1) : 1; }
 
-  function keyPanelHtml() {
-    return `
-      <div class="ai-keypanel">
-        <div class="ai-msg">${tr('ai_need_key')}</div>
-        <ol class="ai-steps">
-          <li>${tr('ai_key_step1')} <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener">aistudio.google.com/apikey</a></li>
-          <li>${tr('ai_key_step2')}</li>
-        </ol>
-        <input type="password" id="ai-key-input" placeholder="${tr('ai_key_label')}" value="${esc(getKey())}">
-        <button class="btn btn-primary btn-block" id="ai-key-save">${tr('ai_save_key')}</button>
-      </div>`;
-  }
-
   // TWO MODES, ONE PANEL.
   //
   // The owner asked why the calorie CHAT has a camera in it. The honest answer
@@ -563,23 +496,12 @@
         </div>
         <button class="icon-btn icon-btn-tile" data-close>${ic('close', 18)}</button>
       </div>
-      <div id="ai-body" class="ai-mode-${mode}">${ready() ? chatPanelHtml(mode) : keyPanelHtml()}</div>
+      <div id="ai-body" class="ai-mode-${mode}">${chatPanelHtml(mode)}</div>
     `);
 
     wire();
 
     function wire() {
-      // Key panel
-      const saveBtn = document.getElementById('ai-key-save');
-      if (saveBtn) {
-        saveBtn.addEventListener('click', () => {
-          const v = document.getElementById('ai-key-input').value;
-          if (!v.trim()) { showToast(tr('ai_need_key')); return; }
-          setKey(v);
-          document.getElementById('ai-body').innerHTML = chatPanelHtml(mode);
-          wire();
-        });
-      }
       // Render the cards (or a decline) for one query — shared by text + photo.
       const showResult = (id, qHtml, items, box, meta) => {
         const p = document.getElementById(id + '-p');
@@ -863,34 +785,22 @@
   // Plain text in → plain text out. Used by the nutrition coach to suggest
   // meals that fit the day's remaining macros. Bypasses the JSON food parser.
   async function ask(prompt) {
-    if (useProxy()) {
-      const res = await fetch(PROXY_URL, {
-        method: 'POST',
-        headers: await authHeaders(),
-        body: JSON.stringify({ text: String(prompt || ''), mode: 'chat' }),
-      });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) {
-        if (res.status === 429) throw new Error(tr('ai_rate_limit'));
-        throw new Error((data && data.error) || ('HTTP ' + res.status));
-      }
-      // Worker may answer as {reply} (chat mode) or fall back to the items shape.
-      if (data && typeof data.reply === 'string') return data.reply.trim();
-      if (data && Array.isArray(data.items)) {
-        return data.items.map((i) => `• ${i.name} — ${i.calories} ${tr('cal')}`).join('\n');
-      }
-      throw new Error(tr('ai_no_result'));
+    const res = await fetch(PROXY_URL, {
+      method: 'POST',
+      headers: await authHeaders(),
+      body: JSON.stringify({ text: String(prompt || ''), mode: 'chat' }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      if (res.status === 429) throw new Error(tr('ai_rate_limit'));
+      throw new Error((data && data.error) || ('HTTP ' + res.status));
     }
-    const key = getKey();
-    if (!key) throw new Error(tr('ai_need_key'));
-    const body = { contents: [{ parts: [{ text: String(prompt) }] }], generationConfig: { temperature: 0.4 } };
-    const res = await fetch(endpoint(key), { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
-    if (!res.ok) throw new Error('HTTP ' + res.status);
-    const data = await res.json();
-    const txt = data && data.candidates && data.candidates[0] && data.candidates[0].content &&
-      data.candidates[0].content.parts && data.candidates[0].content.parts[0] && data.candidates[0].content.parts[0].text;
-    if (!txt) throw new Error(tr('ai_no_result'));
-    return String(txt).trim();
+    // Worker may answer as {reply} (chat mode) or fall back to the items shape.
+    if (data && typeof data.reply === 'string') return data.reply.trim();
+    if (data && Array.isArray(data.items)) {
+      return data.items.map((i) => `• ${i.name} — ${i.calories} ${tr('cal')}`).join('\n');
+    }
+    throw new Error(tr('ai_no_result'));
   }
 
   // Open the chat straight on the photo picker (used by the add-sheet "photo").
@@ -915,43 +825,23 @@
 
   async function analyzeAudio(audio) {
     if (!audio || !audio.data) throw new Error(tr('ai_error'));
-    if (useProxy()) {
-      const res = await fetch(PROXY_URL, {
-        method: 'POST',
-        headers: await authHeaders(),
-        body: JSON.stringify({ audio: audio, prompt: VOICE_PROMPT }),
-      });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) {
-        if (res.status === 429) throw new Error(tr('ai_rate_limit'));
-        throw new Error((data && data.error) || ('HTTP ' + res.status));
-      }
-      return { items: toItems(data).items, transcript: (data && data.transcript) || '' };
+    const res = await fetch(PROXY_URL, {
+      method: 'POST',
+      headers: await authHeaders(),
+      body: JSON.stringify({ audio: audio, prompt: VOICE_PROMPT }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      if (res.status === 429) throw new Error(tr('ai_rate_limit'));
+      throw new Error((data && data.error) || ('HTTP ' + res.status));
     }
-    const key = getKey();
-    if (!key) throw new Error(tr('ai_need_key'));
-    const body = {
-      contents: [{ parts: [
-        { text: VOICE_PROMPT },
-        { inline_data: { mime_type: audio.mimeType, data: audio.data } },
-      ] }],
-      generationConfig: { responseMimeType: 'application/json', temperature: 0 },
-    };
-    const res = await fetch(endpoint(key), { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
-    if (!res.ok) throw new Error('HTTP ' + res.status);
-    const data = await res.json();
-    const partText = data && data.candidates && data.candidates[0] && data.candidates[0].content &&
-      data.candidates[0].content.parts && data.candidates[0].content.parts[0] && data.candidates[0].content.parts[0].text;
-    if (!partText) throw new Error(tr('ai_no_result'));
-    const cleaned = String(partText).trim().replace(/^```(?:json)?/i, '').replace(/```$/, '').trim();
-    const parsed = JSON.parse(cleaned);
-    return { items: toItems(parsed).items, transcript: parsed.transcript || '' };
+    return { items: toItems(data).items, transcript: (data && data.transcript) || '' };
   }
 
   // parseText is parseMacroText exposed deliberately: the manual entry form
   // fills its boxes with it, and it must be the SAME rules the chat uses or the
   // two drift into disagreeing about the same sentence. Pure local matching —
   // it sends nothing anywhere.
-  window.FoodAI = { open, openPhoto, analyze, analyzeImage, analyzeAudio, ask, getKey, setKey, hasKey,
+  window.FoodAI = { open, openPhoto, analyze, analyzeImage, analyzeAudio, ask,
                     parseText: parseMacroText };
 })();

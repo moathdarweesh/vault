@@ -3562,10 +3562,6 @@ body[data-view="session-run"] .bottom-nav { display: none; }
   -webkit-box-orient: vertical;
   overflow: hidden;
 }
-.run-last { font-size: 13px; color: var(--text-mute); font-weight: 600; }
-.run-last-sets { color: var(--text); font-weight: 800; }
-.run-last-unit { color: var(--text-dim); font-weight: 700; font-size: 11px; }
-.run-last--empty { color: var(--text-dim); }
 
 .run-sets-head {
   display: grid;
@@ -4260,13 +4256,6 @@ body[dir="rtl"] .picker-row { text-align: right; }
 .macro-total.fat .macro-total-value { color: var(--cat-shoulders); }
 
 /* ---- AI calorie chat ---- */
-.ai-keypanel { display: flex; flex-direction: column; gap: 12px; }
-.ai-steps {
-  margin: 0; padding-inline-start: 20px;
-  font-size: 13px; color: var(--text-mute); line-height: 1.7;
-}
-.ai-steps a { color: var(--accent-text); }
-.ai-keypanel input,
 .ai-input-row input {
   width: 100%; padding: 12px 14px; border-radius: 12px;
   border: 1px solid var(--border); background: var(--surface-2);

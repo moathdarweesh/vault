@@ -211,13 +211,6 @@ function machineSvgFor(type) {
   return head + body + tail;
 }
 
-function machineImageUrl(machineType) {
-  if (!machineType) return '';
-  const svg = machineSvgFor(machineType);
-  // Base64 is the most universally-supported data URI form for SVG.
-  return 'data:image/svg+xml;base64,' + btoa(svg);
-}
-
 // New machine entries (replace any existing entries with the listed names —
 // see MACHINE_OLD_NAMES below). Each has both a real photo (imageSlug) and
 // a vector blueprint (machineType) used as a fallback.
@@ -2676,19 +2669,6 @@ function formatDateShort(iso) {
   return dateFmt('short').format(new Date(iso + 'T00:00:00'));
 }
 
-function daysAgo(iso) {
-  if (!iso) return '';
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  const d = new Date(iso + 'T00:00:00');
-  const diff = Math.round((today - d) / 86400000);
-  if (diff === 0) return 'Today';
-  if (diff === 1) return 'Yesterday';
-  if (diff < 7) return diff + ' days ago';
-  if (diff < 30) return Math.floor(diff / 7) + ' weeks ago';
-  return Math.floor(diff / 30) + ' months ago';
-}
-
 function startOfWeek(date = new Date()) {
   const d = new Date(date);
   d.setHours(0, 0, 0, 0);
@@ -2737,12 +2717,10 @@ window.todayISO = todayISO;
 window.addDaysISO = addDaysISO;
 window.formatDate = formatDate;
 window.formatDateShort = formatDateShort;
-window.daysAgo = daysAgo;
 window.startOfWeek = startOfWeek;
 window.inRangeISO = inRangeISO;
 window.formatDuration = formatDuration;
 window.formatTime12 = formatTime12;
 window.uid = uid;
 window.exerciseImageUrl = exerciseImageUrl;
-window.machineImageUrl = machineImageUrl;
 window.machineSvgFor = machineSvgFor;

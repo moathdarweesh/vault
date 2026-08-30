@@ -12,7 +12,7 @@
 // build. The literal below is the fallback (file://, or a stripped query) and is
 // still bumped by `npm run release` — see CLAUDE.md "CACHE WORKFLOW".
 const VAULT_BUILD = (() => {
-  const FALLBACK = 'v276';
+  const FALLBACK = 'v277';
   try {
     const src = (document.currentScript && document.currentScript.src) || '';
     const m = src.match(/[?&]v=(\d+)/);
@@ -628,11 +628,6 @@ const I18N = {
     ai_nut_cholesterol: 'Cholesterol', ai_nut_sodium: 'Sodium',
     ai_chat_placeholder: 'e.g. breakfast: eggs & bread, lunch: a burger',
     ai_add_all: 'Add all',
-    ai_need_key: 'A free Google Gemini API key is needed (one-time).',
-    ai_key_step1: 'Get a free key from',
-    ai_key_step2: 'Paste it below — it stays on your device only.',
-    ai_key_label: 'Gemini API key',
-    ai_save_key: 'Save key',
     ai_analyzing: 'calculating…',
     ai_photo: 'Photo',
     ai_no_result: 'No result — try rephrasing.',
@@ -1406,11 +1401,6 @@ const I18N = {
     ai_nut_cholesterol: 'الكوليسترول', ai_nut_sodium: 'الصوديوم',
     ai_chat_placeholder: 'مثلاً: الفطور بيض وخبز، والغدا برجر',
     ai_add_all: 'أضف الكل',
-    ai_need_key: 'يلزم مفتاح Google Gemini مجاني (لمرة واحدة).',
-    ai_key_step1: 'احصل على مفتاح مجاني من',
-    ai_key_step2: 'الصقه في الأسفل — يُخزَّن على جهازك فقط.',
-    ai_key_label: 'مفتاح Gemini',
-    ai_save_key: 'حفظ المفتاح',
     ai_analyzing: 'جارٍ الحساب…',
     ai_photo: 'صورة',
     ai_no_result: 'لا توجد نتيجة — جرّب صياغة أخرى.',
@@ -9723,8 +9713,7 @@ function renderSessionRun(el) {
   //
   // These two cells REPLACED the old "Last time: 10×70 · 9×72.5" strip (the
   // owner: "this bar is not important now that we added the others"). Its
-  // builder went with it — the .run-last CSS at styles.css is now unreferenced
-  // and deliberately retained.
+  // builder and its .run-last CSS were both removed with it (v275/v277).
   // The heaviest set of a list, with the reps that were done AT that weight —
   // NOT bestStats().maxReps, which is the most reps in any set and can belong to
   // a completely different, lighter one ("80 kg × 15" when the 15 was a 40 kg
