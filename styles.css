@@ -4444,11 +4444,18 @@ body[dir="rtl"] .picker-row { text-align: right; }
 .ai-capture-icon { color: var(--accent-text); line-height: 0; }
 .ai-capture-title { font-size: 16px; font-weight: 800; }
 .ai-capture-sub { font-size: 12px; font-weight: 700; color: var(--text-dim); }
-/* Once a shot has been analysed the results are the point; the capture tile
-   shrinks out of their way rather than being removed, so a second photo is
-   still one press. */
-.ai-mode-photo .ai-results:not(:empty) + .ai-capture { padding: 14px 16px; }
-.ai-mode-photo .ai-results:not(:empty) + .ai-capture .ai-capture-sub { display: none; }
+/* Camera and gallery, side by side — equals, because on Android they are two
+   different system destinations that one input cannot reach at once. */
+.ai-capture-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+/* Once a shot has been analysed the results are the point; the tiles shrink
+   out of their way rather than being removed, so a second photo is still one
+   press. */
+.ai-mode-photo .ai-results:not(:empty) + .ai-capture-row .ai-capture { padding: 12px 10px; }
+.ai-mode-photo .ai-results:not(:empty) + .ai-capture-row .ai-capture-sub { display: none; }
 
 .ai-edit-toggle {
   width: 30px; height: 30px;

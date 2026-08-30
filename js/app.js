@@ -12,7 +12,7 @@
 // build. The literal below is the fallback (file://, or a stripped query) and is
 // still bumped by `npm run release` — see CLAUDE.md "CACHE WORKFLOW".
 const VAULT_BUILD = (() => {
-  const FALLBACK = 'v282';
+  const FALLBACK = 'v283';
   try {
     const src = (document.currentScript && document.currentScript.src) || '';
     const m = src.match(/[?&]v=(\d+)/);
@@ -86,6 +86,8 @@ const ICONS = {
   pill: '<path d="M6 7.6h12a4.4 4.4 0 0 1 0 8.8H6a4.4 4.4 0 0 1 0-8.8Z" fill="currentColor"/><path d="M12 7.6h6a4.4 4.4 0 0 1 0 8.8h-6Z" fill="var(--icon-accent,#ff6a00)"/>',
   target: '<path d="M12 2.4a9.6 9.6 0 1 0 0 19.2 9.6 9.6 0 0 0 0-19.2Zm0 2.8a6.8 6.8 0 1 1 0 13.6 6.8 6.8 0 0 1 0-13.6Z" fill="currentColor"/><path d="M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8Z" fill="var(--icon-accent,#ff6a00)"/>',
   trendLine: '<path d="m2.6 15.4 6.4-6.4 3.6 3.6 7-7 2 2-9 9-3.6-3.6-4.4 4.4Z" fill="currentColor"/><path d="M14.4 4.4h7.2v7.2h-2.8V7.2h-4.4Z" fill="var(--icon-accent,#ff6a00)"/>',
+  // Picture frame + accent mountain/sun — the "pick from gallery" affordance.
+  gallery: '<rect x="2.6" y="4.2" width="18.8" height="15.6" rx="3" fill="currentColor"/><path d="M5.6 16.6 9.8 11.6l3.2 3.6 2.4-2.6 3 4Z" fill="var(--icon-accent,#ff6a00)"/><circle cx="8.7" cy="8.7" r="1.7" fill="var(--icon-accent,#ff6a00)"/>',
   camera: '<path d="M8.6 3.4h6.8l1.6 3H19a3.4 3.4 0 0 1 3.4 3.4v7.4a3.4 3.4 0 0 1-3.4 3.4H5a3.4 3.4 0 0 1-3.4-3.4V9.8A3.4 3.4 0 0 1 5 6.4h2Z" fill="currentColor"/><circle cx="12" cy="13.4" r="3.8" fill="var(--icon-accent,#ff6a00)"/>',
   barcode: '<rect x="2.6" y="4.6" width="2.4" height="14.8" rx=".8" fill="currentColor"/><rect x="6.6" y="4.6" width="1.4" height="14.8" rx=".7" fill="currentColor"/><rect x="13.4" y="4.6" width="1.4" height="14.8" rx=".7" fill="currentColor"/><rect x="16.4" y="4.6" width="2.4" height="14.8" rx=".8" fill="currentColor"/><rect x="20.2" y="4.6" width="1.4" height="14.8" rx=".7" fill="currentColor"/><rect x="9.6" y="4.6" width="2.4" height="14.8" rx=".8" fill="var(--icon-accent,#ff6a00)"/>',
   zap: '<path d="M13.6 1.8 3.6 14.4h6.2L9 22.2 20.4 9.6h-6.4Z" fill="var(--icon-accent,#ff6a00)"/>',
@@ -919,7 +921,9 @@ const I18N = {
     ai_photo_title: 'Photo of your food',
     ai_photo_sub: 'Take a picture and I will estimate the calories',
     ai_capture: 'Take a photo',
-    ai_capture_sub: 'Camera or gallery',
+    ai_capture_sub: 'Opens the camera',
+    ai_gallery: 'From gallery',
+    ai_gallery_sub: 'Pick an existing photo',
     run_best_weight: 'Best ever',
     sug_label: 'Suggested today',
     sug_up_reason: '2-for-2: you topped the range two sessions in a row — add weight, restart at {t}',
@@ -1707,7 +1711,9 @@ const I18N = {
     ai_photo_title: 'صورة الأكل',
     ai_photo_sub: 'التقط صورة وسأقدّر السعرات',
     ai_capture: 'التقط صورة',
-    ai_capture_sub: 'الكاميرا أو المعرض',
+    ai_capture_sub: 'تفتح الكاميرا',
+    ai_gallery: 'من المعرض',
+    ai_gallery_sub: 'اختر صورة موجودة',
     run_best_weight: 'أعلى وزن',
     sug_label: 'اقتراح اليوم',
     sug_up_reason: 'قاعدة ٢-في-٢: بلغت أعلى المدى جلستين متتاليتين — زد الوزن وابدأ من {t}',

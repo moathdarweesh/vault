@@ -464,17 +464,28 @@
     if (mode === 'photo') {
       return `
       <div class="ai-results" id="ai-results"></div>
-      <button type="button" class="ai-capture" id="ai-capture">
-        <span class="ai-capture-icon">${ic('camera', 28)}</span>
-        <span class="ai-capture-title">${tr('ai_capture')}</span>
-        <span class="ai-capture-sub">${tr('ai_capture_sub')}</span>
-      </button>
-      <input type="file" id="ai-file" accept="image/*" capture="environment" hidden>`;
+      <div class="ai-capture-row">
+        <button type="button" class="ai-capture" id="ai-capture-cam">
+          <span class="ai-capture-icon">${ic('camera', 28)}</span>
+          <span class="ai-capture-title">${tr('ai_capture')}</span>
+          <span class="ai-capture-sub">${tr('ai_capture_sub')}</span>
+        </button>
+        <button type="button" class="ai-capture" id="ai-capture-gal">
+          <span class="ai-capture-icon">${ic('gallery', 28)}</span>
+          <span class="ai-capture-title">${tr('ai_gallery')}</span>
+          <span class="ai-capture-sub">${tr('ai_gallery_sub')}</span>
+        </button>
+      </div>
+      <!-- TWO inputs because ONE cannot serve both destinations: on Android,
+           capture="environment" jumps STRAIGHT to the camera and the gallery
+           is never offered — which is exactly what the owner reported. The
+           capture-less twin opens the system picker instead. -->
+      <input type="file" id="ai-file-cam" accept="image/*" capture="environment" hidden>
+      <input type="file" id="ai-file-gal" accept="image/*" hidden>`;
     }
     return `
       <div class="ai-results" id="ai-results"></div>
       <div class="ai-input-row">
-        <input type="file" id="ai-file" accept="image/*" capture="environment" hidden>
         <input type="text" id="ai-input" placeholder="${tr('ai_chat_placeholder')}" autocomplete="off">
         <button class="btn btn-primary" id="ai-send">${ic('arrowUp', 18)}</button>
       </div>`;
@@ -653,13 +664,15 @@
           });
         }
 
-        // Photo → calories. The trigger differs by mode (the big capture tile in
-        // photo mode; nothing in chat mode, which is now text-only) but the file
-        // input and everything downstream of it are identical.
-        const photoBtn = document.getElementById('ai-capture') || document.getElementById('ai-photo');
-        const fileInput = document.getElementById('ai-file');
-        if (photoBtn && fileInput) {
-          photoBtn.addEventListener('click', () => fileInput.click());
+        // Photo → calories. Camera and gallery are separate tiles feeding
+        // separate inputs (see the markup note), but everything downstream of
+        // the chosen file is one shared handler. Chat mode renders neither
+        // tile, so bindPicker simply finds nothing there.
+        const bindPicker = (btnId, inputId) => {
+          const pickBtn = document.getElementById(btnId);
+          const fileInput = document.getElementById(inputId);
+          if (!pickBtn || !fileInput) return;
+          pickBtn.addEventListener('click', () => fileInput.click());
           fileInput.addEventListener('change', async () => {
             const file = fileInput.files && fileInput.files[0];
             fileInput.value = '';
@@ -710,7 +723,9 @@
             if (goEl) goEl.addEventListener('click', go);
             if (noteEl) noteEl.addEventListener('keydown', (e) => { if (e.key === 'Enter') go(); });
           });
-        }
+        };
+        bindPicker('ai-capture-cam', 'ai-file-cam');
+        bindPicker('ai-capture-gal', 'ai-file-gal');
       }
       bindAdds();
     }
