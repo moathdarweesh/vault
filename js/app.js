@@ -12,7 +12,7 @@
 // build. The literal below is the fallback (file://, or a stripped query) and is
 // still bumped by `npm run release` — see CLAUDE.md "CACHE WORKFLOW".
 const VAULT_BUILD = (() => {
-  const FALLBACK = 'v281';
+  const FALLBACK = 'v282';
   try {
     const src = (document.currentScript && document.currentScript.src) || '';
     const m = src.match(/[?&]v=(\d+)/);
@@ -819,6 +819,7 @@ const I18N = {
     training_days: 'Training days',
     rotation_cycle: 'Workout cycle',
     add_workout: 'Add workout',
+    slot_editor_sub_new: 'Name it, then pick its exercises in the order you will train',
     rotation_preview: 'Next 7 days',
     min_logged: 'Minimum effort — done',
     min_logged_sub: '{what} · {n} minutes · streak intact',
@@ -1608,6 +1609,7 @@ const I18N = {
     training_days: 'أيام التمرين',
     rotation_cycle: 'دورة التمارين',
     add_workout: 'إضافة تمرين',
+    slot_editor_sub_new: 'سمِّه ثم اختر تمارينه بالترتيب الذي ستؤدّيه',
     rotation_preview: 'الأيام السبعة القادمة',
     min_logged: 'أقل مجهود — تم',
     min_logged_sub: '{what} · {n} دقائق · السلسلة سليمة',
@@ -9168,7 +9170,12 @@ function openSlotEditorModal(slotIdx, onAdd) {
       <div class="modal-header">
         <div>
           <div class="modal-title">${escapeHtml(dayLabel || t('add_workout'))}</div>
-          <div class="modal-subtitle">${isNew ? t('add_workout') : t('edit_workout')}</div>
+          <!-- On a NEW slot the title already says "Add workout" (the name is
+               empty, so the title falls back to the same key) — echoing it here
+               printed the identical sentence twice and made the sheet read as
+               broken. The subtitle now carries the one thing a first-time user
+               actually needs: what the two steps are. -->
+          <div class="modal-subtitle">${isNew ? t('slot_editor_sub_new') : t('edit_workout')}</div>
         </div>
         <button class="icon-btn icon-btn-tile" data-close aria-label="${escapeHtml(t('close'))}">${icon('close', 20)}</button>
       </div>
