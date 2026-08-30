@@ -12,7 +12,7 @@
 // build. The literal below is the fallback (file://, or a stripped query) and is
 // still bumped by `npm run release` — see CLAUDE.md "CACHE WORKFLOW".
 const VAULT_BUILD = (() => {
-  const FALLBACK = 'v280';
+  const FALLBACK = 'v281';
   try {
     const src = (document.currentScript && document.currentScript.src) || '';
     const m = src.match(/[?&]v=(\d+)/);
@@ -921,9 +921,11 @@ const I18N = {
     ai_capture_sub: 'Camera or gallery',
     run_best_weight: 'Best ever',
     sug_label: 'Suggested today',
-    sug_up_reason: 'You hit {r} reps last time — add weight, restart at {t}',
+    sug_up_reason: '2-for-2: you topped the range two sessions in a row — add weight, restart at {t}',
+    sug_confirm_reason: 'You topped the range once — confirm it a second session before adding (2-for-2)',
     sug_rep_reason: 'Same weight — aim for one more rep',
     sug_hold_reason: 'Hold this weight until you reach {t} clean reps',
+    sug_deload_reason: '{n} sessions under the range at this weight — drop ~10% and rebuild',
     sug_applied: 'Suggestion filled into the next set',
     tab_saved_foods: 'Foods',
     tab_bundles: 'My meals',
@@ -1706,9 +1708,11 @@ const I18N = {
     ai_capture_sub: 'الكاميرا أو المعرض',
     run_best_weight: 'أعلى وزن',
     sug_label: 'اقتراح اليوم',
-    sug_up_reason: 'بلغت {r} تكرارات آخر مرة — زد الوزن وابدأ من {t}',
+    sug_up_reason: 'قاعدة ٢-في-٢: بلغت أعلى المدى جلستين متتاليتين — زد الوزن وابدأ من {t}',
+    sug_confirm_reason: 'بلغت أعلى المدى مرة — أكّدها جلسة ثانية قبل الزيادة (٢-في-٢)',
     sug_rep_reason: 'نفس الوزن — حاول تكراراً إضافياً',
     sug_hold_reason: 'ثبّت هذا الوزن حتى تبلغ {t} تكرارات نظيفة',
+    sug_deload_reason: '{n} جلسات دون المدى على هذا الوزن — خفّف نحو ١٠٪ وأعد البناء',
     sug_applied: 'وُضع الاقتراح في المجموعة التالية',
     tab_saved_foods: 'أطعمة',
     tab_bundles: 'وجباتي',
@@ -9857,26 +9861,64 @@ function renderSessionRun(el) {
     }, null);
   }
 
-  // ---- Next-weight suggestion — double progression, not blind adding ------
-  // The owner's brief: a REASONED suggestion, not 'add weight because time
-  // passed'. Double progression in the 8–12 hypertrophy range, judged on the
-  // TOP set of the last session (same topSet the two cells above use):
-  //   · reached 12+   → the weight is beaten: +2.5 kg, restart at 8 reps.
-  //   · 8–11          → the weight still has room: same weight, one more rep.
-  //   · under 8       → the last increase hasn't been absorbed: hold the
-  //                     weight until 8 clean reps. Suggesting MORE weight
-  //                     here is how people get stuck grinding triples.
-  // 2.5 kg regardless of lift: it is the smallest real-world plate pair, and
-  // guessing 'compound vs isolation' from a free-text exercise name would be
-  // the un-reasoned part.
+  // ---- Next-weight suggestion — rebuilt on the literature (v281) ----------
+  // The owner asked for the studies, then the rules. What they say:
+  //
+  //  WHEN — the 2-for-2 rule (NSCA; ACSM position stand 2009, PMID 19204579):
+  //  raise the load only after beating the rep target on TWO CONSECUTIVE
+  //  sessions. So the answer to 'how many sessions at one weight' is: at
+  //  least two at the top of the range, usually more while reps climb.
+  //
+  //  HOW MUCH — ACSM: 2–10%, small/upper muscle groups at the low end,
+  //  large/lower at the high end; NSCA's absolute form: upper ≈ +1–2.5 kg,
+  //  lower ≈ +2.5–5 kg. Here: legs +5 kg once the lift is ≥50 kg (5–10%
+  //  territory), otherwise +2.5 kg — the smallest real plate pair.
+  //
+  //  ZONE — 8–12 stays the working range. Schoenfeld's meta-analyses (2017
+  //  PMID 28834797; 2021 PMID 33671664) show hypertrophy across a broad
+  //  loading spectrum, so the zone is a practical anchor, not dogma.
+  //
+  //  STALL — plateau guidance: ~3 sessions stuck under the range at one
+  //  weight → deload 5–10% and rebuild. Grinding forward instead is how
+  //  people end up stuck at the same triple for months.
+  //
+  // All judged on the TOP set of each session (same topSet as the cells
+  // above), so a drop set cannot fool any branch.
   function runSuggest(exId) {
-    const last = DB.sessions.lastForExercise(exId);
-    const top = last ? topSet(last.sets) : null;
-    if (!top || !(top.w > 0) || !(top.r > 0)) return null;
+    const hist = DB.sessions.listByExercise(exId);   // sorted date desc
+    if (!hist.length) return null;
+    const s1 = topSet(hist[0].sets);
+    if (!s1 || !(s1.w > 0) || !(s1.r > 0)) return null;
     const LO = 8, HI = 12;
-    if (top.r >= HI) return { w: Math.round((top.w + 2.5) * 2) / 2, r: LO, key: 'sug_up_reason', vars: { r: top.r, t: LO } };
-    if (top.r >= LO) return { w: top.w, r: top.r + 1, key: 'sug_rep_reason', vars: { t: top.r + 1 } };
-    return { w: top.w, r: LO, key: 'sug_hold_reason', vars: { t: LO } };
+    const ex = DB.exercises.getById(exId);
+    const inc = (ex && ex.category === 'legs' && s1.w >= 50) ? 5 : 2.5;
+    const to25 = (x) => Math.round(x / 2.5) * 2.5;
+
+    if (s1.r >= HI) {
+      // 2-for-2: the increase needs the SECOND consecutive session at this
+      // weight to also top the range. One great day is not a new baseline.
+      const s2 = hist[1] ? topSet(hist[1].sets) : null;
+      const confirmed = !!(s2 && s2.w === s1.w && s2.r >= HI);
+      if (confirmed) return { w: to25(s1.w + inc), r: LO, key: 'sug_up_reason', vars: { t: LO } };
+      return { w: s1.w, r: HI, key: 'sug_confirm_reason', vars: {} };
+    }
+    if (s1.r >= LO) return { w: s1.w, r: s1.r + 1, key: 'sug_rep_reason', vars: { t: s1.r + 1 } };
+
+    // Under the range. Count how many CONSECUTIVE recent sessions sat under
+    // it at this same weight; three is the stall signal the deload evidence
+    // keys on.
+    let stuck = 0;
+    for (const s of hist) {
+      const tp = topSet(s.sets);
+      if (!tp || tp.w !== s1.w || tp.r >= LO) break;
+      stuck++;
+    }
+    if (stuck >= 3) {
+      let dw = Math.max(2.5, to25(s1.w * 0.9));
+      if (dw >= s1.w) dw = Math.max(2.5, s1.w - 2.5);   // rounding must not undo the deload
+      return { w: dw, r: LO, key: 'sug_deload_reason', vars: { n: stuck } };
+    }
+    return { w: s1.w, r: LO, key: 'sug_hold_reason', vars: { t: LO } };
   }
 
   function runSuggestHtml(exId) {
