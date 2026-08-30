@@ -455,7 +455,8 @@
       var res=await Promise.all([
         fetchAll(function(a,b){return sb.from('exercises').select('id,name,category,owner_id,deleted_at').range(a,b);}),
         fetchAll(function(a,b){return sb.from('profiles').select('user_id,username,created_at,last_seen').range(a,b);}),
-        fetchAll(function(a,b){return sb.from('user_prefs').select('user_id,unit').range(a,b);}),
+        // unit lives in the blob now — the user_prefs mirror table was dropped (migration 18)
+        fetchAll(function(a,b){return sb.from('vault_data').select('user_id,data->prefs->>unit').range(a,b);}),
         fetchAll(function(a,b){return sb.from('user_flags').select('user_id,role,status,reason').range(a,b);}),
         fetchAll(function(a,b){return sb.from('cardio_types').select('id,label,owner_id,deleted_at').range(a,b);}),
         fetchAll(function(a,b){return sb.from('feedback').select('id,user_id,username,message,context,status,created_at').range(a,b);}),
@@ -874,22 +875,47 @@
       inner.innerHTML='<div class="center">جارٍ تحميل بيانات المستخدم…</div>';
       box.classList.add('show'); window.scrollTo(0,0);
       try{
-        var r=await Promise.all([
-          fetchAll(function(a,b){return sb.from('workout_sessions').select('id, exercise_id, performed_on').eq('user_id',uid).range(a,b);}),
-          fetchAll(function(a,b){return sb.from('plan_days').select('day_of_week, name').eq('user_id',uid).range(a,b);}),
-          fetchAll(function(a,b){return sb.from('plan_day_exercises').select('day_of_week, exercise_id, position').eq('user_id',uid).range(a,b);}),
-          fetchAll(function(a,b){return sb.from('food_logs').select('logged_on, name, calories').eq('user_id',uid).range(a,b);}),
-          fetchAll(function(a,b){return sb.from('sleep_logs').select('slept_on, sleep_time, wake_time, duration_min').eq('user_id',uid).range(a,b);}),
-          fetchAll(function(a,b){return sb.from('exercises').select('id, name, category').eq('owner_id',uid).range(a,b);})
-        ]);
-        var sessions=(r[0].data||[]), plans=(r[1].data||[]), planEx=(r[2].data||[]), foods=(r[3].data||[]), sleeps=(r[4].data||[]), customs=(r[5].data||[]);
-        // sets: chunk session ids (keeps the .in() URL short) and page each chunk
-        var sets=[], ids=sessions.map(function(s){return s.id;});
-        for(var i=0;i<ids.length;i+=60){
-          var chunk=ids.slice(i,i+60);
-          var sr=await fetchAll((function(ch){return function(a,b){return sb.from('workout_sets').select('session_id, set_index, reps, weight').in('session_id',ch).range(a,b);};})(chunk));
-          if(sr.data) sets=sets.concat(sr.data);
+        // ONE read: the user's vault_data blob (admin-read policy, migration 18).
+        // This replaced six mirror-table queries plus a chunked sets fetch — and
+        // it is COMPLETE, which the mirror never was: its projection resolved
+        // seed exercises by name against the global catalog and silently dropped
+        // every session it could not match, so the old drill-down showed 0
+        // sessions for a user whose blob held 152.
+        var r=await sb.from('vault_data').select('data').eq('user_id',uid).maybeSingle();
+        if(r.error) throw new Error(r.error.message);
+        var b=(r.data&&r.data.data)||{};
+        var arr=function(x){return Array.isArray(x)?x:[];};
+        // Names resolve from the user's OWN exercise list — blob ids are local
+        // and (for seed exercises) never matched the global catalog's ids.
+        arr(b.exercises).forEach(function(e){ if(e&&e.id&&!exMap[e.id]) exMap[e.id]={name:e.name,category:e.category||'Other'}; });
+        var sessions=[], sets=[];
+        arr(b.sessions).forEach(function(sx){
+          if(!sx||!sx.id) return;
+          sessions.push({id:sx.id, exercise_id:sx.exerciseId, performed_on:sx.date});
+          arr(sx.sets).forEach(function(x,i){ sets.push({session_id:sx.id, set_index:i, reps:(+x.reps||0), weight:(+x.weight||0)}); });
+        });
+        // The blob's plan is a ROTATION (ordered cycle slots), not weekday rows;
+        // each slot renders as one "day" card in cycle order.
+        var plans=[], planEx=[];
+        var cyc=(b.plan&&Array.isArray(b.plan.cycle))?b.plan.cycle:[];
+        cyc.forEach(function(slot,i){
+          plans.push({day_of_week:i, name:(slot&&slot.name)||('Workout '+(i+1))});
+          arr(slot&&slot.exerciseIds).forEach(function(exId,pos){ planEx.push({day_of_week:i, exercise_id:exId, position:pos}); });
+        });
+        var foods=[];
+        if(b.foodLogs&&typeof b.foodLogs==='object'&&!Array.isArray(b.foodLogs)){
+          Object.keys(b.foodLogs).forEach(function(dt){
+            arr(b.foodLogs[dt]).forEach(function(f){
+              foods.push({logged_on:dt, name:(f&&f.name)||'—', calories:(+((f&&f.calories)||0))*(+((f&&f.servings)||1))});
+            });
+          });
         }
+        var sleeps=arr(b.sleep).map(function(sl){
+          return {slept_on:sl.date, sleep_time:sl.sleepTime||null, wake_time:sl.wakeTime||null,
+                  duration_min:(+sl.durationMinutes||0)};
+        });
+        var customs=arr(b.exercises).filter(function(e){return e&&e.isCustom;})
+          .map(function(e){return {id:e.id, name:e.name, category:e.category||'Other'};});
         renderDetail(u, {sessions:sessions,sets:sets,plans:plans,planEx:planEx,foods:foods,sleeps:sleeps,customs:customs});
       }catch(e){ inner.innerHTML='<div class="d-top"><button class="d-back" id="dback">‹ رجوع</button></div><div class="center">تعذّر التحميل: '+esc(e.message||e)+'</div>'; wireBack(); }
     }
@@ -929,7 +955,7 @@
       var planHtml=d.plans.length? d.plans.sort(function(a,b){return a.day_of_week-b.day_of_week;}).map(function(pd){
         var exs=(exByDay[pd.day_of_week]||[]).sort(function(a,b){return a.position-b.position;});
         var li=exs.length? exs.map(function(pe){return '<li><span class="dot" style="background:'+catColor(exCat(pe.exercise_id))+'"></span>'+esc(exName(pe.exercise_id))+'</li>';}).join('') : '<li class="muted">—</li>';
-        return '<div class="day"><div class="day-name">'+esc(pd.name||DOW[pd.day_of_week])+' · '+DOW[pd.day_of_week]+'</div><ul>'+li+'</ul></div>';
+        return '<div class="day"><div class="day-name">'+esc(pd.name||DOW[pd.day_of_week]||('#'+(pd.day_of_week+1)))+'</div><ul>'+li+'</ul></div>';
       }).join('') : '<div class="empty-mini">لا خطة أسبوعية.</div>';
       var custHtml=d.customs.length? '<div class="chips">'+d.customs.map(function(e){return '<span class="chip"><span class="tag" style="background:'+catColor(e.category)+'"></span>'+esc(e.name)+'</span>';}).join('')+'</div>' : '<div class="empty-mini">لا تمارين خاصة.</div>';
       var foodHtml=d.foods.length? '<div class="rows2">'+d.foods.slice().sort(function(a,b){return (b.logged_on||'').localeCompare(a.logged_on||'');}).map(function(f){
@@ -966,14 +992,15 @@
 
     // COMPLETE backup: every admin-readable table, all rows (paginated), as one
     // timestamped JSON. Free, no credentials. Run before any risky DB operation.
-    var BACKUP_TABLES=['profiles','user_prefs','user_exercise_prefs','exercises','workout_sessions',
-      'workout_sets','cardio_types','cardio_logs','foods','food_logs','sleep_logs','plan_days',
-      'plan_day_exercises','supplements','supplement_logs','health_prefs','user_flags','feedback',
+    // Migration 18 dropped the 13 mirror tables; vault_data (now admin-readable,
+    // ALL users' rows) carries everything they used to hold — so this backup got
+    // MORE complete, not less: it now includes every user's actual blob.
+    var BACKUP_TABLES=['profiles','exercises','cardio_types','user_flags','feedback',
       'audit_log','admins','food_catalog','preset_plans','app_config','vault_data'];
     async function exportBackup(){
       toast('جارٍ إنشاء النسخة الاحتياطية…');
       var out={ backup:'VAULT full backup', schema:'v4', exported_at:new Date().toISOString(),
-        note:'يشمل كل الجداول المطبّعة (بصلاحية الأدمِن). vault_data يحتوي صفّك أنت فقط — لا يمكن للأدمِن قراءة مدوّنات المستخدمين الآخرين (RLS)، ومصدر حقيقتهم على أجهزتهم. السكيما نفسها في backend/*.sql بالمستودع.',
+        note:'يشمل كل الجداول الباقية بعد حذف المرآة (migration 18). vault_data يحتوي مدوّنات كل المستخدمين (سياسة قراءة أدمِن) — فهذه النسخة الآن أكمل من أي نسخة سابقة. السكيما في backend/*.sql بالمستودع.',
         counts:{}, tables:{} }, errs=[];
       for(var i=0;i<BACKUP_TABLES.length;i++){
         var t=BACKUP_TABLES[i];

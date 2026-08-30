@@ -494,8 +494,6 @@
     // runPush(), not push().catch(() => {}): the failure has to start a retry
     // chain instead of vanishing.
     pushTimer = setTimeout(() => { runPush(); }, 1200);
-    // Also project the change into the normalized tables (best-effort mirror).
-    if (window.Tables && Tables.scheduleProject) Tables.scheduleProject();
   }
 
   // Replace local data with the cloud blob — but NEVER overwrite a non-empty
@@ -998,7 +996,7 @@
     // a known user whose token merely expired while offline (must NOT be locked
     // out of data that is already on their device).
     wasLinked: () => { const u = getLastUid(); return !!u && isLinked(u); },
-    getClient: sb, // exposed for the tables.js "mirror" projection (RLS-scoped)
+    getClient: sb, // RLS-scoped client, exposed for auxiliary readers
     getUsername, checkUsername, setUsername,
     touchLastSeen, getMyFlags, submitFeedback, reportError,
     pullCatalog,
