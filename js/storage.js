@@ -1736,7 +1736,14 @@ const DB = {
       return {
         asked: !!n.asked,
         cap,
-        window: Object.assign(d.window, n.window || {}),
+        // STRICT, not Object.assign: a malformed write (proven possible — a
+        // string patch spreads to {"0":"1","1":"4",…}) must die HERE, on the
+        // next read, instead of riding the blob to every device. Only start/end
+        // survive, and only as valid HH:MM.
+        window: {
+          start: this._validHHMM((n.window || {}).start, d.window.start),
+          end: this._validHHMM((n.window || {}).end, d.window.end),
+        },
         channels: {
           train: Object.assign(d.channels.train, c.train || {}),
           supps: Object.assign(d.channels.supps, c.supps || {}, {
@@ -1795,9 +1802,24 @@ const DB = {
       });
       this.setChannel('supps', { doses: kept });
     },
+    // Accepts "H:MM" / "HH:MM" and nothing else; anything malformed keeps the
+    // fallback. The shape gate matters because this object is SYNCED: one bad
+    // write here used to fan out to every device the account owns.
+    _validHHMM(v, fallback) {
+      const m = /^([0-9]{1,2}):([0-9]{2})$/.exec(String(v == null ? '' : v).trim());
+      if (!m) return fallback;
+      const h = Number(m[1]), mi = Number(m[2]);
+      if (h > 23 || mi > 59) return fallback;
+      return String(h).padStart(2, '0') + ':' + m[2];
+    },
     setWindow(patch) {
-      const cur = this.get();
-      STATE.notif = Object.assign(cur, { window: Object.assign(cur.window, patch || {}) });
+      const cur = this.get();               // get() has already healed the shape
+      const win = { start: cur.window.start, end: cur.window.end };
+      if (patch && typeof patch === 'object' && !Array.isArray(patch)) {
+        if ('start' in patch) win.start = this._validHHMM(patch.start, win.start);
+        if ('end' in patch) win.end = this._validHHMM(patch.end, win.end);
+      }
+      STATE.notif = Object.assign(cur, { window: win });
       save();
     },
     setChannel(id, patch) {
