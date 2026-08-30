@@ -514,19 +514,42 @@
       </div>`;
   }
 
-  function chatPanelHtml() {
+  // TWO MODES, ONE PANEL.
+  //
+  // The owner asked why the calorie CHAT has a camera in it. The honest answer
+  // was that "Photo" was never a screen: openPhoto() opened the chat and then
+  // synthetically clicked that little camera 120ms later. So picking "صورة" from
+  // the add sheet landed you in a sheet headed "Calorie chat" with a text box,
+  // and a file picker appeared over it. The camera was the feature; the tile
+  // just pressed it for you.
+  //
+  // Now they are genuinely separate. Chat is text. Photo is a photo screen with
+  // one large capture target and no text row. Both render their results into the
+  // same #ai-results, so every result card, portion stepper and macro editor is
+  // shared — the split is in the input, not in the machinery.
+  function chatPanelHtml(mode) {
+    if (mode === 'photo') {
+      return `
+      <div class="ai-results" id="ai-results"></div>
+      <button type="button" class="ai-capture" id="ai-capture">
+        <span class="ai-capture-icon">${ic('camera', 28)}</span>
+        <span class="ai-capture-title">${tr('ai_capture')}</span>
+        <span class="ai-capture-sub">${tr('ai_capture_sub')}</span>
+      </button>
+      <input type="file" id="ai-file" accept="image/*" capture="environment" hidden>`;
+    }
     return `
       <div class="ai-results" id="ai-results"></div>
       <div class="ai-input-row">
-        <button class="ai-photo-btn" id="ai-photo" aria-label="${tr('ai_photo')}">${ic('camera', 20)}</button>
         <input type="file" id="ai-file" accept="image/*" capture="environment" hidden>
         <input type="text" id="ai-input" placeholder="${tr('ai_chat_placeholder')}" autocomplete="off">
         <button class="btn btn-primary" id="ai-send">${ic('arrowUp', 18)}</button>
       </div>`;
   }
 
-  function open(dateForLog) {
+  function open(dateForLog, opts) {
     if (typeof openModal !== 'function') return;
+    const mode = (opts && opts.mode === 'photo') ? 'photo' : 'chat';
     logDate = dateForLog || (typeof todayISO === 'function' ? todayISO() : null);
     const results = {}; // cardId -> item
     const groups = {};  // messageId -> items[]
@@ -535,12 +558,12 @@
     openModal(`
       <div class="modal-header">
         <div>
-          <div class="modal-title">${tr('ai_chat_title')}</div>
-          <div class="modal-subtitle">${tr('ai_chat_sub')}</div>
+          <div class="modal-title">${mode === 'photo' ? tr('ai_photo_title') : tr('ai_chat_title')}</div>
+          <div class="modal-subtitle">${mode === 'photo' ? tr('ai_photo_sub') : tr('ai_chat_sub')}</div>
         </div>
         <button class="icon-btn icon-btn-tile" data-close>${ic('close', 18)}</button>
       </div>
-      <div id="ai-body">${ready() ? chatPanelHtml() : keyPanelHtml()}</div>
+      <div id="ai-body" class="ai-mode-${mode}">${ready() ? chatPanelHtml(mode) : keyPanelHtml()}</div>
     `);
 
     wire();
@@ -553,7 +576,7 @@
           const v = document.getElementById('ai-key-input').value;
           if (!v.trim()) { showToast(tr('ai_need_key')); return; }
           setKey(v);
-          document.getElementById('ai-body').innerHTML = chatPanelHtml();
+          document.getElementById('ai-body').innerHTML = chatPanelHtml(mode);
           wire();
         });
       }
@@ -614,7 +637,14 @@
         send.addEventListener('click', run);
         input.addEventListener('keydown', (e) => { if (e.key === 'Enter') run(); });
         input.focus();
+      }
 
+      // EVERYTHING BELOW IS MODE-INDEPENDENT and must not sit inside the
+      // if(send && input) guard above: photo mode has no text row, and when it
+      // did sit there the capture tile, the portion stepper AND the macro editor
+      // were all silently dead in photo mode — the guard was written when chat
+      // was the only face this panel had.
+      {
         // Portion stepper (delegated once) — +/- adjusts the card's multiplier
         // in 0.25 steps and live-recomputes its macros before the user commits.
         const resultsBox = document.getElementById('ai-results');
@@ -701,8 +731,10 @@
           });
         }
 
-        // Photo → calories
-        const photoBtn = document.getElementById('ai-photo');
+        // Photo → calories. The trigger differs by mode (the big capture tile in
+        // photo mode; nothing in chat mode, which is now text-only) but the file
+        // input and everything downstream of it are identical.
+        const photoBtn = document.getElementById('ai-capture') || document.getElementById('ai-photo');
         const fileInput = document.getElementById('ai-file');
         if (photoBtn && fileInput) {
           photoBtn.addEventListener('click', () => fileInput.click());
@@ -862,9 +894,11 @@
   }
 
   // Open the chat straight on the photo picker (used by the add-sheet "photo").
+  // A real mode now, not "open the chat and press its camera for the user".
+  // The old synthetic click also raced the render: a slow frame and the button
+  // was not there yet, so the tile silently did nothing but open a chat box.
   function openPhoto(dateForLog) {
-    open(dateForLog);
-    setTimeout(() => { const b = document.getElementById('ai-photo'); if (b) b.click(); }, 120);
+    open(dateForLog, { mode: 'photo' });
   }
 
   // ---- voice → food --------------------------------------------------------

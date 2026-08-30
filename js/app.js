@@ -12,7 +12,7 @@
 // build. The literal below is the fallback (file://, or a stripped query) and is
 // still bumped by `npm run release` — see CLAUDE.md "CACHE WORKFLOW".
 const VAULT_BUILD = (() => {
-  const FALLBACK = 'v275';
+  const FALLBACK = 'v276';
   try {
     const src = (document.currentScript && document.currentScript.src) || '';
     const m = src.match(/[?&]v=(\d+)/);
@@ -920,6 +920,10 @@ const I18N = {
     sync_restored: 'Restored from the pre-sync copy',
     sync_restore_failed: 'Could not restore',
     conflict_warn_cloud: 'Keeping the cloud copy discards the changes made on this device.',
+    ai_photo_title: 'Photo of your food',
+    ai_photo_sub: 'Take a picture and I will estimate the calories',
+    ai_capture: 'Take a photo',
+    ai_capture_sub: 'Camera or gallery',
     run_best_weight: 'Best ever',
     run_last_weight: 'Last session',
     ai_edit_values: 'Edit values',
@@ -1688,6 +1692,10 @@ const I18N = {
     sync_restored: 'تمت الاستعادة من نسخة ما قبل المزامنة',
     sync_restore_failed: 'تعذّرت الاستعادة',
     conflict_warn_cloud: 'الاحتفاظ بنسخة السحابة يتخلّى عن التعديلات التي جرت على هذا الجهاز.',
+    ai_photo_title: 'صورة الأكل',
+    ai_photo_sub: 'التقط صورة وسأقدّر السعرات',
+    ai_capture: 'التقط صورة',
+    ai_capture_sub: 'الكاميرا أو المعرض',
     run_best_weight: 'أعلى وزن',
     run_last_weight: 'آخر وزن',
     ai_edit_values: 'تعديل القِيَم',
@@ -9743,12 +9751,26 @@ function renderSessionRun(el) {
     const lastSession = DB.sessions.lastForExercise(exId);
     const last = lastSession ? topSet(lastSession.sets) : null;
     const u = viewContext.runUnit.toUpperCase();
-    const cell = (label, ts, cls) => `
+    // ONE figure, not a stack: weight and reps belong side by side because they
+    // describe a single set. This is the SAME shape the Home screen's "last set"
+    // card already uses (.last-set-figure at app.js:3716) — "80 KG × 6 reps" —
+    // so the two screens speak with one vocabulary instead of two.
+    //
+    // dir="ltr" on the figure: it is a numeric expression, and in an RTL page a
+    // bare "80 KG × 6" lets the bidi algorithm reorder the run around the
+    // neutral ×. Pinning the direction keeps the weight first in both languages,
+    // which is what the label above it promises.
+    const cell = (label, ts, cls) => {
+      const has = !!(ts && ts.w > 0);
+      return `
       <div class="run-stat ${cls}">
         <div class="run-stat-label">${label}</div>
-        <div class="run-stat-value num">${ts && ts.w > 0 ? fmtNum(convDisplay(ts.w)) : '—'}<span class="run-stat-unit">${ts && ts.w > 0 ? u : ''}</span></div>
-        <div class="run-stat-reps">${ts && ts.r > 0 ? `<span class="num">${fmtNum(ts.r)}</span> ${t('reps')}` : '&nbsp;'}</div>
+        <div class="run-stat-figure" dir="ltr">${has ? `
+          <span class="num">${fmtNum(convDisplay(ts.w))}</span><span class="run-stat-unit">${u}</span>
+          ${ts.r > 0 ? `<span class="run-stat-x" aria-hidden="true">×</span><span class="num">${fmtNum(ts.r)}</span><span class="run-stat-unit">${t('reps')}</span>` : ''}
+        ` : '<span class="run-stat-empty">—</span>'}</div>
       </div>`;
+    };
     return `<div class="run-stats">
       ${cell(t('run_best_weight'), best, 'is-best')}
       ${cell(t('run_last_weight'), last, '')}

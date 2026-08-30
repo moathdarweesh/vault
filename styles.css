@@ -3483,25 +3483,35 @@ body[data-view="session-run"] .bottom-nav { display: none; }
   color: var(--text-dim);
   margin-bottom: 3px;
 }
-.run-stat-value {
-  font-size: 20px;
-  font-weight: 800;
+
+/* Weight and reps on ONE baseline — the same figure the Home card uses. */
+.run-stat-figure {
+  display: flex;
+  align-items: baseline;
+  justify-content: center;
+  gap: 2px;
+  font-size: 22px;
+  font-weight: 900;
+  line-height: 1;
   color: var(--text);
-  line-height: 1.1;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.02em;
+  /* Both cells keep one height whether or not the exercise has history, so
+     tapping Next never moves the set rows below. */
+  min-height: 22px;
 }
-.run-stat.is-best .run-stat-value { color: var(--accent-text); }
-.run-stat-reps {
-  margin-top: 2px;
-  font-size: 12px;
-  font-weight: 700;
-  color: var(--text-dim);
-}
-.run-stat-unit {
+.run-stat.is-best .run-stat-figure { color: var(--accent-text); }
+.run-stat-unit,
+.run-stat-x {
   font-size: 11px;
-  font-weight: 700;
-  color: var(--text-dim);
-  margin-inline-start: 3px;
+  font-weight: 800;
+  color: var(--text-mute);
+  letter-spacing: 0;
 }
+/* The × is the only thing separating two numbers that mean different things —
+   it needs air on both sides or "80KG×6" reads as one token. */
+.run-stat-x { margin: 0 5px; }
+.run-stat-empty { color: var(--text-dim); font-weight: 800; }
 
 .run-ex {
   display: flex;
@@ -4305,6 +4315,31 @@ body[dir="rtl"] .picker-row { text-align: right; }
    55 g of protein"). Same rounded-rectangle language as the rest.
    Only ONE of .ai-macros / .ai-edit is ever displayed, so the card does not
    jump in height between reading and correcting. */
+/* Photo mode: ONE target, sized so it is the obvious thing to press. Rounded
+   rectangle, never a circular FAB — house rule. */
+.ai-capture {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  width: 100%;
+  padding: 26px 16px;
+  border: 1px dashed var(--border-hi);
+  border-radius: var(--radius-lg, 18px);
+  background: var(--surface-2);
+  color: var(--text);
+}
+.ai-capture:active { transform: scale(0.98); }
+.ai-capture-icon { color: var(--accent-text); line-height: 0; }
+.ai-capture-title { font-size: 16px; font-weight: 800; }
+.ai-capture-sub { font-size: 12px; font-weight: 700; color: var(--text-dim); }
+/* Once a shot has been analysed the results are the point; the capture tile
+   shrinks out of their way rather than being removed, so a second photo is
+   still one press. */
+.ai-mode-photo .ai-results:not(:empty) + .ai-capture { padding: 14px 16px; }
+.ai-mode-photo .ai-results:not(:empty) + .ai-capture .ai-capture-sub { display: none; }
+
 .ai-edit-toggle {
   width: 30px; height: 30px;
   display: inline-flex; align-items: center; justify-content: center;
