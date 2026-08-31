@@ -4,31 +4,118 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>VAULT — لوحة التحكّم</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wght@700;800&family=IBM+Plex+Sans+Arabic:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
 <style>
   :root{
-    /* THE APP'S PALETTE, not a second one. Every value below is copied from
-       styles.css :root — this console used a cold blue-grey system while the
-       product it administers is warm black and orange, so the two never read
-       as one product.
+    /* THE CONSOLE'S OWN SYSTEM, from Vault Admin.dc.html.
+       It shares the app's orange but sets it on a COLD neutral scale on
+       purpose: this is instrumentation, not the product. (v284 had matched the
+       app's warm browns; the design overrules that.)
 
-       The muscle colours were not merely a different taste: --back was BLUE
-       here and BLUE is the app's Back too, but --legs was amber here and
-       GREEN in the app, --arms teal here and AMBER in the app. The owner
-       reads both surfaces, so the same dot meant a different muscle
-       depending on which screen he was looking at. That is a correctness
-       bug, and it is why this swap is not cosmetic. */
-    --bg:#000000; --surface:#0d0a07; --surface-2:#17120d; --line:rgba(255,232,212,.11);
-    --accent:#ff6a00; --accent-soft:rgba(255,106,0,.13); --accent-ink:#1a0d00;
-    --text:#fdfaf7; --dim:#b0a69e; --mute:#9a8f86; --good:#34d399; --warn:#fbbf24; --red:#f87171;
-    --chest:#f472b6; --back:#60a5fa; --legs:#34d399; --shoulders:#c084fc; --arms:#fbbf24; --core:#fb7185; --other:#9a8f86;
-    --radius:18px; --radius-sm:12px;
+       The muscle colours stay identical to the app's --cat-* values, and THAT
+       part is not taste: before v284 --legs was amber here and GREEN in the
+       app, --arms teal here and AMBER in the app, so the same dot named a
+       different muscle depending on which screen the owner was looking at. */
+    --bg:#08090a; --surface:#0e0f11; --surface-2:#131416; --surface-3:#1d1f22;
+    --line:#1c1e21; --line-2:#1a1c1f; --line-3:#17181b; --edge:#26282c; --edge-hi:#3d4045;
+    --accent:#ff6a00; --accent-soft:rgba(255,106,0,.1); --accent-edge:#3a2a14; --accent-ink:#1a0800;
+    --text:#e8e8ea; --dim:#9a9ea3; --mute:#6e7176; --faint:#4d5055;
+    --good:#34d399; --warn:#e0b23c; --red:#f87171;
+    --chest:#f472b6; --back:#60a5fa; --legs:#34d399; --shoulders:#c084fc; --arms:#fbbf24; --core:#fb7185; --other:#9a9ea3;
+    --radius:14px; --radius-sm:9px;
+    --mono:'JetBrains Mono',ui-monospace,monospace;
+    --display:Archivo,system-ui,sans-serif;
   }
   *{box-sizing:border-box}
   html,body{margin:0;background:
-    radial-gradient(1000px 560px at 100% -10%, rgba(255,106,0,.10), transparent 60%), var(--bg);
-    color:var(--text); font-family:system-ui,-apple-system,"Segoe UI",Tahoma,sans-serif;
+    var(--bg);
+    color:var(--text); font-family:'IBM Plex Sans Arabic',system-ui,-apple-system,"Segoe UI",Tahoma,sans-serif;
     -webkit-font-smoothing:antialiased; line-height:1.55; min-height:100vh}
-  .num{font-variant-numeric:tabular-nums; unicode-bidi:plaintext}
+  /* The design sets every figure in JetBrains Mono. Tabular by construction —
+     it is what makes a column of percentages scan as a column. */
+  /* ===================================================================== */
+  /* CONSOLE COMPONENTS — geometry and colour taken from Vault Admin.dc.html */
+  /* ===================================================================== */
+  .mgrid{display:grid; grid-template-columns:repeat(5,1fr); gap:14px; margin-bottom:22px}
+  .mcard{background:var(--surface); border:1px solid var(--line); border-radius:13px;
+    padding:18px 20px; display:flex; flex-direction:column; gap:11px; min-width:0}
+  .mlabel{font-size:12.5px; color:var(--mute)}
+  /* Archivo 30/700 is the design's hero figure — the one place a display face
+     is used, so the five headline numbers read as one row of instruments. */
+  .mvalue{font-family:var(--display); font-weight:700; font-size:30px; line-height:1; color:var(--text); text-align:start}
+  .mdelta{font-size:11.5px}
+
+  .ogrid{display:grid; grid-template-columns:1.35fr 1fr; gap:18px; align-items:start}
+  .ocol{display:flex; flex-direction:column; gap:18px; min-width:0}
+  .panel2{background:var(--surface); border:1px solid var(--line); border-radius:14px;
+    display:flex; flex-direction:column; min-width:0; overflow:hidden}
+  .panel2.accent{border-color:#2a2114; padding:20px 22px; gap:16px}
+  .p2head{display:flex; align-items:center; justify-content:space-between; gap:12px;
+    padding:18px 22px; border-bottom:1px solid var(--line-2); flex-wrap:wrap}
+  .p2head2{display:flex; align-items:center; justify-content:space-between; gap:12px}
+  .panel2:not(.accent) .p2head2{padding:17px 22px; border-bottom:1px solid var(--line-2)}
+  .p2title{display:flex; align-items:center; gap:10px; font-size:15px; font-weight:600; color:var(--text)}
+  .p2sub{font-size:12.5px; color:var(--mute)}
+  .p2week{font-size:11px; color:var(--mute)}
+  .p2link{font-size:12.5px; color:var(--accent); cursor:pointer}
+  .p2foot{padding:13px 22px; font-size:12.5px; line-height:1.7; color:var(--dim)}
+  .p2note{border-top:1px solid var(--line); padding-top:13px; font-size:12.5px; line-height:1.7; color:var(--mute)}
+  .wdot{width:7px; height:7px; border-radius:50%; background:var(--warn); flex:none}
+
+  .srow{display:flex; align-items:center; gap:14px; padding:14px 22px;
+    border-bottom:1px solid var(--line-3); cursor:pointer}
+  .srow:hover{background:#121315}
+  .smain{flex:1; display:flex; flex-direction:column; gap:3px; min-width:0}
+  .sname{font-size:14px; font-weight:500}
+  .snote{font-size:12px; color:var(--mute); overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
+  .sbarwrap{width:96px; height:5px; border-radius:3px; background:var(--surface-3); overflow:hidden; flex:none}
+  .sbar{display:block; height:100%; border-radius:3px; background:var(--warn)}
+  .spct{font-size:13px; color:var(--warn); min-width:38px; text-align:end; flex:none}
+
+  .snaps{display:flex; flex-direction:column; gap:12px}
+  .snap{display:flex; align-items:center; gap:12px}
+  .slab{flex:1; font-size:13.5px; color:var(--dim)}
+  .sval{font-size:15px; color:var(--text)}
+
+  .erow-brief{display:flex; align-items:center; gap:12px; padding:13px 22px; border-bottom:1px solid var(--line-3)}
+  .emsg{flex:1; font-size:13px; color:#c6c8cc; overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
+  .etime{font-size:11.5px; color:var(--mute); flex:none}
+  /* Severity is a DERIVED signal (see renderErrors) — a dot, never a word that
+     would imply the app classified it. */
+  .edot{width:8px; height:8px; border-radius:50%; flex:none; background:#3a3d42}
+  .edot.high{background:var(--red)} .edot.mid{background:var(--warn)}
+
+  .p2bar{display:flex; align-items:center; gap:8px; padding:15px 22px;
+    border-bottom:1px solid var(--line-2); flex-wrap:wrap}
+  .p2count{margin-inline-start:auto; font-size:12.5px; color:var(--mute)}
+  .fpill{border:1px solid var(--edge); border-radius:8px; padding:7px 13px; font-size:12.5px;
+    font-weight:500; color:var(--dim); cursor:pointer; user-select:none}
+  .fpill:hover{border-color:var(--edge-hi)}
+  .fpill.on{border-color:var(--accent-edge); background:var(--accent-soft); color:var(--accent)}
+  .ehead,.erow{display:grid; grid-template-columns:8px 1fr 150px 92px; gap:16px; align-items:center}
+  .ehead{padding:12px 22px; border-bottom:1px solid var(--line-2); font-size:11.5px; color:var(--mute)}
+  .erow{padding:15px 22px; border-bottom:1px solid var(--line-3)}
+  .ebody{display:flex; flex-direction:column; gap:4px; min-width:0}
+  .emsg2{font-size:13.5px; color:var(--text)}
+  .ewhere{font-size:11.5px; color:var(--mute); overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
+  .ewho{font-size:12.5px; color:var(--dim); overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
+  .ewhen{font-size:11.5px; color:var(--mute); text-align:end}
+
+  /* Below the design's 1440px frame the five-across metric row and the two
+     asymmetric columns stop being readable — they stack rather than shrink. */
+  @media(max-width:1100px){
+    .mgrid{grid-template-columns:repeat(2,1fr)}
+    .ogrid{grid-template-columns:1fr}
+  }
+  @media(max-width:760px){
+    .mgrid{grid-template-columns:1fr}
+    .ehead{display:none}
+    .erow{grid-template-columns:8px 1fr; row-gap:6px}
+    .ewho,.ewhen{grid-column:2; text-align:start}
+  }
+  .num{font-family:var(--mono); font-variant-numeric:tabular-nums; unicode-bidi:plaintext}
   button{font-family:inherit; cursor:pointer}
   .hidden{display:none !important}
   select{font-family:inherit}
@@ -57,16 +144,28 @@
   .shell{display:flex; min-height:100vh}
   .sidebar{width:236px; flex-shrink:0; background:var(--surface); border-inline-end:1px solid var(--line);
     padding:20px 14px; display:flex; flex-direction:column; gap:4px; position:sticky; top:0; height:100vh}
-  .side-brand{display:flex; align-items:center; gap:10px; font-weight:900; font-size:18px; padding:6px 8px 16px}
+  /* The design stacks a wordmark over a spaced-out CONSOLE label, so the
+     sidebar names the SURFACE, not just the product. */
+  .side-brand{display:flex; align-items:center; gap:11px; padding:0 6px 8px}
+  .side-brand .bt{display:flex; flex-direction:column; gap:2px}
+  .side-brand .bn{font-family:var(--display); font-weight:800; font-size:13px; letter-spacing:.18em; line-height:1; color:var(--text)}
+  .side-brand .bs{font-family:var(--mono); font-size:7.5px; letter-spacing:.28em; line-height:1; color:var(--mute)}
   .side-brand .v{display:inline-flex; align-items:center; gap:4px; color:var(--accent)}
   .side-brand .v svg{display:block}
   .nav{display:flex; flex-direction:column; gap:3px}
-  .nav-item{display:flex; align-items:center; gap:11px; padding:11px 13px; border-radius:12px; background:none; border:none;
+  .nav-item{display:flex; align-items:center; gap:11px; padding:10px 12px; border-radius:9px; background:none; border:none;
     color:var(--dim); font-size:14.5px; font-weight:700; width:100%; text-align:start; transition:background .15s,color .15s}
-  .nav-item .ic{font-size:16px; width:22px; text-align:center; flex-shrink:0}
+  /* Icons are the app's own duotone set now, not emoji: a 19px well with the
+     glyph inheriting colour, so the active state tints icon AND label together. */
+  .nav-item .ic{width:19px; height:19px; display:flex; align-items:center; justify-content:center; flex-shrink:0; color:var(--faint)}
+  .nav-item .ic svg{display:block; --icon-accent:var(--faint)}
+  .nav-item:hover .ic{color:var(--dim)}
+  .nav-item.active .ic{color:#c6c8cc}
+  .nav-item.active .ic svg{--icon-accent:var(--accent)}
   .nav-item:hover{color:var(--text); background:var(--surface-2)}
-  .nav-item.active{color:var(--accent); background:var(--accent-soft)}
-  .nav-item .badge-n{margin-inline-start:auto; background:var(--red); color:#fff; font-size:10.5px; font-weight:800; border-radius:99px; padding:1px 7px; min-width:18px; text-align:center}
+  .nav-item.active{color:var(--text); background:var(--accent-soft)}
+  .nav-item .badge-n{margin-inline-start:auto; font-family:var(--mono); font-size:11px; color:var(--mute)}
+  .nav-item.active .badge-n{color:var(--accent)}
   .side-foot{margin-top:auto; padding-top:14px; border-top:1px solid var(--line); display:flex; flex-direction:column; gap:9px}
   .side-foot .who2{font-size:11.5px; color:var(--mute); word-break:break-all; padding:0 4px}
   .out{background:transparent; border:1px solid var(--line); color:var(--dim); border-radius:10px; padding:9px 12px; font-size:13px; font-weight:700}
@@ -290,7 +389,7 @@
 
   <div id="app" class="shell hidden">
     <aside class="sidebar">
-      <div class="side-brand"><span class="v" aria-hidden="true"><svg viewBox="1.5 6 8 12" width="10" height="15"><rect x="1.5" y="9" width="3" height="6" rx="1.2" fill="currentColor"/><rect x="5.5" y="6" width="4" height="12" rx="1.6" fill="currentColor"/></svg><svg viewBox="14.5 6 8 12" width="10" height="15"><rect x="14.5" y="6" width="4" height="12" rx="1.6" fill="currentColor"/><rect x="19.5" y="9" width="3" height="6" rx="1.2" fill="currentColor"/></svg></span> VAULT</div>
+      <div class="side-brand"><span class="v" aria-hidden="true"><svg viewBox="1.5 6 8 12" width="10" height="15"><rect x="1.5" y="9" width="3" height="6" rx="1.2" fill="currentColor"/><rect x="5.5" y="6" width="4" height="12" rx="1.6" fill="currentColor"/></svg><svg viewBox="14.5 6 8 12" width="10" height="15"><rect x="14.5" y="6" width="4" height="12" rx="1.6" fill="currentColor"/><rect x="19.5" y="9" width="3" height="6" rx="1.2" fill="currentColor"/></svg></span><span class="bt" dir="ltr"><span class="bn">VAULT</span><span class="bs">CONSOLE</span></span></div>
       <nav class="nav" id="nav"></nav>
       <div class="side-foot">
         <span class="who2" id="who"></span>
@@ -351,17 +450,36 @@
     function exName(id){return exMap[id]?exMap[id].name:'—';}
     function exCat(id){return exMap[id]?exMap[id].category:'Other';}
 
+    /* Duotone icon set — the same paths the design carries, which it took
+       verbatim from the app's icons-v3.js. currentColor + --icon-accent, no
+       strokes, so one glyph serves rest/hover/active by inheritance alone. */
+    var ICONS={
+      chart:'<rect x="2.4" y="19.4" width="19.2" height="2.4" rx="1.2" fill="currentColor"/><rect x="4.4" y="12.4" width="4.2" height="5.6" rx="1.4" fill="currentColor"/><rect x="15.4" y="9.4" width="4.2" height="8.6" rx="1.4" fill="var(--icon-accent,#ff6a00)"/><rect x="9.9" y="6.4" width="4.2" height="11.6" rx="1.4" fill="currentColor"/>',
+      columns:'<rect x="3.4" y="3.4" width="6.4" height="17.2" rx="2.6" fill="currentColor"/><rect x="14.2" y="9.4" width="6.4" height="11.2" rx="2.6" fill="var(--icon-accent,#ff6a00)"/>',
+      calendar:'<rect x="6.8" y="1.8" width="2.6" height="4.4" rx="1.3" fill="currentColor"/><rect x="14.6" y="1.8" width="2.6" height="4.4" rx="1.3" fill="currentColor"/><path d="M2.6 9.6h18.8v8.4a3.4 3.4 0 0 1-3.4 3.4H6a3.4 3.4 0 0 1-3.4-3.4Z" fill="currentColor"/><path d="M2.6 9.6V7.6A3.4 3.4 0 0 1 6 4.2h12a3.4 3.4 0 0 1 3.4 3.4v2Z" fill="var(--icon-accent,#ff6a00)"/>',
+      info:'<path d="M12 2.4a9.6 9.6 0 1 0 0 19.2 9.6 9.6 0 0 0 0-19.2Zm0 2.8a6.8 6.8 0 1 1 0 13.6 6.8 6.8 0 0 1 0-13.6Z" fill="currentColor"/><circle cx="12" cy="7.8" r="1.4" fill="var(--icon-accent,#ff6a00)"/><rect x="10.6" y="10.4" width="2.8" height="7" rx="1.4" fill="var(--icon-accent,#ff6a00)"/>',
+      search:'<path d="M10.4 2.8a7.6 7.6 0 1 0 0 15.2 7.6 7.6 0 0 0 0-15.2Zm0 2.9a4.7 4.7 0 1 1 0 9.4 4.7 4.7 0 0 1 0-9.4Z" fill="currentColor"/><path d="m15.7 17.7 2-2 4.1 4.1-2 2Z" fill="var(--icon-accent,#ff6a00)"/>',
+      dumbbell:'<rect x="1.5" y="9" width="3" height="6" rx="1.2" fill="currentColor"/><rect x="5.5" y="6" width="4" height="12" rx="1.6" fill="currentColor"/><rect x="14.5" y="6" width="4" height="12" rx="1.6" fill="currentColor"/><rect x="19.5" y="9" width="3" height="6" rx="1.2" fill="currentColor"/><rect x="9.5" y="10.4" width="5" height="3.2" fill="var(--icon-accent,#ff6a00)"/>',
+      utensils:'<rect x="8.9" y="10.4" width="2.4" height="11" rx="1.2" fill="currentColor"/><path d="M17.8 21.4h-2.4v-7.6c-1.5-.5-2.4-2.2-2.4-4.8 0-3.6 1.7-6.2 3.4-6.2h1.4Z" fill="currentColor"/><path d="M6 2.6h1.9v4.6h1.2V2.6H11v4.6h1.2V2.6h1.9v5.2a4 4 0 0 1-8 0Z" fill="var(--icon-accent,#ff6a00)"/>',
+      message:'<path d="M3.4 4.6h17.2a1.4 1.4 0 0 1 1.4 1.4v10a1.4 1.4 0 0 1-1.4 1.4H8.2l-4.8 3.6V6a1.4 1.4 0 0 1 1.4-1.4Z" fill="currentColor"/><rect x="7" y="8.6" width="10" height="2.2" rx="1.1" fill="var(--icon-accent,#ff6a00)"/><rect x="7" y="12.4" width="6.4" height="2.2" rx="1.1" fill="var(--icon-accent,#ff6a00)"/>',
+      shield:'<path d="M12 2.2 20.4 5v7c0 4.6-3.4 8-8.4 9.8C7 20 3.6 16.6 3.6 12V5Z" fill="currentColor"/><path d="m10.9 14.6-3-3 2-2 1 1 3.4-3.4 2 2Z" fill="var(--icon-accent,#ff6a00)"/>',
+      list:'<rect x="3.4" y="3.4" width="17.2" height="17.2" rx="3.4" fill="currentColor"/><rect x="6.8" y="7.6" width="10.4" height="2" rx="1" fill="var(--icon-accent,#ff6a00)"/><rect x="6.8" y="11" width="10.4" height="2" rx="1" fill="var(--icon-accent,#ff6a00)"/><rect x="6.8" y="14.4" width="6.6" height="2" rx="1" fill="var(--icon-accent,#ff6a00)"/>',
+      settings:'<path d="M12 2.4a9.6 9.6 0 1 0 0 19.2 9.6 9.6 0 0 0 0-19.2Z" fill="currentColor"/><circle cx="12" cy="12" r="3.6" fill="var(--icon-accent,#ff6a00)"/>',
+      rocket:'<path d="M12 1.8c3.4 2.6 5.2 6.4 5.2 10.4l-2.6 3.2H9.4L6.8 12.2C6.8 8.2 8.6 4.4 12 1.8Z" fill="currentColor"/><circle cx="12" cy="9" r="2.1" fill="var(--icon-accent,#ff6a00)"/><path d="M9.6 17h4.8l-2.4 5.2Z" fill="var(--icon-accent,#ff6a00)"/>'
+    };
+    function ico(n,size){return '<svg viewBox="0 0 24 24" width="'+(size||19)+'" height="'+(size||19)+'" fill="none" aria-hidden="true">'+(ICONS[n]||'')+'</svg>';}
     var CENTERS=[
-      {id:'dashboard', ic:'📊', label:'لوحة القيادة', title:'لوحة القيادة', sub:'نظرة عامة على النشاط والبيانات'},
-      {id:'users',     ic:'👥', label:'المستخدمون', title:'المستخدمون', sub:'عرض/بحث/فلترة + إدارة الأدوار والحالة'},
-      {id:'analytics', ic:'📈', label:'التحليلات', title:'التحليلات', sub:'إحصاءات مجمّعة عبر كل المستخدمين'},
-      {id:'catalog',   ic:'🏋️', label:'الكتالوج', title:'إدارة المحتوى', sub:'تمارين، أطعمة، وكارديو — إضافة/تعديل/حذف'},
-      {id:'presets',   ic:'📋', label:'الخطط الجاهزة', title:'الخطط الجاهزة', sub:'خطط يتصفّحها المستخدم ويتبنّاها'},
-      {id:'feedback',  ic:'📮', label:'الاقتراحات', title:'صندوق الاقتراحات', sub:'ملاحظات المستخدمين'},
-      {id:'admins',    ic:'🛡️', label:'الأدوار', title:'الأدوار والمشرفون', sub:'من له صلاحية، وتعيين الأدوار'},
-      {id:'audit',     ic:'🧾', label:'سجل العمليات', title:'سجل العمليات', sub:'كل إجراء إداري: من فعل ماذا ومتى'},
-      {id:'settings',  ic:'⚙️', label:'الإعدادات', title:'الإعدادات العامة', sub:'القيم الافتراضية وإعلان للمستخدمين'},
-      {id:'releases',  ic:'🚀', label:'الإصدارات', title:'الإصدارات', sub:'حالة التطبيق ونشر التحديثات'}
+      {id:'dashboard', ic:'chart',    label:'نظرة عامة', title:'نظرة عامة', sub:'كل الأرقام من بيانات اليوم'},
+      {id:'users',     ic:'columns',  label:'المستخدمون', title:'المستخدمون', sub:'الالتزام والأدوار والحالة'},
+      {id:'errors',    ic:'info',     label:'سجلّ الأخطاء', title:'سجلّ الأخطاء', sub:'مبسّط — الرسالة والموضع فقط'},
+      {id:'analytics', ic:'dumbbell', label:'التحليلات', title:'التحليلات', sub:'إحصاءات مجمّعة عبر كل المستخدمين'},
+      {id:'catalog',   ic:'utensils', label:'الكتالوج', title:'إدارة المحتوى', sub:'تمارين، أطعمة، وكارديو — إضافة/تعديل/حذف'},
+      {id:'presets',   ic:'calendar', label:'الخطط الجاهزة', title:'الخطط الجاهزة', sub:'خطط يتصفّحها المستخدم ويتبنّاها'},
+      {id:'feedback',  ic:'message',  label:'الاقتراحات', title:'صندوق الاقتراحات', sub:'ملاحظات المستخدمين'},
+      {id:'admins',    ic:'shield',   label:'الأدوار', title:'الأدوار والمشرفون', sub:'من له صلاحية، وتعيين الأدوار'},
+      {id:'audit',     ic:'list',     label:'سجل العمليات', title:'سجل العمليات', sub:'كل إجراء إداري: من فعل ماذا ومتى'},
+      {id:'settings',  ic:'settings', label:'الإعدادات', title:'الإعدادات العامة', sub:'القيم الافتراضية وإعلان للمستخدمين'},
+      {id:'releases',  ic:'rocket',   label:'الإصدارات', title:'الإصدارات', sub:'حالة التطبيق ونشر التحديثات'}
     ];
 
     /* ---------------- auth: login / reset / recovery (unchanged flow) ------- */
@@ -433,7 +551,7 @@
     /* ---------------- navigation shell ------------------------------------- */
     function buildNav(){
       $('#nav').innerHTML=CENTERS.map(function(c){
-        return '<button class="nav-item" data-center="'+c.id+'"><span class="ic">'+c.ic+'</span>'+
+        return '<button class="nav-item" data-center="'+c.id+'"><span class="ic">'+ico(c.ic)+'</span>'+
           '<span class="lbl">'+c.label+'</span><span class="badge-n hidden" data-badge="'+c.id+'"></span></button>';
       }).join('');
       Array.prototype.forEach.call(document.querySelectorAll('#nav .nav-item'),function(b){
@@ -452,6 +570,7 @@
       else if(id==='users') renderUsers(box);
       else if(id==='analytics') renderAnalytics(box);
       else if(id==='catalog') renderCatalog(box);
+      else if(id==='errors') renderErrors(box);
       else if(id==='presets') renderPresets(box);
       else if(id==='feedback') renderFeedback(box);
       else if(id==='admins') renderAdmins(box);
@@ -483,18 +602,24 @@
         // instead of downloading millions of rows into the browser — see backend/
         // admin-scale-rpc.sql. These return a per-user rollup + a small analytics JSON.
         sb.rpc('admin_user_stats'),
-        sb.rpc('admin_activity')
+        sb.rpc('admin_activity'),
+        // The design's "سجلّ الأخطاء" screen. client_errors already existed and
+        // nothing had ever read it — the table the app writes to on every
+        // unhandled rejection had no viewer.
+        fetchAll(function(a,b){return sb.from('client_errors').select('id,user_id,build,kind,msg,src,line,created_at').order('id',{ascending:false}).range(a,b);})
       ]);
       var d=res.map(function(r){return r.error?[]:(r.data||[]);});
       var exercises=d[0], profiles=d[1], prefs=d[2], flags=d[3], cardioTypes=d[4], feedback=d[5];
       var foodCatalog=d[6], presets=d[7], appConfig=(d[8]&&d[8][0])||null, auditLog=d[9];
       var userStats=d[10]||[], activity=(res[11]&&!res[11].error&&res[11].data)||{};
+      var clientErrors=d[12]||[];
 
       exMap={}; exercises.forEach(function(e){exMap[e.id]={name:e.name,category:e.category,owner_id:e.owner_id};});
 
       var U={};
       function ensure(id){ if(!id) return null; if(!U[id]) U[id]={id:id,username:null,joined:null,last_seen:null,unit:'kg',
-        role:'user',status:'active',reason:null,sessions:0,sets:0,volume:0,custom:0,foods:0,sleeps:0,cardio:0,last:null}; return U[id]; }
+        role:'user',status:'active',reason:null,sessions:0,sets:0,volume:0,custom:0,foods:0,sleeps:0,cardio:0,last:null,
+        weekDone:0,trainingDays:0,planName:null,pct:null}; return U[id]; }
       profiles.forEach(function(p){var u=ensure(p.user_id); if(u){u.username=p.username; u.joined=p.created_at; u.last_seen=p.last_seen;}});
       prefs.forEach(function(p){var u=ensure(p.user_id); if(u)u.unit=p.unit||'kg';});
       flags.forEach(function(f){var u=ensure(f.user_id); if(u){u.role=f.role||'user'; u.status=f.status||'active'; u.reason=f.reason;}});
@@ -503,9 +628,24 @@
         u.sessions=+r.sessions||0; u.sets=+r.sets||0; u.volume=+r.volume||0;
         u.foods=+r.foods||0; u.sleeps=+r.sleeps||0; u.cardio=+r.cardio||0;
         u.custom=+r.custom||0; if(r.last_session)u.last=r.last_session;
+        // Adherence (migration 19). pct is NULL — not 0 — when the user has no
+        // plan: "0% committed" is a judgement about someone who never set a
+        // target, and it would drop every planless account into المتعثّرون.
+        u.weekDone=+r.week_done||0; u.trainingDays=+r.training_days||0;
+        u.planName=r.plan_name||null;
+        u.pct = u.trainingDays>0 ? Math.min(100, Math.round(u.weekDone/u.trainingDays*100)) : null;
       }});
 
       var list=Object.keys(U).map(function(k){return U[k];});
+      // Severity is DERIVED, not stored: client_errors has `kind` (error /
+      // unhandledrejection) and a message, no level column. A thrown Error is
+      // treated as high, a swallowed rejection as medium, anything else low —
+      // and the screen says so rather than implying the app classified them.
+      clientErrors.forEach(function(e){
+        e.sev = e.kind==='error' ? 'high' : (e.kind==='unhandledrejection' ? 'mid' : 'low');
+        var u=U[e.user_id];
+        e.who = u ? (u.username||shortId(e.user_id)) : '—';
+      });
       // analytics
       var now=new Date();
       function withinDays(ds,n){ if(!ds) return false; var t=new Date(ds.length===10?ds+'T00:00:00':ds); return (now-t)/86400000<=n; }
@@ -523,7 +663,7 @@
       var recent=(activity.recent||[]).map(function(r){ var u=U[r.user_id]||{id:r.user_id}; return {u:u, ex:r.ex, cat:r.cat, date:r.date}; });
 
       DATA={
-        usersById:U, usersList:list, cardioTypes:cardioTypes,
+        usersById:U, usersList:list, cardioTypes:cardioTypes, clientErrors:clientErrors,
         globalEx:exercises.filter(function(e){return !e.owner_id && !e.deleted_at;}),
         foodCatalog:foodCatalog, appConfig:appConfig, auditLog:auditLog,
         presets:presets.slice().sort(function(a,b){return (a.position-b.position)||(a.name||'').localeCompare(b.name||'');}),
@@ -550,16 +690,135 @@
       headBtn('↻ تحديث','',async function(){await loadAll(); showCenter('dashboard');});
       headBtn('💾 نسخة احتياطية','pri',exportBackup);
       headBtn('⬇️ تصدير مختصر','',exportAll);
-      var T=DATA.totals, A=DATA.analytics;
-      var recent=A.recent.length? A.recent.map(function(r){
-        return '<div class="row2"><span class="r-name"><span class="uname"><span class="av" style="width:26px;height:26px;font-size:11px">'+esc(initial(r.u))+'</span>'+nameHtml(r.u)+'</span></span>'+
-          '<span class="r-val" style="color:var(--text);font-weight:700"><span class="dot" style="background:'+catColor(r.cat)+';display:inline-block;margin-inline-end:6px"></span>'+esc(r.ex)+'</span>'+
-          '<span class="r-meta num">'+esc(r.date||'')+'</span></div>';
-      }).join('') : '<div class="empty-mini">لا نشاط بعد.</div>';
-      box.innerHTML=
-        '<div class="stats">'+tile(fmt(T.users),'مستخدم','alt')+tile(fmt(A.active7),'نشط (٧ أيام)','')+tile(fmt(T.sessions),'إجمالي الجلسات','')+tile(fmt(T.sets),'مجموعات','')+'</div>'+
-        '<div class="stats">'+tile(fmt(T.volume),'إجمالي الحِمل','')+tile(fmt(T.custom),'تمارين خاصة','')+tile(fmt(T.foods),'سجلات طعام','')+tile(fmt(T.sleeps),'سجلات نوم','')+'</div>'+
-        sec('أحدث النشاط','<div class="rows2">'+recent+'</div>');
+      var T=DATA.totals, A=DATA.analytics, L=DATA.usersList;
+      // المتعثّرون: under half their own plan. Users with NO plan are excluded
+      // (pct===null) — calling someone who never set a target "متعثّر" is a
+      // judgement the data does not support.
+      var stalled=L.filter(function(u){return u.pct!==null && u.pct<50;})
+                   .sort(function(a,b){return a.pct-b.pct;});
+      var planned=L.filter(function(u){return u.pct!==null;});
+      var avgPct=planned.length? Math.round(planned.reduce(function(n,u){return n+u.pct;},0)/planned.length) : null;
+      var errs=DATA.clientErrors||[];
+      var dayAgo=Date.now()-864e5;
+      var errs24=errs.filter(function(e){return new Date(e.created_at).getTime()>dayAgo;});
+      var high24=errs24.filter(function(e){return e.sev==='high';}).length;
+
+      function metric(label,value,delta,color){
+        return '<div class="mcard"><div class="mlabel">'+label+'</div>'+
+          '<div class="mvalue num" dir="ltr">'+value+'</div>'+
+          '<div class="mdelta" style="color:'+(color||'var(--dim)')+'">'+delta+'</div></div>';
+      }
+      var metrics='<div class="mgrid">'+
+        metric('النشطون هذا الأسبوع', fmt(planned.filter(function(u){return u.weekDone>0;}).length), 'من '+fmt(L.length)+' حساباً','var(--dim)')+
+        metric('المتعثّرون', fmt(stalled.length), 'نفّذوا < نصف الخطة','var(--warn)')+
+        metric('متوسط الالتزام', avgPct===null?'—':avgPct+'%', planned.length?'على '+fmt(planned.length)+' خطة':'لا خطط بعد', avgPct!==null&&avgPct<50?'var(--red)':'var(--dim)')+
+        metric('إجمالي الجلسات', fmt(T.sessions), fmt(T.sets)+' مجموعة','var(--dim)')+
+        metric('أخطاء ٢٤ ساعة', fmt(errs24.length), high24?fmt(high24)+' عالية الخطورة':'لا شيء عالي', high24?'var(--red)':'var(--dim)')+
+      '</div>';
+
+      var stalledRows = stalled.length ? stalled.map(function(u){
+        return '<div class="srow" data-open-user="'+esc(u.id)+'">'+
+          '<span class="av">'+esc(initial(u))+'</span>'+
+          '<span class="smain"><span class="sname">'+nameHtml(u)+'</span>'+
+          '<span class="snote">'+esc(u.planName||'بلا خطة مسمّاة')+' · '+esc(u.weekDone)+' من '+esc(u.trainingDays)+' أيام</span></span>'+
+          '<span class="sbarwrap"><span class="sbar" style="width:'+u.pct+'%"></span></span>'+
+          '<span class="spct num" dir="ltr">'+u.pct+'%</span></div>';
+      }).join('') : '<div class="empty-mini">لا أحد متعثّر هذا الأسبوع.</div>';
+
+      var snapRows=[
+        ['جلسات هذا الأسبوع', fmt(L.reduce(function(n,u){return n+u.weekDone;},0))],
+        ['حسابات لها خطة', fmt(planned.length)],
+        ['متوسط الالتزام', avgPct===null?'—':avgPct+'%'],
+        ['أخطاء ٢٤ ساعة', fmt(errs24.length)]
+      ].map(function(r){
+        return '<div class="snap"><span class="slab">'+r[0]+'</span><span class="sval num" dir="ltr">'+r[1]+'</span></div>';
+      }).join('');
+
+      var briefRows = errs.slice(0,4).map(function(e){
+        return '<div class="erow-brief"><span class="edot '+e.sev+'"></span>'+
+          '<span class="emsg">'+esc(e.msg||'')+'</span>'+
+          '<span class="etime num" dir="ltr">'+esc(timeShort(e.created_at))+'</span></div>';
+      }).join('') || '<div class="empty-mini">لا أخطاء مسجّلة.</div>';
+
+      box.innerHTML = metrics +
+        '<div class="ogrid">'+
+          '<div class="panel2"><div class="p2head"><span class="p2title"><span class="wdot"></span>المتعثّرون هذا الأسبوع</span>'+
+            '<span class="p2sub">نفّذوا أقل من نصف خطتهم · الأسبوع من السبت</span></div>'+
+            stalledRows+
+            '<div class="p2foot">القائمة تفرغ كل سبت مع بداية أسبوع جديد.</div></div>'+
+          '<div class="ocol">'+
+            '<div class="panel2 accent"><div class="p2head2"><span class="p2title">اللقطة الأسبوعية</span>'+
+              '<span class="p2week num" dir="ltr">'+esc(weekLabel())+'</span></div>'+
+              '<div class="snaps">'+snapRows+'</div>'+
+              '<div class="p2note">تُحسب من بيانات الأجهزة مباشرة — لا تُرسل بإيميل.</div></div>'+
+            '<div class="panel2"><div class="p2head2"><span class="p2title">آخر الأخطاء</span>'+
+              '<span class="p2link" id="go-errors">السجلّ كامل</span></div>'+briefRows+'</div>'+
+          '</div>'+
+        '</div>';
+
+      var ge=$('#go-errors'); if(ge) ge.addEventListener('click',function(){showCenter('errors');});
+      Array.prototype.forEach.call(box.querySelectorAll('[data-open-user]'),function(el){
+        el.addEventListener('click',function(){ openUser(el.getAttribute('data-open-user')); });
+      });
+    }
+
+    // Saturday-anchored week label, matching the SQL in migration 19 exactly —
+    // if these two ever disagree the page would caption the wrong seven days.
+    function weekStartDate(){
+      var d=new Date(); d.setHours(0,0,0,0);
+      d.setDate(d.getDate()-((d.getDay()+1)%7));
+      return d;
+    }
+    function weekLabel(){
+      var a=weekStartDate(), b=new Date(a); b.setDate(a.getDate()+6);
+      var M=['JAN','FEB','MAR','APR','MAY','JUN','JUL','AUG','SEP','OCT','NOV','DEC'];
+      return ('0'+a.getDate()).slice(-2)+' — '+('0'+b.getDate()).slice(-2)+' '+M[b.getMonth()];
+    }
+    function timeShort(iso){
+      if(!iso) return '';
+      var d=new Date(iso); if(isNaN(d)) return '';
+      var sameDay=d.toDateString()===new Date().toDateString();
+      return sameDay ? ('0'+d.getHours()).slice(-2)+':'+('0'+d.getMinutes()).slice(-2)
+                     : (d.getMonth()+1)+'/'+d.getDate();
+    }
+
+    // سجلّ الأخطاء — the design's fifth screen. client_errors has been
+    // collecting since v9 and nothing had ever displayed it.
+    var errFilter='all';
+    function renderErrors(box){
+      $('#head-actions').innerHTML='';
+      headBtn('↻ تحديث','',async function(){await loadAll(); showCenter('errors');});
+      var all=DATA.clientErrors||[];
+      var shown=all.filter(function(e){
+        return errFilter==='all' ? true : e.sev===errFilter;
+      });
+      var pills=[['all','الكل',all.length],['high','عالية',all.filter(function(e){return e.sev==='high';}).length],
+                 ['mid','متوسطة',all.filter(function(e){return e.sev==='mid';}).length]]
+        .map(function(f){
+          return '<span class="fpill'+(errFilter===f[0]?' on':'')+'" data-errf="'+f[0]+'">'+f[1]+' <span class="num">'+f[2]+'</span></span>';
+        }).join('');
+
+      var rows = shown.length ? shown.map(function(e){
+        return '<div class="erow">'+
+          '<span class="edot '+e.sev+'"></span>'+
+          '<span class="ebody"><span class="emsg2">'+esc(e.msg||'')+'</span>'+
+            '<span class="ewhere num" dir="ltr">'+esc((e.src||'—')+(e.line?(' · '+e.line):''))+' · '+esc(e.build||'')+'</span></span>'+
+          '<span class="ewho">'+esc(e.who||'—')+'</span>'+
+          '<span class="ewhen num" dir="ltr">'+esc(timeShort(e.created_at))+'</span>'+
+        '</div>';
+      }).join('') : '<div class="empty-mini" style="padding:44px">لا أخطاء بهذا المستوى</div>';
+
+      box.innerHTML='<div class="panel2">'+
+        '<div class="p2bar">'+pills+'<span class="p2count">'+fmt(shown.length)+' من '+fmt(all.length)+'</span></div>'+
+        '<div class="ehead"><span></span><span>الخطأ والموضع</span><span>المستخدم</span><span>الوقت</span></div>'+
+        rows+
+        '<div class="p2foot">سجلّ مبسّط: الرسالة والموضع والمستخدم والوقت — لا آثار مكدّس. '+
+        'الخطورة مشتقّة من نوع الحدث (خطأ مرمي = عالية، وعد مرفوض = متوسطة)، لا حقل مخزَّن.</div>'+
+      '</div>';
+
+      Array.prototype.forEach.call(box.querySelectorAll('[data-errf]'),function(el){
+        el.addEventListener('click',function(){ errFilter=el.getAttribute('data-errf'); renderErrors(box); });
+      });
     }
 
     function renderUsers(box){
