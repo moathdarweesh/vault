@@ -74,6 +74,38 @@
   .sbar{display:block; height:100%; border-radius:3px; background:var(--warn)}
   .spct{font-size:13px; color:var(--warn); min-width:38px; text-align:end; flex:none}
 
+  /* Users screen — the design's five columns. Grid, not <table>: the adherence
+     cell holds a bar plus a figure, which a table cell aligns badly. */
+  .uhead,.urow{display:grid; grid-template-columns:1.5fr 1fr 1.2fr 1.1fr 96px;
+    gap:16px; align-items:center}
+  .uhead{padding:12px 22px; border-bottom:1px solid var(--line-2);
+    font-size:11.5px; color:var(--mute)}
+  .urow{padding:14px 22px; border-bottom:1px solid var(--line-3); cursor:pointer}
+  .urow:hover{background:#121315}
+  .ucell{min-width:0}
+  .uname-cell{display:flex; align-items:center; gap:12px}
+  .ustack{display:flex; flex-direction:column; gap:3px; min-width:0}
+  .uname2{font-size:14px; font-weight:500; overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
+  .ustatus{font-size:11.5px}
+  .ustatus.behind{color:var(--warn)}
+  .ustatus.steady{color:#55585d}
+  .ustatus.none{color:var(--faint)}
+  .useen{font-size:13px; color:var(--dim)}
+  .ubarcell{display:flex; align-items:center; gap:11px}
+  .ubarwrap{flex:1; max-width:110px; height:5px; border-radius:3px;
+    background:var(--surface-3); overflow:hidden}
+  .ubar{display:block; height:100%; border-radius:3px; background:var(--dim)}
+  .ubar.behind{background:var(--warn)}
+  .upct{font-size:13px; color:var(--dim); min-width:38px}
+  .upct.behind{color:var(--warn)}
+  .upct.none{color:var(--faint)}
+  .uplan{font-size:13px; color:var(--dim); overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
+  .urole{font-size:12px; color:var(--mute); text-align:center}
+  @media(max-width:860px){
+    .uhead{display:none}
+    .urow{grid-template-columns:1fr; row-gap:8px}
+    .ubarcell{max-width:none}
+  }
   /* الخطة مقابل التنفيذ — two overlaid bars per weekday. The plan sits behind
      in a neutral track; what was actually done is painted in front, so a short
      week reads as a gap rather than as a number you have to compare. */
@@ -842,33 +874,101 @@
       });
     }
 
+    // THE USERS SCREEN, rebuilt to the Console design. The old table sorted by
+    // raw totals — lifetime sessions, sets, custom exercises — which answer
+    // "who has used the app most", a question that never changes and cannot be
+    // acted on. The design asks a different one: WHO IS FALLING BEHIND THIS
+    // WEEK. So the columns are the user, when they were last seen, their
+    // adherence, the plan they are on, and their role.
+    var usersTab='all';
     function renderUsers(box){
       $('#head-actions').innerHTML='';
       headBtn('↻ تحديث','',async function(){await loadAll(); showCenter('users');});
-      var list=DATA.usersList.slice();
+      var all=DATA.usersList.slice();
       var q=usersFilter.trim().toLowerCase();
-      if(q) list=list.filter(function(u){return (u.username||'').toLowerCase().indexOf(q)>=0 || u.id.toLowerCase().indexOf(q)>=0;});
-      var k=usersSort.key, dir=usersSort.dir;
-      list.sort(function(a,b){ var av=a[k], bv=b[k]; if(k==='username'){av=av||''; bv=bv||''; return dir*String(av).localeCompare(String(bv));} return dir*((av||0)-(bv||0)); });
-      function stPill(u){return '<span class="pill st-'+u.status+'">'+(u.status==='active'?'نشط':u.status==='disabled'?'معطّل':'محظور')+'</span>';}
-      function rolePill(u){ if(u.role==='admin')return '<span class="pill role-admin">أدمن</span>'; if(u.role==='coach')return '<span class="pill role-coach">مدرب</span>'; return '<span class="pill">مستخدم</span>'; }
-      function th(key,label){ return '<th data-sort="'+key+'">'+label+(usersSort.key===key?(dir<0?' ▾':' ▴'):'')+'</th>'; }
+      var list=q? all.filter(function(u){
+        return (u.username||'').toLowerCase().indexOf(q)>=0 || u.id.toLowerCase().indexOf(q)>=0;
+      }) : all;
+      // pct===null means NO PLAN, and that is not the same as 0%. A planless
+      // account belongs in neither منتظم nor متعثّر — judging someone who never
+      // set a target is the one thing this screen must not do.
+      list=list.filter(function(u){
+        if(usersTab==='steady')  return u.pct!==null && u.pct>=50;
+        if(usersTab==='behind')  return u.pct!==null && u.pct<50;
+        if(usersTab==='admins')  return u.role==='admin'||u.role==='coach';
+        return true;
+      });
+      // Behind first, then by how far behind. The screen exists to surface them.
+      list.sort(function(a,b){
+        var ap=(a.pct===null?999:a.pct), bp=(b.pct===null?999:b.pct);
+        return ap-bp;
+      });
+
+      var counts={
+        all:all.length,
+        steady:all.filter(function(u){return u.pct!==null&&u.pct>=50;}).length,
+        behind:all.filter(function(u){return u.pct!==null&&u.pct<50;}).length,
+        admins:all.filter(function(u){return u.role==='admin'||u.role==='coach';}).length
+      };
+      var pills=[['all','الكل'],['steady','منتظم'],['behind','متعثّر'],['admins','مشرف']]
+        .map(function(f){
+          return '<span class="fpill'+(usersTab===f[0]?' on':'')+'" data-utab="'+f[0]+'">'+
+            f[1]+' <span class="num">'+counts[f[0]]+'</span></span>';
+        }).join('');
+
+      function seen(u){
+        var d=u.last_seen||u.last;
+        if(!d) return '—';
+        var t=new Date(d); if(isNaN(t)) return String(d).slice(0,10);
+        var days=Math.floor((Date.now()-t.getTime())/864e5);
+        if(days<=0) return 'اليوم';
+        if(days===1) return 'أمس';
+        if(days<7) return 'قبل '+days+' أيام';
+        return String(d).slice(0,10);
+      }
+      function roleLabel(u){ return u.role==='admin'?'أدمن':u.role==='coach'?'مدرب':'مستخدم'; }
+
       var rows=list.length? list.map(function(u){
         var you=(u.id===meId)?' <span class="pill you">أنت</span>':'';
-        return '<tr data-uid="'+esc(u.id)+'">'+
-          '<td><span class="uname"><span class="av">'+esc(initial(u))+'</span>'+nameHtml(u)+you+'</span></td>'+
-          '<td>'+rolePill(u)+'</td><td>'+stPill(u)+'</td>'+
-          '<td class="num">'+u.sessions+'</td><td class="num">'+u.sets+'</td><td class="num">'+u.custom+'</td>'+
-          '<td class="num muted">'+(u.last_seen?String(u.last_seen).slice(0,10):(u.last||'—'))+'</td><td class="chev">‹</td></tr>';
-      }).join('') : '<tr><td colspan="8" class="center">لا مستخدمون مطابقون.</td></tr>';
-      box.innerHTML=
-        '<div class="searchbar"><input id="user-search" type="search" placeholder="بحث بالاسم أو المعرّف…" value="'+esc(usersFilter)+'"></div>'+
-        '<div class="table-wrap"><div class="scroll-x"><table class="tbl"><thead><tr>'+
-          th('username','المستخدم')+th('role','الدور')+th('status','الحالة')+th('sessions','الجلسات')+th('sets','المجموعات')+th('custom','خاصة')+th('last_seen','آخر ظهور')+'<th class="no-sort"></th>'+
-        '</tr></thead><tbody>'+rows+'</tbody></table></div></div>';
-      var si=$('#user-search'); si.addEventListener('input',function(){ usersFilter=si.value; var pos=si.selectionStart; renderUsers(box); var ns=$('#user-search'); ns.focus(); try{ns.setSelectionRange(pos,pos);}catch(_){} });
-      Array.prototype.forEach.call(box.querySelectorAll('th[data-sort]'),function(th){ th.addEventListener('click',function(){ var key=th.getAttribute('data-sort'); if(usersSort.key===key)usersSort.dir*=-1; else usersSort={key:key,dir:key==='username'?1:-1}; renderUsers(box); }); });
-      Array.prototype.forEach.call(box.querySelectorAll('tr[data-uid]'),function(tr){ tr.addEventListener('click',function(){openUser(tr.getAttribute('data-uid'));}); });
+        var behind=(u.pct!==null&&u.pct<50);
+        var status=(u.pct===null)?'بلا خطة':(behind?'متعثّر':'منتظم');
+        var statusCls=(u.pct===null)?'none':(behind?'behind':'steady');
+        // No plan => no bar and an em dash, never a 0% bar. A full-width empty
+        // track reads as "measured at zero"; there was nothing to measure.
+        var bar=(u.pct===null)
+          ? '<span class="upct num none" dir="ltr">—</span>'
+          : '<span class="ubarwrap"><span class="ubar'+(behind?' behind':'')+'" style="width:'+u.pct+'%"></span></span>'+
+            '<span class="upct num'+(behind?' behind':'')+'" dir="ltr">'+u.pct+'%</span>';
+        return '<div class="urow" data-uid="'+esc(u.id)+'">'+
+          '<span class="ucell uname-cell"><span class="av">'+esc(initial(u))+'</span>'+
+            '<span class="ustack"><span class="uname2">'+nameHtml(u)+you+'</span>'+
+            '<span class="ustatus '+statusCls+'">'+status+'</span></span></span>'+
+          '<span class="ucell useen">'+esc(seen(u))+'</span>'+
+          '<span class="ucell ubarcell">'+bar+'</span>'+
+          '<span class="ucell uplan">'+esc(u.planName||'—')+'</span>'+
+          '<span class="ucell urole">'+roleLabel(u)+'</span>'+
+        '</div>';
+      }).join('') : '<div class="empty-mini" style="padding:44px">لا أحد بهذا الفلتر</div>';
+
+      box.innerHTML='<div class="panel2">'+
+        '<div class="p2bar">'+pills+'<span class="p2count">'+fmt(list.length)+' من '+fmt(all.length)+'</span></div>'+
+        '<div class="searchbar" style="padding:12px 22px 0"><input id="user-search" type="search" placeholder="بحث بالاسم أو المعرّف…" value="'+esc(usersFilter)+'"></div>'+
+        '<div class="uhead"><span>المستخدم</span><span>آخر ظهور</span><span>الالتزام هذا الأسبوع</span><span>الخطة المعيّنة</span><span>الدور</span></div>'+
+        rows+
+        '<div class="p2foot">الالتزام = أيام تدرّبها من أيام خطتها، والأسبوع من السبت. من لا خطة له لا يُحسب في أيّ من الفلترين.</div>'+
+      '</div>';
+
+      var si=$('#user-search');
+      si.addEventListener('input',function(){
+        usersFilter=si.value; var pos=si.selectionStart; renderUsers(box);
+        var ns=$('#user-search'); ns.focus(); try{ns.setSelectionRange(pos,pos);}catch(_){}
+      });
+      Array.prototype.forEach.call(box.querySelectorAll('[data-utab]'),function(el){
+        el.addEventListener('click',function(){ usersTab=el.getAttribute('data-utab'); renderUsers(box); });
+      });
+      Array.prototype.forEach.call(box.querySelectorAll('.urow'),function(r){
+        r.addEventListener('click',function(){ openUser(r.getAttribute('data-uid')); });
+      });
     }
 
     function renderAnalytics(box){
