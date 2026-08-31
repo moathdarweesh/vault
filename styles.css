@@ -480,6 +480,12 @@ img { display: block; max-width: 100%; }
   font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
   font-variant-numeric: tabular-nums;
   letter-spacing: 0;
+  /* Handoff §3: every number is mono AND ltr. Carrying direction here rather
+     than on 67 individual dir="ltr" attributes means a .num added tomorrow
+     cannot ship without it. `isolate` also stops the figure from reordering
+     the Arabic words around it. */
+  direction: ltr;
+  unicode-bidi: isolate;
 }
 
 /* =========================================================================
@@ -850,7 +856,9 @@ body.theme-light .home-center-icon { box-shadow: 0 8px 24px rgba(255, 106, 0, 0.
   border-radius: 12px;
 }
 
+/* Touch target: see .icon-btn::after below — 38px drawn, 44px tappable. */
 .icon-btn {
+  position: relative;
   width: 38px;
   height: 38px;
   border-radius: 10px;
@@ -871,6 +879,7 @@ body.theme-light .home-center-icon { box-shadow: 0 8px 24px rgba(255, 106, 0, 0.
 }
 
 .back-btn {
+  position: relative;
   width: 40px;
   height: 40px;
   border-radius: 12px;
@@ -3084,7 +3093,7 @@ body.rest-active .toast { bottom: calc(var(--nav-h) + var(--safe-b) + 120px); }
 .planner-side-label::before {
   content: '';
   display: inline-block;
-  width: 14px;
+  width: 16px;   /* handoff §4: the group rule is 16x2px */
   height: 2px;
   border-radius: 2px;
   background: var(--text-faint);
@@ -4684,10 +4693,8 @@ body[dir="rtl"] .picker-row { text-align: right; }
 .sl-legend { display: grid; grid-template-columns: repeat(2, 1fr); gap: 6px 14px; margin-top: 12px; }
 .sl-leg-item { display: flex; align-items: center; gap: 7px; font-size: 12px; }
 .sl-dot { width: 9px; height: 9px; border-radius: 3px; flex-shrink: 0; }
-.sl-dot.deep  { background: #6366f1; }
-.sl-dot.rem   { background: #22d3ee; }
-.sl-dot.light { background: #60a5fa; }
-.sl-dot.awake { background: #fbbf24; }
+/* .sl-dot colours live with the .sl-seg bars above — one source, so the
+   legend can never name a different colour than the bar it explains. */
 .sl-leg-label { color: var(--text-mute); }
 .sl-leg-val { margin-inline-start: auto; font-weight: 700; color: var(--text); }
 .sleep-eff { font-size: 12px; color: var(--text-mute); margin-top: 11px; }
@@ -7630,6 +7637,20 @@ body.theme-light {
 .wk-compact .wk-dow { font-size: 11px; }
 .wk-compact .wk-chip { min-height: 0; pointer-events: none; }
 .l7-label { font-size: 12.5px; color: var(--text-dim); margin-bottom: 8px; }
+/* HANDOFF §3: minimum touch target 44px, enlarged with ::after rather than by
+   growing the control. 38px and 40px buttons keep their drawn size; the finger
+   gets the missing 3px on each side. Transparent and pointer-events untouched,
+   so it changes nothing except where a tap lands. */
+.icon-btn::after,
+.back-btn::after {
+  content: "";
+  position: absolute;
+  inset: 50% auto auto 50%;
+  transform: translate(-50%, -50%);
+  width: 44px;
+  height: 44px;
+}
+
 .rest-last7 { margin-bottom: var(--sp-4, 16px); }
 
 /* The rest-day hero. It sat BELOW the identity layer until v269 — the one thing

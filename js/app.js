@@ -12,7 +12,7 @@
 // build. The literal below is the fallback (file://, or a stripped query) and is
 // still bumped by `npm run release` — see CLAUDE.md "CACHE WORKFLOW".
 const VAULT_BUILD = (() => {
-  const FALLBACK = 'v286';
+  const FALLBACK = 'v287';
   try {
     const src = (document.currentScript && document.currentScript.src) || '';
     const m = src.match(/[?&]v=(\d+)/);
@@ -3206,13 +3206,21 @@ function brandLockup(size = 'header') {
   const plateW = Math.round(plateH * (10 / 15) * 10) / 10;   // the spec's 10x15 aspect
   const sub = Math.round(v * 0.5 * 10) / 10;
   const gap = Math.round(v * 0.57 * 10) / 10;
-  // Rule 5 + the 11px floor: below legibility the sub-word is dropped rather
-  // than shrunk. The guard tested `v` — the VAULT size — instead of `sub`, the
-  // size that actually renders, so the header (VAULT 11 → TRAIN 5.5) shipped an
-  // illegible 5.5px smudge on five screens in both languages and both themes,
-  // while the comment claimed it was protected. Test what renders: splash keeps
-  // TRAIN at 16px, the header drops it.
-  const showSub = sub >= 11;
+  // RULE 5, restored. v264 changed this guard from `v >= 10` to `sub >= 11` and
+  // called it a bug fix. It was the opposite: the handoff's floor is on the
+  // VAULT size, not on the rendered sub size, and it says TRAIN at 5.5px WORKS —
+  // "يعمل فقط بخط مونو وبتباعد .3em" — dropping it only below VAULT 10. The
+  // header is VAULT 11, above the floor, and the spec pins the header at three
+  // parts in three separate places: rule 5, the §1 markup comment
+  // ("plateH 15 · VAULT 11 · TRAIN 5.5 · gap 6") and §4 ("بمقاس ١٥/١١/٥٫٥").
+  // So v264 silently deleted a third of the wordmark from every header.
+  //
+  // The two conditions the spec attaches to 5.5px are real and are met:
+  // styles.css .bl-sub sets 'JetBrains Mono' and letter-spacing .3em. A general
+  // 11px minimum is the right rule for CONTENT; this is a wordmark, and
+  // overriding the owner's approved identity on my own reading of a body-text
+  // rule was the actual error.
+  const showSub = v >= 10;
   return `
     <div dir="ltr" class="brand-lockup brand-${size}" style="gap:${gap}px">
       <svg viewBox="1.5 6 8 12" width="${plateW}" height="${plateH}" aria-hidden="true">
