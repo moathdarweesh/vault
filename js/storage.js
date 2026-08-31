@@ -427,6 +427,10 @@ function defaultState() {
     // renaming or deleting a saved food must not silently rewrite history a
     // bundle was built from.
     mealBundles: [],
+    // Recipes — ingredients you enter once, totalled, and divided into servings.
+    // NOT the same thing as a meal bundle: a bundle re-logs rows you already
+    // logged; a recipe COMPUTES a total from parts that were never log rows.
+    recipes: [],
     water: {}, // per-day water intake in ml, keyed by YYYY-MM-DD
     bodyweight: [], // [{ date:'YYYY-MM-DD', kg }] — one entry per day
     // Nutrition targets. `mode:'off'` → the Food page shows the "set up your
@@ -579,6 +583,7 @@ function loadState() {
     parsed.water = parsed.water || {};
     parsed.bodyweight = Array.isArray(parsed.bodyweight) ? parsed.bodyweight : [];
     parsed.mealBundles = Array.isArray(parsed.mealBundles) ? parsed.mealBundles : [];
+    parsed.recipes = Array.isArray(parsed.recipes) ? parsed.recipes : [];
     // Nutrition targets (added later) — backfill for existing users.
     if (!parsed.nutrition || typeof parsed.nutrition !== 'object') {
       parsed.nutrition = defaultNutrition();
@@ -2507,6 +2512,81 @@ const DB = {
   },
 
   // ----- Foods (reference list only) -----
+  // ----- Recipes -----
+  // Each ingredient carries the macros FOR THE QUANTITY ENTERED, scaled by its
+  // own qty multiplier — the same base x multiplier shape the AI cards and the
+  // portion stepper already use, so the app has one idea of "how much", not two.
+  //
+  // Totals are DERIVED on read, never stored. A stored total is a number that
+  // can silently disagree with the ingredients it came from the moment one is
+  // edited, and the recipe would then log calories nothing in it accounts for.
+  recipes: {
+    list() { return [...(STATE.recipes || [])]; },
+    totals(rec) {
+      const t = { calories: 0, protein: 0, carbs: 0, fat: 0 };
+      ((rec && rec.items) || []).forEach((it) => {
+        const q = Number(it.qty) || 1;
+        t.calories += (Number(it.calories) || 0) * q;
+        t.protein  += (Number(it.protein)  || 0) * q;
+        t.carbs    += (Number(it.carbs)    || 0) * q;
+        t.fat      += (Number(it.fat)      || 0) * q;
+      });
+      return t;
+    },
+    // What ONE serving costs. Servings is clamped at 1: a recipe that makes
+    // zero servings would divide by zero and log Infinity calories.
+    perServing(rec) {
+      const t = this.totals(rec);
+      const n = Math.max(1, Number(rec && rec.servings) || 1);
+      return {
+        calories: Math.round(t.calories / n),
+        protein: Math.round(t.protein / n * 10) / 10,
+        carbs: Math.round(t.carbs / n * 10) / 10,
+        fat: Math.round(t.fat / n * 10) / 10,
+      };
+    },
+    add({ name, servings, items }) {
+      const clean = (Array.isArray(items) ? items : []).map((it) => ({
+        name: String((it && it.name) || '').trim(),
+        qty: Math.max(0, Number(it && it.qty) || 1),
+        calories: Math.max(0, Number(it && it.calories) || 0),
+        protein: Math.max(0, Number(it && it.protein) || 0),
+        carbs: Math.max(0, Number(it && it.carbs) || 0),
+        fat: Math.max(0, Number(it && it.fat) || 0),
+      })).filter((it) => it.name || it.calories || it.protein || it.carbs || it.fat);
+      if (!clean.length) return null;
+      const rec = {
+        id: uid(),
+        name: String(name || '').trim() || 'وصفة',
+        servings: Math.max(1, Number(servings) || 1),
+        items: clean,
+        createdAt: new Date().toISOString(),
+      };
+      if (!Array.isArray(STATE.recipes)) STATE.recipes = [];
+      STATE.recipes.push(rec);
+      save();
+      return rec;
+    },
+    update(id, patch) {
+      const r = (STATE.recipes || []).find((x) => x.id === id);
+      if (!r) return null;
+      const made = this.add(Object.assign({ name: r.name, servings: r.servings, items: r.items }, patch || {}));
+      if (!made) return null;
+      // Replace in place so an edit does not jump the recipe to the end of the
+      // list, and drop the temporary the add() above appended.
+      STATE.recipes.pop();
+      made.id = r.id; made.createdAt = r.createdAt;
+      STATE.recipes[STATE.recipes.indexOf(r)] = made;
+      save();
+      return made;
+    },
+    remove(id) {
+      if (!Array.isArray(STATE.recipes)) return;
+      const at = STATE.recipes.findIndex((r) => r.id === id);
+      if (at !== -1) { STATE.recipes.splice(at, 1); save(); }
+    },
+  },
+
   // ----- Meal bundles ("my usual breakfast" in one tap) -----
   mealBundles: {
     list() { return [...(STATE.mealBundles || [])]; },

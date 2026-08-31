@@ -12,7 +12,7 @@
 // build. The literal below is the fallback (file://, or a stripped query) and is
 // still bumped by `npm run release` — see CLAUDE.md "CACHE WORKFLOW".
 const VAULT_BUILD = (() => {
-  const FALLBACK = 'v285';
+  const FALLBACK = 'v286';
   try {
     const src = (document.currentScript && document.currentScript.src) || '';
     const m = src.match(/[?&]v=(\d+)/);
@@ -932,6 +932,27 @@ const I18N = {
     sug_hold_reason: 'Hold this weight until you reach {t} clean reps',
     sug_deload_reason: '{n} sessions under the range at this weight — drop ~10% and rebuild',
     sug_applied: 'Suggestion filled into the next set',
+    tab_recipes: 'Recipes',
+    rec_new: 'New recipe',
+    rec_name_ph: 'Recipe name — e.g. my chicken and rice',
+    rec_servings: 'Servings',
+    rec_ing: 'Ingredients',
+    rec_u_ing: 'ingredients',
+    rec_u_serv: 'servings',
+    rec_u_per: 'per serving',
+    rec_add_ing: 'Add ingredient',
+    rec_ing_name: 'Ingredient',
+    rec_qty: 'Qty',
+    rec_pick: 'Pick from foods',
+    rec_total: 'Whole recipe',
+    rec_per: 'Per serving',
+    rec_save: 'Save recipe',
+    rec_saved: 'Recipe saved',
+    rec_deleted: 'Recipe deleted',
+    rec_logged: '{name} — one serving added',
+    rec_empty: 'No recipes yet. Enter the ingredients once and it totals them for you.',
+    rec_need_ing: 'Add at least one ingredient with numbers',
+    rec_edit: 'Edit',
     tab_saved_foods: 'Foods',
     tab_bundles: 'My meals',
     bundle_new: 'New meal',
@@ -1722,6 +1743,27 @@ const I18N = {
     sug_hold_reason: 'ثبّت هذا الوزن حتى تبلغ {t} تكرارات نظيفة',
     sug_deload_reason: '{n} جلسات دون المدى على هذا الوزن — خفّف نحو ١٠٪ وأعد البناء',
     sug_applied: 'وُضع الاقتراح في المجموعة التالية',
+    tab_recipes: 'وصفاتي',
+    rec_new: 'وصفة جديدة',
+    rec_name_ph: 'اسم الوصفة — مثلاً: دجاج ورز',
+    rec_servings: 'عدد الحصص',
+    rec_ing: 'المكوّنات',
+    rec_u_ing: 'مكوّنات',
+    rec_u_serv: 'حصص',
+    rec_u_per: 'للحصّة',
+    rec_add_ing: 'أضف مكوّناً',
+    rec_ing_name: 'المكوّن',
+    rec_qty: 'الكمية',
+    rec_pick: 'اختر من الأطعمة',
+    rec_total: 'الوصفة كاملة',
+    rec_per: 'للحصّة الواحدة',
+    rec_save: 'احفظ الوصفة',
+    rec_saved: 'حُفظت الوصفة',
+    rec_deleted: 'حُذفت الوصفة',
+    rec_logged: '{name} — أُضيفت حصّة واحدة',
+    rec_empty: 'لا وصفات بعد. اكتب المكوّنات مرة واحدة وتُحسب لك.',
+    rec_need_ing: 'أضف مكوّناً واحداً على الأقل بأرقامه',
+    rec_edit: 'تعديل',
     tab_saved_foods: 'أطعمة',
     tab_bundles: 'وجباتي',
     bundle_new: 'وجبة جديدة',
@@ -7271,6 +7313,135 @@ function openManualFoodEntry(date, onSave) {
 // Saved-food picker — the old "reference library" as an add-method. Search
 // your saved foods + presets, tap to log to today. Long-press-free: tap = add.
 // ===========================================================================
+
+// ===========================================================================
+// RECIPE CALCULATOR — write the ingredients once, get the numbers.
+// ===========================================================================
+// Distinct from a meal bundle, and the difference is the whole point: a bundle
+// RE-LOGS rows you already logged; a recipe COMPUTES a total from parts that
+// were never log rows, then divides it into servings. "500 g chicken + 300 g
+// rice + a spoon of oil, makes 4" is not expressible as a bundle.
+//
+// Every ingredient is its own row of separate fields, per the owner's brief:
+// name, quantity, and its four macros. The quantity is a MULTIPLIER over the
+// macros on that row — the same base x multiplier idea the AI cards and the
+// portion stepper already use, so the app holds one notion of "how much".
+//
+// Totals are never stored; DB.recipes.totals() derives them on read. A stored
+// total silently disagrees with its own ingredients the moment one is edited.
+function openRecipeEditor(date, existing, onDone) {
+  var items = existing && existing.items ? existing.items.map(function (i) { return Object.assign({}, i); }) : [
+    { name: '', qty: 1, calories: 0, protein: 0, carbs: 0, fat: 0 },
+  ];
+  var name = (existing && existing.name) || '';
+  var servings = (existing && existing.servings) || 1;
+
+  var overlay = openModal('' +
+    '<div class="modal-header">' +
+      '<div><div class="modal-title">' + (existing ? escapeHtml(existing.name) : t('rec_new')) + '</div>' +
+      '<div class="modal-subtitle">' + t('rec_ing') + '</div></div>' +
+      '<button class="icon-btn icon-btn-tile" data-close>' + icon('close', 20) + '</button>' +
+    '</div>' +
+    '<div class="rec-top">' +
+      '<input type="text" id="rec-name" class="input" maxlength="60" placeholder="' + escapeHtml(t('rec_name_ph')) + '" value="' + escapeHtml(name) + '">' +
+      '<label class="rec-serv"><span>' + t('rec_servings') + '</span>' +
+        '<input type="number" id="rec-servings" inputmode="numeric" min="1" step="1" value="' + numAttr(servings) + '"></label>' +
+    '</div>' +
+
+    '<div id="rec-rows"></div>' +
+    '<button type="button" class="btn btn-ghost btn-block" id="rec-add">' + icon('plus', 16) + ' ' + t('rec_add_ing') + '</button>' +
+    '<div class="rec-totals" id="rec-totals"></div>' +
+    '<div class="form-actions sticky-actions">' +
+      '<button type="button" class="btn btn-primary" id="rec-save">' + t('rec_save') + '</button>' +
+    '</div>');
+
+  function drawRows() {
+    var host = overlay.querySelector('#rec-rows');
+    host.innerHTML = items.map(function (it, i) {
+      // type=number with plain digits: an <input type=number> silently rejects
+      // Arabic-Indic numerals, so numAttr must not localise here.
+      var fld = function (f, cap, step, mode) {
+        return '<label class="rec-f" style="grid-area:' + f + '">' +
+          '<span class="rec-cap">' + cap + '</span>' +
+          '<input type="number" data-f="' + f + '" inputmode="' + mode + '" min="0" step="' + step + '"' +
+          ' aria-label="' + escapeHtml(cap) + '" value="' + numAttr(it[f]) + '"></label>';
+      };
+      return '<div class="rec-row" data-row="' + i + '">' +
+        '<input type="text" data-f="name" placeholder="' + escapeHtml(t('rec_ing_name')) + '" value="' + escapeHtml(it.name || '') + '">' +
+        fld('qty', t('rec_qty'), '0.25', 'decimal') +
+        fld('calories', t('cal'), '1', 'numeric') +
+        fld('protein', t('protein_label'), '0.1', 'decimal') +
+        fld('carbs', t('carbs_label'), '0.1', 'decimal') +
+        fld('fat', t('fat_label'), '0.1', 'decimal') +
+        '<button type="button" class="icon-btn danger rec-del" data-del="' + i + '" aria-label="' + escapeHtml(t('delete')) + '">' + icon('close', 16) + '</button>' +
+      '</div>';
+    }).join('');
+
+    host.querySelectorAll('.rec-row input').forEach(function (inp) {
+      inp.addEventListener('input', function () {
+        var i = Number(inp.closest('.rec-row').dataset.row);
+        var f = inp.dataset.f;
+        items[i][f] = (f === 'name') ? inp.value : (parseFloat(inp.value) || 0);
+        drawTotals();
+      });
+    });
+    host.querySelectorAll('[data-del]').forEach(function (b) {
+      b.addEventListener('click', function () {
+        // Never leave the sheet with zero rows — an empty editor gives the user
+        // nothing to type into and no way back to a row.
+        if (items.length === 1) items[0] = { name: '', qty: 1, calories: 0, protein: 0, carbs: 0, fat: 0 };
+        else items.splice(Number(b.dataset.del), 1);
+        drawRows(); drawTotals();
+      });
+    });
+    drawTotals();
+  }
+
+  function drawTotals() {
+    var n = Math.max(1, parseInt(overlay.querySelector('#rec-servings').value, 10) || 1);
+    var rec = { servings: n, items: items };
+    var tot = DB.recipes.totals(rec);
+    var per = DB.recipes.perServing(rec);
+    var cell = function (label, v, unit) {
+      return '<span class="rt-cell"><span class="rt-k">' + label + '</span>' +
+        '<span class="rt-v num">' + fmtNum(v) + (unit || '') + '</span></span>';
+    };
+    overlay.querySelector('#rec-totals').innerHTML =
+      '<div class="rt-block"><div class="rt-title">' + t('rec_total') + '</div><div class="rt-grid">' +
+        cell(t('cal'), Math.round(tot.calories)) +
+        cell(t('protein_label'), Math.round(tot.protein * 10) / 10, 'g') +
+        cell(t('carbs_label'), Math.round(tot.carbs * 10) / 10, 'g') +
+        cell(t('fat_label'), Math.round(tot.fat * 10) / 10, 'g') +
+      '</div></div>' +
+      '<div class="rt-block accent"><div class="rt-title">' + t('rec_per') + '</div><div class="rt-grid">' +
+        cell(t('cal'), per.calories) +
+        cell(t('protein_label'), per.protein, 'g') +
+        cell(t('carbs_label'), per.carbs, 'g') +
+        cell(t('fat_label'), per.fat, 'g') +
+      '</div></div>';
+  }
+
+  overlay.querySelector('#rec-servings').addEventListener('input', drawTotals);
+  overlay.querySelector('#rec-add').addEventListener('click', function () {
+    items.push({ name: '', qty: 1, calories: 0, protein: 0, carbs: 0, fat: 0 });
+    drawRows();
+    var rows = overlay.querySelectorAll('.rec-row input[data-f="name"]');
+    if (rows.length) rows[rows.length - 1].focus();
+  });
+  overlay.querySelector('#rec-save').addEventListener('click', function () {
+    var nm = overlay.querySelector('#rec-name').value.trim();
+    var n = Math.max(1, parseInt(overlay.querySelector('#rec-servings').value, 10) || 1);
+    var payload = { name: nm, servings: n, items: items };
+    var made = existing ? DB.recipes.update(existing.id, payload) : DB.recipes.add(payload);
+    if (!made) { showToast(t('rec_need_ing')); return; }
+    closeModal();
+    showToast(t('rec_saved'));
+    if (typeof onDone === 'function') onDone();
+  });
+
+  drawRows();
+  setTimeout(function () { overlay.querySelector('#rec-name').focus(); }, 60);
+}
 function openSavedFoodPicker(date, onSave) {
   let query = '';
   let tab = 'foods';
@@ -7282,6 +7453,7 @@ function openSavedFoodPicker(date, onSave) {
     <div class="sfp-tabs" role="tablist">
       <button type="button" class="sfp-tab on" data-tab="foods" role="tab">${t('tab_saved_foods')}</button>
       <button type="button" class="sfp-tab" data-tab="bundles" role="tab">${t('tab_bundles')}</button>
+      <button type="button" class="sfp-tab" data-tab="recipes" role="tab">${t('tab_recipes')}</button>
     </div>
     <div class="search-wrap" id="sf-search-wrap" style="margin-bottom:10px">
       ${icon('search', 20)}
@@ -7291,6 +7463,56 @@ function openSavedFoodPicker(date, onSave) {
     <button class="btn btn-ghost btn-block" id="sf-new" style="margin-top:10px">${icon('plus', 20)} ${t('saved_new')}</button>
   `);
   const listEl = overlay.querySelector('#sf-list');
+
+  // ---- "My recipes" — the computed ones ------------------------------------
+  function drawRecipes() {
+    const recs = DB.recipes.list();
+    if (!recs.length) {
+      listEl.innerHTML = `<div class="calc-preview-hint" style="text-align:center;padding:18px">${t('rec_empty')}</div>`;
+      return;
+    }
+    listEl.innerHTML = recs.map((r) => {
+      const per = DB.recipes.perServing(r);
+      return `
+      <div class="bundle-card">
+        <div class="bundle-main">
+          <div class="bundle-name">${escapeHtml(r.name)}</div>
+          <div class="bundle-meta"><span class="num">${fmtNum(r.items.length)}</span> ${t('rec_u_ing')} ·
+            <span class="num">${fmtNum(r.servings)}</span> ${t('rec_u_serv')} ·
+            <span class="num">${fmtNum(per.calories)}</span> ${t('cal')} ${t('rec_u_per')}</div>
+        </div>
+        <button type="button" class="btn btn-primary bundle-add" data-log-rec="${escapeHtml(r.id)}" aria-label="${escapeHtml(t('add'))}">${icon('plus', 16)}</button>
+        <button type="button" class="icon-btn" data-edit-rec="${escapeHtml(r.id)}" aria-label="${escapeHtml(t('rec_edit'))}">${icon('edit', 16)}</button>
+        <button type="button" class="icon-btn danger" data-del-rec="${escapeHtml(r.id)}" aria-label="${escapeHtml(t('delete'))}">${icon('trash', 16)}</button>
+      </div>`;
+    }).join('');
+
+    // Logging a recipe logs ONE SERVING as a single row — not the ingredients.
+    // The ingredients are how the number was reached; the meal you ate is the
+    // row, and splitting it into six would make the day's list unreadable.
+    listEl.querySelectorAll('[data-log-rec]').forEach((b) => b.addEventListener('click', () => {
+      const r = DB.recipes.list().find((x) => x.id === b.dataset.logRec);
+      if (!r) return;
+      const per = DB.recipes.perServing(r);
+      DB.foodLogs.add(date, {
+        name: r.name, servings: 1,
+        calories: per.calories, protein: per.protein, carbs: per.carbs, fat: per.fat,
+        source: 'recipe',
+      });
+      showToast(t('rec_logged').replace('{name}', r.name));
+      if (typeof onSave === 'function') onSave();
+    }));
+    listEl.querySelectorAll('[data-edit-rec]').forEach((b) => b.addEventListener('click', () => {
+      const r = DB.recipes.list().find((x) => x.id === b.dataset.editRec);
+      if (r) openRecipeEditor(date, r, () => openSavedFoodPicker(date, onSave));
+    }));
+    listEl.querySelectorAll('[data-del-rec]').forEach((b) => b.addEventListener('click', () => {
+      confirmDialog({
+        title: t('delete') + '؟', text: '', confirmLabel: t('delete'), variant: 'danger',
+        onConfirm: () => { DB.recipes.remove(b.dataset.delRec); showToast(t('rec_deleted')); drawRecipes(); },
+      });
+    }));
+  }
 
   // ---- "My meals" — several foods, one tap (فطوري المعتاد) -----------------
   function drawBundles() {
@@ -7404,16 +7626,18 @@ function openSavedFoodPicker(date, onSave) {
   const newBtn = overlay.querySelector('#sf-new');
   newBtn.addEventListener('click', () => {
     if (tab === 'bundles') { openBundleCreator(); return; }
+    if (tab === 'recipes') { openRecipeEditor(date, null, () => openSavedFoodPicker(date, onSave)); return; }
     closeModal(); openFoodLibraryModal();
   });
   overlay.querySelectorAll('.sfp-tab').forEach((b) => b.addEventListener('click', () => {
     tab = b.dataset.tab;
     overlay.querySelectorAll('.sfp-tab').forEach((x) => x.classList.toggle('on', x === b));
     overlay.querySelector('#sf-search-wrap').style.display = tab === 'bundles' ? 'none' : '';
-    newBtn.innerHTML = tab === 'bundles'
-      ? icon('plus', 20) + ' ' + t('bundle_new')
-      : icon('plus', 20) + ' ' + t('saved_new');
-    if (tab === 'bundles') drawBundles(); else draw();
+    newBtn.innerHTML = icon('plus', 20) + ' ' +
+      (tab === 'bundles' ? t('bundle_new') : tab === 'recipes' ? t('rec_new') : t('saved_new'));
+    if (tab === 'bundles') drawBundles();
+    else if (tab === 'recipes') drawRecipes();
+    else draw();
   }));
   draw();
 }

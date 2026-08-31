@@ -4302,6 +4302,53 @@ body[dir="rtl"] .picker-row { text-align: right; }
 .macro-total.fat .macro-total-value { color: var(--cat-shoulders); }
 
 /* ---- AI calorie chat ---- */
+/* ── Recipe calculator ─────────────────────────────────────────────────
+   Each ingredient is its OWN row of separate fields, per the owner brief.
+   Seven columns on a phone is unreadable, so the row wraps into a 2-line
+   grid: name spans the top, the five numbers sit under it. */
+.rec-top{display:flex; gap:8px; margin-bottom:10px}
+.rec-top #rec-name{flex:1; min-width:0}
+.rec-serv{display:flex; align-items:center; gap:6px; flex:none;
+  font-size:12px; font-weight:700; color:var(--text-dim)}
+.rec-serv input{width:64px; text-align:center}
+/* Five columns for the five numbers, and the name spanning the row above them.
+   Each number sits in its own labelled cell so a row is self-describing. */
+.rec-row{
+  display:grid;
+  grid-template-columns:repeat(5, 1fr) 30px;
+  grid-template-areas:"nm nm nm nm nm del" "qty calories protein carbs fat .";
+  gap:6px; margin-bottom:8px; padding:9px;
+  border:1px solid var(--border); border-radius:12px; background:var(--surface-2);
+}
+.rec-f{display:flex; flex-direction:column; gap:3px; min-width:0}
+.rec-cap{font-size:9.5px; font-weight:800; letter-spacing:.02em; color:var(--text-dim);
+  text-align:center; overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
+.rec-row input{width:100%; min-width:0; height:36px; padding:0 4px;
+  border:1px solid var(--border); border-radius:9px; background:var(--surface-3);
+  color:var(--text); font-size:13px; font-weight:700; text-align:center}
+.rec-row input[data-f="name"]{grid-area:nm; height:38px; padding:0 10px;
+  text-align:start; font-size:14px; font-weight:600}
+.rec-row input:focus{outline:none; border-color:var(--accent-soft)}
+.rec-del{grid-area:del; align-self:start; justify-self:center; margin-top:2px}
+
+/* Live totals. Two blocks: the whole recipe, then what ONE serving costs —
+   the second is the number that actually gets logged, so it carries the
+   accent border. */
+.rec-totals{display:grid; grid-template-columns:1fr 1fr; gap:8px; margin:12px 0 4px}
+.rt-block{border:1px solid var(--border); border-radius:14px;
+  background:var(--surface-2); padding:11px 12px}
+.rt-block.accent{border-color:var(--accent-soft, var(--border-hi))}
+.rt-title{font-size:11px; font-weight:800; letter-spacing:.03em;
+  color:var(--text-dim); margin-bottom:8px}
+.rt-block.accent .rt-title{color:var(--accent-text)}
+.rt-grid{display:grid; grid-template-columns:1fr 1fr; gap:6px 10px}
+.rt-cell{display:flex; align-items:baseline; justify-content:space-between; gap:6px}
+.rt-k{font-size:11px; font-weight:700; color:var(--text-dim)}
+.rt-v{font-size:15px; font-weight:800; color:var(--text)}
+.rt-block.accent .rt-v{color:var(--accent-text)}
+@media(max-width:380px){
+  .rec-totals{grid-template-columns:1fr}
+}
 /* ── Saved picker: أطعمة | وجباتي ──────────────────────────────────────── */
 .sfp-tabs {
   display: flex;

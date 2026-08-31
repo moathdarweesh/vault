@@ -74,6 +74,27 @@
   .sbar{display:block; height:100%; border-radius:3px; background:var(--warn)}
   .spct{font-size:13px; color:var(--warn); min-width:38px; text-align:end; flex:none}
 
+  /* الخطة مقابل التنفيذ — two overlaid bars per weekday. The plan sits behind
+     in a neutral track; what was actually done is painted in front, so a short
+     week reads as a gap rather than as a number you have to compare. */
+  .pvd{display:grid; grid-template-columns:60px 1fr 86px; gap:14px; align-items:center;
+    padding:13px 22px; border-bottom:1px solid var(--line-3)}
+  .pvd-day{font-size:13px; color:var(--dim)}
+  .pvd-track{position:relative; height:22px; display:flex; align-items:center}
+  .pvd-plan,.pvd-done{position:absolute; inset-inline-start:0; height:8px; border-radius:4px}
+  .pvd-plan{width:44%; background:#2b2d31}
+  .pvd-done{width:44%; background:var(--text)}
+  .pvd-label{font-size:12.5px; text-align:end}
+  .pvd-label.rest{color:var(--mute)}
+  .pvd-label.met{color:var(--dim)}
+  .pvd-label.short{color:var(--warn)}
+  /* A day still ahead of us is not a miss — grey, never amber. */
+  .pvd-label.ahead{color:var(--faint)}
+  .pvd-legend{display:flex; align-items:center; gap:15px; font-size:12px; color:var(--mute)}
+  .pvd-legend span{display:flex; align-items:center; gap:7px}
+  .pvd-legend i{width:14px; height:6px; border-radius:3px; display:block}
+  .pvd-legend .k-plan{background:#2b2d31}
+  .pvd-legend .k-done{background:var(--text)}
   .snaps{display:flex; flex-direction:column; gap:12px}
   .snap{display:flex; align-items:center; gap:12px}
   .slab{flex:1; font-size:13.5px; color:var(--dim)}
@@ -1171,6 +1192,7 @@
         // The blob's plan is a ROTATION (ordered cycle slots), not weekday rows;
         // each slot renders as one "day" card in cycle order.
         var plans=[], planEx=[];
+        var trainingDays=(b.plan&&Array.isArray(b.plan.trainingDays))?b.plan.trainingDays:[];
         var cyc=(b.plan&&Array.isArray(b.plan.cycle))?b.plan.cycle:[];
         cyc.forEach(function(slot,i){
           plans.push({day_of_week:i, name:(slot&&slot.name)||('Workout '+(i+1))});
@@ -1190,7 +1212,7 @@
         });
         var customs=arr(b.exercises).filter(function(e){return e&&e.isCustom;})
           .map(function(e){return {id:e.id, name:e.name, category:e.category||'Other'};});
-        renderDetail(u, {sessions:sessions,sets:sets,plans:plans,planEx:planEx,foods:foods,sleeps:sleeps,customs:customs});
+        renderDetail(u, {sessions:sessions,sets:sets,plans:plans,planEx:planEx,foods:foods,sleeps:sleeps,customs:customs,trainingDays:trainingDays});
       }catch(e){ inner.innerHTML='<div class="d-top"><button class="d-back" id="dback">‹ رجوع</button></div><div class="center">تعذّر التحميل: '+esc(e.message||e)+'</div>'; wireBack(); }
     }
     function wireBack(){ var b=$('#dback'); if(b)b.addEventListener('click',function(){$('#detail').classList.remove('show');}); }
@@ -1210,6 +1232,38 @@
         (self?'<div class="selfnote">هذا حسابك — لا يمكنك تغيير دورك أو حالتك.</div>':'')+
         '<div class="selfnote">آخر ظهور: '+(u.last_seen?esc(String(u.last_seen).replace('T',' ').slice(0,16)):'—')+'</div>'+
       '</div>');
+    }
+
+    var DOW_AR=['الأحد','الاثنين','الثلاثاء','الأربعاء','الخميس','الجمعة','السبت'];
+    function planVsDone(u, d){
+      // trainingDays holds weekday numbers (0=Sun). The blob's own convention.
+      var td = d.trainingDays || [];
+      var isTraining = {}; td.forEach(function(n){ isTraining[n]=true; });
+      // Distinct dates trained, so a 5-exercise workout counts as ONE day —
+      // the same trap migration 19 documents on the SQL side.
+      var done = {};
+      (d.sessions||[]).forEach(function(s){ if(s.performed_on) done[s.performed_on]=true; });
+
+      var start = new Date(); start.setHours(0,0,0,0);
+      start.setDate(start.getDate() - ((start.getDay()+1)%7));   // back to Saturday
+      var rows='';
+      for (var i=0;i<7;i++){
+        var day = new Date(start); day.setDate(start.getDate()+i);
+        var iso = day.getFullYear()+'-'+('0'+(day.getMonth()+1)).slice(-2)+'-'+('0'+day.getDate()).slice(-2);
+        var dow = day.getDay();
+        var planned = isTraining[dow] ? 1 : 0;
+        var did = done[iso] ? 1 : 0;
+        var future = day.getTime() > Date.now();
+        var label = planned ? (did+' / '+planned) : 'راحة';
+        var cls = !planned ? 'rest' : (did>=planned ? 'met' : (future ? 'ahead' : 'short'));
+        rows += '<div class="pvd"><span class="pvd-day">'+DOW_AR[dow]+'</span>'+
+          '<span class="pvd-track">'+
+            (planned?'<span class="pvd-plan"></span>':'')+
+            (did?'<span class="pvd-done"></span>':'')+
+          '</span>'+
+          '<span class="pvd-label num '+cls+'" dir="ltr">'+label+'</span></div>';
+      }
+      return rows;
     }
 
     function renderDetail(u, d){
@@ -1240,12 +1294,39 @@
         return '<div class="row2"><span class="r-name num" style="direction:ltr">'+(s.sleep_time||'—')+' → '+(s.wake_time||'—')+'</span><span class="r-val num">'+h+'س '+m+'د</span><span class="r-meta num">'+esc(s.slept_on)+'</span></div>';
       }).join('')+'</div>' : '<div class="empty-mini">لا نوم مسجّل.</div>';
       var totSets=d.sets.length, totVol=Math.round(d.sets.reduce(function(a,x){return a+(x.reps*(+x.weight||0));},0));
+      // The design's "الخطة مقابل التنفيذ" + "الأرقام" pair, above the existing
+      // sections. Adherence is read from the SAME RPC the users table uses, so
+      // the profile and the list can never quote different percentages.
+      var pct = (u.pct===null||u.pct===undefined) ? null : u.pct;
+      var statRows=[
+        ['الالتزام هذا الأسبوع', pct===null?'—':pct+'%', pct===null?'var(--mute)':(pct<50?'var(--warn)':'var(--dim)')],
+        ['أيام الخطة أسبوعياً', u.trainingDays?fmt(u.trainingDays):'—','var(--text)'],
+        ['إجمالي الجلسات', fmt(d.sessions.length),'var(--text)'],
+        ['تمارين خاصة', fmt(d.customs.length),'var(--text)']
+      ].map(function(r){
+        return '<div class="snap"><span class="slab">'+r[0]+'</span>'+
+          '<span class="sval num" dir="ltr" style="color:'+r[2]+'">'+r[1]+'</span></div>';
+      }).join('');
+
+      var profile =
+        '<div class="ogrid" style="margin-bottom:18px">'+
+          '<div class="panel2"><div class="p2head">'+
+            '<span class="p2title">الخطة مقابل التنفيذ</span>'+
+            '<span class="pvd-legend"><span><i class="k-plan"></i>مخطّط</span><span><i class="k-done"></i>منفّذ</span></span>'+
+          '</div>'+planVsDone(u,d)+
+          '<div class="p2foot">الأسبوع من السبت — نفس الأسبوع الذي تحسبه الأرقام أعلاه.</div></div>'+
+          '<div class="panel2 accent"><div class="p2head2"><span class="p2title">الأرقام</span>'+
+            '<span class="p2week num" dir="ltr">'+esc(weekLabel())+'</span></div>'+
+            '<div class="snaps">'+statRows+'</div></div>'+
+        '</div>';
+
       $('#detail-inner').innerHTML=
         '<div class="d-top"><button class="d-back" id="dback">‹ رجوع للقائمة</button><span class="d-id">'+esc(u.id)+'</span></div>'+
         '<div class="d-title"><span class="av">'+esc(initial(u))+'</span><span class="name">'+nameHtml(u)+'</span></div>'+
         '<div class="stats">'+tile(d.sessions.length,'جلسة','alt')+tile(totSets,'مجموعة','')+tile(totVol.toLocaleString('en-US'),'حِمل ('+(u.unit||'kg').toUpperCase()+')','')+tile(d.customs.length,'تمرين خاص','')+'</div>'+
         mgmtHtml(u)+
-        sec('الخطة الأسبوعية','<div class="plan">'+planHtml+'</div>')+
+        profile+
+        sec('دورة التمارين','<div class="plan">'+planHtml+'</div>')+
         sec('سجلّ التمارين','<div class="log">'+logHtml+'</div>')+
         sec('التمارين الخاصة',custHtml)+
         sec('التغذية',foodHtml)+

@@ -76,6 +76,7 @@
     if ('cardio' in data && !Array.isArray(data.cardio)) return false;
     if ('supplements' in data && !Array.isArray(data.supplements)) return false;
     if ('mealBundles' in data && !Array.isArray(data.mealBundles)) return false;
+    if ('recipes' in data && !Array.isArray(data.recipes)) return false;
     return true;
   }
 
