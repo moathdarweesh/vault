@@ -6,15 +6,26 @@
 <title>VAULT — لوحة التحكّم</title>
 <style>
   :root{
-    --bg:#08080a; --surface:#141418; --surface-2:#1b1b21; --line:#26262e;
-    --accent:#5b8def; --accent-soft:rgba(91,141,239,.14); --accent-ink:#04122e;
-    --text:#f4f4f7; --dim:#9a9aa6; --mute:#6b6b76; --good:#4fd1a5; --warn:#f0b45b; --red:#ef6f6f;
-    --chest:#ef6f6f; --back:#5b8def; --legs:#f0b45b; --shoulders:#b07be0; --arms:#4fd1a5; --core:#e0709a; --other:#9a9aa6;
+    /* THE APP'S PALETTE, not a second one. Every value below is copied from
+       styles.css :root — this console used a cold blue-grey system while the
+       product it administers is warm black and orange, so the two never read
+       as one product.
+
+       The muscle colours were not merely a different taste: --back was BLUE
+       here and BLUE is the app's Back too, but --legs was amber here and
+       GREEN in the app, --arms teal here and AMBER in the app. The owner
+       reads both surfaces, so the same dot meant a different muscle
+       depending on which screen he was looking at. That is a correctness
+       bug, and it is why this swap is not cosmetic. */
+    --bg:#000000; --surface:#0d0a07; --surface-2:#17120d; --line:rgba(255,232,212,.11);
+    --accent:#ff6a00; --accent-soft:rgba(255,106,0,.13); --accent-ink:#1a0d00;
+    --text:#fdfaf7; --dim:#b0a69e; --mute:#9a8f86; --good:#34d399; --warn:#fbbf24; --red:#f87171;
+    --chest:#f472b6; --back:#60a5fa; --legs:#34d399; --shoulders:#c084fc; --arms:#fbbf24; --core:#fb7185; --other:#9a8f86;
     --radius:18px; --radius-sm:12px;
   }
   *{box-sizing:border-box}
   html,body{margin:0;background:
-    radial-gradient(1000px 560px at 100% -10%, rgba(91,141,239,.10), transparent 60%), var(--bg);
+    radial-gradient(1000px 560px at 100% -10%, rgba(255,106,0,.10), transparent 60%), var(--bg);
     color:var(--text); font-family:system-ui,-apple-system,"Segoe UI",Tahoma,sans-serif;
     -webkit-font-smoothing:antialiased; line-height:1.55; min-height:100vh}
   .num{font-variant-numeric:tabular-nums; unicode-bidi:plaintext}
@@ -26,7 +37,10 @@
   .login-wrap{min-height:100vh; display:flex; align-items:center; justify-content:center; padding:24px}
   .card{background:var(--surface); border:1px solid var(--line); border-radius:var(--radius); padding:30px; width:100%; max-width:390px}
   .brand{display:flex; align-items:center; gap:10px; font-weight:900; letter-spacing:-.01em; font-size:20px}
-  .brand .v{display:inline-flex; align-items:center; justify-content:center; width:34px; height:34px; border-radius:10px; background:var(--accent); color:var(--accent-ink); font-size:18px}
+  /* The mark is the mark — not an emoji in an accent tile. Orange plates on
+     the page ground, exactly as the app draws them. */
+  .brand .v{display:inline-flex; align-items:center; gap:5px; color:var(--accent)}
+  .brand .v svg{display:block}
   .card h1{font-size:19px; font-weight:800; margin:14px 0 4px}
   .card p.sub{color:var(--dim); font-size:14px; margin:0 0 20px}
   label{display:block; font-size:12.5px; font-weight:700; color:var(--dim); margin:0 0 6px}
@@ -44,7 +58,8 @@
   .sidebar{width:236px; flex-shrink:0; background:var(--surface); border-inline-end:1px solid var(--line);
     padding:20px 14px; display:flex; flex-direction:column; gap:4px; position:sticky; top:0; height:100vh}
   .side-brand{display:flex; align-items:center; gap:10px; font-weight:900; font-size:18px; padding:6px 8px 16px}
-  .side-brand .v{display:inline-flex; align-items:center; justify-content:center; width:32px; height:32px; border-radius:9px; background:var(--accent); color:var(--accent-ink); font-size:17px}
+  .side-brand .v{display:inline-flex; align-items:center; gap:4px; color:var(--accent)}
+  .side-brand .v svg{display:block}
   .nav{display:flex; flex-direction:column; gap:3px}
   .nav-item{display:flex; align-items:center; gap:11px; padding:11px 13px; border-radius:12px; background:none; border:none;
     color:var(--dim); font-size:14.5px; font-weight:700; width:100%; text-align:start; transition:background .15s,color .15s}
@@ -89,14 +104,14 @@
   .tbl td{padding:11px 15px; border-bottom:1px solid #1e1e25; font-size:14px}
   .tbl tr:last-child td{border-bottom:none}
   .tbl tbody tr{cursor:pointer; transition:background .12s}
-  .tbl tbody tr:hover td{background:rgba(91,141,239,.06)}
+  .tbl tbody tr:hover td{background:rgba(255,106,0,.06)}
   .uname{font-weight:800; display:flex; align-items:center; gap:9px}
   .av{width:30px; height:30px; border-radius:9px; background:var(--accent-soft); color:var(--accent); display:inline-flex; align-items:center; justify-content:center; font-weight:900; font-size:13px; flex-shrink:0}
   .handle{color:var(--accent)} .noname{color:var(--mute); font-weight:600}
   .pill{display:inline-block; padding:3px 9px; border-radius:999px; font-size:11px; font-weight:800; background:var(--surface-2); border:1px solid var(--line); white-space:nowrap}
   .pill.you{background:var(--accent-soft); border-color:transparent; color:var(--accent)}
-  .pill.role-admin{background:rgba(91,141,239,.16); color:var(--accent); border-color:transparent}
-  .pill.role-coach{background:rgba(176,123,224,.16); color:var(--shoulders); border-color:transparent}
+  .pill.role-admin{background:var(--accent-soft); color:var(--accent); border-color:transparent}
+  .pill.role-coach{background:rgba(192,132,252,.16); color:var(--shoulders); border-color:transparent}
   .pill.st-active{color:var(--good)} .pill.st-disabled{color:var(--warn)} .pill.st-banned{color:var(--red)}
   .chev{color:var(--mute)}
   .center{text-align:center; color:var(--dim); padding:40px 16px; font-size:14px}
@@ -241,7 +256,7 @@
 
   <div id="login" class="login-wrap">
     <div class="card">
-      <div class="brand"><span class="v">🏋️</span> VAULT</div>
+      <div class="brand"><span class="v" aria-hidden="true"><svg viewBox="1.5 6 8 12" width="10" height="15"><rect x="1.5" y="9" width="3" height="6" rx="1.2" fill="currentColor"/><rect x="5.5" y="6" width="4" height="12" rx="1.6" fill="currentColor"/></svg><svg viewBox="14.5 6 8 12" width="10" height="15"><rect x="14.5" y="6" width="4" height="12" rx="1.6" fill="currentColor"/><rect x="19.5" y="9" width="3" height="6" rx="1.2" fill="currentColor"/></svg></span> VAULT</div>
       <form id="panel-login" autocomplete="on">
         <h1>لوحة التحكّم</h1>
         <p class="sub">سجّل دخولك بحساب المالك — نفس حسابك في التطبيق.</p>
@@ -275,7 +290,7 @@
 
   <div id="app" class="shell hidden">
     <aside class="sidebar">
-      <div class="side-brand"><span class="v">🏋️</span> VAULT</div>
+      <div class="side-brand"><span class="v" aria-hidden="true"><svg viewBox="1.5 6 8 12" width="10" height="15"><rect x="1.5" y="9" width="3" height="6" rx="1.2" fill="currentColor"/><rect x="5.5" y="6" width="4" height="12" rx="1.6" fill="currentColor"/></svg><svg viewBox="14.5 6 8 12" width="10" height="15"><rect x="14.5" y="6" width="4" height="12" rx="1.6" fill="currentColor"/><rect x="19.5" y="9" width="3" height="6" rx="1.2" fill="currentColor"/></svg></span> VAULT</div>
       <nav class="nav" id="nav"></nav>
       <div class="side-foot">
         <span class="who2" id="who"></span>
