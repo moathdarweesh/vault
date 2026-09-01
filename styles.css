@@ -125,10 +125,6 @@
   --safe-b: env(safe-area-inset-bottom, 0px);
   --safe-t: env(safe-area-inset-top, 0px);
 
-  /* Where a floating bottom bar sits: clear of the nav and the safe area.
-     Declared once because the space reserved for the rest timer is computed
-     from this exact value. */
-  --rest-anchor: calc(var(--nav-h) + var(--safe-b) + 16px);
   --radius:      14px;
   --radius-sm:   10px;
   --radius-md:   16px;
@@ -519,16 +515,11 @@ img { display: block; max-width: 100%; }
   scrollbar-width: none;
 }
 .main::-webkit-scrollbar { display: none; }
-/* While the floating rest timer is up, add bottom room so the guided-mode
-   Next/Prev buttons can scroll clear of it instead of being hidden underneath. */
-/* THE TIMER AND ITS RESERVED SPACE ARE NOW THE SAME NUMBER.
-   --rest-h is written by startRestTimer() from the bar's measured height: it
-   wraps to two lines on a narrow screen, so a constant here would be wrong
-   again the moment it did. Content stops exactly where the bar begins, plus a
-   16px gap — no overlap is possible by construction rather than by luck. */
-body.rest-active .main {
-  padding-bottom: calc(var(--rest-anchor) + var(--rest-h, 72px) + 16px);
-}
+/* No reserved space here on purpose. Reserving padding was the old answer to
+   a FLOATING bar, and it only ever worked at the end of the scroll — in transit
+   the buttons still passed underneath it. The bar is now a block in the flow
+   (inserted directly above .run-nav), so it takes its own space and the
+   question of clearance does not arise. */
 
 .view {
   display: none;
@@ -2741,7 +2732,9 @@ body[dir="rtl"] .w-unit { margin-left: 0; margin-right: 2px; }
    never overlap (they otherwise share the same bottom anchor). The timer bar is
    ~70px tall sitting 16px above the nav, so ~120px clears it plus the toast's
    own slide-in. */
-body.rest-active .toast { bottom: calc(var(--nav-h) + var(--safe-b) + 120px); }
+/* Clears the sticky rest bar at its stuck position: anchor + measured height +
+   a gap. It used to be measured from --nav-h, which the guided screen hides. */
+body.rest-active .toast { bottom: calc(var(--safe-b) + var(--rest-h, 72px) + 28px); }
 .toast .toast-msg { padding-inline-start: 10px; }
 .toast-action {
   flex-shrink: 0;
@@ -3768,13 +3761,18 @@ body[dir="rtl"] .calendar-nav-btn svg { transform: scaleX(-1); }
 
 /* ── Floating rest timer (mounted on .app, above the bottom nav) ──────── */
 .rest-timer {
-  position: fixed;
-  left: 50%;
-  transform: translateX(-50%);
-  /* Shared with body.rest-active .main so the two cannot drift apart. */
-  bottom: var(--rest-anchor);
-  z-index: 60;
-  width: min(440px, calc(100vw - 24px));
+  margin-top: 14px;
+  /* STICKY, NOT FIXED. Sticky keeps the countdown pinned near the bottom while
+     you scroll — the whole reason it floated — but it is still a block in the
+     flow, and .run-nav comes after it, so it can never be painted on top of the
+     buttons. At the end of the scroll it settles into place just above them.
+     The old rule also centred with translateX(-50%), which `animation: popIn`
+     (a scale) overrode for its whole duration: the bar jumped sideways every
+     time it appeared. In the flow it is centred by its own box, so it does not. */
+  position: sticky;
+  bottom: calc(var(--safe-b) + 12px);
+  z-index: 5;
+  width: 100%;
   display: flex;
   align-items: center;
   gap: 8px;
@@ -3784,6 +3782,17 @@ body[dir="rtl"] .calendar-nav-btn svg { transform: scaleX(-1); }
   border-radius: 16px;
   box-shadow: var(--elev-2);
   animation: popIn var(--dur) var(--ease);
+}
+/* Only when there is no .run-nav to sit above. Not reachable from the guided
+   screen; it exists so a timer can never become invisible. */
+.rest-timer.floating {
+  position: fixed;
+  left: 0;
+  right: 0;
+  margin-inline: auto;   /* centred without a transform popIn could override */
+  bottom: calc(var(--nav-h) + var(--safe-b) + 16px);
+  z-index: 60;
+  width: min(440px, calc(100vw - 24px));
 }
 .rest-timer-mid { flex: 1; text-align: center; }
 .rest-timer-label {

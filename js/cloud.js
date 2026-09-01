@@ -326,7 +326,20 @@
   let inFlight = null;
   function push(opts) {
     if (inFlight) return inFlight;
-    inFlight = pushOnce(opts).finally(() => { inFlight = null; });
+    // Announce success here rather than at each of pushOnce's three `return
+    // 'ok'` sites — one place, and it cannot fall out of step with them. The
+    // only listener is the conflict toast's latch, which must reopen once a
+    // push lands again; without this a conflict the user simply dismissed would
+    // silence every LATER conflict for the rest of the session, and a refusal
+    // nobody is told about is worse than a refusal that nags.
+    inFlight = pushOnce(opts)
+      .then((r) => {
+        if (r === 'ok') {
+          try { if (typeof window !== 'undefined') window.dispatchEvent(new CustomEvent('vault:push-ok')); } catch (_) {}
+        }
+        return r;
+      })
+      .finally(() => { inFlight = null; });
     return inFlight;
   }
 

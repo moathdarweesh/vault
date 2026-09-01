@@ -12,7 +12,7 @@
 // build. The literal below is the fallback (file://, or a stripped query) and is
 // still bumped by `npm run release` — see CLAUDE.md "CACHE WORKFLOW".
 const VAULT_BUILD = (() => {
-  const FALLBACK = 'v289';
+  const FALLBACK = 'v290';
   try {
     const src = (document.currentScript && document.currentScript.src) || '';
     const m = src.match(/[?&]v=(\d+)/);
@@ -3378,6 +3378,11 @@ window.addEventListener('popstate', () => {
 // NOT a modal: this can fire mid-set. A toast that offers the resolution, and a
 // latch so the settings screen can keep showing it after the toast is gone.
 let __conflictPending = false;
+// The latch above suppresses REPEATS of one unresolved conflict. It must not
+// suppress the next one: a push that lands proves the disagreement is over, so
+// the latch reopens here. Clearing it only in the resolve dialog meant that a
+// toast the user swiped away armed permanent silence.
+window.addEventListener('vault:push-ok', () => { __conflictPending = false; });
 window.addEventListener('vault:push-conflict', () => {
   // ONCE, not once per push. A conflict does not clear itself: until the user
   // answers, every later push conflicts too, so a toast per event meant the
@@ -9883,11 +9888,55 @@ function renderSessionDay(el) {
 // Default rest between sets, in seconds.
 const REST_DEFAULT_SEC = 90;
 
-// A single floating rest-timer bar lives on `.app` (not on the animated `.view`,
-// so a view transform can't break its fixed positioning) and survives view
-// re-renders. navigate() calls clearRestTimer() to tear it down.
+// THE REST BAR SITS IN THE FLOW, DIRECTLY ABOVE Prev/Next — it does not float
+// over them. It used to be `position: fixed` on `.app`, which guaranteed only
+// that the two never collided AT THE END of the scroll (v289 reserved space for
+// exactly that). In transit they collided completely: scrolled to 210px on a
+// 812px screen, the bar covered 52px of a 52px button row — the whole thing.
+// A floating overlay covers whatever passes beneath it; no amount of reserved
+// padding can fix that, because padding only describes where content STOPS.
+//
+// So the bar is now a sticky block that mountRestBar() inserts directly before
+// .run-nav, as a child of the view. Sticky keeps the countdown pinned near
+// the bottom while you scroll (the reason it floated in the first place), and
+// document order does the rest: the buttons come AFTER it, so it can never be
+// drawn on top of them. At the end of the scroll it settles into its own place
+// just above them. Nothing moves, nothing overlaps.
+//
+// The cost of living inside the view is that re-renders wipe it — and the run
+// screen re-renders on "add set" and on "next exercise", both of which happen
+// mid-rest. mountRestBar() re-attaches the SAME element (its listeners and the
+// running interval are attached to it, so the countdown never restarts).
 let __restTimer = null;
+let __restBar = null;
 let __restAudioCtx = null;   // created/unlocked on the "done" tap (a user gesture)
+// Put the live bar where this screen wants it. The slot exists only on the
+// guided screen; anywhere else the bar falls back to floating so a timer that
+// somehow outlives the screen is still visible rather than silently orphaned.
+function mountRestBar() {
+  const bar = __restBar;
+  // Guard on the ELEMENT only. __restTimer is assigned at the end of
+  // startRestTimer, after this runs, so testing it here meant the very first
+  // mount always bailed out and the bar never appeared at all.
+  if (!bar) return;
+  // Directly before the buttons, as a CHILD OF THE VIEW — not inside a wrapper.
+  // position:sticky may only travel within its containing block, so a wrapper
+  // sized to the bar pins it to nothing and it scrolls off like plain content.
+  // The view is the full scroll height, which is the travel sticky needs.
+  const nav = document.querySelector('.view.active .run-nav') || document.querySelector('.run-nav');
+  if (nav && nav.parentNode) {
+    bar.classList.remove('floating');
+    if (bar.nextElementSibling !== nav) nav.parentNode.insertBefore(bar, nav);
+    return;
+  }
+  // No buttons to sit above (not the guided screen): float, so a live timer is
+  // never simply invisible.
+  const app = document.querySelector('.app');
+  if (!app) return;
+  bar.classList.add('floating');
+  if (bar.parentNode !== app) app.appendChild(bar);
+}
+
 function clearRestTimer() {
   if (__restTimer) {
     clearInterval(__restTimer.id);
@@ -9896,6 +9945,7 @@ function clearRestTimer() {
     __restTimer = null;
   }
   document.querySelector('.rest-timer')?.remove();
+  __restBar = null;
   document.body.classList.remove('rest-active');
 }
 // A short two-tone beep (a simple alarm — not music) when the rest ends. Uses
@@ -9949,11 +9999,12 @@ function startRestTimer(seconds) {
     <button type="button" class="rest-timer-adj" data-rest-plus aria-label="+15s">+15</button>
     <button type="button" class="rest-timer-skip" data-rest-skip>${t('skip')}</button>
   `;
-  app.appendChild(bar);
-  // MEASURE, do not guess. The reservation in styles.css is computed from this
-  // value, so the Next/Prev row clears the bar exactly — a constant was wrong
-  // by 39px on a 812px screen, and would be wrong again whenever the bar wraps
-  // to two lines. Read offsetHeight AFTER append, while it is in the document.
+  __restBar = bar;
+  mountRestBar();
+  // The toast is the one thing still floating at the bottom, so it alone needs
+  // the bar's real height to clear it. Measure AFTER mounting, while the bar is
+  // in the document — it wraps to two lines on a narrow screen, so a constant
+  // would be wrong the moment it did.
   try {
     document.documentElement.style.setProperty('--rest-h', bar.offsetHeight + 'px');
   } catch (_) {}
@@ -10389,6 +10440,10 @@ function renderSessionRun(el) {
          something the app had already inferred from the action they just took.
          "Finish" remains the filled button: run-next reads Finish and stays
          .btn-primary on the last exercise. -->
+    <!-- mountRestBar() inserts the rest bar right here, immediately before
+         .run-nav and as a direct child of the view, so it sits ABOVE the
+         buttons instead of floating over them. No wrapper: a wrapper would be
+         the sticky bar's containing block and would leave it no travel. -->
     <div class="run-nav">
       <button type="button" class="btn btn-ghost run-prev" data-prev ${idx === 0 ? 'disabled' : ''}><span class="icon-mirror">${icon('back', 20)}</span> ${t('previous')}</button>
       <button type="button" class="btn btn-primary run-next" data-next>${isLast ? `${t('finish')} ${icon('check', 20)}` : `${t('next')} <span class="icon-mirror">${icon('chevronRight', 20)}</span>`}</button>
@@ -10556,6 +10611,12 @@ function renderSessionRun(el) {
     }
     renderSessionRun(el);
   });
+
+  // The template above replaced this screen's DOM, taking the rest bar's slot
+  // with it. Adding a set and moving to the next exercise BOTH re-render while
+  // a rest is running, so re-attach the live element — same node, same running
+  // interval, same listeners; the countdown does not restart.
+  mountRestBar();
 }
 
 // ==========================================================================
