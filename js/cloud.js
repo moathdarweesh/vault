@@ -309,7 +309,28 @@
     setDirty(uid, false);
   }
 
-  async function push(opts) {
+  // ONE PUSH AT A TIME. Six call sites reach this — the 1200ms debounce, the
+  // retry chain, resume()/bootSync, resolveOnLogin, chooseLocal, logout — and
+  // until now NOTHING serialized them. Two overlapping pushes both read the same
+  // base version, the first bumps the row, and the second finds 0 rows matched
+  // and reports a CONFLICT — against its own sibling. That is where
+  // "في هذا الجهاز تعديلات لم تصل السحابة" kept coming from: not another device,
+  // just this one racing itself. v275 made it visible by adding a second
+  // automatic path (resume on every foreground) to a design that assumed one.
+  //
+  // Callers await the SAME in-flight promise rather than queueing a second
+  // write: a push always sends the whole current blob, so a caller that arrives
+  // mid-flight wants exactly what is already being sent. The dirty flag is the
+  // safety net for anything typed after that snapshot — clearDirtyIfUnchanged
+  // leaves it set, and the debounce fires again.
+  let inFlight = null;
+  function push(opts) {
+    if (inFlight) return inFlight;
+    inFlight = pushOnce(opts).finally(() => { inFlight = null; });
+    return inFlight;
+  }
+
+  async function pushOnce(opts) {
     const force = !!(opts && opts.force);
     const c = sb(); const s = await getSession();
     // NOT a success: there is no session (signed out, or the token could not be
@@ -382,8 +403,23 @@
           const { data: cur, error: curErr } = await c.from(TABLE)
             .select('*').eq('user_id', uid).maybeSingle();
           if (!curErr && cur) {
+            // SELF-CONFLICT: the row already holds exactly the bytes we were
+            // trying to write, so a sibling push (or a retry of this same one)
+            // got there first. Nothing was lost and nothing disagrees — adopt
+            // the version it produced and report success. Alarming the user
+            // here is what made the toast reappear "every little while".
+            let same = false;
+            try { same = JSON.stringify(cur.data) === JSON.stringify(payload); } catch (_) { same = false; }
+            if (same) {
+              if (typeof cur.version === 'number') setVersion(uid, cur.version);
+              setStamp(uid, cur.updated_at || iso);
+              clearDirtyIfUnchanged(uid, raw);
+              return 'ok';
+            }
+            // A REAL conflict: the remote holds something this device has never
+            // seen. Do not overwrite it; let bootSync/resume resolve it.
             try { if (typeof window !== 'undefined') window.dispatchEvent(new CustomEvent('vault:push-conflict')); } catch (_) {}
-            return 'conflict'; // do NOT overwrite the newer remote
+            return 'conflict';
           }
           // no row exists → fall through to the insert path below
         }

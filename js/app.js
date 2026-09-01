@@ -12,7 +12,7 @@
 // build. The literal below is the fallback (file://, or a stripped query) and is
 // still bumped by `npm run release` — see CLAUDE.md "CACHE WORKFLOW".
 const VAULT_BUILD = (() => {
-  const FALLBACK = 'v288';
+  const FALLBACK = 'v289';
   try {
     const src = (document.currentScript && document.currentScript.src) || '';
     const m = src.match(/[?&]v=(\d+)/);
@@ -3379,6 +3379,11 @@ window.addEventListener('popstate', () => {
 // latch so the settings screen can keep showing it after the toast is gone.
 let __conflictPending = false;
 window.addEventListener('vault:push-conflict', () => {
+  // ONCE, not once per push. A conflict does not clear itself: until the user
+  // answers, every later push conflicts too, so a toast per event meant the
+  // same sentence reappearing every few minutes with nothing new to say. The
+  // latch holds until the conflict is actually resolved (finish() clears it).
+  if (__conflictPending) return;
   __conflictPending = true;
   try {
     showToast(t('sync_conflict_toast'), {
@@ -9945,8 +9950,13 @@ function startRestTimer(seconds) {
     <button type="button" class="rest-timer-skip" data-rest-skip>${t('skip')}</button>
   `;
   app.appendChild(bar);
-  // Reserve extra scroll space at the bottom so the guided-mode Next/Prev nav
-  // can clear above the floating timer instead of hiding under it.
+  // MEASURE, do not guess. The reservation in styles.css is computed from this
+  // value, so the Next/Prev row clears the bar exactly — a constant was wrong
+  // by 39px on a 812px screen, and would be wrong again whenever the bar wraps
+  // to two lines. Read offsetHeight AFTER append, while it is in the document.
+  try {
+    document.documentElement.style.setProperty('--rest-h', bar.offsetHeight + 'px');
+  } catch (_) {}
   document.body.classList.add('rest-active');
   const countEl = bar.querySelector('.rest-timer-count');
   const finish = () => {

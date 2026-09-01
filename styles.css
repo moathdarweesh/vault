@@ -125,6 +125,10 @@
   --safe-b: env(safe-area-inset-bottom, 0px);
   --safe-t: env(safe-area-inset-top, 0px);
 
+  /* Where a floating bottom bar sits: clear of the nav and the safe area.
+     Declared once because the space reserved for the rest timer is computed
+     from this exact value. */
+  --rest-anchor: calc(var(--nav-h) + var(--safe-b) + 16px);
   --radius:      14px;
   --radius-sm:   10px;
   --radius-md:   16px;
@@ -517,7 +521,14 @@ img { display: block; max-width: 100%; }
 .main::-webkit-scrollbar { display: none; }
 /* While the floating rest timer is up, add bottom room so the guided-mode
    Next/Prev buttons can scroll clear of it instead of being hidden underneath. */
-body.rest-active .main { padding-bottom: 104px; }
+/* THE TIMER AND ITS RESERVED SPACE ARE NOW THE SAME NUMBER.
+   --rest-h is written by startRestTimer() from the bar's measured height: it
+   wraps to two lines on a narrow screen, so a constant here would be wrong
+   again the moment it did. Content stops exactly where the bar begins, plus a
+   16px gap — no overlap is possible by construction rather than by luck. */
+body.rest-active .main {
+  padding-bottom: calc(var(--rest-anchor) + var(--rest-h, 72px) + 16px);
+}
 
 .view {
   display: none;
@@ -3760,7 +3771,8 @@ body[dir="rtl"] .calendar-nav-btn svg { transform: scaleX(-1); }
   position: fixed;
   left: 50%;
   transform: translateX(-50%);
-  bottom: calc(var(--nav-h) + var(--safe-b) + 16px);
+  /* Shared with body.rest-active .main so the two cannot drift apart. */
+  bottom: var(--rest-anchor);
   z-index: 60;
   width: min(440px, calc(100vw - 24px));
   display: flex;
