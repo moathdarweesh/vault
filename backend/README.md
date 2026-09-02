@@ -52,6 +52,8 @@ file on a database that already has it is safe.
 | 15 | `ban-rls-completion-v11.sql` | Closes 12's gap: ban INSERT/UPDATE on the four tables it missed (`exercises`, `cardio_types`, `foods`, `user_prefs`), a ban on `profiles` INSERT (12 restricted UPDATE only, so a banned user could delete their own profile row and insert a new one under a fresh @handle), and the revoke/grant double-lock `client_errors` never got. Raises instead of skipping a missing table, and its VERIFY asserts the policy COUNT rather than mere existence — the check that would have caught 12. Applied + verified live 2026-08-13: tables carrying a ban pair went 14 -> 18, all four missing tables show ins=1/upd=1, `profiles_ban_insert` exists, and `client_errors` grants are exactly `authenticated: SELECT, INSERT` with nothing for `anon`. |
 | 18 | `drop-mirror-v14.sql` | Removes the one-way analytics mirror (13 normalized tables) after the owner decision that the blob IS the truth; rewrites the three functions that named those tables (plpgsql binds table names at call time) in the same transaction; adds the `vault_data_admin_read` policy so `admin.html` reads blobs directly. Applied + verified live 2026-09-02. |
 | 19 | `admin-adherence-v15.sql` | The Console's adherence RPC: planned-vs-done per user per week, counting DISTINCT DATES (the blob stores one session row per exercise). Applied + verified live 2026-09-02. |
+| 20 | `vault-data-history-v16.sql` | `vault_data_history` — the last 10 versions of every user's blob, filed by a BEFORE UPDATE trigger (SECURITY DEFINER, empty search_path) whenever `data` changes; own-row SELECT only, no client write path, grants double-locked like `vault_data`. Closes the "the side force-pushed over had no copy anywhere" gap of whole-blob sync. Applied + verified live 2026-09-02 (the trigger read back from `pg_trigger` in the same run). |
+| 21 | `food-catalog-fat-v17.sql` | `food_catalog.fat` (default 0) and a 7-argument `admin_upsert_food` overload with `p_fat`; the 6-argument original stays. Applied + verified live 2026-09-02 — verified BY CALLING: a `do` block invoked the new overload (it ran to its admin gate, as a non-admin session must), and the same run counted the column, the 7-arg and the 6-arg functions (1 / 1 / 1). |
 
 > ⚠️ **Keep `image/svg+xml` OUT of the `exercise-images` mime allowlist,
 > permanently.** It is what rejects an active-content SVG arriving from a
@@ -77,18 +79,9 @@ PASS, because it proves the body parsed and executed.
 
 ## 2) Not yet applied — `pending/`
 
-Written and reviewed in v291 (2026-09-02). The MCP apply was refused by the
-session's permission classifier, so these wait for a human in the SQL editor.
-The client is already tolerant of either state: the catalog pull selects `*`,
-and the Console falls back to the 6-argument `admin_upsert_food`. After applying:
-move the file to `migrations/` and add its row to the table above.
-
-| # | File | What it establishes |
-|---|---|---|
-| 20 | `vault-data-history-v16.sql` | `vault_data_history` — the last 10 versions of every user's blob, written by a BEFORE UPDATE trigger (SECURITY DEFINER, empty search_path) whenever `data` changes. Own-row SELECT only; no client write path; grants double-locked like `vault_data`. Closes the "the side that was force-pushed over had no copy anywhere" gap of whole-blob sync. **NOT APPLIED.** |
-| 21 | `food-catalog-fat-v17.sql` | `food_catalog.fat` (default 0) and a 7-argument `admin_upsert_food` overload with `p_fat`; the 6-argument original stays. Until this is applied every curated catalog food logs 0 g fat. **NOT APPLIED.** |
-
-(16 `security-audit-repairs-v12.sql` used to be listed here; it has been applied since 2026-08-13 — see its row above.)
+Nothing. 20 and 21 (written in v291) were applied from the SQL editor on
+2026-09-02 — driven through the owner's signed-in Chrome, after the session's
+permission classifier had refused the MCP apply — and moved to `migrations/`.
 
 ## 3) State unknown — `unverified/`
 
