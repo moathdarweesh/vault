@@ -615,6 +615,20 @@ function loadState() {
     // Build a set of exerciseIds that have logged sessions (used for inMyList migration)
     const exercisesWithSessions = new Set((parsed.sessions || []).map((s) => s.exerciseId));
 
+    // Recipes from v286–v290 stored `qty` as a NUMERIC MULTIPLIER over the row's
+    // figures ("2 × egg"). Since v291 the row's figures ARE the amount used and
+    // qty is a text label — so an old multiplier is folded into the figures
+    // once, keeping every total the user saw, and the label is blanked.
+    (parsed.recipes || []).forEach((r) => {
+      (r && Array.isArray(r.items) ? r.items : []).forEach((it) => {
+        if (!it || typeof it.qty !== 'number') return;
+        const q = Number.isFinite(it.qty) ? Math.max(0, it.qty) : 1;
+        if (q !== 1) ['calories', 'protein', 'carbs', 'fat'].forEach((k) => { it[k] = Math.round((Number(it[k]) || 0) * q * 10) / 10; });
+        it.qty = '';
+        migrated = true;
+      });
+    });
+
     parsed.exercises.forEach((ex) => {
       if (ex.imageSlug === undefined) { ex.imageSlug = null; migrated = true; }
       // An inline base64 string is moved to the side store by
@@ -789,7 +803,7 @@ function defineImgAccessor(ex) {
     if (have) {
       const at = imgAtGet(ex.id);
       if (ex.imageCleared && !ex.imageAt) { imgSet(ex.id, null); imgAtSet(ex.id, null); }
-      else if (ex.imageAt && at && at !== ex.imageAt) { imgSet(ex.id, null); imgAtSet(ex.id, null); }
+      else if (ex.imageAt && at !== ex.imageAt) { imgSet(ex.id, null); imgAtSet(ex.id, null); }   // a null stamp is UNKNOWN, so it counts as different
     }
   }
   Object.defineProperty(ex, 'customImage', {
@@ -1496,16 +1510,26 @@ const DB = {
       if (data.category != null) ex.category = data.category;
       if (data.customImage !== undefined) {
         if (data.customImage) {
-          ex.imageAt = new Date().toISOString();
-          ex.imageCleared = false;
-          ex.customImage = data.customImage;   // side store, via the accessor
-          imgAtSet(id, ex.imageAt);
+          // Same bytes as we already hold (the edit modal re-sends the photo on
+          // every save) → nothing changes; a new stamp here would make every
+          // other device drop and re-download an unchanged photo.
+          if (data.customImage !== imgGet(id)) {
+            ex.imageAt = new Date().toISOString();
+            ex.imageCleared = false;
+            // The bucket copy is now STALE. Drop the pointer so the upload runs
+            // again (syncExerciseImages retries `customImage && !imagePath`) and
+            // the push carries the new bytes inline until it lands.
+            ex.imagePath = null;
+            ex.customImage = data.customImage;   // side store, via the accessor
+            imgAtSet(id, ex.imageAt);
+          }
         } else {
           // An explicit removal. The tombstone travels in the blob so every
           // other device drops its copy on the next pull, instead of keeping
           // the photo and pushing it straight back into the account.
           ex.imageAt = null;
           ex.imageCleared = true;
+          ex.imagePath = null;
           ex.customImage = null;
           imgAtSet(id, null);
         }
@@ -2612,9 +2636,9 @@ const DB = {
 
   // ----- Foods (reference list only) -----
   // ----- Recipes -----
-  // Each ingredient carries the macros FOR THE QUANTITY ENTERED, scaled by its
-  // own qty multiplier — the same base x multiplier shape the AI cards and the
-  // portion stepper already use, so the app has one idea of "how much", not two.
+  // Each ingredient carries the macros FOR THE AMOUNT USED, and `qty` is that
+  // amount as a text label ("200 غ") — totals SUM the rows as typed. The v286
+  // shape (qty as a numeric multiplier) is folded into the figures on load.
   //
   // Totals are DERIVED on read, never stored. A stored total is a number that
   // can silently disagree with the ingredients it came from the moment one is

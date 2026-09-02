@@ -12,7 +12,7 @@
 // build. The literal below is the fallback (file://, or a stripped query) and is
 // still bumped by `npm run release` — see CLAUDE.md "CACHE WORKFLOW".
 const VAULT_BUILD = (() => {
-  const FALLBACK = 'v291';
+  const FALLBACK = 'v292';
   try {
     const src = (document.currentScript && document.currentScript.src) || '';
     const m = src.match(/[?&]v=(\d+)/);
@@ -7440,9 +7440,11 @@ function openManualFoodEntry(date, onSave) {
 // rice + a spoon of oil, makes 4" is not expressible as a bundle.
 //
 // Every ingredient is its own row of separate fields, per the owner's brief:
-// name, quantity, and its four macros. The quantity is a MULTIPLIER over the
-// macros on that row — the same base x multiplier idea the AI cards and the
-// portion stepper already use, so the app holds one notion of "how much".
+// name, amount, and its four macros. The amount is a free-text LABEL ("200 غ",
+// "3 حبات") and the four figures are for that amount, exactly as a person reads
+// them off a label — rows are summed as typed. (v286–v290 treated the amount as
+// a numeric multiplier: 200 g at 330 kcal totalled 66,000. Old multipliers are
+// folded into the figures once, on load — see loadState.)
 //
 // Totals are never stored; DB.recipes.totals() derives them on read. A stored
 // total silently disagrees with its own ingredients the moment one is edited.
@@ -7681,7 +7683,7 @@ function openSavedFoodPicker(date, onSave, initialTab) {
   // once by any path (chat, photo, barcode, manual), then keep them as one
   // meal. A picker over the whole food library would be a second, worse form.
   function openBundleCreator() {
-    const todays = DB.foodLogs.listForDate(date) || [];
+    const todays = DB.foodLogs.listForDate(date || todayISO()) || [];
     const inner = todays.length
       ? `<div class="calc-preview-hint" style="margin-bottom:8px">${t('bundle_pick_hint')}</div>
          <div class="bundle-pick">${todays.map((e, i) => `
@@ -10097,7 +10099,7 @@ function playRestBeep() {
 }
 // `setIndex` is the set whose ✓ started this rest: only un-ticking THAT set
 // stops the clock (un-ticking set 1 by accident used to cancel set 3's rest).
-function startRestTimer(seconds, setIndex, exId) {
+function startRestTimer(seconds, setIndex, exId, setRef) {
   stopRestTimer();
   // Unlock audio while we're inside the user's tap gesture so the end-beep can play.
   try {
@@ -10166,7 +10168,7 @@ function startRestTimer(seconds, setIndex, exId) {
   // phone was locked reports done immediately instead of on the next tick.
   const onWake = () => { if (document.visibilityState === 'visible') tick(); };
   document.addEventListener('visibilitychange', onWake);
-  __restTimer = { id, onWake, setIndex: (setIndex == null ? -1 : setIndex), exId: exId || null };
+  __restTimer = { id, onWake, setIndex: (setIndex == null ? -1 : setIndex), exId: exId || null, setRef: setRef || null };
   bar.querySelector('[data-rest-minus]').addEventListener('click', () => {
     endAt = Math.max(Date.now() + 1000, endAt - 15000); tick(); arm();
   });
@@ -10741,11 +10743,13 @@ function renderSessionRun(el) {
         // Refuse it visibly and leave the row untouched.
         if (!(Number(set.reps) > 0 || Number(set.weight) > 0)) { showToast(t('add_at_least_one')); return; }
         set.done = true;
-        startRestTimer(REST_DEFAULT_SEC, i, ex.id);
+        startRestTimer(REST_DEFAULT_SEC, i, ex.id, set);
       } else {
         set.done = false;
         // Only the set that STARTED the rest may end it by being un-ticked.
-        if (__restTimer && __restTimer.setIndex === i && __restTimer.exId === ex.id) stopRestTimer();
+        // By OBJECT, not index: deleting or undoing a set above this one shifts
+        // every index, and the runState set objects survive re-renders.
+        if (__restTimer && __restTimer.setRef === set) stopRestTimer();
       }
       row.classList.toggle('done', set.done);
       row.querySelector('[data-done]').classList.toggle('done', set.done);

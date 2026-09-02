@@ -847,12 +847,12 @@ body.theme-light .home-center-icon { box-shadow: 0 8px 24px rgba(255, 106, 0, 0.
 /* Exercises-page toolbar: My-exercises + New-exercise + search all in one row,
    same height, the search a smaller square so they read as a consistent set. */
 .exq-toolbar { display: flex; align-items: center; gap: 8px; margin-bottom: 14px; }
-.exq-toolbar > .btn { height: var(--btn-h-s); min-height: 0; padding: 0 14px; font-size: var(--fs-btn-s);
+.exq-toolbar > .btn { height: var(--btn-h-m); min-height: 0; padding: 0 14px; font-size: var(--fs-btn-m);
   border-radius: var(--radius-btn-s);
 }
-.exq-toolbar > .icon-square { width: 40px; height: 40px; }
+.exq-toolbar > .icon-square { width: var(--btn-h-m); height: var(--btn-h-m); }
 .exq-toolbar > .icon-square svg { width: 28px; height: 28px; }
-.exq-toolbar .search-wrap { flex: 1; height: 40px; margin: 0; }
+.exq-toolbar .search-wrap { flex: 1; height: var(--btn-h-m); margin: 0; }
 
 .btn-danger {
   background: var(--red-bg);
@@ -2112,10 +2112,11 @@ body[dir="rtl"] .w-unit { margin-left: 0; margin-right: 2px; }
 
 .form-actions button {
   flex: 1;
-  padding: 14px;
+  height: var(--btn-h-l);
+  padding: 0 14px;
   font-weight: 800;
-  border-radius: 12px;
-  font-size: 15px;
+  border-radius: var(--radius-btn-l);
+  font-size: var(--fs-btn-l);
 }
 
 /* Confirm dialog */
@@ -3363,8 +3364,11 @@ body[data-view="session-run"] .bottom-nav { display: none; }
 .run-set-del::after { content: ''; position: absolute; inset: 0 -5px; }
 /* The two remaining sub-44 controls keep their visual size (they sit in tight
    rows) and get the same invisible halo: a 44px target without a 44px box. */
-.ai-portion-btn, .data-actions .icon-btn { position: relative; }
-.ai-portion-btn::after, .data-actions .icon-btn::after { content: ''; position: absolute; inset: -5px; }
+.ai-portion-btn { position: relative; }
+.ai-portion-btn::after { content: ''; position: absolute; inset: -5px; }
+/* (.data-actions .icon-btn is an .icon-btn: the centred 44px halo above already
+   applies. A second, inset-based ::after on top of it shifted the box 22px
+   up-left and onto the Edit button beside it.) */
 .run-set-del:active { transform: scale(var(--press-scale)); color: var(--danger, #e5484d); }
 .run-set-del.is-hidden { visibility: hidden; pointer-events: none; }
 .run-set-n {

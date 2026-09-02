@@ -263,14 +263,25 @@
       if (!raw || raw.length < 3) return false;
       let blob; try { blob = JSON.parse(raw); } catch (_) { return false; }
       if (!blobHasUserData(blob)) return false;
+      // The raw blob carries NO photos since v291 (they live in the side store),
+      // and the pull that follows this snapshot prunes/replaces the side store.
+      // A photo with no bucket copy therefore exists nowhere but here — so the
+      // rescue re-attaches exactly those, the way the upload does. Backed-up
+      // ones are left out: the bucket is their durable copy and they are what
+      // made a 3-MB rescue fail on the phones that needed it most.
       let keep = raw;
-      if (Array.isArray(blob.exercises) && blob.exercises.some((e) => e && e.customImage && e.imagePath)) {
-        keep = JSON.stringify(Object.assign({}, blob, {
-          exercises: blob.exercises.map((e) => {
-            if (!(e && e.customImage && e.imagePath)) return e;
-            const copy = Object.assign({}, e); delete copy.customImage; return copy;
-          }),
-        }));
+      if (Array.isArray(blob.exercises)) {
+        let changed = false;
+        const exercises = blob.exercises.map((e) => {
+          if (!e) return e;
+          if (e.customImage && e.imagePath) { changed = true; const copy = Object.assign({}, e); delete copy.customImage; return copy; }
+          if (e.isCustom && !e.imagePath && !e.customImage && typeof DB !== 'undefined' && DB.exercises && DB.exercises.getImage) {
+            const img = DB.exercises.getImage(e.id);
+            if (img) { changed = true; return Object.assign({}, e, { customImage: img }); }
+          }
+          return e;
+        });
+        if (changed) keep = JSON.stringify(Object.assign({}, blob, { exercises }));
       }
       // Stamped with the account it belongs to. recoveryInfo()/restoreRecovery()
       // refuse a snapshot from any other uid, so a rescue taken under one account
@@ -324,7 +335,7 @@
     if (!recoveryOwnedByCurrent(rec)) return false;
     // Swap: the blob we are about to replace becomes the new snapshot, so an
     // accidental restore is itself undoable.
-    snapshotLocal('pre-restore');
+    snapshotLocal('pre-restore', rec.uid || undefined);   // the rescue being restored belongs to this account (guarded above)
     if (!importRaw(rec.raw)) return false;
     const s = await getSession();
     if (s) { setDirty(s.user.id, true); try { await push({ force: true }); } catch (_) {} }
@@ -340,7 +351,7 @@
   // client's millisecond 'Z' form.
   function sameInstant(a, b) {
     const ta = Date.parse(a || ''), tb = Date.parse(b || '');
-    return isFinite(ta) && isFinite(tb) && Math.abs(ta - tb) < 1000;
+    return isFinite(ta) && isFinite(tb) && ta === tb;   // our own iso is written back verbatim; a window could adopt ANOTHER device's row
   }
   function newer(a, b) {
     const ta = Date.parse(a || ''); const tb = Date.parse(b || '');
@@ -538,11 +549,17 @@
         }
       } catch (_) { /* fall through to the safe upsert */ }
     }
-    const { data: up, error } = await c.from(TABLE).upsert(
+    const { data: up, error, status } = await c.from(TABLE).upsert(
       { user_id: uid, data: payload, updated_at: iso },
       { onConflict: 'user_id' }
     ).select('*');
-    if (error) { clearPushing(uid); throw new Error(error.message); }   // a server error is an answer, not an unknown
+    if (error) {
+      // Only a genuine server answer proves nothing was committed. The SDK also
+      // hands back {error} for a request that never got a response (status 0,
+      // no PostgREST code) — that outcome is unknown, and the stamp must stay.
+      if (error.code || (typeof status === 'number' && status > 0)) clearPushing(uid);
+      throw new Error(error.message);
+    }
     if (up && up[0] && typeof up[0].version === 'number') setVersion(uid, up[0].version);
     clearPushing(uid);
     setStamp(uid, iso);
@@ -748,7 +765,7 @@
     // the last ten versions too, since 20_vault-data-history.)
     try {
       const remote = await pull();
-      if (remote && remoteHasData(remote)) snapshotRaw(JSON.stringify(remote.data), 'pre-force-push');
+      if (remote && remoteHasData(remote)) snapshotRaw(JSON.stringify(remote.data), 'pre-force-push', s.user.id);   // BEFORE markLinked: getLastUid() is still empty on a first link
     } catch (_) {}
     // Explicit user override ("my device wins") — force past the empty-blob guard.
     let r; try { r = await push({ force: true }); } catch (_) { r = 'error'; }
