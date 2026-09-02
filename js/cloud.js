@@ -214,6 +214,26 @@
   const dirtyKey = (uid) => 'vault_dirty_' + uid; // local edits not yet pushed
   const getStamp = (uid) => { try { return localStorage.getItem(stampKey(uid)) || ''; } catch (_) { return ''; } };
   const setStamp = (uid, iso) => { try { localStorage.setItem(stampKey(uid), iso || ''); } catch (_) {} };
+  // WHY DID THIS DEVICE SAY 'CONFLICT'? The dialog is a real question, but when
+  // it keeps coming back the cause is in these four values and nothing else, and
+  // until now none of them was recorded anywhere — leaving the answer to guesswork.
+  // Numbers and booleans only (client_errors carries no user content by rule).
+  function noteConflict(where, uid, remote) {
+    try {
+      const bits = [
+        'at=' + where,
+        'linked=' + (isLinked(uid) ? 1 : 0),
+        'dirty=' + (isDirty(uid) ? 1 : 0),
+        'localVer=' + String(getVersion(uid)),
+        'remoteVer=' + String(remote && remote.version),
+        'localStamp=' + String(getStamp(uid) || '').slice(0, 24),
+        'remoteStamp=' + String((remote && remote.updatedAt) || '').slice(0, 24),
+        'pushing=' + String(getPushing(uid) || '').slice(0, 24),
+        'localHasData=' + (localHasData() ? 1 : 0),
+      ].join(' ');
+      reportError('sync-conflict', bits, 'cloud.js', 0);
+    } catch (_) {}
+  }
   const isLinked = (uid) => { try { return !!localStorage.getItem(linkedKey(uid)); } catch (_) { return false; } };
   // Remember the last linked user id so onLocalChange can flag unsynced edits as
   // "dirty" EVEN when getSession() is momentarily null (SDK still loading on boot,
@@ -408,13 +428,6 @@
   // safety net for anything typed after that snapshot — clearDirtyIfUnchanged
   // leaves it set, and the debounce fires again.
   let inFlight = null;
-  // The bytes of the last upload that the server accepted, and of the attempt in
-  // flight. bootSync pushes on EVERY foreground whether or not anything changed,
-  // and each of those was a full 50 KB upload that bumped the server version for
-  // nothing (the history table showed version gaps with identical data). An
-  // unchanged, clean store is already synced — say so without a request.
-  let lastUploadedRaw = null;
-  let lastAttemptRaw = null;
   function push(opts) {
     if (inFlight) return inFlight;
     // Announce success here rather than at each of pushOnce's three `return
@@ -426,7 +439,6 @@
     inFlight = pushOnce(opts)
       .then((r) => {
         if (r === 'ok') {
-          lastUploadedRaw = lastAttemptRaw;
           try { if (typeof window !== 'undefined') window.dispatchEvent(new CustomEvent('vault:push-ok')); } catch (_) {}
         }
         return r;
@@ -445,8 +457,6 @@
     // ignore the return value, so naming it is safe.
     if (!c || !s) return 'nosession';
     const raw = exportRaw();
-    if (!force && raw && raw === lastUploadedRaw && !isDirty(s.user.id)) return 'ok';   // nothing new since the server accepted these exact bytes
-    lastAttemptRaw = raw;
     let blob; try { blob = JSON.parse(raw || '{}'); } catch (_) { blob = {}; }
     // SAFETY GUARD (data-loss protection): never SILENTLY overwrite a cloud backup
     // that holds real user data with a local blob that holds NONE. That is exactly
@@ -553,6 +563,7 @@
             // seen. Do not overwrite it; let bootSync/resume resolve it.
             try { if (typeof window !== 'undefined') window.dispatchEvent(new CustomEvent('vault:push-conflict')); } catch (_) {}
             clearPushing(uid);   // the server answered: nothing of ours was committed
+            noteConflict('push-version-moved', uid, cur);
             return 'conflict';
           }
           // no row exists → fall through to the insert path below
@@ -715,7 +726,7 @@
     // Cloud empty (no row, or a row with no data) → seed it from this device.
     if (remote === null || !remoteHasData(remote)) return pushed();
     // Cloud has data AND this device has its own data, first time → ask the user.
-    if (!isLinked(uid) && localHasData()) return 'conflict';
+    if (!isLinked(uid) && localHasData()) { noteConflict('login-firstlink', uid, remote); return 'conflict'; }
     // ALREADY-LINKED devices need the same question asked a different way. The
     // guard above only covers a FIRST link, so a device that was linked before
     // fell straight through to applyRemote — and then setDirty(false) marked the
@@ -730,7 +741,7 @@
     //     the data that fail-closed logout had just protected.
     // bootSync has always made this check; the interactive sign-in path is the
     // one that did not, and afterLogin calls THIS, not bootSync.
-    if (isLinked(uid) && isDirty(uid) && localHasData()) return 'conflict';
+    if (isLinked(uid) && isDirty(uid) && localHasData()) { noteConflict('login-dirty', uid, remote); return 'conflict'; }
     if (applyRemote(remote, uid)) { setStamp(uid, remote.updatedAt); setVersion(uid, remote.version); setDirty(uid, false); markLinked(uid); return "pulled"; }
     // applyRemote FAILED on a blob that demonstrably has data (remoteHasData
     // passed above), so this is a broken import, not an empty cloud. Pushing
@@ -843,7 +854,7 @@
     // would never trigger a pull here (a local reset/corrupt-load leaves a recent
     // stamp), stranding the device empty next to a full backup. Pull it back.
     const localEmpty = !localHasData();
-    if (remoteNewer && isDirty(uid) && !localEmpty) return 'conflict'; // both changed → ask
+    if (remoteNewer && isDirty(uid) && !localEmpty) { noteConflict('boot-both-changed', uid, remote); return 'conflict'; } // both changed → ask
     if (remoteNewer || localEmpty) {
       if (applyRemote(remote, uid)) { setStamp(uid, remote.updatedAt); setVersion(uid, remote.version); setDirty(uid, false); markLinked(uid); return "pulled"; }
       return 'offline';
