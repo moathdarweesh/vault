@@ -408,6 +408,13 @@
   // safety net for anything typed after that snapshot — clearDirtyIfUnchanged
   // leaves it set, and the debounce fires again.
   let inFlight = null;
+  // The bytes of the last upload that the server accepted, and of the attempt in
+  // flight. bootSync pushes on EVERY foreground whether or not anything changed,
+  // and each of those was a full 50 KB upload that bumped the server version for
+  // nothing (the history table showed version gaps with identical data). An
+  // unchanged, clean store is already synced — say so without a request.
+  let lastUploadedRaw = null;
+  let lastAttemptRaw = null;
   function push(opts) {
     if (inFlight) return inFlight;
     // Announce success here rather than at each of pushOnce's three `return
@@ -419,6 +426,7 @@
     inFlight = pushOnce(opts)
       .then((r) => {
         if (r === 'ok') {
+          lastUploadedRaw = lastAttemptRaw;
           try { if (typeof window !== 'undefined') window.dispatchEvent(new CustomEvent('vault:push-ok')); } catch (_) {}
         }
         return r;
@@ -437,6 +445,8 @@
     // ignore the return value, so naming it is safe.
     if (!c || !s) return 'nosession';
     const raw = exportRaw();
+    if (!force && raw && raw === lastUploadedRaw && !isDirty(s.user.id)) return 'ok';   // nothing new since the server accepted these exact bytes
+    lastAttemptRaw = raw;
     let blob; try { blob = JSON.parse(raw || '{}'); } catch (_) { blob = {}; }
     // SAFETY GUARD (data-loss protection): never SILENTLY overwrite a cloud backup
     // that holds real user data with a local blob that holds NONE. That is exactly

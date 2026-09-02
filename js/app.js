@@ -12,7 +12,7 @@
 // build. The literal below is the fallback (file://, or a stripped query) and is
 // still bumped by `npm run release` — see CLAUDE.md "CACHE WORKFLOW".
 const VAULT_BUILD = (() => {
-  const FALLBACK = 'v293';
+  const FALLBACK = 'v294';
   try {
     const src = (document.currentScript && document.currentScript.src) || '';
     const m = src.match(/[?&]v=(\d+)/);
@@ -728,7 +728,7 @@ const I18N = {
     change_password_mismatch: 'Passwords do not match',
     change_password_done: 'Password changed',
     conflict_title: 'Existing data found',
-    conflict_text: 'Your account already has saved data. Which version do you want to keep?',
+    conflict_text: 'Your account has a saved copy, and this device has changes that never reached it. Which one do you keep?',
     conflict_cloud: 'Keep account data',
     conflict_local: "Keep this device's data",
 
@@ -918,7 +918,9 @@ const I18N = {
     sync_snapshot_failed: 'No pre-sync copy could be kept — storage is full',
     export_copied: 'Backup copied to the clipboard — paste it into a note or an email',
     export_failed: 'Could not export the backup',
-    conflict_warn_cloud: 'Keeping the cloud copy discards the changes made on this device.',
+    conflict_local_sub: 'Uploads this device\'s changes to your account and replaces the account copy.',
+    conflict_cloud_sub: 'Replaces this device with the account copy; changes that never reached it are dropped.',
+    conflict_undo_note: 'Whichever you choose, the other copy is kept: Settings → Restore.',
     ai_photo_title: 'Photo of your food',
     ai_photo_sub: 'Take a picture and I will estimate the calories',
     ai_capture: 'Take a photo',
@@ -1562,7 +1564,7 @@ const I18N = {
     change_password_mismatch: 'كلمتا السر غير متطابقتين',
     change_password_done: 'تم تغيير كلمة السر',
     conflict_title: 'يوجد بيانات في حسابك',
-    conflict_text: 'حسابك فيه بيانات محفوظة مسبقاً. أي نسخة تريد أن تبقي؟',
+    conflict_text: 'في حسابك نسخة محفوظة مسبقاً، وفي هذا الجهاز تعديلات لم تصل إليها. أيّ النسختين تُبقي؟',
     conflict_cloud: 'إبقاء بيانات الحساب (السحابة)',
     conflict_local: 'إبقاء بيانات هذا الجهاز',
 
@@ -1746,7 +1748,9 @@ const I18N = {
     sync_snapshot_failed: 'تعذّر الاحتفاظ بنسخة ما قبل المزامنة — التخزين ممتلئ',
     export_copied: 'نُسخت النسخة الاحتياطية إلى الحافظة — ألصقها في ملاحظة أو بريد',
     export_failed: 'تعذّر تصدير النسخة الاحتياطية',
-    conflict_warn_cloud: 'الاحتفاظ بنسخة السحابة يتخلّى عن التعديلات التي جرت على هذا الجهاز.',
+    conflict_local_sub: 'تُرفع تعديلات هذا الجهاز إلى حسابك وتحلّ محلّ نسخة الحساب.',
+    conflict_cloud_sub: 'تُستبدل بيانات هذا الجهاز بنسخة الحساب، وتُفقد التعديلات التي لم تصل إليها.',
+    conflict_undo_note: 'أيّاً اخترت، تبقى النسخة الأخرى محفوظة: الإعدادات ← استعادة.',
     ai_photo_title: 'صورة الأكل',
     ai_photo_sub: 'التقط صورة وسأقدّر السعرات',
     ai_capture: 'التقط صورة',
@@ -11893,14 +11897,25 @@ function showConflictDialog() {
   // 3. Either answer was unrecoverable. cloud.js snapshots the local blob
   //    immediately before any overwrite, so a wrong answer is undoable from
   //    Settings.
+  // TWO OPTION CARDS, each naming its consequence, not two identical buttons
+  // under an orange warning that only described one of them. The user is
+  // choosing between two copies of their own data; the card says, in one
+  // line, what happens to the other copy — and the footer says the loser is
+  // kept (Settings → Restore, and the server's own history since v291).
   const overlay = openModal(`
     <div class="confirm-title">${t('conflict_title')}</div>
     <div class="confirm-text">${t('conflict_text')}</div>
-    <div class="confirm-text conflict-warn">${t('conflict_warn_cloud')}</div>
-    <div class="form-actions" style="flex-direction:column;gap:8px">
-      <button type="button" class="btn btn-ghost btn-block" data-keep="local">${t('conflict_local')}</button>
-      <button type="button" class="btn btn-ghost btn-block" data-keep="cloud">${t('conflict_cloud')}</button>
+    <div class="choice-list">
+      <button type="button" class="choice" data-keep="local">
+        <span class="choice-icon">${icon('upload', 20)}</span>
+        <span class="choice-main"><span class="choice-title">${t('conflict_local')}</span><span class="choice-sub">${t('conflict_local_sub')}</span></span>
+      </button>
+      <button type="button" class="choice" data-keep="cloud">
+        <span class="choice-icon">${icon('download', 20)}</span>
+        <span class="choice-main"><span class="choice-title">${t('conflict_cloud')}</span><span class="choice-sub">${t('conflict_cloud_sub')}</span></span>
+      </button>
     </div>
+    <div class="choice-note">${t('conflict_undo_note')}</div>
   `, { variant: 'confirm', dismissible: false });
   const finish = () => { __conflictPending = false; closeModal(); hideAuthGate(); refreshAfterSync(); showToast(t('synced')); ensureUsername(); };
   // Both branches used to call finish() unconditionally, so a chooseCloud that

@@ -3133,10 +3133,27 @@ body[data-view="session-run"] .bottom-nav { display: none; }
 /* The one line in the conflict dialog that names what is about to be lost.
    --warn, not --danger: nothing has gone wrong, but one of the two buttons
    below it discards work and the user is entitled to know which. */
-.conflict-warn {
-  color: var(--warn, var(--accent-text));
-  font-weight: 700;
+/* Option cards for a two-sided choice (the sync conflict dialog). Start-aligned
+   text inside a centred dialog: a title and a one-line consequence per card. */
+.choice-list { display: flex; flex-direction: column; gap: 10px; text-align: start; }
+.choice {
+  display: flex; align-items: flex-start; gap: 12px;
+  width: 100%; min-height: 64px; padding: 12px 14px;
+  background: var(--surface-2); border: 1px solid var(--border-hi);
+  border-radius: var(--radius-btn-l); color: var(--text);
+  font: inherit; text-align: start; cursor: pointer;
+  appearance: none; -webkit-appearance: none; -webkit-tap-highlight-color: transparent;
+  transition: transform var(--dur-press) var(--ease), border-color 0.15s, background 0.15s;
 }
+.choice:active { transform: scale(var(--press-scale)); }
+.choice:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.choice[disabled] { opacity: 0.55; cursor: default; }
+.choice-icon { flex-shrink: 0; width: 36px; height: 36px; border-radius: 10px; display: inline-flex; align-items: center; justify-content: center; background: var(--accent-soft); color: var(--accent-text); }
+.choice-icon svg { width: 20px; height: 20px; }
+.choice-main { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.choice-title { font-size: 15px; font-weight: 700; line-height: 1.25; }
+.choice-sub { font-size: 12.5px; color: var(--text-mute); line-height: 1.45; }
+.choice-note { margin-top: 14px; font-size: 12px; color: var(--text-dim); line-height: 1.5; text-align: center; }
 
 .run-progress { margin: 4px 0 18px; }
 .run-progress-track {
