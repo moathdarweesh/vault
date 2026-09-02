@@ -12,7 +12,7 @@
 // build. The literal below is the fallback (file://, or a stripped query) and is
 // still bumped by `npm run release` — see CLAUDE.md "CACHE WORKFLOW".
 const VAULT_BUILD = (() => {
-  const FALLBACK = 'v292';
+  const FALLBACK = 'v293';
   try {
     const src = (document.currentScript && document.currentScript.src) || '';
     const m = src.match(/[?&]v=(\d+)/);
@@ -8415,7 +8415,7 @@ function openSleepModal(sleepId = null) {
 
     <div id="sleep-duration-preview" class="prev-session" style="margin-bottom:0">
       <div class="prev-session-head"><span>${t('total_sleep')}</span></div>
-      <div class="prev-session-sets num" style="font-size:18px;font-weight:900;letter-spacing:-0.03em"></div>
+      <div class="prev-session-sets num" style="font-size:18px;font-weight:700;letter-spacing:-0.03em"></div>
     </div>
 
     <div class="form-actions">
