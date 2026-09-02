@@ -548,6 +548,7 @@ function migratePlan(plan) {
 // DELIBERATE whole-blob replacement (cloud pull / backup restore / reset).
 let STATE_LOAD_FAILED = false;
 
+
 function loadState() {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
@@ -616,7 +617,11 @@ function loadState() {
 
     parsed.exercises.forEach((ex) => {
       if (ex.imageSlug === undefined) { ex.imageSlug = null; migrated = true; }
-      if (ex.customImage === undefined) { ex.customImage = null; migrated = true; }
+      // An inline base64 string is moved to the side store by
+      // withImageAccessors() below; flag the blob so the rewrite without it
+      // is persisted. (Older blobs also carried `customImage: null`; that key
+      // simply disappears on the same rewrite.)
+      if (typeof ex.customImage === 'string' && ex.customImage) migrated = true;
       if (ex.imagePath === undefined) { ex.imagePath = null; migrated = true; }
       if (ex.machineType === undefined) { ex.machineType = null; migrated = true; }
 
@@ -689,6 +694,7 @@ function loadState() {
       }
     });
 
+    withImageAccessors(parsed);   // moves inline photos out before the rewrite below
     if (migrated) {
       try {
         localStorage.setItem(STORAGE_KEY, JSON.stringify(parsed));
@@ -721,7 +727,99 @@ function loadState() {
   }
 }
 
-let STATE = loadState();
+// ==========================================================================
+// CUSTOM-EXERCISE IMAGES LIVE BESIDE THE BLOB, NOT IN IT.
+//
+// Each photo is one localStorage key ('vault_img_<exerciseId>' → data URL) and
+// every exercise object carries `customImage` as a NON-ENUMERABLE accessor onto
+// that key. Readers and writers see the same property they always did;
+// JSON.stringify(STATE) does not. What that buys:
+//   · every save() writes the text blob, not the photos — a set commit no longer
+//     stringifies multi-MB of base64 on the main thread;
+//   · the pre-sync snapshot and the corrupt-blob copy are text too, so they fit;
+//   · a cloud pull replaces the blob and LEAVES THE PHOTOS ALONE — they no
+//     longer vanish after every foreground sync until the next heal;
+//   · healing a photo from the bucket writes one key, not the whole blob.
+// An inline `customImage` string found in a stored/imported/pulled blob (older
+// builds, backups, another device's un-backed-up photo) is moved into the side
+// store on load. The upload payload re-attaches un-backed-up photos so they
+// still travel until the bucket has them (see Cloud.pushOnce).
+// ==========================================================================
+const IMG_KEY = 'vault_img_';
+function imgGet(id) { try { return localStorage.getItem(IMG_KEY + id) || null; } catch (_) { return null; } }
+function imgSet(id, dataUrl) {
+  try {
+    if (dataUrl) localStorage.setItem(IMG_KEY + id, String(dataUrl));
+    else localStorage.removeItem(IMG_KEY + id);
+    return true;
+  } catch (err) {
+    // quota — report exactly like a blob write so the user is told
+    try { window.dispatchEvent(new CustomEvent('vault:save-failed', { detail: { quota: true } })); } catch (_) {}
+    return false;
+  }
+}
+// The stamp beside each side-store photo: the blob's `imageAt` at the moment the
+// photo was stored here. It is how a device tells a photo it holds from a photo
+// the account no longer has (removed elsewhere) or has replaced elsewhere.
+function imgAtGet(id) { try { return localStorage.getItem(IMG_KEY + 'at_' + id) || null; } catch (_) { return null; } }
+function imgAtSet(id, at) { try { if (at) localStorage.setItem(IMG_KEY + 'at_' + id, String(at)); else localStorage.removeItem(IMG_KEY + 'at_' + id); } catch (_) {} }
+function defineImgAccessor(ex) {
+  if (!ex || typeof ex !== 'object' || !ex.id) return;
+  const d = Object.getOwnPropertyDescriptor(ex, 'customImage');
+  if (d && d.get) return;                        // already wired
+  if (d) {
+    // an inline value from an older blob, a backup file or a pull — move it.
+    // If the side store refuses it (quota), the photo STAYS inline and no
+    // accessor is defined: deleting it first would have persisted the blob
+    // without the photo on exactly the phone that is already full.
+    if (typeof d.value === 'string' && d.value) {
+      if (!imgSet(ex.id, d.value)) return;
+      imgAtSet(ex.id, ex.imageAt || null);
+    }
+    delete ex.customImage;
+  } else if (ex.isCustom) {
+    // No inline photo in this blob. Reconcile what THIS device holds with what
+    // the account says — a pull replaces the blob but not the side store:
+    //   · imageCleared with no imageAt → the photo was removed elsewhere; drop it
+    //     (legacy blobs never carry imageCleared, so an old un-backed-up photo
+    //     is never mistaken for a removed one);
+    //   · a different imageAt from the one this copy was stored under → it was
+    //     replaced elsewhere; drop it and let the boot heal refetch the bucket.
+    const have = imgGet(ex.id);
+    if (have) {
+      const at = imgAtGet(ex.id);
+      if (ex.imageCleared && !ex.imageAt) { imgSet(ex.id, null); imgAtSet(ex.id, null); }
+      else if (ex.imageAt && at && at !== ex.imageAt) { imgSet(ex.id, null); imgAtSet(ex.id, null); }
+    }
+  }
+  Object.defineProperty(ex, 'customImage', {
+    get() { return imgGet(this.id); },
+    set(v) { imgSet(this.id, v); },
+    enumerable: false, configurable: true,
+  });
+}
+function withImageAccessors(state) {
+  try { (state && state.exercises || []).forEach(defineImgAccessor); } catch (_) {}
+  return state;
+}
+// Drop side keys whose exercise no longer exists (deleted elsewhere, or a
+// backup restored without it). NEVER while READ-ONLY: the in-memory default
+// state has none of the user's exercises, and pruning against it would erase
+// every photo on the device.
+function imgPrune() {
+  if (STATE_LOAD_FAILED) return;
+  try {
+    const keep = new Set((STATE.exercises || []).map((e) => e.id));
+    Object.keys(localStorage).forEach((k) => {
+      if (k.indexOf(IMG_KEY) !== 0) return;
+      const id = k.indexOf(IMG_KEY + 'at_') === 0 ? k.slice((IMG_KEY + 'at_').length) : k.slice(IMG_KEY.length);
+      if (!keep.has(id)) localStorage.removeItem(k);
+    });
+  } catch (_) {}
+}
+
+let STATE = withImageAccessors(loadState());
+imgPrune();
 
 // The one low-level write. Returns true when the bytes actually landed.
 //
@@ -733,6 +831,13 @@ let STATE = loadState();
 function writeStore() {
   if (STATE_LOAD_FAILED) {
     console.error('[VAULT] Refusing to write: stored data is unreadable (READ-ONLY mode).');
+    // Say so to the app, exactly like the quota branch below. This branch only
+    // logged, so a corrupt store looked like a working app that saved nothing.
+    try {
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('vault:save-failed', { detail: { quota: false, readonly: true } }));
+      }
+    } catch (_) {}
     return false;
   }
   try {
@@ -784,7 +889,8 @@ function reloadState() {
   // this, a device that once hit a corrupt blob could never be recovered — even
   // by pulling a known-good copy from the cloud.
   STATE_LOAD_FAILED = false;
-  STATE = loadState();
+  STATE = withImageAccessors(loadState());
+  imgPrune();
 }
 
 // ==========================================================================
@@ -883,7 +989,6 @@ const DB = {
       save();
       return this.isRest(iso);
     },
-    toggleRest(D) { return this.setRest(D, !this.isRest(D)); },
 
     // ----- "training today after all" — the mirror of the two above -----
     // A weekday that is NOT in the rotation, pulled in for this one date. It
@@ -1055,7 +1160,6 @@ const DB = {
       save();
       return s;
     },
-    setTimes(id, times) { return this.update(id, { times: Array.isArray(times) ? times : [] }); },
     remove(id) {
       STATE.supplements = STATE.supplements.filter((s) => s.id !== id);
       // Also clean logs for this supplement
@@ -1150,48 +1254,6 @@ const DB = {
         },
         { calories: 0, protein: 0, carbs: 0, fat: 0 }
       );
-    },
-    // Most-frequently-logged foods across ALL dates — derived on demand, no
-    // new storage. Keyed by foodId when present, else lowercased name so
-    // AI/manual entries of the same food still group. Each result carries the
-    // macros + servings from its MOST RECENT logging (by addedAt) so a one-tap
-    // re-add reproduces the last real entry. Excludes anything already logged
-    // on `excludeDate` so the quick-add rail doesn't suggest today's foods.
-    frequent(limit = 6, excludeDate = null) {
-      const excludeKeys = new Set(
-        (excludeDate ? (STATE.foodLogs[excludeDate] || []) : []).map(
-          (e) => e.foodId || ('name:' + (e.name || '').toLowerCase())
-        )
-      );
-      const map = {};
-      Object.keys(STATE.foodLogs).forEach((date) => {
-        (STATE.foodLogs[date] || []).forEach((e) => {
-          const key = e.foodId || ('name:' + (e.name || '').toLowerCase());
-          if (!e.name) return;
-          if (!map[key]) map[key] = { key, count: 0, last: null, entry: null };
-          map[key].count += 1;
-          const at = e.addedAt || (date + 'T00:00:00');
-          if (!map[key].last || at > map[key].last) {
-            map[key].last = at;
-            map[key].entry = e;
-          }
-        });
-      });
-      return Object.values(map)
-        .filter((m) => !excludeKeys.has(m.key))
-        .sort((a, b) => (b.count - a.count) || isoDesc(a.last || '', b.last || ''))
-        .slice(0, limit)
-        .map((m) => ({
-          foodId: m.entry.foodId || null,
-          name: m.entry.name,
-          servings: m.entry.servings || 1,
-          calories: m.entry.calories || 0,
-          protein: m.entry.protein || 0,
-          carbs: m.entry.carbs || 0,
-          fat: m.entry.fat || 0,
-          source: m.entry.source || null,
-          count: m.count,
-        }));
     },
   },
 
@@ -1295,12 +1357,15 @@ const DB = {
       save();
       return n;
     },
-    clear() { STATE.nutrition = defaultNutrition(); save(); },
   },
 
   // ----- Bulk export / import (for backup) -----
   exportJSON() {
-    return JSON.stringify(STATE, null, 2);
+    // Photos are re-attached inline: a backup file must be complete on its own,
+    // and importJSON()/loadState() move them back out on the way in.
+    const out = JSON.parse(JSON.stringify(STATE));
+    try { (out.exercises || []).forEach((e) => { const img = imgGet(e.id); if (img) e.customImage = img; }); } catch (_) {}
+    return JSON.stringify(out, null, 2);
   },
   // Validate that a parsed blob has the expected shape before we accept it.
   // Lenient: only requires what must exist; optional arrays are checked only
@@ -1381,8 +1446,9 @@ const DB = {
     }
   },
   resetAll() {
-    STATE = defaultState();
+    STATE = withImageAccessors(defaultState());
     STATE_LOAD_FAILED = false;   // a reset is a deliberate replacement — see importJSON
+    imgPrune();                  // the wiped exercises' photos go with them
     save();
   },
 
@@ -1409,27 +1475,61 @@ const DB = {
         // Storage path of the durable backup copy of customImage (set once the
         // upload lands — see Cloud.backupExerciseImage / syncExerciseImages).
         imagePath: imagePath || null,
+        // When the photo was last set (syncs with the blob); imageCleared says
+        // an explicit removal happened — see defineImgAccessor's reconciliation.
+        imageAt: customImage ? new Date().toISOString() : null,
+        imageCleared: false,
         isCustom: true,
         inMyList: true,
         createdAt: new Date().toISOString(),
       };
       STATE.exercises.push(ex);
+      defineImgAccessor(ex);   // moves the inline photo to the side store
       save();
       return ex;
     },
     update(id, data) {
       const ex = STATE.exercises.find((x) => x.id === id);
       if (!ex) return null;
+      defineImgAccessor(ex);
       if (data.name != null) ex.name = data.name.trim();
       if (data.category != null) ex.category = data.category;
-      if (data.customImage !== undefined) ex.customImage = data.customImage;
+      if (data.customImage !== undefined) {
+        if (data.customImage) {
+          ex.imageAt = new Date().toISOString();
+          ex.imageCleared = false;
+          ex.customImage = data.customImage;   // side store, via the accessor
+          imgAtSet(id, ex.imageAt);
+        } else {
+          // An explicit removal. The tombstone travels in the blob so every
+          // other device drops its copy on the next pull, instead of keeping
+          // the photo and pushing it straight back into the account.
+          ex.imageAt = null;
+          ex.imageCleared = true;
+          ex.customImage = null;
+          imgAtSet(id, null);
+        }
+      }
       if (data.imagePath !== undefined) ex.imagePath = data.imagePath;
       save();
       return ex;
     },
+    // The photo alone — no blob write, no cloud dirty flag. For the boot-time
+    // heal from the bucket: a restored base64 is re-derivable, and writing the
+    // whole blob once per healed image was the first-launch cost on a new phone.
+    setImage(id, dataUrl) {
+      const ex = STATE.exercises.find((x) => x.id === id);
+      if (!ex) return false;
+      defineImgAccessor(ex);
+      const ok = imgSet(id, dataUrl);
+      if (ok) imgAtSet(id, ex.imageAt || null);
+      return ok;
+    },
+    getImage(id) { return imgGet(id); },
     remove(id) {
       STATE.exercises = STATE.exercises.filter((e) => e.id !== id);
       STATE.sessions = STATE.sessions.filter((s) => s.exerciseId !== id);
+      imgSet(id, null); imgAtSet(id, null);
       save();
     },
     setInMyList(id, value) {
@@ -1463,11 +1563,11 @@ const DB = {
           category: EXERCISE_CATEGORIES.includes(g.category) ? g.category : 'Other',
           imageSlug: g.imageSlug || null,
           machineType: g.machineType || null,
-          customImage: null,
           isCustom: false,
           inMyList: false,
           createdAt: new Date().toISOString(),
         });
+        defineImgAccessor(STATE.exercises[STATE.exercises.length - 1]);
         added++;
       });
       // Housekeeping: the global catalog is admin-owned and re-pulled on every
@@ -2339,7 +2439,6 @@ const DB = {
       return limit ? l.slice(0, limit) : l;
     },
     logForDate(iso) { return this._readLog().filter((x) => x.date === iso); },
-    logHas(tag) { return this._readLog().some((x) => x.tag === tag); },
     logMarkSeen(id) {
       const l = this._readLog();
       let hit = false;
@@ -2525,7 +2624,12 @@ const DB = {
     totals(rec) {
       const t = { calories: 0, protein: 0, carbs: 0, fat: 0 };
       ((rec && rec.items) || []).forEach((it) => {
-        const q = Number(it.qty) || 1;
+        // SUMMED AS TYPED. The figures on a row are the figures FOR THAT
+        // INGREDIENT AS USED — "200 g chicken breast: 330 kcal, 62 g protein" —
+        // exactly what a person reads off a label or a search result. `qty` is
+        // the amount as a label ("200 غ", "3 حبات"); it used to be a multiplier,
+        // so typing 200 in the quantity box turned 330 kcal into 66,000.
+        const q = 1;
         t.calories += (Number(it.calories) || 0) * q;
         t.protein  += (Number(it.protein)  || 0) * q;
         t.carbs    += (Number(it.carbs)    || 0) * q;
@@ -2548,7 +2652,7 @@ const DB = {
     add({ name, servings, items }) {
       const clean = (Array.isArray(items) ? items : []).map((it) => ({
         name: String((it && it.name) || '').trim(),
-        qty: Math.max(0, Number(it && it.qty) || 1),
+        qty: String(it && it.qty != null ? it.qty : '').trim().slice(0, 24),
         calories: Math.max(0, Number(it && it.calories) || 0),
         protein: Math.max(0, Number(it && it.protein) || 0),
         carbs: Math.max(0, Number(it && it.carbs) || 0),
@@ -2739,6 +2843,10 @@ const DB = {
 
 // Re-read STATE from localStorage (after cloud sync swaps in pulled data).
 DB.reload = reloadState;
+// True when the stored blob could not be parsed at boot and the app is running
+// READ-ONLY on an in-memory default. The 'vault:load-failed' event fires
+// before app.js loads (STATE is built at evaluation time), so init() asks.
+DB.loadFailed = () => STATE_LOAD_FAILED;
 
 // ==========================================================================
 // Helpers exposed for the UI layer

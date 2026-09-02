@@ -21,7 +21,10 @@
     --bg:#08090a; --surface:#0e0f11; --surface-2:#131416; --surface-3:#1d1f22;
     --line:#1c1e21; --line-2:#1a1c1f; --line-3:#17181b; --edge:#26282c; --edge-hi:#3d4045;
     --accent:#ff6a00; --accent-soft:rgba(255,106,0,.1); --accent-edge:#3a2a14; --accent-ink:#1a0800;
-    --text:#e8e8ea; --dim:#9a9ea3; --mute:#6e7176; --faint:#4d5055;
+    /* --mute is small text (labels, table headers, timestamps): 5.0:1 on the
+       darkest panel. It was #6e7176 = 3.4:1 there, under AA. --faint is for
+       icon tints and rules only — never text. */
+    --text:#e8e8ea; --dim:#9a9ea3; --mute:#8b8f95; --faint:#4d5055;
     --good:#34d399; --warn:#e0b23c; --red:#f87171;
     --chest:#f472b6; --back:#60a5fa; --legs:#34d399; --shoulders:#c084fc; --arms:#fbbf24; --core:#fb7185; --other:#9a9ea3;
     --radius:14px; --radius-sm:9px;
@@ -89,7 +92,7 @@
   .ustatus{font-size:11.5px}
   .ustatus.behind{color:var(--warn)}
   .ustatus.steady{color:#55585d}
-  .ustatus.none{color:var(--faint)}
+  .ustatus.none{color:var(--mute)}
   .useen{font-size:13px; color:var(--dim)}
   .ubarcell{display:flex; align-items:center; gap:11px}
   .ubarwrap{flex:1; max-width:110px; height:5px; border-radius:3px;
@@ -98,7 +101,7 @@
   .ubar.behind{background:var(--warn)}
   .upct{font-size:13px; color:var(--dim); min-width:38px}
   .upct.behind{color:var(--warn)}
-  .upct.none{color:var(--faint)}
+  .upct.none{color:var(--mute)}
   .uplan{font-size:13px; color:var(--dim); overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
   .urole{font-size:12px; color:var(--mute); text-align:center}
   @media(max-width:860px){
@@ -121,7 +124,7 @@
   .pvd-label.met{color:var(--dim)}
   .pvd-label.short{color:var(--warn)}
   /* A day still ahead of us is not a miss — grey, never amber. */
-  .pvd-label.ahead{color:var(--faint)}
+  .pvd-label.ahead{color:var(--mute)}
   .pvd-legend{display:flex; align-items:center; gap:15px; font-size:12px; color:var(--mute)}
   .pvd-legend span{display:flex; align-items:center; gap:7px}
   .pvd-legend i{width:14px; height:6px; border-radius:3px; display:block}
@@ -630,6 +633,10 @@
       else if(id==='audit') renderAudit(box);
       else if(id==='settings') renderSettings(box);
       else if(id==='releases') renderReleases(box);
+      // A save closes its modal (focus back to the opener) and then re-renders
+      // this panel, which destroys that opener — focus fell to <body>. Land it
+      // on the first control of the fresh panel instead.
+      if(document.activeElement===document.body){ var f=box.querySelector('input,button,[tabindex]'); if(f){ try{ f.focus(); }catch(_){} } }
     }
     function headBtn(label,cls,fn){
       var b=document.createElement('button'); b.className='abtn '+(cls||''); b.textContent=label; b.addEventListener('click',fn);
@@ -647,7 +654,7 @@
         fetchAll(function(a,b){return sb.from('user_flags').select('user_id,role,status,reason').range(a,b);}),
         fetchAll(function(a,b){return sb.from('cardio_types').select('id,label,owner_id,deleted_at').range(a,b);}),
         fetchAll(function(a,b){return sb.from('feedback').select('id,user_id,username,message,context,status,created_at').range(a,b);}),
-        fetchAll(function(a,b){return sb.from('food_catalog').select('id,name,serving,calories,protein,carbs').range(a,b);}),
+        fetchAll(function(a,b){return sb.from('food_catalog').select('*').range(a,b);}),
         fetchAll(function(a,b){return sb.from('preset_plans').select('id,name,description,data,position').range(a,b);}),
         fetchAll(function(a,b){return sb.from('app_config').select('default_unit,announcement_ar,announcement_en,announcement_active').range(a,b);}),
         fetchAll(function(a,b){return sb.from('audit_log').select('id,actor,action,target,detail,created_at').order('id',{ascending:false}).range(a,b);}),
@@ -674,7 +681,9 @@
         role:'user',status:'active',reason:null,sessions:0,sets:0,volume:0,custom:0,foods:0,sleeps:0,cardio:0,last:null,
         weekDone:0,trainingDays:0,planName:null,pct:null}; return U[id]; }
       profiles.forEach(function(p){var u=ensure(p.user_id); if(u){u.username=p.username; u.joined=p.created_at; u.last_seen=p.last_seen;}});
-      prefs.forEach(function(p){var u=ensure(p.user_id); if(u)u.unit=p.unit||'kg';});
+      // WHITELIST at the source: this lands in innerHTML on the detail page, and a
+      // PostgREST update of one's own row bypasses the app's kg/lb clamp.
+      prefs.forEach(function(p){var u=ensure(p.user_id); if(u)u.unit=(p.unit==='lb')?'lb':'kg';});
       flags.forEach(function(f){var u=ensure(f.user_id); if(u){u.role=f.role||'user'; u.status=f.status||'active'; u.reason=f.reason;}});
       // Per-user activity rollup now comes from the DB (admin_user_stats RPC).
       userStats.forEach(function(r){ var u=ensure(r.user_id); if(u){
@@ -992,11 +1001,28 @@
     // Generic CRUD modal: body html + onSave(overlay, close).
     function admModal(title, bodyHtml, onSave){
       var ov=document.createElement('div'); ov.className='adm-overlay';
-      ov.innerHTML='<div class="adm-modal"><div class="adm-modal-h"><span>'+esc(title)+'</span><button class="adm-x">✕</button></div>'+
+      ov.innerHTML='<div class="adm-modal" role="dialog" aria-modal="true" aria-label="'+esc(title)+'"><div class="adm-modal-h"><span>'+esc(title)+'</span><button class="adm-x" aria-label="إغلاق">✕</button></div>'+
         '<div class="adm-modal-b">'+bodyHtml+'</div>'+
         '<div class="adm-modal-f"><button class="abtn adm-cancel">إلغاء</button><button class="abtn pri adm-save">حفظ</button></div></div>';
       document.body.appendChild(ov);
-      function close(){ if(ov.parentNode) ov.parentNode.removeChild(ov); }
+      // Escape closes; focus goes back to what opened it.
+      var opener=document.activeElement;
+      function onKey(e){
+        if(e.key==='Escape'){ e.preventDefault(); close(); return; }
+        if(e.key!=='Tab') return;
+        // keep Tab inside the dialog
+        var f=Array.prototype.filter.call(ov.querySelectorAll('button,input,select,textarea,[tabindex]:not([tabindex="-1"])'),function(x){ return !x.disabled && x.offsetParent!==null; });
+        if(!f.length) return;
+        var first=f[0], last=f[f.length-1];
+        if(e.shiftKey && document.activeElement===first){ e.preventDefault(); last.focus(); }
+        else if(!e.shiftKey && document.activeElement===last){ e.preventDefault(); first.focus(); }
+      }
+      document.addEventListener('keydown',onKey);
+      function close(){
+        document.removeEventListener('keydown',onKey);
+        if(ov.parentNode) ov.parentNode.removeChild(ov);
+        try{ if(opener&&opener.focus) opener.focus(); }catch(_){}
+      }
       ov.querySelector('.adm-x').onclick=close; ov.querySelector('.adm-cancel').onclick=close;
       ov.addEventListener('click',function(e){ if(e.target===ov) close(); });
       ov.querySelector('.adm-save').onclick=function(){ onSave(ov, close); };
@@ -1066,11 +1092,17 @@
         '<label>الحصة (اختياري)</label><input id="fd-serv" value="'+esc(f.serving||'')+'" placeholder="مثال: ١٠٠غ">'+
         '<label>السعرات</label><input id="fd-cal" type="number" value="'+(f.calories!=null?+f.calories:'')+'">'+
         '<label>بروتين (غ)</label><input id="fd-pro" type="number" value="'+(f.protein!=null?+f.protein:'')+'">'+
-        '<label>كربوهيدرات (غ)</label><input id="fd-carb" type="number" value="'+(f.carbs!=null?+f.carbs:'')+'">';
+        '<label>كربوهيدرات (غ)</label><input id="fd-carb" type="number" value="'+(f.carbs!=null?+f.carbs:'')+'">'+
+        '<label>دهون (غ)</label><input id="fd-fat" type="number" value="'+(f.fat!=null?+f.fat:'')+'">';
       admModal(id?'تعديل طعام':'طعام جديد', body, async function(ov,close){
         var name=(ov.querySelector('#fd-name').value||'').trim(); if(!name){ toast('الاسم مطلوب'); return; }
         var num=function(s){ var n=parseFloat(ov.querySelector(s).value); return isNaN(n)?0:n; };
-        var r=await sb.rpc('admin_upsert_food',{p_id:id||null,p_name:name,p_serving:(ov.querySelector('#fd-serv').value||'').trim()||null,p_cal:num('#fd-cal'),p_pro:num('#fd-pro'),p_carb:num('#fd-carb')});
+        var args={p_id:id||null,p_name:name,p_serving:(ov.querySelector('#fd-serv').value||'').trim()||null,p_cal:num('#fd-cal'),p_pro:num('#fd-pro'),p_carb:num('#fd-carb')};
+        // The 7-argument overload (with fat) exists once 21_food-catalog-fat is
+        // applied; until then PostgREST answers "function not found" and the
+        // 6-argument original still saves the rest.
+        var r=await sb.rpc('admin_upsert_food',Object.assign({p_fat:num('#fd-fat')},args));
+        if(r.error&&/function|p_fat|PGRST202/i.test(r.error.message||'')){ r=await sb.rpc('admin_upsert_food',args); if(!r.error) toast('حُفظ بلا دهون — طبّق ترحيل 21 لتفعيل حقل الدهون'); }
         if(r.error){ toast('تعذّر: '+r.error.message); return; }
         close(); await loadAll(); showCenter('catalog'); toast('تم الحفظ');
       });
@@ -1391,7 +1423,7 @@
       }).join('')+'</div>' : '<div class="empty-mini">لا وجبات مسجّلة.</div>';
       var sleepHtml=d.sleeps.length? '<div class="rows2">'+d.sleeps.slice().sort(function(a,b){return (b.slept_on||'').localeCompare(a.slept_on||'');}).map(function(s){
         var h=Math.floor((s.duration_min||0)/60), m=(s.duration_min||0)%60;
-        return '<div class="row2"><span class="r-name num" style="direction:ltr">'+(s.sleep_time||'—')+' → '+(s.wake_time||'—')+'</span><span class="r-val num">'+h+'س '+m+'د</span><span class="r-meta num">'+esc(s.slept_on)+'</span></div>';
+        return '<div class="row2"><span class="r-name num" style="direction:ltr">'+esc(s.sleep_time||'—')+' → '+esc(s.wake_time||'—')+'</span><span class="r-val num">'+h+'س '+m+'د</span><span class="r-meta num">'+esc(s.slept_on)+'</span></div>';
       }).join('')+'</div>' : '<div class="empty-mini">لا نوم مسجّل.</div>';
       var totSets=d.sets.length, totVol=Math.round(d.sets.reduce(function(a,x){return a+(x.reps*(+x.weight||0));},0));
       // The design's "الخطة مقابل التنفيذ" + "الأرقام" pair, above the existing
@@ -1423,7 +1455,7 @@
       $('#detail-inner').innerHTML=
         '<div class="d-top"><button class="d-back" id="dback">‹ رجوع للقائمة</button><span class="d-id">'+esc(u.id)+'</span></div>'+
         '<div class="d-title"><span class="av">'+esc(initial(u))+'</span><span class="name">'+nameHtml(u)+'</span></div>'+
-        '<div class="stats">'+tile(d.sessions.length,'جلسة','alt')+tile(totSets,'مجموعة','')+tile(totVol.toLocaleString('en-US'),'حِمل ('+(u.unit||'kg').toUpperCase()+')','')+tile(d.customs.length,'تمرين خاص','')+'</div>'+
+        '<div class="stats">'+tile(d.sessions.length,'جلسة','alt')+tile(totSets,'مجموعة','')+tile(totVol.toLocaleString('en-US'),'حِمل ('+(u.unit==='lb'?'LB':'KG')+')','')+tile(d.customs.length,'تمرين خاص','')+'</div>'+
         mgmtHtml(u)+
         profile+
         sec('دورة التمارين','<div class="plan">'+planHtml+'</div>')+

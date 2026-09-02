@@ -12,7 +12,7 @@
 // build. The literal below is the fallback (file://, or a stripped query) and is
 // still bumped by `npm run release` — see CLAUDE.md "CACHE WORKFLOW".
 const VAULT_BUILD = (() => {
-  const FALLBACK = 'v290';
+  const FALLBACK = 'v291';
   try {
     const src = (document.currentScript && document.currentScript.src) || '';
     const m = src.match(/[?&]v=(\d+)/);
@@ -42,8 +42,6 @@ const ICONS = {
   home: '<path d="M12 2.6 1.8 11.2h3.4v10.2h13.6V11.2h3.4Z" fill="currentColor"/><path d="M9.2 21.4V15.4h5.6v6Z" fill="var(--icon-accent,#ff6a00)"/>',
   // Five-bar field: the outer pair sits back at 55% opacity, the inner pair full
   // currentColor, the centre bar takes the accent — three tones, one colour token.
-  vault: '<rect x="2.6" y="9" width="2.8" height="6" rx="1.4" fill="currentColor" opacity=".55"/><rect x="7" y="5" width="2.8" height="14" rx="1.4" fill="currentColor"/><rect x="14.2" y="5" width="2.8" height="14" rx="1.4" fill="currentColor"/><rect x="18.6" y="9" width="2.8" height="6" rx="1.4" fill="currentColor" opacity=".55"/><rect x="10.6" y="7" width="2.8" height="10" rx="1.4" fill="var(--icon-accent,#ff6a00)"/>',
-  vaultDoor: '<rect x="2.5" y="2.5" width="19" height="19" rx="5" fill="currentColor"/><circle cx="12" cy="12" r="4.4" fill="var(--icon-accent,#ff6a00)"/><rect x="11.1" y="3.8" width="1.8" height="3.2" rx=".9" fill="var(--icon-accent,#ff6a00)"/><rect x="11.1" y="17" width="1.8" height="3.2" rx=".9" fill="var(--icon-accent,#ff6a00)"/><rect x="3.8" y="11.1" width="3.2" height="1.8" rx=".9" fill="var(--icon-accent,#ff6a00)"/><rect x="17" y="11.1" width="3.2" height="1.8" rx=".9" fill="var(--icon-accent,#ff6a00)"/>',
   calendar: '<rect x="6.8" y="1.8" width="2.6" height="4.4" rx="1.3" fill="currentColor"/><rect x="14.6" y="1.8" width="2.6" height="4.4" rx="1.3" fill="currentColor"/><path d="M2.6 9.6h18.8v8.4a3.4 3.4 0 0 1-3.4 3.4H6a3.4 3.4 0 0 1-3.4-3.4Z" fill="currentColor"/><path d="M6 4.2h12a3.4 3.4 0 0 1 3.4 3.4v2H2.6v-2A3.4 3.4 0 0 1 6 4.2Z" fill="var(--icon-accent,#ff6a00)"/>',
   chart: '<rect x="2.4" y="19.4" width="19.2" height="2.4" rx="1.2" fill="currentColor"/><rect x="4.4" y="12.4" width="4.2" height="5.6" rx="1.4" fill="currentColor"/><rect x="15.4" y="9.4" width="4.2" height="8.6" rx="1.4" fill="currentColor"/><rect x="9.9" y="5.4" width="4.2" height="12.6" rx="1.4" fill="var(--icon-accent,#ff6a00)"/>',
   dumbbell: '<rect x="1.5" y="9" width="3" height="6" rx="1.2" fill="currentColor"/><rect x="5.5" y="6" width="4" height="12" rx="1.6" fill="currentColor"/><rect x="14.5" y="6" width="4" height="12" rx="1.6" fill="currentColor"/><rect x="19.5" y="9" width="3" height="6" rx="1.2" fill="currentColor"/><rect x="9.5" y="10.4" width="5" height="3.2" fill="var(--icon-accent,#ff6a00)"/>',
@@ -69,14 +67,12 @@ const ICONS = {
   grip: '<circle cx="9" cy="6.6" r="1.5" fill="currentColor"/><circle cx="9" cy="12" r="1.5" fill="currentColor"/><circle cx="9" cy="17.4" r="1.5" fill="currentColor"/><circle cx="15" cy="6.6" r="1.5" fill="var(--icon-accent,#ff6a00)"/><circle cx="15" cy="12" r="1.5" fill="var(--icon-accent,#ff6a00)"/><circle cx="15" cy="17.4" r="1.5" fill="var(--icon-accent,#ff6a00)"/>',
   play: '<path d="M7.6 4.4a1.4 1.4 0 0 1 2.1-1.2l6.5 4.7v8.2l-6.5 4.7a1.4 1.4 0 0 1-2.1-1.2Z" fill="currentColor"/><path d="M16.2 7.9l3.1 2.3a1.4 1.4 0 0 1 0 2.3l-3.1 2.3Z" fill="var(--icon-accent,#ff6a00)"/>',
   send: '<path d="M21.6 2.4 2.4 9.8l7.4 3.8Z" fill="currentColor"/><path d="M21.6 2.4 13.8 21.6l-3.8-7.4Z" fill="var(--icon-accent,#ff6a00)"/>',
-  backspace: '<path d="M9.4 3.4h9.2a3 3 0 0 1 3 3v11.2a3 3 0 0 1-3 3H9.4a1.7 1.7 0 0 1-1.2-.5L1.6 13a1.4 1.4 0 0 1 0-2l6.6-7a1.7 1.7 0 0 1 1.2-.6Z" fill="currentColor"/><path d="m11.4 8.6 1.9-1.9 2.7 2.7 2.7-2.7 1.9 1.9-2.7 2.7 2.7 2.7-1.9 1.9-2.7-2.7-2.7 2.7-1.9-1.9 2.7-2.7Z" fill="var(--icon-accent,#ff6a00)"/>',
 
   // ——— cardio & movement ———
   run: '<path d="M14.6 7.6 8.4 11l2 3.8-4 6.4 2.8 1.6 4.6-7.2-1.4-2.6 3-1.6 3.4 2.2 1.6-2.6-4.2-2.8Z" fill="currentColor"/><circle cx="16.4" cy="4.6" r="2.7" fill="var(--icon-accent,#ff6a00)"/>',
   walk: '<path d="M11.2 7.4 8 13.4l2.4 2.2-1.8 5.8 2.8.8 2.2-7-1.6-1.8 1.6-2.4 2.4 1.8 1.4 3.6 2.6-1-1.8-4.6Z" fill="currentColor"/><circle cx="13" cy="4.2" r="2.7" fill="var(--icon-accent,#ff6a00)"/>',
   bike: '<path d="M5.6 12.4a4.6 4.6 0 1 0 0 9.2 4.6 4.6 0 0 0 0-9.2Zm0 2.6a2 2 0 1 1 0 4 2 2 0 0 1 0-4Z" fill="currentColor"/><path d="M18.4 12.4a4.6 4.6 0 1 0 0 9.2 4.6 4.6 0 0 0 0-9.2Zm0 2.6a2 2 0 1 1 0 4 2 2 0 0 1 0-4Z" fill="currentColor"/><path d="M9.2 5.6h4.6l4.8 10.6-2.2 1-4.2-9.2H9.2Z" fill="var(--icon-accent,#ff6a00)"/><path d="m12.6 7.4 2.4.6-2.6 8.8-2.4-.7Z" fill="var(--icon-accent,#ff6a00)"/>',
   treadmill: '<path d="M4.6 13.6h10.8a3.4 3.4 0 0 1 0 6.8H4.6a3.4 3.4 0 0 1 0-6.8Z" fill="currentColor"/><path d="M16.6 17.4V6.4h-4.4V4h6.8v13.4Z" fill="var(--icon-accent,#ff6a00)"/>',
-  footprints: '<path d="M6.8 2.6c1.9 0 3.4 2.3 3.4 5.2S8.7 13 6.8 13 3.4 10.7 3.4 7.8 4.9 2.6 6.8 2.6Z" fill="currentColor"/><path d="M17.2 9.4c1.9 0 3.4 2.3 3.4 5.2s-1.5 5.2-3.4 5.2-3.4-2.3-3.4-5.2 1.5-5.2 3.4-5.2Z" fill="var(--icon-accent,#ff6a00)"/>',
   columns: '<rect x="3.4" y="3.4" width="6.4" height="17.2" rx="2.6" fill="currentColor"/><rect x="14.2" y="9.4" width="6.4" height="11.2" rx="2.6" fill="var(--icon-accent,#ff6a00)"/>',
 
   // ——— data & body ———
@@ -400,7 +396,7 @@ function dayName(dow, full = false) {
 // ==========================================================================
 const I18N = {
   en: {
-    app_name: 'VAULT',
+
     // nav_train labels the Program tab (view id 'workouts'), not the exercise
     // browser — that moved to its own screen. See renderProgram.
     nav_home: 'Home', nav_train: 'Program', nav_cardio: 'Cardio', nav_food: 'Food', nav_sleep: 'Sleep',
@@ -427,7 +423,7 @@ const I18N = {
     streak_one_day: '1 day', streak_days: 'days',
     streak_active: 'Active streak — keep it going!',
     streak_start: 'Log a session to start your streak',
-    workouts: 'Workouts', volume: 'Volume', cardio: 'Cardio', last_sleep: 'Last sleep', sleep_today: "Today's sleep",
+    workouts: 'Workouts', volume: 'Volume', cardio: 'Cardio', sleep_today: "Today's sleep",
     sessions_label: 'Sessions',
     sessions_this_week: 'sets this week',
     this_week: 'this week',
@@ -435,14 +431,14 @@ const I18N = {
     muscle_focus_sub: 'Sessions per muscle · last 7 days',
 
     // Train / Workouts
-    train: 'Train', cardio_title: 'Cardio', food: 'Food', sleep: 'Sleep', compare: 'Compare', settings: 'Settings',
+    train: 'Train', food: 'Food', sleep: 'Sleep', compare: 'Compare', settings: 'Settings',
     library: 'Library',
     train_subtitle: 'Tap an exercise to log a session or view your history.',
     search_exercises: 'Search exercises…',
     new_exercise: 'New Exercise',
     new_exercise_sub: 'Add a custom exercise to your library.',
     add_custom: 'Add a custom one',
-    my_exercises_short: 'My exercises', my_exercises_sub: 'The exercises you created.',
+    my_exercises_short: 'My exercises',
     ce_empty_title: 'No custom exercises yet', ce_empty_text: 'Tap "Add a custom one" to create your own exercise with a name, category and photo.',
     no_matches: 'No matches found',
     no_matches_hint: 'Try a different search term.',
@@ -463,7 +459,7 @@ const I18N = {
     pr: 'PR',
     volume_label: 'Volume',
     set_n: 'Set',
-    reps: 'reps', weight_kg: 'kg',
+    reps: 'reps',
     last_session: 'Last session',
     date: 'Date',
     sets: 'Sets',
@@ -481,20 +477,20 @@ const I18N = {
     exercise_added: 'Exercise added',
     enter_name: 'Enter a name',
     name: 'Name', category: 'Category',
-    save: 'Save', cancel: 'Cancel', update: 'Update', delete: 'Delete', edit: 'Edit', select: 'Select',
+    save: 'Save', cancel: 'Cancel', update: 'Update', delete: 'Delete', edit: 'Edit',
     unit: 'Unit', done: 'Done',
     // Reminders
     remind_title: 'Reminders',
     remind_sub: 'Supplement and water reminders.',
-    remind_off: 'Off',
-    remind_from: 'From', remind_to: 'To',
+
+
     remind_none: 'No reminders set',
     remind_times: 'Reminder times', remind_add_time: 'Add time',
     remind_denied: 'Notifications were not allowed.',
     remind_blocked: 'Notifications are blocked — turn them on in your phone settings.',
-    remind_water_body: 'Time for a glass of water.',
+
     open: 'Open',
-    remind_sound_off: 'Silent — drawer only',
+
     remind_test: 'Send a test alert', remind_test_sub: 'Arrives in about 5 seconds',
     remind_test_title: 'VAULT', remind_test_body: 'Test alert — reminders are working.',
     remind_test_sent: 'Test sent — watch your notification bar.',
@@ -551,9 +547,9 @@ const I18N = {
     coach_unavailable: 'Coach is unavailable right now.',
     coach_goal_met: "You've hit your goal for today 🎉",
     add_sheet_title: 'Add food',
-    add_voice: 'Voice', add_voice_sub: 'Say what you ate',
-    add_chat: 'Chat', add_chat_sub: 'Type it — AI finds the calories',
-    add_photo: 'Photo', add_photo_sub: 'Snap your meal',
+    add_voice: 'Voice',
+    add_chat: 'Chat',
+    add_photo: 'Photo',
     add_barcode: 'Barcode', bc_amount: 'Amount', unit_g: 'g',
     water: 'Water', unit_ml: 'ml', water_undo: 'Remove a cup',
     bodyweight: 'Weight', weight_add_first: 'Log your weight', weight_trend: 'Weight trend',
@@ -577,11 +573,13 @@ const I18N = {
     barcode_lookup: 'Look up',
     barcode_invalid: 'Enter a valid barcode number',
     barcode_cam_denied_manual: 'Camera blocked — type the barcode number instead.',
-    add_saved: 'Saved food', add_saved_sub: 'Pick from your foods',
-    add_manual: 'Manual', add_manual_sub: 'Enter the numbers yourself',
+    add_saved: 'Saved food',
+    add_manual: 'Manual',
+    add_recipe: 'Recipe calculator',
+    add_recipe_sub: 'Ingredients one per line — calories, protein, carbs and fat are totalled for you',
     saved_new: 'Add a new saved food', saved_empty: 'No saved foods yet',
     calc_title: 'Calorie calculator', calc_sub: 'Mifflin-St Jeor — the gold standard',
-    calc_mode_manual: 'Enter manually',
+
     calc_use_manual: 'Or enter the numbers manually', calc_use_calc: 'Use the calculator instead',
     calc_sex: 'Sex', calc_male: 'Male', calc_female: 'Female',
     calc_age: 'Age', calc_height: 'Height (cm)', calc_weight: 'Weight (kg)',
@@ -614,7 +612,7 @@ const I18N = {
     fcat_more: 'More',
     new_food: 'New Food', edit_food: 'Edit Food',
     food_quick: 'Macros per serving.',
-    serving_hint: 'e.g. 100g, 1 cup',
+
     amount_label: 'Amount', serving_unit_label: 'Unit', unit_hint: 'g, ml, piece',
     ph_exercise_name: 'e.g. Bulgarian Split Squat', ph_food_name: 'e.g. Chicken Breast', ph_supplement_name: 'e.g. Creatine',
     view_photo: 'View photo',
@@ -793,7 +791,7 @@ const I18N = {
     health_hr: 'Heart rate', health_oxygen: 'Blood oxygen', health_sleep: 'Sleep',
     health_no_data: 'No data in this range',
     health_connect_btn: 'Connect', health_open_settings: 'Open Health Connect',
-    health_today: 'Today', health_bpm: 'bpm', health_min: 'min',
+    health_bpm: 'bpm', health_min: 'min',
     health_calories: 'Calories', health_distance: 'Distance', health_vo2: 'VO₂ max',
     health_exercise: 'Exercise', health_power: 'Power', health_speed: 'Speed',
     health_kcal: 'kcal', health_km: 'km', health_kmh: 'km/h', health_watt: 'W', health_vo2_unit: 'ml/kg',
@@ -907,8 +905,8 @@ const I18N = {
     start_first_workout: 'Start your first workout',
     exercise_word: 'Exercise',
     of_word: 'of',
-    last_time: 'Last time',
-    first_time_no_record: 'First time — no record yet',
+
+
     sync_conflict_toast: 'This device has changes the cloud does not',
     sync_resolve: 'Resolve',
     sync_unsynced: 'Not backed up yet',
@@ -917,6 +915,9 @@ const I18N = {
     sync_restore: 'Restore',
     sync_restored: 'Restored from the pre-sync copy',
     sync_restore_failed: 'Could not restore',
+    sync_snapshot_failed: 'No pre-sync copy could be kept — storage is full',
+    export_copied: 'Backup copied to the clipboard — paste it into a note or an email',
+    export_failed: 'Could not export the backup',
     conflict_warn_cloud: 'Keeping the cloud copy discards the changes made on this device.',
     ai_photo_title: 'Photo of your food',
     ai_photo_sub: 'Take a picture and I will estimate the calories',
@@ -942,8 +943,10 @@ const I18N = {
     rec_u_per: 'per serving',
     rec_add_ing: 'Add ingredient',
     rec_ing_name: 'Ingredient',
-    rec_qty: 'Qty',
-    rec_pick: 'Pick from foods',
+    rec_qty: 'Amount',
+    rec_qty_ph: '200 g',
+    rec_figures_hint: 'Figures are for the amount used, per ingredient; the recipe adds them up.',
+
     rec_total: 'Whole recipe',
     rec_per: 'Per serving',
     rec_save: 'Save recipe',
@@ -971,6 +974,11 @@ const I18N = {
     ai_edit_done: 'Done',
     ai_edited: 'Edited',
     resting: 'Rest',
+    rest_idle: 'Rest starts when you tick ✓',
+    rest_minus_15: 'Fifteen seconds less rest',
+    rest_plus_15: 'Fifteen seconds more rest',
+    rest_over_title: 'Rest over',
+    rest_over_body: 'Next set.',
     skip: 'Skip',
     previous: 'Previous',
     next: 'Next',
@@ -1037,8 +1045,8 @@ const I18N = {
     // Calendar
     calendar_title: 'Calendar',
     calendar_subtitle: 'Month view of your training activity.',
-    no_activity_day: 'No activity this day',
-    workouts_day: 'Workouts', cardio_day: 'Cardio', sleep_day: 'Sleep',
+
+
 
     // Supplements
     supplements_title: 'Supplements', todays_doses: "Today's doses",
@@ -1064,7 +1072,12 @@ const I18N = {
     no_food_logged: 'No food logged today',
     no_food_logged_text: 'Tap "Add Food" and pick from your reference list.',
     servings: 'Servings',
-    food_added: 'Food logged',
+    fl_edit_title: 'Edit entry',
+    fl_edited: 'Entry updated',
+    fl_per_serving_hint: 'Figures are per serving; the total is figures × servings.',
+    ai_err_signin: 'Sign in to use the AI',
+    ai_err_too_large: 'The file is too large',
+
     food_removed: 'Removed',
     take_all: 'Take all',
     all_taken: 'All marked as taken',
@@ -1222,7 +1235,7 @@ const I18N = {
   },
 
   ar: {
-    app_name: 'فولت',
+
     nav_home: 'الرئيسية', nav_train: 'برنامجي', nav_cardio: 'كارديو', nav_food: 'الأكل', nav_sleep: 'النوم',
 
     greet_morning: 'صباح الخير', greet_afternoon: 'نهارك سعيد', greet_evening: 'مساء الخير',
@@ -1247,21 +1260,21 @@ const I18N = {
     streak_days: 'يوم',
     streak_active: 'سلسلة نشطة — واصل!',
     streak_start: 'سجّل جلسة لبدء سلسلتك',
-    workouts: 'التمارين', volume: 'الحجم', cardio: 'الكارديو', last_sleep: 'آخر نوم', sleep_today: 'نوم اليوم',
+    workouts: 'التمارين', volume: 'الحجم', cardio: 'الكارديو', sleep_today: 'نوم اليوم',
     sessions_label: 'الجلسات',
     sessions_this_week: 'مجموعة هذا الأسبوع',
     this_week: 'هذا الأسبوع',
     muscle_focus: 'تركيز العضلات',
     muscle_focus_sub: 'جلسات لكل عضلة · آخر 7 أيام',
 
-    train: 'التمارين', cardio_title: 'الكارديو', food: 'الأكل', sleep: 'النوم', compare: 'المقارنة', settings: 'الإعدادات',
+    train: 'التمارين', food: 'الأكل', sleep: 'النوم', compare: 'المقارنة', settings: 'الإعدادات',
     library: 'المكتبة',
     train_subtitle: 'اضغط على تمرين لتسجيل جلسة جديدة أو مشاهدة السجل.',
     search_exercises: 'ابحث عن تمرين…',
     new_exercise: 'تمرين جديد',
     new_exercise_sub: 'أضف تمريناً مخصصاً لمكتبتك.',
     add_custom: 'أضف تمرينك الخاص',
-    my_exercises_short: 'تماريني', my_exercises_sub: 'التمارين التي أنشأتها.',
+    my_exercises_short: 'تماريني',
     ce_empty_title: 'لا توجد تمارين خاصة بعد', ce_empty_text: 'اضغط "أضف تمرينك الخاص" لإنشاء تمرين باسم وتصنيف وصورة.',
     no_matches: 'لا توجد نتائج',
     no_matches_hint: 'جرّب كلمة بحث أخرى.',
@@ -1281,7 +1294,7 @@ const I18N = {
     pr: 'رقم قياسي',
     volume_label: 'الحجم',
     set_n: 'مجموعة',
-    reps: 'تكرار', weight_kg: 'كجم',
+    reps: 'تكرار',
     last_session: 'آخر جلسة',
     date: 'التاريخ',
     sets: 'المجموعات',
@@ -1299,20 +1312,20 @@ const I18N = {
     exercise_added: 'تمت إضافة التمرين',
     enter_name: 'أدخل اسماً',
     name: 'الاسم', category: 'الفئة',
-    save: 'حفظ', cancel: 'إلغاء', update: 'تحديث', delete: 'حذف', edit: 'تعديل', select: 'اختيار',
+    save: 'حفظ', cancel: 'إلغاء', update: 'تحديث', delete: 'حذف', edit: 'تعديل',
     unit: 'الوحدة', done: 'تم',
     // التنبيهات
     remind_title: 'التنبيهات',
     remind_sub: 'تنبيهات المكمّلات والماء.',
-    remind_off: 'متوقّفة',
-    remind_from: 'من', remind_to: 'إلى',
+
+
     remind_none: 'لا توجد تنبيهات',
     remind_times: 'أوقات التذكير', remind_add_time: 'أضف وقتاً',
     remind_denied: 'لم يُسمح بالتنبيهات.',
     remind_blocked: 'التنبيهات محجوبة — فعّلها من إعدادات هاتفك.',
-    remind_water_body: 'حان وقت كوب ماء.',
+
     open: 'فتح',
-    remind_sound_off: 'صامت — في لوحة الإشعارات فقط',
+
     remind_test: 'أرسل تنبيهاً تجريبياً', remind_test_sub: 'يصل خلال خمس ثوانٍ تقريباً',
     remind_test_title: 'VAULT', remind_test_body: 'تنبيه تجريبي — التنبيهات تعمل.',
     remind_test_sent: 'أُرسل التنبيه — راقب شريط الإشعارات.',
@@ -1367,9 +1380,9 @@ const I18N = {
     coach_unavailable: 'المدرّب غير متاح حالياً.',
     coach_goal_met: 'أكملت هدفك لهذا اليوم 🎉',
     add_sheet_title: 'إضافة أكل',
-    add_voice: 'صوت', add_voice_sub: 'قُل ما أكلته',
-    add_chat: 'محادثة', add_chat_sub: 'اكتبه — والذكاء يحسب السعرات',
-    add_photo: 'صورة', add_photo_sub: 'صوّر وجبتك',
+    add_voice: 'صوت',
+    add_chat: 'محادثة',
+    add_photo: 'صورة',
     add_barcode: 'باركود', bc_amount: 'الكمية', unit_g: 'غ',
     water: 'الماء', unit_ml: 'مل', water_undo: 'إزالة كوب',
     bodyweight: 'الوزن', weight_add_first: 'سجّل وزنك', weight_trend: 'منحنى الوزن',
@@ -1396,11 +1409,13 @@ const I18N = {
     barcode_lookup: 'بحث',
     barcode_invalid: 'أدخل رقم باركود صحيح',
     barcode_cam_denied_manual: 'الكاميرا محجوبة — اكتب رقم الباركود بدلاً من ذلك.',
-    add_saved: 'أكل محفوظ', add_saved_sub: 'اختر من أطعمتك',
-    add_manual: 'يدوي', add_manual_sub: 'أدخل الأرقام بنفسك',
+    add_saved: 'أكل محفوظ',
+    add_manual: 'يدوي',
+    add_recipe: 'حاسبة الوصفة',
+    add_recipe_sub: 'المكوّنات كلٌّ في خانته — وتُحسب السعرات والبروتين والكارب والدهون',
     saved_new: 'أضف طعاماً محفوظاً جديداً', saved_empty: 'لا يوجد أكل محفوظ بعد',
     calc_title: 'حاسبة السعرات', calc_sub: 'معادلة Mifflin-St Jeor — المعيار الأدق',
-    calc_mode_manual: 'إدخال يدوي',
+
     calc_use_manual: 'أو أدخِل الأرقام يدوياً', calc_use_calc: 'استخدِم الحاسبة بدلاً من ذلك',
     calc_sex: 'الجنس', calc_male: 'ذكر', calc_female: 'أنثى',
     calc_age: 'العمر', calc_height: 'الطول (سم)', calc_weight: 'الوزن (كغ)',
@@ -1433,7 +1448,7 @@ const I18N = {
     fcat_more: 'المزيد',
     new_food: 'أكل جديد', edit_food: 'تعديل الأكل',
     food_quick: 'المعدلات الغذائية لكل حصة.',
-    serving_hint: 'مثلاً 100جم، كوب',
+
     amount_label: 'الكمية', serving_unit_label: 'الوحدة', unit_hint: 'غ، مل، حبة',
     ph_exercise_name: 'مثال: سكوات بلغاري', ph_food_name: 'مثال: صدر دجاج', ph_supplement_name: 'مثال: كرياتين',
     view_photo: 'عرض الصورة',
@@ -1607,7 +1622,7 @@ const I18N = {
     health_hr: 'النبض', health_oxygen: 'الأكسجين', health_sleep: 'النوم',
     health_no_data: 'لا توجد بيانات في هذه الفترة',
     health_connect_btn: 'ربط', health_open_settings: 'فتح Health Connect',
-    health_today: 'اليوم', health_bpm: 'نبضة/د', health_min: 'دقيقة',
+    health_bpm: 'نبضة/د', health_min: 'دقيقة',
     health_calories: 'السعرات', health_distance: 'المسافة', health_vo2: 'VO₂ max',
     health_exercise: 'التمارين', health_power: 'الطاقة', health_speed: 'السرعة',
     health_kcal: 'سعرة', health_km: 'كم', health_kmh: 'كم/س', health_watt: 'واط', health_vo2_unit: 'مل/كغ',
@@ -1718,8 +1733,8 @@ const I18N = {
     start_first_workout: 'ابدأ أول تمرين',
     exercise_word: 'تمرين',
     of_word: 'من',
-    last_time: 'آخر مرة',
-    first_time_no_record: 'أول مرة — لا يوجد سجل بعد',
+
+
     sync_conflict_toast: 'في هذا الجهاز تعديلات لم تصل السحابة',
     sync_resolve: 'حلّها',
     sync_unsynced: 'لم تُرفَع بعد',
@@ -1728,6 +1743,9 @@ const I18N = {
     sync_restore: 'استعادة',
     sync_restored: 'تمت الاستعادة من نسخة ما قبل المزامنة',
     sync_restore_failed: 'تعذّرت الاستعادة',
+    sync_snapshot_failed: 'تعذّر الاحتفاظ بنسخة ما قبل المزامنة — التخزين ممتلئ',
+    export_copied: 'نُسخت النسخة الاحتياطية إلى الحافظة — ألصقها في ملاحظة أو بريد',
+    export_failed: 'تعذّر تصدير النسخة الاحتياطية',
     conflict_warn_cloud: 'الاحتفاظ بنسخة السحابة يتخلّى عن التعديلات التي جرت على هذا الجهاز.',
     ai_photo_title: 'صورة الأكل',
     ai_photo_sub: 'التقط صورة وسأقدّر السعرات',
@@ -1754,7 +1772,9 @@ const I18N = {
     rec_add_ing: 'أضف مكوّناً',
     rec_ing_name: 'المكوّن',
     rec_qty: 'الكمية',
-    rec_pick: 'اختر من الأطعمة',
+    rec_qty_ph: '200 غ',
+    rec_figures_hint: 'الأرقام لكمية كل مكوّن كما استُخدم، والوصفة تجمعها.',
+
     rec_total: 'الوصفة كاملة',
     rec_per: 'للحصّة الواحدة',
     rec_save: 'احفظ الوصفة',
@@ -1782,6 +1802,11 @@ const I18N = {
     ai_edit_done: 'تم',
     ai_edited: 'مُعدَّل',
     resting: 'راحة',
+    rest_idle: 'تبدأ الراحة عند تعليم ✓',
+    rest_minus_15: 'خمس عشرة ثانية أقل',
+    rest_plus_15: 'خمس عشرة ثانية أكثر',
+    rest_over_title: 'انتهت الراحة',
+    rest_over_body: 'المجموعة التالية.',
     skip: 'تخطّي',
     previous: 'السابق',
     next: 'التالي',
@@ -1844,8 +1869,8 @@ const I18N = {
 
     calendar_title: 'التقويم',
     calendar_subtitle: 'عرض شهري لنشاطك.',
-    no_activity_day: 'لا يوجد نشاط في هذا اليوم',
-    workouts_day: 'تمارين', cardio_day: 'كارديو', sleep_day: 'نوم',
+
+
 
     supplements_title: 'المكمّلات', todays_doses: 'جرعات اليوم',
     supplements_subtitle: 'تتبّع جرعاتك اليومية وحافظ على سلسلتك.',
@@ -1869,7 +1894,12 @@ const I18N = {
     no_food_logged: 'ما سجّلت أكل اليوم',
     no_food_logged_text: 'اضغط "أضف أكل" واختر من قائمتك المرجعية.',
     servings: 'عدد الحصص',
-    food_added: 'تم التسجيل',
+    fl_edit_title: 'تعديل السطر',
+    fl_edited: 'عُدِّل السطر',
+    fl_per_serving_hint: 'الأرقام لكل حصة، والمجموع = الأرقام × عدد الحصص.',
+    ai_err_signin: 'سجّل الدخول لاستخدام الذكاء الاصطناعي',
+    ai_err_too_large: 'الملف كبير جداً',
+
     food_removed: 'تم الحذف',
     take_all: 'أخذ الكل',
     all_taken: 'تم تحديد الكل كمأخوذ',
@@ -3432,14 +3462,40 @@ window.addEventListener('unhandledrejection', (e) => {
 // Download the whole store as a JSON backup. Extracted from the Settings button
 // so the storage-failure dialog can offer it too — that is the one moment the
 // user most needs a copy off this device.
-function exportBackupFile() {
+function isNativeShell() {
+  try { return !!(window.Capacitor && Capacitor.isNativePlatform && Capacitor.isNativePlatform()); } catch (_) { return false; }
+}
+async function exportBackupFile() {
   const json = DB.exportJSON();
+  const stamp = todayISO();  // local date — toISOString() would name the file with yesterday's date after ~21:00 in UTC+3
+  const name = `vault-backup-${stamp}.json`;
+  // INSIDE THE APK an <a download> of a blob: URL does nothing: the Capacitor
+  // WebView registers no download handler, and no filesystem/share plugin is
+  // installed. This was the ONLY rescue offered by the storage-full dialog and
+  // the Settings export button — a button that visibly did nothing at the exact
+  // moment a copy off the phone mattered most. Native path: the system share
+  // sheet when the WebView offers one, else the clipboard (always available
+  // inside a tap), with a toast that says where the copy went.
+  if (isNativeShell()) {
+    try {
+      if (navigator.share && navigator.canShare) {
+        const file = new File([json], name, { type: 'application/json' });
+        if (navigator.canShare({ files: [file] })) { await navigator.share({ files: [file], title: name }); showToast(t('export_data')); return; }
+      }
+    } catch (_) { /* fall through to the clipboard */ }
+    try {
+      await navigator.clipboard.writeText(json);
+      showToast(t('export_copied'));
+      return;
+    } catch (_) {}
+    showToast(t('export_failed'));
+    return;
+  }
   const blob = new Blob([json], { type: 'application/json' });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
-  const stamp = todayISO();  // local date — toISOString() would name the file with yesterday's date after ~21:00 in UTC+3
   a.href = url;
-  a.download = `vault-backup-${stamp}.json`;
+  a.download = name;
   document.body.appendChild(a);
   a.click();
   document.body.removeChild(a);
@@ -3463,10 +3519,11 @@ window.addEventListener('vault:save-failed', (e) => {
   if (now - __storageAlertedAt < 60000) return;
   __storageAlertedAt = now;
   const quota = !!(e && e.detail && e.detail.quota);
+  const readonly = !!(e && e.detail && e.detail.readonly);
   try {
     confirmDialog({
       title: t('storage_error_title'),
-      text: quota ? t('storage_full_text') : t('storage_write_failed_text'),
+      text: readonly ? t('storage_unreadable_text') : quota ? t('storage_full_text') : t('storage_write_failed_text'),
       confirmLabel: t('export_data'),
       variant: 'danger',
       onConfirm: () => { try { exportBackupFile(); } catch (_) {} },
@@ -3475,19 +3532,27 @@ window.addEventListener('vault:save-failed', (e) => {
     try { showToast(t('storage_error_title')); } catch (__) {}
   }
 });
-window.addEventListener('vault:load-failed', () => {
+// The stored blob could not be parsed and the app is running READ-ONLY on an
+// in-memory default. Told ONCE, at boot. Two things made this unreachable:
+// storage.js dispatches 'vault:load-failed' while it is still being evaluated,
+// before this file has registered anything — so init() asks DB.loadFailed()
+// instead of waiting for an event that has already gone by — and the guard
+// variable below was never declared, so the handler would have thrown.
+let __storageAlerted = false;
+function showUnreadableDialog() {
   if (__storageAlerted) return;
   __storageAlerted = true;
   try {
     confirmDialog({
       title: t('storage_error_title'),
       text: t('storage_unreadable_text'),
-      confirmLabel: t('close'),
+      confirmLabel: t('export_data'),
       variant: 'danger',
-      onConfirm: () => {},
+      onConfirm: () => { try { exportBackupFile(); } catch (_) {} },
     });
   } catch (_) {}
-});
+}
+window.addEventListener('vault:load-failed', showUnreadableDialog);
 
 // Android hardware back button via the @capacitor/app plugin → same goBack(),
 // and exit the app only at the root screen.
@@ -3651,9 +3716,15 @@ function openImageLightbox(src, alt) {
 // ==========================================================================
 // Personal Records helper
 // ==========================================================================
-function checkPR(exerciseId, prior, newSets) {
+// `unit` is the unit of the screen that will SHOW the message. session-day and
+// the guided run let the user pick lb/kg per session without touching the
+// global preference, so a PR line formatted from the preference read "102 kg"
+// under rows that read "225 LB". Omitted → the preference, as before.
+function checkPR(exerciseId, prior, newSets, unit) {
   // Cold-start: no toast on the very first session ever
   if (prior.sessionCount === 0) return null;
+  const u = (unit === 'lb' || unit === 'kg') ? unit : unitLabel();
+  const fw = (kg) => fmtNum(u === 'lb' ? Math.round(kg * KG_TO_LB * 2) / 2 : Math.round(kg * 100) / 100);
 
   // Compute new max weight and best Epley 1RM from the sets just saved
   let newMaxW = 0;
@@ -3675,14 +3746,14 @@ function checkPR(exerciseId, prior, newSets) {
   if (!wPR && !ormPR) return null;
 
   if (wPR && ormPR) {
-    return t('pr_both') + ' ' + fmtWeight(postBest.maxWeight) + unitLabel()
-      + ' · ' + t('pr_est_orm') + ' ' + fmtWeight(Math.round(postBest.bestORM)) + unitLabel();
+    return t('pr_both') + ' ' + fw(postBest.maxWeight) + u
+      + ' · ' + t('pr_est_orm') + ' ' + fw(Math.round(postBest.bestORM)) + u;
   }
   if (wPR) {
-    return t('pr_weight') + ' ' + fmtWeight(postBest.maxWeight) + unitLabel();
+    return t('pr_weight') + ' ' + fw(postBest.maxWeight) + u;
   }
   // ormPR only
-  return t('pr_orm') + ' ' + t('pr_est_orm') + ' ' + fmtWeight(Math.round(postBest.bestORM)) + unitLabel();
+  return t('pr_orm') + ' ' + t('pr_est_orm') + ' ' + fw(Math.round(postBest.bestORM)) + u;
 }
 
 // `sessions`/`cardio` are OPTIONAL and exist only so a caller that already holds
@@ -3938,15 +4009,6 @@ function renderHome(el) {
   } else if (todayIsOff || scheduledRest) {
     // Declined day. Say what it cost — nothing — because the whole reason the
     // rotation is continuous is that a missed day postpones rather than forfeits.
-    const nextUp = (() => {
-      const d = new Date(now);
-      for (let i = 1; i <= 14; i++) {
-        d.setDate(d.getDate() + 1);
-        const w = DB.plan.workoutForDate(d);
-        if (w) return { name: w.name, day: dayName(d.getDay(), true) };
-      }
-      return null;
-    })();
     // THE INVERTED STATE. A rest day does not leave the screen empty: the same
     // slot turns around and offers the opposite. The solid orange disappears and
     // becomes an outline only — per the spec, "a filled colour promises a task,
@@ -4466,7 +4528,9 @@ async function syncExerciseImages() {
         if (path) DB.exercises.update(ex.id, { imagePath: path });
       } else if (!ex.customImage && ex.imagePath) {
         const dataUrl = await Cloud.restoreExerciseImage(ex.imagePath);
-        if (dataUrl) { DB.exercises.update(ex.id, { customImage: dataUrl }); healed++; }
+        // setImage, not update: the restored base64 is re-derivable, so it
+        // writes its own key and neither rewrites the blob nor flags it dirty.
+        if (dataUrl && DB.exercises.setImage(ex.id, dataUrl)) healed++;
       }
     } catch (_) {}
   }
@@ -4477,6 +4541,16 @@ async function syncExerciseImages() {
 // DB.sessions.statsByExercise() pass — without it every card re-scans the whole
 // session list, and this grid rebuilds on every filter tap and every keystroke.
 // Omitted for a one-off card, where a single scan is cheaper than a map.
+// Attach base64 photos to cards already in the document (see bentoCardHtml).
+// exerciseImgSrc() is the single safety guard on the value, as everywhere else.
+function hydrateCardImages(root) {
+  if (!root) return;
+  root.querySelectorAll('[data-bg-ex]').forEach((node) => {
+    const ex = DB.exercises.getById(node.dataset.bgEx);
+    const src = ex ? exerciseImgSrc(ex) : '';
+    if (src) node.style.backgroundImage = `url('${src}')`;
+  });
+}
 function bentoCardHtml(ex, i, { showPR = true, toggle = null, stats = null } = {}) {
   const isWide = i % 5 === 0;
   if (!stats) stats = DB.sessions.bestStats(ex.id);
@@ -4521,6 +4595,12 @@ function bentoCardHtml(ex, i, { showPR = true, toggle = null, stats = null } = {
         ${url ? `<img class="machine-photo" src="${escapeHtml(url)}" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="this.remove()">` : ''}
       </div>
     `;
+  } else if (url && /^data:/i.test(url)) {
+    // A base64 photo is NOT inlined into the HTML string: with ten photographed
+    // exercises that string was megabytes, re-parsed on every filter tap and
+    // every pause in typing. hydrateCardImages() sets the background from the
+    // side store once the cards are in the document.
+    bgHtml = `<div class="bento-card-bg" data-cat="${escapeHtml(ex.category)}" data-bg-ex="${escapeHtml(ex.id)}"></div>`;
   } else if (url) {
     bgHtml = `<div class="bento-card-bg" data-cat="${escapeHtml(ex.category)}" style="background-image:url('${escapeHtml(url)}')"></div>`;
   } else {
@@ -4877,19 +4957,24 @@ function renderExercises(el) {
   `;
 
   // Rebuild ONLY the card grid (search/filter changes) — not the whole view.
+  // Computed ONCE per render, not on every filter tap and every debounced
+  // keystroke: list() copies and locale-sorts the whole catalog, and
+  // statsByExercise() walks every session. Every data change re-renders this
+  // view (renderView), so a per-render cache cannot go stale.
+  const gridExercises = DB.exercises.list();
+  const gridStats = DB.sessions.statsByExercise();
   function updateWorkoutGrid() {
     const grid = $('#workout-grid', el);
     if (!grid) return;
     const q = (viewContext.workoutQuery || '').toLowerCase();
     const f = viewContext.workoutFilter || 'All';
-    let filtered = DB.exercises.list();
+    let filtered = gridExercises;
     if (f !== 'All') filtered = filtered.filter((e) => e.category === f);
     if (q) filtered = filtered.filter((e) => exMatchesQuery(e, q));
 
     // Keep cards as an ARRAY so the "add" card can be spliced after the first
     // card without string-searching for '</button>' (which would break the day
     // a card gains a nested control).
-    const gridStats = DB.sessions.statsByExercise();
     const cards = filtered.map((ex, i) =>
       bentoCardHtml(ex, i, { stats: gridStats[ex.id] || DB.sessions.emptyStats() }));
 
@@ -4908,6 +4993,7 @@ function renderExercises(el) {
     } else {
       cards.splice(1, 0, addCard); // after the first (wide) card
       grid.innerHTML = `<div class="bento-grid">${cards.join('')}</div>`;
+      hydrateCardImages(grid);
     }
   }
   updateWorkoutGrid();
@@ -6324,7 +6410,7 @@ function setServerFoodCatalog(rows) {
         cat: 'more',
         en: String(f.name), ar: String(f.name),
         s: f.serving || '', sa: f.serving || '',
-        cal: Number(f.calories) || 0, pro: Number(f.protein) || 0, carb: Number(f.carbs) || 0,
+        cal: Number(f.calories) || 0, pro: Number(f.protein) || 0, carb: Number(f.carbs) || 0, f: Number(f.fat) || 0,
       }));
   } catch (_) { SERVER_FOOD_PRESETS = []; }
 }
@@ -6355,10 +6441,12 @@ function renderFood(el) {
     <button class="food-fab" id="food-fab" aria-label="${escapeHtml(t('add'))}">${icon('plus', 28)}</button>
   `;
 
-  const rerender = () => { const h = $('#nutri-host', el); if (h) h.innerHTML = nutritionDashboardHtml(date); };
+  // todayISO() HERE, not the render-time `date`: rows now land on the day they
+  // are written, so the repaint must show that same day.
+  const rerender = () => { const h = $('#nutri-host', el); if (h) h.innerHTML = nutritionDashboardHtml(todayISO()); };
 
   // A single add button: the floating FAB (the top-bar action was a duplicate).
-  $('#food-fab', el)?.addEventListener('click', () => openAddSheet(date, rerender));
+  $('#food-fab', el)?.addEventListener('click', () => openAddSheet(null, rerender));   // null = today, resolved at log time
 
   // Arriving from Home's food card with "add" intent — open the sheet straight
   // away, so one tap gets the user to the thing they actually came to do.
@@ -6368,7 +6456,7 @@ function renderFood(el) {
   // by any other route (the nav, back) does not re-open the sheet.
   if (viewContext.openAdd) {
     viewContext.openAdd = false;
-    openAddSheet(date, rerender);
+    openAddSheet(null, rerender);   // null = today, resolved at log time
   }
 
   const host = $('#nutri-host', el);
@@ -6433,8 +6521,8 @@ function nutritionDashboardHtml(date) {
       </div>
       <div class="water-bar"><span class="water-fill" style="width:${waterPct}%"></span></div>
       <div class="water-actions">
-        <button class="water-cup" data-add-water="250">+<span class="num">250</span></button>
-        <button class="water-cup" data-add-water="500">+<span class="num">500</span></button>
+        <button class="water-cup" data-add-water="250"><span class="num">+250</span></button>
+        <button class="water-cup" data-add-water="500"><span class="num">+500</span></button>
         <button class="water-cup water-cup-minus" data-add-water="-250" aria-label="${escapeHtml(t('water_undo'))}">${icon('minus', 16)}</button>
       </div>
     </div>`;
@@ -6491,8 +6579,12 @@ function nutritionDashboardHtml(date) {
 }
 
 // Shared: log AI/voice/photo items to today and refresh the dashboard.
+// `date` null = today — resolved HERE, when the rows are written, not when the
+// sheet that led here was opened. A date captured at render time put a meal
+// answered at 00:01 on yesterday.
 function logNutritionItems(date, items, onDone) {
-  (items || []).forEach((it) => DB.foodLogs.add(date, {
+  const d = date || todayISO();
+  (items || []).forEach((it) => DB.foodLogs.add(d, {
     name: it.name, servings: it.servings || 1,
     calories: it.calories, protein: it.protein, carbs: it.carbs, fat: it.fat,
     source: it.source || 'ai',
@@ -6737,6 +6829,10 @@ function openAddSheet(date, onChange) {
         ${tile({ k: 'barcode', icon: 'barcode', title: t('add_barcode') })}
         ${tile({ k: 'saved', icon: 'utensils', title: t('add_saved') })}
         ${tile({ k: 'manual', icon: 'edit', title: t('add_manual') })}
+        <button class="add-tile wide" data-method="recipe">
+          <span class="add-tile-icon recipe">${icon('chart', 24)}</span>
+          <span class="add-tile-text"><span class="add-tile-title">${t('add_recipe')}</span><span class="add-tile-sub">${t('add_recipe_sub')}</span></span>
+        </button>
       </div>
     </div>`;
   app.appendChild(overlay);
@@ -6759,6 +6855,9 @@ function openAddSheet(date, onChange) {
       else if (method === 'barcode') openBarcodeScanner(date, onChange);
       else if (method === 'saved') openSavedFoodPicker(date, onChange);
       else if (method === 'manual') openManualFoodEntry(date, onChange);
+      // Straight into the editor; saving lands on the recipes tab so the new
+      // recipe can be logged with one tap.
+      else if (method === 'recipe') openRecipeEditor(date, null, () => openSavedFoodPicker(date, onChange, 'recipes'));
     });
   });
 }
@@ -7312,7 +7411,7 @@ function openManualFoodEntry(date, onSave) {
       carbs: Number(F.carb.value) || 0,
       fat: Number(F.fat.value) || 0,
     };
-    DB.foodLogs.add(date, { name, servings: 1, ...macros, source: 'manual' });
+    DB.foodLogs.add(date || todayISO(), { name, servings: 1, ...macros, source: 'manual' });
     // Keep it for next time, so the same meal is one tap from the saved picker
     // instead of being retyped. Skipped when an identically-named food already
     // exists, or the list fills with duplicates of whatever you eat most.
@@ -7349,7 +7448,7 @@ function openManualFoodEntry(date, onSave) {
 // total silently disagrees with its own ingredients the moment one is edited.
 function openRecipeEditor(date, existing, onDone) {
   var items = existing && existing.items ? existing.items.map(function (i) { return Object.assign({}, i); }) : [
-    { name: '', qty: 1, calories: 0, protein: 0, carbs: 0, fat: 0 },
+    { name: '', qty: '', calories: 0, protein: 0, carbs: 0, fat: 0 },
   ];
   var name = (existing && existing.name) || '';
   var servings = (existing && existing.servings) || 1;
@@ -7367,6 +7466,7 @@ function openRecipeEditor(date, existing, onDone) {
     '</div>' +
 
     '<div id="rec-rows"></div>' +
+    '<p class="calc-preview-hint" style="margin:4px 0 10px">' + t('rec_figures_hint') + '</p>' +
     '<button type="button" class="btn btn-ghost btn-block" id="rec-add">' + icon('plus', 16) + ' ' + t('rec_add_ing') + '</button>' +
     '<div class="rec-totals" id="rec-totals"></div>' +
     '<div class="form-actions sticky-actions">' +
@@ -7386,7 +7486,11 @@ function openRecipeEditor(date, existing, onDone) {
       };
       return '<div class="rec-row" data-row="' + i + '">' +
         '<input type="text" data-f="name" placeholder="' + escapeHtml(t('rec_ing_name')) + '" value="' + escapeHtml(it.name || '') + '">' +
-        fld('qty', t('rec_qty'), '0.25', 'decimal') +
+        // The amount is a LABEL ("200 غ", "3 حبات"), and the four figures are
+        // for that amount. It used to be a numeric multiplier — 200 g at 330
+        // kcal became 66,000 kcal — which no one entering a recipe expects.
+        '<label class="rec-f" style="grid-area:qty"><span class="rec-cap">' + t('rec_qty') + '</span>' +
+          '<input type="text" data-f="qty" maxlength="24" placeholder="' + escapeHtml(t('rec_qty_ph')) + '" aria-label="' + escapeHtml(t('rec_qty')) + '" value="' + escapeHtml(String(it.qty == null ? '' : it.qty)) + '"></label>' +
         fld('calories', t('cal'), '1', 'numeric') +
         fld('protein', t('protein_label'), '0.1', 'decimal') +
         fld('carbs', t('carbs_label'), '0.1', 'decimal') +
@@ -7399,7 +7503,7 @@ function openRecipeEditor(date, existing, onDone) {
       inp.addEventListener('input', function () {
         var i = Number(inp.closest('.rec-row').dataset.row);
         var f = inp.dataset.f;
-        items[i][f] = (f === 'name') ? inp.value : (parseFloat(inp.value) || 0);
+        items[i][f] = (f === 'name' || f === 'qty') ? inp.value : (parseFloat(inp.value) || 0);
         drawTotals();
       });
     });
@@ -7407,7 +7511,7 @@ function openRecipeEditor(date, existing, onDone) {
       b.addEventListener('click', function () {
         // Never leave the sheet with zero rows — an empty editor gives the user
         // nothing to type into and no way back to a row.
-        if (items.length === 1) items[0] = { name: '', qty: 1, calories: 0, protein: 0, carbs: 0, fat: 0 };
+        if (items.length === 1) items[0] = { name: '', qty: '', calories: 0, protein: 0, carbs: 0, fat: 0 };
         else items.splice(Number(b.dataset.del), 1);
         drawRows(); drawTotals();
       });
@@ -7441,7 +7545,7 @@ function openRecipeEditor(date, existing, onDone) {
 
   overlay.querySelector('#rec-servings').addEventListener('input', drawTotals);
   overlay.querySelector('#rec-add').addEventListener('click', function () {
-    items.push({ name: '', qty: 1, calories: 0, protein: 0, carbs: 0, fat: 0 });
+    items.push({ name: '', qty: '', calories: 0, protein: 0, carbs: 0, fat: 0 });
     drawRows();
     var rows = overlay.querySelectorAll('.rec-row input[data-f="name"]');
     if (rows.length) rows[rows.length - 1].focus();
@@ -7460,33 +7564,34 @@ function openRecipeEditor(date, existing, onDone) {
   drawRows();
   setTimeout(function () { overlay.querySelector('#rec-name').focus(); }, 60);
 }
-function openSavedFoodPicker(date, onSave) {
+function openSavedFoodPicker(date, onSave, initialTab) {
   let query = '';
-  let tab = 'foods';
+  let tab = (initialTab === 'recipes' || initialTab === 'bundles') ? initialTab : 'foods';
   const overlay = openModal(`
     <div class="modal-header">
       <div class="modal-title">${t('add_saved')}</div>
       <button class="icon-btn icon-btn-tile" data-close>${icon('close', 20)}</button>
     </div>
     <div class="sfp-tabs" role="tablist">
-      <button type="button" class="sfp-tab on" data-tab="foods" role="tab">${t('tab_saved_foods')}</button>
-      <button type="button" class="sfp-tab" data-tab="bundles" role="tab">${t('tab_bundles')}</button>
-      <button type="button" class="sfp-tab" data-tab="recipes" role="tab">${t('tab_recipes')}</button>
+      <button type="button" class="sfp-tab${tab === 'foods' ? ' on' : ''}" data-tab="foods" role="tab">${t('tab_saved_foods')}</button>
+      <button type="button" class="sfp-tab${tab === 'bundles' ? ' on' : ''}" data-tab="bundles" role="tab">${t('tab_bundles')}</button>
+      <button type="button" class="sfp-tab${tab === 'recipes' ? ' on' : ''}" data-tab="recipes" role="tab">${t('tab_recipes')}</button>
     </div>
     <div class="search-wrap" id="sf-search-wrap" style="margin-bottom:10px">
       ${icon('search', 20)}
       <input type="search" id="sf-search" placeholder="${t('search_foods')}">
     </div>
     <div class="picker-list" id="sf-list"></div>
-    <button class="btn btn-ghost btn-block" id="sf-new" style="margin-top:10px">${icon('plus', 20)} ${t('saved_new')}</button>
+    <button class="btn btn-ghost btn-block" id="sf-new" style="margin-top:10px">${icon('plus', 20)} ${tab === 'bundles' ? t('bundle_new') : tab === 'recipes' ? t('rec_new') : t('saved_new')}</button>
   `);
   const listEl = overlay.querySelector('#sf-list');
 
   // ---- "My recipes" — the computed ones ------------------------------------
   function drawRecipes() {
-    const recs = DB.recipes.list();
+    const q = String(query || '').trim().toLowerCase();
+    const recs = DB.recipes.list().filter((r) => !q || String(r.name || '').toLowerCase().includes(q));
     if (!recs.length) {
-      listEl.innerHTML = `<div class="calc-preview-hint" style="text-align:center;padding:18px">${t('rec_empty')}</div>`;
+      listEl.innerHTML = `<div class="calc-preview-hint" style="text-align:center;padding:18px">${DB.recipes.list().length ? t('no_matches_simple') : t('rec_empty')}</div>`;
       return;
     }
     listEl.innerHTML = recs.map((r) => {
@@ -7512,7 +7617,7 @@ function openSavedFoodPicker(date, onSave) {
       const r = DB.recipes.list().find((x) => x.id === b.dataset.logRec);
       if (!r) return;
       const per = DB.recipes.perServing(r);
-      DB.foodLogs.add(date, {
+      DB.foodLogs.add(date || todayISO(), {
         name: r.name, servings: 1,
         calories: per.calories, protein: per.protein, carbs: per.carbs, fat: per.fat,
         source: 'recipe',
@@ -7522,7 +7627,7 @@ function openSavedFoodPicker(date, onSave) {
     }));
     listEl.querySelectorAll('[data-edit-rec]').forEach((b) => b.addEventListener('click', () => {
       const r = DB.recipes.list().find((x) => x.id === b.dataset.editRec);
-      if (r) openRecipeEditor(date, r, () => openSavedFoodPicker(date, onSave));
+      if (r) openRecipeEditor(date, r, () => openSavedFoodPicker(date, onSave, 'recipes'));
     }));
     listEl.querySelectorAll('[data-del-rec]').forEach((b) => b.addEventListener('click', () => {
       confirmDialog({
@@ -7556,7 +7661,7 @@ function openSavedFoodPicker(date, onSave) {
       if (!b) return;
       // Itemized, not summed: each food lands as its own log row so the day's
       // list stays editable piece by piece, exactly as if tapped one by one.
-      b.items.forEach((it) => DB.foodLogs.add(date, {
+      b.items.forEach((it) => DB.foodLogs.add(date || todayISO(), {
         name: it.name, servings: it.servings || 1,
         calories: it.calories, protein: it.protein, carbs: it.carbs, fat: it.fat,
         source: 'bundle',
@@ -7627,7 +7732,7 @@ function openSavedFoodPicker(date, onSave) {
       </button>`).join('');
     listEl.querySelectorAll('[data-add-saved]').forEach((b) => b.addEventListener('click', () => {
       const f = list[Number(b.dataset.addSaved)];
-      DB.foodLogs.add(date, { name: f.name, servings: 1, calories: f.calories, protein: f.protein, carbs: f.carbs, fat: f.fat, source: 'saved' });
+      DB.foodLogs.add(date || todayISO(), { name: f.name, servings: 1, calories: f.calories, protein: f.protein, carbs: f.carbs, fat: f.fat, source: 'saved' });
       showToast(t('ai_added'));
       b.querySelector('.picker-row-check').innerHTML = icon('check', 16);
       b.classList.add('picked');
@@ -7639,12 +7744,15 @@ function openSavedFoodPicker(date, onSave) {
   const drawSavedFoodSearch = debounce(draw, 150);
   overlay.querySelector('#sf-search').addEventListener('input', (e) => {
     query = e.target.value;
-    drawSavedFoodSearch();
+    // Route by tab: this used to redraw the SAVED-FOODS list regardless, so
+    // typing on the recipes tab replaced the recipes with foods mid-word.
+    if (tab === 'recipes') drawRecipes();
+    else drawSavedFoodSearch();
   });
   const newBtn = overlay.querySelector('#sf-new');
   newBtn.addEventListener('click', () => {
     if (tab === 'bundles') { openBundleCreator(); return; }
-    if (tab === 'recipes') { openRecipeEditor(date, null, () => openSavedFoodPicker(date, onSave)); return; }
+    if (tab === 'recipes') { openRecipeEditor(date, null, () => openSavedFoodPicker(date, onSave, 'recipes')); return; }
     closeModal(); openFoodLibraryModal();
   });
   overlay.querySelectorAll('.sfp-tab').forEach((b) => b.addEventListener('click', () => {
@@ -7657,7 +7765,10 @@ function openSavedFoodPicker(date, onSave) {
     else if (tab === 'recipes') drawRecipes();
     else draw();
   }));
-  draw();
+  overlay.querySelector('#sf-search-wrap').style.display = tab === 'bundles' ? 'none' : '';
+  if (tab === 'bundles') drawBundles();
+  else if (tab === 'recipes') drawRecipes();
+  else draw();
 }
 
 // ===========================================================================
@@ -7793,7 +7904,7 @@ function openVoiceCapture(date, onSave) {
       if (!items || !items.length) { results.innerHTML = `<div class="ai-decline">${t('ai_not_food')}</div>`; return; }
       renderVoiceResults(items);
     } catch (e) {
-      setStatus((e && e.message) || t('ai_error'));
+      setStatus((window.FoodAI && FoodAI.friendlyErr) ? FoodAI.friendlyErr(e) : ((e && e.message) || t('ai_error')));
     }
   }
 
@@ -7890,12 +8001,16 @@ function openFoodModal(foodId = null) {
   const baseAmount = existing ? (parsed.amount || '') : '';
   const baseUnit = existing ? parsed.unit : '';
   // Per-unit macros — used to live-recalculate when the amount is edited.
-  const per = { cal: 0, pro: 0, carb: 0 };
+  // All FOUR macros. Fat was left out, so changing 100 g → 200 g doubled
+  // calories/protein/carbs and kept the old fat — then persisted it, and every
+  // later one-tap add re-logged the wrong figure.
+  const per = { cal: 0, pro: 0, carb: 0, fat: 0 };
   if (existing) {
     const a = parsed.amount || 1;
     per.cal = existing.calories / a;
     per.pro = existing.protein / a;
     per.carb = existing.carbs / a;
+    per.fat = (existing.fat || 0) / a;
   }
   openModal(`
     <div class="modal-header">
@@ -7953,10 +8068,11 @@ function openFoodModal(foodId = null) {
   // Edit the amount → live-recalculate calories/protein/carbs from per-unit.
   $('#food-amount')?.addEventListener('input', () => {
     const a = Number($('#food-amount').value);
-    if (!a || (!per.cal && !per.pro && !per.carb)) return;
+    if (!a || (!per.cal && !per.pro && !per.carb && !per.fat)) return;
     $('#food-cal').value = Math.round(per.cal * a);
     $('#food-pro').value = Math.round(per.pro * a * 10) / 10;
     $('#food-carb').value = Math.round(per.carb * a * 10) / 10;
+    const fatEl = $('#food-fat'); if (fatEl) fatEl.value = Math.round(per.fat * a * 10) / 10;
   });
 
   $('#save-food-btn').addEventListener('click', () => {
@@ -9863,7 +9979,7 @@ function renderSessionDay(el) {
         });
         st.savedSessionId = created.id;
       }
-      const prMsg = checkPR(exId, prior, cleaned);
+      const prMsg = checkPR(exId, prior, cleaned, viewContext.sdUnit);
       if (prMsg) {
         showToast(prMsg);
       } else {
@@ -9888,73 +10004,84 @@ function renderSessionDay(el) {
 // Default rest between sets, in seconds.
 const REST_DEFAULT_SEC = 90;
 
-// THE REST BAR SITS IN THE FLOW, DIRECTLY ABOVE Prev/Next — it does not float
-// over them. It used to be `position: fixed` on `.app`, which guaranteed only
-// that the two never collided AT THE END of the scroll (v289 reserved space for
-// exactly that). In transit they collided completely: scrolled to 210px on a
-// 812px screen, the bar covered 52px of a 52px button row — the whole thing.
-// A floating overlay covers whatever passes beneath it; no amount of reserved
-// padding can fix that, because padding only describes where content STOPS.
+// THE REST BAR IS ONE PERSISTENT ELEMENT WITH TWO STATES, ONE HEIGHT.
 //
-// So the bar is now a sticky block that mountRestBar() inserts directly before
-// .run-nav, as a child of the view. Sticky keeps the countdown pinned near
-// the bottom while you scroll (the reason it floated in the first place), and
-// document order does the rest: the buttons come AFTER it, so it can never be
-// drawn on top of them. At the end of the scroll it settles into its own place
-// just above them. Nothing moves, nothing overlaps.
+// v290 moved it into the flow directly above Prev/Next (sticky, so it stays
+// pinned while you scroll, and it can never be painted over the buttons). That
+// left one movement: the bar was created on every ✓ and removed when the rest
+// ended, so the button row under it dropped ~80px and sprang back each time —
+// and a Skip tap that landed a moment late hit Next, or Finish. The owner asked
+// for a screen that does not move.
 //
-// The cost of living inside the view is that re-renders wipe it — and the run
-// screen re-renders on "add set" and on "next exercise", both of which happen
-// mid-rest. mountRestBar() re-attaches the SAME element (its listeners and the
-// running interval are attached to it, so the countdown never restarts).
-let __restTimer = null;
-let __restBar = null;
+// So the guided screen always carries the bar. `.idle` while no rest is running
+// (a quiet dashed strip, scrolls with the content), `.live` while one is (the
+// countdown, sticky). Same min-height: nothing below it ever moves. The element
+// is created ONCE with the screen — no pop animation replaying per set — and
+// startRestTimer() only swaps its contents.
+//
+// It lives inside the view (a sticky element may only travel within its
+// containing block, so it cannot sit in a wrapper). Re-renders wipe it — add
+// set, next exercise, both mid-rest — and ensureRestBar() re-attaches the SAME
+// node, listeners and running interval included, so the countdown never
+// restarts. clearRestTimer() (navigate away) is the only thing that drops it.
+let __restTimer = null;      // { id, onWake, setIndex }
+let __restBar = null;        // the element, while a guided screen is up
 let __restAudioCtx = null;   // created/unlocked on the "done" tap (a user gesture)
-// Put the live bar where this screen wants it. The slot exists only on the
-// guided screen; anywhere else the bar falls back to floating so a timer that
-// somehow outlives the screen is still visible rather than silently orphaned.
-function mountRestBar() {
-  const bar = __restBar;
-  // Guard on the ELEMENT only. __restTimer is assigned at the end of
-  // startRestTimer, after this runs, so testing it here meant the very first
-  // mount always bailed out and the bar never appeared at all.
-  if (!bar) return;
-  // Directly before the buttons, as a CHILD OF THE VIEW — not inside a wrapper.
-  // position:sticky may only travel within its containing block, so a wrapper
-  // sized to the bar pins it to nothing and it scrolls off like plain content.
-  // The view is the full scroll height, which is the travel sticky needs.
-  const nav = document.querySelector('.view.active .run-nav') || document.querySelector('.run-nav');
-  if (nav && nav.parentNode) {
-    bar.classList.remove('floating');
-    if (bar.nextElementSibling !== nav) nav.parentNode.insertBefore(bar, nav);
-    return;
-  }
-  // No buttons to sit above (not the guided screen): float, so a live timer is
-  // never simply invisible.
-  const app = document.querySelector('.app');
-  if (!app) return;
-  bar.classList.add('floating');
-  if (bar.parentNode !== app) app.appendChild(bar);
+
+function restIdleHtml() {
+  return `<div class="rest-timer-mid"><div class="rest-timer-label">${icon('clock', 16)} ${t('rest_idle')}</div></div>`;
 }
 
-function clearRestTimer() {
+// The bar, directly before .run-nav as a child of the view. Creates it idle if
+// this screen has none yet. Returns null off the guided screen.
+function ensureRestBar() {
+  const nav = document.querySelector('.view.active .run-nav');
+  if (!nav || !nav.parentNode) return null;
+  if (!__restBar) {
+    __restBar = document.createElement('div');
+    __restBar.className = 'rest-timer idle';
+    __restBar.setAttribute('role', 'timer');
+    __restBar.innerHTML = restIdleHtml();
+  }
+  __restBar.classList.remove('floating');
+  if (__restBar.nextElementSibling !== nav) nav.parentNode.insertBefore(__restBar, nav);
+  return __restBar;
+}
+function mountRestBar() { ensureRestBar(); }
+
+// The rest is over — finished, skipped, or its set was un-ticked. The clock
+// stops and the bar goes idle IN PLACE. Nothing moves.
+function stopRestTimer() {
   if (__restTimer) {
     clearInterval(__restTimer.id);
     // Drop the wake listener too — otherwise every rest period leaves one behind.
     if (__restTimer.onWake) document.removeEventListener('visibilitychange', __restTimer.onWake);
     __restTimer = null;
+    try { if (window.Notify && Notify.cancelRestAlarm) Notify.cancelRestAlarm(); } catch (_) {}
   }
-  document.querySelector('.rest-timer')?.remove();
-  __restBar = null;
+  if (__restBar) {
+    __restBar.classList.add('idle');
+    __restBar.classList.remove('live');
+    __restBar.innerHTML = restIdleHtml();
+  }
   document.body.classList.remove('rest-active');
+}
+// Leaving the guided screen: the bar goes with it. navigate() calls this.
+function clearRestTimer() {
+  stopRestTimer();
+  if (__restBar) { __restBar.remove(); __restBar = null; }
+  document.querySelector('.rest-timer')?.remove();
 }
 // A short two-tone beep (a simple alarm — not music) when the rest ends. Uses
 // the AudioContext unlocked during the "done" tap, so mobile autoplay policy
-// doesn't mute it.
+// doesn't mute it. Android suspends the context while the app is hidden, so
+// resume() here as well — the tones were being scheduled into a context that
+// was still asleep, and the beep after a locked-phone rest was silent.
 function playRestBeep() {
   try {
     const ctx = __restAudioCtx;
     if (!ctx) return;
+    if (ctx.state === 'suspended') { try { ctx.resume(); } catch (_) {} }
     const tone = (at, freq) => {
       const o = ctx.createOscillator();
       const g = ctx.createGain();
@@ -9968,50 +10095,64 @@ function playRestBeep() {
     tone(0, 880); tone(0.28, 880);
   } catch (_) {}
 }
-function startRestTimer(seconds) {
-  clearRestTimer();
-  const app = document.querySelector('.app');
-  if (!app) return;
+// `setIndex` is the set whose ✓ started this rest: only un-ticking THAT set
+// stops the clock (un-ticking set 1 by accident used to cancel set 3's rest).
+function startRestTimer(seconds, setIndex, exId) {
+  stopRestTimer();
   // Unlock audio while we're inside the user's tap gesture so the end-beep can play.
   try {
     const AC = window.AudioContext || window.webkitAudioContext;
     if (AC) { if (!__restAudioCtx) __restAudioCtx = new AC(); if (__restAudioCtx.state === 'suspended') __restAudioCtx.resume(); }
   } catch (_) {}
-  // WALL-CLOCK anchored. This used to decrement a counter once per setInterval
-  // tick, but a phone that locks or backgrounds the tab throttles/suspends timers
-  // — so the rest countdown effectively PAUSED in your pocket and you came back
-  // to "1:12 remaining" after resting three minutes. Deriving `remaining` from a
-  // real end timestamp makes the display correct the instant the screen wakes,
-  // and lets us fire the end-of-rest alert immediately on resume.
+  let bar = ensureRestBar();
+  if (!bar) {
+    // Not the guided screen: float, so a live timer is never simply invisible.
+    const app = document.querySelector('.app');
+    if (!app) return;
+    if (!__restBar) { __restBar = document.createElement('div'); __restBar.setAttribute('role', 'timer'); }
+    bar = __restBar;
+    bar.className = 'rest-timer floating';
+    if (bar.parentNode !== app) app.appendChild(bar);
+  }
+  // WALL-CLOCK anchored. A phone that locks or backgrounds the tab suspends
+  // timers, so deriving `remaining` from a real end timestamp makes the display
+  // correct the instant the screen wakes. The OS alarm below is what actually
+  // tells you the rest is over while the screen is off.
   let endAt = Date.now() + Math.max(1, Math.round(seconds)) * 1000;
   const left = () => Math.max(0, Math.round((endAt - Date.now()) / 1000));
   const fmt = (s) => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
   let remaining = left();
-  const bar = document.createElement('div');
-  bar.className = 'rest-timer';
-  bar.setAttribute('role', 'timer');
+  bar.classList.remove('idle');
+  bar.classList.add('live');
+  // The two adjust buttons carry .num: they are numeric expressions, and in an
+  // RTL run the bidi algorithm rendered "−15" as "15−". Labels through t().
   bar.innerHTML = `
-    <button type="button" class="rest-timer-adj" data-rest-minus aria-label="−15s">−15</button>
+    <button type="button" class="rest-timer-adj num" data-rest-minus aria-label="${escapeHtml(t('rest_minus_15'))}">−15</button>
     <div class="rest-timer-mid">
       <div class="rest-timer-label">${icon('clock', 16)} ${t('resting')}</div>
       <div class="rest-timer-count num">${fmt(remaining)}</div>
     </div>
-    <button type="button" class="rest-timer-adj" data-rest-plus aria-label="+15s">+15</button>
+    <button type="button" class="rest-timer-adj num" data-rest-plus aria-label="${escapeHtml(t('rest_plus_15'))}">+15</button>
     <button type="button" class="rest-timer-skip" data-rest-skip>${t('skip')}</button>
   `;
-  __restBar = bar;
-  mountRestBar();
   // The toast is the one thing still floating at the bottom, so it alone needs
-  // the bar's real height to clear it. Measure AFTER mounting, while the bar is
-  // in the document — it wraps to two lines on a narrow screen, so a constant
-  // would be wrong the moment it did.
+  // the bar's real height to clear it. Measure while the bar is in the document.
   try {
     document.documentElement.style.setProperty('--rest-h', bar.offsetHeight + 'px');
   } catch (_) {}
   document.body.classList.add('rest-active');
   const countEl = bar.querySelector('.rest-timer-count');
+  // THE ALERT FOR A LOCKED PHONE. A dated OS notification at the end of the
+  // rest, re-armed on every ±15s (same id, so it replaces). Scheduled 1.5s
+  // AFTER endAt on purpose: with the screen on, tick() reaches finish() at
+  // endAt and cancels it first, so you hear the beep, not the beep plus a
+  // notification. With the screen off there is no tick, and it fires.
+  const arm = () => {
+    try { if (window.Notify && Notify.restAlarm) Notify.restAlarm(endAt + 1500, t('rest_over_title'), t('rest_over_body')); } catch (_) {}
+  };
+  arm();
   const finish = () => {
-    clearRestTimer();
+    stopRestTimer();
     try { if (navigator.vibrate) navigator.vibrate([200, 100, 200]); } catch (_) {}
     playRestBeep();
   };
@@ -10025,16 +10166,15 @@ function startRestTimer(seconds) {
   // phone was locked reports done immediately instead of on the next tick.
   const onWake = () => { if (document.visibilityState === 'visible') tick(); };
   document.addEventListener('visibilitychange', onWake);
-  __restTimer = { id, onWake };
+  __restTimer = { id, onWake, setIndex: (setIndex == null ? -1 : setIndex), exId: exId || null };
   bar.querySelector('[data-rest-minus]').addEventListener('click', () => {
-    endAt = Math.max(Date.now() + 1000, endAt - 15000); tick();
+    endAt = Math.max(Date.now() + 1000, endAt - 15000); tick(); arm();
   });
   bar.querySelector('[data-rest-plus]').addEventListener('click', () => {
-    endAt += 15000; tick();
+    endAt += 15000; tick(); arm();
   });
-  bar.querySelector('[data-rest-skip]').addEventListener('click', () => clearRestTimer());
+  bar.querySelector('[data-rest-skip]').addEventListener('click', () => stopRestTimer());
 }
-
 function renderSessionRun(el) {
   // Resolve the workout by DATE (continuous rotation), like session-day.
   if (!viewContext.runDate) viewContext.runDate = viewContext.date || todayISO();
@@ -10056,7 +10196,19 @@ function renderSessionRun(el) {
 
   // Persist run state across re-renders (until navigation replaces viewContext).
   if (!viewContext.runUnit) viewContext.runUnit = viewContext.unit || (DB.prefs.get().unit) || 'kg';
-  if (viewContext.runIdx == null) viewContext.runIdx = 0;
+  // RESUME, do not restart. viewContext is replaced on every navigate(), so any
+  // exit — the back arrow, Android killing the WebView between sets, a reboot —
+  // used to bring you back to exercise 1 with every ✓ cleared, although every
+  // set was safely in the database. Open on the first exercise that has no
+  // session on this date; if all of them do, the last one (Finish is one tap).
+  if (viewContext.runIdx == null) {
+    // The LAST exercise with a session on this date is the one you were on —
+    // possibly mid-way. Opening on the first exercise WITHOUT a session skipped
+    // past it (two sets logged, four to go, and you land on the next lift).
+    let last = -1;
+    exObjs.forEach((ex, i) => { if (DB.sessions.listByExercise(ex.id).some((s) => s.date === viewContext.runDate)) last = i; });
+    viewContext.runIdx = last === -1 ? 0 : last;
+  }
   if (!viewContext.runState) viewContext.runState = {};
   if (!viewContext.runView) viewContext.runView = 'run';
 
@@ -10080,7 +10232,9 @@ function renderSessionRun(el) {
     const last = DB.sessions.lastForExercise(exId);
     let sets, savedId = null;
     if (today) {
-      sets = today.sets.map((s) => ({ reps: s.reps, weight: s.weight, done: false, phReps: s.reps, phWeight: s.weight }));
+      // A set that reached the database was done — show it ticked, so coming
+      // back mid-workout shows exactly where you stopped.
+      sets = today.sets.map((s) => ({ reps: s.reps, weight: s.weight, done: true, phReps: s.reps, phWeight: s.weight }));
       savedId = today.id;
     } else if (last) {
       sets = last.sets.map((s) => ({ reps: '', weight: '', done: false, phReps: s.reps, phWeight: s.weight }));
@@ -10137,7 +10291,7 @@ function renderSessionRun(el) {
     // (and [data-next] dismisses toasts on the way out). The summary screen shows
     // it once the workout is done.
     try {
-      const msg = checkPR(exId, prior, cleaned);
+      const msg = checkPR(exId, prior, cleaned, viewContext.runUnit);
       if (msg) st.prMsg = msg;
     } catch (_) {}
     return true;
@@ -10191,21 +10345,39 @@ function renderSessionRun(el) {
   // All judged on the TOP set of each session (same topSet as the cells
   // above), so a drop set cannot fool any branch.
   function runSuggest(exId) {
-    const hist = DB.sessions.listByExercise(exId);   // sorted date desc
+    // HISTORY MEANS BEFORE THIS RUN. Today's own row lands in the database on
+    // the first ✓, and without this filter it became hist[0] — so after one
+    // set the box read "2-for-2 confirmed, add weight" against today's own
+    // numbers, and the advice changed between sets of one workout.
+    const hist = DB.sessions.listByExercise(exId).filter((s) => s.date !== viewContext.runDate);   // sorted date desc
     if (!hist.length) return null;
     const s1 = topSet(hist[0].sets);
-    if (!s1 || !(s1.w > 0) || !(s1.r > 0)) return null;
+    if (!s1) return null;
+    // Bodyweight (pull-ups, dips): no load to progress, so progress the reps.
+    if (!(s1.w > 0)) return s1.r > 0 ? { w: 0, r: s1.r + 1, key: 'sug_rep_reason', vars: {} } : null;
+    if (!(s1.r > 0)) return null;
     const LO = 8, HI = 12;
     const ex = DB.exercises.getById(exId);
-    const inc = (ex && ex.category === 'legs' && s1.w >= 50) ? 5 : 2.5;
-    const to25 = (x) => Math.round(x / 2.5) * 2.5;
+    // Stored categories are capitalised ('Legs'); this compared against 'legs',
+    // so the +5 kg lower-body step the v281 rules promise was never taken.
+    const legs = !!(ex && String(ex.category || '').toLowerCase() === 'legs');
+    // WORK IN THE UNIT THE BAR IS LOADED IN. Rounding to 2.5 kg plates and
+    // then showing lb produced 143.5 lb — a number no bar can be loaded to.
+    // In lb: 5-lb steps (10 for legs from 110 lb), rounded to 5-lb plates.
+    const lb = viewContext.runUnit === 'lb';
+    const toU = (kg) => (lb ? kg * KG_TO_LB : kg);
+    const fromU = (u) => (lb ? Math.round((u / KG_TO_LB) * 100) / 100 : u);
+    const plate = lb ? 5 : 2.5;
+    const w1 = toU(s1.w);
+    const inc = lb ? ((legs && w1 >= 110) ? 10 : 5) : ((legs && s1.w >= 50) ? 5 : 2.5);
+    const toPlate = (x) => Math.round(x / plate) * plate;
 
     if (s1.r >= HI) {
       // 2-for-2: the increase needs the SECOND consecutive session at this
       // weight to also top the range. One great day is not a new baseline.
       const s2 = hist[1] ? topSet(hist[1].sets) : null;
       const confirmed = !!(s2 && s2.w === s1.w && s2.r >= HI);
-      if (confirmed) return { w: to25(s1.w + inc), r: LO, key: 'sug_up_reason', vars: { t: LO } };
+      if (confirmed) return { w: fromU(toPlate(w1 + inc)), r: LO, key: 'sug_up_reason', vars: { t: LO } };
       return { w: s1.w, r: HI, key: 'sug_confirm_reason', vars: {} };
     }
     if (s1.r >= LO) return { w: s1.w, r: s1.r + 1, key: 'sug_rep_reason', vars: { t: s1.r + 1 } };
@@ -10220,9 +10392,9 @@ function renderSessionRun(el) {
       stuck++;
     }
     if (stuck >= 3) {
-      let dw = Math.max(2.5, to25(s1.w * 0.9));
-      if (dw >= s1.w) dw = Math.max(2.5, s1.w - 2.5);   // rounding must not undo the deload
-      return { w: dw, r: LO, key: 'sug_deload_reason', vars: { n: stuck } };
+      let dw = Math.max(plate, toPlate(w1 * 0.9));
+      if (dw >= w1) dw = Math.max(plate, w1 - plate);   // rounding must not undo the deload
+      return { w: fromU(dw), r: LO, key: 'sug_deload_reason', vars: { n: stuck } };
     }
     return { w: s1.w, r: LO, key: 'sug_hold_reason', vars: { t: LO } };
   }
@@ -10235,13 +10407,18 @@ function renderSessionRun(el) {
     return `
       <button type="button" class="run-suggest" data-sug-w="${g.w}" data-sug-r="${g.r}">
         <span class="run-suggest-label">${t('sug_label')}</span>
-        <span class="run-suggest-figure num" dir="ltr">${fmtNum(convDisplay(g.w))}<b>${u}</b> × ${fmtNum(g.r)}</span>
+        <span class="run-suggest-figure num" dir="ltr">${g.w > 0 ? `${fmtNum(convDisplay(g.w))}<b>${u}</b> × ${fmtNum(g.r)}` : `${fmtNum(g.r)} ${t('reps')}`}</span>
         <span class="run-suggest-why">${reason}</span>
       </button>`;
   }
 
   function runStatsHtml(exId) {
-    const all = DB.sessions.listByExercise(exId);
+    // Same rule as runSuggest: the cells describe the PAST. Today's own row
+    // made "Last" flip to today's set 1 after the first ✓.
+    const all = DB.sessions.listByExercise(exId).filter((s) => s.date !== viewContext.runDate);
+    // Rendered ONLY when there is history — on a first-ever exercise two cells
+    // reading "—" are noise (this is what the comment below always promised).
+    if (!all.length) return '';
     // Best EVER: the heaviest single set across every session on record.
     const best = all.reduce((b, s) => {
       const t2 = topSet(s.sets);
@@ -10251,7 +10428,7 @@ function renderSessionRun(el) {
     // Last: the heaviest set of the most recent session — not its LAST set. A
     // drop set ends light, and "last weight 40" after a 90 top set reads as a
     // regression that never happened.
-    const lastSession = DB.sessions.lastForExercise(exId);
+    const lastSession = all[0] || null;   // listByExercise is sorted date desc
     const last = lastSession ? topSet(lastSession.sets) : null;
     const u = viewContext.runUnit.toUpperCase();
     // ONE figure, not a stack: weight and reps belong side by side because they
@@ -10263,15 +10440,19 @@ function renderSessionRun(el) {
     // bare "80 KG × 6" lets the bidi algorithm reorder the run around the
     // neutral ×. Pinning the direction keeps the weight first in both languages,
     // which is what the label above it promises.
+    // Bodyweight sets (weight 0, reps > 0) are a supported input everywhere
+    // else in the app; here they read "—" forever. Show the reps.
     const cell = (label, ts, cls) => {
-      const has = !!(ts && ts.w > 0);
+      const has = !!(ts && (ts.w > 0 || ts.r > 0));
+      const figure = !has ? '<span class="run-stat-empty">—</span>'
+        : ts.w > 0 ? `
+          <span class="num">${fmtNum(convDisplay(ts.w))}</span><span class="run-stat-unit">${u}</span>
+          ${ts.r > 0 ? `<span class="run-stat-x" aria-hidden="true">×</span><span class="num">${fmtNum(ts.r)}</span><span class="run-stat-unit">${t('reps')}</span>` : ''}
+        ` : `<span class="num">${fmtNum(ts.r)}</span><span class="run-stat-unit">${t('reps')}</span>`;
       return `
       <div class="run-stat ${cls}">
         <div class="run-stat-label">${label}</div>
-        <div class="run-stat-figure" dir="ltr">${has ? `
-          <span class="num">${fmtNum(convDisplay(ts.w))}</span><span class="run-stat-unit">${u}</span>
-          ${ts.r > 0 ? `<span class="run-stat-x" aria-hidden="true">×</span><span class="num">${fmtNum(ts.r)}</span><span class="run-stat-unit">${t('reps')}</span>` : ''}
-        ` : '<span class="run-stat-empty">—</span>'}</div>
+        <div class="run-stat-figure" dir="ltr">${figure}</div>
       </div>`;
     };
     // The progress chart the owner asked to reach "from an easy place" has
@@ -10307,7 +10488,9 @@ function renderSessionRun(el) {
         .map((s) => ({ reps: Number(s.reps) || 0, weight: Number(s.weight) || 0 }))
         .filter((s) => s.reps > 0 || s.weight > 0);
       if (done.length === 0) return '';
-      done.forEach((s) => { totalSets += 1; totalVolume += s.reps * s.weight; });
+      // State holds kg; the rows above show the run unit. Summing raw kg under an
+      // LB label was off by 2.2× for LB users, right beneath rows that were right.
+      done.forEach((s) => { totalSets += 1; totalVolume += s.reps * convDisplay(s.weight); });
       const setsStr = done
         .map((s) => `${fmtNum(s.reps)}×${fmtNum(convDisplay(s.weight))}`)
         .join('  ·  ');
@@ -10486,11 +10669,11 @@ function renderSessionRun(el) {
     let at = st.sets.findIndex((x) => !x.done && (x.reps === '' || x.reps == null) && (x.weight === '' || x.weight == null));
     if (at === -1) at = st.sets.findIndex((x) => !x.done);
     if (at === -1) return;                       // everything already done
-    st.sets[at].weight = w;                      // state holds kg
+    st.sets[at].weight = w > 0 ? w : '';         // state holds kg; 0 = bodyweight, left blank
     st.sets[at].reps = r;
     const row = el.querySelector('.run-set-row[data-set="' + at + '"]');
     if (row) {
-      const wi = row.querySelector('[data-field="weight"]'); if (wi) wi.value = String(convDisplay(w));
+      const wi = row.querySelector('[data-field="weight"]'); if (wi) wi.value = w > 0 ? String(convDisplay(w)) : '';
       const ri = row.querySelector('[data-field="reps"]');   if (ri) ri.value = String(r);
     }
     commitExercise(ex.id);
@@ -10523,15 +10706,27 @@ function renderSessionRun(el) {
       // the value is committed and focus leaves, which is exactly "typed it and
       // moved to something else". `blur` covers the case where the value did not
       // change but the row was completed by other means.
-      inp.addEventListener('change', () => commitExercise(ex.id, { warnEmpty: true }));
-      inp.addEventListener('blur', () => commitExercise(ex.id));
+      // ONE write per field-leave. `change` and `blur` both fire on the same
+      // focus loss when the value changed, and each commit serialises the whole
+      // blob — so every edited field cost two full writes. Coalesce them into
+      // one on the next tick (`change` alone is kept for Enter on a keyboard,
+      // which commits without a blur). No warnEmpty here: clearing a number to
+      // retype it is editing, not a mistake; ✓ and Finish are where an empty
+      // set is worth a word.
+      let commitQueued = false;
+      const commitOnce = () => {
+        if (commitQueued) return;
+        commitQueued = true;
+        setTimeout(() => { commitQueued = false; commitExercise(ex.id); }, 0);
+      };
+      inp.addEventListener('change', commitOnce);
+      inp.addEventListener('blur', commitOnce);
     });
     // ✓ Done → mark the set complete + start the rest timer. If the row is still
     // empty, fill it from the "last time" ghost — one tap = "same as last time".
     row.querySelector('[data-done]')?.addEventListener('click', () => {
       const set = st.sets[i];
-      set.done = !set.done;
-      if (set.done) {
+      if (!set.done) {
         if ((set.reps === '' || set.reps == null) && set.phReps !== '' && set.phReps != null) {
           set.reps = Number(set.phReps);
           const r = row.querySelector('[data-field="reps"]'); if (r) r.value = String(set.reps);
@@ -10540,9 +10735,17 @@ function renderSessionRun(el) {
           set.weight = set.phWeight;
           const w = row.querySelector('[data-field="weight"]'); if (w) w.value = String(convDisplay(Number(set.weight)));
         }
-        startRestTimer(REST_DEFAULT_SEC);
+        // A set with no numbers cannot be "done". On a first-ever exercise the
+        // ghost is empty, so ✓ used to light the row green and start the rest
+        // while nothing was saved — and the toast was easy to miss mid-set.
+        // Refuse it visibly and leave the row untouched.
+        if (!(Number(set.reps) > 0 || Number(set.weight) > 0)) { showToast(t('add_at_least_one')); return; }
+        set.done = true;
+        startRestTimer(REST_DEFAULT_SEC, i, ex.id);
       } else {
-        clearRestTimer();
+        set.done = false;
+        // Only the set that STARTED the rest may end it by being un-ticked.
+        if (__restTimer && __restTimer.setIndex === i && __restTimer.exId === ex.id) stopRestTimer();
       }
       row.classList.toggle('done', set.done);
       row.querySelector('[data-done]').classList.toggle('done', set.done);
@@ -10550,7 +10753,7 @@ function renderSessionRun(el) {
       // Ticking a set is the strongest "I finished this" signal in the screen,
       // and it can fill the row from the ghost values without any field being
       // touched — so it must persist on its own, not wait for a blur.
-      commitExercise(ex.id, { warnEmpty: true });
+      commitExercise(ex.id);
     });
     // Delete this set and persist immediately. A logged one-set exercise can be
     // removed this way too; Undo puts it back at its original position.
@@ -11222,6 +11425,7 @@ function renderFoodLog(el) {
             ${e.fat ? `<span class="dot-sep"></span><span><span class="num">${fmtNum(Math.round(e.fat * m * 10) / 10)}</span>g ${t('fat_label')}</span>` : ''}
           </div>
         </div>
+        <button class="icon-btn" data-edit-food="${escapeHtml(e.id)}" aria-label="${escapeHtml(t('fl_edit_title'))}">${icon('edit', 20)}</button>
         <button class="icon-btn danger" data-del-food="${escapeHtml(e.id)}" aria-label="${escapeHtml(t('delete'))}">${icon('trash', 20)}</button>
       </div>
     `;
@@ -11299,8 +11503,68 @@ function renderFoodLog(el) {
     set('.macro-total.fat .macro-total-value', fmtNum(Math.round((tt.fat || 0) * 10) / 10));
   }
 
-  // Delegated delete — append/remove keep working without rebinding.
+  // EDIT IN PLACE. Until now a logged row could only be deleted: a wrong
+  // portion meant re-photographing or re-recording the meal, while the AI
+  // panel told the user to "correct it in the food log" — a correction that
+  // did not exist. DB.foodLogs.update() had zero callers.
+  function openFoodLogEditor(id) {
+    const entry = DB.foodLogs.listForDate(ctx.date).find((x) => x.id === id);
+    if (!entry) return;
+    let mult = Number(entry.servings) || 1;
+    const overlay = openModal(`
+      <div class="modal-header">
+        <div>
+          <div class="modal-title">${t('fl_edit_title')}</div>
+          <div class="modal-subtitle">${escapeHtml(entry.name)}</div>
+        </div>
+        <button class="icon-btn icon-btn-tile" data-close>${icon('close', 20)}</button>
+      </div>
+      <div class="form-group">
+        <label class="form-label">${t('servings')}</label>
+        <div class="fl-stepper">
+          <button type="button" class="icon-btn" data-step="-1" aria-label="${escapeHtml(t('portion_less'))}">${icon('minus', 18)}</button>
+          <span class="fl-stepper-val num" id="fl-mult">${fmtNum(mult)}</span>
+          <button type="button" class="icon-btn" data-step="1" aria-label="${escapeHtml(t('portion_more'))}">${icon('plus', 18)}</button>
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group"><label class="form-label" for="fl-cal">${t('cal')}</label><input type="number" inputmode="decimal" id="fl-cal" step="1" min="0" value="${numAttr(entry.calories)}"></div>
+        <div class="form-group"><label class="form-label" for="fl-pro">${t('protein_label')}</label><input type="number" inputmode="decimal" id="fl-pro" step="0.1" min="0" value="${numAttr(entry.protein)}"></div>
+      </div>
+      <div class="form-row">
+        <div class="form-group"><label class="form-label" for="fl-carb">${t('carbs_label')}</label><input type="number" inputmode="decimal" id="fl-carb" step="0.1" min="0" value="${numAttr(entry.carbs)}"></div>
+        <div class="form-group"><label class="form-label" for="fl-fat">${t('fat_label')}</label><input type="number" inputmode="decimal" id="fl-fat" step="0.1" min="0" value="${numAttr(entry.fat)}"></div>
+      </div>
+      <p class="calc-preview-hint">${t('fl_per_serving_hint')}</p>
+      <button type="button" class="btn btn-primary btn-block" id="fl-save">${icon('check', 20)} ${t('save')}</button>
+    `);
+    overlay.querySelectorAll('[data-step]').forEach((b) => b.addEventListener('click', () => {
+      // Same 0.25 steps and 0.25–20 bounds as the AI cards.
+      mult = Math.max(0.25, Math.min(20, Math.round((mult + (Number(b.dataset.step) || 0) * 0.25) * 100) / 100));
+      overlay.querySelector('#fl-mult').textContent = fmtNum(mult);
+    }));
+    overlay.querySelector('#fl-save').addEventListener('click', () => {
+      const num = (sel) => { const v = parseFloat(overlay.querySelector(sel).value); return isFinite(v) && v >= 0 ? v : 0; };
+      const updated = DB.foodLogs.update(ctx.date, id, {
+        servings: mult, calories: num('#fl-cal'), protein: num('#fl-pro'), carbs: num('#fl-carb'), fat: num('#fl-fat'),
+      });
+      if (!updated) { closeModal(); return; }
+      // Replace the row FIRST, then close: closeModal() returns focus to the
+      // opener, and the opener is the pencil inside the row being replaced.
+      const list = $('#food-log-list', el);
+      const row = list.querySelector(`[data-food-row="${CSS.escape(id)}"]`);
+      if (row) row.outerHTML = foodRowHtml(updated);
+      refreshTotals();
+      closeModal();
+      try { list.querySelector(`[data-food-row="${CSS.escape(id)}"] [data-edit-food]`)?.focus(); } catch (_) {}
+      showToast(t('fl_edited'));
+    });
+  }
+
+  // Delegated edit + delete — append/remove keep working without rebinding.
   $('#food-log-list', el).addEventListener('click', (e) => {
+    const editBtn = e.target.closest('[data-edit-food]');
+    if (editBtn) { openFoodLogEditor(editBtn.dataset.editFood); return; }
     const btn = e.target.closest('[data-del-food]');
     if (!btn) return;
     DB.foodLogs.remove(ctx.date, btn.dataset.delFood);
@@ -11330,6 +11594,11 @@ function refreshAfterSync() {
   applyTheme(prefs.theme || 'dark');
   applyLang(prefs.lang || 'en');
   renderView(currentView || 'home');
+  // Photos: a device that pulled through resume / Sync now / the conflict dialog
+  // never reconciled its images (only login and boot did), so a fresh device
+  // showed initials until its next cold start with network. Cheap when there is
+  // nothing to do — one pass over the custom exercises, no network.
+  try { syncExerciseImages(); } catch (_) {}
   // The pulled blob carries its own reminder settings and supplement times, and
   // the OS alarms still reflect the ones this device had a moment ago. Nothing
   // else re-arms them: the boot sync runs on a 1.5s timer that can fire before
@@ -11770,7 +12039,21 @@ async function populateAccount(el) {
       </button>
       ${(() => {
         const rec = (window.Cloud && Cloud.recoveryInfo) ? Cloud.recoveryInfo() : null;
-        if (!rec) return '';
+        if (!rec) {
+          // No rescue — and if the last attempt to keep one FAILED (storage
+          // full), say so. Quietly offering nothing is how the one user this
+          // slot exists for finds out it was never there.
+          const failedAt = (window.Cloud && Cloud.recoveryFailedAt) ? Cloud.recoveryFailedAt() : '';
+          if (!failedAt) return '';
+          return `
+      <div class="settings-action-row is-static" role="status">
+        <div class="settings-action-icon">${icon('refresh', 20)}</div>
+        <div class="settings-action-main">
+          <div class="settings-action-title">${t('sync_snapshot_failed')}</div>
+          <div class="settings-action-sub">${escapeHtml(formatDateShort(String(failedAt).slice(0, 10)))}</div>
+        </div>
+      </div>`;
+        }
         return `
       <button class="settings-action-row" id="sync-restore-btn">
         <div class="settings-action-icon">${icon('refresh', 20)}</div>
@@ -11855,7 +12138,10 @@ async function populateAccount(el) {
           // token), 'blocked', 'conflict', or a throw — means the local data was
           // NOT uploaded, so we must keep it rather than clear it.
           let safe = false;
-          try { safe = (await Cloud.push()) === 'ok'; } catch (_) { safe = false; }
+          // flush(), not push(): push() hands back a push already in flight,
+          // whose snapshot predates a set logged during the upload — 'ok' with
+          // dirty still set. Wiping the device on that 'ok' lost the set.
+          try { safe = (await Cloud.flush()) === 'ok'; } catch (_) { safe = false; }
           try { await Cloud.signOut(); } catch (_) {}
           if (safe) { try { Cloud.clearLocalUserData(); } catch (_) {} }
           location.reload();
@@ -12399,6 +12685,8 @@ function showOnboarding() {
 }
 
 (function init() {
+  // READ-ONLY boot (unparseable store): say so before anything else renders.
+  try { if (DB.loadFailed && DB.loadFailed()) setTimeout(showUnreadableDialog, 400); } catch (_) {}
   // Kick off the (large) Supabase SDK download in parallel with the first paint,
   // before anything awaits it — so the login gate / session check isn't blocked
   // on a cold download. Fire-and-forget; bootCloud awaits the same promise.

@@ -50,6 +50,8 @@ file on a database that already has it is safe.
 | 16 | `security-audit-repairs-v12.sql` | Rewrites `delete_own_account()` to delete the caller's children explicitly in FK-safe order — the old one relied on the `auth.users` cascade, which hits `ON DELETE RESTRICT` from `workout_sessions.exercise_id`/`cardio_logs.cardio_type_id`. Also re-pins `admin_user_stats`/`admin_activity`/`snapshot_feedback_username` from `search_path=public` to `''`, makes `client_errors_rate_cap` SECURITY INVOKER, adds the `client_errors` ban policy, and drops `migration_v2` behind a raise-guard. Applied + verified live 2026-08-13. |
 | 17 | `cross-tenant-write-guards-v13.sql` | 8 RESTRICTIVE guards so a row cannot reference another user's custom exercise/cardio type; all 12 predicates permit the global catalog (`owner_id is null`). Adds `workout_sessions_performed_idx`. Refuses to apply if any cross-tenant row already exists. Applied + verified live 2026-08-13. |
 | 15 | `ban-rls-completion-v11.sql` | Closes 12's gap: ban INSERT/UPDATE on the four tables it missed (`exercises`, `cardio_types`, `foods`, `user_prefs`), a ban on `profiles` INSERT (12 restricted UPDATE only, so a banned user could delete their own profile row and insert a new one under a fresh @handle), and the revoke/grant double-lock `client_errors` never got. Raises instead of skipping a missing table, and its VERIFY asserts the policy COUNT rather than mere existence — the check that would have caught 12. Applied + verified live 2026-08-13: tables carrying a ban pair went 14 -> 18, all four missing tables show ins=1/upd=1, `profiles_ban_insert` exists, and `client_errors` grants are exactly `authenticated: SELECT, INSERT` with nothing for `anon`. |
+| 18 | `drop-mirror-v14.sql` | Removes the one-way analytics mirror (13 normalized tables) after the owner decision that the blob IS the truth; rewrites the three functions that named those tables (plpgsql binds table names at call time) in the same transaction; adds the `vault_data_admin_read` policy so `admin.html` reads blobs directly. Applied + verified live 2026-09-02. |
+| 19 | `admin-adherence-v15.sql` | The Console's adherence RPC: planned-vs-done per user per week, counting DISTINCT DATES (the blob stores one session row per exercise). Applied + verified live 2026-09-02. |
 
 > ⚠️ **Keep `image/svg+xml` OUT of the `exercise-images` mime allowlist,
 > permanently.** It is what rejects an active-content SVG arriving from a
@@ -75,9 +77,18 @@ PASS, because it proves the body parsed and executed.
 
 ## 2) Not yet applied — `pending/`
 
+Written and reviewed in v291 (2026-09-02). The MCP apply was refused by the
+session's permission classifier, so these wait for a human in the SQL editor.
+The client is already tolerant of either state: the catalog pull selects `*`,
+and the Console falls back to the 6-argument `admin_upsert_food`. After applying:
+move the file to `migrations/` and add its row to the table above.
+
 | # | File | What it establishes |
 |---|---|---|
-| 16 | `security-audit-repairs-v12.sql` | Repairs the confirmed-live account-erasure FK failure; re-pins the three weakly pinned definer functions; downgrades/revokes the client-error trigger surface; bans client-error inserts; and drops `migration_v2` on fresh/re-run paths. **NOT APPLIED — review and run the file's pre-flight first.** |
+| 20 | `vault-data-history-v16.sql` | `vault_data_history` — the last 10 versions of every user's blob, written by a BEFORE UPDATE trigger (SECURITY DEFINER, empty search_path) whenever `data` changes. Own-row SELECT only; no client write path; grants double-locked like `vault_data`. Closes the "the side that was force-pushed over had no copy anywhere" gap of whole-blob sync. **NOT APPLIED.** |
+| 21 | `food-catalog-fat-v17.sql` | `food_catalog.fat` (default 0) and a 7-argument `admin_upsert_food` overload with `p_fat`; the 6-argument original stays. Until this is applied every curated catalog food logs 0 g fat. **NOT APPLIED.** |
+
+(16 `security-audit-repairs-v12.sql` used to be listed here; it has been applied since 2026-08-13 — see its row above.)
 
 ## 3) State unknown — `unverified/`
 

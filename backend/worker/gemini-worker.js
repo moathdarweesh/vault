@@ -87,12 +87,26 @@ function clampItems(rawItems) {
 //   - audio present → voice: transcribe + extract, returns { ok, transcript, items }.
 //   - otherwise → food/photo, returns { ok, items }.
 // Returns { rateLimited: true } on 429/404, or { error } on any other failure.
+// The only instruction chat mode ever runs under. Not overridable by the client.
+const CHAT_SYSTEM = [
+  'You are the nutrition and training coach inside a fitness app called VAULT.',
+  'Answer ONLY questions about food, calories, macros, meals, hydration, sleep, training, recovery and body weight.',
+  'If the message is about anything else, reply with one short sentence saying you can only help with nutrition and training.',
+  'Reply in the language of the message. Be concise: at most 120 words, no markdown headings.',
+  'Never claim to be a doctor; for medical questions advise seeing a professional.',
+].join(' ');
+
 async function callModel(model, key, req) {
   const chat = req.mode === 'chat';
   const isAudio = !!(req.audio && req.audio.data);
   const isImage = !!(req.image && req.image.data);
 
-  const parts = [{ text: req.prompt || req.text || (isImage ? 'Identify the food in this photo.' : '') }];
+  // Chat mode takes the caller's TEXT as the user turn and nothing else: the
+  // client-supplied prompt is honoured only for audio (the voice instruction),
+  // never as a free-form system prompt. Without this, any signed-in account had
+  // an unconstrained Gemini relay on the owner's key.
+  const userText = chat ? req.text : (req.prompt || req.text);
+  const parts = [{ text: userText || (isImage ? 'Identify the food in this photo.' : '') }];
   if (isImage) parts.push({ inline_data: { mime_type: req.image.mimeType || 'image/jpeg', data: req.image.data } });
   if (isAudio) parts.push({ inline_data: { mime_type: req.audio.mimeType || 'audio/webm', data: req.audio.data } });
 
@@ -105,6 +119,9 @@ async function callModel(model, key, req) {
   // Food/photo use the strict JSON SYSTEM prompt; audio + chat carry their own
   // instruction in `prompt`, so they don't get the food-only system prompt.
   if (!chat && !isAudio) body.systemInstruction = { parts: [{ text: SYSTEM }] };
+  // Chat gets a FIXED coach instruction from the server. It scopes the model to
+  // nutrition and training questions and tells it to decline anything else.
+  if (chat) body.systemInstruction = { parts: [{ text: CHAT_SYSTEM }] };
 
   let res;
   try {

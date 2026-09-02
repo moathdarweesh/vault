@@ -18,11 +18,18 @@
   // A dropped connection surfaces as TypeError('Failed to fetch'/'Load failed').
   // Show the localized network message instead of the raw browser string; keep
   // already-localized errors (rate limit, etc.) as-is.
+  // Also maps the Worker's fixed English error constants (they are protocol,
+  // not prose): 'unauthorized' → sign-in hint, 'too large' → too large, and
+  // everything else it emits → the generic AI error. Exported on FoodAI so the
+  // voice panel in app.js can use it instead of printing e.message raw.
   function friendlyErr(e) {
     const m = (e && e.message) || '';
     if ((e && e.name === 'TypeError') || /failed to fetch|load failed|networkerror|network request/i.test(m)) {
       return tr('auth_err_network');
     }
+    if (/^unauthorized$/i.test(m)) return tr('ai_err_signin');
+    if (/too large/i.test(m)) return tr('ai_err_too_large');
+    if (/^(service unavailable|server misconfigured|upstream|no result|parse error|rate limited|method not allowed|no input|HTTP \d+)/i.test(m)) return tr('ai_error');
     return m || tr('ai_error');
   }
 
@@ -494,8 +501,24 @@
   function open(dateForLog, opts) {
     if (typeof openModal !== 'function') return;
     const mode = (opts && opts.mode === 'photo') ? 'photo' : 'chat';
-    logDate = dateForLog || (typeof todayISO === 'function' ? todayISO() : null);
+    // null = "today", resolved by dateNow() at the moment a row is WRITTEN. A
+    // date frozen here was the day the sheet opened: a meal answered at 00:01
+    // for a question asked at 23:56 landed on yesterday.
+    logDate = dateForLog || null;
     const results = {}; // cardId -> item
+    const queryText = {}; // groupId -> the message that produced it (cache key)
+    const groupSource = {}; // groupId -> 'local' when the figures were the user's own
+    const editedGroups = new Set(); // groups corrected in THIS panel (not a persisted flag)
+    const foldedGroups = new Set(); // groups whose bases absorbed a portion multiplier
+    const groupOf = (cid) => String(cid).slice(0, String(cid).lastIndexOf('-'));
+    // LOCAL calendar date, never toISOString(): that is the UTC bug this
+    // project has hit three times.
+    const dateNow = () => {
+      if (logDate) return logDate;
+      if (typeof todayISO === 'function') return todayISO();
+      const d = new Date(), z = (n) => String(n).padStart(2, '0');
+      return d.getFullYear() + '-' + z(d.getMonth() + 1) + '-' + z(d.getDate());
+    };
     const groups = {};  // messageId -> items[]
     let n = 0;
 
@@ -520,6 +543,7 @@
           if (p) p.innerHTML = qHtml + `<span class="ai-decline">${tr('ai_not_food')}</span>`;
         } else {
           groups[id] = items;
+          groupSource[id] = meta && meta.parsed;
           const cards = items.map((it, i) => {
             const cid = id + '-' + i; results[cid] = it; return resultCardHtml(it, cid);
           }).join('');
@@ -554,6 +578,7 @@
           const text = input.value.trim();
           if (!text) return;
           const id = 'r' + (++n);
+          queryText[id] = text;
           const box = document.getElementById('ai-results');
           input.value = '';
           const qHtml = `<span class="ai-q">${esc(text)}</span>`;
@@ -622,6 +647,7 @@
                 if (it) it[MACRO_FIELD[k]] = v;
               });
               card.dataset.mult = 1;
+              foldedGroups.add(groupOf(card.dataset.result));   // bases are no longer the 1× answer
             }
             card.querySelectorAll('.ai-edit input[data-e]').forEach((inp) => {
               inp.value = String(baseOf(card, inp.dataset.e));
@@ -658,7 +684,7 @@
             v = k === 'cal' ? Math.round(v) : Math.round(v * 10) / 10;
             card.dataset['b' + k] = v;
             const it = results[card.dataset.result];
-            if (it) { it[MACRO_FIELD[k]] = v; it.edited = true; }
+            if (it) { it[MACRO_FIELD[k]] = v; it.edited = true; editedGroups.add(groupOf(card.dataset.result)); }
             card.classList.add('is-edited');
             applyPortion(card);
           });
@@ -730,12 +756,31 @@
       bindAdds();
     }
 
+    // The cache promises "the same text returns the same macros". Once the
+    // user has corrected an estimate and logged it, the corrected figures ARE
+    // the right answer for that text — so they become the cached one. Without
+    // this the pencil had to be used again every single day for a repeat meal.
+    // Only for model answers (a local parse is the user's own numbers already)
+    // and only for text queries (photos have no key).
+    function writeBackCache(cid) {
+      try {
+        const gid = String(cid).slice(0, String(cid).lastIndexOf('-'));
+        const text = queryText[gid];
+        const items = groups[gid];
+        if (!text || !items || !items.length || groupSource[gid] === 'local') return;
+        // Only a correction made in THIS panel counts (`edited` also rides in
+        // from a cached answer written earlier), and never after a portion was
+        // folded into the bases — that would cache a 2× plate as the 1× answer.
+        if (!editedGroups.has(gid) || foldedGroups.has(gid)) return;
+        cacheSet(text, items.map((x) => { const c = Object.assign({}, x); delete c.edited; return c; }));
+      } catch (_) {}
+    }
     function logItem(it, mult) {
       if (!it || typeof DB === 'undefined') return;
       // Store the AI's estimate as the per-serving base and the chosen portion
       // as `servings`, so totals (macros × servings) count the adjusted amount
       // and the food-log row shows the "× N" the user picked.
-      DB.foodLogs.add(logDate, {
+      DB.foodLogs.add(dateNow(), {
         name: it.name, servings: mult || 1,
         calories: it.calories, protein: it.protein, carbs: it.carbs, fat: it.fat,
         source: 'ai',
@@ -745,7 +790,7 @@
       // Refresh whichever nutrition screen is behind the chat so the user sees
       // what they added the moment they close it. The Food dashboard is the
       // primary screen now; the per-day foodlog is the secondary history view.
-      if (typeof viewContext !== 'undefined') viewContext.foodLog = { date: logDate };
+      if (typeof viewContext !== 'undefined') viewContext.foodLog = { date: dateNow() };
       if (typeof currentView !== 'undefined' && (currentView === 'foodlog' || currentView === 'food') && typeof renderView === 'function') {
         renderView(currentView);
       } else if (typeof navigate === 'function') {
@@ -769,6 +814,7 @@
         b.dataset.bound = '1';
         b.addEventListener('click', () => {
           logItem(results[b.dataset.add], cardMult(b.closest('.ai-card')));
+          writeBackCache(b.dataset.add);
           showToast(tr('ai_added'));
           markAdded(b);
           refreshFoodLog();
@@ -788,6 +834,7 @@
             logItem(results[addBtn.dataset.add], cardMult(addBtn.closest('.ai-card')));
             markAdded(addBtn);
           });
+          writeBackCache(b.dataset.addall + '-0');
           showToast(tr('ai_added'));
           markAdded(b);
           refreshFoodLog();
@@ -857,6 +904,6 @@
   // fills its boxes with it, and it must be the SAME rules the chat uses or the
   // two drift into disagreeing about the same sentence. Pure local matching —
   // it sends nothing anywhere.
-  window.FoodAI = { open, openPhoto, analyze, analyzeImage, analyzeAudio, ask,
+  window.FoodAI = { open, openPhoto, analyze, analyzeImage, analyzeAudio, ask, friendlyErr,
                     parseText: parseMacroText };
 })();

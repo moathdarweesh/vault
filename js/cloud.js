@@ -106,6 +106,14 @@
   // content: logged sessions/cardio/sleep, foods, food/supplement logs, own
   // supplements, or a custom exercise. Used both to detect a real local store
   // AND to protect a data-ful cloud backup from being overwritten by an empty one.
+  function _notifHasUserContent(n) {
+    try {
+      if (!n || !n.channels) return false;
+      const c = n.channels;
+      return !!((c.supps && Array.isArray(c.supps.doses) && c.supps.doses.length) ||
+                (c.food && Array.isArray(c.food.meals) && c.food.meals.length));
+    } catch (_) { return false; }
+  }
   function blobHasUserData(b) {
     try {
       if (!b || typeof b !== 'object') return false;
@@ -124,7 +132,17 @@
         (b.water && Object.keys(b.water).length) ||
         (b.cardioTypes && b.cardioTypes.length) ||
         (b.plan && Array.isArray(b.plan.cycle) && b.plan.cycle.length) ||
-        (b.nutrition && b.nutrition.targets && b.nutrition.targets.calories)
+        (b.nutrition && b.nutrition.targets && b.nutrition.targets.calories) ||
+        // Recipes, meal bundles and a configured notification setup are user
+        // work too. A second device whose ONLY content was these read as
+        // "empty": pulled over without a snapshot, and refused a push.
+        (b.recipes && b.recipes.length) ||
+        (b.mealBundles && b.mealBundles.length) ||
+        // notif counts ONLY for content the user typed (supplement doses, meal
+        // times). The object itself is written into every blob at boot by
+        // migrateFromReminders(), so counting its mere presence made a fresh
+        // install read as "has data" and defeated every empty-device guard.
+        _notifHasUserContent(b.notif)
       );
     } catch (_) { return false; }
   }
@@ -227,26 +245,72 @@
   // not a backup history. Keeping several would multiply a 40 KB blob against
   // the same localStorage quota whose exhaustion is itself a data-loss path.
   const RECOVERY_KEY = 'vault_pre_sync_backup';
-  function snapshotLocal(reason) {
+  const RECOVERY_FAILED_KEY = 'vault_pre_sync_backup_failed';
+  // Keep `raw` (a whole-blob JSON string) as the one rescue slot.
+  //
+  // WITHOUT the base64 of images the bucket already holds: the snapshot is a
+  // second full copy of the store, and with photos in it that was blob +
+  // snapshot (+ a possible __corrupt copy) against one ~5 MB budget — so the
+  // write failed, silently, on exactly the phones with the most to lose. An
+  // image with imagePath is in the bucket and rehydrates from there.
+  //
+  // And a failed write is RECORDED, not swallowed: Settings can then say that
+  // no pre-sync copy could be kept instead of quietly offering nothing.
+  function snapshotRaw(raw, reason, uid) {
     try {
-      const raw = exportRaw();
       // Nothing worth keeping, and never overwrite a good snapshot with an
       // empty one — the empty store IS the case you need the snapshot for.
       if (!raw || raw.length < 3) return false;
       let blob; try { blob = JSON.parse(raw); } catch (_) { return false; }
       if (!blobHasUserData(blob)) return false;
+      let keep = raw;
+      if (Array.isArray(blob.exercises) && blob.exercises.some((e) => e && e.customImage && e.imagePath)) {
+        keep = JSON.stringify(Object.assign({}, blob, {
+          exercises: blob.exercises.map((e) => {
+            if (!(e && e.customImage && e.imagePath)) return e;
+            const copy = Object.assign({}, e); delete copy.customImage; return copy;
+          }),
+        }));
+      }
+      // Stamped with the account it belongs to. recoveryInfo()/restoreRecovery()
+      // refuse a snapshot from any other uid, so a rescue taken under one account
+      // can never be offered to — or force-pushed into — the next one.
       localStorage.setItem(RECOVERY_KEY, JSON.stringify({
-        at: new Date().toISOString(), reason: String(reason || ''), raw: raw,
+        at: new Date().toISOString(), reason: String(reason || ''), raw: keep,
+        // The session's uid when the caller has one: during a FIRST link the
+        // snapshot is taken before markLinked(), so getLastUid() was still empty
+        // and the rescue was stamped null — then refused a moment later.
+        uid: uid || getLastUid() || null,
       }));
+      try { localStorage.removeItem(RECOVERY_FAILED_KEY); } catch (_) {}
       return true;
-    } catch (_) { return false; }   // quota/private mode — never block the sync
+    } catch (err) {
+      // quota/private mode — never block the sync, but never hide it either
+      try { console.warn('[VAULT] pre-sync snapshot could not be kept', err); } catch (_) {}
+      try { localStorage.setItem(RECOVERY_FAILED_KEY, new Date().toISOString()); } catch (_) {}
+      return false;
+    }
+  }
+  function snapshotLocal(reason, uid) { return snapshotRaw(exportRaw(), reason, uid); }
+  // ISO of the last snapshot that could NOT be written, or '' — for Settings.
+  function recoveryFailedAt() {
+    try { return localStorage.getItem(RECOVERY_FAILED_KEY) || ''; } catch (_) { return ''; }
   }
   // { at, reason, bytes } or null. Deliberately does NOT return the payload:
   // the UI only needs to know a rescue exists and when it was taken.
+  // A snapshot from another account is not a rescue, it is a leak — treat it as
+  // absent. A snapshot with no uid predates the stamp: only the signed-out state
+  // may use one of those, so it cannot cross accounts either.
+  function recoveryOwnedByCurrent(rec) {
+    const cur = getLastUid() || null;
+    const own = (rec && rec.uid) || null;
+    return own ? own === cur : !cur;
+  }
   function recoveryInfo() {
     try {
       const rec = JSON.parse(localStorage.getItem(RECOVERY_KEY) || 'null');
       if (!rec || !rec.raw) return null;
+      if (!recoveryOwnedByCurrent(rec)) return null;
       return { at: rec.at || '', reason: rec.reason || '', bytes: rec.raw.length };
     } catch (_) { return null; }
   }
@@ -257,6 +321,7 @@
     let rec;
     try { rec = JSON.parse(localStorage.getItem(RECOVERY_KEY) || 'null'); } catch (_) { return false; }
     if (!rec || !rec.raw) return false;
+    if (!recoveryOwnedByCurrent(rec)) return false;
     // Swap: the blob we are about to replace becomes the new snapshot, so an
     // accidental restore is itself undoable.
     snapshotLocal('pre-restore');
@@ -269,6 +334,14 @@
   // Compare two ISO timestamps by real time, NOT string order — Supabase returns
   // `+00:00` microsecond timestamps while the client writes `...Z` ms timestamps,
   // so a lexicographic `>` would be wrong. Returns true if `a` is strictly newer.
+  function getPushing(uid) { try { return localStorage.getItem('vault_pushing_' + uid) || ''; } catch (_) { return ''; } }
+  function clearPushing(uid) { try { localStorage.removeItem('vault_pushing_' + uid); } catch (_) {} }
+  // Same instant, allowing for Supabase's microsecond '+00:00' form against the
+  // client's millisecond 'Z' form.
+  function sameInstant(a, b) {
+    const ta = Date.parse(a || ''), tb = Date.parse(b || '');
+    return isFinite(ta) && isFinite(tb) && Math.abs(ta - tb) < 1000;
+  }
   function newer(a, b) {
     const ta = Date.parse(a || ''); const tb = Date.parse(b || '');
     if (!isFinite(ta)) return false;
@@ -392,9 +465,34 @@
         }),
       });
     }
+    // Photos live in a side store now (storage.js), so exportRaw() carries none.
+    // One that has NO bucket copy yet must still travel with the blob — it is
+    // the only copy in the world besides this phone — so it is re-attached here
+    // for the upload; a backed-up one (imagePath set) rehydrates from the
+    // bucket on the other device, as before.
+    if (typeof DB !== 'undefined' && DB.exercises && DB.exercises.getImage &&
+        payload && Array.isArray(payload.exercises)) {
+      let changed = false;
+      const withImgs = payload.exercises.map((e) => {
+        if (!(e && e.isCustom && !e.imagePath)) return e;
+        const img = DB.exercises.getImage(e.id);
+        if (!img) return e;
+        changed = true;
+        return Object.assign({}, e, { customImage: img });
+      });
+      if (changed) payload = Object.assign({}, payload, { exercises: withImgs });
+    }
     const iso = new Date().toISOString();
     const uid = s.user.id;
     const known = getVersion(uid);
+    // REMEMBER WHAT WE ARE ABOUT TO WRITE, BEFORE WRITING IT. If the process
+    // dies after Postgres commits but before the response arrives, the row
+    // carries this exact updated_at while the device still holds the old stamp,
+    // the old version and dirty=1. The next bootSync saw "remote newer + local
+    // dirty" and called it a conflict — against this device's own push — and
+    // "keep account data" then discarded whatever was logged offline since.
+    // bootSyncCore recognises this stamp and adopts the row instead.
+    try { localStorage.setItem('vault_pushing_' + uid, iso); } catch (_) {}
     // OPTIMISTIC CONCURRENCY: when we know the base version, write CONDITIONALLY on
     // the row still being at it (atomic integer compare — no timestamp-format
     // fragility). A real conflict (another device advanced the row) is DETECTED and
@@ -410,7 +508,7 @@
         if (!updErr) {
           if (updated && updated.length) {
             if (typeof updated[0].version === 'number') setVersion(uid, updated[0].version);
-            setStamp(uid, iso); clearDirtyIfUnchanged(uid, raw); return 'ok';
+            setStamp(uid, iso); clearDirtyIfUnchanged(uid, raw); clearPushing(uid); return 'ok';
           }
           // 0 rows matched: the remote moved ahead (conflict) or the row is gone.
           const { data: cur, error: curErr } = await c.from(TABLE)
@@ -427,11 +525,13 @@
               if (typeof cur.version === 'number') setVersion(uid, cur.version);
               setStamp(uid, cur.updated_at || iso);
               clearDirtyIfUnchanged(uid, raw);
+              clearPushing(uid);
               return 'ok';
             }
             // A REAL conflict: the remote holds something this device has never
             // seen. Do not overwrite it; let bootSync/resume resolve it.
             try { if (typeof window !== 'undefined') window.dispatchEvent(new CustomEvent('vault:push-conflict')); } catch (_) {}
+            clearPushing(uid);   // the server answered: nothing of ours was committed
             return 'conflict';
           }
           // no row exists → fall through to the insert path below
@@ -442,8 +542,9 @@
       { user_id: uid, data: payload, updated_at: iso },
       { onConflict: 'user_id' }
     ).select('*');
-    if (error) throw new Error(error.message);
+    if (error) { clearPushing(uid); throw new Error(error.message); }   // a server error is an answer, not an unknown
     if (up && up[0] && typeof up[0].version === 'number') setVersion(uid, up[0].version);
+    clearPushing(uid);
     setStamp(uid, iso);
     clearDirtyIfUnchanged(uid, raw); // only if nothing changed while we uploaded
     return 'ok';          // the ONLY success value — callers gate on this explicitly
@@ -549,11 +650,11 @@
 
   // Replace local data with the cloud blob — but NEVER overwrite a non-empty
   // local store with an empty cloud blob. Returns true only if it applied.
-  function applyRemote(remote) {
+  function applyRemote(remote, uid) {
     if (!remoteHasData(remote)) return false;
     // BEFORE the overwrite, not after: importRaw() replaces the stored blob, so
     // once it has run there is nothing left to copy.
-    snapshotLocal('applyRemote');
+    snapshotLocal('applyRemote', uid);
     syncing = true;
     clearTimeout(pushTimer);            // cancel any pending echo push
     // PROPAGATE the import result. importRaw() returns false when the remote blob
@@ -603,7 +704,7 @@
     // bootSync has always made this check; the interactive sign-in path is the
     // one that did not, and afterLogin calls THIS, not bootSync.
     if (isLinked(uid) && isDirty(uid) && localHasData()) return 'conflict';
-    if (applyRemote(remote)) { setStamp(uid, remote.updatedAt); setVersion(uid, remote.version); setDirty(uid, false); markLinked(uid); return "pulled"; }
+    if (applyRemote(remote, uid)) { setStamp(uid, remote.updatedAt); setVersion(uid, remote.version); setDirty(uid, false); markLinked(uid); return "pulled"; }
     // applyRemote FAILED on a blob that demonstrably has data (remoteHasData
     // passed above), so this is a broken import, not an empty cloud. Pushing
     // here would overwrite the very copy we failed to read. Report offline and
@@ -620,7 +721,7 @@
     let remote;
     try { remote = await pull(); } catch (_) { return 'failed'; }
     if (remote === undefined) return 'failed';
-    if (applyRemote(remote)) {
+    if (applyRemote(remote, s.user.id)) {
       setStamp(s.user.id, remote.updatedAt); setVersion(s.user.id, remote.version);
       setDirty(s.user.id, false); markLinked(s.user.id);
       return 'ok';
@@ -641,11 +742,35 @@
   }
   async function chooseLocal() {
     const s = await getSession(); if (!s) return 'failed';
+    // The cloud copy is about to be overwritten wholesale. Keep it in the rescue
+    // slot on THIS device first, so "my device wins" is undoable here as well —
+    // until now only the losing device ever held a snapshot. (The server keeps
+    // the last ten versions too, since 20_vault-data-history.)
+    try {
+      const remote = await pull();
+      if (remote && remoteHasData(remote)) snapshotRaw(JSON.stringify(remote.data), 'pre-force-push');
+    } catch (_) {}
     // Explicit user override ("my device wins") — force past the empty-blob guard.
     let r; try { r = await push({ force: true }); } catch (_) { r = 'error'; }
     if (r !== 'ok') return 'failed';
     markLinked(s.user.id);
     return 'ok';
+  }
+
+  // FOR CALLERS ABOUT TO DESTROY LOCAL DATA (logout). push() hands a caller the
+  // push already in flight — whose snapshot of the store predates any save made
+  // during the upload. That push resolves 'ok' and honestly leaves dirty set;
+  // a caller that only looked at 'ok' then wiped the device with an unsent set
+  // on it. Push, and push again while dirty, up to three times.
+  async function flush() {
+    let r = 'nosession';
+    for (let i = 0; i < 3; i++) {
+      try { r = await push(); } catch (_) { r = 'error'; }
+      if (r !== 'ok') return r;
+      const s = await getSession(); if (!s) return 'nosession';
+      if (!isDirty(s.user.id)) return 'ok';
+    }
+    return 'dirty';
   }
 
   // Background sync on app boot for an already-linked, logged-in device. Uses a
@@ -668,14 +793,32 @@
       markLinked(uid); return 'pushed';
     };
     if (remote === null || !remoteHasData(remote)) return pushed();
-    const remoteNewer = newer(remote.updatedAt, getStamp(uid));
+    // OUR OWN PUSH, whose answer never arrived (app killed mid-upload). The row
+    // carries the stamp this device wrote; adopt its version and carry on.
+    const attempted = getPushing(uid);
+    if (attempted && sameInstant(remote.updatedAt, attempted)) {
+      setStamp(uid, remote.updatedAt);
+      if (typeof remote.version === 'number') setVersion(uid, remote.version);
+      clearPushing(uid);
+      return pushed();
+    }
+    // DECIDE BY THE SERVER'S COUNTER, not by clocks. updated_at is written from
+    // each device's own clock, so a device running fast never saw the other
+    // device's row as newer — it never pulled, its push conflicted on the
+    // version, and the only way out offered was to force-push over the other
+    // device. The version is what the conditional write actually trusts; the
+    // timestamp compare remains only for a row whose version is unknown.
+    const localVer = getVersion(uid);
+    const remoteNewer = (typeof remote.version === 'number' && typeof localVer === 'number')
+      ? remote.version > localVer
+      : newer(remote.updatedAt, getStamp(uid));
     // RECOVERY: this device has no user data but the cloud does. Timestamps alone
     // would never trigger a pull here (a local reset/corrupt-load leaves a recent
     // stamp), stranding the device empty next to a full backup. Pull it back.
     const localEmpty = !localHasData();
     if (remoteNewer && isDirty(uid) && !localEmpty) return 'conflict'; // both changed → ask
     if (remoteNewer || localEmpty) {
-      if (applyRemote(remote)) { setStamp(uid, remote.updatedAt); setVersion(uid, remote.version); setDirty(uid, false); markLinked(uid); return "pulled"; }
+      if (applyRemote(remote, uid)) { setStamp(uid, remote.updatedAt); setVersion(uid, remote.version); setDirty(uid, false); markLinked(uid); return "pulled"; }
       return 'offline';
     }
     return pushed();
@@ -793,7 +936,10 @@
       try {
         const { data, error } = await c
           .from('food_catalog')
-          .select('id,name,serving,calories,protein,carbs')
+          // `*`, not a column list: `fat` arrives with 21_food-catalog-fat and
+          // naming it before that migration is applied would fail the whole
+          // pull. The mapper reads what is there.
+          .select('*')
           .is('deleted_at', null);
         if (!error && Array.isArray(data)) result.foods = data;
       } catch (_) {}
@@ -958,10 +1104,20 @@
   function clearLocalUserData() {
     try {
       localStorage.removeItem('gym_tracker_v1');
+      // The three OTHER full copies of the blob. The pre-sync rescue held the whole
+      // raw store and outlived logout, so on a shared phone the next account was
+      // offered Restore of the previous one's entire history — and restoreRecovery
+      // force-pushes, so one tap would have moved it into their cloud row. The
+      // corrupt-blob copy and the AI cache (typed meal descriptions) are the same
+      // kind of residue.
+      localStorage.removeItem(RECOVERY_KEY);
+      localStorage.removeItem(RECOVERY_FAILED_KEY);
+      localStorage.removeItem('gym_tracker_v1__corrupt');
+      localStorage.removeItem('foodai_cache');
       localStorage.removeItem(CATALOG_CACHE_KEY);
       localStorage.removeItem(LAST_UID_KEY);
       Object.keys(localStorage).forEach((k) => {
-        if (/^vault_(synced|linked|dirty|ver)_/.test(k)) localStorage.removeItem(k);
+        if (/^vault_(synced|linked|dirty|ver|pushing)_/.test(k) || /^vault_img_/.test(k)) localStorage.removeItem(k);
       });
     } catch (_) {}
   }
@@ -1030,8 +1186,8 @@
   window.Cloud = {
     configured, ensureSdk, getSession, currentEmail,
     signUp, signIn, signOut, changePassword, resetPassword, onPasswordRecovery,
-    pull, push, onLocalChange, resume,
-    snapshotLocal, recoveryInfo, restoreRecovery, isSettled,
+    pull, push, flush, onLocalChange, resume,
+    snapshotLocal, recoveryInfo, recoveryFailedAt, restoreRecovery, isSettled,
     // Read-only view of this device's sync state, so the UI can finally SAY
     // "you have changes that have not reached the cloud" — neither flag was
     // exported before, which is why no screen could show it.

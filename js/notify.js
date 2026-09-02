@@ -568,8 +568,53 @@
     } catch (_) {}
   }
 
+  // THE REST TIMER'S OWN ALERT. The countdown in app.js is wall-clock anchored,
+  // so it is CORRECT the moment the screen wakes — but a WebView whose screen is
+  // off runs no timers, so the one thing a rest timer must do while you cannot
+  // see it (tell you the rest is over) never happened until the next unlock.
+  // A dated one-shot through the OS does. Fixed id, so re-arming after a ±15s
+  // adjustment REPLACES the pending one rather than stacking a second alarm.
+  // Not a reminder: it does not go through DB.notif, the daily cap, or the
+  // wake window, and it is cancelled the instant the rest ends or is skipped.
+  const REST_ALARM_ID = 990001;
+  // A sequence number so a cancel can never be overtaken by a schedule that was
+  // still awaiting its permission check: Skip right after a ✓ used to leave the
+  // alarm armed, because the cancel ran first and the schedule landed after.
+  let restSeq = 0;
+  async function restAlarm(atMs, title, body) {
+    if (!supported()) return false;
+    const my = ++restSeq;
+    try {
+      if ((await permissionState()) !== 'granted') return false;
+      await ensureChannels();
+      if (my !== restSeq) return false;              // cancelled or re-armed meanwhile
+      await plugin().schedule({
+        notifications: [{
+          id: REST_ALARM_ID,
+          title: String(title || ''),
+          body: String(body || ''),
+          channelId: channelId(),
+          smallIcon: 'ic_stat_vault',
+          iconColor: '#FF6A00',
+          schedule: { at: new Date(atMs), allowWhileIdle: true },
+        }],
+      });
+      if (my !== restSeq) {                          // a cancel arrived during the schedule call
+        try { await plugin().cancel({ notifications: [{ id: REST_ALARM_ID }] }); } catch (_) {}
+        return false;
+      }
+      return true;
+    } catch (_) { return false; }
+  }
+  async function cancelRestAlarm() {
+    restSeq++;                                        // invalidates any schedule still in flight
+    if (!supported()) return;
+    try { await plugin().cancel({ notifications: [{ id: REST_ALARM_ID }] }); } catch (_) {}
+  }
+
   window.Notify = {
     isNative: supported, sync, ensurePermission, permissionState, gate, catchUp, missed,
     test, diagnose, exactAlarmState, requestExactAlarms, reconcile,
+    restAlarm, cancelRestAlarm,
   };
 })();
