@@ -640,10 +640,10 @@ window.VAULT_KEYS = Object.freeze({
     return syncSettled;
   }
   async function bootSync() {
-    try { return await bootSyncCore(); } finally { syncSettled = true; }
+    try { return await bootSyncCore(); } finally { syncSettled = true; try { window.dispatchEvent(new CustomEvent('vault:sync-settled')); } catch (_) {} }
   }
   async function resolveOnLogin() {
-    try { return await resolveOnLoginCore(); } finally { syncSettled = true; }
+    try { return await resolveOnLoginCore(); } finally { syncSettled = true; try { window.dispatchEvent(new CustomEvent('vault:sync-settled')); } catch (_) {} }
   }
 
   // ---- RESUME --------------------------------------------------------------

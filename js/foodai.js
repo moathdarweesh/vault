@@ -335,9 +335,10 @@
 
   // Public entry — an explicit figure in the text wins, then the cache (so the
   // SAME text always returns the SAME macros), then the model.
-  async function analyze(text) {
-    const local = parseMacroText(text);
-    if (local) return local;
+  // opts.skipLocal: do not try the pasted-label parser first — the recipe editor
+  // sends '30 g protein powder' lines, which that parser reads as a macro.
+  async function analyze(text, opts) {
+    if (!(opts && opts.skipLocal)) { const local = parseMacroText(text); if (local) return local; }
     const cached = cacheGet(text);
     if (cached) return { items: cached };
     const result = await analyzeUncached(text);

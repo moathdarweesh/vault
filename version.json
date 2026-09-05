@@ -1,11 +1,11 @@
 {
   "_comment": "Update manifest. `web` is the latest web build — it MUST equal the ?v=N in index.html on every release (scripts/release.js writes both); js/update.js reads it fresh (no-store) and reloads the entry html so web/CSS/JS updates reach all devices without a reinstall. `apk` only triggers the in-app download banner when apk.build here is GREATER than the versionCode installed on the device. To release a NEW APK: bump android/app/build.gradle versionCode + versionName, `npm run sync`, build, commit the APK to download/THE-VAULT.apk, then set apk.build/apk.version here to the same numbers (scripts/check-contracts.js refuses a mismatch) and push.",
-  "web": 298,
+  "web": 299,
   "apk": {
-    "build": 19,
-    "version": "2.8",
+    "build": 20,
+    "version": "2.9",
     "url": "https://raw.githubusercontent.com/moathdarweesh/vault/main/download/THE-VAULT.apk",
-    "notes_ar": "الحدّ الأدنى لإصدار WebView صار ٨٠: الهاتف الذي كان يفتح التطبيق على شاشة فارغة بسبب WebView قديم يرى الآن رسالة تحديث واضحة بدل الفراغ. لا تغيير آخر في القشرة — كل التحديثات تصلك عبر الرابط الحيّ كما هي.",
-    "notes_en": "Minimum WebView is now 80: a phone that opened the app to a blank screen because of an old WebView now sees a clear update prompt instead. Nothing else changed in the shell — every update still reaches you through the live URL."
+    "notes_ar": "Health Connect: الخطوات والسعرات والمسافة تُحسب بالتجميع الرسمي فلا تُعدّ مرّتين حين يكتب الهاتف والساعة معاً؛ حالة الإذن صادقة (كلّ الأذونات لا بعضها)؛ والمزامنة تقرأ الجديد فقط بدل ثلاثين يوماً في كل فتح.",
+    "notes_en": "Health Connect: steps, calories and distance use the official aggregate so phone + watch are never counted twice; the permission state is honest (all, not some); and each sync reads only what is new instead of thirty days every open."
   }
 }

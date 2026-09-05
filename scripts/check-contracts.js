@@ -249,5 +249,25 @@ const contract = (name, problems) => {
   contract('index.html preconnects to the same Supabase host cloud.js uses', problems);
 }
 
+// ---------------------------------------------------------------- 13. the two exercise-name maps cover every seed exercise, and each other
+{
+  const app = src['js/app.js'];
+  const mapKeys = (name) => {
+    const i = app.indexOf('const ' + name + ' = {'); if (i < 0) return null;
+    const body = app.slice(i, app.indexOf('\n};', i));
+    return new Set([...body.matchAll(/^\s*'([^']+)':\s*'/gm)].map((m) => m[1]));
+  };
+  const a = mapKeys('EXERCISE_NAME_AR'), b = mapKeys('EXERCISE_NAME_AR_FULL');
+  const seeds = new Set([...src['js/storage.js'].matchAll(/^\s*\{\s*name:\s*'([^']+)'/gm)].map((m) => m[1]));
+  const problems = [];
+  if (!a || !b) problems.push('a name map is missing from js/app.js');
+  else {
+    for (const k of a) if (!b.has(k)) problems.push(`'${k}' has a transliteration but no translation (EXERCISE_NAME_AR_FULL)`);
+    for (const k of b) if (!a.has(k)) problems.push(`'${k}' has a translation but no transliteration (EXERCISE_NAME_AR)`);
+    for (const k of seeds) if (!a.has(k) || !b.has(k)) problems.push(`seed exercise '${k}' is missing from a name map`);
+  }
+  contract(`exercise names: ${seeds.size} seed exercises have both a transliteration and a translation, and the two maps match`, problems);
+}
+
 console.log(failures.length ? `\ncheck-contracts: ${failures.length} broken contract(s)` : '\ncheck-contracts: all contracts hold');
 process.exit(failures.length ? 1 : 0);

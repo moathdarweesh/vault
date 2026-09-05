@@ -378,7 +378,8 @@ function defaultState() {
       lang: detectLang(),
       theme: detectTheme(),
       unit: 'kg',
-      translateExercises: true,   // Arabic UI: transliterate built-in exercise names
+      translateExercises: true,   // Arabic UI: transliterate built-in exercise names (kept for older readers)
+      exNames: 'translit',        // 'translit' | 'ar' (translated) | 'en' — the one that decides since v299
       restSec: 90,                // guided run: default rest between sets, in seconds
     },
     exercises: [
@@ -564,6 +565,7 @@ function loadState() {
     if (!parsed.prefs.lang) parsed.prefs.lang = 'en';
     if (!parsed.prefs.theme) parsed.prefs.theme = 'dark';
     if (!parsed.prefs.unit) parsed.prefs.unit = 'kg';
+    if (!parsed.prefs.exNames) parsed.prefs.exNames = parsed.prefs.translateExercises === false ? 'en' : 'translit';   // the boolean becomes the mode
     // Drop any leftover PIN/recovery fields from earlier versions
     if (parsed.prefs.pinHash !== undefined) delete parsed.prefs.pinHash;
     if (parsed.prefs.pinSalt !== undefined) delete parsed.prefs.pinSalt;
@@ -961,6 +963,8 @@ const DB = {
     mirrorUi(extra) { mirrorUi(extra); },
     setUnit(unit) { STATE.prefs.unit = unit === 'lb' ? 'lb' : 'kg'; save(); },
     setTranslateExercises(on) { STATE.prefs.translateExercises = !!on; save(); },
+    // The three-way name mode; the boolean is kept in step for anything older.
+    setExNames(mode) { const m = (mode === 'en' || mode === 'ar') ? mode : 'translit'; STATE.prefs.exNames = m; STATE.prefs.translateExercises = m !== 'en'; save(); },
     // Default rest between sets. Set from the idle rest bar's ±15; the live ±15
     // only move the running clock. 15 s to 10 min, whole seconds.
     setRestSec(sec) { const n = Math.round(Number(sec)); STATE.prefs.restSec = Number.isFinite(n) ? Math.min(600, Math.max(15, n)) : 90; save(); },

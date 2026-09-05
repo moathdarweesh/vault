@@ -1870,6 +1870,36 @@ body[dir="rtl"] .w-unit { margin-left: 0; margin-right: 2px; }
 /* =========================================================================
    DATA ROWS (CARDIO / FOOD / SLEEP)
    ========================================================================= */
+/* DAY LEDGER (sleep, cardio): a day header, then the day's rows or one quiet
+   'nothing logged' line with a + that logs that day. Empty days are the point —
+   they must read as days, not as gaps. */
+.ledger { display: flex; flex-direction: column; gap: var(--sp-3); }
+.ledger-day { display: flex; flex-direction: column; gap: var(--sp-1h); }
+.ledger-date { display: flex; align-items: baseline; gap: var(--sp-2); padding: 0 var(--sp-1); }
+.ledger-dow { font-size: var(--fs-label); font-weight: 700; color: var(--text); }
+.ledger-num { font-size: var(--fs-meta); color: var(--text-mute); }
+.ledger-day.is-empty .ledger-dow { color: var(--text-mute); font-weight: 600; }
+.ledger-day.is-future .ledger-num { color: var(--cat-arms); }
+.ledger-add {
+  position: relative;
+  display: flex; align-items: center; gap: var(--sp-2);
+  width: 100%; height: var(--btn-h-s); padding: 0 var(--sp-3);
+  border: 1px dashed var(--border); border-radius: var(--radius-btn-s);
+  background: transparent; color: var(--text-dim);
+  font: inherit; font-size: var(--fs-btn-s); text-align: start; cursor: pointer;
+  appearance: none; -webkit-appearance: none; -webkit-tap-highlight-color: transparent;
+  transition: color 0.15s, border-color 0.15s;
+}
+.ledger-add::after { content: ''; position: absolute; inset: -4px 0; }   /* 44px target on a 36px row */
+.ledger-add svg { width: 14px; height: 14px; flex-shrink: 0; color: var(--accent-text); }
+.ledger-add:active { color: var(--text); border-color: var(--accent-line); }
+
+/* Health Connect: the reading's age beside its label, the status line in the
+   Settings row, and the amber note for a partly-granted connection. */
+.health-card-age { font-weight: 500; color: var(--text-dim); }
+.settings-action-sub.health-status { color: var(--accent-text); margin-top: 2px; }
+.health-msg-warn { color: var(--cat-arms); }
+
 .data-list {
   display: flex;
   flex-direction: column;
@@ -4141,6 +4171,11 @@ body[dir="rtl"] .picker-row { text-align: right; }
 .rec-row input[data-f="name"]{grid-area:nm; height:38px; padding:0 10px;
   text-align:start; font-size:14px; font-weight:600}
 .rec-row input:focus{outline:none; border-color:var(--accent-soft)}
+/* A row whose figures are being worked out dims them; one that was filled
+   automatically keeps a faint accent edge, so a hand-typed figure is visibly
+   the user's own. */
+.rec-row.is-pending .rec-f input{opacity:.45; transition:opacity .2s}
+.rec-row.is-auto .rec-f input{border-color:var(--accent-line)}
 .rec-del{grid-area:del; align-self:start; justify-self:center; margin-top:2px}
 
 /* Live totals. Two blocks: the whole recipe, then what ONE serving costs —
@@ -5107,7 +5142,7 @@ body[dir="rtl"] .bento-card.wide .bento-added-stripe { left: 14px; }
 
 .lang-toggle {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: repeat(auto-fit, minmax(0, 1fr));   /* two options or three: the exercise-name toggle has three */
   background: var(--surface-1);
   border: 1px solid var(--border);
   border-radius: 14px;

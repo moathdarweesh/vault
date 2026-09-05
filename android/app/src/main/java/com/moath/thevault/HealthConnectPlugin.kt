@@ -14,6 +14,7 @@ import androidx.health.connect.client.records.SpeedRecord
 import androidx.health.connect.client.records.StepsRecord
 import androidx.health.connect.client.records.TotalCaloriesBurnedRecord
 import androidx.health.connect.client.records.Vo2MaxRecord
+import androidx.health.connect.client.request.AggregateRequest
 import androidx.health.connect.client.request.ReadRecordsRequest
 import androidx.health.connect.client.time.TimeRangeFilter
 import com.getcapacitor.JSArray
@@ -69,6 +70,23 @@ class HealthConnectPlugin : Plugin() {
         else -> null
     }
 
+    /**
+     * granted = ALL of our read permissions; partial = some but not all; missing =
+     * the short names of the ones not granted. `granted` used to mean ANY, so a
+     * user who allowed only steps looked 'connected' while sleep and cardio
+     * silently never arrived.
+     */
+    private fun permissionPayload(granted: Set<String>): JSObject {
+        val have = permissions.filter { it in granted }
+        val ret = JSObject()
+        ret.put("granted", have.size == permissions.size)
+        ret.put("partial", have.isNotEmpty() && have.size < permissions.size)
+        val missing = JSArray()
+        permissions.filter { it !in granted }.forEach { missing.put(it.substringAfterLast('.')) }
+        ret.put("missing", missing)
+        return ret
+    }
+
     private fun clientOrNull(): HealthConnectClient? {
         return if (HealthConnectClient.getSdkStatus(context) == HealthConnectClient.SDK_AVAILABLE) {
             HealthConnectClient.getOrCreate(context)
@@ -96,10 +114,7 @@ class HealthConnectPlugin : Plugin() {
                 val granted = withContext(Dispatchers.IO) {
                     client.permissionController.getGrantedPermissions()
                 }
-                val ret = JSObject()
-                // Forgiving: proceed if the user granted at least one of our types.
-                ret.put("granted", granted.any { it in permissions })
-                call.resolve(ret)
+                call.resolve(permissionPayload(granted))
             } catch (e: Exception) {
                 call.reject(e.message, e)
             }
@@ -127,10 +142,7 @@ class HealthConnectPlugin : Plugin() {
                 val granted = withContext(Dispatchers.IO) {
                     client.permissionController.getGrantedPermissions()
                 }
-                val ret = JSObject()
-                // Forgiving: proceed if the user granted at least one of our types.
-                ret.put("granted", granted.any { it in permissions })
-                call.resolve(ret)
+                call.resolve(permissionPayload(granted))
             } catch (e: Exception) {
                 call.reject(e.message, e)
             }
@@ -154,10 +166,15 @@ class HealthConnectPlugin : Plugin() {
             return
         }
         val range = TimeRangeFilter.between(Instant.ofEpochMilli(startMs), Instant.ofEpochMilli(endMs))
-        // Sleep looks back 30 days so the app's sleep log can backfill history,
-        // not just last night. The home card still shows the most recent night.
+        // `sinceTime` (optional): the newest session the app already holds. History
+        // starts there instead of thirty days back, so a foreground does not
+        // re-read a month of sessions (and a calorie query per session) every time.
+        val sinceMs = call.getLong("sinceTime")
+        val historyStart = if (sinceMs != null && sinceMs > endMs - 30L * 24 * 3600 * 1000) sinceMs else endMs - 30L * 24 * 3600 * 1000
+        // Sleep looks back to historyStart (30 days at most) so the app's sleep log
+        // can backfill history, not just last night.
         val sleepRange = TimeRangeFilter.between(
-            Instant.ofEpochMilli(endMs - 30L * 24 * 3600 * 1000),
+            Instant.ofEpochMilli(historyStart),
             Instant.ofEpochMilli(endMs)
         )
         // Instantaneous "latest reading" types look back a week so a card always
@@ -166,9 +183,9 @@ class HealthConnectPlugin : Plugin() {
             Instant.ofEpochMilli(endMs - 7L * 24 * 3600 * 1000),
             Instant.ofEpochMilli(endMs)
         )
-        // Cardio sessions backfill 30 days into the app's cardio log.
+        // Cardio sessions backfill from historyStart into the app's cardio log.
         val historyRange = TimeRangeFilter.between(
-            Instant.ofEpochMilli(endMs - 30L * 24 * 3600 * 1000),
+            Instant.ofEpochMilli(historyStart),
             Instant.ofEpochMilli(endMs)
         )
 
@@ -179,9 +196,8 @@ class HealthConnectPlugin : Plugin() {
                     val out = JSObject()
 
                     runCatching {
-                        val steps = client.readRecords(ReadRecordsRequest(StepsRecord::class, range))
-                            .records.sumOf { it.count }
-                        out.put("steps", steps)
+                        val agg = client.aggregate(AggregateRequest(setOf(StepsRecord.COUNT_TOTAL), range))
+                        out.put("steps", agg[StepsRecord.COUNT_TOTAL] ?: 0L)
                     }
 
                     runCatching {
@@ -239,15 +255,13 @@ class HealthConnectPlugin : Plugin() {
                     }
 
                     runCatching {
-                        val kcal = client.readRecords(ReadRecordsRequest(TotalCaloriesBurnedRecord::class, range))
-                            .records.sumOf { it.energy.inKilocalories }
-                        out.put("calories", kcal)
+                        val agg = client.aggregate(AggregateRequest(setOf(TotalCaloriesBurnedRecord.ENERGY_TOTAL), range))
+                        out.put("calories", agg[TotalCaloriesBurnedRecord.ENERGY_TOTAL]?.inKilocalories ?: 0.0)
                     }
 
                     runCatching {
-                        val km = client.readRecords(ReadRecordsRequest(DistanceRecord::class, range))
-                            .records.sumOf { it.distance.inKilometers }
-                        out.put("distance", km)
+                        val agg = client.aggregate(AggregateRequest(setOf(DistanceRecord.DISTANCE_TOTAL), range))
+                        out.put("distance", agg[DistanceRecord.DISTANCE_TOTAL]?.inKilometers ?: 0.0)
                     }
 
                     runCatching {
@@ -272,12 +286,12 @@ class HealthConnectPlugin : Plugin() {
                             val type = cardioTypeFor(s.exerciseType)
                             if (type != null) {
                                 val cal = runCatching {
-                                    client.readRecords(
-                                        ReadRecordsRequest(
-                                            TotalCaloriesBurnedRecord::class,
+                                    client.aggregate(
+                                        AggregateRequest(
+                                            setOf(TotalCaloriesBurnedRecord.ENERGY_TOTAL),
                                             TimeRangeFilter.between(s.startTime, s.endTime)
                                         )
-                                    ).records.sumOf { it.energy.inKilocalories }
+                                    )[TotalCaloriesBurnedRecord.ENERGY_TOTAL]?.inKilocalories ?: 0.0
                                 }.getOrDefault(0.0)
                                 val o = JSObject()
                                 o.put("start", s.startTime.toString())

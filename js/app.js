@@ -12,7 +12,7 @@
 // build. The literal below is the fallback (file://, or a stripped query) and is
 // still bumped by `npm run release` — see CLAUDE.md "CACHE WORKFLOW".
 const VAULT_BUILD = (() => {
-  const FALLBACK = 'v298';
+  const FALLBACK = 'v299';
   try {
     const src = (document.currentScript && document.currentScript.src) || '';
     const m = src.match(/[?&]v=(\d+)/);
@@ -735,6 +735,7 @@ const I18N = {
 
     // Sleep
     sleep_subtitle: 'Track when you sleep and wake up.',
+    ledger_no_sleep: 'No sleep logged', ledger_no_cardio: 'No cardio', ledger_older: 'Earlier days',
     no_sleep_logged: 'No sleep logged',
     sleep_stages: 'Sleep stages', sleep_deep: 'Deep', sleep_light: 'Light', sleep_rem: 'REM', sleep_awake: 'Awake',
     sleep_efficiency: 'Sleep efficiency',
@@ -769,8 +770,8 @@ const I18N = {
     settings_title: 'Settings',
     settings_subtitle: 'Customize language, theme, and manage your data.',
     language: 'Language',
-    translate_ex_title: 'Exercise names', translate_ex_sub: 'Show built-in exercise names transliterated in Arabic, or keep them in English.',
-    translate_ex_on: 'Arabic', translate_ex_off: 'English',
+    translate_ex_title: 'Exercise names', translate_ex_sub: 'Built-in exercise names: transliterated into Arabic letters, translated into Arabic, or kept in English.',
+    translate_ex_on: 'Transliterated', translate_ex_full: 'Full Arabic', translate_ex_off: 'English',
     theme: 'Theme',
     data: 'Data',
     theme_dark: 'Dark', theme_light: 'Light',
@@ -798,6 +799,10 @@ const I18N = {
     health_kcal: 'kcal', health_km: 'km', health_kmh: 'km/h', health_watt: 'W', health_vo2_unit: 'ml/kg',
     health_home: 'Health', health_toggle_hint: 'Tap a card to show or hide it on your home screen.',
     health_all_hidden: 'All hidden — tap to choose cards',
+    health_st_web: 'Android app only', health_st_unavailable: 'Health Connect is not installed on this device', health_st_update: 'Health Connect needs an update from the store',
+    health_st_checking: 'Checking the connection…', health_st_none: 'Not connected — tap to connect', health_st_partial: 'Partly connected — {n} permissions missing', health_st_ok: 'Connected · last sync {ago}', health_st_never: 'Connected · not synced yet',
+    health_partial_hint: 'Open Health Connect and grant the rest', health_update_btn: 'Update Health Connect',
+    health_ago_now: 'just now', health_ago_min: '{n} min ago', health_ago_hr: '{n} h ago', health_ago_day: '{n} d ago',
     reset_data: 'Reset All Data', reset_data_sub: 'Delete everything and start fresh',
     reset_q: 'Reset all data?',
     reset_text: 'This will permanently delete all exercises, sessions, cardio, food, sleep, and settings.',
@@ -948,7 +953,10 @@ const I18N = {
     rec_ing_name: 'Ingredient',
     rec_qty: 'Amount',
     rec_qty_ph: '200 g',
-    rec_figures_hint: 'Figures are for the amount used, per ingredient; the recipe adds them up.',
+    rec_figures_hint: 'Type the ingredient and its weight in grams — calories and macros fill in by themselves. Edit any figure by hand if you know better.',
+    rec_auto_wait: 'One moment — the figures are being worked out', date_future: 'That date has not come yet', date_future_tag: 'a date still to come',
+    rec_auto_fail: 'Could not work out {name} — type its figures by hand',
+    rec_auto_signin: 'Automatic figures need you to be signed in (the AI); saved foods still work',
 
     rec_total: 'Whole recipe',
     rec_per: 'Per serving',
@@ -1573,6 +1581,7 @@ const I18N = {
     conflict_local: 'إبقاء بيانات هذا الجهاز',
 
     sleep_subtitle: 'تتبّع متى تنام ومتى تصحى.',
+    ledger_no_sleep: 'لم يُسجَّل نوم', ledger_no_cardio: 'لا كارديو', ledger_older: 'الأيام السابقة',
     no_sleep_logged: 'لا يوجد نوم مسجّل',
     sleep_stages: 'مراحل النوم', sleep_deep: 'عميق', sleep_light: 'خفيف', sleep_rem: 'حركة العين (REM)', sleep_awake: 'استيقاظ',
     sleep_efficiency: 'كفاءة النوم',
@@ -1605,8 +1614,8 @@ const I18N = {
     settings_title: 'الإعدادات',
     settings_subtitle: 'خصّص اللغة والمظهر وأدر بياناتك.',
     language: 'اللغة',
-    translate_ex_title: 'أسماء التمارين', translate_ex_sub: 'اعرض أسماء التمارين الجاهزة معرّبة، أو أبقِها بالإنجليزية.',
-    translate_ex_on: 'عربي', translate_ex_off: 'إنجليزي',
+    translate_ex_title: 'أسماء التمارين', translate_ex_sub: 'أسماء التمارين الجاهزة: معرّبة بلفظها الإنجليزي، أو مترجمة بالعربية، أو بالإنجليزية.',
+    translate_ex_on: 'معرّبة', translate_ex_full: 'عربية كاملة', translate_ex_off: 'إنجليزي',
     theme: 'المظهر',
     data: 'البيانات',
     theme_dark: 'داكن', theme_light: 'فاتح',
@@ -1618,7 +1627,7 @@ const I18N = {
     import_data: 'استيراد البيانات', import_data_sub: 'استرجاع من نسخة JSON',
     health_section: 'هيلث كونيكت',
     health_connect: 'مزامنة من Health Connect',
-    health_connect_sub: 'الخطوات والنبض والأكسجين والنوم من ساعتك',
+    health_connect_sub: 'الخطوات والنبض والأكسجين والنوم والسعرات وجلسات الكارديو من ساعتك — تلقائياً عند كل فتح',
     health_only_android: 'متاح فقط في تطبيق أندرويد',
     health_unavailable: 'Health Connect غير مثبّت على هذا الجهاز',
     health_no_permission: 'لم يتم منح الإذن',
@@ -1634,6 +1643,10 @@ const I18N = {
     health_kcal: 'سعرة', health_km: 'كم', health_kmh: 'كم/س', health_watt: 'واط', health_vo2_unit: 'مل/كغ',
     health_home: 'صحّتي', health_toggle_hint: 'اضغط على المربّع لإظهاره أو إخفائه من الشاشة الرئيسية.',
     health_all_hidden: 'الكل مخفي — اضغط لاختيار المربّعات',
+    health_st_web: 'متاح في تطبيق أندرويد فقط', health_st_unavailable: 'Health Connect غير مثبَّت على هذا الجهاز', health_st_update: 'Health Connect يحتاج تحديثاً من المتجر',
+    health_st_checking: 'يتحقّق من الاتصال…', health_st_none: 'غير متصل — اضغط للربط', health_st_partial: 'متصل جزئياً — {n} من الأذونات ناقصة', health_st_ok: 'متصل · آخر مزامنة {ago}', health_st_never: 'متصل · لم تتم مزامنة بعد',
+    health_partial_hint: 'افتح Health Connect وامنح بقية الأذونات', health_update_btn: 'حدّث Health Connect',
+    health_ago_now: 'الآن', health_ago_min: 'قبل {n} د', health_ago_hr: 'قبل {n} س', health_ago_day: 'قبل {n} ي',
     reset_data: 'إعادة تعيين الكل', reset_data_sub: 'حذف كل شي والبدء من جديد',
     reset_q: 'إعادة تعيين كل البيانات؟',
     reset_text: 'سيُحذف كل شي نهائياً: التمارين، الجلسات، الكارديو، الأكل، النوم، والإعدادات.',
@@ -1781,7 +1794,10 @@ const I18N = {
     rec_ing_name: 'المكوّن',
     rec_qty: 'الكمية',
     rec_qty_ph: '200 غ',
-    rec_figures_hint: 'الأرقام لكمية كل مكوّن كما استُخدم، والوصفة تجمعها.',
+    rec_figures_hint: 'اكتب المكوّن ووزنه بالغرام وتُحسب سعراته وعناصره تلقائياً؛ عدّل أي رقم يدوياً إن كنت تعرفه.',
+    rec_auto_wait: 'لحظة — الأرقام تُحسب', date_future: 'لا يمكن التسجيل لتاريخ لم يأتِ بعد', date_future_tag: 'تاريخ لم يأتِ بعد',
+    rec_auto_fail: 'تعذّر حساب {name} — اكتب أرقامه يدوياً',
+    rec_auto_signin: 'الحساب التلقائي يحتاج تسجيل الدخول (الذكاء الاصطناعي)؛ الأطعمة المحفوظة تعمل بدونه',
 
     rec_total: 'الوصفة كاملة',
     rec_per: 'للحصّة الواحدة',
@@ -4496,15 +4512,104 @@ const EXERCISE_NAME_AR = {
   'Cable Crunch': 'كيبل كرانش',
 };
 
+// TRANSLATED, not transliterated — the third choice for exercise names
+// (prefs.exNames === 'ar'). Formal terms; a machine is جهاز, ثلاثية الرؤوس
+// for triceps, الكابل for cable. Kept in step with EXERCISE_NAME_AR above: the
+// patch that introduced it refuses a key on one side that is missing on the other.
+const EXERCISE_NAME_AR_FULL = {
+  'Squat': 'القرفصاء بالبار',
+  'Bench Press': 'ضغط الصدر بالبار',
+  'Deadlift': 'الرفعة الميتة',
+  'Incline Bench Press': 'ضغط الصدر المائل بالبار',
+  'Dumbbell Press': 'ضغط الصدر بالدمبل',
+  'Dumbbell Fly': 'تفتيح الصدر بالدمبل',
+  'Push Up': 'الضغط الأرضي',
+  'Barbell Row': 'التجديف بالبار',
+  'Pull Up': 'العقلة',
+  'Dumbbell Row': 'التجديف بالدمبل',
+  'Front Squat': 'القرفصاء الأمامية',
+  'Romanian Deadlift': 'الرفعة الميتة الرومانية',
+  'Lunges': 'الطعنات',
+  'Calf Raise': 'رفع السمانة',
+  'Overhead Press': 'ضغط الكتف فوق الرأس',
+  'Lateral Raise': 'الرفرفة الجانبية',
+  'Front Raise': 'الرفرفة الأمامية',
+  'Rear Delt Fly': 'تفتيح الكتف الخلفي',
+  'Shrugs': 'هزّ الكتفين',
+  'Barbell Curl': 'ثني الذراع بالبار',
+  'EZ Bar Curl': 'ثني الذراع بالبار المعقوف',
+  'Dumbbell Curl': 'ثني الذراع بالدمبل',
+  'Incline Dumbbell Curl': 'ثني الذراع بالدمبل على المقعد المائل',
+  'Hammer Curl': 'ثني الذراع بقبضة المطرقة',
+  'Concentration Curl': 'ثني الذراع المركّز',
+  'Spider Curl': 'ثني الذراع منبطحاً على المقعد المائل',
+  'Reverse Curl': 'ثني الذراع بالقبضة المعكوسة',
+  'Chin-Up': 'العقلة بالقبضة المعكوسة',
+  'Tricep Pushdown': 'دفع ثلاثية الرؤوس للأسفل',
+  'Tricep Extension': 'مدّ ثلاثية الرؤوس',
+  'Dips': 'الغطس على المتوازيين',
+  'Plank': 'تثبيت الجذع (بلانك)',
+  'Crunches': 'انثناء البطن',
+  'Leg Raise': 'رفع الساقين',
+  'Russian Twist': 'الالتفاف الروسي',
+  'Chest Press Machine': 'جهاز ضغط الصدر',
+  'Incline Chest Press Machine': 'جهاز ضغط الصدر المائل',
+  'Pec Deck Machine': 'جهاز تفتيح الصدر',
+  'Cable Crossover': 'تقاطع الكابل للصدر',
+  'Smith Machine Bench Press': 'ضغط الصدر على جهاز سميث',
+  'Shoulder Press Machine': 'جهاز ضغط الكتف',
+  'Smith Machine Shoulder Press': 'ضغط الكتف على جهاز سميث',
+  'Lateral Raise Machine': 'جهاز الرفرفة الجانبية',
+  'Cable Lateral Raise': 'الرفرفة الجانبية بالكابل',
+  'Rear Delt Fly Machine': 'جهاز تفتيح الكتف الخلفي',
+  'Face Pull': 'سحب الكابل نحو الوجه',
+  'Cable Upright Row': 'التجديف العمودي بالكابل',
+  'Cable Shrug': 'هزّ الكتفين بالكابل',
+  'Lat Pulldown Machine': 'جهاز السحب العلوي',
+  'Seated Row Machine': 'جهاز التجديف جالساً',
+  'T-Bar Row Machine': 'جهاز التجديف بالبار T',
+  'Iso-Lateral Row': 'التجديف أحادي الجانب',
+  'Assisted Pull-Up Machine': 'جهاز العقلة المساعدة',
+  'Back Extension': 'مدّ الظهر',
+  'Leg Press Machine': 'جهاز دفع الأرجل',
+  'Hack Squat Machine': 'جهاز القرفصاء المائلة',
+  'Smith Machine Squat': 'القرفصاء على جهاز سميث',
+  'Leg Extension Machine': 'جهاز مدّ الساقين',
+  'Leg Curl Machine': 'جهاز ثني الساقين',
+  'Seated Leg Curl': 'ثني الساقين جالساً',
+  'Hip Abductor Machine': 'جهاز إبعاد الوركين',
+  'Hip Adductor Machine': 'جهاز تقريب الوركين',
+  'Hip Thrust Machine': 'جهاز دفع الورك',
+  'Calf Raise Machine': 'جهاز رفع السمانة',
+  'Seated Calf Raise': 'رفع السمانة جالساً',
+  'Preacher Curl Machine': 'جهاز ثني الذراع على المسند',
+  'Cable Curl': 'ثني الذراع بالكابل',
+  'Triceps Dip Machine': 'جهاز الغطس لثلاثية الرؤوس',
+  'Assisted Dip Machine': 'جهاز الغطس المساعد',
+  'Cable Triceps Pushdown': 'دفع ثلاثية الرؤوس بالكابل للأسفل',
+  'Overhead Cable Triceps': 'مدّ ثلاثية الرؤوس بالكابل فوق الرأس',
+  'Ab Crunch Machine': 'جهاز انثناء البطن',
+  'Cable Crunch': 'انثناء البطن بالكابل',
+};
+
 // The name to SHOW for an exercise. Never use this for storage, sync, or the
 // image catalogue — those key off the raw `ex.name`.
+// Which of the three name modes is on: 'translit' (Arabic letters, English sound),
+// 'ar' (translated), 'en'. Older blobs carry only the boolean; it still decides.
+function exNamesMode(prefs) {
+  const p = prefs || DB.prefs.get();
+  if (p.exNames === 'en' || p.exNames === 'ar' || p.exNames === 'translit') return p.exNames;
+  return p.translateExercises === false ? 'en' : 'translit';
+}
 function exDisplayName(ex) {
   if (!ex) return '';
   const raw = ex.name || '';
   if (ex.isCustom) return raw;                       // the user named it — leave it alone
   const prefs = DB.prefs.get();
   if ((prefs.lang || 'en') !== 'ar') return raw;
-  if (prefs.translateExercises === false) return raw; // user turned exercise-name translation off
+  const mode = exNamesMode(prefs);
+  if (mode === 'en') return raw;
+  if (mode === 'ar') return EXERCISE_NAME_AR_FULL[raw] || EXERCISE_NAME_AR[raw] || raw;   // translated; the transliteration if a name has none
   return EXERCISE_NAME_AR[raw] || raw;
 }
 
@@ -5918,6 +6023,53 @@ function openSessionModal(exerciseId, sessionId = null) {
 // ==========================================================================
 // CARDIO
 // ==========================================================================
+// DAY LEDGER — the sleep and cardio histories, one row per DAY, newest first.
+// The owner's ask: the days themselves must be visible, and a day with nothing
+// logged must say so in words — not vanish from a list that shows only entries.
+// Each empty day carries a + that opens the log modal ON that date.
+function ledgerDayIso(daysBack) {
+  const d = new Date(); d.setHours(12, 0, 0, 0); d.setDate(d.getDate() - daysBack);
+  const z = (n) => String(n).padStart(2, '0');
+  return d.getFullYear() + '-' + z(d.getMonth() + 1) + '-' + z(d.getDate());
+}
+function ledgerDayLabel(iso, daysBack) {
+  if (daysBack === 0) return t('today');
+  if (daysBack === 1) return t('yesterday');
+  const keys = ['dow_sun_full', 'dow_mon_full', 'dow_tue_full', 'dow_wed_full', 'dow_thu_full', 'dow_fri_full', 'dow_sat_full'];
+  return t(keys[new Date(iso + 'T12:00:00').getDay()]);
+}
+function dayLedgerHtml({ entries, days, renderEntry, emptyText, addAttr }) {
+  const byDate = {};
+  entries.forEach((x) => { (byDate[x.date] = byDate[x.date] || []).push(x); });
+  const rows = [];
+  // Anything dated AFTER today (a mistyped year, a picker slip) is still shown —
+  // above today — so it can be edited or deleted; it used to be unreachable.
+  const todayIso = ledgerDayIso(0);
+  [...new Set(entries.filter((x) => x.date > todayIso).map((x) => x.date))].sort().reverse().forEach((iso) => {
+    rows.push(`
+      <div class="ledger-day is-future">
+        <div class="ledger-date"><span class="ledger-dow">${escapeHtml(formatDate(iso))}</span><span class="ledger-num">${escapeHtml(t('date_future_tag'))}</span></div>
+        <div class="data-list">${byDate[iso].map(renderEntry).join('')}</div>
+      </div>`);
+  });
+  for (let d = 0; d < days; d++) {
+    const iso = ledgerDayIso(d);
+    const list = byDate[iso] || [];
+    rows.push(`
+      <div class="ledger-day${list.length ? '' : ' is-empty'}">
+        <div class="ledger-date">
+          <span class="ledger-dow">${escapeHtml(ledgerDayLabel(iso, d))}</span>
+          <span class="ledger-num">${escapeHtml(formatDate(iso))}</span>
+        </div>
+        ${list.length
+          ? `<div class="data-list">${list.map(renderEntry).join('')}</div>`
+          : `<button type="button" class="ledger-add" ${addAttr}="${iso}">${icon('plus', 14)} <span>${escapeHtml(emptyText)}</span></button>`}
+      </div>`);
+  }
+  const windowStart = ledgerDayIso(days - 1);
+  const older = entries.filter((x) => x.date < windowStart).length;
+  return { html: rows.join(''), more: older > 0 || days < 28 };
+}
 function renderCardio(el) {
   const list = DB.cardio.list();
   const { thisStart, thisEnd } = weekRanges();
@@ -5938,7 +6090,8 @@ function renderCardio(el) {
     return { label: typeId, iconName: 'heart', cls: '' };
   }
 
-  const items = list.map((c) => {
+  const cardioDays = viewContext.cardioDays || 7;
+  const renderCardioEntry = (c) => {
     const tm = resolveCardioType(c.type);
     return `
       <div class="data-row">
@@ -5946,9 +6099,8 @@ function renderCardio(el) {
         <div class="data-main">
           <div class="data-title">${escapeHtml(tm.label)}${c.source === 'health' ? `<span class="src-badge">${icon('refresh', 16)}${t('from_watch')}</span>` : ''}</div>
           <div class="data-meta">
-            <span>${escapeHtml(daysAgoLocalized(c.date))}</span>
-            <span class="dot-sep"></span>
-            <!-- Coerced, not interpolated raw. These arrive from the synced
+            <!-- The day header above the row carries the date now.
+                 Coerced, not interpolated raw. These arrive from the synced
                  blob and from imported backups, both of which CLAUDE.md names
                  as untrusted, and they land in innerHTML — so a string field
                  carrying markup would execute. A number field can only ever be
@@ -5964,7 +6116,8 @@ function renderCardio(el) {
         </div>
       </div>
     `;
-  }).join('');
+  };
+  const cardioLedger = dayLedgerHtml({ entries: list, days: cardioDays, renderEntry: renderCardioEntry, emptyText: t('ledger_no_cardio'), addAttr: 'data-ledger-cardio' });
 
   el.innerHTML = `
     ${vaultBar()}
@@ -5995,11 +6148,11 @@ function renderCardio(el) {
       <button class="btn btn-primary" id="add-cardio-btn">${icon('plus', 20)} ${t('log')}</button>
     </div>
 
-    ${list.length === 0
-      ? emptyState({ iconName: 'run', title: t('no_cardio'), text: t('no_cardio_text') })
-      : `<div class="data-list">${items}</div>`
-    }
+    <div class="ledger">${cardioLedger.html}</div>
+    ${cardioLedger.more ? `<button type="button" class="btn btn-ghost btn-block" id="more-cardio-days">${t('ledger_older')}</button>` : ''}
   `;
+  $('#more-cardio-days', el)?.addEventListener('click', () => { viewContext.cardioDays = cardioDays + 7; renderCardio(el); });
+  el.querySelectorAll('[data-ledger-cardio]').forEach((b) => b.addEventListener('click', () => openCardioModal(null, b.dataset.ledgerCardio)));
 
   // Single add button: the labeled "Log" button (the top-bar + was a duplicate).
   $('#add-cardio-btn', el).addEventListener('click', () => openCardioModal());
@@ -6029,7 +6182,7 @@ function renderCardio(el) {
   if (typeof Health !== 'undefined' && Health.autoSync) Health.autoSync();
 }
 
-function openCardioModal(cardioId = null) {
+function openCardioModal(cardioId = null, presetDate = null) {
   const existing = cardioId ? DB.cardio.list().find((c) => c.id === cardioId) : null;
   let selectedType = existing ? existing.type : 'treadmill';
 
@@ -6071,7 +6224,7 @@ function openCardioModal(cardioId = null) {
 
     <div class="form-group">
       <label class="form-label">${t('date')}</label>
-      <input type="date" id="cardio-date" value="${escapeHtml(existing ? existing.date : todayISO())}">
+      <input type="date" id="cardio-date" max="${todayISO()}" value="${escapeHtml(existing ? existing.date : (presetDate || todayISO()))}">
     </div>
 
     <div class="form-row">
@@ -6110,6 +6263,7 @@ function openCardioModal(cardioId = null) {
 
   $('#save-cardio-btn').addEventListener('click', () => {
     const date = $('#cardio-date').value || todayISO();
+    if (date > todayISO()) { showToast(t('date_future')); return; }
     const duration = Number($('#cardio-duration').value);
     const calories = Number($('#cardio-calories').value);
     if (!duration || duration <= 0) { showToast(t('enter_duration')); return; }
@@ -7506,9 +7660,13 @@ function openManualFoodEntry(date, onSave) {
 // Totals are never stored; DB.recipes.totals() derives them on read. A stored
 // total silently disagrees with its own ingredients the moment one is edited.
 function openRecipeEditor(date, existing, onDone) {
-  var items = existing && existing.items ? existing.items.map(function (i) { return Object.assign({}, i); }) : [
-    { name: '', qty: '', calories: 0, protein: 0, carbs: 0, fat: 0 },
-  ];
+  // Every row carries a transient _id (rows are matched by it after an await —
+  // an index shifts when a row above is deleted), and the auto machinery never
+  // touches a row that already holds figures unless IT filled them this session.
+  var seq = 0;
+  var newItem = function () { return { _id: ++seq, name: '', qty: '', calories: 0, protein: 0, carbs: 0, fat: 0 }; };
+  var hasFigures = function (it) { return !!(Number(it.calories) || Number(it.protein) || Number(it.carbs) || Number(it.fat)); };
+  var items = existing && existing.items ? existing.items.map(function (i) { return Object.assign({ _id: ++seq }, i); }) : [newItem()];
   var name = (existing && existing.name) || '';
   var servings = (existing && existing.servings) || 1;
 
@@ -7543,7 +7701,7 @@ function openRecipeEditor(date, existing, onDone) {
           '<input type="number" data-f="' + f + '" inputmode="' + mode + '" min="0" step="' + step + '"' +
           ' aria-label="' + escapeHtml(cap) + '" value="' + numAttr(it[f]) + '"></label>';
       };
-      return '<div class="rec-row" data-row="' + i + '">' +
+      return '<div class="rec-row' + (it._auto === 'pending' ? ' is-pending' : it._auto === 'done' ? ' is-auto' : '') + '" data-row="' + i + '">' +
         '<input type="text" data-f="name" placeholder="' + escapeHtml(t('rec_ing_name')) + '" value="' + escapeHtml(it.name || '') + '">' +
         // The amount is a LABEL ("200 غ", "3 حبات"), and the four figures are
         // for that amount. It used to be a numeric multiplier — 200 g at 330
@@ -7562,7 +7720,15 @@ function openRecipeEditor(date, existing, onDone) {
       inp.addEventListener('input', function () {
         var i = Number(inp.closest('.rec-row').dataset.row);
         var f = inp.dataset.f;
-        items[i][f] = (f === 'name' || f === 'qty') ? inp.value : (parseFloat(inp.value) || 0);
+        if (f === 'name' || f === 'qty') {
+          items[i][f] = inp.value;
+          scheduleAuto(i);
+        } else {
+          items[i][f] = parseFloat(inp.value) || 0;
+          // A figure typed by hand is the user's number: never overwrite it.
+          items[i]._manual = true; items[i]._auto = null;
+          inp.closest('.rec-row').classList.remove('is-pending', 'is-auto');
+        }
         drawTotals();
       });
     });
@@ -7570,7 +7736,7 @@ function openRecipeEditor(date, existing, onDone) {
       b.addEventListener('click', function () {
         // Never leave the sheet with zero rows — an empty editor gives the user
         // nothing to type into and no way back to a row.
-        if (items.length === 1) items[0] = { name: '', qty: '', calories: 0, protein: 0, carbs: 0, fat: 0 };
+        if (items.length === 1) items[0] = newItem();
         else items.splice(Number(b.dataset.del), 1);
         drawRows(); drawTotals();
       });
@@ -7602,9 +7768,125 @@ function openRecipeEditor(date, existing, onDone) {
       '</div></div>';
   }
 
+  // ---- AUTOMATIC FIGURES ---------------------------------------------------
+  // The owner's ask: write the ingredient and its weight, the rest fills itself.
+  // Order of preference per row: a food this user (or the curated catalog) already
+  // holds with a gram serving — scaled, instant, offline; otherwise the AI, ONE
+  // request for every row still waiting (the Worker's free quota is per day, so
+  // eight ingredients must not be eight calls). A hand-typed figure wins forever
+  // (_manual). The flags are transient: stripped on save.
+  var autoTimer = null;
+  var latinDigits = function (s) {
+    return String(s || '').replace(/[\u0660-\u0669]/g, function (d) { return String(d.charCodeAt(0) - 0x660); })
+      .replace(/[\u06F0-\u06F9]/g, function (d) { return String(d.charCodeAt(0) - 0x6F0); }).replace(/\u066B/g, '.');
+  };
+  // '200 غ' / '200g' / '٢٠٠' / '0.5 كغ' → grams; anything else (cups, pieces) → null.
+  // The LAST weight in the string counts ('١ كوب · ٢٥٠غ', 'سكوب · ٣٠غ', '200 g',
+  // '0.5 كغ'). A bare number means grams for a typed quantity ('200'), but NOT for
+  // a food's serving — '1' there is one piece, and scaling 100 g by it made a
+  // 7,800-calorie egg.
+  var parseGrams = function (s, requireUnit) {
+    var str = latinDigits(s).trim().toLowerCase();
+    var m = str.match(/(\d+(?:\.\d+)?)\s*(كغ|كجم|kg|غ|غم|جم|غرام|جرام|g|gr|gram|grams|مل|ml)\.?\s*$/);
+    if (!m && !requireUnit) m = str.match(/^(\d+(?:\.\d+)?)$/);
+    if (!m) return null;
+    var n = parseFloat(m[1]); if (!(n > 0)) return null;
+    return /^(كغ|كجم|kg)$/.test(m[2] || '') ? n * 1000 : n;
+  };
+  var normName = function (s) { return String(s || '').trim().toLowerCase().replace(/[\u0640\u064B-\u0652]/g, '').replace(/\s+/g, ' '); };
+  var localLookup = function (nameRaw, qtyRaw) {
+    var g = parseGrams(qtyRaw); if (!g) return null;
+    var name = normName(nameRaw); if (name.length < 2) return null;
+    var foods = DB.foods.list();
+    var food = foods.find(function (f) { return normName(f.name) === name; }) ||
+               foods.find(function (f) { var n = normName(f.name); return n.length >= 3 && (n.indexOf(name) === 0 || name.indexOf(n) === 0); });
+    if (!food) return null;
+    var sg = parseGrams(food.serving, true); if (!sg) return null;   // a 'cup' or a bare '1' serving cannot be scaled by weight
+    var k = g / sg;
+    return { calories: food.calories * k, protein: food.protein * k, carbs: food.carbs * k, fat: food.fat * k };
+  };
+  var rowEl = function (i) { return overlay.querySelector('.rec-row[data-row="' + i + '"]'); };
+  var fill = function (i, m) {
+    var it = items[i]; if (!it) return;
+    if (it._manual || (hasFigures(it) && it._auto !== 'done' && it._auto !== 'sent')) return;   // figures that are not ours stay
+    it.calories = Math.round(m.calories || 0);
+    it.protein = Math.round((m.protein || 0) * 10) / 10;
+    it.carbs = Math.round((m.carbs || 0) * 10) / 10;
+    it.fat = Math.round((m.fat || 0) * 10) / 10;
+    it._auto = 'done';
+    var row = rowEl(i);
+    if (row) {
+      ['calories', 'protein', 'carbs', 'fat'].forEach(function (f) { var inp = row.querySelector('input[data-f="' + f + '"]'); if (inp) inp.value = numAttr(it[f]); });
+      row.classList.remove('is-pending'); row.classList.add('is-auto');
+    }
+  };
+  var settle = function (i, state) { var it = items[i]; if (it) it._auto = state; var row = rowEl(i); if (row) row.classList.remove('is-pending'); };
+  function scheduleAuto(i) {
+    var it = items[i];
+    if (!it || it._manual) return;
+    if (hasFigures(it) && it._auto !== 'done' && it._auto !== 'sent' && it._auto !== 'pending') return;   // a reopened recipe keeps its saved figures
+    if (String(it.name || '').trim().length < 3 || !String(it.qty || '').trim()) return;   // 'دج' is not an ingredient yet
+    it._auto = 'pending';
+    var row = rowEl(i); if (row) { row.classList.add('is-pending'); row.classList.remove('is-auto'); }
+    clearTimeout(autoTimer);
+    autoTimer = setTimeout(runAuto, 900);   // a pause in typing, not every keystroke
+  }
+  async function runAuto() {
+    var pend = [];
+    items.forEach(function (it) { if (it._auto === 'pending') { it._auto = 'sent'; pend.push({ id: it._id, key: it.name + '|' + it.qty }); } });   // 'sent': a later timer must not resend it
+    if (!pend.length) return;
+    var need = [];
+    var idx = function (id) { return items.findIndex(function (it) { return it._id === id; }); };
+    pend.forEach(function (x) {
+      var i = idx(x.id); if (i < 0) return;
+      var hit = localLookup(items[i].name, items[i].qty);
+      if (hit) fill(i, hit); else need.push(x);
+    });
+    drawTotals();
+    if (!need.length) return;
+    if (!(window.FoodAI && FoodAI.analyze)) { need.forEach(function (x) { settle(idx(x.id), 'fail'); }); return; }
+    // Batches under the Worker's 500-character text limit, one line per row.
+    var batches = [], cur = [], len = 0;
+    need.forEach(function (x) {
+      var it0 = items[idx(x.id)]; if (!it0) return;
+      var line = String(it0.qty).trim() + ' ' + String(it0.name).trim();
+      if (cur.length && len + line.length + 1 > 380) { batches.push(cur); cur = []; len = 0; }
+      cur.push({ x: x, line: line }); len += line.length + 1;
+    });
+    if (cur.length) batches.push(cur);
+    var failed = [], signin = false;
+    for (var b = 0; b < batches.length; b++) {
+      var batch = batches[b];
+      var got = [];
+      try {
+        var res = await FoodAI.analyze(batch.map(function (p) { return p.line; }).join('\n'), { skipLocal: true });   // never the pasted-label parser: '30 g protein powder' is food, not a macro
+        got = (res && res.items) || [];
+      } catch (err) {
+        if (/unauthorized|sign/i.test((err && err.message) || '')) signin = true;
+        got = null;
+      }
+      if (!overlay.isConnected) return;   // the editor closed while the request was out
+      batch.forEach(function (p, k) {
+        var i = idx(p.x.id); var it = items[i];
+        // the row is gone, changed while we were away, or the user typed a figure: leave it
+        if (!it || it._manual || it._auto !== 'sent' || (it.name + '|' + it.qty) !== p.x.key) return;
+        var m = null;
+        if (got) {
+          if (got.length === batch.length) m = got[k];
+          else { var n = normName(it.name); m = got.find(function (g) { var gn = normName(g.name); return gn && (gn.indexOf(n) !== -1 || n.indexOf(gn) !== -1); }) || null; }
+        }
+        if (m && (m.calories || m.protein || m.carbs || m.fat)) fill(i, m);
+        else { settle(i, 'fail'); failed.push(it.name); }
+      });
+    }
+    drawTotals();
+    if (signin) showToast(t('rec_auto_signin'));
+    else if (failed.length) showToast(t('rec_auto_fail').replace('{name}', failed.join('، ')));
+  }
+
   overlay.querySelector('#rec-servings').addEventListener('input', drawTotals);
   overlay.querySelector('#rec-add').addEventListener('click', function () {
-    items.push({ name: '', qty: '', calories: 0, protein: 0, carbs: 0, fat: 0 });
+    items.push(newItem());
     drawRows();
     var rows = overlay.querySelectorAll('.rec-row input[data-f="name"]');
     if (rows.length) rows[rows.length - 1].focus();
@@ -7612,7 +7894,9 @@ function openRecipeEditor(date, existing, onDone) {
   overlay.querySelector('#rec-save').addEventListener('click', function () {
     var nm = overlay.querySelector('#rec-name').value.trim();
     var n = Math.max(1, parseInt(overlay.querySelector('#rec-servings').value, 10) || 1);
-    var payload = { name: nm, servings: n, items: items };
+    // R4: a row still being worked out must not be saved as zeros
+    if (items.some(function (it) { return it._auto === 'pending' || it._auto === 'sent'; })) { showToast(t('rec_auto_wait')); return; }
+    var payload = { name: nm, servings: n, items: items.map(function (it) { var c = Object.assign({}, it); delete c._auto; delete c._manual; delete c._id; return c; }) };
     var made = existing ? DB.recipes.update(existing.id, payload) : DB.recipes.add(payload);
     if (!made) { showToast(t('rec_need_ing')); return; }
     closeModal();
@@ -8315,22 +8599,21 @@ function sleepStagesHtml(entry, opts) {
 
 function renderSleep(el) {
   const list = DB.sleep.list();
-  const visibleSleep = viewContext.sleepHistoryExpanded ? list : list.slice(0, 30);
+  const sleepDays = viewContext.sleepDays || 7;
   const last7 = list.slice(0, 7);
   const avgMin = last7.length > 0
     ? Math.round(last7.reduce((s, x) => s + x.durationMinutes, 0) / last7.length)
     : 0;
   const latest = list[0];
 
-  const items = visibleSleep.map((s) => `
+  // One row per night, under its day header (the header carries the date).
+  const renderSleepEntry = (s) => `
     <div class="data-row">
       <div class="data-icon sleep">${icon('bed', 20)}</div>
       <div class="data-main">
-        <div class="data-title">${formatDate(s.date)}${s.source === 'health' ? `<span class="src-badge">${icon('refresh', 16)}${t('from_watch')}</span>` : ''}</div>
+        <div class="data-title"><span class="num">${formatTime12(s.sleepTime)}</span> <span aria-hidden="true">→</span> <span class="num">${formatTime12(s.wakeTime)}</span>${s.source === 'health' ? `<span class="src-badge">${icon('refresh', 16)}${t('from_watch')}</span>` : ''}</div>
         <div class="data-meta">
-          <span class="num">${formatTime12(s.sleepTime)}</span>
-          <span>→</span>
-          <span class="num">${formatTime12(s.wakeTime)}</span>
+          <span>${escapeHtml(t('total_sleep'))}</span>
         </div>
         ${sleepStagesHtml(s, { compact: true })}
       </div>
@@ -8340,7 +8623,8 @@ function renderSleep(el) {
         <button class="icon-btn danger" data-delete-sleep="${escapeHtml(s.id)}" aria-label="${escapeHtml(t('delete'))}">${icon('trash', 16)}</button>
       </div>
     </div>
-  `).join('');
+  `;
+  const sleepLedger = dayLedgerHtml({ entries: list, days: sleepDays, renderEntry: renderSleepEntry, emptyText: t('ledger_no_sleep'), addAttr: 'data-ledger-sleep' });
 
   el.innerHTML = `
     ${vaultBar()}
@@ -8404,27 +8688,13 @@ function renderSleep(el) {
       <button class="btn btn-primary" id="add-sleep-btn">${icon('plus', 20)} ${t('log')}</button>
     </div>
 
-    ${list.length === 0
-      ? emptyState({ iconName: 'moon', title: t('no_sleep_logged'), text: t('no_sleep_text') })
-      : `<div class="data-list">${items}</div>`
-    }
+    <div class="ledger">${sleepLedger.html}</div>
+    ${sleepLedger.more ? `<button type="button" class="btn btn-ghost btn-block" id="more-sleep-days">${t('ledger_older')}</button>` : ''}
   `;
 
-  // Single add button: the labeled "Log" button (the top-bar + was a duplicate).
-  if (visibleSleep.length < list.length) {
-    const showMore = document.createElement('button');
-    showMore.type = 'button';
-    showMore.className = 'btn btn-ghost btn-block';
-    showMore.id = 'show-more-sleep';
-    showMore.textContent = t('show_more');
-    $('.data-list', el).after(showMore);
-  }
-
   $('#add-sleep-btn', el).addEventListener('click', () => openSleepModal());
-  $('#show-more-sleep', el)?.addEventListener('click', () => {
-    viewContext.sleepHistoryExpanded = true;
-    renderSleep(el);
-  });
+  $('#more-sleep-days', el)?.addEventListener('click', () => { viewContext.sleepDays = sleepDays + 7; renderSleep(el); });
+  el.querySelectorAll('[data-ledger-sleep]').forEach((b) => b.addEventListener('click', () => openSleepModal(null, b.dataset.ledgerSleep)));
   el.querySelectorAll('[data-edit-sleep]').forEach((b) =>
     b.addEventListener('click', () => openSleepModal(b.dataset.editSleep))
   );
@@ -8443,7 +8713,7 @@ function renderSleep(el) {
   );
 }
 
-function openSleepModal(sleepId = null) {
+function openSleepModal(sleepId = null, presetDate = null) {
   const existing = sleepId ? DB.sleep.list().find((s) => s.id === sleepId) : null;
   openModal(`
     <div class="modal-header">
@@ -8456,7 +8726,7 @@ function openSleepModal(sleepId = null) {
 
     <div class="form-group">
       <label class="form-label">${t('date')}</label>
-      <input type="date" id="sleep-date" value="${escapeHtml(existing ? existing.date : todayISO())}">
+      <input type="date" id="sleep-date" max="${todayISO()}" value="${escapeHtml(existing ? existing.date : (presetDate || todayISO()))}">
     </div>
 
     <div class="form-row">
@@ -8499,6 +8769,7 @@ function openSleepModal(sleepId = null) {
 
   $('#save-sleep-btn').addEventListener('click', () => {
     const date = $('#sleep-date').value;
+    if (date > todayISO()) { showToast(t('date_future')); return; }
     const sleepTime = $('#sleep-start').value;
     const wakeTime = $('#sleep-end').value;
     if (!date || !sleepTime || !wakeTime) { showToast(t('fill_all_fields')); return; }
@@ -8870,8 +9141,9 @@ function renderSettings(el) {
       <div class="section-title">${t('translate_ex_title')}</div>
       <p class="settings-hint">${t('translate_ex_sub')}</p>
       <div class="lang-toggle">
-        <button class="lang-option ${prefs.translateExercises !== false ? 'active' : ''}" data-translate-ex="1">${t('translate_ex_on')}</button>
-        <button class="lang-option ${prefs.translateExercises === false ? 'active' : ''}" data-translate-ex="0">${t('translate_ex_off')}</button>
+        <button class="lang-option ${exNamesMode(prefs) === 'translit' ? 'active' : ''}" data-translate-ex="translit">${t('translate_ex_on')}</button>
+        <button class="lang-option ${exNamesMode(prefs) === 'ar' ? 'active' : ''}" data-translate-ex="ar">${t('translate_ex_full')}</button>
+        <button class="lang-option ${exNamesMode(prefs) === 'en' ? 'active' : ''}" data-translate-ex="en">${t('translate_ex_off')}</button>
       </div>
     </div>` : ''}
 
@@ -8895,6 +9167,9 @@ function renderSettings(el) {
         <div class="settings-action-main">
           <div class="settings-action-title">${t('health_connect')}</div>
           <div class="settings-action-sub">${t('health_connect_sub')}</div>
+          <!-- The row is a STATUS, not a label: web / not installed / needs an update /
+               not connected / partly connected / connected + last sync. -->
+          <div class="settings-action-sub health-status" id="health-status">${escapeHtml(window.Health && Health.statusText ? Health.statusText(Health.status()) : t('health_only_android'))}</div>
         </div>
       </button>
     </div>
@@ -8972,7 +9247,7 @@ function renderSettings(el) {
   // Exercise-name translation toggle (Arabic only)
   el.querySelectorAll('[data-translate-ex]').forEach((b) =>
     b.addEventListener('click', () => {
-      DB.prefs.setTranslateExercises(b.dataset.translateEx === '1');
+      DB.prefs.setExNames(b.dataset.translateEx);
       renderSettings(el);
       showToast(t('saved'));
     })
@@ -9009,6 +9284,10 @@ function renderSettings(el) {
     if (window.Health && typeof window.Health.open === 'function') window.Health.open();
     else showToast(t('health_only_android'));
   });
+  // Re-label the status row with a fresh availability + permission check.
+  if (window.Health && Health.refreshStatus) {
+    Health.refreshStatus().then((s) => { const st = el.querySelector('#health-status'); if (st) st.textContent = Health.statusText(s); }).catch(() => {});
+  }
 
   $('#notifications-btn', el)?.addEventListener('click', () => navigate('notifications'));
 

@@ -33,11 +33,23 @@
     return `${h}<span class="health-card-unit">${tr('unit_hr')}</span> ${m}<span class="health-card-unit">${tr('unit_min')}</span>`;
   }
 
+  // 'الآن' / 'قبل ٣ د' / 'قبل ٢ س' / 'قبل ٣ ي' — for last-sync lines and reading ages.
+  function ago(ms) {
+    if (!ms) return '';
+    const d = Math.max(0, Date.now() - ms);
+    if (d < 90 * 1000) return tr('health_ago_now');
+    if (d < 3600 * 1000) return tr('health_ago_min').replace('{n}', fmt(Math.round(d / 60000)));
+    if (d < 48 * 3600 * 1000) return tr('health_ago_hr').replace('{n}', fmt(Math.round(d / 3600000)));
+    return tr('health_ago_day').replace('{n}', fmt(Math.round(d / 86400000)));
+  }
+  // A 'latest' heart-rate or oxygen reading can be days old (the native read
+  // looks back 7 days): the card says how old, instead of passing it off as now.
+  const readingAge = (key) => (d) => { const t = d && d[key] && d[key].latestTime; const ms = t ? Date.parse(t) : NaN; return isNaN(ms) ? '' : ago(ms); };
   // Single source of truth for every metric: how to read it, label, icon, color.
   const METRICS = [
-    { key: 'heartRate', icon: 'heartPulse', color: '#f87171', label: 'health_hr', unit: 'health_bpm', val: (d) => (d.heartRate && d.heartRate.latest != null ? fmt(d.heartRate.latest) : null) },
+    { key: 'heartRate', icon: 'heartPulse', color: '#f87171', label: 'health_hr', unit: 'health_bpm', sub: readingAge('heartRate'), val: (d) => (d.heartRate && d.heartRate.latest != null ? fmt(d.heartRate.latest) : null) },
     { key: 'sleep', icon: 'moon', color: '#a78bfa', label: 'health_sleep', unit: '', val: sleepValue },
-    { key: 'oxygen', icon: 'droplet', color: '#38bdf8', label: 'health_oxygen', unit: 'percent', val: (d) => (d.oxygen && d.oxygen.latest != null ? round(d.oxygen.latest) : null) },
+    { key: 'oxygen', icon: 'droplet', color: '#38bdf8', label: 'health_oxygen', unit: 'percent', sub: readingAge('oxygen'), val: (d) => (d.oxygen && d.oxygen.latest != null ? round(d.oxygen.latest) : null) },
     { key: 'calories', icon: 'flame', color: '#fb923c', label: 'health_calories', unit: 'health_kcal', val: (d) => (d.calories != null ? fmt(round(d.calories)) : null) },
     { key: 'distance', icon: 'run', color: '#34d399', label: 'health_distance', unit: 'health_km', val: (d) => round(d.distance, 2) },
     { key: 'vo2max', icon: 'chart', color: '#facc15', label: 'health_vo2', unit: 'health_vo2_unit', val: (d) => round(d.vo2max, 1) },
@@ -64,7 +76,7 @@
         ${toggle}
         <div class="health-card-icon" style="background:var(--accent-soft);color:var(--accent)">${ic(m.icon)}</div>
         <div class="health-card-value num">${valHtml}</div>
-        <div class="health-card-label">${tr(m.label)}</div>
+        <div class="health-card-label">${tr(m.label)}${value != null && m.sub && m.sub(data) ? ` <span class="health-card-age">· ${esc(m.sub(data))}</span>` : ''}</div>
       </div>`;
   }
 
@@ -121,6 +133,51 @@
   }
 
   let lastSyncAt = 0;
+  // What we already hold from the watch: the newest imported session's start.
+  // Passed to the native read as `sinceTime` (minus a day of overlap — the
+  // import dedupes) so a foreground does not re-read thirty days every time.
+  function sinceTime() {
+    try {
+      let max = 0;
+      [].concat(DB.sleep.list(), DB.cardio.list()).forEach((x) => { const ms = x && x.hcKey ? Date.parse(x.hcKey) : NaN; if (!isNaN(ms) && ms > max) max = ms; });
+      return max ? max - 24 * 3600 * 1000 : undefined;
+    } catch (_) { return undefined; }
+  }
+  function readFresh() {
+    const req = { startTime: startOfTodayMs(), endTime: Date.now() };
+    const since = sinceTime(); if (since) req.sinceTime = since;
+    return plugin().readData(req);
+  }
+  // The plugin's messages are English constants; the user reads Arabic.
+  function friendlyHealthErr(e) {
+    const m = String((e && e.message) || '');
+    if (/not available|unavailable/i.test(m)) return tr('health_unavailable');
+    if (/permission/i.test(m)) return tr('health_no_permission');
+    return tr('health_no_data');
+  }
+  // LAST KNOWN STATE, so the Settings row can say something true synchronously;
+  // refreshStatus() updates it and the row re-labels itself.
+  let lastPerm = null;    // { granted, partial, missing }
+  let lastAvail = null;   // { available, status }
+  function status() {
+    const h = (typeof DB !== 'undefined') ? DB.health.get() : { syncedAt: 0 };
+    if (!isNative() || !plugin()) return { platform: 'web', syncedAt: h.syncedAt || 0 };
+    return { platform: 'native', avail: lastAvail, perm: lastPerm, syncedAt: h.syncedAt || 0 };
+  }
+  function statusText(s) {
+    if (!s || s.platform === 'web') return tr('health_st_web');
+    if (s.avail && !s.avail.available) return s.avail.status === 2 ? tr('health_st_update') : tr('health_st_unavailable');
+    if (!s.perm) return tr('health_st_checking');
+    if (s.perm.granted) return s.syncedAt ? tr('health_st_ok').replace('{ago}', ago(s.syncedAt)) : tr('health_st_never');
+    if (s.perm.partial) return tr('health_st_partial').replace('{n}', fmt((s.perm.missing || []).length));
+    return tr('health_st_none');
+  }
+  async function refreshStatus() {
+    if (!isNative() || !plugin()) return status();
+    try { lastAvail = await plugin().isAvailable(); } catch (_) { lastAvail = { available: false, status: 1 }; }
+    if (lastAvail && lastAvail.available) { try { lastPerm = await plugin().checkHealthPermissions(); } catch (_) { lastPerm = null; } }
+    return status();
+  }
 
   // Merge a fresh read over the cached data so a metric that comes back empty
   // (nothing logged yet today, or Samsung Health hasn't pushed it) never blanks
@@ -137,6 +194,7 @@
 
   // Write fresh Health Connect data into the app's own logs (sleep, …) so it
   // shows up in the records, not just the home cards. Deduped inside storage.
+  let pendingLogs = null;
   function applyToLogs(data) {
     if (!data || typeof DB === 'undefined') return;
     // WAIT FOR THE FIRST CLOUD RECONCILIATION. These two writes go through
@@ -147,8 +205,12 @@
     // free: silentSync() runs again on every foreground, so the import lands a
     // moment later with the same data and no race.
     try {
-      if (window.Cloud && Cloud.isSettled && !Cloud.isSettled()) return;
+      // Kept aside and applied on 'vault:sync-settled' (below): the morning's
+      // sleep used to reach the home card but not the Sleep ledger until the
+      // NEXT foreground, because the silent re-sync only runs on visibilitychange.
+      if (window.Cloud && Cloud.isSettled && !Cloud.isSettled()) { pendingLogs = data; return; }
     } catch (_) { /* no cloud layer at all → nothing to race */ }
+    pendingLogs = null;
     try { if (DB.sleep && DB.sleep.importFromHealth) DB.sleep.importFromHealth(data.sleep); } catch (_) { /* ignore */ }
     try { if (DB.cardio && DB.cardio.importFromHealth) DB.cardio.importFromHealth(data.exerciseSessions); } catch (_) { /* ignore */ }
   }
@@ -168,7 +230,7 @@
 
   // Read + cache + import into logs + refresh the home cards.
   async function pull() {
-    const fresh = await plugin().readData({ startTime: startOfTodayMs(), endTime: Date.now() });
+    const fresh = await readFresh();
     lastSyncAt = Date.now();
     DB.health.setData(mergeData(DB.health.get().data, fresh));
     applyToLogs(fresh);
@@ -183,7 +245,8 @@
     lastSyncAt = now;
     try {
       const perm = await plugin().checkHealthPermissions();
-      if (!perm || !perm.granted) return;
+      lastPerm = perm || null;
+      if (!perm || !(perm.granted || perm.partial)) return;   // read whatever is allowed
       await pull();
     } catch (_) { /* ignore */ }
   }
@@ -195,11 +258,17 @@
     if (!isNative() || !plugin()) return;
     try {
       const perm = await plugin().checkHealthPermissions();
-      if (perm && perm.granted) { await pull(); return; }
+      lastPerm = perm || null;
+      if (perm && (perm.granted || perm.partial)) { await pull(); return; }
       if (localStorage.getItem(VAULT_KEYS.hcPrompted)) return; // don't nag after a decline
-      localStorage.setItem(VAULT_KEYS.hcPrompted, '1');
-      const req = await plugin().requestHealthPermissions();
-      if (req && req.granted) await pull();
+      // Not before the welcome flow is done: a system dialog about health data
+      // on the very first screen, with no word from the app, reads as a mistake.
+      try { if (typeof DB !== 'undefined' && DB.prefs && DB.prefs.onboarded && !DB.prefs.onboarded()) return; } catch (_) {}
+      let req = null;
+      try { req = await plugin().requestHealthPermissions(); }
+      finally { try { localStorage.setItem(VAULT_KEYS.hcPrompted, '1'); } catch (_) {} }   // after the dialog: a kill mid-dialog is not a decline
+      lastPerm = req || lastPerm;
+      if (req && (req.granted || req.partial)) await pull();
     } catch (_) { /* ignore */ }
   }
 
@@ -222,14 +291,14 @@
     try {
       const perm = await plugin().requestHealthPermissions();
       if (!perm || !perm.granted) { open(); return; }
-      const fresh = await plugin().readData({ startTime: startOfTodayMs(), endTime: Date.now() });
+      const fresh = await readFresh();
       lastSyncAt = Date.now();
       DB.health.setData(mergeData(DB.health.get().data, fresh));
       applyToLogs(fresh);
       if (typeof showToast === 'function') showToast(tr('health_synced'));
       if (typeof renderView === 'function') renderView('home');
     } catch (e) {
-      if (typeof showToast === 'function') showToast((e && e.message) || tr('health_no_data'));
+      if (typeof showToast === 'function') showToast(friendlyHealthErr(e));
       if (btn) btn.classList.remove('spinning');
     }
   }
@@ -240,7 +309,12 @@
       ? gridHtml(data, { withToggle: true })
       : `<div class="health-msg">${tr('health_syncing')}</div>`;
     const hint = data ? `<div class="health-hint">${tr('health_toggle_hint')}</div>` : '';
-    return grid + hint + actions(!!data);
+    // Some permissions, not all: say which are missing, with the way to fix it.
+    const partial = lastPerm && lastPerm.partial
+      ? `<div class="health-msg health-msg-warn">${esc(tr('health_st_partial').replace('{n}', fmt((lastPerm.missing || []).length)))} — ${esc(tr('health_partial_hint'))}</div>`
+      : '';
+    const synced = (typeof DB !== 'undefined' && DB.health.get().syncedAt) ? `<div class="health-hint">${esc(tr('health_st_ok').replace('{ago}', ago(DB.health.get().syncedAt)))}</div>` : '';
+    return grid + partial + synced + hint + actions(!!data);
   }
 
   function actions(refresh) {
@@ -274,12 +348,13 @@
     if (body) body.innerHTML = `<div class="health-msg">${tr('health_syncing')}</div>`;
     try {
       const perm = await plugin().requestHealthPermissions();
-      if (!perm || !perm.granted) {
+      lastPerm = perm || null;
+      if (!perm || !(perm.granted || perm.partial)) {
         if (body) body.innerHTML = `<div class="health-msg">${tr('health_no_permission')}</div>` + actions(false);
         wireModal();
         return;
       }
-      const fresh = await plugin().readData({ startTime: startOfTodayMs(), endTime: Date.now() });
+      const fresh = await readFresh();
       lastSyncAt = Date.now();
       const data = mergeData(DB.health.get().data, fresh);
       DB.health.setData(data);
@@ -288,7 +363,7 @@
       wireModal();
       if (typeof showToast === 'function') showToast(tr('health_synced'));
     } catch (e) {
-      if (body) body.innerHTML = `<div class="health-msg">${esc((e && e.message) || tr('health_no_data'))}</div>` + actions(false);
+      if (body) body.innerHTML = `<div class="health-msg">${esc(friendlyHealthErr(e))}</div>` + actions(false);
       wireModal();
     }
   }
@@ -322,18 +397,32 @@
     wireModal();
     try {
       const avail = await plugin().isAvailable();
+      lastAvail = avail || null;
       if (!avail || !avail.available) {
         const body = document.getElementById('health-body');
-        if (body) body.innerHTML = `<div class="health-msg">${tr('health_unavailable')}</div>`;
+        // status 2 = installed but too old: the fix is one tap away, not a dead end
+        const update = avail && avail.status === 2;
+        if (body) body.innerHTML = `<div class="health-msg">${tr(update ? 'health_st_update' : 'health_unavailable')}</div>` +
+          (update ? `<div class="form-actions" style="margin-top:16px"><button class="btn btn-primary" id="hc-update">${tr('health_update_btn')}</button></div>` : '');
+        const u = document.getElementById('hc-update');
+        if (u) u.addEventListener('click', () => { try { window.open('market://details?id=com.google.android.apps.healthdata', '_system'); } catch (_) { window.open('https://play.google.com/store/apps/details?id=com.google.android.apps.healthdata', '_blank'); } });
         return;
       }
       await sync();
     } catch (e) {
       const body = document.getElementById('health-body');
-      if (body && !cached) body.innerHTML = `<div class="health-msg">${esc((e && e.message) || tr('health_unavailable'))}</div>`;
+      if (body && !cached) body.innerHTML = `<div class="health-msg">${esc(friendlyHealthErr(e))}</div>`;
     }
   }
 
+  // The cloud reconciliation finished: imports held back by applyToLogs land now.
+  if (typeof window !== 'undefined') {
+    window.addEventListener('vault:sync-settled', () => {
+      if (!pendingLogs) return;
+      const d = pendingLogs; pendingLogs = null;
+      try { applyToLogs(d); refreshActive(); } catch (_) {}
+    });
+  }
   // Auto-sync whenever the app is brought back to the foreground.
   if (typeof document !== 'undefined') {
     document.addEventListener('visibilitychange', () => {
@@ -347,5 +436,5 @@
   // autoSync: safe to call from any view's render. No-op off-native, no-op without
   // permission, and throttled to once per 20s — so a screen can ask for fresh
   // watch data on open without prompting or hammering Health Connect.
-  window.Health = { open, sync, autoSync: silentSync, isNative, homeSectionHtml, bindHomeSection };
+  window.Health = { open, sync, autoSync: silentSync, isNative, homeSectionHtml, bindHomeSection, status, statusText, refreshStatus };
 })();
