@@ -379,6 +379,7 @@ function defaultState() {
       theme: detectTheme(),
       unit: 'kg',
       translateExercises: true,   // Arabic UI: transliterate built-in exercise names
+      restSec: 90,                // guided run: default rest between sets, in seconds
     },
     exercises: [
       ...SEED_EXERCISES.map((e) => ({
@@ -832,7 +833,19 @@ function imgPrune() {
   } catch (_) {}
 }
 
+// PRE-PAINT MIRROR. index.html reads this tiny key in an inline script before
+// the static body paints, so a light-theme or Arabic user never sees the black,
+// English, left-to-right frame that used to precede app.js on a cold start.
+// It is a mirror of prefs, never a source: the blob stays the truth.
+function mirrorUi(extra) {
+  try {
+    const p = (STATE && STATE.prefs) || {};
+    let cur = {}; try { cur = JSON.parse(localStorage.getItem('vault_ui') || '{}') || {}; } catch (_) {}
+    localStorage.setItem('vault_ui', JSON.stringify({ ...cur, ...(extra || {}), theme: p.theme, lang: p.lang }));
+  } catch (_) {}
+}
 let STATE = withImageAccessors(loadState());
+mirrorUi();
 imgPrune();
 
 // The one low-level write. Returns true when the bytes actually landed.
@@ -921,10 +934,14 @@ const DB = {
     // No `langPicked` companion flag any more: nothing needs to know whether the
     // choice was deliberate, because the app never asks. A fresh install gets
     // detectLang() and the login screen's ar/en toggle changes it.
-    setLang(lang) { STATE.prefs.lang = lang; save(); },
-    setTheme(theme) { STATE.prefs.theme = canonicalTheme(theme); save(); },
+    setLang(lang) { STATE.prefs.lang = lang; save(); mirrorUi(); },
+    setTheme(theme) { STATE.prefs.theme = canonicalTheme(theme); save(); mirrorUi(); },
+    mirrorUi(extra) { mirrorUi(extra); },
     setUnit(unit) { STATE.prefs.unit = unit === 'lb' ? 'lb' : 'kg'; save(); },
     setTranslateExercises(on) { STATE.prefs.translateExercises = !!on; save(); },
+    // Default rest between sets. Set from the idle rest bar's ±15; the live ±15
+    // only move the running clock. 15 s to 10 min, whole seconds.
+    setRestSec(sec) { const n = Math.round(Number(sec)); STATE.prefs.restSec = Number.isFinite(n) ? Math.min(600, Math.max(15, n)) : 90; save(); },
     // First-run welcome flow: true once the user has seen (or skipped) it.
     onboarded() { return !!(STATE.prefs && STATE.prefs.onboarded); },
     // Housekeeping: set during boot (app.js auto-flags existing users so an update
@@ -1633,6 +1650,8 @@ const DB = {
         sets: sets.map((s) => ({
           reps: Number(s.reps) || 0,
           weight: Number(s.weight) || 0,
+          // Only the exception is stored: a guided-run set saved before its ✓.
+          ...(s.done === false ? { done: false } : {}),
         })),
         createdAt: new Date().toISOString(),
       };
@@ -1645,7 +1664,7 @@ const DB = {
       if (!s) return null;
       if (date) s.date = date;
       if (sets) {
-        s.sets = sets.map((x) => ({ reps: Number(x.reps) || 0, weight: Number(x.weight) || 0 }));
+        s.sets = sets.map((x) => ({ reps: Number(x.reps) || 0, weight: Number(x.weight) || 0, ...(x.done === false ? { done: false } : {}) }));
       }
       save();
       return s;

@@ -117,6 +117,7 @@
   --up-bg:   rgba(52, 211, 153, 0.14);
   --down:    #f87171;
   --down-bg: rgba(248, 113, 113, 0.14);
+  --danger:  #ef4444;   /* was only ever a var() fallback literal — dark red in both themes */
   --red:     #f87171;
   --red-bg:  rgba(248, 113, 113, 0.13);
 
@@ -284,6 +285,7 @@ body.theme-light {
   --up-bg:    rgba(3, 107, 78, 0.12);
   --down:     #b91c1c;
   --down-bg:  rgba(185, 28, 28, 0.12);
+  --danger:   #b91c1c;
   --red:      #b91c1c;
   --red-bg:   rgba(185, 28, 28, 0.10);
 
@@ -398,9 +400,6 @@ body { --accent-text: var(--accent); }
 /* =========================================================================
    RTL (Arabic) support
    ========================================================================= */
-body[dir="rtl"] .page-header {
-  text-align: right;
-}
 
 body[dir="rtl"] .back-btn svg,
 body[dir="rtl"] .exercise-chev svg,
@@ -502,6 +501,7 @@ img { display: block; max-width: 100%; }
    ========================================================================= */
 .app {
   width: 100%;
+  height: 100vh;    /* WebView < Chrome 108 has no dvh: without this the shell had no height and nothing scrolled */
   height: 100dvh;
   max-width: 480px;
   margin: 0 auto;
@@ -579,10 +579,13 @@ img { display: block; max-width: 100%; }
    Painting it orange put the loudest chrome on the least important control and
    made it compete with the CTA below. 36px is the spec's size, and the logo
    opposite is deliberately smaller than it. */
+/* 36px is the S size, so it takes the S radius — it wore the M radius. The
+   halo gives the header action its 44px target. */
 .vault-action {
-  width: 36px;
-  height: 36px;
-  border-radius: 12px;
+  position: relative;
+  width: var(--btn-h-s);
+  height: var(--btn-h-s);
+  border-radius: var(--radius-btn-s);
   background: var(--surface-1);
   border: 1px solid var(--surface-3);
   color: var(--text-mute);
@@ -732,7 +735,7 @@ body.theme-light .home-center-icon { box-shadow: 0 8px 24px rgba(255, 106, 0, 0.
    PAGE HEADER (inside view)
    ========================================================================= */
 .page-header {
-  text-align: right;
+  text-align: start;   /* was `right`: English titles sat flush right */
   margin-bottom: 20px;
 }
 
@@ -847,9 +850,7 @@ body.theme-light .home-center-icon { box-shadow: 0 8px 24px rgba(255, 106, 0, 0.
 /* Exercises-page toolbar: My-exercises + New-exercise + search all in one row,
    same height, the search a smaller square so they read as a consistent set. */
 .exq-toolbar { display: flex; align-items: center; gap: 8px; margin-bottom: 14px; }
-.exq-toolbar > .btn { height: var(--btn-h-m); min-height: 0; padding: 0 14px; font-size: var(--fs-btn-m);
-  border-radius: var(--radius-btn-s);
-}
+.exq-toolbar > .btn { height: var(--btn-h-m); min-height: 0; padding: 0 14px; font-size: var(--fs-btn-m); border-radius: var(--radius-btn-m); }
 .exq-toolbar > .icon-square { width: var(--btn-h-m); height: var(--btn-h-m); }
 .exq-toolbar > .icon-square svg { width: 28px; height: 28px; }
 .exq-toolbar .search-wrap { flex: 1; height: var(--btn-h-m); margin: 0; }
@@ -993,14 +994,16 @@ body.theme-light input[type="date"], body.theme-light input[type="time"] { color
 
 .filter-pill {
   flex-shrink: 0;
-  padding: 9px 16px;
+  position: relative;
+  height: var(--btn-h-s);
+  padding: 0 16px;
   background: var(--surface-1);
   border: 1px solid var(--border);
   border-radius: var(--radius-pill);
   font-size: 13px;
   font-weight: 600;
   color: var(--text-mute);
-  transition: all 0.15s;
+  transition: background-color 0.15s, border-color 0.15s, color 0.15s, transform 0.12s;
   white-space: nowrap;
 }
 
@@ -1137,7 +1140,7 @@ body.theme-light input[type="date"], body.theme-light input[type="time"] { color
   width: 100%;
   height: 100%;
   object-fit: cover;
-  background: #fff;
+  background: var(--img-placeholder);
 }
 
 .ms-main { display: flex; flex-direction: column; gap: 4px; min-width: 0; flex: 1; }
@@ -1385,7 +1388,7 @@ body[dir="rtl"] .bento-card-content { text-align: right; }
 .bento-card-name-tag {
   position: absolute;
   top: 8px;
-  right: 8px;
+  inset-inline-end: 8px;
   max-width: calc(100% - 56px);
   padding: 5px 10px;
   background: rgba(var(--scrim-rgb), 0.78);
@@ -1412,16 +1415,16 @@ body[dir="rtl"] .bento-card-content { text-align: right; }
 
 .bento-card.wide .bento-card-name-tag {
   top: 14px;
-  right: 14px;
+  inset-inline-end: 14px;
   font-size: 14px;
   padding: 6px 12px;
 }
 
-body[dir="rtl"] .bento-card-name-tag {
-  right: auto;
-  left: 8px;
-}
-body[dir="rtl"] .bento-card.wide .bento-card-name-tag { left: 14px; }
+/* A PR chip shares the top row with the name tag only on the WIDE card, which
+   has room for both. A narrow card (157px) does not: reserving the chip's width
+   there left a 33px tag — so the chip drops under the tag instead. */
+.bento-card.wide.has-pr .bento-card-name-tag { max-width: calc(100% - 124px); }
+.bento-card.has-pr:not(.wide) .bento-pr { top: 54px; }
 
 /* Mini category label that lives in the bottom content row */
 .bento-card-cat-mini {
@@ -1462,10 +1465,13 @@ body[dir="rtl"] .bento-card.wide .bento-card-name-tag { left: 14px; }
 }
 
 /* PR chip on bento card */
+/* inline-START; the name tag holds inline-END. Both were physical (left /
+   right) and an RTL override moved the tag to the left as well — in Arabic
+   the chip sat under the tag. */
 .bento-pr {
   position: absolute;
   top: 10px;
-  left: 10px;
+  inset-inline-start: 10px;
   padding: 3px 9px;
   background: var(--accent);
   color: var(--accent-ink);
@@ -2163,7 +2169,7 @@ body[dir="rtl"] .w-unit { margin-left: 0; margin-right: 2px; }
 
 .sets-editor-head {
   display: grid;
-  grid-template-columns: 32px 1fr 1fr 38px;
+  grid-template-columns: 44px 1fr 1fr 38px;   /* 'مجموعة' needs 38px */
   gap: 8px;
   margin-bottom: 2px;
   font-size: 11px;
@@ -2192,9 +2198,14 @@ body[dir="rtl"] .w-unit { margin-left: 0; margin-right: 2px; }
   gap: 2px;
 }
 
+/* The unit toggle sits on the session screen, which is used mid-set with one
+   hand. It measured 45×27 with no halo — the smallest hit area in the app. The
+   pill keeps its size (it is a segmented control, not a button row); the halo
+   below gives each half a real 44px target without moving anything. */
 .modal-unit-toggle button {
+  position: relative;
   padding: 5px 14px;
-  font-size: 11px;
+  font-size: var(--fs-btn-s);
   font-weight: 700;
   letter-spacing: 0.08em;
   background: transparent;
@@ -2203,16 +2214,17 @@ body[dir="rtl"] .w-unit { margin-left: 0; margin-right: 2px; }
   border-radius: 999px;
   cursor: pointer;
   transition: background 0.15s, color 0.15s;
-  min-width: 38px;
+  min-width: 40px;
 }
+.modal-unit-toggle button::after { content: ''; position: absolute; inset: -9px -2px; }
 
 .modal-unit-toggle button.active {
   background: var(--accent);
   color: var(--accent-ink);
 }
 
-.modal-unit-toggle button:not(.active):hover {
-  color: var(--text);
+@media (hover: hover) {
+  .modal-unit-toggle button:not(.active):hover { color: var(--text); }
 }
 
 .sets-editor-head div:nth-child(2),
@@ -2222,7 +2234,7 @@ body[dir="rtl"] .w-unit { margin-left: 0; margin-right: 2px; }
 
 .set-edit-row {
   display: grid;
-  grid-template-columns: 32px 1fr 1fr 38px;
+  grid-template-columns: 44px 1fr 1fr 38px;   /* 'مجموعة' needs 38px */
   gap: 8px;
   align-items: center;
 }
@@ -2331,13 +2343,11 @@ body[dir="rtl"] .w-unit { margin-left: 0; margin-right: 2px; }
   border-color: var(--border-hi);
   color: var(--text-mute);
 }
-.type-option.type-option-add:hover {
-  border-color: var(--accent-line);
-  color: var(--accent-text);
-  background: var(--accent-soft);
+@media (hover: hover) {
+  .type-option.type-option-add:hover { border-color: var(--accent-line); color: var(--accent-text); background: var(--accent-soft); }
 }
 .type-option.type-option-add svg { color: var(--text-mute); }
-.type-option.type-option-add:hover svg { color: var(--accent-text); }
+@media (hover: hover) { .type-option.type-option-add:hover svg { color: var(--accent-text); } }
 
 /* Icon picker chips inside the new-cardio-type modal */
 .cardio-icon-chips {
@@ -2354,7 +2364,7 @@ body[dir="rtl"] .w-unit { margin-left: 0; margin-right: 2px; }
   align-items: center;
   justify-content: center;
   color: var(--text-mute);
-  transition: all 0.15s;
+  transition: background-color 0.15s, border-color 0.15s, color 0.15s, transform 0.12s;
 }
 .cardio-icon-chip svg { width: 20px; height: 20px; }
 .cardio-icon-chip.active {
@@ -2362,7 +2372,7 @@ body[dir="rtl"] .w-unit { margin-left: 0; margin-right: 2px; }
   border-color: var(--accent-line);
   color: var(--accent-text);
 }
-.cardio-icon-chip:hover { border-color: var(--border-hi); }
+@media (hover: hover) { .cardio-icon-chip:hover { border-color: var(--border-hi); } }
 
 /* Nested overlay (sub-modal layered on top of an existing modal) */
 .modal-overlay.nested {
@@ -2397,7 +2407,7 @@ body[dir="rtl"] .w-unit { margin-left: 0; margin-right: 2px; }
   flex-direction: column;
   align-items: center;
   gap: 6px;
-  transition: all 0.15s;
+  transition: background-color 0.15s, border-color 0.15s, color 0.15s, transform 0.12s;
 }
 
 .type-option-icon {
@@ -2439,14 +2449,18 @@ body[dir="rtl"] .w-unit { margin-left: 0; margin-right: 2px; }
 }
 
 .compare-tab {
-  padding: 10px;
-  border-radius: 11px;
+  position: relative;
+  height: var(--btn-h-s);
+  padding: 0 10px;
+  border-radius: var(--radius-btn-s);
   font-weight: 700;
   color: var(--text-mute);
-  font-size: 13px;
-  transition: all 0.15s;
+  font-size: var(--fs-btn-s);
+  transition: background-color 0.15s, border-color 0.15s, color 0.15s, transform 0.12s;
   letter-spacing: -0.01em;
 }
+/* 40px / r11 before — r11 exists nowhere else in the file. */
+.compare-tab::after { content: ''; position: absolute; inset: -4px 0; }
 
 .compare-tab.active {
   background: var(--accent);
@@ -2553,7 +2567,9 @@ body[dir="rtl"] .w-unit { margin-left: 0; margin-right: 2px; }
   pointer-events: none;
   z-index: 200;
   box-shadow: var(--elev-2);
-  white-space: nowrap;
+  white-space: normal;   /* long Arabic strings ran off the screen edge as one line */
+  text-align: center;
+  width: max-content;    /* at left:50% a shrink-to-fit box gets only the half-width; this lets it reach max-width */
   max-width: 90vw;
   letter-spacing: -0.01em;
 }
@@ -2574,6 +2590,7 @@ body[dir="rtl"] .w-unit { margin-left: 0; margin-right: 2px; }
   padding-left: 8px;
 }
 .toast.has-action.show { pointer-events: auto; }
+.toast.has-action .toast-msg { min-width: 0; }
 /* When the floating rest timer is up, lift the toast clear above it so the two
    never overlap (they otherwise share the same bottom anchor). The timer bar is
    ~70px tall sitting 16px above the nav, so ~120px clears it plus the toast's
@@ -2642,10 +2659,10 @@ body.rest-active .toast { bottom: calc(var(--safe-b) + var(--rest-h, 72px) + 28p
   margin-bottom: var(--sp-5);
 }
 .schedule-day {
-  height: 46px;
+  height: var(--btn-h-m);
   min-width: 0;
   padding: 0 2px;
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius-btn-m);
   border: 1px solid var(--border);
   background: var(--surface-2);
   color: var(--text-mute);
@@ -2726,11 +2743,15 @@ body.rest-active .toast { bottom: calc(var(--safe-b) + var(--rest-h, 72px) + 28p
   border-radius: var(--radius-sm);
   color: var(--accent-text);
   font-family: inherit;
-  font-size: 12px;
+  font-size: var(--fs-btn-s);
   font-weight: 700;
   cursor: pointer;
+  position: relative;
   -webkit-tap-highlight-color: transparent;
 }
+/* 30px tall as text. Growing it would push the section header around, so the
+   target grows instead of the button. */
+.rot-section-action::after { content: ''; position: absolute; inset: -7px -6px; }
 .rot-section-action svg { width: 16px; height: 16px; }
 
 /* Where you are in the cycle: numbered chips, current one highlighted. Numbers —
@@ -3004,7 +3025,7 @@ body.rest-active .toast { bottom: calc(var(--safe-b) + var(--rest-h, 72px) + 28p
 
 .sd-sets-head {
   display: grid;
-  grid-template-columns: 32px 1fr 1fr 32px;
+  grid-template-columns: 44px 1fr 1fr 32px;   /* 'مجموعة' needs 38px */
   gap: 8px;
   margin-bottom: 4px;
   font-size: 11px;
@@ -3025,7 +3046,7 @@ body.rest-active .toast { bottom: calc(var(--safe-b) + var(--rest-h, 72px) + 28p
 
 .sd-set-row {
   display: grid;
-  grid-template-columns: 32px 1fr 1fr 32px;
+  grid-template-columns: 44px 1fr 1fr 32px;   /* 'مجموعة' needs 38px */
   gap: 8px;
   align-items: center;
 }
@@ -3060,8 +3081,9 @@ body.rest-active .toast { bottom: calc(var(--safe-b) + var(--rest-h, 72px) + 28p
 }
 
 .sd-set-remove {
-  width: 36px;
-  height: 36px;
+  position: relative;
+  width: var(--btn-h-s);
+  height: var(--btn-h-s);
   border-radius: 50%;
   background: transparent;
   border: 1px solid var(--border);
@@ -3071,8 +3093,8 @@ body.rest-active .toast { bottom: calc(var(--safe-b) + var(--rest-h, 72px) + 28p
   justify-content: center;
   transition: transform 0.12s, background 0.15s, color 0.15s, border-color 0.15s;
 }
-.sd-set-remove:hover,
 .sd-set-remove:active { background: var(--red-bg); color: var(--red); border-color: var(--red); }
+@media (hover: hover) { .sd-set-remove:hover { background: var(--red-bg); color: var(--red); border-color: var(--red); } }
 .sd-set-remove:active { transform: scale(var(--press-scale)); }
 .sd-set-remove svg { width: 16px; height: 16px; }
 
@@ -3085,10 +3107,13 @@ body.rest-active .toast { bottom: calc(var(--safe-b) + var(--rest-h, 72px) + 28p
   padding-top: 12px;
   border-top: 1px solid var(--border);
 }
+/* Was 38px tall with a 12px label — under the S size and under the smallest
+   button type. On the scale it is an S. */
 .sd-add-set-btn {
-  font-size: 12px;
-  padding: 8px 12px;
-  height: auto;
+  font-size: var(--fs-btn-s);
+  padding: 0 14px;
+  height: var(--btn-h-s);
+  border-radius: var(--radius-btn-s);
 }
 .sd-save-btn {
   font-size: 13px;
@@ -3108,10 +3133,11 @@ body.rest-active .toast { bottom: calc(var(--safe-b) + var(--rest-h, 72px) + 28p
   justify-content: center;
   gap: 8px;
   width: 100%;
-  margin: 2px 0 16px;
-  padding: 11px;
+  height: var(--btn-h-m);
+  margin: 4px 0 16px;
+  padding: 0 12px;
   border: 1px solid var(--border);
-  border-radius: var(--radius);
+  border-radius: var(--radius-btn-m);
   background: var(--surface-3);
   color: var(--text-mute);
   font-size: 14px;
@@ -3324,8 +3350,9 @@ body[data-view="session-run"] .bottom-nav { display: none; }
      shifted every row below it by a whole line each time you tapped Next. Two
      lines are always reserved and never exceeded, so the set rows sit at the
      same height for every exercise in the workout. */
-  line-height: 1.15;
-  min-height: 2.3em;
+  line-height: 1.3;      /* 1.15 clipped the descenders of a second Arabic line */
+  min-height: 2.68em;    /* = two lines + the padding below, so a one-line name reserves the same box */
+  padding-bottom: 0.08em;
   display: -webkit-box;
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
@@ -3334,7 +3361,7 @@ body[data-view="session-run"] .bottom-nav { display: none; }
 
 .run-sets-head {
   display: grid;
-  grid-template-columns: 34px 30px 1fr 1fr 46px;
+  grid-template-columns: 34px 42px 1fr 1fr 46px;   /* 'مجموعة' needs 38px */
   gap: 8px;
   margin-bottom: 6px;
   font-size: 11px;
@@ -3348,7 +3375,7 @@ body[data-view="session-run"] .bottom-nav { display: none; }
 .run-sets { display: flex; flex-direction: column; gap: 8px; }
 .run-set-row {
   display: grid;
-  grid-template-columns: 34px 30px 1fr 1fr 46px;
+  grid-template-columns: 34px 42px 1fr 1fr 46px;   /* 'مجموعة' needs 38px */
   gap: 8px;
   align-items: center;
 }
@@ -3383,6 +3410,9 @@ body[data-view="session-run"] .bottom-nav { display: none; }
    rows) and get the same invisible halo: a 44px target without a 44px box. */
 .ai-portion-btn { position: relative; }
 .ai-portion-btn::after { content: ''; position: absolute; inset: -5px; }
+/* Three more 36px controls that a thumb has to hit: the header action, the
+   calendar's month arrows, and the set-remove in session-day. Same treatment. */
+.vault-action::after, .calendar-nav-btn::after, .sd-set-remove::after { content: ''; position: absolute; inset: -4px; }
 /* (.data-actions .icon-btn is an .icon-btn: the centred 44px halo above already
    applies. A second, inset-based ::after on top of it shifted the box 22px
    up-left and onto the Edit button beside it.) */
@@ -3500,7 +3530,7 @@ body[dir="rtl"] .calendar-nav-btn svg { transform: scaleX(-1); }
    running, .live while one is. Same min-height, so nothing below ever moves. */
 .rest-timer {
   margin-top: 14px;
-  min-height: 72px;   /* the live layout measures 71px (label + 24px count); idle must match it exactly */
+  min-height: 72px;   /* idle and live share one shape (label + 24px figure + ±15), so they measure the same */
   box-sizing: border-box;
   /* STICKY, NOT FIXED. Sticky keeps the countdown pinned near the bottom while
      you scroll — the whole reason it floated — but it is still a block in the
@@ -3523,14 +3553,16 @@ body[dir="rtl"] .calendar-nav-btn svg { transform: scaleX(-1); }
   border-radius: 16px;
   box-shadow: var(--elev-2);
 }
+/* Idle: the same card, quiet. A solid hairline instead of the accent, no shadow,
+   and the figure in the muted ink — it IS the control for the default rest, not
+   a dashed placeholder waiting to be filled. */
 .rest-timer.idle {
   position: static;            /* scrolls with the content; nothing to pin */
   box-shadow: none;
-  border-style: dashed;
   border-color: var(--border);
-  background: transparent;
 }
 .rest-timer.idle .rest-timer-label { color: var(--text-mute); }
+.rest-timer.idle .rest-timer-count { color: var(--text-mute); }
 /* Only when there is no .run-nav to sit above. Not reachable from the guided
    screen; it exists so a timer can never become invisible. */
 .rest-timer.floating {
@@ -3564,9 +3596,9 @@ body[dir="rtl"] .calendar-nav-btn svg { transform: scaleX(-1); }
 .rest-timer-adj {
   flex-shrink: 0;
   min-width: 46px;
-  height: 44px;
+  height: var(--btn-h-m);
   padding: 0 10px;
-  border-radius: 12px;
+  border-radius: var(--radius-btn-m);
   background: var(--surface-2);
   border: 1px solid var(--border);
   color: var(--text);
@@ -3579,9 +3611,9 @@ body[dir="rtl"] .calendar-nav-btn svg { transform: scaleX(-1); }
 .rest-timer-adj:active { transform: scale(var(--press-scale)); }
 .rest-timer-skip {
   flex-shrink: 0;
-  height: 44px;
+  height: var(--btn-h-m);
   padding: 0 14px;
-  border-radius: 12px;
+  border-radius: var(--radius-btn-m);
   background: var(--accent);
   border: none;
   color: var(--accent-ink);
@@ -3731,7 +3763,7 @@ body[dir="rtl"] .calendar-nav-btn svg { transform: scaleX(-1); }
   width: 100%;
   height: 100%;
   object-fit: cover;
-  background: #fff;
+  background: var(--img-placeholder);
 }
 
 .picker-row-name {
@@ -3782,9 +3814,10 @@ body[dir="rtl"] .picker-row { text-align: right; }
 }
 
 .calendar-nav-btn {
-  width: 36px;
-  height: 36px;
-  border-radius: 10px;
+  position: relative;
+  width: var(--btn-h-s);
+  height: var(--btn-h-s);
+  border-radius: var(--radius-btn-s);
   background: var(--surface-2);
   border: 1px solid var(--border);
   display: flex;
@@ -3824,7 +3857,7 @@ body[dir="rtl"] .picker-row { text-align: right; }
 
 .calendar-cell {
   aspect-ratio: 1 / 1;
-  border-radius: 10px;
+  border-radius: var(--radius-btn-m);   /* it measures 44 tall: the M radius */
   background: var(--surface-2);
   border: 1px solid var(--border);
   display: flex;
@@ -3982,7 +4015,7 @@ body[dir="rtl"] .picker-row { text-align: right; }
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
-  transition: all 0.18s;
+  transition: background-color 0.18s, border-color 0.18s, color 0.18s, transform 0.12s;
 }
 /* Was missing entirely — the base `svg{width:100%}` was inflating the check/plus
    glyph to fill the whole 44px circle with zero padding. Same ratio as the
@@ -4099,7 +4132,7 @@ body[dir="rtl"] .picker-row { text-align: right; }
   border:1px solid var(--border); border-radius:12px; background:var(--surface-2);
 }
 .rec-f{display:flex; flex-direction:column; gap: 4px; min-width:0}
-.rec-cap{font-size:9.5px; font-weight: 700; letter-spacing:.02em; color:var(--text-dim);
+.rec-cap{font-size:11px; font-weight: 700; letter-spacing:.02em; color:var(--text-dim);
   text-align:center; overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
 .rec-row input{width:100%; min-width:0; height:36px; padding:0 4px;
   border:1px solid var(--border); border-radius:9px; background:var(--surface-3);
@@ -4389,9 +4422,12 @@ body[dir="rtl"] .picker-row { text-align: right; }
 .link-btn {
   display: inline-flex; align-items: center; gap: 4px; flex-shrink: 0;
   background: none; border: none; cursor: pointer; padding: 6px 2px;
-  color: var(--text-mute); font: inherit; font-size: 13px; font-weight: 700;
+  color: var(--text-mute); font: inherit; font-size: var(--fs-btn-s); font-weight: 700; position: relative;
   appearance: none; -webkit-appearance: none; -webkit-tap-highlight-color: transparent;
 }
+/* An inline text action, 32px tall: it should read as text, so the halo — not
+   the box — reaches 44. */
+.link-btn::after { content: ''; position: absolute; inset: -6px -8px; }
 .link-btn:active { color: var(--text); }
 .link-btn svg { width: 16px; height: 16px; flex-shrink: 0; }
 
@@ -4405,9 +4441,9 @@ body[dir="rtl"] .picker-row { text-align: right; }
 .sleep-detail-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
 .sleep-detail-title { font-size: 13px; font-weight: 700; }
 .sleep-quality { font-size: 11px; font-weight: 700; padding: 3px 9px; border-radius: 999px; }
-.sleep-quality.q-excellent { background: rgba(52, 211, 153, 0.18); color: #34d399; }
-.sleep-quality.q-good { background: rgba(96, 165, 250, 0.18); color: #60a5fa; }
-.sleep-quality.q-fair { background: rgba(251, 191, 36, 0.16); color: #fbbf24; }
+.sleep-quality.q-excellent { background: var(--up-bg); color: var(--up); }
+.sleep-quality.q-good { background: var(--cat-back-bg); color: var(--cat-back); }
+.sleep-quality.q-fair { background: var(--cat-arms-bg); color: var(--cat-arms); }
 .sl-bar { display: flex; height: 12px; border-radius: 999px; overflow: hidden; background: var(--surface-3); }
 .sl-seg { display: block; height: 100%; }
 /* APPLY-vault.md §4 (sleep): orange for deep, mid grey for light, dark grey for
@@ -4611,8 +4647,8 @@ body[dir="rtl"] .picker-row { text-align: right; }
 .weight-spark-svg { width: 64px; height: 28px; display: block; }
 .weight-card-add { flex: 0 0 auto; color: var(--accent-text); display: flex; align-items: center; }
 .weight-delta { font-size: 12px; font-weight: 700; padding: 2px 7px; border-radius: 999px; white-space: nowrap; }
-.weight-delta.up { color: #f87171; background: rgba(248,113,113,.14); }
-.weight-delta.down { color: #34d399; background: rgba(52,211,153,.14); }
+.weight-delta.up { color: var(--down); background: var(--down-bg); }     /* weight up = the red pair */
+.weight-delta.down { color: var(--up); background: var(--up-bg); }
 .weight-delta.flat { color: var(--text-mute); background: var(--surface-3); }
 
 .chart-foot { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: 8px; font-size: 11px; color: var(--text-mute); font-weight: 600; }
@@ -4650,11 +4686,15 @@ body[dir="rtl"] .picker-row { text-align: right; }
 .coach-done { font-size: 15px; font-weight: 700; color: var(--text); text-align: center; padding: 18px 8px; }
 
 /* Floating add button — compact icon-only rounded RECTANGLE (not a circle). */
+/* A child of .app (index.html), NOT of the food view: the view's entrance
+   transform made it the containing block, so the button was laid out against
+   the content and snapped into place 200 ms after every open of Food. */
 .food-fab {
+  display: none;
   position: absolute; inset-inline-start: 16px;
   bottom: calc(var(--nav-h) + var(--safe-b) + 16px);
   width: 68px; height: 60px; border-radius: 20px; z-index: 20;
-  display: inline-flex; align-items: center; justify-content: center;
+  align-items: center; justify-content: center;
   background: var(--accent); color: var(--accent-ink); border: none;
   box-shadow: 0 6px 18px rgba(0, 0, 0, 0.35), 0 0 0 1px rgba(255,255,255,0.06);
   cursor: pointer; appearance: none; -webkit-appearance: none;
@@ -4749,7 +4789,7 @@ body[dir="rtl"] .picker-row { text-align: right; }
   flex: 1 1 auto; white-space: nowrap; padding: 0 14px; border-radius: var(--radius-btn-s); cursor: pointer;
   background: var(--surface-2); border: 1px solid var(--border); color: var(--text-mute);
   font-weight: 700; font-size: var(--fs-btn-s); appearance: none; -webkit-appearance: none;
-  transition: all 0.12s;
+  transition: background-color 0.12s, border-color 0.12s, color 0.12s, transform 0.12s;
   height: var(--btn-h-s);
 }
 .seg-btn.active { background: var(--accent-soft); border-color: var(--accent-line); color: var(--accent-text); }
@@ -4908,12 +4948,13 @@ body[dir="rtl"] .picker-row { text-align: right; }
 }
 
 .unit-option {
-  padding: 12px;
-  border-radius: 11px;
+  height: var(--btn-h-m);
+  padding: 0 12px;
+  border-radius: var(--radius-btn-m);
   font-weight: 700;
   color: var(--text-mute);
-  font-size: 14px;
-  transition: all 0.15s;
+  font-size: var(--fs-btn-m);
+  transition: background-color 0.15s, border-color 0.15s, color 0.15s, transform 0.12s;
 }
 
 .unit-option.active {
@@ -5075,13 +5116,16 @@ body[dir="rtl"] .bento-card.wide .bento-added-stripe { left: 14px; }
   gap: 2px;
 }
 
+/* 45px / r11 → the M size. These are full-width choices in Settings, so they
+   grow rather than take a halo. */
 .lang-option {
-  padding: 12px;
-  border-radius: 11px;
+  height: var(--btn-h-m);
+  padding: 0 12px;
+  border-radius: var(--radius-btn-m);
   font-weight: 700;
   color: var(--text-mute);
-  font-size: 14px;
-  transition: all 0.15s;
+  font-size: var(--fs-btn-m);
+  transition: background-color 0.15s, border-color 0.15s, color 0.15s, transform 0.12s;
 }
 
 .lang-option.active {
@@ -5660,8 +5704,8 @@ body[dir="rtl"] .bento-card.wide .bento-added-stripe { left: 14px; }
 /* Session-day card: feedback on the real tap targets (name → history,
    photo → lightbox) rather than the whole card, which holds the set inputs. */
 .sd-card-name[role="button"] { cursor: pointer; }
-.sd-card-name[role="button"]:hover,
 .sd-card-name[role="button"]:active { color: var(--accent-text); }
+@media (hover: hover) { .sd-card-name[role="button"]:hover { color: var(--accent-text); } }
 .sd-thumb-zoom:active { transform: scale(var(--press-scale)); }
 .sd-card-name[role="button"]:focus-visible,
 .sd-thumb-zoom:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
@@ -5964,6 +6008,7 @@ body[dir="rtl"] .bento-card.wide .bento-added-stripe { left: 14px; }
 
 /* Give the food list room so its last row clears the floating bar */
 .view[data-view="food"] { padding-bottom: 84px; }
+body[data-view="food"] .food-fab { display: inline-flex; }
 
 /* --- Food library picker: catalog shown as small rectangular chips --- */
 .food-lib-search { margin-bottom: 12px; }
@@ -6441,9 +6486,10 @@ body[dir="rtl"] .ntfs-switch.on .ntfs-knob { transform: translateX(-18px); }
    the same reasoning as .bento-add, and now the same token. */
 .ntfs-add {
   display: flex; align-items: center; justify-content: center; gap: 8px;
-  padding: 11px;
+  height: var(--btn-h-m);
+  padding: 0 12px;
   border: 1px dashed var(--accent-line);
-  border-radius: 10px;
+  border-radius: var(--radius-btn-m);
   background: transparent;
   color: var(--text-mute);
   font-family: inherit; font-size: 13px; font-weight: 600;
@@ -6909,9 +6955,9 @@ body.theme-light {
    the only thing on the line, so they can be full-size targets. */
 .sd-reorder-open {
   display: flex; align-items: center; justify-content: center; gap: 8px;
-  width: 100%; min-height: 44px; margin-bottom: var(--sp-3, 12px);
-  padding: 11px 14px;
-  border: 1px solid var(--border); border-radius: var(--radius);
+  width: 100%; height: var(--btn-h-m); margin-bottom: var(--sp-3, 12px);
+  padding: 0 14px;
+  border: 1px solid var(--border); border-radius: var(--radius-btn-m);
   background: none; color: var(--text-mute);
   font-family: inherit; font-size: 14px; font-weight: 600;
   cursor: pointer; -webkit-tap-highlight-color: transparent;
@@ -7193,7 +7239,7 @@ body.theme-light {
   margin-top: 8px;
   align-items: center;
 }
-.ai-note {
+.ai-note-input {
   flex: 1 1 auto;
   min-width: 0;                /* or a long placeholder pushes the button out */
   font-size: 16px;             /* the input floor — never below it, iOS zooms */
@@ -7203,7 +7249,7 @@ body.theme-light {
   background: var(--surface-2);
   color: var(--text);
 }
-.ai-note:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.ai-note-input:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
 .ai-note-go {
   flex: none;
   padding: 10px 16px;
@@ -7402,7 +7448,10 @@ body.theme-light .home-center-icon {
 }
 /* Capsules are for TRANSIENT chips only. Anything that holds STATE gets the
    machined corner. */
-.filter-pill { border-radius: var(--radius-sm); }
+/* S size. It measured 40px / r8 — on neither the height nor the radius scale.
+   The halo carries the 44px target the 36px box gives up. */
+.filter-pill { border-radius: var(--radius-btn-s); }
+.filter-pill::after { content: ''; position: absolute; inset: -4px 0; }
 /* 13px, not --radius-sm: the icon spec fixes the active tab's pill at 13 around
    a 32px box. Written as a literal because no token holds that value, and this
    declaration has to live HERE — the same selector earlier in the file is

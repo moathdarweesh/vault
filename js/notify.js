@@ -234,7 +234,8 @@
       // one prompt the OS grants us with no user gesture behind it is how the
       // permission gets permanently lost. Asking belongs to gate(), which is only
       // ever reached from a tap.
-      const allowed = (await permissionState()) === 'granted';
+      const permState = await permissionState();
+      const allowed = permState === 'granted';
 
       // DECIDE BEFORE DESTROYING. Cancelling first looks harmless — we are about
       // to re-arm anyway — but it is only safe when we know a replacement will
@@ -242,7 +243,10 @@
       // reminders disabled, or a momentary permission loss, would otherwise wipe
       // every live alarm and arm nothing in its place, silently. Bailing out
       // here leaves the previous schedule running, which is the safe failure.
-      if (!allowed && items.length) return { ok: false, reason: 'denied', count: 0 };
+      // 'denied' only when the OS really refused; a never-asked 'prompt' /
+      // 'default' state is reported as such, so callers do not scold the user
+      // for a dialog they have not seen.
+      if (!allowed && items.length) return { ok: false, reason: permState === 'denied' ? 'denied' : 'prompt', count: 0 };
 
       // The SAME rule, for the empty case — which the old guard let through.
       // `if (!allowed && items.length)` only protected a permission loss; an
@@ -276,6 +280,10 @@
       // only needed for genuine orphans — a supplement that was deleted.
       const wanted = new Set(items.map((it) => it.id));
       wanted.add(TEST_ID);   // never sweep away a test the user just fired
+      // ...nor the RUNNING REST's alarm. sync() runs on every foreground, and a
+      // screen woken for a second mid-rest used to cancel the very alarm that
+      // tells you the rest is over once the screen is off again.
+      wanted.add(REST_ALARM_ID);
       const pending = await plugin().getPending();
       const orphans = ((pending && pending.notifications) || []).filter((n) => !wanted.has(n.id));
       if (orphans.length) await plugin().cancel({ notifications: orphans.map((n) => ({ id: n.id })) });

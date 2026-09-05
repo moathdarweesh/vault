@@ -1154,6 +1154,7 @@
       localStorage.removeItem('foodai_cache');
       localStorage.removeItem(CATALOG_CACHE_KEY);
       localStorage.removeItem(LAST_UID_KEY);
+      localStorage.removeItem('vault_ui');   // the pre-paint mirror of prefs — the next account must not inherit this one's frame
       Object.keys(localStorage).forEach((k) => {
         if (/^vault_(synced|linked|dirty|ver|pushing)_/.test(k) || /^vault_img_/.test(k)) localStorage.removeItem(k);
       });

@@ -520,6 +520,10 @@
       return d.getFullYear() + '-' + z(d.getMonth() + 1) + '-' + z(d.getDate());
     };
     const groups = {};  // messageId -> items[]
+    // Row ids carry a per-open stamp: a reply that arrives for a panel the user
+    // has closed used to find the SAME id in the re-opened panel and overwrite
+    // the new question's row with the old answer.
+    const stamp = Date.now().toString(36);
     let n = 0;
 
     openModal(`
@@ -577,7 +581,7 @@
         const run = async () => {
           const text = input.value.trim();
           if (!text) return;
-          const id = 'r' + (++n);
+          const id = 'r' + stamp + '_' + (++n);
           queryText[id] = text;
           const box = document.getElementById('ai-results');
           input.value = '';
@@ -703,7 +707,7 @@
             const file = fileInput.files && fileInput.files[0];
             fileInput.value = '';
             if (!file) return;
-            const id = 'r' + (++n);
+            const id = 'r' + stamp + '_' + (++n);
             const box = document.getElementById('ai-results');
             let qHtml = `<span class="ai-q">${tr('ai_photo')}</span>`;
             let image = null;
@@ -720,7 +724,7 @@
             box.insertAdjacentHTML('beforeend',
               `<div class="ai-pending ai-photo-ask" id="${id}-p">${qHtml}
                  <div class="ai-note-wrap">
-                   <input type="text" class="ai-note" id="${id}-note" placeholder="${esc(tr('ai_photo_note_ph'))}" maxlength="400">
+                   <input type="text" class="ai-note-input" id="${id}-note" placeholder="${esc(tr('ai_photo_note_ph'))}" maxlength="400">
                    <button class="ai-note-go" id="${id}-go">${esc(tr('ai_photo_analyze'))}</button>
                  </div>
                  <div class="ai-note-hint">${esc(tr('ai_photo_note_hint'))}</div>

@@ -12,7 +12,7 @@
 // build. The literal below is the fallback (file://, or a stripped query) and is
 // still bumped by `npm run release` — see CLAUDE.md "CACHE WORKFLOW".
 const VAULT_BUILD = (() => {
-  const FALLBACK = 'v295';
+  const FALLBACK = 'v296';
   try {
     const src = (document.currentScript && document.currentScript.src) || '';
     const m = src.match(/[?&]v=(\d+)/);
@@ -486,6 +486,7 @@ const I18N = {
 
     remind_none: 'No reminders set',
     remind_times: 'Reminder times', remind_add_time: 'Add time',
+    remind_sync_failed: 'Reminders could not be scheduled — check notification permission',
     remind_denied: 'Notifications were not allowed.',
     remind_blocked: 'Notifications are blocked — turn them on in your phone settings.',
 
@@ -976,7 +977,8 @@ const I18N = {
     ai_edit_done: 'Done',
     ai_edited: 'Edited',
     resting: 'Rest',
-    rest_idle: 'Rest starts when you tick ✓',
+    rest_idle: 'Starts when you tick ✓',
+    rest_length: 'Rest between sets',
     rest_minus_15: 'Fifteen seconds less rest',
     rest_plus_15: 'Fifteen seconds more rest',
     rest_over_title: 'Rest over',
@@ -1323,6 +1325,7 @@ const I18N = {
 
     remind_none: 'لا توجد تنبيهات',
     remind_times: 'أوقات التذكير', remind_add_time: 'أضف وقتاً',
+    remind_sync_failed: 'تعذّرت جدولة التذكيرات — راجع إذن الإشعارات',
     remind_denied: 'لم يُسمح بالتنبيهات.',
     remind_blocked: 'التنبيهات محجوبة — فعّلها من إعدادات هاتفك.',
 
@@ -1806,7 +1809,8 @@ const I18N = {
     ai_edit_done: 'تم',
     ai_edited: 'مُعدَّل',
     resting: 'راحة',
-    rest_idle: 'تبدأ الراحة عند تعليم ✓',
+    rest_idle: 'تبدأ عند تعليم ✓',
+    rest_length: 'الراحة بين المجموعات',
     rest_minus_15: 'خمس عشرة ثانية أقل',
     rest_plus_15: 'خمس عشرة ثانية أكثر',
     rest_over_title: 'انتهت الراحة',
@@ -2132,9 +2136,14 @@ function applyLang(lang) {
   document.documentElement.lang = lang;
   document.body.setAttribute('dir', lang === 'ar' ? 'rtl' : 'ltr');
   // Update bottom nav labels (they have data-t)
+  const nav = {};
   document.querySelectorAll('[data-t]').forEach((el) => {
     el.textContent = t(el.dataset.t);
+    nav[el.dataset.t] = el.textContent;
   });
+  // Mirrored beside theme/lang for index.html's pre-paint script, so the next
+  // cold start paints the nav in this language before app.js has loaded.
+  try { DB.prefs.mirrorUi({ nav }); } catch (_) {}
 }
 
 // Switch the UI language and re-render everything that is currently on screen.
@@ -2457,6 +2466,19 @@ function notifHistoryHtml() {
     </button>`;
 }
 
+// Notify.sync() from a SETTINGS change: its {ok:false} used to vanish into an
+// empty catch, so 'saved' could show while the OS schedule stayed on the old
+// times. 'unsupported' (web) and 'empty' (nothing to schedule) are not failures.
+function syncRemindersOrWarn() {
+  try {
+    if (!window.Notify) return;
+    Promise.resolve(Notify.sync()).then((r) => {
+      if (!r || r.ok !== false || r.reason === 'unsupported' || r.reason === 'empty' || r.reason === 'prompt') return;
+      showToast(r.reason === 'denied' ? t('remind_denied') : t('remind_sync_failed'));
+      try { if (window.Cloud && Cloud.reportError) Cloud.reportError('notif', 'sync:' + r.reason, 'notify.js', 0); } catch (_) {}
+    }).catch(() => {});
+  } catch (_) {}
+}
 function renderNotifications(el) {
   const cfg = DB.notif.get();
   const ch = cfg.channels;
@@ -2618,7 +2640,7 @@ function renderNotifications(el) {
   // the page dedicated to notification settings did not.
   const redraw = () => {
     armNotifications();
-    try { if (window.Notify) Notify.sync(); } catch (_) {}
+    syncRemindersOrWarn();
     renderNotifications(el);
   };
 
@@ -3169,6 +3191,9 @@ function openModal(innerHtml, { variant = 'sheet', dismissible = true } = {}) {
   // control walks into the page BEHIND the modal — which is still fully
   // interactive — so a keyboard user can silently operate the obscured screen.
   const FOCUSABLE = 'a[href],button:not([disabled]),input:not([disabled]),select:not([disabled]),textarea:not([disabled]),[tabindex]:not([tabindex="-1"])';
+  // A modal opened over another (chooser → picker) left the previous trap
+  // listening; closeModal removes only the current one.
+  if (__modalKeydown) { document.removeEventListener('keydown', __modalKeydown, true); __modalKeydown = null; }
   __modalKeydown = (e) => {
     if (e.key === 'Escape') {
       // A dialog that must be answered ignores Escape as well as the backdrop.
@@ -3322,9 +3347,18 @@ function navigate(view, context = {}, opts = {}) {
   // Tear down the guided-workout rest timer so it never lingers over other views.
   if (typeof clearRestTimer === 'function') clearRestTimer();
   // Dismiss any lingering toast (e.g. an "Undo set" action toast) — its action
-  // is scoped to the view it was raised from, so leaving cancels it.
+  // is scoped to the view it was raised from, so leaving cancels it. Therefore a
+  // confirmation toast for an action that ends in navigate() must be raised
+  // AFTER the navigate, or it dies here before a frame is painted.
   if (typeof hideToast === 'function') hideToast();
 
+  // The screen being left remembers its scroll offset on its own stack entry;
+  // a Back (fromPop) restores the offset of the entry it returns to, below.
+  // Every return from a detail used to land at the top of the list. This MUST
+  // come before the .active toggle: hiding the outgoing view collapses the
+  // scroller and its scrollTop reads 0 from then on.
+  const mainEl = $('.main');
+  if (!opts.fromPop) { const leaving = navStack[navStack.length - 1]; if (leaving && mainEl) leaving.scrollY = mainEl.scrollTop; }
   $$('.view').forEach((v) => v.classList.toggle('active', v.dataset.view === view));
   // Publish the active view on <body>: .bottom-nav is a SIBLING of <main>, so
   // nothing rooted at .view can select it, and the guided-run screen needs to
@@ -3347,7 +3381,11 @@ function navigate(view, context = {}, opts = {}) {
   $$('.nav-btn').forEach((b) => b.classList.toggle('active', b.dataset.view === highlightView));
 
   renderView(view);
-  $('.main').scrollTop = 0;
+  if (mainEl) {
+    const y = opts.fromPop ? ((navStack[navStack.length - 1] || {}).scrollY || 0) : 0;
+    mainEl.scrollTop = y;
+    if (y) requestAnimationFrame(() => { mainEl.scrollTop = y; });   // once more after images/layout settle
+  }
 
   // Record the step for the back button — unless we got here BY going back.
   if (!opts.fromPop) {
@@ -4612,7 +4650,7 @@ function bentoCardHtml(ex, i, { showPR = true, toggle = null, stats = null } = {
   }
 
   return `
-    <button class="bento-card ${isWide ? 'wide' : ''} ${addedClass}" data-exercise="${escapeHtml(ex.id)}">
+    <button class="bento-card ${isWide ? 'wide' : ''} ${addedClass}${!toggleBtn && prBadge ? ' has-pr' : ''}" data-exercise="${escapeHtml(ex.id)}">
       ${bgHtml}
       <div class="bento-card-name-tag" title="${escapeHtml(exDisplayName(ex))}">${escapeHtml(exDisplayName(ex))}</div>
       ${toggleBtn}
@@ -5695,8 +5733,8 @@ function renderExerciseDetail(el, exerciseId) {
         text: t('delete_exercise_text'),
         onConfirm: () => {
           DB.exercises.remove(exerciseId);
-          showToast(t('exercise_deleted'));
           navigate('workouts');
+          showToast(t('exercise_deleted'));   // after navigate(), which hides any toast it finds
         },
       });
     });
@@ -6442,7 +6480,6 @@ function renderFood(el) {
       </div>
     </div>
     <div id="nutri-host">${nutritionDashboardHtml(date)}</div>
-    <button class="food-fab" id="food-fab" aria-label="${escapeHtml(t('add'))}">${icon('plus', 28)}</button>
   `;
 
   // todayISO() HERE, not the render-time `date`: rows now land on the day they
@@ -6450,7 +6487,17 @@ function renderFood(el) {
   const rerender = () => { const h = $('#nutri-host', el); if (h) h.innerHTML = nutritionDashboardHtml(todayISO()); };
 
   // A single add button: the floating FAB (the top-bar action was a duplicate).
-  $('#food-fab', el)?.addEventListener('click', () => openAddSheet(null, rerender));   // null = today, resolved at log time
+  // The FAB is a child of .app (index.html), outside the fading .view: while
+  // the view carries its entrance transform it is the containing block for
+  // absolute descendants, and the button used to land against the content and
+  // snap into place 200 ms later. onclick, not addEventListener: the node lives
+  // for the whole session and this runs on every render of Food.
+  const fab = document.getElementById('food-fab');
+  if (fab) {
+    fab.innerHTML = icon('plus', 28);
+    fab.setAttribute('aria-label', t('add'));
+    fab.onclick = () => openAddSheet(null, rerender);   // null = today, resolved at log time
+  }
 
   // Arriving from Home's food card with "add" intent — open the sheet straight
   // away, so one tap gets the user to the thing they actually came to do.
@@ -9360,10 +9407,11 @@ function openScheduleModal(tmpl) {
     const trainingDays = dayOrder.filter((d) => training.has(d));
     DB.plan.setRotation({ cycle, trainingDays, anchor: todayISO() });
     closeModal();
-    showToast(t('template_applied'));
     // A single decisive "apply" → save and return to Home, where the new plan
-    // shows on the hero. (Don't strand the user in a sub-screen.)
+    // shows on the hero. (Don't strand the user in a sub-screen.) The toast
+    // comes AFTER the navigate, which hides any toast it finds.
     navigate('home');
+    showToast(t('template_applied'));
   });
 }
 
@@ -10009,6 +10057,13 @@ function renderSessionDay(el) {
 
 // Default rest between sets, in seconds.
 const REST_DEFAULT_SEC = 90;
+// The user's default rest (prefs.restSec), falling back to the constant when the
+// blob predates the setting or carries something unusable.
+function restDefaultSec() {
+  const v = Number(DB.prefs.get().restSec);
+  return Number.isFinite(v) && v >= 15 && v <= 600 ? Math.round(v) : REST_DEFAULT_SEC;
+}
+const fmtRest = (s) => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
 
 // THE REST BAR IS ONE PERSISTENT ELEMENT WITH TWO STATES, ONE HEIGHT.
 //
@@ -10034,8 +10089,36 @@ let __restTimer = null;      // { id, onWake, setIndex }
 let __restBar = null;        // the element, while a guided screen is up
 let __restAudioCtx = null;   // created/unlocked on the "done" tap (a user gesture)
 
+// IDLE = the timer, waiting: the same three-column shape as live (so nothing
+// moves when a rest starts), with the default rest as the figure and ±15 to set
+// it. It used to be a 72px dashed box around one line of hint — which read as an
+// empty placeholder, not as a control.
 function restIdleHtml() {
-  return `<div class="rest-timer-mid"><div class="rest-timer-label">${icon('clock', 16)} ${t('rest_idle')}</div></div>`;
+  return `
+    <button type="button" class="rest-timer-adj num" data-rest-def-minus aria-label="${escapeHtml(t('rest_minus_15'))}">−15</button>
+    <div class="rest-timer-mid">
+      <div class="rest-timer-label">${icon('clock', 16)} ${t('rest_idle')}</div>
+      <div class="rest-timer-count num" aria-label="${escapeHtml(t('rest_length'))}">${fmtRest(restDefaultSec())}</div>
+    </div>
+    <button type="button" class="rest-timer-adj num" data-rest-def-plus aria-label="${escapeHtml(t('rest_plus_15'))}">+15</button>
+  `;
+}
+// One delegated listener on the bar node itself: innerHTML swaps its contents on
+// every idle/live change, the node stays. Only the idle ±15 live here — the live
+// pair is bound by startRestTimer to the running clock.
+function newRestBar(className) {
+  const bar = document.createElement('div');
+  bar.className = className;
+  bar.setAttribute('role', 'timer');
+  bar.innerHTML = restIdleHtml();
+  bar.addEventListener('click', (e) => {
+    const dir = e.target.closest('[data-rest-def-plus]') ? 1 : (e.target.closest('[data-rest-def-minus]') ? -1 : 0);
+    if (!dir || !bar.classList.contains('idle')) return;
+    DB.prefs.setRestSec(restDefaultSec() + dir * 15);
+    const c = bar.querySelector('.rest-timer-count');
+    if (c) c.textContent = fmtRest(restDefaultSec());
+  });
+  return bar;
 }
 
 // The bar, directly before .run-nav as a child of the view. Creates it idle if
@@ -10043,12 +10126,7 @@ function restIdleHtml() {
 function ensureRestBar() {
   const nav = document.querySelector('.view.active .run-nav');
   if (!nav || !nav.parentNode) return null;
-  if (!__restBar) {
-    __restBar = document.createElement('div');
-    __restBar.className = 'rest-timer idle';
-    __restBar.setAttribute('role', 'timer');
-    __restBar.innerHTML = restIdleHtml();
-  }
+  if (!__restBar) __restBar = newRestBar('rest-timer idle');
   __restBar.classList.remove('floating');
   if (__restBar.nextElementSibling !== nav) nav.parentNode.insertBefore(__restBar, nav);
   return __restBar;
@@ -10066,9 +10144,15 @@ function stopRestTimer() {
     try { if (window.Notify && Notify.cancelRestAlarm) Notify.cancelRestAlarm(); } catch (_) {}
   }
   if (__restBar) {
-    __restBar.classList.add('idle');
-    __restBar.classList.remove('live');
-    __restBar.innerHTML = restIdleHtml();
+    if (__restBar.classList.contains('floating')) {
+      // A floating bar exists only to carry a LIVE clock off the guided screen;
+      // idle, it would just hover over some other view. Gone with the clock.
+      __restBar.remove(); __restBar = null;
+    } else {
+      __restBar.classList.add('idle');
+      __restBar.classList.remove('live');
+      __restBar.innerHTML = restIdleHtml();
+    }
   }
   document.body.classList.remove('rest-active');
 }
@@ -10115,7 +10199,7 @@ function startRestTimer(seconds, setIndex, exId, setRef) {
     // Not the guided screen: float, so a live timer is never simply invisible.
     const app = document.querySelector('.app');
     if (!app) return;
-    if (!__restBar) { __restBar = document.createElement('div'); __restBar.setAttribute('role', 'timer'); }
+    if (!__restBar) __restBar = newRestBar('rest-timer floating');
     bar = __restBar;
     bar.className = 'rest-timer floating';
     if (bar.parentNode !== app) app.appendChild(bar);
@@ -10126,7 +10210,7 @@ function startRestTimer(seconds, setIndex, exId, setRef) {
   // tells you the rest is over while the screen is off.
   let endAt = Date.now() + Math.max(1, Math.round(seconds)) * 1000;
   const left = () => Math.max(0, Math.round((endAt - Date.now()) / 1000));
-  const fmt = (s) => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
+  const fmt = fmtRest;
   let remaining = left();
   bar.classList.remove('idle');
   bar.classList.add('live');
@@ -10170,7 +10254,10 @@ function startRestTimer(seconds, setIndex, exId, setRef) {
   const id = setInterval(tick, 250);   // re-derive often so a wake looks instant
   // Recompute the moment the screen comes back, so a rest that expired while the
   // phone was locked reports done immediately instead of on the next tick.
-  const onWake = () => { if (document.visibilityState === 'visible') tick(); };
+  // On wake: recompute, and if the rest is still running RE-ARM the OS alarm —
+  // the foreground path runs Notify.sync(), which sweeps alarms it does not
+  // know (fixed in notify.js too; this is the belt to that brace).
+  const onWake = () => { if (document.visibilityState === 'visible') { tick(); if (__restTimer && remaining > 0) arm(); } };
   document.addEventListener('visibilitychange', onWake);
   __restTimer = { id, onWake, setIndex: (setIndex == null ? -1 : setIndex), exId: exId || null, setRef: setRef || null };
   bar.querySelector('[data-rest-minus]').addEventListener('click', () => {
@@ -10217,13 +10304,21 @@ function renderSessionRun(el) {
   }
   if (!viewContext.runState) viewContext.runState = {};
   if (!viewContext.runView) viewContext.runView = 'run';
+  // EVERY read below goes through runCtx, never viewContext. navigate() swaps
+  // viewContext synchronously, but the blur→setTimeout(0) commit of a half-typed
+  // set (commitOnce) fires AFTER that swap — reading viewContext there found no
+  // runState, threw, and the number never reached the database (a v291
+  // regression: the coalescing defeated the flush that v221 added for exactly
+  // this exit). The object captured here IS the run those listeners belong to,
+  // whatever screen is showing by the time they fire.
+  const runCtx = viewContext;
 
   function convDisplay(kg) {
-    if (viewContext.runUnit === 'lb') return Math.round(kg * KG_TO_LB * 2) / 2;
+    if (runCtx.runUnit === 'lb') return Math.round(kg * KG_TO_LB * 2) / 2;
     return Math.round(kg * 100) / 100;
   }
   function convToKg(value) {
-    if (viewContext.runUnit === 'lb') return Math.round((Number(value) / KG_TO_LB) * 100) / 100;
+    if (runCtx.runUnit === 'lb') return Math.round((Number(value) / KG_TO_LB) * 100) / 100;
     return Number(value);
   }
 
@@ -10233,36 +10328,39 @@ function renderSessionRun(el) {
   // don't touch logs nothing. Re-opening today's already-logged session shows
   // its real values for editing.
   function runInit(exId) {
-    if (viewContext.runState[exId]) return viewContext.runState[exId];
-    const today = DB.sessions.listByExercise(exId).find((s) => s.date === viewContext.runDate);
+    if (runCtx.runState[exId]) return runCtx.runState[exId];
+    const today = DB.sessions.listByExercise(exId).find((s) => s.date === runCtx.runDate);
     const last = DB.sessions.lastForExercise(exId);
     let sets, savedId = null;
     if (today) {
-      // A set that reached the database was done — show it ticked, so coming
-      // back mid-workout shows exactly where you stopped.
-      sets = today.sets.map((s) => ({ reps: s.reps, weight: s.weight, done: true, phReps: s.reps, phWeight: s.weight }));
+      // A set that reached the database is shown ticked UNLESS it was saved
+      // un-ticked (typed, then the field lost focus — the blur commit writes it
+      // so nothing is lost, and records done:false so a resume does not confirm
+      // what you never confirmed). Sets logged by the other paths carry no flag
+      // and count as done.
+      sets = today.sets.map((s) => ({ reps: s.reps, weight: s.weight, done: s.done !== false, phReps: s.reps, phWeight: s.weight }));
       savedId = today.id;
     } else if (last) {
       sets = last.sets.map((s) => ({ reps: '', weight: '', done: false, phReps: s.reps, phWeight: s.weight }));
     } else {
       sets = [{ reps: '', weight: '', done: false, phReps: '', phWeight: '' }];
     }
-    viewContext.runState[exId] = { sets, savedSessionId: savedId };
-    return viewContext.runState[exId];
+    runCtx.runState[exId] = { sets, savedSessionId: savedId };
+    return runCtx.runState[exId];
   }
 
   // Persist one exercise's sets to the DB (add or update by date). Idempotent —
   // called when leaving an exercise and again on the final save, so a workout is
   // never lost if the app is closed mid-session.
   function commitExercise(exId, opts = {}) {
-    const st = viewContext.runState[exId];
+    const st = runCtx.runState[exId];
     if (!st) return false;
     const cleaned = st.sets
-      .map((s) => ({ reps: Number(s.reps) || 0, weight: Number(s.weight) || 0 }))
+      .map((s) => ({ reps: Number(s.reps) || 0, weight: Number(s.weight) || 0, done: !!s.done }))
       .filter((s) => s.reps > 0 || s.weight > 0);
     let existingId = st.savedSessionId;
     if (!existingId) {
-      const existing = DB.sessions.listByExercise(exId).find((s) => s.date === viewContext.runDate);
+      const existing = DB.sessions.listByExercise(exId).find((s) => s.date === runCtx.runDate);
       if (existing) existingId = existing.id;
     }
     if (cleaned.length === 0) {
@@ -10280,7 +10378,7 @@ function renderSessionRun(el) {
     // did, so a PR set here was stored yet never celebrated. Must be taken before
     // the write, or the new set is already inside the "previous" best.
     const prior = DB.sessions.prSnapshot(exId);
-    if (existingId && DB.sessions.update(existingId, { date: viewContext.runDate, sets: cleaned })) {
+    if (existingId && DB.sessions.update(existingId, { date: runCtx.runDate, sets: cleaned })) {
       st.savedSessionId = existingId;
     } else {
       // Tagged 'minimum' when the run inherited a reduced day from the rest-day
@@ -10288,8 +10386,8 @@ function renderSessionRun(el) {
       // reduced workout counts as a full one purely because it was logged
       // through guided mode instead of the cards.
       const created = DB.sessions.add({
-        exerciseId: exId, date: viewContext.runDate, sets: cleaned,
-        kind: viewContext.runMinimum ? 'minimum' : undefined,
+        exerciseId: exId, date: runCtx.runDate, sets: cleaned,
+        kind: runCtx.runMinimum ? 'minimum' : undefined,
       });
       st.savedSessionId = created.id;
     }
@@ -10297,7 +10395,7 @@ function renderSessionRun(el) {
     // (and [data-next] dismisses toasts on the way out). The summary screen shows
     // it once the workout is done.
     try {
-      const msg = checkPR(exId, prior, cleaned, viewContext.runUnit);
+      const msg = checkPR(exId, prior, cleaned, runCtx.runUnit);
       if (msg) st.prMsg = msg;
     } catch (_) {}
     return true;
@@ -10355,7 +10453,7 @@ function renderSessionRun(el) {
     // the first ✓, and without this filter it became hist[0] — so after one
     // set the box read "2-for-2 confirmed, add weight" against today's own
     // numbers, and the advice changed between sets of one workout.
-    const hist = DB.sessions.listByExercise(exId).filter((s) => s.date !== viewContext.runDate);   // sorted date desc
+    const hist = DB.sessions.listByExercise(exId).filter((s) => s.date !== runCtx.runDate);   // sorted date desc
     if (!hist.length) return null;
     const s1 = topSet(hist[0].sets);
     if (!s1) return null;
@@ -10370,7 +10468,7 @@ function renderSessionRun(el) {
     // WORK IN THE UNIT THE BAR IS LOADED IN. Rounding to 2.5 kg plates and
     // then showing lb produced 143.5 lb — a number no bar can be loaded to.
     // In lb: 5-lb steps (10 for legs from 110 lb), rounded to 5-lb plates.
-    const lb = viewContext.runUnit === 'lb';
+    const lb = runCtx.runUnit === 'lb';
     const toU = (kg) => (lb ? kg * KG_TO_LB : kg);
     const fromU = (u) => (lb ? Math.round((u / KG_TO_LB) * 100) / 100 : u);
     const plate = lb ? 5 : 2.5;
@@ -10408,7 +10506,7 @@ function renderSessionRun(el) {
   function runSuggestHtml(exId) {
     const g = runSuggest(exId);
     if (!g) return '';
-    const u = viewContext.runUnit.toUpperCase();
+    const u = runCtx.runUnit.toUpperCase();
     const reason = Object.entries(g.vars).reduce((txt, [k, v]) => txt.replace('{' + k + '}', fmtNum(v)), t(g.key));
     return `
       <button type="button" class="run-suggest" data-sug-w="${g.w}" data-sug-r="${g.r}">
@@ -10421,7 +10519,7 @@ function renderSessionRun(el) {
   function runStatsHtml(exId) {
     // Same rule as runSuggest: the cells describe the PAST. Today's own row
     // made "Last" flip to today's set 1 after the first ✓.
-    const all = DB.sessions.listByExercise(exId).filter((s) => s.date !== viewContext.runDate);
+    const all = DB.sessions.listByExercise(exId).filter((s) => s.date !== runCtx.runDate);
     // Rendered ONLY when there is history — on a first-ever exercise two cells
     // reading "—" are noise (this is what the comment below always promised).
     if (!all.length) return '';
@@ -10436,7 +10534,7 @@ function renderSessionRun(el) {
     // regression that never happened.
     const lastSession = all[0] || null;   // listByExercise is sorted date desc
     const last = lastSession ? topSet(lastSession.sets) : null;
-    const u = viewContext.runUnit.toUpperCase();
+    const u = runCtx.runUnit.toUpperCase();
     // ONE figure, not a stack: weight and reps belong side by side because they
     // describe a single set. This is the SAME shape the Home screen's "last set"
     // card already uses (.last-set-figure at app.js:3716) — "80 KG × 6 reps" —
@@ -10486,7 +10584,7 @@ function renderSessionRun(el) {
   }
 
   // ----- SUMMARY SCREEN -----
-  if (viewContext.runView === 'summary') {
+  if (runCtx.runView === 'summary') {
     let totalSets = 0, totalVolume = 0;
     const rowsHtml = exObjs.map((ex) => {
       const st = runInit(ex.id);
@@ -10505,7 +10603,7 @@ function renderSessionRun(el) {
       return `
         <div class="run-sum-ex">
           <div class="run-sum-name">${escapeHtml(exDisplayName(ex))}</div>
-          <div class="run-sum-sets num">${setsStr} <span class="run-sum-unit">${viewContext.runUnit.toUpperCase()}</span></div>
+          <div class="run-sum-sets num">${setsStr} <span class="run-sum-unit">${runCtx.runUnit.toUpperCase()}</span></div>
           ${pr}
         </div>`;
     }).join('');
@@ -10526,7 +10624,7 @@ function renderSessionRun(el) {
              ${rowsHtml}
              <div class="run-sum-totals">
                <div class="run-sum-total"><span class="run-sum-total-n num">${fmtNum(totalSets)}</span><span class="run-sum-total-l">${t('total_sets')}</span></div>
-               <div class="run-sum-total"><span class="run-sum-total-n num">${fmtNum(Math.round(totalVolume))}</span><span class="run-sum-total-l">${t('total_volume')} (${viewContext.runUnit.toUpperCase()})</span></div>
+               <div class="run-sum-total"><span class="run-sum-total-n num">${fmtNum(Math.round(totalVolume))}</span><span class="run-sum-total-l">${t('total_volume')} (${runCtx.runUnit.toUpperCase()})</span></div>
              </div>
            </div>`
       }
@@ -10534,7 +10632,7 @@ function renderSessionRun(el) {
     `;
 
     $('[data-run-back]', el)?.addEventListener('click', () => {
-      viewContext.runView = 'run';
+      runCtx.runView = 'run';
       renderSessionRun(el);
     });
     $('[data-run-save]', el)?.addEventListener('click', () => {
@@ -10550,16 +10648,16 @@ function renderSessionRun(el) {
       navStack.forEach((entry) => {
         if (entry.view === 'session-day' && entry.context) entry.context.sdState = {};
       });
-      showToast(t('session_saved'));
-      maybeAskNotifPermission();
       if (!goBack()) navigate('session-day', { dow });
+      showToast(t('session_saved'));   // after the navigate, which hides any toast it finds
+      maybeAskNotifPermission();
     });
     return;
   }
 
   // ----- RUN SCREEN (current exercise) -----
-  const idx = Math.min(viewContext.runIdx, totalEx - 1);
-  viewContext.runIdx = idx;
+  const idx = Math.min(runCtx.runIdx, totalEx - 1);
+  runCtx.runIdx = idx;
   const ex = exObjs[idx];
   const st = runInit(ex.id);
   const isLast = idx === totalEx - 1;
@@ -10587,7 +10685,7 @@ function renderSessionRun(el) {
         <button type="button" class="run-set-del${st.sets.length > 1 ? '' : ' is-hidden'}" data-del-set aria-label="${escapeHtml(t('delete'))}"${st.sets.length > 1 ? '' : ' tabindex="-1" aria-hidden="true"'}>${icon('trash', 16)}</button>
         <div class="run-set-n num">${i + 1}</div>
         <input type="number" inputmode="numeric" step="1" min="0" placeholder="${numAttr(phReps)}" value="${numAttr(repsVal)}" data-field="reps" aria-label="${escapeHtml(t('reps'))}">
-        <input type="number" inputmode="decimal" step="0.5" min="0" placeholder="${numAttr(phW)}" value="${numAttr(wDisplay)}" data-field="weight" aria-label="${escapeHtml(viewContext.runUnit)}">
+        <input type="number" inputmode="decimal" step="0.5" min="0" placeholder="${numAttr(phW)}" value="${numAttr(wDisplay)}" data-field="weight" aria-label="${escapeHtml(runCtx.runUnit)}">
         <button type="button" class="run-set-done${s.done ? ' done' : ''}" data-done aria-label="${escapeHtml(t('mark_set_done'))}" aria-pressed="${!!s.done}">${icon('check', 20)}</button>
       </div>`;
   }).join('');
@@ -10614,7 +10712,7 @@ function renderSessionRun(el) {
       <div></div>
       <div>${t('set_n')}</div>
       <div>${t('reps')}</div>
-      <div>${viewContext.runUnit.toUpperCase()}</div>
+      <div>${runCtx.runUnit.toUpperCase()}</div>
       <div class="run-head-done">${t('done_col')}</div>
     </div>
     <div class="run-sets">${setsRows}</div>
@@ -10747,7 +10845,7 @@ function renderSessionRun(el) {
         // Refuse it visibly and leave the row untouched.
         if (!(Number(set.reps) > 0 || Number(set.weight) > 0)) { showToast(t('add_at_least_one')); return; }
         set.done = true;
-        startRestTimer(REST_DEFAULT_SEC, i, ex.id, set);
+        startRestTimer(restDefaultSec(), i, ex.id, set);
       } else {
         set.done = false;
         // Only the set that STARTED the rest may end it by being un-ticked.
@@ -10805,7 +10903,7 @@ function renderSessionRun(el) {
     // Keep the rest timer running when moving between exercises (it lives on
     // .app and survives the re-render) — the user asked for it not to reset.
     commitExercise(ex.id);
-    viewContext.runIdx = idx - 1;
+    runCtx.runIdx = idx - 1;
     renderSessionRun(el);
   });
 
@@ -10816,9 +10914,9 @@ function renderSessionRun(el) {
     commitExercise(ex.id);
     if (isLast) {
       clearRestTimer();
-      viewContext.runView = 'summary';
+      runCtx.runView = 'summary';
     } else {
-      viewContext.runIdx = idx + 1;
+      runCtx.runIdx = idx + 1;
     }
     renderSessionRun(el);
   });
@@ -11374,7 +11472,7 @@ function openSupplementModal(id = null) {
     try { DB.notif.syncSuppDoses(suppId, name, times); } catch (_) {}
     // Times changed → the alarm set is stale. No-op off-native.
     try { armNotifications(); } catch (_) {}
-    try { if (window.Notify) Notify.sync(); } catch (_) {}
+    syncRemindersOrWarn();
     closeModal();
     renderView(currentView);
   });
@@ -11391,7 +11489,7 @@ function openSupplementModal(id = null) {
           // exactly what sync()'s full-replace exists to prevent.
           try { DB.notif.syncSuppDoses(existing.id, '', []); } catch (_) {}
           try { armNotifications(); } catch (_) {}
-          try { if (window.Notify) Notify.sync(); } catch (_) {}
+          syncRemindersOrWarn();
           closeModal();
           showToast(t('deleted'));
           renderView(currentView);
@@ -11612,7 +11710,7 @@ function refreshAfterSync() {
   // else re-arms them: the boot sync runs on a 1.5s timer that can fire before
   // the pull lands, so without this a phone can sit on a schedule the user
   // changed on their other device — or on none at all.
-  try { if (window.Notify) Notify.sync(); } catch (_) {}
+  try { if (window.Notify) Notify.sync(); } catch (_) {}   // silent: a pull is not a settings change
 }
 
 function hideAuthGate() {
@@ -11698,6 +11796,9 @@ function showAuthGate(mode) {
   const submit = document.getElementById('auth-submit');
 
   const run = async () => {
+    // Enter on the password field calls run() directly, around the disabled
+    // button: a keyboard bounce sent two sign-ins and two afterLogin()s.
+    if (submit.disabled) return;
     const email = (document.getElementById('auth-email').value || '').trim();
     const pw = document.getElementById('auth-password').value || '';
     if (!email || !pw) { err(t('auth_err_fields')); return; }
@@ -12613,7 +12714,17 @@ function setupKeyboardHandling() {
     const el = e.target;
     if (!el || !el.matches || !el.matches('input, textarea, [contenteditable="true"]')) return;
     setTimeout(() => {
-      try { el.scrollIntoView({ block: 'center', behavior: 'smooth' }); } catch (_) {}
+      try {
+        // Only when the field is really out of view (under the keyboard or off
+        // screen). 'center' scrolled EVERY tap into a visible set row by about
+        // one row, so the guided screen glided under the thumb between sets.
+        const r = el.getBoundingClientRect();
+        const vv = window.visualViewport;
+        const top = (vv && vv.offsetTop) || 0;
+        const vh = (vv && vv.height) || window.innerHeight;
+        if (r.top >= top + 8 && r.bottom <= top + vh - 8) return;
+        el.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+      } catch (_) {}
     }, 320);
   });
 }
