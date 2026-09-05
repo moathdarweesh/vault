@@ -1391,9 +1391,10 @@ body[dir="rtl"] .bento-card-content { text-align: right; }
   inset-inline-end: 8px;
   max-width: calc(100% - 56px);
   padding: 5px 10px;
-  background: rgba(var(--scrim-rgb), 0.78);
-  backdrop-filter: blur(10px);
-  -webkit-backdrop-filter: blur(10px);
+  /* 0.86 and NO backdrop blur. It was 0.78 + blur(10px): one compositor blur
+     layer per card on a scrolling grid (74 on the exercises page), for an
+     effect the near-opaque scrim hid anyway. The nav keeps its blur — one layer. */
+  background: rgba(var(--scrim-rgb), 0.86);
   border: 1px solid rgba(255, 255, 255, 0.14);
   border-radius: 8px;
   font-size: 12px;
@@ -5004,9 +5005,7 @@ body[dir="rtl"] .picker-row { text-align: right; }
   width: 34px;
   height: 34px;
   border-radius: 50%;
-  background: var(--overlay);
-  backdrop-filter: blur(8px);
-  -webkit-backdrop-filter: blur(8px);
+  background: var(--overlay);   /* no backdrop blur: one layer per card in the picker grid */
   border: 1px solid var(--border-hi);
   color: #fff;
   display: flex;

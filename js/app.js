@@ -12,7 +12,7 @@
 // build. The literal below is the fallback (file://, or a stripped query) and is
 // still bumped by `npm run release` — see CLAUDE.md "CACHE WORKFLOW".
 const VAULT_BUILD = (() => {
-  const FALLBACK = 'v296';
+  const FALLBACK = 'v297';
   try {
     const src = (document.currentScript && document.currentScript.src) || '';
     const m = src.match(/[?&]v=(\d+)/);
@@ -3344,8 +3344,11 @@ function navigate(view, context = {}, opts = {}) {
   // The food add-sheet lives on `.app` (not #modal-root) — clear it too so it
   // never lingers over another view after a nav.
   document.getElementById('add-sheet-overlay')?.remove();
-  // Tear down the guided-workout rest timer so it never lingers over other views.
-  if (typeof clearRestTimer === 'function') clearRestTimer();
+  // A LIVE rest follows you: the bar floats over whatever screen comes next and
+  // slots back above Prev/Next when you return (ensureRestBar). An idle bar has
+  // nothing to carry and is dropped. It used to be torn down either way — log a
+  // shake on the Food tab mid-rest and the countdown was simply gone.
+  if (typeof parkRestBar === 'function') parkRestBar();
   // Dismiss any lingering toast (e.g. an "Undo set" action toast) — its action
   // is scoped to the view it was raised from, so leaving cancels it. Therefore a
   // confirmation toast for an action that ends in navigate() must be raised
@@ -10162,6 +10165,16 @@ function clearRestTimer() {
   if (__restBar) { __restBar.remove(); __restBar = null; }
   document.querySelector('.rest-timer')?.remove();
 }
+// Leaving the guided screen with a rest RUNNING: keep the clock, float the bar
+// (fixed above the nav, z 60) until the run screen takes it back or the rest
+// ends — stopRestTimer removes a floating bar rather than leaving it idle.
+function parkRestBar() {
+  if (!__restTimer || !__restBar) { clearRestTimer(); return; }
+  const app = document.querySelector('.app');
+  if (!app) { clearRestTimer(); return; }
+  __restBar.classList.add('floating');
+  if (__restBar.parentNode !== app) app.appendChild(__restBar);
+}
 // A short two-tone beep (a simple alarm — not music) when the rest ends. Uses
 // the AudioContext unlocked during the "done" tap, so mobile autoplay policy
 // doesn't mute it. Android suspends the context while the app is hidden, so
@@ -10345,6 +10358,10 @@ function renderSessionRun(el) {
     } else {
       sets = [{ reps: '', weight: '', done: false, phReps: '', phWeight: '' }];
     }
+    // A rest that is still running from BEFORE this (re-)entry points at a set
+    // object that no longer exists; re-point it at its successor so un-ticking
+    // that set still ends the rest (the check is by identity, on purpose).
+    if (__restTimer && __restTimer.exId === exId && !sets.includes(__restTimer.setRef)) __restTimer.setRef = sets[__restTimer.setIndex] || null;
     runCtx.runState[exId] = { sets, savedSessionId: savedId };
     return runCtx.runState[exId];
   }
