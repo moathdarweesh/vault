@@ -75,7 +75,7 @@ a faster TTFB — not fewer bytes.
 npm run release          # bump every marker + verify, then commit all files together
 ```
 
-**Current version: v298.** APK: build 18 / v2.7.
+**Current version: v298.** APK: build 19 / v2.8.
 
 `scripts/release.js` rewrites **every** marker and then re-reads them from disk to confirm; it exits non-zero if any disagree, and prints the count per file (derived, never hard-coded — the docs used to say 16 while the real count was 15). The markers are `?v=N` in `index.html` (every script and stylesheet, the `js/vendor/supabase.js` preload, both `icons/icon.svg` links, `manifest.json`), the `__cleaned_vN` sessionStorage key, the `FALLBACK` literal in `app.js`, `version.json` → `web`, the `?v=` in `manifest.json`, `admin.html`, `privacy.html` and `get/index.html`, and the `Current version` line in this file. `scripts/check-contracts.js` (pre-commit) refuses a commit where any of them disagree.
 

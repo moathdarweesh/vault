@@ -2,10 +2,10 @@
   "_comment": "Update manifest. `web` is the latest web build — it MUST equal the ?v=N in index.html on every release (scripts/release.js writes both); js/update.js reads it fresh (no-store) and reloads the entry html so web/CSS/JS updates reach all devices without a reinstall. `apk` only triggers the in-app download banner when apk.build here is GREATER than the versionCode installed on the device. To release a NEW APK: bump android/app/build.gradle versionCode + versionName, `npm run sync`, build, commit the APK to download/THE-VAULT.apk, then set apk.build/apk.version here to the same numbers (scripts/check-contracts.js refuses a mismatch) and push.",
   "web": 298,
   "apk": {
-    "build": 18,
-    "version": "2.7",
+    "build": 19,
+    "version": "2.8",
     "url": "https://raw.githubusercontent.com/moathdarweesh/vault/main/download/THE-VAULT.apk",
-    "notes_ar": "ضبط شريط الحالة نهائياً: البناء السابق كان يحسب الهامش العلوي مرتين فيتضخّم الشريط. الآن كابستور وحده يتولّى الهوامش، ولون أيقونات الشريط صار يتبع ثيم التطبيق لا وضع الهاتف — وهذا سبب اختفائه أصلاً على الأجهزة المضبوطة على الوضع الفاتح.",
-    "notes_en": "Status bar settled: the previous build paid the top inset twice, which is why the strip looked oversized. Capacitor now owns insets alone, and the bar icon colour follows VAULT theme rather than the phone night mode — which is why it vanished on phones set to light mode."
+    "notes_ar": "الحدّ الأدنى لإصدار WebView صار ٨٠: الهاتف الذي كان يفتح التطبيق على شاشة فارغة بسبب WebView قديم يرى الآن رسالة تحديث واضحة بدل الفراغ. لا تغيير آخر في القشرة — كل التحديثات تصلك عبر الرابط الحيّ كما هي.",
+    "notes_en": "Minimum WebView is now 80: a phone that opened the app to a blank screen because of an old WebView now sees a clear update prompt instead. Nothing else changed in the shell — every update still reaches you through the live URL."
   }
 }
