@@ -7,7 +7,8 @@
  *   npm run release --check  -> verify only, change nothing (used by the git hook)
  *
  * WHY THIS EXISTS
- * The version lives in 12 places across 4 files. Miss one and the release fails
+ * The version lives in every MARKERS entry below (eight files at last count —
+ * the count is derived and printed, never trusted). Miss one and the release fails
  * SILENTLY in one of two directions (CLAUDE.md "CACHE WORKFLOW"):
  *   - version.json.web left behind  -> js/update.js never reloads devices, so a
  *     shipped fix degrades to "whenever the 10-minute GitHub Pages cache expires".
@@ -37,6 +38,14 @@ const MARKERS = [
   // fallback (file://, stripped query) and must still track the release.
   ['js/app.js',   /const FALLBACK = 'v(\d+)'/g, (n) => `const FALLBACK = 'v${n}'`],
   ['version.json', /"web":\s*(\d+)/g,           (n) => `"web": ${n}`],
+  // Every other page and asset that cache-busts by ?v=N — they used to sit at
+  // whatever number they were written with (privacy.html at 219, get/ at 215).
+  ['manifest.json', /\?v=(\d+)/g,               (n) => `?v=${n}`],
+  ['admin.html',    /\?v=(\d+)/g,               (n) => `?v=${n}`],
+  ['privacy.html',  /\?v=(\d+)/g,               (n) => `?v=${n}`],
+  ['get/index.html', /\?v=(\d+)/g,              (n) => `?v=${n}`],
+  // The doc every session reads first said the previous version on every release.
+  ['CLAUDE.md',     /Current version: v(\d+)/g,   (n) => `Current version: v${n}`],
 ];
 
 function read(f) { return fs.readFileSync(p(f), 'utf8'); }
@@ -66,6 +75,10 @@ function check(expected) {
   const target = expected != null ? expected : found[0].value;
   const bad = found.filter((f) => f.value !== target);
   const counts = found.reduce((a, f) => (a[f.file] = (a[f.file] || 0) + 1, a), {});
+  // A MARKERS entry that matches NOTHING is the quiet failure: the line was
+  // reworded, the marker is gone, and the file stays at the old version forever.
+  const silent = MARKERS.filter(([file, re]) => !new RegExp(re.source, re.flags).test(read(file))).map(([file, re]) => `${file} ${re}`);
+  if (silent.length) { console.error('release: NO MARKER FOUND for ' + silent.join(', ') + ' — reworded, or the regex is stale.'); return false; }
   if (bad.length) {
     console.error(`release: MARKER MISMATCH — expected v${target}`);
     for (const b of bad) console.error(`   ${b.file}: found "${b.text}"`);
@@ -97,7 +110,8 @@ function main() {
   // Re-read from disk and confirm — a write that silently matched nothing is the
   // whole failure mode this script exists to prevent.
   if (!check(next)) { console.error('release: post-write verification FAILED.'); process.exit(1); }
-  console.log(`release: v${cur} -> v${next}. Remember to commit all 4 files together.`);
+  const files = [...new Set(MARKERS.map((m) => m[0]))];
+  console.log(`release: v${cur} -> v${next}. Remember to commit all ${files.length} files together (${files.join(', ')}).`);
 }
 
 main();

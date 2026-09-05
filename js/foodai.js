@@ -22,22 +22,30 @@
   // not prose): 'unauthorized' → sign-in hint, 'too large' → too large, and
   // everything else it emits → the generic AI error. Exported on FoodAI so the
   // voice panel in app.js can use it instead of printing e.message raw.
+  // THE WORKER'S ERROR VOCABULARY, as the client understands it. Compared on
+  // every commit against every `error: '…'` the Worker can return
+  // (scripts/check-contracts.js), after lower-casing and turning '_' into ' ' —
+  // the Worker says both 'rate limited' and 'rate_limited', and the second used
+  // to reach the screen raw.
+  const WORKER_ERR_RE = /^(unauthorized|rate limited|image too large|audio too large|too large|service unavailable|server misconfigured|upstream|no result|parse error|method not allowed|no input|http \d+)/;
   function friendlyErr(e) {
-    const m = (e && e.message) || '';
+    const raw = (e && e.message) || '';
+    const m = raw.toLowerCase().replace(/_/g, ' ');
     if ((e && e.name === 'TypeError') || /failed to fetch|load failed|networkerror|network request/i.test(m)) {
       return tr('auth_err_network');
     }
-    if (/^unauthorized$/i.test(m)) return tr('ai_err_signin');
-    if (/too large/i.test(m)) return tr('ai_err_too_large');
-    if (/^(service unavailable|server misconfigured|upstream|no result|parse error|rate limited|method not allowed|no input|HTTP \d+)/i.test(m)) return tr('ai_error');
-    return m || tr('ai_error');
+    if (/^unauthorized$/.test(m)) return tr('ai_err_signin');
+    if (/too large/.test(m)) return tr('ai_err_too_large');
+    if (/^rate limited/.test(m)) return tr('ai_err_busy');
+    if (WORKER_ERR_RE.test(m)) return tr('ai_error');
+    return raw || tr('ai_error');
   }
 
   // ---- result cache --------------------------------------------------------
   // The model RE-ESTIMATES on every call, so the same meal can come back with
   // slightly different numbers. We cache by normalized text so an identical
   // message always returns the SAME macros (and skips a network call).
-  const CACHE_STORE = 'foodai_cache';
+  const CACHE_STORE = VAULT_KEYS.foodaiCache;
   const normKey = (text) =>
     String(text)
       .trim()

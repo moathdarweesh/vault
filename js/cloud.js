@@ -6,6 +6,38 @@
 // SETUP: create a free Supabase project, run backend/migrations/01_supabase-setup.sql, then
 // paste your Project URL + anon key below. The anon key is PUBLIC and safe to
 // ship — RLS makes sure each user only ever touches their own row.
+// ONE REGISTRY for every localStorage key this app owns. cloud.js is the first
+// script, so every later file reads VAULT_KEYS instead of spelling a key; the
+// pre-commit contract check (scripts/check-contracts.js) refuses a literal copy
+// anywhere else. Prefix keys (ending in '_') take an id or a uid after them.
+// The two inline scripts in index.html run BEFORE this file and must spell the
+// `ui` key themselves — the check compares that one literal against `ui`.
+window.VAULT_KEYS = Object.freeze({
+  store: 'gym_tracker_v1',                 // the whole app state, one JSON blob
+  corrupt: 'gym_tracker_v1__corrupt',      // an unparseable blob, kept for rescue
+  img: 'vault_img_',                       // + exerciseId → photo data URL (side store)
+  imgAt: 'vault_img_at_',                  // + exerciseId → the photo's stamp
+  ui: 'vault_ui',                          // pre-paint mirror of prefs (theme, lang, nav labels)
+  lastUid: 'vault_last_uid',
+  recovery: 'vault_pre_sync_backup',       // the rescue copy taken before an overwrite
+  recoveryFailed: 'vault_pre_sync_backup_failed',
+  catalog: 'vault_catalog_cache',
+  foodaiCache: 'foodai_cache',
+  announcement: 'vault_announcement_dismissed',
+  reminderSeen: 'vault_reminder_seen',
+  hcPrompted: 'hc_prompted',
+  pushing: 'vault_pushing_',               // + uid — the four per-account sync stamps
+  synced: 'vault_synced_',
+  linked: 'vault_linked_',
+  dirty: 'vault_dirty_',
+  ver: 'vault_ver_',
+  notifDay: 'vault.notif.day.v1',          // DB.notif — the reminder side store (per device, per account)
+  notifLog: 'vault.notif.log.v1',
+  notifArmed: 'vault.notif.armed.v1',
+  unitSeeded: 'vault_default_unit_seeded_v1',
+  updateDismissed: 'vault_update_dismissed_build',   // js/update.js — per DEVICE, deliberately not swept on logout
+  webReloadGuard: 'vault_wr_',                        // js/update.js — sessionStorage, + target build: one auto-reload per session per target
+});
 (function () {
   'use strict';
 
@@ -13,7 +45,7 @@
   const SUPABASE_URL = 'https://ilmusnuchqlpirywonzx.supabase.co';
   const SUPABASE_ANON_KEY = 'sb_publishable_ZBR2VENMP2O_K2YTMePCsw_NfLC9FSI';
   const TABLE = 'vault_data';
-  const STORE_KEY = 'gym_tracker_v1'; // must match storage.js STORAGE_KEY
+  const STORE_KEY = VAULT_KEYS.store;
 
   const configured = () =>
     /^https:\/\/.+\.supabase\.co/.test(SUPABASE_URL) && SUPABASE_ANON_KEY.length > 30;
@@ -69,15 +101,15 @@
   // Validate a parsed blob before writing it to localStorage.
   // Mirrors DB._validateBlob — only requires keys that must exist; optional
   // arrays are checked only when present so old backups still apply cleanly.
+  // The blob has ONE definition of well-formed, and it lives with the blob's
+  // owner: DB._validateBlob in storage.js. This used to be a second copy that
+  // had drifted (it checked mealBundles/recipes; the import path did not), so a
+  // file could import and then fail to sync. storage.js loads after this file
+  // but before anything can call validateBlob, so delegating is safe; the
+  // fallback only exists so a truly broken boot fails closed, not open.
   function validateBlob(data) {
-    if (!data || typeof data !== 'object' || Array.isArray(data)) return false;
-    if (!Array.isArray(data.exercises)) return false;
-    if ('sessions' in data && !Array.isArray(data.sessions)) return false;
-    if ('cardio' in data && !Array.isArray(data.cardio)) return false;
-    if ('supplements' in data && !Array.isArray(data.supplements)) return false;
-    if ('mealBundles' in data && !Array.isArray(data.mealBundles)) return false;
-    if ('recipes' in data && !Array.isArray(data.recipes)) return false;
-    return true;
+    if (typeof DB !== 'undefined' && DB._validateBlob) return DB._validateBlob(data);
+    return false;
   }
 
   function importRaw(raw) {
@@ -106,46 +138,11 @@
   // content: logged sessions/cardio/sleep, foods, food/supplement logs, own
   // supplements, or a custom exercise. Used both to detect a real local store
   // AND to protect a data-ful cloud backup from being overwritten by an empty one.
-  function _notifHasUserContent(n) {
-    try {
-      if (!n || !n.channels) return false;
-      const c = n.channels;
-      return !!((c.supps && Array.isArray(c.supps.doses) && c.supps.doses.length) ||
-                (c.food && Array.isArray(c.food.meals) && c.food.meals.length));
-    } catch (_) { return false; }
-  }
-  function blobHasUserData(b) {
-    try {
-      if (!b || typeof b !== 'object') return false;
-      return !!(
-        (b.sessions && b.sessions.length) || (b.cardio && b.cardio.length) ||
-        (b.sleep && b.sleep.length) || (b.foods && b.foods.length) ||
-        (b.foodLogs && Object.keys(b.foodLogs).length) ||
-        (b.supplements && b.supplements.length) ||
-        (b.supplementLogs && Object.keys(b.supplementLogs).length) ||
-        (b.exercises && b.exercises.some((e) => e && e.isCustom)) ||
-        // Standalone tracking that isn't sessions/food — a device whose ONLY
-        // content is these must NOT be treated as "empty" (else its plan / weight
-        // / water / nutrition goal gets silently overwritten on first login and
-        // never syncs up). Matches the new Weight/Water features.
-        (b.bodyweight && b.bodyweight.length) ||
-        (b.water && Object.keys(b.water).length) ||
-        (b.cardioTypes && b.cardioTypes.length) ||
-        (b.plan && Array.isArray(b.plan.cycle) && b.plan.cycle.length) ||
-        (b.nutrition && b.nutrition.targets && b.nutrition.targets.calories) ||
-        // Recipes, meal bundles and a configured notification setup are user
-        // work too. A second device whose ONLY content was these read as
-        // "empty": pulled over without a snapshot, and refused a push.
-        (b.recipes && b.recipes.length) ||
-        (b.mealBundles && b.mealBundles.length) ||
-        // notif counts ONLY for content the user typed (supplement doses, meal
-        // times). The object itself is written into every blob at boot by
-        // migrateFromReminders(), so counting its mere presence made a fresh
-        // install read as "has data" and defeated every empty-device guard.
-        _notifHasUserContent(b.notif)
-      );
-    } catch (_) { return false; }
-  }
+  // Both live in storage.js now (DB._notifHasUserContent / DB.hasUserData): the
+  // blob's owner decides what counts as user data, and the two other places
+  // that had re-typed this list (seedDefaultUnitIfNew, and this file) ask it.
+  function _notifHasUserContent(n) { return (typeof DB !== 'undefined' && DB._notifHasUserContent) ? DB._notifHasUserContent(n) : false; }
+  function blobHasUserData(b) { return (typeof DB !== 'undefined' && DB.hasUserData) ? DB.hasUserData(b) : false; }
   // Does local hold real user data (vs a fresh/empty install)?
   function localHasData() {
     try { return blobHasUserData(JSON.parse(exportRaw() || '{}')); } catch (_) { return false; }
@@ -209,9 +206,9 @@
   }
 
   // ---- per-device sync state (persisted so it survives app restarts) -------
-  const stampKey = (uid) => 'vault_synced_' + uid;
-  const linkedKey = (uid) => 'vault_linked_' + uid;
-  const dirtyKey = (uid) => 'vault_dirty_' + uid; // local edits not yet pushed
+  const stampKey = (uid) => VAULT_KEYS.synced + uid;
+  const linkedKey = (uid) => VAULT_KEYS.linked + uid;
+  const dirtyKey = (uid) => VAULT_KEYS.dirty + uid; // local edits not yet pushed
   const getStamp = (uid) => { try { return localStorage.getItem(stampKey(uid)) || ''; } catch (_) { return ''; } };
   const setStamp = (uid, iso) => { try { localStorage.setItem(stampKey(uid), iso || ''); } catch (_) {} };
   // WHY DID THIS DEVICE SAY 'CONFLICT'? The dialog is a real question, but when
@@ -239,7 +236,7 @@
   // "dirty" EVEN when getSession() is momentarily null (SDK still loading on boot,
   // or an offline-expired token). Without this a workout logged in that window was
   // never marked dirty and got silently overwritten by the next bootSync pull.
-  const LAST_UID_KEY = 'vault_last_uid';
+  const LAST_UID_KEY = VAULT_KEYS.lastUid;
   const setLastUid = (uid) => { try { if (uid) localStorage.setItem(LAST_UID_KEY, uid); } catch (_) {} };
   const getLastUid = () => { try { return localStorage.getItem(LAST_UID_KEY) || ''; } catch (_) { return ''; } };
   const markLinked = (uid) => { try { localStorage.setItem(linkedKey(uid), '1'); setLastUid(uid); } catch (_) {} };
@@ -249,7 +246,7 @@
   // set once the server actually returns a numeric version (i.e. after the
   // vault-data-version.sql migration); until then it stays null and push() falls
   // back to the previous last-writer-wins upsert.
-  const verKey = (uid) => 'vault_ver_' + uid;
+  const verKey = (uid) => VAULT_KEYS.ver + uid;
   const getVersion = (uid) => { try { const v = localStorage.getItem(verKey(uid)); return v == null ? null : Number(v); } catch (_) { return null; } };
   const setVersion = (uid, v) => { try { if (typeof v === 'number' && isFinite(v)) localStorage.setItem(verKey(uid), String(v)); } catch (_) {} };
 
@@ -264,8 +261,8 @@
   // ONE slot on purpose: this is an undo for the overwrite that just happened,
   // not a backup history. Keeping several would multiply a 40 KB blob against
   // the same localStorage quota whose exhaustion is itself a data-loss path.
-  const RECOVERY_KEY = 'vault_pre_sync_backup';
-  const RECOVERY_FAILED_KEY = 'vault_pre_sync_backup_failed';
+  const RECOVERY_KEY = VAULT_KEYS.recovery;
+  const RECOVERY_FAILED_KEY = VAULT_KEYS.recoveryFailed;
   // Keep `raw` (a whole-blob JSON string) as the one rescue slot.
   //
   // WITHOUT the base64 of images the bucket already holds: the snapshot is a
@@ -365,8 +362,8 @@
   // Compare two ISO timestamps by real time, NOT string order — Supabase returns
   // `+00:00` microsecond timestamps while the client writes `...Z` ms timestamps,
   // so a lexicographic `>` would be wrong. Returns true if `a` is strictly newer.
-  function getPushing(uid) { try { return localStorage.getItem('vault_pushing_' + uid) || ''; } catch (_) { return ''; } }
-  function clearPushing(uid) { try { localStorage.removeItem('vault_pushing_' + uid); } catch (_) {} }
+  function getPushing(uid) { try { return localStorage.getItem(VAULT_KEYS.pushing + uid) || ''; } catch (_) { return ''; } }
+  function clearPushing(uid) { try { localStorage.removeItem(VAULT_KEYS.pushing + uid); } catch (_) {} }
   // Same instant, allowing for Supabase's microsecond '+00:00' form against the
   // client's millisecond 'Z' form.
   function sameInstant(a, b) {
@@ -523,7 +520,7 @@
     // dirty" and called it a conflict — against this device's own push — and
     // "keep account data" then discarded whatever was logged offline since.
     // bootSyncCore recognises this stamp and adopts the row instead.
-    try { localStorage.setItem('vault_pushing_' + uid, iso); } catch (_) {}
+    try { localStorage.setItem(VAULT_KEYS.pushing + uid, iso); } catch (_) {}
     // OPTIMISTIC CONCURRENCY: when we know the base version, write CONDITIONALLY on
     // the row still being at it (atomic integer compare — no timestamp-format
     // fragility). A real conflict (another device advanced the row) is DETECTED and
@@ -539,7 +536,7 @@
         if (!updErr) {
           if (updated && updated.length) {
             if (typeof updated[0].version === 'number') setVersion(uid, updated[0].version);
-            setStamp(uid, iso); clearDirtyIfUnchanged(uid, raw); clearPushing(uid); return 'ok';
+            setStamp(uid, iso); clearDirtyIfUnchanged(uid, raw); clearPushing(uid); markLinked(uid); return 'ok';   // a push that landed links the device
           }
           // 0 rows matched: the remote moved ahead (conflict) or the row is gone.
           const { data: cur, error: curErr } = await c.from(TABLE)
@@ -816,7 +813,16 @@
   //   - remote newer & no local edits  → pull
   //   - remote newer & local edits too  → conflict (let the user choose)
   //   - otherwise                       → push our local up
-  async function bootSyncCore() {
+  // ONE sync at a time. bootCloud's direct bootSync() and a visibilitychange
+  // resume() inside the boot pull's round trip used to run two pulls, decide
+  // 'conflict' twice, and stack two dialogs. Callers share the promise in flight.
+  let syncInFlight = null;
+  function bootSyncCore() {
+    if (syncInFlight) return syncInFlight;
+    syncInFlight = bootSyncCoreUnguarded().finally(() => { syncInFlight = null; });
+    return syncInFlight;
+  }
+  async function bootSyncCoreUnguarded() {
     const s = await getSession(); if (!s) return 'offline';
     const uid = s.user.id;
     let remote;
@@ -855,6 +861,15 @@
     // stamp), stranding the device empty next to a full backup. Pull it back.
     const localEmpty = !localHasData();
     if (remoteNewer && isDirty(uid) && !localEmpty) { noteConflict('boot-both-changed', uid, remote); return 'conflict'; } // both changed → ask
+    // FIRST LINK, guarding the PULL only. A device that never answered the
+    // 'keep which copy?' question used to reach this branch, find the cloud
+    // 'newer' than a stamp it never had, and pull over its local data silently.
+    // It sits HERE, below the own-push adoption and the version compare, so a
+    // device whose first push committed but never got its reply (or whose
+    // background retry later succeeded) still adopts its own row and links —
+    // asking it to choose between two copies of its own data was the very
+    // self-conflict the pushing stamp exists to prevent.
+    if (remoteNewer && !localEmpty && !isLinked(uid)) { noteConflict('boot-firstlink', uid, remote); return 'conflict'; }
     if (remoteNewer || localEmpty) {
       if (applyRemote(remote, uid)) { setStamp(uid, remote.updatedAt); setVersion(uid, remote.version); setDirty(uid, false); markLinked(uid); return "pulled"; }
       return 'offline';
@@ -941,7 +956,7 @@
   // when the user is logged out. ANY failure (offline, not configured, a
   // table not existing yet) resolves that field to null — callers must treat
   // every field as optional and never let a failure here block boot.
-  const CATALOG_CACHE_KEY = 'vault_catalog_cache';
+  const CATALOG_CACHE_KEY = VAULT_KEYS.catalog;
   const CATALOG_TTL = 30 * 60 * 1000; // 30 min
 
   async function pullCatalog() {
@@ -1141,7 +1156,7 @@
   // deletion. A synced user restores from the cloud on next sign-in.
   function clearLocalUserData() {
     try {
-      localStorage.removeItem('gym_tracker_v1');
+      localStorage.removeItem(VAULT_KEYS.store);
       // The three OTHER full copies of the blob. The pre-sync rescue held the whole
       // raw store and outlived logout, so on a shared phone the next account was
       // offered Restore of the previous one's entire history — and restoreRecovery
@@ -1150,13 +1165,22 @@
       // kind of residue.
       localStorage.removeItem(RECOVERY_KEY);
       localStorage.removeItem(RECOVERY_FAILED_KEY);
-      localStorage.removeItem('gym_tracker_v1__corrupt');
-      localStorage.removeItem('foodai_cache');
+      localStorage.removeItem(VAULT_KEYS.corrupt);
+      localStorage.removeItem(VAULT_KEYS.foodaiCache);
       localStorage.removeItem(CATALOG_CACHE_KEY);
       localStorage.removeItem(LAST_UID_KEY);
-      localStorage.removeItem('vault_ui');   // the pre-paint mirror of prefs — the next account must not inherit this one's frame
+      localStorage.removeItem(VAULT_KEYS.ui);   // the pre-paint mirror of prefs — the next account must not inherit this one's frame
+      // The reminder side store and the one-time unit seed: user B on a shared
+      // phone used to open Notifications and read user A's log.
+      localStorage.removeItem(VAULT_KEYS.notifDay);
+      localStorage.removeItem(VAULT_KEYS.notifLog);
+      localStorage.removeItem(VAULT_KEYS.notifArmed);
+      localStorage.removeItem(VAULT_KEYS.unitSeeded);
+      // The per-account and per-exercise prefix keys, by their registry names —
+      // a regex here used to be a second spelling of the same prefixes.
+      const prefixes = [VAULT_KEYS.synced, VAULT_KEYS.linked, VAULT_KEYS.dirty, VAULT_KEYS.ver, VAULT_KEYS.pushing, VAULT_KEYS.img, VAULT_KEYS.imgAt];
       Object.keys(localStorage).forEach((k) => {
-        if (/^vault_(synced|linked|dirty|ver|pushing)_/.test(k) || /^vault_img_/.test(k)) localStorage.removeItem(k);
+        if (prefixes.some((p) => k.indexOf(p) === 0)) localStorage.removeItem(k);
       });
     } catch (_) {}
   }

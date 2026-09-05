@@ -468,7 +468,7 @@
   <div id="detail" class="detail"><div class="detail-inner" id="detail-inner"></div></div>
   <div class="toast" id="toast"></div>
 
-  <script src="js/vendor/supabase.js"></script>
+  <script src="js/vendor/supabase.js?v=298"></script>
   <script>
   (function(){
     'use strict';
@@ -1246,7 +1246,7 @@
       var gen='<div class="rel-card"><h4 style="margin:0 0 12px">مولّد version.json لإصدار جديد</h4>'+
         '<label>رقم البناء (versionCode)</label><input id="g-build" type="number" placeholder="3">'+
         '<label>الإصدار</label><input id="g-ver" type="text" placeholder="1.2">'+
-        '<label>معرّف ملف Drive أو رابطه المباشر</label><input id="g-id" type="text" placeholder="Drive file id أو https://…">'+
+        '<label>اسم ملف الـ APK داخل download/ (عادةً THE-VAULT.apk) أو رابط مباشر</label><input id="g-id" type="text" placeholder="THE-VAULT.apk أو https://…" value="THE-VAULT.apk">'+
         '<label>ملاحظات (عربي)</label><input id="g-ar" type="text" placeholder="ماذا الجديد؟">'+
         '<label>ملاحظات (إنجليزي)</label><input id="g-en" type="text" placeholder="What\'s new?">'+
         '<button class="btn" id="g-go" style="margin-top:4px">توليد</button>'+
@@ -1255,7 +1255,7 @@
       box.innerHTML=cur+share+gen;
       $('#g-go').addEventListener('click',function(){
         var id=($('#g-id').value||'').trim();
-        var url=id.indexOf('http')===0?id:('https://drive.usercontent.google.com/download?id='+id+'&export=download&confirm=t');
+        var url=id.indexOf('http')===0?id:('https://raw.githubusercontent.com/moathdarweesh/vault/main/download/'+id);   // the APK ships from the repo (download/), not Drive
         // MERGE into the live manifest. Emitting only {apk:{…}} (as this used to)
         // and pasting it over version.json DELETES the `web` key — which is what
         // js/update.js compares to decide whether to reload devices onto a new web

@@ -3,7 +3,7 @@
 // Persists everything to localStorage under a single key.
 // ==========================================================================
 
-const STORAGE_KEY = 'gym_tracker_v1';
+const STORAGE_KEY = VAULT_KEYS.store;   // registry: js/cloud.js
 const SCHEMA_VERSION = 1;
 const ENTITY_ID_RE = /^[A-Za-z0-9_-]{1,64}$/;
 
@@ -513,6 +513,7 @@ function extraMap(p) { return dateSet(p, 'extraDates'); }
 function migratePlan(plan) {
   if (plan && plan.mode === 'rotation') {
     return {
+      ...plan,   // any field this rebuild does not know rides through — it runs on EVERY load and used to erase them
       mode: 'rotation',
       cycle: (Array.isArray(plan.cycle) ? plan.cycle : []).map((s) => ({
         name: (s && s.name) || 'Workout',
@@ -583,6 +584,25 @@ function loadState() {
     parsed.supplementLogs = parsed.supplementLogs || {};
     parsed.foodLogs = parsed.foodLogs || {};
     parsed.water = parsed.water || {};
+    // SHAPE, not just presence. A pulled or imported blob with `sleep: {}` used
+    // to pass validation (present) and throw at the first `[...STATE.sleep]`;
+    // a session without `sets`, or with reps typed as '8x', broke Home and the
+    // Console's SQL. This is the one place the blob is made well-formed.
+    let normChanged = false;   // → migrated below: the well-formed copy must reach localStorage and the cloud, not just memory
+    for (const k of ['exercises', 'sessions', 'cardio', 'cardioTypes', 'foods', 'sleep', 'supplements', 'mealBundles', 'recipes', 'bodyweight']) {
+      if (k in parsed && !Array.isArray(parsed[k])) { parsed[k] = []; normChanged = true; }
+    }
+    for (const k of ['supplementLogs', 'foodLogs', 'water']) {
+      if (!parsed[k] || typeof parsed[k] !== 'object' || Array.isArray(parsed[k])) { parsed[k] = {}; normChanged = true; }
+    }
+    const sessionsBefore = JSON.stringify(parsed.sessions);
+    parsed.sessions = parsed.sessions.filter((s) => s && typeof s === 'object').map((s) => ({
+      ...s,
+      sets: Array.isArray(s.sets)
+        ? s.sets.filter((x) => x && typeof x === 'object').map((x) => ({ reps: Number(x.reps) || 0, weight: Number(x.weight) || 0, ...(x.done === false ? { done: false } : {}) }))
+        : [],
+    }));
+    if (JSON.stringify(parsed.sessions) !== sessionsBefore) normChanged = true;
     parsed.bodyweight = Array.isArray(parsed.bodyweight) ? parsed.bodyweight : [];
     parsed.mealBundles = Array.isArray(parsed.mealBundles) ? parsed.mealBundles : [];
     parsed.recipes = Array.isArray(parsed.recipes) ? parsed.recipes : [];
@@ -601,6 +621,7 @@ function loadState() {
     // Migration: backfill missing fields + add any new seed exercises
     const seedByName = Object.fromEntries(SEED_EXERCISES.map((e) => [e.name, e]));
     let migrated = false;
+    if (normChanged) migrated = true;   // persist the normalised shape: exportRaw() pushes the STORED string, not STATE
 
     // v210 cut the eleven alternate skins down to the two brand modes. This has
     // to REWRITE the stored value, not just correct it in memory: the blob is
@@ -760,7 +781,8 @@ function loadState() {
 // store on load. The upload payload re-attaches un-backed-up photos so they
 // still travel until the bucket has them (see Cloud.pushOnce).
 // ==========================================================================
-const IMG_KEY = 'vault_img_';
+const IMG_KEY = VAULT_KEYS.img;
+const IMG_AT_KEY = VAULT_KEYS.imgAt;
 function imgGet(id) { try { return localStorage.getItem(IMG_KEY + id) || null; } catch (_) { return null; } }
 function imgSet(id, dataUrl) {
   try {
@@ -776,8 +798,8 @@ function imgSet(id, dataUrl) {
 // The stamp beside each side-store photo: the blob's `imageAt` at the moment the
 // photo was stored here. It is how a device tells a photo it holds from a photo
 // the account no longer has (removed elsewhere) or has replaced elsewhere.
-function imgAtGet(id) { try { return localStorage.getItem(IMG_KEY + 'at_' + id) || null; } catch (_) { return null; } }
-function imgAtSet(id, at) { try { if (at) localStorage.setItem(IMG_KEY + 'at_' + id, String(at)); else localStorage.removeItem(IMG_KEY + 'at_' + id); } catch (_) {} }
+function imgAtGet(id) { try { return localStorage.getItem(IMG_AT_KEY + id) || null; } catch (_) { return null; } }
+function imgAtSet(id, at) { try { if (at) localStorage.setItem(IMG_AT_KEY + id, String(at)); else localStorage.removeItem(IMG_AT_KEY + id); } catch (_) {} }
 function defineImgAccessor(ex) {
   if (!ex || typeof ex !== 'object' || !ex.id) return;
   const d = Object.getOwnPropertyDescriptor(ex, 'customImage');
@@ -827,7 +849,7 @@ function imgPrune() {
     const keep = new Set((STATE.exercises || []).map((e) => e.id));
     Object.keys(localStorage).forEach((k) => {
       if (k.indexOf(IMG_KEY) !== 0) return;
-      const id = k.indexOf(IMG_KEY + 'at_') === 0 ? k.slice((IMG_KEY + 'at_').length) : k.slice(IMG_KEY.length);
+      const id = k.indexOf(IMG_AT_KEY) === 0 ? k.slice((IMG_AT_KEY).length) : k.slice(IMG_KEY.length);
       if (!keep.has(id)) localStorage.removeItem(k);
     });
   } catch (_) {}
@@ -840,8 +862,8 @@ function imgPrune() {
 function mirrorUi(extra) {
   try {
     const p = (STATE && STATE.prefs) || {};
-    let cur = {}; try { cur = JSON.parse(localStorage.getItem('vault_ui') || '{}') || {}; } catch (_) {}
-    localStorage.setItem('vault_ui', JSON.stringify({ ...cur, ...(extra || {}), theme: p.theme, lang: p.lang }));
+    let cur = {}; try { cur = JSON.parse(localStorage.getItem(VAULT_KEYS.ui) || '{}') || {}; } catch (_) {}
+    localStorage.setItem(VAULT_KEYS.ui, JSON.stringify({ ...cur, ...(extra || {}), theme: p.theme, lang: p.lang }));
   } catch (_) {}
 }
 let STATE = withImageAccessors(loadState());
@@ -1398,15 +1420,66 @@ const DB = {
     try { (out.exercises || []).forEach((e) => { const img = imgGet(e.id); if (img) e.customImage = img; }); } catch (_) {}
     return JSON.stringify(out, null, 2);
   },
+  // 'Does this install hold user data?' — ONE list, here, next to the blob it
+  // describes. cloud.js (the empty-blob push guard, the rescue snapshot) and
+  // app.js (the one-time default-unit seed) all ask this; each used to carry
+  // its own copy of the list, and the copies had drifted apart.
+  _notifHasUserContent(n) {
+    try {
+      if (!n || !n.channels) return false;
+      const c = n.channels;
+      return !!((c.supps && Array.isArray(c.supps.doses) && c.supps.doses.length) ||
+                (c.food && Array.isArray(c.food.meals) && c.food.meals.length));
+    } catch (_) { return false; }
+  },
+  hasUserData(b = STATE) {
+    try {
+      if (!b || typeof b !== 'object') return false;
+      return !!(
+        (b.sessions && b.sessions.length) || (b.cardio && b.cardio.length) ||
+        (b.sleep && b.sleep.length) || (b.foods && b.foods.length) ||
+        (b.foodLogs && Object.keys(b.foodLogs).length) ||
+        (b.supplements && b.supplements.length) ||
+        (b.supplementLogs && Object.keys(b.supplementLogs).length) ||
+        (b.exercises && b.exercises.some((e) => e && e.isCustom)) ||
+        // Standalone tracking that isn't sessions/food — a device whose ONLY
+        // content is these must NOT be treated as "empty" (else its plan / weight
+        // / water / nutrition goal gets silently overwritten on first login and
+        // never syncs up). Matches the new Weight/Water features.
+        (b.bodyweight && b.bodyweight.length) ||
+        (b.water && Object.keys(b.water).length) ||
+        (b.cardioTypes && b.cardioTypes.length) ||
+        (b.plan && Array.isArray(b.plan.cycle) && b.plan.cycle.length) ||
+        (b.nutrition && b.nutrition.targets && b.nutrition.targets.calories) ||
+        // Recipes, meal bundles and a configured notification setup are user
+        // work too. A second device whose ONLY content was these read as
+        // "empty": pulled over without a snapshot, and refused a push.
+        (b.recipes && b.recipes.length) ||
+        (b.mealBundles && b.mealBundles.length) ||
+        // notif counts ONLY for content the user typed (supplement doses, meal
+        // times). The object itself is written into every blob at boot by
+        // migrateFromReminders(), so counting its mere presence made a fresh
+        // install read as "has data" and defeated every empty-device guard.
+        this._notifHasUserContent(b.notif)
+      );
+    } catch (_) { return false; }
+  },
   // Validate that a parsed blob has the expected shape before we accept it.
   // Lenient: only requires what must exist; optional arrays are checked only
   // when present (older backups may lack newer keys and still import fine).
+  // THE definition of a well-formed blob. cloud.js (pull, restore, import) and
+  // importJSON both come here — there used to be two copies, and they drifted.
+  // Optional sections are checked only when present, so an older blob without
+  // them is still valid; a present section of the wrong TYPE is not.
   _validateBlob(data) {
     if (!data || typeof data !== 'object' || Array.isArray(data)) return false;
     if (!Array.isArray(data.exercises)) return false;
-    if ('sessions' in data && !Array.isArray(data.sessions)) return false;
-    if ('cardio' in data && !Array.isArray(data.cardio)) return false;
-    if ('supplements' in data && !Array.isArray(data.supplements)) return false;
+    for (const k of ['sessions', 'cardio', 'cardioTypes', 'sleep', 'foods', 'supplements', 'mealBundles', 'recipes', 'bodyweight']) {
+      if (k in data && data[k] != null && !Array.isArray(data[k])) return false;
+    }
+    for (const k of ['prefs', 'foodLogs', 'supplementLogs', 'water', 'notif', 'plan', 'nutrition', 'reminders']) {
+      if (k in data && data[k] != null && (typeof data[k] !== 'object' || Array.isArray(data[k]))) return false;
+    }
     return true;
   },
   // Reject a blob whose entity IDs are not the safe charset our uid() produces.
@@ -1570,6 +1643,11 @@ const DB = {
     remove(id) {
       STATE.exercises = STATE.exercises.filter((e) => e.id !== id);
       STATE.sessions = STATE.sessions.filter((s) => s.exerciseId !== id);
+      // ...and the plan. A deleted exercise used to stay in its cycle slot as a
+      // dangling id: readers that filter(Boolean) hid it, three that count did not.
+      if (STATE.plan && Array.isArray(STATE.plan.cycle)) {
+        STATE.plan.cycle.forEach((slot) => { if (slot && Array.isArray(slot.exerciseIds)) slot.exerciseIds = slot.exerciseIds.filter((x) => x !== id); });
+      }
       imgSet(id, null); imgAtSet(id, null);
       save();
     },
@@ -1789,18 +1867,18 @@ const DB = {
   // written changes.
   // =========================================================================
   notif: {
-    DAY_KEY: 'vault.notif.day.v1',
+    DAY_KEY: VAULT_KEYS.notifDay,
     // The delivered-notification LOG. Device-local for the same reason the day
     // ledger is, and one more: it records what THIS DEVICE actually showed. A
     // reminder that arrived on the phone was never seen on the laptop, so
     // syncing the log would make the laptop's history a lie. Config syncs
     // (a time set on the phone must reach the web); the record of what was
     // shown does not.
-    LOG_KEY: 'vault.notif.log.v1',
+    LOG_KEY: VAULT_KEYS.notifLog,
     LOG_MAX: 120,
     // What sync() last armed, so a foreground can tell which of those alarms
     // fired while the app was dead. See Notify.reconcile().
-    ARMED_KEY: 'vault.notif.armed.v1',
+    ARMED_KEY: VAULT_KEYS.notifArmed,
     // How many days ahead the native path arms. Owner's choice.
     //
     // This is the number that replaced an UNBOUNDED daily repeat. `{on:{hour,
@@ -2961,11 +3039,17 @@ function formatDateShort(iso) {
   return dateFmt('short').format(new Date(iso + 'T00:00:00'));
 }
 
+// THE week starts here, for everything: the calendar grid, the weekday strips,
+// the planner's day order AND the 'this week' statistics. 0 = Sunday, which is
+// the strips' order and the working week where this app lives. The stats used
+// to start on Monday while every strip started on Sunday, so 'this week' counted
+// a different seven days from the ones the calendar showed.
+const WEEK_START = 0;
+function weekOrder() { return [0, 1, 2, 3, 4, 5, 6].map((i) => (WEEK_START + i) % 7); }
 function startOfWeek(date = new Date()) {
   const d = new Date(date);
   d.setHours(0, 0, 0, 0);
-  const day = d.getDay();
-  const diff = (day + 6) % 7; // Monday as start of week
+  const diff = (d.getDay() - WEEK_START + 7) % 7;
   d.setDate(d.getDate() - diff);
   return d;
 }
@@ -3010,6 +3094,8 @@ window.addDaysISO = addDaysISO;
 window.formatDate = formatDate;
 window.formatDateShort = formatDateShort;
 window.startOfWeek = startOfWeek;
+window.weekOrder = weekOrder;
+window.WEEK_START = WEEK_START;
 window.inRangeISO = inRangeISO;
 window.formatDuration = formatDuration;
 window.formatTime12 = formatTime12;

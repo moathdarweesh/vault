@@ -12,7 +12,7 @@
 // build. The literal below is the fallback (file://, or a stripped query) and is
 // still bumped by `npm run release` — see CLAUDE.md "CACHE WORKFLOW".
 const VAULT_BUILD = (() => {
-  const FALLBACK = 'v297';
+  const FALLBACK = 'v298';
   try {
     const src = (document.currentScript && document.currentScript.src) || '';
     const m = src.match(/[?&]v=(\d+)/);
@@ -1081,6 +1081,7 @@ const I18N = {
     fl_per_serving_hint: 'Figures are per serving; the total is figures × servings.',
     ai_err_signin: 'Sign in to use the AI',
     ai_err_too_large: 'The file is too large',
+    ai_err_busy: 'The assistant is busy — try again in a minute',
 
     food_removed: 'Removed',
     take_all: 'Take all',
@@ -1907,6 +1908,7 @@ const I18N = {
     fl_per_serving_hint: 'الأرقام لكل حصة، والمجموع = الأرقام × عدد الحصص.',
     ai_err_signin: 'سجّل الدخول لاستخدام الذكاء الاصطناعي',
     ai_err_too_large: 'الملف كبير جداً',
+    ai_err_busy: 'المساعد مشغول — حاول بعد دقيقة',
 
     food_removed: 'تم الحذف',
     take_all: 'أخذ الكل',
@@ -3379,6 +3381,7 @@ function navigate(view, context = {}, opts = {}) {
     cardio: 'cardio', food: 'food', sleep: 'sleep',
     compare: 'home', settings: 'home', calendar: 'home', supplements: 'home', foodlog: 'food',
     day: 'home', notifications: 'home',
+    'session-day': 'workouts', 'session-run': 'workouts',   // the run screens belong to Program; without this no tab was lit
   };
   const highlightView = navMap[view] || view;
   $$('.nav-btn').forEach((b) => b.classList.toggle('active', b.dataset.view === highlightView));
@@ -9146,7 +9149,7 @@ function renderPlanner(el) {
   const cycle = plan.cycle || [];
   const trainingDays = plan.trainingDays || [];
   const exerciseById = Object.fromEntries(DB.exercises.list().map((e) => [e.id, e]));
-  const dayOrder = [0, 1, 2, 3, 4, 5, 6];
+  const dayOrder = weekOrder();   // storage.js WEEK_START — the same order as every strip
 
   // Training-day pills (which weekdays you train; the others are rest).
   const daysHtml = dayOrder.map((d) =>
@@ -9325,12 +9328,12 @@ function openTemplatesModal() {
 function openScheduleModal(tmpl) {
   const workouts = tmpl.days;           // [{ name, exercises:[names] }]
   const M = workouts.length;
-  const dayOrder = [0, 1, 2, 3, 4, 5, 6]; // Sun..Sat
+  const dayOrder = weekOrder();   // storage.js WEEK_START — the same order as every strip
   const defaults = M <= 3 ? [1, 3, 5]
     : M === 4 ? [1, 2, 4, 5]
     : M === 5 ? [1, 2, 3, 4, 5]
     : M === 6 ? [0, 1, 2, 3, 4, 5]
-    : [0, 1, 2, 3, 4, 5, 6];
+    : weekOrder();   // seven days a week: all of them, in the week's order
   const training = new Set(defaults);
 
 
@@ -10665,7 +10668,7 @@ function renderSessionRun(el) {
       navStack.forEach((entry) => {
         if (entry.view === 'session-day' && entry.context) entry.context.sdState = {};
       });
-      if (!goBack()) navigate('session-day', { dow });
+      if (!goBack()) navigate('session-day', { date: runCtx.runDate });   // session-day reads `date`; `dow` was a key nothing consumed
       showToast(t('session_saved'));   // after the navigate, which hides any toast it finds
       maybeAskNotifPermission();
     });
@@ -11727,7 +11730,10 @@ function refreshAfterSync() {
   // else re-arms them: the boot sync runs on a 1.5s timer that can fire before
   // the pull lands, so without this a phone can sit on a schedule the user
   // changed on their other device — or on none at all.
-  try { if (window.Notify) Notify.sync(); } catch (_) {}   // silent: a pull is not a settings change
+  // The blob just changed under the reminders: re-arm the in-app timers (they
+  // were armed from the pre-pull blob) and run the OS sequence in its one order.
+  try { armNotifications(); } catch (_) {}
+  try { if (window.Notify) Notify.foreground({ catchUp: false }); } catch (_) {}   // re-arm only: boot/visibility already ran the catch-up, a second one burns the bar
 }
 
 function hideAuthGate() {
@@ -12002,6 +12008,10 @@ async function afterLogin() {
 }
 
 function showConflictDialog() {
+  // Already asking. A resume (visibilitychange, `online`) mid-answer used to
+  // rebuild the dialog with fresh, enabled buttons while chooseLocal/chooseCloud
+  // was still running behind it.
+  if (document.querySelector('#modal-root .choice[data-keep]')) return;
   // THREE things were wrong with this dialog, and all three pointed the same way.
   //
   // 1. "Keep the cloud copy" was .btn-primary — the filled, visually default
@@ -12579,7 +12589,7 @@ function showAnnouncementBanner(config) {
   // (fallback: the text). So editing OR re-saving it in the admin panel bumps
   // updated_at and it shows again to everyone, even users who dismissed the
   // previous one; an untouched announcement stays dismissed.
-  const DISMISS_KEY = 'vault_announcement_dismissed';
+  const DISMISS_KEY = VAULT_KEYS.announcement;
   const sig = String(config.updated_at || text);
   let dismissed = '';
   try { dismissed = localStorage.getItem(DISMISS_KEY) || ''; } catch (_) {}
@@ -12635,19 +12645,12 @@ function showAnnouncementBanner(config) {
 // persisted flag so this is attempted at most once per install, ever.
 function seedDefaultUnitIfNew(config) {
   if (!config || (config.default_unit !== 'kg' && config.default_unit !== 'lb')) return;
-  const FLAG = 'vault_default_unit_seeded_v1';
+  const FLAG = VAULT_KEYS.unitSeeded;
   try { if (localStorage.getItem(FLAG)) return; } catch (_) { return; }
   try { localStorage.setItem(FLAG, '1'); } catch (_) { return; } // one-time, regardless of the outcome below
   try {
     const all = DB.getAll();
-    const hasUserData = !!(
-      (all.sessions && all.sessions.length) || (all.cardio && all.cardio.length) ||
-      (all.sleep && all.sleep.length) || (all.foods && all.foods.length) ||
-      (all.foodLogs && Object.keys(all.foodLogs).length) ||
-      (all.supplements && all.supplements.length) ||
-      (all.supplementLogs && Object.keys(all.supplementLogs).length) ||
-      (all.exercises && all.exercises.some((e) => e && e.isCustom))
-    );
+    const hasUserData = DB.hasUserData();   // the one list, in storage.js
     if (hasUserData) return; // not a brand-new user — never override their setup
     if ((all.prefs && all.prefs.unit) !== config.default_unit) {
       DB.prefs.setUnit(config.default_unit);
@@ -12879,9 +12882,7 @@ function showOnboarding() {
     // while the app was closed.
     try {
       if (window.Notify) {
-        Promise.resolve(Notify.reconcile()).catch(() => {}).then(() => {
-          try { Notify.sync(); Notify.catchUp(); } catch (_) {}
-        });
+        Promise.resolve(Notify.foreground()).catch(() => {});   // reconcile → sync → catchUp, owned by notify.js
       }
     } catch (_) {}
   }, 1500);
@@ -12966,9 +12967,7 @@ function showOnboarding() {
     try { armNotifications(); } catch (_) {}
     try {
       if (window.Notify) {
-        Promise.resolve(Notify.reconcile()).catch(() => {}).then(() => {
-          try { Notify.sync(); Notify.catchUp(); } catch (_) {}
-        });
+        Promise.resolve(Notify.foreground()).catch(() => {});   // reconcile → sync → catchUp, owned by notify.js
       }
     } catch (_) {}
     try { if (window.VaultUpdate && VaultUpdate.checkWeb) VaultUpdate.checkWeb(); } catch (_) {}

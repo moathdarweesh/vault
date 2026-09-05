@@ -21,7 +21,7 @@
   const supported = () => !!(isNative() && plugin());
 
   const tr = (k) => (typeof t === 'function' ? t(k) : k);
-  const SEEN_KEY = 'vault_reminder_seen';   // per-day, per-item "already nagged" marks
+  const SEEN_KEY = VAULT_KEYS.reminderSeen;   // per-day, per-item "already nagged" marks
 
   // ---------------------------------------------------------------- channels ---
   //
@@ -620,9 +620,30 @@
     try { await plugin().cancel({ notifications: [{ id: REST_ALARM_ID }] }); } catch (_) {}
   }
 
+  // THE FOREGROUND SEQUENCE, owned here: reconcile (read what fired while we were
+  // away, from the manifest the LAST session armed) → sync (re-arm, which
+  // rewrites that manifest) → catchUp. Boot, visibilitychange and the post-pull
+  // refresh all call this; refreshAfterSync used to call sync() directly, and
+  // when the pull landed before boot's reconcile the manifest was overwritten
+  // before it had been read. Calls are chained, so two foregrounds never
+  // interleave and the order holds for each.
+  let foregroundChain = Promise.resolve();
+  // opts.catchUp === false: re-arm only (reconcile → sync). The post-pull refresh
+  // uses it — a second catchUp within the boot's round trip replaced the first
+  // missed-reminder bar before it could be read, and burned it as 'seen'.
+  function foreground(opts) {
+    foregroundChain = foregroundChain.then(async () => {
+      try { await reconcile(); } catch (_) {}
+      let r = { ok: false, reason: 'error', count: 0 };
+      try { r = await sync(); } catch (_) {}
+      if (!(opts && opts.catchUp === false)) { try { catchUp(); } catch (_) {} }
+      return r;
+    });
+    return foregroundChain;
+  }
   window.Notify = {
     isNative: supported, sync, ensurePermission, permissionState, gate, catchUp, missed,
     test, diagnose, exactAlarmState, requestExactAlarms, reconcile,
-    restAlarm, cancelRestAlarm,
+    restAlarm, cancelRestAlarm, foreground,
   };
 })();

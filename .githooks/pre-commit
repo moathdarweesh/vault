@@ -3,3 +3,7 @@
 # Enable with:  git config core.hooksPath .githooks
 # Bypass once:  SKIP_RELEASE_CHECK=1 git commit ...
 node scripts/check-release.js || exit 1
+# The implicit agreements between files (keys, validators, i18n, schema, Worker errors, markers).
+node scripts/check-contracts.js || exit 1
+# Every marker agrees with every other (not only index.html's against HEAD).
+node scripts/release.js --check || exit 1

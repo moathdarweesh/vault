@@ -54,6 +54,7 @@ file on a database that already has it is safe.
 | 19 | `admin-adherence-v15.sql` | The Console's adherence RPC: planned-vs-done per user per week, counting DISTINCT DATES (the blob stores one session row per exercise). Applied + verified live 2026-09-02. |
 | 20 | `vault-data-history-v16.sql` | `vault_data_history` — the last 10 versions of every user's blob, filed by a BEFORE UPDATE trigger (SECURITY DEFINER, empty search_path) whenever `data` changes; own-row SELECT only, no client write path, grants double-locked like `vault_data`. Closes the "the side force-pushed over had no copy anywhere" gap of whole-blob sync. Applied + verified live 2026-09-02 (the trigger read back from `pg_trigger` in the same run). |
 | 21 | `food-catalog-fat-v17.sql` | `food_catalog.fat` (default 0) and a 7-argument `admin_upsert_food` overload with `p_fat`; the 6-argument original stays. Applied + verified live 2026-09-02 — verified BY CALLING: a `do` block invoked the new overload (it ran to its admin gate, as a non-admin session must), and the same run counted the column, the 7-arg and the 6-arg functions (1 / 1 / 1). |
+| 22 | `vault-data-version.sql` | The server-authoritative `version` column on `vault_data` (+ its bump trigger) that the client's optimistic-concurrency push compares against. Applied live long before it was numbered — it sat in `unverified/` while every push already depended on it; moved into the history in v298 so a rebuild of the schema from this folder produces a database the client can sync with. Idempotent. |
 
 > ⚠️ **Keep `image/svg+xml` OUT of the `exercise-images` mime allowlist,
 > permanently.** It is what rejects an active-content SVG arriving from a
@@ -85,8 +86,9 @@ permission classifier had refused the MCP apply — and moved to `migrations/`.
 
 ## 3) State unknown — `unverified/`
 
-**Checked live on 2026-08-13.** Three of the four are already applied; only
-`perf-indexes.sql` is genuinely missing. The "How to check" column is kept so the
+**Checked live on 2026-08-13.** Two of the three are already applied; only
+`perf-indexes.sql` is genuinely missing (`vault-data-version.sql`, also applied, moved to
+`migrations/22_vault-data-version.sql` in v298). The "How to check" column is kept so the
 result can be re-confirmed rather than trusted. Verdicts below are from that run.
 
 | File | Verdict (2026-08-13) |
@@ -94,7 +96,6 @@ result can be re-confirmed rather than trusted. Verdicts below are from that run
 | `admin-scale-rpc.sql` | **APPLIED** — both `admin_user_stats()` and `admin_activity()` exist. Consistent with `14_hardening-v8.sql` having revoked EXECUTE on them inside one transaction, which could not have succeeded otherwise. Move it into `migrations/`. |
 | `delete-own-account.sql` | **APPLIED** — `delete_own_account()` exists. ⚠️ This makes the FK-RESTRICT abort a LIVE defect, not a hypothetical one: `workout_sessions.exercise_id` and `cardio_logs.cardio_type_id` are `ON DELETE RESTRICT` while their parents cascade from `auth.users`, so any user with a custom exercise or cardio type that has logs should hit a foreign-key violation — after `Cloud.deleteAccount()` has already swept their Storage images. |
 | `perf-indexes.sql` | **NOT APPLIED** — `workout_sessions_performed_idx` does not exist. |
-| `vault-data-version.sql` | **APPLIED** — `vault_data.version` exists, `bump_vault_data_version()` exists, and `vault_data` carries both `trg_vault_data_size` and `trg_vault_data_version`. `max(version)` was **590**, so it is not merely present but actively incrementing. The optimistic-concurrency path in `js/cloud.js` (six read sites) is therefore backed by real server state, not an assumption. Move it into `migrations/`. |
 
 Also confirmed in the same run: the `migration_v2` staging schema (unminimized cross-user
 PII, no RLS) is **absent**, so M-9 is a latent re-run hazard only.
@@ -106,7 +107,6 @@ Original checks, kept for re-confirmation:
 | `admin-scale-rpc.sql` | `admin_user_stats()` / `admin_activity()` aggregate RPCs for the admin panel. | `select proname from pg_proc where proname like 'admin\_%';` |
 | `delete-own-account.sql` | `delete_own_account()` — **destructive by design**; the client sweeps Storage first, then this cascades the rows. | `select proname from pg_proc where proname = 'delete_own_account';` |
 | `perf-indexes.sql` | One index on `workout_sessions(performed_on)`. | `select indexname from pg_indexes where indexname = 'workout_sessions_performed_idx';` |
-| `vault-data-version.sql` | `vault_data.version` + its bump trigger — the server-authoritative sync counter. | `select column_name from information_schema.columns where table_name='vault_data' and column_name='version';` |
 
 ## 4) Never run — `archive/`
 

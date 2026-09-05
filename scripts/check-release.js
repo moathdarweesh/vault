@@ -6,7 +6,7 @@
  *   node scripts/check-release.js
  *
  * WHY THIS AND NOT JUST scripts/release.js --check
- * `--check` only proves the 16 markers agree with EACH OTHER. It cannot catch the
+ * `--check` only proves the markers agree with EACH OTHER. It cannot catch the
  * failure that has actually occurred in this repo (commit ea6c74e, "v150"): a
  * commit that edited js/app.js and nothing else, after the v150 markers had
  * already been consumed by an earlier commit. Every marker still agreed — they
@@ -25,9 +25,11 @@ const { execSync } = require('child_process');
 
 // Files whose contents are served to a browser — changing any of them requires a
 // new ?v=N or devices keep running the old copy from cache.
-const SHIPPED = /^(index\.html|styles\.css|js\/.*\.js|privacy\.html|admin\.html)$/;
+const SHIPPED = /^(index\.html|styles\.css|js\/.*\.js|privacy\.html|admin\.html|manifest\.json|icons\/.*|get\/index\.html)$/;
 // …except these, which are not part of the cached app bundle.
-const EXEMPT = /^(js\/vendor\/|scripts\/)/;
+// js/vendor/ is NOT exempt: the SDK is cache-busted by the same ?v=N, so a
+// vendored update that shipped without a bump never reached a cached device.
+const EXEMPT = /^scripts\//;
 
 function sh(cmd) {
   try { return execSync(cmd, { encoding: 'utf8', stdio: ['pipe', 'pipe', 'pipe'] }); }

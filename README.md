@@ -61,9 +61,9 @@ There is **no test framework**. "Verified" here means driven in a real browser.
 npm run release
 ```
 
-That rewrites all 16 cache markers and verifies them; a pre-commit hook refuses
+That rewrites every cache marker and verifies them; a pre-commit hook refuses
 a commit that ships code without them. **Never bump a version by hand** — the
-markers live in three files and a missed one means the change reaches nobody.
+markers live in eight files (release.js prints the list) and a missed one means the change reaches nobody.
 
 Push to `main` and GitHub Pages serves it. The Android app is a thin shell over
 the same live URL, so a push updates web and phone together — **a new APK is only

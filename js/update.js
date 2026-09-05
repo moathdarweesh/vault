@@ -26,7 +26,7 @@
   try { SELF_SRC = (document.currentScript && document.currentScript.src) || ''; } catch (_) {}
 
   var MANIFEST_URL = 'version.json';                // same origin as the app
-  var DISMISS_KEY = 'vault_update_dismissed_build'; // APK "Later", per build
+  var DISMISS_KEY = VAULT_KEYS.updateDismissed; // APK "Later", per build (registry: js/cloud.js)
   var TIMEOUT_MS = 8000;
   var DELAY_MS = 5000;                              // native nudge: wait past first paint
 
@@ -79,7 +79,7 @@
       if (String(location.search).indexOf('u=' + latest) !== -1) return; // already reloaded to this target
       if (trigger === 'resume') { showWebBanner(latest); return; }
       // boot: seamless auto-reload, at most once per session per target.
-      var gk = 'vault_wr_' + latest;
+      var gk = VAULT_KEYS.webReloadGuard + latest;
       try { if (sessionStorage.getItem(gk)) return; sessionStorage.setItem(gk, '1'); } catch (_) { return; }
       reloadTo(latest);
     }).catch(function () {});

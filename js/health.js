@@ -196,8 +196,8 @@
     try {
       const perm = await plugin().checkHealthPermissions();
       if (perm && perm.granted) { await pull(); return; }
-      if (localStorage.getItem('hc_prompted')) return; // don't nag after a decline
-      localStorage.setItem('hc_prompted', '1');
+      if (localStorage.getItem(VAULT_KEYS.hcPrompted)) return; // don't nag after a decline
+      localStorage.setItem(VAULT_KEYS.hcPrompted, '1');
       const req = await plugin().requestHealthPermissions();
       if (req && req.granted) await pull();
     } catch (_) { /* ignore */ }
