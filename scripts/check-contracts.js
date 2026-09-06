@@ -674,5 +674,49 @@ const contract = (name, problems) => {
   contract(`the four pages carry one Content-Security-Policy, and it allows every origin the code loads from`, problems);
 }
 
+// ---------------------------------------------------------------- 30. error strings crossing a language boundary
+// A message raised in SQL or returned by the Worker, and matched by a regex in
+// JS, is an agreement between two files nothing else keeps. Reword one side and
+// every check still passes while the app quietly degrades to a generic error —
+// the failure the project's own rule exists to prevent ("when a review finds a
+// 'must match' comment, add a contract"). Both directions are checked.
+{
+  const problems = [];
+  const dir = path.join(root, 'backend/migrations');
+  // Only the SURVIVING definition of each function counts: an older migration
+  // still carrying the old wording must not satisfy the check for a body that
+  // has since been replaced.
+  const bodies = {};
+  for (const f of fs.readdirSync(dir).filter((f) => f.endsWith('.sql')).sort((a, b) => parseInt(a, 10) - parseInt(b, 10))) {
+    const text = fs.readFileSync(path.join(dir, f), 'utf8');
+    for (const m of text.matchAll(/create(?: or replace)? function\s+(?:public\.)?(\w+)\s*\([\s\S]*?\$\$([\s\S]*?)\$\$/gi)) bodies[m[1].toLowerCase()] = m[2];
+  }
+  const sql = Object.values(bodies).join('\n');
+  const js = JS.map((f) => src[f]).join('\n');
+  const worker = exists('backend/worker/gemini-worker.js') ? read('backend/worker/gemini-worker.js') : '';
+
+  // (a) a JS regex tested against a database error message must name a string
+  //     some migration actually raises
+  let checkedSql = 0;
+  for (const f of JS) {
+    for (const m of src[f].matchAll(/\/([a-z][a-z ]{4,60}?)\/i\.test\(\s*(?:\(?\s*)?(?:error|err|e)\s*(?:&&|\?|\.)[^)]*message/gi)) {
+      checkedSql++;
+      const lit = m[1];
+      if (!new RegExp("raise exception '" + lit.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + "'").test(sql)) {
+        problems.push(`${f} matches a database error /${lit}/i, but no migration raises exactly that string`);
+      }
+    }
+  }
+
+  // (b) every `code:` the Worker returns is a code the client tests for, and
+  //     every code the client tests for is one the Worker can send
+  const workerCodes = new Set([...worker.matchAll(/code:\s*'([A-Z_]+)'/g)].map((m) => m[1]));
+  const clientCodes = new Set([...js.matchAll(/data\.code === '([A-Z_]+)'/g)].map((m) => m[1]));
+  for (const c of workerCodes) if (!clientCodes.has(c)) problems.push(`the Worker can return code '${c}' but no client path tests for it — the user gets a generic message`);
+  for (const c of clientCodes) if (workerCodes.size && !workerCodes.has(c)) problems.push(`a client tests for code '${c}', which the Worker never sends`);
+
+  contract(`error strings cross the SQL/JS and Worker/JS boundaries intact (${checkedSql} database matches, ${workerCodes.size} Worker codes)`, problems);
+}
+
 console.log(failures.length ? `\ncheck-contracts: ${failures.length} broken contract(s)` : '\ncheck-contracts: all contracts hold');
 process.exit(failures.length ? 1 : 0);

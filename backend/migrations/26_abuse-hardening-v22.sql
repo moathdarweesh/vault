@@ -5,7 +5,15 @@
 -- What it found was cheaper: ways for ONE account (or none at all) to spend a
 -- shared free-tier resource until the app stops working FOR EVERYONE.
 --
--- Seven changes, each with a VERIFY that CALLS rather than merely reads:
+-- EIGHT changes. ⚠️ READ 27 BEFORE TRUSTING THIS FILE: an adversarial review
+-- found that four of the eight did not do what they claim here, and 27 is the
+-- repair. The claim below that every section is verified BY CALLING was also
+-- false — several VERIFY blocks read a catalog instead, which is exactly how a
+-- no-op ships looking green. What 26 got right stands; what it got wrong is:
+--   4 (the feedback cap never fired), 8 (the budget billed its own refusals),
+--   7 (the image count answered about any user), and the omission of
+--   exercises/cardio_types, which were the larger hole.
+-- The eight changes:
 --   1. anon loses EXECUTE on username_available() and is_admin()
 --   2. authenticated loses TRUNCATE / TRIGGER / REFERENCES on three tables
 --   3. two trigger functions get their search_path pinned
@@ -15,7 +23,12 @@
 --   7. the image bucket gets a name shape and a per-user object cap
 --   8. a DURABLE per-user + global daily budget for the shared AI key
 --
--- Idempotent. What it deliberately does NOT do: lower the 5 MB blob cap. The
+-- Idempotent. The per-account worst case quoted below is the UNCOMPRESSED
+-- reasoning; pg_column_size measures the TOAST-compressed bytes, so a JSON blob
+-- that compresses well can keep ten history rows inside the 8 MB budget and the
+-- true ceiling is nearer 15 MB than 13. It is the right order of magnitude and
+-- the wrong number; 27 does not change the mechanism.
+-- What this file deliberately does NOT do: lower the 5 MB blob cap. The
 -- largest real blob is 55 KB, but `Cloud.pushOnce` re-attaches photos that have
 -- no bucket copy yet, so a device with many un-backed-up photos legitimately
 -- pushes megabytes. Bounding the HISTORY gets most of the win with none of that

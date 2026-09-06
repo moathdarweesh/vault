@@ -12,7 +12,7 @@
 // build. The literal below is the fallback (file://, or a stripped query) and is
 // still bumped by `npm run release` — see CLAUDE.md "CACHE WORKFLOW".
 const VAULT_BUILD = (() => {
-  const FALLBACK = 'v303';
+  const FALLBACK = 'v304';
   try {
     const src = (document.currentScript && document.currentScript.src) || '';
     const m = src.match(/[?&]v=(\d+)/);
@@ -725,6 +725,7 @@ const I18N = {
     change_password_sub: 'Set a new password for this account',
     change_password_current: 'Current password',
     change_password_current_req: 'Enter your current password',
+    change_password_recovery_sub: 'Choose a new password. You came from the reset link, so the old one is not needed.',
     change_password_wrong_current: 'Current password is incorrect',
     change_password_new: 'New password',
     change_password_confirm: 'Confirm new password',
@@ -1590,6 +1591,7 @@ const I18N = {
     change_password_sub: 'عيّن كلمة سر جديدة لهذا الحساب',
     change_password_current: 'كلمة السر الحالية',
     change_password_current_req: 'أدخل كلمة السر الحالية',
+    change_password_recovery_sub: 'اختر كلمة سر جديدة. وصلت من رابط الاستعادة، فلا حاجة إلى القديمة.',
     change_password_wrong_current: 'كلمة السر الحالية غير صحيحة',
     change_password_new: 'كلمة السر الجديدة',
     change_password_confirm: 'تأكيد كلمة السر الجديدة',
@@ -12619,13 +12621,17 @@ function showConflictDialog() {
   localBtn.addEventListener('click', () => run(Cloud.chooseLocal, localBtn));
 }
 
-function showChangePassword() {
+// `recovery` = the user arrived from the emailed reset link. Supabase has
+// already proved they hold the mailbox, so asking for the CURRENT password
+// would be asking for the one thing they came here because they lost. The form
+// drops that field entirely on this path.
+function showChangePassword(recovery) {
   const overlay = openModal(`
     <div class="modal-header">
       <div class="modal-title">${t('change_password')}</div>
       <button class="icon-btn icon-btn-tile" data-close>${icon('close', 20)}</button>
     </div>
-    <input type="password" id="cpw-current" class="auth-input" placeholder="${t('change_password_current')}" autocomplete="current-password">
+    ${recovery ? `<div class="confirm-text" style="margin-bottom:12px">${t('change_password_recovery_sub')}</div>` : `<input type="password" id="cpw-current" class="auth-input" placeholder="${t('change_password_current')}" autocomplete="current-password">`}
     <input type="password" id="cpw-new" class="auth-input" placeholder="${t('change_password_new')}" autocomplete="new-password">
     <input type="password" id="cpw-confirm" class="auth-input" placeholder="${t('change_password_confirm')}" autocomplete="new-password">
     <div class="auth-err" id="cpw-err"></div>
@@ -12634,15 +12640,16 @@ function showChangePassword() {
   const err = (m) => { const e = overlay.querySelector('#cpw-err'); if (e) e.textContent = m || ''; };
   const btn = overlay.querySelector('#cpw-save');
   btn.addEventListener('click', async () => {
-    const cur = overlay.querySelector('#cpw-current').value || '';
+    const curEl = overlay.querySelector('#cpw-current');
+    const cur = curEl ? (curEl.value || '') : '';
     const pw = overlay.querySelector('#cpw-new').value || '';
     const pw2 = overlay.querySelector('#cpw-confirm').value || '';
-    if (!cur) { err(t('change_password_current_req')); return; }
+    if (!recovery && !cur) { err(t('change_password_current_req')); return; }
     if (pw.length < 8) { err(t('auth_pw_short')); return; }
     if (pw !== pw2) { err(t('change_password_mismatch')); return; }
     err(''); btn.disabled = true; btn.textContent = t('auth_signing');
     try {
-      const res = await Cloud.changePassword(pw, cur);
+      const res = await Cloud.changePassword(pw, cur, recovery);
       if (res.error === 'reauth_failed') { err(t('change_password_wrong_current')); btn.disabled = false; btn.textContent = t('save'); return; }
       if (res.error) { err(translateAuthError(res.error)); btn.disabled = false; btn.textContent = t('save'); return; }
       closeModal();
@@ -13048,7 +13055,7 @@ async function bootCloud() {
   if (!window.Cloud || !Cloud.configured()) return; // not set up → local-only
   await Cloud.ensureSdk(); // load the Supabase SDK on demand
   // Opened from a password-reset link → let the user set a new password.
-  Cloud.onPasswordRecovery(() => showChangePassword());
+  Cloud.onPasswordRecovery(() => showChangePassword(true));
   let session = null;
   try { session = await Cloud.getSession(); } catch (_) {}
   if (!session) {

@@ -117,6 +117,12 @@
     const data = await res.json().catch(() => ({}));
     if (!res.ok) {
       // Quota hit on every free model — surface a friendly message.
+      // The DAILY budget and the per-minute burst are both 429. Read the BODY
+      // first: telling someone to try again in a minute when the limit lasts
+      // until midnight is a lie they will act on for hours.
+      if (data && (data.code === 'DAILY_LIMIT' || data.error === 'daily limit')) {
+        throw new Error(tr('ai_daily_limit'));
+      }
       if (res.status === 429 || (data && (data.code === 'RATE_LIMIT' || data.error === 'rate_limited'))) {
         throw new Error(tr('ai_rate_limit'));
       }
@@ -875,6 +881,7 @@
     });
     const data = await res.json().catch(() => ({}));
     if (!res.ok) {
+      if (data && (data.code === 'DAILY_LIMIT' || data.error === 'daily limit')) throw new Error(tr('ai_daily_limit'));
       if (res.status === 429) throw new Error(tr('ai_rate_limit'));
       throw new Error((data && data.error) || ('HTTP ' + res.status));
     }
@@ -915,6 +922,7 @@
     });
     const data = await res.json().catch(() => ({}));
     if (!res.ok) {
+      if (data && (data.code === 'DAILY_LIMIT' || data.error === 'daily limit')) throw new Error(tr('ai_daily_limit'));
       if (res.status === 429) throw new Error(tr('ai_rate_limit'));
       throw new Error((data && data.error) || ('HTTP ' + res.status));
     }

@@ -176,12 +176,16 @@ window.VAULT_KEYS = Object.freeze({
     try { await c.auth.signOut(); } catch (_) {}
   }
   // Change the signed-in user's password.
-  async function changePassword(newPassword, currentPassword) {
+  async function changePassword(newPassword, currentPassword, recovery) {
     const c = sb(); if (!c) return { error: 'not_configured' };
     // Require re-authentication with the CURRENT password so a briefly-unlocked
     // or shared logged-in device can't silently change it and lock the owner out.
     try {
       const email = await currentEmail();
+      // A RECOVERY session is already proof of the mailbox — Supabase issued it
+      // from the emailed link — so re-authenticating with the old password is
+      // both impossible (the user forgot it) and unnecessary.
+      if (recovery) return null;
       if (!email || !currentPassword) return { error: 'reauth_failed' };
       const { error: reauthErr } = await c.auth.signInWithPassword({ email, password: currentPassword });
       if (reauthErr) return { error: 'reauth_failed' };

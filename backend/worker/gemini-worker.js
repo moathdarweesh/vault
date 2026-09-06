@@ -270,12 +270,18 @@ function ipFlooding(request) {
 // be forged. Fail-OPEN on a network/5xx failure (the same availability trade the
 // auth check makes) and fail-CLOSED only on an explicit refusal.
 async function budgetAllows(request) {
-  const auth = request.headers.get('Authorization') || '';
-  if (!auth.startsWith('Bearer ')) return { ok: true };          // the outage path has no user to bill
+  const raw = request.headers.get('Authorization') || '';
+  if (!raw.startsWith('Bearer ')) return { ok: true };           // no token: nobody to bill
+  // REBUILD the header from the parsed token. callerAllowed trims, so
+  // `Bearer  <valid token>` (two spaces) passes the auth check while PostgREST
+  // rejects the malformed header — and this function fails open, which would
+  // skip the daily budget for anyone who noticed.
+  const token = raw.slice(7).trim();
+  if (!token) return { ok: true };
   try {
     const r = await fetch(SUPABASE_URL + '/rest/v1/rpc/ai_budget_take', {
       method: 'POST',
-      headers: { Authorization: auth, apikey: SUPABASE_ANON, 'Content-Type': 'application/json' },
+      headers: { Authorization: 'Bearer ' + token, apikey: SUPABASE_ANON, 'Content-Type': 'application/json' },
       body: '{}',                                                 // both limits keep their SQL defaults
     });
     if (!r.ok) return { ok: true };                               // the RPC is missing or unwell: do not lock the app out
@@ -317,8 +323,6 @@ export default {
     const caller = await callerAllowed(request);
     if (!caller.allowed) return json({ error: 'unauthorized' }, 401, origin);
     if (rateLimited(caller.userId)) return json({ error: 'rate limited' }, 429, origin);
-    const budget = await budgetAllows(request);
-    if (!budget.ok) return json({ error: 'daily limit', code: 'DAILY_LIMIT' }, 429, origin);
 
     const OK_MIME = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
     const OK_AUDIO = ['audio/webm', 'audio/mp4', 'audio/mpeg', 'audio/ogg', 'audio/wav', 'audio/aac', 'audio/m4a', 'audio/3gpp'];
@@ -356,6 +360,13 @@ export default {
 
     const key = env.GEMINI_KEY;
     if (!key) return json({ error: 'server misconfigured' }, 500, origin);
+
+    // The durable daily budget is spent HERE — after the body is known to be
+    // valid and just before the upstream call. Taken any earlier, a malformed
+    // request that never reaches Gemini still burns a slot, and sixty empty
+    // POSTs would exhaust an account's day without costing the key anything.
+    const budget = await budgetAllows(request);
+    if (!budget.ok) return json({ error: 'daily limit', code: 'DAILY_LIMIT' }, 429, origin);
 
     const req = { text, image, audio, prompt, mode };
 
