@@ -99,8 +99,12 @@
   // Call the backend proxy (no key in the app) and return the macros. `image`
   // is an optional { mimeType, data(base64) } for photo-based analysis.
   async function analyzeViaProxy(text, image) {
-    const payload = { text: String(text || '') };
-    if (image) payload.image = image;
+    // A photo's instruction travels as `prompt`: the Worker keeps 1200 characters
+    // of that (`req.prompt || req.text` in the non-chat modes) but only 500 of
+    // `text`, and imagePrompt() with a full 400-character note is ~1170. Sent as
+    // `text`, the note — the ground truth that outranks the picture — was the
+    // part cut off. check-contracts measures both against the Worker's caps.
+    const payload = image ? { text: '', prompt: String(text || ''), image } : { text: String(text || '') };
     const res = await fetch(PROXY_URL, {
       method: 'POST',
       headers: await authHeaders(),

@@ -468,7 +468,7 @@
   <div id="detail" class="detail"><div class="detail-inner" id="detail-inner"></div></div>
   <div class="toast" id="toast"></div>
 
-  <script src="js/vendor/supabase.js?v=299"></script>
+  <script src="js/vendor/supabase.js?v=300"></script>
   <script>
   (function(){
     'use strict';
@@ -661,7 +661,11 @@
         // The heavy per-user activity aggregation runs in Postgres (is_admin RPCs)
         // instead of downloading millions of rows into the browser — see backend/
         // admin-scale-rpc.sql. These return a per-user rollup + a small analytics JSON.
-        sb.rpc('admin_user_stats'),
+        // The week the panel is DISPLAYING is passed in: the SQL falls back to the
+        // UTC Sunday, and between 00:00 and 03:00 local every Sunday UTC is still
+        // on Saturday — so for three hours the figures covered the previous week
+        // while the caption above them named the new one (migration 25).
+        sb.rpc('admin_user_stats', { p_week_start: isoDate(weekStartDate()) }),
         sb.rpc('admin_activity'),
         // The design's "سجلّ الأخطاء" screen. client_errors already existed and
         // nothing had ever read it — the table the app writes to on every
@@ -805,9 +809,9 @@
       box.innerHTML = metrics +
         '<div class="ogrid">'+
           '<div class="panel2"><div class="p2head"><span class="p2title"><span class="wdot"></span>المتعثّرون هذا الأسبوع</span>'+
-            '<span class="p2sub">نفّذوا أقل من نصف خطتهم · الأسبوع من السبت</span></div>'+
+            '<span class="p2sub">نفّذوا أقل من نصف خطتهم · الأسبوع من الأحد</span></div>'+
             stalledRows+
-            '<div class="p2foot">القائمة تفرغ كل سبت مع بداية أسبوع جديد.</div></div>'+
+            '<div class="p2foot">القائمة تفرغ كل أحد مع بداية أسبوع جديد.</div></div>'+
           '<div class="ocol">'+
             '<div class="panel2 accent"><div class="p2head2"><span class="p2title">اللقطة الأسبوعية</span>'+
               '<span class="p2week num" dir="ltr">'+esc(weekLabel())+'</span></div>'+
@@ -824,11 +828,13 @@
       });
     }
 
-    // Saturday-anchored week label, matching the SQL in migration 19 exactly —
-    // if these two ever disagree the page would caption the wrong seven days.
+    // Sunday-anchored week start, in the BROWSER's timezone. It is both the label
+    // and the argument admin_user_stats() counts by (migration 25), so the figures
+    // and the caption can no longer name different weeks.
+    function isoDate(d){ return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); }
     function weekStartDate(){
       var d=new Date(); d.setHours(0,0,0,0);
-      d.setDate(d.getDate()-((d.getDay()+1)%7));
+      d.setDate(d.getDate()-d.getDay());
       return d;
     }
     function weekLabel(){
@@ -964,7 +970,7 @@
         '<div class="searchbar" style="padding:12px 22px 0"><input id="user-search" type="search" placeholder="بحث بالاسم أو المعرّف…" value="'+esc(usersFilter)+'"></div>'+
         '<div class="uhead"><span>المستخدم</span><span>آخر ظهور</span><span>الالتزام هذا الأسبوع</span><span>الخطة المعيّنة</span><span>الدور</span></div>'+
         rows+
-        '<div class="p2foot">الالتزام = أيام تدرّبها من أيام خطتها، والأسبوع من السبت. من لا خطة له لا يُحسب في أيّ من الفلترين.</div>'+
+        '<div class="p2foot">الالتزام = أيام تدرّبها من أيام خطتها، والأسبوع من الأحد. من لا خطة له لا يُحسب في أيّ من الفلترين.</div>'+
       '</div>';
 
       var si=$('#user-search');
@@ -1377,7 +1383,7 @@
       (d.sessions||[]).forEach(function(s){ if(s.performed_on) done[s.performed_on]=true; });
 
       var start = new Date(); start.setHours(0,0,0,0);
-      start.setDate(start.getDate() - ((start.getDay()+1)%7));   // back to Saturday
+      start.setDate(start.getDate() - start.getDay());   // back to Sunday — the app's WEEK_START, and migration 23's anchor
       var rows='';
       for (var i=0;i<7;i++){
         var day = new Date(start); day.setDate(start.getDate()+i);
@@ -1446,7 +1452,7 @@
             '<span class="p2title">الخطة مقابل التنفيذ</span>'+
             '<span class="pvd-legend"><span><i class="k-plan"></i>مخطّط</span><span><i class="k-done"></i>منفّذ</span></span>'+
           '</div>'+planVsDone(u,d)+
-          '<div class="p2foot">الأسبوع من السبت — نفس الأسبوع الذي تحسبه الأرقام أعلاه.</div></div>'+
+          '<div class="p2foot">الأسبوع من الأحد — نفس الأسبوع الذي تحسبه الأرقام أعلاه.</div></div>'+
           '<div class="panel2 accent"><div class="p2head2"><span class="p2title">الأرقام</span>'+
             '<span class="p2week num" dir="ltr">'+esc(weekLabel())+'</span></div>'+
             '<div class="snaps">'+statRows+'</div></div>'+

@@ -1,6 +1,6 @@
 {
   "_comment": "Update manifest. `web` is the latest web build — it MUST equal the ?v=N in index.html on every release (scripts/release.js writes both); js/update.js reads it fresh (no-store) and reloads the entry html so web/CSS/JS updates reach all devices without a reinstall. `apk` only triggers the in-app download banner when apk.build here is GREATER than the versionCode installed on the device. To release a NEW APK: bump android/app/build.gradle versionCode + versionName, `npm run sync`, build, commit the APK to download/THE-VAULT.apk, then set apk.build/apk.version here to the same numbers (scripts/check-contracts.js refuses a mismatch) and push.",
-  "web": 299,
+  "web": 300,
   "apk": {
     "build": 20,
     "version": "2.9",

@@ -952,8 +952,13 @@ window.VAULT_KEYS = Object.freeze({
   // Best-effort pull of admin-curated GLOBAL content the app should surface
   // additively: the global exercise catalog (owner_id IS NULL), the shared
   // food catalog, ready-made preset plans, and the single app_config row.
-  // These tables are readable by anon (RLS "public read"), so this works even
-  // when the user is logged out. ANY failure (offline, not configured, a
+  // food_catalog, preset_plans and app_config are readable by anon (migration
+  // 07), so those work logged out. The exercises table is `to authenticated`
+  // only (migration 02 revoked anon), so its read waits for a session — it used
+  // to be attempted on every logged-out boot and fail; and because only a
+  // signed-in pull is cached, a logged-out boot re-reads the two small public
+  // tables each time, which is the cheaper of the two mistakes. ANY failure
+  // (offline, not configured, a
   // table not existing yet) resolves that field to null — callers must treat
   // every field as optional and never let a failure here block boot.
   const CATALOG_CACHE_KEY = VAULT_KEYS.catalog;
@@ -978,14 +983,18 @@ window.VAULT_KEYS = Object.freeze({
       result.foods = cached.foods || null;
       result.presets = cached.presets || null;
     } else {
-      try {
-        const { data, error } = await c
-          .from('exercises')
-          .select('id,name,category,image_slug,machine_type')
-          .is('owner_id', null)
-          .is('deleted_at', null);
-        if (!error && Array.isArray(data)) result.exercises = data;
-      } catch (_) {}
+      let signedIn = false;
+      try { signedIn = !!(await getSession()); } catch (_) {}
+      if (signedIn) {
+        try {
+          const { data, error } = await c
+            .from('exercises')
+            .select('id,name,category,image_slug,machine_type')
+            .is('owner_id', null)
+            .is('deleted_at', null);
+          if (!error && Array.isArray(data)) result.exercises = data;
+        } catch (_) {}
+      }
       try {
         const { data, error } = await c
           .from('food_catalog')

@@ -81,20 +81,40 @@ const contract = (name, problems) => {
   for (const m of clients.matchAll(/\.from\(['"]([\w-]+)['"]\)/g)) used.table.add(m[1]);
   for (const m of clients.matchAll(/\.rpc\(['"](\w+)['"]/g)) used.rpc.add(m[1]);
   for (const m of clients.matchAll(/storage\s*\.from\(['"]([\w-]+)['"]\)/g)) used.bucket.add(m[1]);
+  // a table named through a const — `const TABLE = 'vault_data'` … `.from(TABLE)` — counts too
+  for (const m of clients.matchAll(/const\s+([A-Z_]\w*)\s*=\s*'([\w-]+)'/g)) {
+    if (new RegExp('storage\\s*\\.from\\(' + m[1] + '\\)').test(clients)) used.bucket.add(m[2]);
+    else if (new RegExp('\\.from\\(' + m[1] + '\\)').test(clients)) used.table.add(m[2]);
+  }
   used.table.delete('objects');   // storage.objects is Supabase's, not ours
   // replay the migrations in order: the LAST statement about a name wins
   const dir = path.join(root, 'backend/migrations');
   const files = fs.readdirSync(dir).filter((f) => f.endsWith('.sql')).sort((a, b) => parseInt(a, 10) - parseInt(b, 10));
-  const state = { table: {}, rpc: {}, bucket: {} };
+  const state = { table: {}, rpc: {}, bucket: {}, cols: {} };
+  const trigFn = {};   // trigger function → the old./new. columns its body reads
+  const problems = [];
   for (const f of files) {
     const sql = fs.readFileSync(path.join(dir, f), 'utf8');
+    // columns: from the CREATE TABLE body (one column per line) and every ADD COLUMN since
+    for (const m of sql.matchAll(/create table(?: if not exists)?\s+(?:public\.)?(\w+)\s*\(([\s\S]*?)^\)/gim)) {
+      const cols = new Set();
+      for (const line of m[2].split(/\r?\n/)) { const c = line.trim().match(/^"?([a-z_]\w*)"?\s+\w/i); if (c && !/^(primary|unique|check|constraint|foreign|references|like)$/i.test(c[1])) cols.add(c[1].toLowerCase()); }
+      state.cols[m[1].toLowerCase()] = cols;
+    }
+    for (const m of sql.matchAll(/alter table\s+(?:public\.)?(\w+)\s+add column(?: if not exists)?\s+"?(\w+)"?/gi)) (state.cols[m[1].toLowerCase()] = state.cols[m[1].toLowerCase()] || new Set()).add(m[2].toLowerCase());
+    // a trigger function's body names columns of the row it fires on; they must exist on the
+    // table the trigger is attached to AT THIS POINT of the replay (20 read old.version two files before 22 added it)
+    for (const m of sql.matchAll(/create(?: or replace)? function\s+(?:public\.)?(\w+)\s*\(\s*\)\s*returns trigger[\s\S]*?\$\$([\s\S]*?)\$\$/gi)) trigFn[m[1].toLowerCase()] = new Set([...m[2].matchAll(/\b(?:old|new)\.(\w+)/gi)].map((x) => x[1].toLowerCase()));
+    for (const m of sql.matchAll(/create(?: or replace)? trigger\s+\w+[\s\S]*?\bon\s+(?:public\.)?(\w+)[\s\S]*?execute (?:function|procedure)\s+(?:public\.)?(\w+)\s*\(/gi)) {
+      const refs = trigFn[m[2].toLowerCase()], cols = state.cols[m[1].toLowerCase()];
+      if (refs && cols) for (const c of refs) if (!cols.has(c)) problems.push(`${f}: trigger on ${m[1]} runs ${m[2]}(), which reads ${c} — a column ${m[1]} does not have at that point of the replay`);
+    }
     for (const m of sql.matchAll(/\b(create table(?: if not exists)?|drop table(?: if exists)?)\s+(?:public\.)?(\w+)/gi)) state.table[m[2].toLowerCase()] = /^create/i.test(m[1]);
     for (const m of sql.matchAll(/\b(create(?: or replace)? function|drop function(?: if exists)?)\s+(?:public\.)?(\w+)\s*\(/gi)) state.rpc[m[2].toLowerCase()] = /^create/i.test(m[1]);
     for (const m of sql.matchAll(/storage\.buckets[\s\S]{0,300}?'([\w-]+)'/g)) state.bucket[m[1]] = true;
   }
-  const problems = [];
   for (const kind of ['table', 'rpc', 'bucket']) for (const n of used[kind]) if (!state[kind][n]) problems.push(`${kind} "${n}" is used by a client but no migration leaves it in place`);
-  contract('every Supabase table / RPC / bucket the clients call exists after replaying backend/migrations in order', problems);
+  contract('every Supabase table / RPC / bucket the clients call exists after replaying backend/migrations in order, and every trigger reads columns its table has by then', problems);
 }
 
 // ---------------------------------------------------------------- 5. i18n: every literal key exists in BOTH dictionaries, and the dictionaries match
@@ -118,6 +138,11 @@ const contract = (name, problems) => {
     // t('cat_' + x) is a PREFIX: every key under it must exist in both dictionaries
     if (m[2] === '+') prefixes.add(m[1]); else usedKeys.add(m[1]);
   }
+  // keys that reach t() by other routes: the static nav's data-t attributes (index.html),
+  // health.js's METRICS label/unit fields, and storage.js's F('key') reminder texts
+  for (const m of html.matchAll(/data-t="([A-Za-z0-9_]+)"/g)) usedKeys.add(m[1]);
+  for (const m of src['js/health.js'].matchAll(/\b(?:label|unit):\s*'([A-Za-z0-9_]+)'/g)) if (m[1] !== 'percent') usedKeys.add(m[1]);
+  for (const m of src['js/storage.js'].matchAll(/\bF\(\s*'([A-Za-z0-9_]+)'/g)) usedKeys.add(m[1]);
   const missing = [...usedKeys].filter((k) => !en.has(k) || !ar.has(k));
   if (missing.length) problems.push('used but missing from a dictionary: ' + missing.join(', '));
   for (const p of prefixes) {
@@ -132,13 +157,26 @@ const contract = (name, problems) => {
   const sections = new Set([...html.matchAll(/<section class="view[^"]*" data-view="([\w-]+)"/g)].map((m) => m[1]));
   const targets = new Set();
   for (const f of JS) for (const m of src[f].matchAll(/navigate\(\s*'([\w-]+)'/g)) targets.add(m[1]);
+  // reminder tap destinations (DB.notif.destFor) name views as data and reach navigate() unchanged
+  for (const m of src['js/storage.js'].matchAll(/\bview:\s*'([\w-]+)'/g)) targets.add(m[1]);
   const rv = src['js/app.js'].slice(src['js/app.js'].indexOf('function renderView('));
   const body = rv.slice(0, rv.search(/\r?\nfunction /));
   const cases = new Set([...body.matchAll(/case '([\w-]+)':/g)].map((m) => m[1]));
   const problems = [];
   for (const v of targets) if (!sections.has(v)) problems.push(`navigate('${v}') but index.html has no <section data-view="${v}">`);
   for (const v of sections) if (!cases.has(v)) problems.push(`<section data-view="${v}"> has no case in renderView()`);
-  contract('views: every navigate() target has a <section>, every <section> a renderView case', problems);
+  // the bottom nav's buttons and navigate()'s navMap (which tab stays lit) are the same vocabulary
+  const navBtns = new Set([...html.matchAll(/class="nav-btn[^"]*" data-view="([\w-]+)"/g)].map((m) => m[1]));
+  const nm = src['js/app.js'].match(/const navMap = \{([\s\S]*?)\};/);
+  if (!nm) problems.push('app.js has no navMap literal');
+  else {
+    const navMap = {};
+    for (const m of nm[1].replace(/\/\/[^\n]*/g, '').matchAll(/'?([\w-]+)'?\s*:\s*'([\w-]+)'/g)) navMap[m[1]] = m[2];
+    for (const v of navBtns) if (!sections.has(v)) problems.push(`bottom-nav button data-view="${v}" has no <section>`);
+    for (const v of sections) if (!(v in navMap)) problems.push(`navMap has no entry for view '${v}' — no tab stays lit there`);
+    for (const k of Object.keys(navMap)) { if (!sections.has(k)) problems.push(`navMap names '${k}', which has no <section>`); if (!navBtns.has(navMap[k])) problems.push(`navMap lights tab '${navMap[k]}' for '${k}', but the bottom nav has no such button`); }
+  }
+  contract('views: every navigate() target and reminder destination has a <section>, every <section> a renderView case and a navMap entry, and navMap lights only real tabs', problems);
 }
 
 // ---------------------------------------------------------------- 7. custom events: every vault:* event has a sender and a listener
@@ -191,6 +229,12 @@ const contract = (name, problems) => {
         }
       }
     }
+    // a key DERIVED from another (`STORAGE_KEY + '__corrupt'`) is a second spelling the registry cannot see
+    for (const f of JS) for (const m of src[f].matchAll(/(?:STORAGE_KEY|VAULT_KEYS\.\w+)\s*\+\s*'(_+\w*)'/g)) problems.push(`${f}: key derived as ${m[0]} — register it in VAULT_KEYS instead`);
+    const regObj = {}; for (const m of reg[1].matchAll(/\b(\w+):\s*'([^']+)'/g)) regObj[m[1]] = m[2];
+    if (regObj.corrupt !== regObj.store + '__corrupt') problems.push(`VAULT_KEYS.corrupt ('${regObj.corrupt}') is not VAULT_KEYS.store + '__corrupt' — an existing user's quarantined copy would not be found`);
+    // imgPrune sweeps every key starting with VAULT_KEYS.img: no OTHER registry value may start with it
+    for (const [k, v] of Object.entries(regObj)) if (k !== 'img' && k !== 'imgAt' && v.startsWith(regObj.img)) problems.push(`VAULT_KEYS.${k} ('${v}') starts with VAULT_KEYS.img — imgPrune would delete it`);
     // index.html's pre-paint scripts run BEFORE cloud.js and must spell the mirror key
     // themselves — so that one literal is checked against the registry instead.
     const ui = (reg[1].match(/\bui:\s*'([^']+)'/) || [])[1];
@@ -233,6 +277,9 @@ const contract = (name, problems) => {
   const apk = JSON.parse(read('version.json')).apk || {};
   if (gradle && String(apk.build) !== String(code)) problems.push(`version.json apk.build ${apk.build} vs build.gradle versionCode ${code}`);
   if (gradle && String(apk.version) !== String(name)) problems.push(`version.json apk.version ${apk.version} vs build.gradle versionName ${name}`);
+  // update.js ends its native check on `typeof apk.build !== 'number'` — a quoted build passes a string compare and silently disables the banner
+  if (typeof apk.build !== 'number') problems.push(`version.json apk.build must be a JSON number (update.js requires typeof 'number'), got ${JSON.stringify(apk.build)}`);
+  if (typeof apk.version !== 'string') problems.push(`version.json apk.version must be a string, got ${JSON.stringify(apk.version)}`);
   const capRoot = 'capacitor.config.json', capCopy = 'android/app/src/main/assets/capacitor.config.json';
   if (exists(capRoot) && exists(capCopy) && read(capRoot).replace(/\s+/g, '') !== read(capCopy).replace(/\s+/g, '')) {
     console.log('  ! capacitor.config.json differs from the copy inside android/app/src/main/assets — run `npm run sync` before the next APK build (not a failure: the web release does not ship it)');
@@ -267,6 +314,318 @@ const contract = (name, problems) => {
     for (const k of seeds) if (!a.has(k) || !b.has(k)) problems.push(`seed exercise '${k}' is missing from a name map`);
   }
   contract(`exercise names: ${seeds.size} seed exercises have both a transliteration and a translation, and the two maps match`, problems);
+}
+
+// ---------------------------------------------------------------- 14. RPC argument names match the SQL parameter names (PostgREST resolves by NAME)
+{
+  const dir = path.join(root, 'backend/migrations');
+  let sql = '';
+  for (const f of fs.readdirSync(dir).filter((f) => f.endsWith('.sql')).sort((a, b) => parseInt(a, 10) - parseInt(b, 10))) sql += '\n' + fs.readFileSync(path.join(dir, f), 'utf8');
+  const fns = {};   // name → [param-name lists], every overload that survives replay
+  for (const m of sql.matchAll(/create(?: or replace)? function\s+(?:public\.)?(\w+)\s*\(([^)]*)\)/gi)) {
+    const params = m[2].split(',').map((p) => p.trim()).filter(Boolean).map((p) => p.replace(/^(in|out|inout)\s+/i, '').split(/\s+/)[0].toLowerCase());
+    (fns[m[1].toLowerCase()] = fns[m[1].toLowerCase()] || []).push(params);
+  }
+  const clients = { 'js/cloud.js': src['js/cloud.js'], 'js/app.js': src['js/app.js'], 'js/foodai.js': src['js/foodai.js'], 'admin.html': admin };
+  const problems = []; let checked = 0;
+  for (const [f, s] of Object.entries(clients)) {
+    for (const m of s.matchAll(/\.rpc\(\s*['"](\w+)['"]\s*(?:,\s*(\{[^}]*\}|[A-Za-z_$][\w$.]*))?/g)) {
+      const name = m[1].toLowerCase(), defs = fns[name];
+      if (!defs) { problems.push(`${f}: rpc('${name}') has no definition in the migrations`); continue; }
+      if (!m[2] || !m[2].startsWith('{')) continue;            // arguments built elsewhere: checked by contract 4 (exists) only
+      const args = m[2].slice(1, -1).split(',').map((a) => a.trim()).filter(Boolean).map((a) => a.split(':')[0].trim().replace(/['"]/g, '').toLowerCase());
+      checked++;
+      if (!defs.some((p) => p.length === args.length && args.every((a) => p.includes(a)))) problems.push(`${f}: rpc('${name}', {${args.join(', ')}}) matches no overload — SQL has ${defs.map((p) => '(' + p.join(', ') + ')').join(' | ')}`);
+    }
+  }
+  contract(`every rpc() call's argument names match a surviving SQL overload (${checked} calls with literal arguments)`, problems);
+}
+
+// ---------------------------------------------------------------- 15. js/health.js calls only methods HealthConnectPlugin.kt declares
+{
+  const kt = exists('android/app/src/main/java/com/moath/thevault/HealthConnectPlugin.kt') ? read('android/app/src/main/java/com/moath/thevault/HealthConnectPlugin.kt') : '';
+  const methods = new Set([...kt.matchAll(/@PluginMethod\s*\r?\n\s*fun\s+(\w+)\s*\(/g)].map((m) => m[1]));
+  const calls = new Set([...src['js/health.js'].matchAll(/plugin\(\)\.(\w+)\(/g)].map((m) => m[1]));
+  const problems = kt ? [...calls].filter((c) => !methods.has(c)).map((c) => `js/health.js calls plugin().${c}() but the Kotlin plugin has no @PluginMethod ${c}`) : [];
+  contract(`js/health.js calls only @PluginMethods the native plugin declares (${calls.size} calls)`, problems);
+}
+
+// ---------------------------------------------------------------- 16. the Console counts the SAME week as the app
+// storage.js WEEK_START is the app's one week start (contract 10). The Console has
+// three more copies of that decision — the SQL anchor in admin_user_stats(), the
+// two client-side week computations in admin.html, and the captions that name the
+// day. Migration 19 said Saturday while the app said Sunday, and the same user
+// read two different adherence figures on the same morning.
+{
+  const problems = [];
+  const ws = Number((src['js/storage.js'].match(/^const WEEK_START\s*=\s*(\d)/m) || [])[1]);
+  const AR_DAY = ['الأحد', 'الاثنين', 'الثلاثاء', 'الأربعاء', 'الخميس', 'الجمعة', 'السبت'];
+  const ANCHOR_SQL = { 0: 'current_date - extract(dow from current_date)::int', 6: 'current_date - ((extract(dow from current_date)::int + 1) % 7)' };
+  const ANCHOR_JS = { 0: /getDate\(\)\s*-\s*(\w+)\.getDay\(\)\)/, 6: /getDate\(\)\s*-\s*\(\((\w+)\.getDay\(\)\s*\+\s*1\)\s*%\s*7\)\)/ };
+  if (!(ws in ANCHOR_SQL)) problems.push(`WEEK_START = ${ws} — this contract knows the Sunday (0) and Saturday (6) anchors only; teach it the new one`);
+  else {
+    // the SQL: the last migration (replay order) that defines admin_user_stats decides
+    const dir = path.join(root, 'backend/migrations');
+    let def = null, from = null;
+    for (const f of fs.readdirSync(dir).filter((f) => f.endsWith('.sql')).sort((a, b) => parseInt(a, 10) - parseInt(b, 10))) {
+      const sql = fs.readFileSync(path.join(dir, f), 'utf8');
+      const i = sql.search(/create(?: or replace)? function\s+(?:public\.)?admin_user_stats\s*\(/i);
+      if (i >= 0) { def = sql.slice(i); from = f; }
+    }
+    if (!def) problems.push('no migration defines admin_user_stats()');
+    else if (!def.includes(ANCHOR_SQL[ws])) problems.push(`${from}: admin_user_stats() does not anchor its week on day ${ws} — expected "${ANCHOR_SQL[ws]}"`);
+    // the two client-side week starts in admin.html (weekStartDate + the plan-vs-done grid)
+    const jsSites = [...admin.matchAll(/getDate\(\)\s*-\s*[^;]*getDay\(\)[^;]*;/g)].map((m) => m[0]);
+    if (jsSites.length !== 2) problems.push(`admin.html has ${jsSites.length} week-start computations (expected 2: weekStartDate and the plan-vs-done grid)`);
+    for (const site of jsSites) if (!ANCHOR_JS[ws].test(site)) problems.push(`admin.html week start does not begin on day ${ws}: ${site.trim()}`);
+    // the captions name the day
+    for (const m of admin.matchAll(/الأسبوع من ([\u0600-\u06FF]+)/g)) if (m[1] !== AR_DAY[ws]) problems.push(`admin.html caption says the week starts on ${m[1]}, the app says ${AR_DAY[ws]}`);
+    for (const m of admin.matchAll(/تفرغ كل ([\u0600-\u06FF]+)/g)) if (m[1] !== AR_DAY[ws].replace(/^ال/, '')) problems.push(`admin.html says the list empties every ${m[1]}, the week starts on ${AR_DAY[ws]}`);
+  }
+  contract(`the Console counts the app's week (WEEK_START ${ws}): the admin_user_stats() anchor, both admin.html week starts and every caption agree`, problems);
+}
+
+// ---------------------------------------------------------------- 17. the static DOM app.js assumes (index.html's chrome)
+// The bottom nav, the modal root, the toast, the food FAB, .app, .main and the
+// theme-color meta are static HTML that no template emits; JS queries them by
+// name, and `$('#bottom-nav').addEventListener` runs at top level with no guard.
+{
+  const problems = [];
+  const js = JS.map((f) => src[f]).join('\n');
+  const stripped = js.replace(/\/\/[^\n]*/g, '');
+  const ids = new Set(), classes = new Set();
+  for (const m of stripped.matchAll(/(?:\$|getElementById|querySelector)\(\s*'#?([\w-]+)'\s*\)/g)) ids.add(m[1]);
+  for (const m of stripped.matchAll(/(?:\$\$|\$|querySelectorAll|querySelector)\(\s*'\.([\w-]+)'\s*\)/g)) classes.add(m[1]);
+  const emitsId = (id) => new RegExp('id=\\"' + id + '\\"|\\bid:\\s*\'' + id + '\'|\\.id\\s*=\\s*\'' + id + '\'').test(js);
+  // emitted by JS when the token is named anywhere other than a '.x' query literal —
+  // a class attribute (`class="sfp-tab${…}"`), a classList call, or `moved ? 'is-moved' : ''`
+  const emitsClass = (c) => (stripped.match(new RegExp('\\b' + c + '\\b', 'g')) || []).length > (stripped.match(new RegExp('[\'"`]\\.' + c + '[\'"`]', 'g')) || []).length;
+  for (const id of ids) if (!emitsId(id) && !new RegExp('id=\\"' + id + '\\"').test(html)) problems.push(`JS queries #${id}, which no template emits and index.html does not have`);
+  for (const c of classes) if (!emitsClass(c) && !new RegExp('class=\\"[^\\"]*\\b' + c + '\\b').test(html)) problems.push(`JS queries .${c}, which no template emits and index.html does not have`);
+  if (/meta\[name="theme-color"\]/.test(js) && !/<meta name="theme-color"/.test(html)) problems.push('JS updates meta[name="theme-color"] but index.html has no such meta');
+  contract(`the static DOM the scripts query (${ids.size} ids, ${classes.size} classes) exists — in index.html when no template emits it`, problems);
+}
+
+// ---------------------------------------------------------------- 18. client_errors accepts every kind the app reports
+{
+  const dir = path.join(root, 'backend/migrations');
+  let kinds = null, from = null;
+  for (const f of fs.readdirSync(dir).filter((f) => f.endsWith('.sql')).sort((a, b) => parseInt(a, 10) - parseInt(b, 10))) {
+    const sql = fs.readFileSync(path.join(dir, f), 'utf8');
+    for (const m of sql.matchAll(/kind\s+(?:text\s+not\s+null\s+)?check\s*\(\s*kind\s+in\s*\(([^)]*)\)|check\s*\(\s*kind\s+in\s*\(([^)]*)\)/gi)) { kinds = new Set([...(m[1] || m[2]).matchAll(/'([^']+)'/g)].map((x) => x[1])); from = f; }
+  }
+  const problems = [];
+  if (!kinds) problems.push('no migration constrains client_errors.kind');
+  else for (const f of JS) for (const m of src[f].matchAll(/reportError\(\s*'([\w-]+)'/g)) if (!kinds.has(m[1])) problems.push(`${f}: reportError('${m[1]}', …) — ${from} only accepts ${[...kinds].join(', ')}; the insert is refused and silently dropped`);
+  contract(`client_errors accepts every reportError() kind the scripts send (${kinds ? [...kinds].length : 0} kinds, ${from})`, problems);
+}
+
+// ---------------------------------------------------------------- 19. a module app.js paints around (typeof X ? X.y() : '') redraws once it exists
+{
+  const problems = [];
+  const mods = new Set([...src['js/app.js'].matchAll(/typeof (\w+) !== 'undefined' \? \1\./g)].map((m) => m[1]));
+  const file = { Health: 'js/health.js', Notify: 'js/notify.js', FoodAI: 'js/foodai.js', VaultUpdate: 'js/update.js' };
+  for (const mod of mods) {
+    const f = file[mod]; if (!f) { problems.push(`no file known for module ${mod}`); continue; }
+    const after = src[f].slice(src[f].indexOf('window.' + mod + ' ='));
+    if (!/refreshActive\(\)|renderView\(/.test(after)) problems.push(`${f}: app.js's init() renders before this file exists and its template asks typeof ${mod} — nothing after window.${mod} = … redraws the view`);
+  }
+  contract(`modules loaded after app.js redraw what init() painted without them (${[...mods].join(', ') || 'none'})`, problems);
+}
+
+// ---------------------------------------------------------------- 20. the two background colours, in all four places
+{
+  const css = read('styles.css');
+  const dark = (css.match(/:root, body\.theme-dark[\s\S]*?--bg:\s*(#[0-9a-f]{6})/i) || [])[1];
+  const light = (css.match(/body\.theme-light[\s\S]*?--bg:\s*(#[0-9a-f]{6})/i) || [])[1];
+  const problems = [];
+  if (!dark || !light) problems.push(`styles.css --bg not found (dark ${dark}, light ${light})`);
+  else {
+    const meta = (html.match(/<meta name="theme-color" content="(#[0-9a-f]{6})"/i) || [])[1];
+    if (meta !== dark) problems.push(`index.html static theme-color ${meta} ≠ styles.css dark --bg ${dark}`);
+    for (const [name, text] of [['index.html pre-paint', html], ['app.js applyTheme', src['js/app.js']]]) {
+      const m = text.match(/theme === 'light' \? '(#[0-9a-f]{6})' : '(#[0-9a-f]{6})'/i);
+      if (!m) problems.push(`${name}: no "theme === 'light' ? '#…' : '#…'" literal`);
+      else { if (m[1] !== light) problems.push(`${name}: light ${m[1]} ≠ styles.css ${light}`); if (m[2] !== dark) problems.push(`${name}: dark ${m[2]} ≠ styles.css ${dark}`); }
+    }
+  }
+  contract(`theme-color tracks --bg exactly: styles.css (${dark}/${light}), the static meta, the pre-paint script and applyTheme agree`, problems);
+}
+
+// ---------------------------------------------------------------- 21. the pre-paint mirror's shape is a three-file agreement
+{
+  const problems = [];
+  const pre = html.slice(html.indexOf("localStorage.getItem('"), html.indexOf('</script>', html.indexOf("localStorage.getItem('")));
+  const readFields = new Set([...pre.matchAll(/\bui\.(\w+)/g)].map((m) => m[1]));
+  const mirror = src['js/storage.js'].slice(src['js/storage.js'].indexOf('function mirrorUi('));
+  const written = new Set([...mirror.slice(0, mirror.indexOf('\n}')).matchAll(/\b(\w+):\s*p\.\w+/g)].map((m) => m[1]));
+  for (const m of src['js/app.js'].matchAll(/mirrorUi\(\{\s*(\w+)/g)) written.add(m[1]);
+  for (const f of readFields) if (!written.has(f)) problems.push(`index.html's pre-paint reads ui.${f}, which mirrorUi() never writes`);
+  if (!/'theme-' \+ ui\.theme/.test(pre)) problems.push("index.html's pre-paint no longer builds 'theme-' + ui.theme");
+  if (!/'theme-' \+ theme/.test(src['js/app.js'])) problems.push("app.js applyTheme no longer builds 'theme-' + theme");
+  for (const t of ['dark', 'light']) if (!new RegExp('body\\.theme-' + t + '\\b').test(read('styles.css'))) problems.push(`styles.css has no body.theme-${t} block`);
+  contract(`the pre-paint mirror's fields (${[...readFields].join(', ')}) are written by mirrorUi(), and the theme-<name> class is spelled the same in index.html, app.js and styles.css`, problems);
+}
+
+// ---------------------------------------------------------------- 22. the seven glyphs copied outside ICONS are byte-for-byte the masters
+{
+  const problems = [];
+  const app = src['js/app.js'];
+  const block = app.slice(app.indexOf('const ICONS = {'), app.indexOf('\n};', app.indexOf('const ICONS = {')));
+  const icons = {}; for (const m of block.matchAll(/^\s+(\w+):\s*'((?:[^'\\]|\\.)*)',?\s*(?:\/\/.*)?$/gm)) icons[m[1]] = m[2];
+  const norm = (x) => x.replace(/\s+/g, ' ').replace(/> </g, '><').trim();
+  const nav = html.slice(html.indexOf('<nav class="bottom-nav"'), html.indexOf('</nav>'));
+  const navSvgs = [...nav.matchAll(/<svg[^>]*>([\s\S]*?)<\/svg>/g)].map((m) => m[1]);
+  const navOrder = [...nav.matchAll(/data-view="(\w+)"/g)].map((m) => ({ workouts: 'calendar', cardio: 'heartPulse', home: 'home', food: 'utensils', sleep: 'moon' })[m[1]]);
+  if (navSvgs.length !== navOrder.length) problems.push(`bottom nav: ${navSvgs.length} svgs for ${navOrder.length} buttons`);
+  navOrder.forEach((name, i) => { if (navSvgs[i] != null && norm(navSvgs[i]) !== norm(icons[name] || '')) problems.push(`index.html nav glyph #${i + 1} differs from ICONS.${name}`); });
+  const upd = [...src['js/update.js'].matchAll(/<svg[^>]*>([\s\S]*?)<\/svg>/g)].map((m) => m[1]);
+  ['refresh', 'arrowUp'].forEach((name, i) => { if (upd[i] == null) problems.push(`update.js has no svg #${i + 1} (expected ICONS.${name})`); else if (norm(upd[i]) !== norm(icons[name] || '')) problems.push(`update.js svg #${i + 1} differs from ICONS.${name}`); });
+  contract(`the 7 glyphs duplicated outside ICONS (5 in index.html's nav, 2 in update.js) match their masters`, problems);
+}
+
+// ---------------------------------------------------------------- 23. every icon name is an ICONS key (a wrong name renders nothing, silently)
+{
+  const problems = [];
+  const app = src['js/app.js'];
+  const block = app.slice(app.indexOf('const ICONS = {'), app.indexOf('\n};', app.indexOf('const ICONS = {')));
+  const keys = new Set([...block.matchAll(/^\s+(\w+):\s*'/gm)].map((m) => m[1]));
+  for (const m of app.matchAll(/^ICONS\.(\w+) = ICONS\.(\w+);/gm)) { if (!keys.has(m[2])) problems.push(`alias ICONS.${m[1]} points at missing ICONS.${m[2]}`); keys.add(m[1]); }
+  const used = new Map();
+  for (const f of JS) {
+    const code = src[f].replace(/\/\/[^\n]*/g, '');
+    for (const m of code.matchAll(/\b(?:icon|ic)\(\s*'([A-Za-z][\w]*)'/g)) used.set(m[1], f);
+    for (const m of code.matchAll(/\b(?:iconName|icon):\s*'([a-z][A-Za-z0-9]*)'/g)) used.set(m[1], f);
+  }
+  const opts = src['js/storage.js'].match(/const CARDIO_ICON_OPTIONS = \[([^\]]*)\]/);
+  if (opts) for (const m of opts[1].matchAll(/'(\w+)'/g)) used.set(m[1], 'js/storage.js CARDIO_ICON_OPTIONS');
+  for (const [name, f] of used) if (!keys.has(name)) problems.push(`${f}: icon '${name}' is not an ICONS key`);
+  contract(`every icon name in the scripts (${used.size} names) is one of the ${keys.size} ICONS keys`, problems);
+}
+
+// ---------------------------------------------------------------- 24. the Worker's caps and origins fit what the clients send
+{
+  const vm = require('vm');
+  const problems = [];
+  const worker = read('backend/worker/gemini-worker.js');
+  const textCap = Number((worker.match(/text = String\(body\.text \|\| ''\)\.slice\(0, (\d+)\)/) || [])[1]);
+  const promptCap = Number((worker.match(/prompt = String\(body\.prompt \|\| ''\)\.slice\(0, (\d+)\)/) || [])[1]);
+  if (!textCap || !promptCap) problems.push(`could not read the Worker's text/prompt caps (${textCap}/${promptCap})`);
+  else {
+    const fa = src['js/foodai.js'];
+    // imagePrompt() with the longest note the input allows, evaluated from the source
+    const ip = fa.slice(fa.indexOf('function imagePrompt(note) {'), fa.indexOf('\n  }', fa.indexOf('function imagePrompt(note) {')) + 4);
+    const noteMax = Number((fa.match(/ai-note-input[^>]*maxlength="(\d+)"/) || [])[1]) || 400;
+    let ipLen = -1; try { ipLen = vm.runInNewContext(ip + '; imagePrompt("x".repeat(' + noteMax + ')).length', {}); } catch (e) { problems.push('could not evaluate imagePrompt(): ' + e.message); }
+    const vp = fa.slice(fa.indexOf('const VOICE_PROMPT = ['), fa.indexOf(".join(' ');", fa.indexOf('const VOICE_PROMPT = [')) + 11);
+    let vpLen = -1; try { vpLen = vm.runInNewContext(vp + '; VOICE_PROMPT.length', {}); } catch (e) { problems.push('could not evaluate VOICE_PROMPT: ' + e.message); }
+    const proxy = fa.slice(fa.indexOf('async function analyzeViaProxy('), fa.indexOf('\n  }', fa.indexOf('async function analyzeViaProxy(')));
+    if (!/prompt:\s*String\(text/.test(proxy)) problems.push('foodai.js analyzeViaProxy sends the photo instruction as `text` (capped at ' + textCap + ') instead of `prompt`');
+    if (ipLen > promptCap) problems.push(`imagePrompt() with a ${noteMax}-char note is ${ipLen} chars — the Worker keeps ${promptCap} of \`prompt\`; the note (the ground truth) is what gets cut`);
+    if (vpLen > promptCap) problems.push(`VOICE_PROMPT is ${vpLen} chars — the Worker keeps ${promptCap} of \`prompt\``);
+    const batch = Number((src['js/app.js'].match(/len \+ line\.length \+ 1 > (\d+)/) || [])[1]);
+    if (batch && batch > textCap) problems.push(`the recipe auto-fill batches up to ${batch} chars of \`text\`; the Worker keeps ${textCap}`);
+    // every port a dev server can listen on is an origin the Worker admits
+    const ports = new Set();
+    const ds = exists('dev-server.js') ? read('dev-server.js') : ''; const dp = (ds.match(/PORT \|\| (\d+)/) || [])[1]; if (dp) ports.add(dp);
+    if (exists('.claude/launch.json')) for (const c of (JSON.parse(read('.claude/launch.json')).configurations || [])) if (c.port) ports.add(String(c.port));
+    const allowed = new Set([...(worker.match(/const ALLOWED_ORIGINS = new Set\(\[([\s\S]*?)\]\)/) || ['', ''])[1].matchAll(/'([^']+)'/g)].map((m) => m[1]));
+    const localRe = (worker.match(/const LOCAL_DEV_ORIGIN = \/(.+)\/;/) || [])[1];
+    const admits = (o) => allowed.has(o) || (localRe ? new RegExp(localRe).test(o) : false);
+    for (const port of ports) if (!admits('http://localhost:' + port)) problems.push(`a dev server listens on ${port} but the Worker's CORS admits neither http://localhost:${port} nor local origins by pattern — AI calls fail with "Failed to fetch"`);
+  }
+  contract(`the Worker's caps (text ${textCap}, prompt ${promptCap}) hold the clients' longest instructions, and its CORS admits every dev-server port`, problems);
+}
+
+// ---------------------------------------------------------------- 25. .run-nav is emitted once, at the root of the guided screen
+// position:sticky can only travel inside its containing block, so the rest bar
+// (inserted before .run-nav) and .run-nav itself must be DIRECT children of the
+// view. ensureRestBar reports a wrapper at runtime; this refuses it at commit.
+{
+  const problems = [];
+  const lines = src['js/app.js'].split(/\r?\n/);
+  const emits = lines.map((l, i) => [l, i + 1]).filter(([l]) => /class="run-nav"/.test(l));
+  if (emits.length !== 1) problems.push(`app.js emits class="run-nav" ${emits.length} times (expected 1)`);
+  else if (!/^    <div class="run-nav">/.test(emits[0][0])) problems.push(`app.js:${emits[0][1]}: .run-nav is not at the template's root indentation (4 spaces) — a wrapper would be the sticky bar's containing block`);
+  const queries = (src['js/app.js'].match(/querySelector\('\.view\.active \.run-nav'\)/g) || []).length;
+  if (queries !== 1) problems.push(`app.js queries '.view.active .run-nav' ${queries} times (expected 1: ensureRestBar)`);
+  contract('.run-nav is emitted once, as a direct child of the guided view, and queried from one place', problems);
+}
+
+// ---------------------------------------------------------------- 26. app.js checks a later module before using it, and never on a boot timer
+{
+  const problems = [];
+  const lines = src['js/app.js'].split(/\r?\n/);
+  const mods = ['Notify', 'Health', 'FoodAI', 'VaultUpdate'];
+  for (const mod of mods) {
+    const guard = new RegExp('window\\.' + mod + '\\b|typeof ' + mod + '\\b');
+    lines.forEach((line, i) => {
+      const code = line.replace(/\/\/.*$/, '');
+      if (!new RegExp('\\b' + mod + '\\.').test(code) || guard.test(code)) return;
+      const back = lines.slice(Math.max(0, i - 20), i).join('\n');
+      if (!guard.test(back)) problems.push(`app.js:${i + 1}: uses ${mod}. with no window.${mod} / typeof ${mod} check on the line or within the 20 lines above`);
+    });
+  }
+  // the init IIFE: no timer armed at evaluation time may be the thing that waits for a later script
+  const init = src['js/app.js'].slice(src['js/app.js'].indexOf('(function init() {'));
+  for (const m of init.matchAll(/setTimeout\(\(\) => \{([\s\S]*?)\n  \}, (\d+)\);/g)) if (Number(m[2]) >= 1000 && new RegExp('\\b(' + mods.join('|') + ')\\.').test(m[1])) problems.push(`init(): a ${m[2]} ms timer armed during app.js's evaluation is what reaches ${mods.find((x) => m[1].includes(x + '.'))}. — gate it on afterScripts() instead`);
+  contract('app.js checks a later module (Notify/Health/FoodAI/VaultUpdate) before using it, and init() reaches none of them from a timer', problems);
+}
+
+// ---------------------------------------------------------------- 27. the catalog tables pullCatalog reads while logged out are anon-readable
+{
+  const problems = [];
+  const dir = path.join(root, 'backend/migrations');
+  const anonGrant = {}, anonPolicy = {};
+  for (const f of fs.readdirSync(dir).filter((f) => f.endsWith('.sql')).sort((a, b) => parseInt(a, 10) - parseInt(b, 10))) {
+    const sql = fs.readFileSync(path.join(dir, f), 'utf8').replace(/--[^\n]*/g, '');
+    for (const m of sql.matchAll(/\b(grant|revoke)\s+(?:all|select)(?:\s+privileges)?\s+on\s+(?:table\s+)?public\.(\w+)\s+(?:to|from)\s+([^;]+);/gi)) if (/\banon\b/.test(m[3])) anonGrant[m[2].toLowerCase()] = m[1].toLowerCase() === 'grant';
+    for (const m of sql.matchAll(/create policy\s+\S+\s+on\s+public\.(\w+)[\s\S]*?for\s+select\s+to\s+([^\n]+)/gi)) anonPolicy[m[1].toLowerCase()] = /\banon\b/.test(m[2]);
+  }
+  const c = src['js/cloud.js'];
+  const start = c.indexOf('async function pullCatalog()');
+  const endRel = c.slice(start).search(/\r?\n  \}\r?\n/);
+  const body = endRel < 0 ? '' : c.slice(start, start + endRel);
+  if (!body) problems.push('cloud.js: could not delimit pullCatalog()');
+  let guarded = '';
+  const gi = body.indexOf('if (signedIn) {');
+  if (gi >= 0) { let d = 0; for (let i = body.indexOf('{', gi); i < body.length; i++) { if (body[i] === '{') d++; else if (body[i] === '}') { d--; if (!d) { guarded = body.slice(gi, i + 1); break; } } } }
+  const open = body.replace(guarded, '');
+  for (const m of open.matchAll(/\.from\('(\w+)'\)/g)) if (!anonGrant[m[1]] || !anonPolicy[m[1]]) problems.push(`pullCatalog reads '${m[1]}' without a session, but the migrations give anon ${anonGrant[m[1]] ? 'a grant' : 'no grant'} and ${anonPolicy[m[1]] ? 'a select policy' : 'no select policy'} on it — the read fails on every logged-out boot`);
+  contract('every table pullCatalog() reads without a session is anon-readable after the migrations; the rest wait for one', problems);
+}
+
+// ---------------------------------------------------------------- 28. a function locked against anon/PUBLIC stays locked
+// Postgres grants EXECUTE on a NEW function to PUBLIC, and DROP discards the
+// ACL — so `drop function f(); create function f()` silently undoes a revoke
+// made three migrations earlier. That happened: 19 re-created admin_user_stats
+// that way and handed anon EXECUTE back (the is_admin() gate still raised, so
+// nothing was exposed) until 23 re-issued the revoke. Replayed in order, every
+// function that was ever locked must still be locked at the end.
+{
+  const dir = path.join(root, 'backend/migrations');
+  const files = fs.readdirSync(dir).filter((f) => f.endsWith('.sql')).sort((a, b) => parseInt(a, 10) - parseInt(b, 10));
+  const locked = {};      // fn → true (revoked from anon/PUBLIC) | false (ACL discarded since)
+  const everLocked = {};  // fn → the file that first locked it
+  const openedBy = {};    // fn → the file that discarded its ACL
+  for (const f of files) {
+    const sql = fs.readFileSync(path.join(dir, f), 'utf8').replace(/--[^\n]*/g, '');
+    const events = [];
+    // a revoke naming anon or public — 'revoke all on function f(...) from public, anon'
+    for (const m of sql.matchAll(/revoke\s+(?:all|execute)[\s\S]{0,40}?on function\s+(?:public\.)?(\w+)\s*\(([^)]*)\)\s*from\s+([^;]+);/gi)) if (/\b(anon|public)\b/i.test(m[3])) events.push([m.index, m[1].toLowerCase(), 'lock']);
+    // anything that gives the function a FRESH acl: a drop, or a create that is not OR REPLACE
+    for (const m of sql.matchAll(/drop function(?: if exists)?\s+(?:public\.)?(\w+)\s*\(/gi)) events.push([m.index, m[1].toLowerCase(), 'open']);
+    for (const m of sql.matchAll(/create function\s+(?:public\.)?(\w+)\s*\(/gi)) events.push([m.index, m[1].toLowerCase(), 'open']);
+    events.sort((a, b) => a[0] - b[0]);
+    for (const [, fn, kind] of events) {
+      if (kind === 'lock') { locked[fn] = true; if (!everLocked[fn]) everLocked[fn] = f; }
+      else if (everLocked[fn] && locked[fn]) { locked[fn] = false; openedBy[fn] = f; }
+      else if (everLocked[fn]) openedBy[fn] = f;
+    }
+  }
+  const problems = [];
+  for (const fn of Object.keys(everLocked)) if (!locked[fn]) problems.push(`${fn}(): ${everLocked[fn]} revoked EXECUTE from anon/PUBLIC, then ${openedBy[fn]} dropped or re-created it without re-issuing the revoke — Postgres hands EXECUTE back to PUBLIC on the new function`);
+  contract(`every function ever locked against anon/PUBLIC is still locked after the replay (${Object.keys(everLocked).length} functions)`, problems);
 }
 
 console.log(failures.length ? `\ncheck-contracts: ${failures.length} broken contract(s)` : '\ncheck-contracts: all contracts hold');

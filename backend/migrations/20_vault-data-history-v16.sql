@@ -43,6 +43,13 @@ grant select on public.vault_data_history to authenticated;
 
 -- SECURITY DEFINER with an empty search_path (the convention since 18): the
 -- function body names every relation with its schema.
+-- The trigger below reads old.version. That column is added by 22 (idempotent,
+-- and it stays there), but a replay of this folder IN ORDER reached this file
+-- first, and every blob UPDATE then failed until 22 ran. The same statement
+-- here — `if not exists` — makes both orders and any re-run safe.
+alter table public.vault_data
+  add column if not exists version bigint not null default 0;
+
 create or replace function public.vault_data_keep_history()
 returns trigger
 language plpgsql

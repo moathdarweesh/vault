@@ -437,4 +437,11 @@
   // permission, and throttled to once per 20s — so a screen can ask for fresh
   // watch data on open without prompting or hammering Health Connect.
   window.Health = { open, sync, autoSync: silentSync, isNative, homeSectionHtml, bindHomeSection, status, statusText, refreshStatus };
+
+  // app.js's init() painted Home before this file existed (it is the fourth
+  // script) and its template asks `typeof Health` — so the Health section was
+  // missing from the first paint until something re-rendered Home, and on a
+  // phone that has not granted the permission nothing did. Redraw once, now
+  // that the module exists; only when the section has something to show.
+  try { if (homeSectionHtml()) refreshActive(); } catch (_) {}
 })();

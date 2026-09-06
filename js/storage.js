@@ -755,7 +755,7 @@ function loadState() {
     STATE_LOAD_FAILED = true;
     try {
       const raw = localStorage.getItem(STORAGE_KEY);
-      if (raw) localStorage.setItem(STORAGE_KEY + '__corrupt', raw);
+      if (raw) localStorage.setItem(VAULT_KEYS.corrupt, raw);   // the registry's spelling — the one logout clears
     } catch (_) { /* quarantine is best-effort; never block the boot */ }
     console.error('[VAULT] Stored data could not be parsed — running READ-ONLY to protect it.', err);
     try {
@@ -785,6 +785,11 @@ function loadState() {
 // ==========================================================================
 const IMG_KEY = VAULT_KEYS.img;
 const IMG_AT_KEY = VAULT_KEYS.imgAt;
+// True while this file evaluates (loadState may move inline photos out of a
+// stored blob); a quota failure in that window has no listener yet in app.js,
+// so it is remembered here and init() re-raises it — see DB.bootSaveFailed.
+let BOOTING = true;
+let BOOT_SAVE_FAILED = false;
 function imgGet(id) { try { return localStorage.getItem(IMG_KEY + id) || null; } catch (_) { return null; } }
 function imgSet(id, dataUrl) {
   try {
@@ -792,7 +797,9 @@ function imgSet(id, dataUrl) {
     else localStorage.removeItem(IMG_KEY + id);
     return true;
   } catch (err) {
-    // quota — report exactly like a blob write so the user is told
+    // quota — report exactly like a blob write so the user is told. During this
+    // file's own evaluation the event has no listener; keep the fact for init().
+    if (BOOTING) BOOT_SAVE_FAILED = true;
     try { window.dispatchEvent(new CustomEvent('vault:save-failed', { detail: { quota: true } })); } catch (_) {}
     return false;
   }
@@ -850,9 +857,11 @@ function imgPrune() {
   try {
     const keep = new Set((STATE.exercises || []).map((e) => e.id));
     Object.keys(localStorage).forEach((k) => {
-      if (k.indexOf(IMG_KEY) !== 0) return;
-      const id = k.indexOf(IMG_AT_KEY) === 0 ? k.slice((IMG_AT_KEY).length) : k.slice(IMG_KEY.length);
-      if (!keep.has(id)) localStorage.removeItem(k);
+      // Both prefixes named, neither derived from the other: nothing here relies
+      // on 'vault_img_at_' happening to start with 'vault_img_'.
+      const id = k.indexOf(IMG_AT_KEY) === 0 ? k.slice(IMG_AT_KEY.length)
+        : k.indexOf(IMG_KEY) === 0 ? k.slice(IMG_KEY.length) : null;
+      if (id !== null && !keep.has(id)) localStorage.removeItem(k);
     });
   } catch (_) {}
 }
@@ -869,6 +878,7 @@ function mirrorUi(extra) {
   } catch (_) {}
 }
 let STATE = withImageAccessors(loadState());
+BOOTING = false;
 mirrorUi();
 imgPrune();
 
@@ -2972,6 +2982,7 @@ DB.reload = reloadState;
 // READ-ONLY on an in-memory default. The 'vault:load-failed' event fires
 // before app.js loads (STATE is built at evaluation time), so init() asks.
 DB.loadFailed = () => STATE_LOAD_FAILED;
+DB.bootSaveFailed = () => BOOT_SAVE_FAILED;   // a quota failure during this file's evaluation, re-raised by init()
 
 // ==========================================================================
 // Helpers exposed for the UI layer

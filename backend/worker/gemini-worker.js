@@ -47,8 +47,14 @@ const ALLOWED_ORIGINS = new Set([
   'http://localhost:8080',
 ]);
 
+// Local development on ANY port: the preview tool starts dev-server.js on 8090
+// (.claude/launch.json, autoPort) and a hand-started one sits on 8080. The fixed
+// list admitted only 8080, so the preview's AI calls failed with "Failed to
+// fetch". scripts/check-contracts.js tests every configured port against this.
+const LOCAL_DEV_ORIGIN = /^http:\/\/(?:localhost|127\.0\.0\.1)(?::\d{1,5})?$/;
+
 function corsHeaders(requestOrigin) {
-  const origin = ALLOWED_ORIGINS.has(requestOrigin)
+  const origin = (ALLOWED_ORIGINS.has(requestOrigin) || LOCAL_DEV_ORIGIN.test(requestOrigin || ''))
     ? requestOrigin
     : 'https://moathdarweesh.github.io';
   return {

@@ -12,7 +12,7 @@
 // build. The literal below is the fallback (file://, or a stripped query) and is
 // still bumped by `npm run release` — see CLAUDE.md "CACHE WORKFLOW".
 const VAULT_BUILD = (() => {
-  const FALLBACK = 'v299';
+  const FALLBACK = 'v300';
   try {
     const src = (document.currentScript && document.currentScript.src) || '';
     const m = src.match(/[?&]v=(\d+)/);
@@ -5537,14 +5537,6 @@ function openNewExerciseModal(exerciseId = null, opts = {}) {
 
   let pickedImage = existing ? (existing.customImage || null) : null;
 
-  function previewHtml() {
-    if (pickedImage) {
-      const src = exerciseImgSrc({ customImage: pickedImage });
-      if (src) return `<img src="${escapeHtml(src)}" alt="">`;
-    }
-    return icon('apple', 22);
-  }
-
   openModal(`
     <div class="modal-header">
       <div>
@@ -5584,9 +5576,10 @@ function openNewExerciseModal(exerciseId = null, opts = {}) {
     </div>
   `);
 
+  // The uploader is buttons only (since v94): the picked photo changes the
+  // labels, it is not previewed here. (This used to query a #ex-image-preview
+  // that no template emitted, and paint into nothing.)
   function refreshPreview() {
-    const prev = $('#ex-image-preview');
-    if (prev) prev.innerHTML = previewHtml();
     const pickBtn = $('#ex-image-pick');
     if (pickBtn) pickBtn.textContent = pickedImage ? t('change_image') : t('choose_image');
     let clearBtn = $('#ex-image-clear');
@@ -7061,8 +7054,12 @@ function openAddSheet(date, onChange) {
     const method = btn.dataset.method;
     close(() => {
       if (method === 'voice') openVoiceCapture(date, onChange);
-      else if (method === 'chat') FoodAI.open(date);
-      else if (method === 'photo') FoodAI.openPhoto ? FoodAI.openPhoto(date) : FoodAI.open(date);
+      else if (method === 'chat' || method === 'photo') {
+        // Runs from a detached 260 ms callback; foodai.js is the sixth script,
+        // so it is checked here exactly like every other FoodAI site.
+        if (!window.FoodAI) { showToast(t('ai_error')); return; }
+        if (method === 'photo' && FoodAI.openPhoto) FoodAI.openPhoto(date); else FoodAI.open(date);
+      }
       else if (method === 'barcode') openBarcodeScanner(date, onChange);
       else if (method === 'saved') openSavedFoodPicker(date, onChange);
       else if (method === 'manual') openManualFoodEntry(date, onChange);
@@ -10411,6 +10408,13 @@ function newRestBar(className) {
 function ensureRestBar() {
   const nav = document.querySelector('.view.active .run-nav');
   if (!nav || !nav.parentNode) return null;
+  // position:sticky travels only inside its containing block: the bar (and
+  // .run-nav) must sit directly in the view, never in a wrapper. The template
+  // keeps it there (check-contracts asserts the emission); this is the runtime
+  // half, so a regression is REPORTED instead of silently un-sticking the bar.
+  if (!nav.parentNode.classList || !nav.parentNode.classList.contains('view')) {
+    try { if (window.Cloud && Cloud.reportError) Cloud.reportError('manual', 'run-nav is not a direct child of the view — the rest bar cannot stick', 'app.js', 0); } catch (_) {}
+  }
   if (!__restBar) __restBar = newRestBar('rest-timer idle');
   __restBar.classList.remove('floating');
   if (__restBar.nextElementSibling !== nav) nav.parentNode.insertBefore(__restBar, nav);
@@ -11600,7 +11604,7 @@ function openRemindersModal() {
       if (!box.isConnected) return;
       box.innerHTML = rows.join('');
       box.querySelector('#rem-exact')?.addEventListener('click', async () => {
-        await Notify.requestExactAlarms();
+        if (window.Notify) await Notify.requestExactAlarms();
         paintStatus();
       });
     };
@@ -13113,9 +13117,23 @@ function showOnboarding() {
   render();
 }
 
+// Run `fn` once every classic <script> has executed and the page has loaded,
+// still off the first paint. The modules after app.js (health, notify, foodai,
+// update) exist by then; a fixed timer armed during app.js's own evaluation
+// only guessed at that, and on a cold cache the guess was wrong.
+function afterScripts(fn) {
+  const run = () => setTimeout(fn, 400);
+  if (document.readyState === 'complete') run();
+  else window.addEventListener('load', run, { once: true });
+}
+
 (function init() {
   // READ-ONLY boot (unparseable store): say so before anything else renders.
   try { if (DB.loadFailed && DB.loadFailed()) setTimeout(showUnreadableDialog, 400); } catch (_) {}
+  // A photo moved out of the blob during storage.js's own evaluation can hit the
+  // quota before this file's 'vault:save-failed' listener exists; storage.js
+  // keeps the fact, and it is re-raised here into that same listener.
+  try { if (DB.bootSaveFailed && DB.bootSaveFailed()) setTimeout(() => window.dispatchEvent(new CustomEvent('vault:save-failed', { detail: { quota: true } })), 600); } catch (_) {}
   // Kick off the (large) Supabase SDK download in parallel with the first paint,
   // before anything awaits it — so the login gate / session check isn't blocked
   // on a cold download. Fire-and-forget; bootCloud awaits the same promise.
@@ -13154,7 +13172,10 @@ function showOnboarding() {
   // could not appear, and on the web — where there is no OS alarm — that meant
   // reminders simply did not exist. It also runs the v208 migration, which was
   // similarly stranded behind sync()'s native-only bail.
-  setTimeout(() => {
+  // Gated on the load event, not a timer: notify.js is two scripts after this
+  // one, and a 1.5 s timer armed while app.js was still being evaluated raced
+  // its arrival — the callback found no window.Notify and silently armed nothing.
+  afterScripts(() => {
     try { armNotifications(); } catch (_) {}
     // reconcile() before sync(), and chained rather than merely ordered: sync()
     // rewrites the armed manifest that reconcile() reads to work out what fired
@@ -13164,7 +13185,7 @@ function showOnboarding() {
         Promise.resolve(Notify.foreground()).catch(() => {});   // reconcile → sync → catchUp, owned by notify.js
       }
     } catch (_) {}
-  }, 1500);
+  });
 
   // When the app is re-foregrounded (common on the APK — Android keeps it warm),
   // refresh without a full restart: pull admin content again (so a freshly

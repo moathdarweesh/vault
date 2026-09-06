@@ -3,10 +3,12 @@
 Supabase (Postgres + RLS), project ref `ilmusnuchqlpirywonzx`, plus one
 Cloudflare Worker that holds the Gemini key server-side.
 
-**There is no migration tool.** Every `.sql` here is pasted by hand into the
-Supabase SQL editor. That is workable, but it means the two questions that
-matter — *what order do these run in* and *which have already run* — live in
-this file and nowhere else. Keep it true.
+**There is no migration tool.** Every `.sql` here is applied by hand — pasted
+into the Supabase SQL editor, or run through the Supabase MCP `execute_sql`
+where the session has it (`apply_migration` is refused by the permission
+classifier; `execute_sql` is not). Either way the two questions that matter —
+*what order do these run in* and *which have already run* — live in this file
+and nowhere else, so every row below records the date AND the path it took. Keep it true.
 
 ```
 backend/
@@ -28,8 +30,9 @@ notes all cite these by name, and renaming them would break that paper trail.
 
 ## 1) Applied — `migrations/`
 
-Run in this order on a fresh project. All ten are idempotent, so re-running a
-file on a database that already has it is safe.
+Run in this order on a fresh project. All of them are idempotent EXCEPT `04`
+(a one-time blob backfill), so re-running a file on a database that already has
+it is safe.
 
 | # | File | What it establishes |
 |---|---|---|
@@ -51,10 +54,13 @@ file on a database that already has it is safe.
 | 17 | `cross-tenant-write-guards-v13.sql` | 8 RESTRICTIVE guards so a row cannot reference another user's custom exercise/cardio type; all 12 predicates permit the global catalog (`owner_id is null`). Adds `workout_sessions_performed_idx`. Refuses to apply if any cross-tenant row already exists. Applied + verified live 2026-08-13. |
 | 15 | `ban-rls-completion-v11.sql` | Closes 12's gap: ban INSERT/UPDATE on the four tables it missed (`exercises`, `cardio_types`, `foods`, `user_prefs`), a ban on `profiles` INSERT (12 restricted UPDATE only, so a banned user could delete their own profile row and insert a new one under a fresh @handle), and the revoke/grant double-lock `client_errors` never got. Raises instead of skipping a missing table, and its VERIFY asserts the policy COUNT rather than mere existence — the check that would have caught 12. Applied + verified live 2026-08-13: tables carrying a ban pair went 14 -> 18, all four missing tables show ins=1/upd=1, `profiles_ban_insert` exists, and `client_errors` grants are exactly `authenticated: SELECT, INSERT` with nothing for `anon`. |
 | 18 | `drop-mirror-v14.sql` | Removes the one-way analytics mirror (13 normalized tables) after the owner decision that the blob IS the truth; rewrites the three functions that named those tables (plpgsql binds table names at call time) in the same transaction; adds the `vault_data_admin_read` policy so `admin.html` reads blobs directly. Applied + verified live 2026-09-02. |
-| 19 | `admin-adherence-v15.sql` | The Console's adherence RPC: planned-vs-done per user per week, counting DISTINCT DATES (the blob stores one session row per exercise). Applied + verified live 2026-09-02. |
-| 20 | `vault-data-history-v16.sql` | `vault_data_history` — the last 10 versions of every user's blob, filed by a BEFORE UPDATE trigger (SECURITY DEFINER, empty search_path) whenever `data` changes; own-row SELECT only, no client write path, grants double-locked like `vault_data`. Closes the "the side force-pushed over had no copy anywhere" gap of whole-blob sync. Applied + verified live 2026-09-02 (the trigger read back from `pg_trigger` in the same run). |
+| 19 | `admin-adherence-v15.sql` | The Console's adherence RPC: planned-vs-done per user per week, counting DISTINCT DATES (the blob stores one session row per exercise). Applied + verified live 2026-09-02. ⚠️ It used DROP + a bare CREATE, and a DROP discards the function ACL: PUBLIC/anon regained EXECUTE on `admin_user_stats()` from this apply until 23 re-issued the revoke (the `is_admin()` gate still raised, so nothing was exposed — the 14/16 double-lock was simply gone). check-contracts #28 now catches that shape. |
+| 20 | `vault-data-history-v16.sql` | `vault_data_history` — the last 10 versions of every user's blob, filed by a BEFORE UPDATE trigger (SECURITY DEFINER, empty search_path) whenever `data` changes; own-row SELECT only, no client write path, grants double-locked like `vault_data`. Closes the "the side force-pushed over had no copy anywhere" gap of whole-blob sync. Applied + verified live 2026-09-02 (the trigger read back from `pg_trigger` in the same run). Since v300 the file also adds the `version` column itself (`add column if not exists`, the same statement as 22): its trigger reads `old.version`, and a replay of this folder in order reached 20 before 22 — check-contracts #4 now replays the columns too. |
 | 21 | `food-catalog-fat-v17.sql` | `food_catalog.fat` (default 0) and a 7-argument `admin_upsert_food` overload with `p_fat`; the 6-argument original stays. Applied + verified live 2026-09-02 — verified BY CALLING: a `do` block invoked the new overload (it ran to its admin gate, as a non-admin session must), and the same run counted the column, the 7-arg and the 6-arg functions (1 / 1 / 1). |
 | 22 | `vault-data-version.sql` | The server-authoritative `version` column on `vault_data` (+ its bump trigger) that the client's optimistic-concurrency push compares against. Applied live long before it was numbered — it sat in `unverified/` while every push already depended on it; moved into the history in v298 so a rebuild of the schema from this folder produces a database the client can sync with. Idempotent. |
+| 23 | `admin-week-sunday-v19.sql` | `admin_user_stats()` re-created with the adherence week anchored on SUNDAY — the app's one `WEEK_START` since v298 (migration 19 had Saturday from the Console design's copy, so the Console and the Program tab counted different weeks). Return type unchanged; idempotent. Also re-locks EXECUTE (see row 19). Applied 2026-09-05 **through the Supabase MCP `execute_sql`**; verified by calling it (non-admin session stops at the gate), by reading the anchor back out of `pg_get_functiondef`, and the file now ends with that call instead of suggesting it in a comment. |
+| 24 | `client-errors-kinds-v20.sql` | `client_errors.kind` CHECK widened to the five kinds the app actually sends (`error`, `unhandledrejection`, `manual`, `notif`, `sync-conflict`). 11 allowed three; `reportError('notif', …)` and the sync-conflict diagnostics were refused with 23514 and silently dropped — the conflict diagnostics had never reached the table. Idempotent. Applied 2026-09-05 through the Supabase MCP and verified by reading the constraint back. check-contracts #18 now reads the LAST such constraint and refuses a new `reportError('<kind>')` literal that is not in it. |
+| 25 | `admin-week-client-v21.sql` | `admin_user_stats(p_week_start date default null)` — the Console passes the week it is DISPLAYING (browser-local Sunday) instead of letting the SQL anchor on UTC `current_date`: between 00:00 and 03:00 local every Sunday, UTC was still on Saturday and the figures covered the previous week while the caption named the new one. Adds the missing upper bound (`< week_start + 7`) so a future-dated session stops counting as "this week". Signature change, so DROP + CREATE — and the revoke/grant pair after it is the ACL the DROP discards (see row 19). Ends by CALLING both overload forms and by asserting the ACL. Idempotent. |
 
 > ⚠️ **Keep `image/svg+xml` OUT of the `exercise-images` mime allowlist,
 > permanently.** It is what rejects an active-content SVG arriving from a
