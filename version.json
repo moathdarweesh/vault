@@ -2,10 +2,10 @@
   "_comment": "Update manifest. `web` is the latest web build — it MUST equal the ?v=N in index.html on every release (scripts/release.js writes both); js/update.js reads it fresh (no-store) and reloads the entry html so web/CSS/JS updates reach all devices without a reinstall. `apk` only triggers the in-app download banner when apk.build here is GREATER than the versionCode installed on the device. To release a NEW APK: bump android/app/build.gradle versionCode + versionName, `npm run sync`, build, commit the APK to download/THE-VAULT.apk, then set apk.build/apk.version here to the same numbers (scripts/check-contracts.js refuses a mismatch) and push.",
   "web": 304,
   "apk": {
-    "build": 20,
-    "version": "2.9",
+    "build": 21,
+    "version": "3.0",
     "url": "https://raw.githubusercontent.com/moathdarweesh/vault/main/download/THE-VAULT.apk",
-    "notes_ar": "Health Connect: الخطوات والسعرات والمسافة تُحسب بالتجميع الرسمي فلا تُعدّ مرّتين حين يكتب الهاتف والساعة معاً؛ حالة الإذن صادقة (كلّ الأذونات لا بعضها)؛ والمزامنة تقرأ الجديد فقط بدل ثلاثين يوماً في كل فتح.",
-    "notes_en": "Health Connect: steps, calories and distance use the official aggregate so phone + watch are never counted twice; the permission state is honest (all, not some); and each sync reads only what is new instead of thirty days every open."
+    "notes_ar": "إصدار أمني: التطبيق لم يعد يسمح بنسخ بياناته احتياطياً إلى حساب جوجل، فرمز الجلسة لا يغادر الجهاز. لا تغيير في الواجهة، والتحديث اختياري لكنه مستحسن.",
+    "notes_en": "Security build: the app no longer allows its data to be backed up to your Google account, so the session token never leaves the device. Nothing changes in the interface; the update is optional but recommended."
   }
 }
