@@ -1,0 +1,136 @@
+# Proves the iOS app COMPILES, on every change that could break it.
+#
+# WHY THIS EXISTS
+# The maintainer works on Windows. Nothing about an iOS app can be built there:
+# Xcode is macOS-only. Without this workflow the iOS project would sit in the
+# repository for weeks accumulating breakage that nobody could see until the
+# first time someone borrowed a Mac — which is exactly how a "quick port" turns
+# into a fortnight.
+#
+# It builds for the SIMULATOR, which needs NO signing, NO certificates and NO
+# Apple Developer Program membership. So this runs today, for free (GitHub gives
+# public repositories free macOS minutes), and answers the only question that
+# matters at this stage: does it build, and does it build the RIGHT thing.
+#
+# It deliberately does NOT upload to TestFlight. That needs the $99 membership
+# and real signing secrets, and it belongs in a separate workflow the owner
+# enables when he has them.
+name: iOS build
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'ios/**'
+      - 'js/**'
+      - 'index.html'
+      - 'styles.css'
+      - 'manifest.json'
+      - 'version.json'
+      - 'capacitor.config.json'
+      - 'package.json'
+      - 'package-lock.json'
+      - 'scripts/build-www.js'
+      - 'scripts/sync-ios.js'
+      - '.github/workflows/ios-build.yml'
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: ios-build-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: macos-15
+    timeout-minutes: 30
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build web assets and sync iOS
+        # This is the guarded sync, never a bare `cap sync ios`. It strips the
+        # `server` block that makes the Android build a live-URL shell and then
+        # re-reads the file to prove the strip happened.
+        run: npm run sync:ios
+
+      - name: Refuse a build that would load the live site
+        # Defence in depth. sync-ios.js already asserts this, but the whole App
+        # Store question turns on it, so CI asserts it independently — a future
+        # edit that bypasses the script must not reach a build artifact.
+        run: |
+          CONFIG=ios/App/App/capacitor.config.json
+          echo "--- $CONFIG ---"
+          cat "$CONFIG"
+          if grep -q '"server"' "$CONFIG"; then
+            echo "::error::The iOS runtime config still carries a server block. A remote-URL build is rejected under App Store guideline 4.2."
+            exit 1
+          fi
+          if [ ! -f ios/App/App/public/index.html ]; then
+            echo "::error::No bundled index.html — the app would open blank."
+            exit 1
+          fi
+          echo "ok: bundled assets, no server block"
+
+      - name: Check the permission strings and privacy manifest are present
+        # A missing usage description does not warn: iOS kills the app the first
+        # time the feature runs, and App Review rejects it. The privacy manifest
+        # is refused at UPLOAD time, not at review time.
+        run: |
+          PLIST=ios/App/App/Info.plist
+          for KEY in NSCameraUsageDescription NSPhotoLibraryUsageDescription NSMicrophoneUsageDescription ITSAppUsesNonExemptEncryption; do
+            /usr/libexec/PlistBuddy -c "Print :$KEY" "$PLIST" >/dev/null 2>&1 \
+              || { echo "::error::$PLIST is missing $KEY"; exit 1; }
+          done
+          test -f ios/App/App/PrivacyInfo.xcprivacy \
+            || { echo "::error::PrivacyInfo.xcprivacy is missing — App Store Connect refuses the upload."; exit 1; }
+          plutil -lint ios/App/App/PrivacyInfo.xcprivacy
+          plutil -lint "$PLIST"
+          echo "ok: permission strings, privacy manifest, both plists well-formed"
+
+      - name: Show the toolchain
+        run: |
+          xcodebuild -version
+          xcrun simctl list runtimes | head -20
+
+      - name: Build for the simulator (no signing, no Apple account)
+        run: |
+          set -o pipefail
+          xcodebuild \
+            -project ios/App/App.xcodeproj \
+            -scheme App \
+            -configuration Debug \
+            -sdk iphonesimulator \
+            -destination 'generic/platform=iOS Simulator' \
+            -derivedDataPath build-ios \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            build 2>&1 | tail -40
+
+      - name: Confirm the app bundle carries what we put in it
+        run: |
+          APP=$(find build-ios/Build/Products -maxdepth 2 -name '*.app' | head -1)
+          test -n "$APP" || { echo "::error::No .app produced"; exit 1; }
+          echo "built: $APP"
+          test -f "$APP/PrivacyInfo.xcprivacy" \
+            || { echo "::error::PrivacyInfo.xcprivacy is not inside the built app"; exit 1; }
+          test -f "$APP/public/index.html" \
+            || { echo "::error::The web bundle is not inside the built app"; exit 1; }
+          /usr/libexec/PlistBuddy -c 'Print :NSCameraUsageDescription' "$APP/Info.plist"
+          du -sh "$APP"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: VAULT-ios-simulator
+          path: build-ios/Build/Products/**/*.app
+          retention-days: 14
+          if-no-files-found: error
