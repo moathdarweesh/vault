@@ -12,7 +12,7 @@
 // build. The literal below is the fallback (file://, or a stripped query) and is
 // still bumped by `npm run release` — see CLAUDE.md "CACHE WORKFLOW".
 const VAULT_BUILD = (() => {
-  const FALLBACK = 'v306';
+  const FALLBACK = 'v307';
   try {
     const src = (document.currentScript && document.currentScript.src) || '';
     const m = src.match(/[?&]v=(\d+)/);
@@ -946,6 +946,17 @@ const I18N = {
     sug_deload_reason: '{n} sessions under the range at this weight — drop ~10% and rebuild',
     sug_applied: 'Suggestion filled into the next set',
     tab_recipes: 'Recipes',
+    run_ex_options: 'Exercise options',
+    run_ex_options_sub: 'For today only — your plan does not change',
+    run_ex_swap: 'Swap exercise',
+    run_ex_drop: 'Skip today',
+    run_ex_today_only: 'Both change today\'s workout only. Edit the rotation to change it for good.',
+    run_ex_only_one: 'This is the only exercise left, so it cannot be skipped. Swap it instead.',
+    run_ex_drop_logged: 'You already logged sets for this exercise today. They will be deleted.',
+    run_ex_dropped: 'Skipped for today',
+    run_ex_swapped: 'Exercise swapped',
+    run_ex_same_muscle: 'Same muscle',
+    run_ex_other: 'Everything else',
     rec_new: 'New recipe',
     rec_name_ph: 'Recipe name — e.g. my chicken and rice',
     rec_servings: 'Servings',
@@ -1807,6 +1818,17 @@ const I18N = {
     sug_deload_reason: '{n} جلسات دون المدى على هذا الوزن — خفّف نحو ١٠٪ وأعد البناء',
     sug_applied: 'وُضع الاقتراح في المجموعة التالية',
     tab_recipes: 'وصفاتي',
+    run_ex_options: 'خيارات التمرين',
+    run_ex_options_sub: 'لهذا اليوم فقط — لا يتغيّر برنامجك',
+    run_ex_swap: 'استبدال التمرين',
+    run_ex_drop: 'تخطّيه اليوم',
+    run_ex_today_only: 'كلا الخيارين يغيّران تمرين اليوم وحده. لتغييرٍ دائم، عدّل الدورة من شاشة البرنامج.',
+    run_ex_only_one: 'هذا آخر تمرين متبقٍّ، فلا يمكن تخطّيه. استبدله بغيره.',
+    run_ex_drop_logged: 'سجّلت مجموعات لهذا التمرين اليوم، وستُحذف.',
+    run_ex_dropped: 'تم تخطّي التمرين اليوم',
+    run_ex_swapped: 'استُبدل التمرين',
+    run_ex_same_muscle: 'العضلة نفسها',
+    run_ex_other: 'بقيّة التمارين',
     rec_new: 'وصفة جديدة',
     rec_name_ph: 'اسم الوصفة — مثلاً: دجاج وأرز',
     rec_servings: 'عدد الحصص',
@@ -11234,6 +11256,119 @@ function renderSessionRun(el) {
     return;
   }
 
+  // ----- SWAP / DROP THE CURRENT EXERCISE ----------------------------------
+  // Both act on TODAY'S RUN, never on the plan. The machine is taken, or the
+  // shoulder hurts — that is a fact about this hour, not a decision to rewrite
+  // every future workout. The plan stays where it is edited: the rotation screen.
+  //
+  // `runOnly` is the run's own list (it already exists for the "train a lagging
+  // muscle" route). It is null while the run simply follows the plan, so the
+  // first edit MATERIALISES it from the ids showing right now.
+  function runListNow() {
+    if (!Array.isArray(runCtx.runOnly)) runCtx.runOnly = runIds.slice();
+    return runCtx.runOnly;
+  }
+  // A session already logged for this exercise today. Swapping or dropping has
+  // to say what happens to it rather than silently orphaning it.
+  function loggedToday(exId) {
+    return DB.sessions.listByExercise(exId).find((s) => s.date === runCtx.runDate) || null;
+  }
+  function replaceInRun(oldId, newId) {
+    const list = runListNow();
+    const i = list.indexOf(oldId);
+    if (i === -1) return;
+    if (newId) list[i] = newId; else list.splice(i, 1);
+    // Drop the old exercise's in-memory sets so the slot does not inherit them.
+    if (runCtx.runState) delete runCtx.runState[oldId];
+  }
+
+  function openRunExMenu() {
+    const logged = loggedToday(ex.id);
+    const onlyOne = totalEx <= 1;
+    const overlay = openModal(`
+      <div class="modal-header">
+        <div><div class="modal-title">${escapeHtml(exDisplayName(ex))}</div>
+        <div class="modal-subtitle">${t('run_ex_options_sub')}</div></div>
+        <button class="icon-btn icon-btn-tile" data-close>${icon('close', 20)}</button>
+      </div>
+      <button type="button" class="btn btn-ghost btn-block" data-swap>${icon('refresh', 18)} ${t('run_ex_swap')}</button>
+      <button type="button" class="btn btn-ghost btn-block" data-drop ${onlyOne ? 'disabled' : ''} style="margin-top:8px;color:var(--danger)">${icon('trash', 18)} ${t('run_ex_drop')}</button>
+      <p class="calc-preview-hint" style="margin:10px 0 0">${onlyOne ? t('run_ex_only_one') : t('run_ex_today_only')}</p>
+    `);
+    overlay.querySelector('[data-swap]').addEventListener('click', () => { closeModal(); setTimeout(openRunExSwap, 220); });
+    const dropBtn = overlay.querySelector('[data-drop]');
+    if (dropBtn && !onlyOne) dropBtn.addEventListener('click', () => {
+      closeModal();
+      setTimeout(() => {
+        const go = () => {
+          if (logged) DB.sessions.remove(logged.id);
+          replaceInRun(ex.id, null);
+          // Stay on the same position: the next exercise slides into it. Past
+          // the end (it was last) step back one.
+          if (runCtx.runIdx >= runListNow().length) runCtx.runIdx = Math.max(0, runListNow().length - 1);
+          renderSessionRun(el);
+          showToast(t('run_ex_dropped'));
+        };
+        // Sets already logged today would be orphaned by a silent drop, so the
+        // one destructive case is the one that asks.
+        if (logged) confirmDialog({ title: t('run_ex_drop'), text: t('run_ex_drop_logged'), confirmLabel: t('delete'), variant: 'danger', onConfirm: go });
+        else go();
+      }, 220);
+    });
+  }
+
+  // The chooser. Same category first — a swap is nearly always for the same
+  // movement pattern — then everything else, and a search over both.
+  function openRunExSwap() {
+    const inRun = new Set(runListNow());
+    const all = DB.exercises.list().filter((x) => x.id !== ex.id && !inRun.has(x.id));
+    const same = all.filter((x) => x.category === ex.category);
+    const rest = all.filter((x) => x.category !== ex.category);
+    const overlay = openModal(`
+      <div class="modal-header">
+        <div><div class="modal-title">${t('run_ex_swap')}</div>
+        <div class="modal-subtitle">${escapeHtml(exDisplayName(ex))}</div></div>
+        <button class="icon-btn icon-btn-tile" data-close>${icon('close', 20)}</button>
+      </div>
+      <div class="search-wrap" style="margin-bottom:10px">${icon('search', 20)}
+        <input type="search" id="swap-search" placeholder="${escapeHtml(t('search_exercises'))}"></div>
+      <div class="picker-list" id="swap-list"></div>
+    `);
+    const list = overlay.querySelector('#swap-list');
+    const draw = (q) => {
+      const norm = String(q || '').trim().toLowerCase();
+      const match = (x) => !norm || exDisplayName(x).toLowerCase().includes(norm) || String(x.name || '').toLowerCase().includes(norm);
+      const rows = (arr, head) => {
+        const hits = arr.filter(match);
+        if (!hits.length) return '';
+        return `<div class="rot-section-sub" style="margin:6px 2px">${escapeHtml(head)}</div>` + hits.map((x) =>
+          `<button type="button" class="picker-row" data-pick="${escapeHtml(x.id)}">
+             <span class="picker-row-name">${escapeHtml(exDisplayName(x))}</span>
+             <span class="picker-row-cat">${escapeHtml(t('cat_' + String(x.category || '').toLowerCase(), x.category || ''))}</span>
+           </button>`).join('');
+      };
+      const html = rows(same, t('run_ex_same_muscle')) + rows(rest, t('run_ex_other'));
+      list.innerHTML = html || `<div class="calc-preview-hint" style="text-align:center;padding:18px">${t('no_matches_simple')}</div>`;
+      list.querySelectorAll('[data-pick]').forEach((b) => b.addEventListener('click', () => {
+        const newId = b.dataset.pick;
+        const logged = loggedToday(ex.id);
+        const go = () => {
+          if (logged) DB.sessions.remove(logged.id);
+          replaceInRun(ex.id, newId);
+          closeModal();
+          renderSessionRun(el);
+          showToast(t('run_ex_swapped'));
+        };
+        if (logged) confirmDialog({ title: t('run_ex_swap'), text: t('run_ex_drop_logged'), confirmLabel: t('run_ex_swap'), variant: 'danger', onConfirm: go });
+        else go();
+      }));
+    };
+    draw('');
+    const si = overlay.querySelector('#swap-search');
+    let tmr = null;
+    si.addEventListener('input', () => { clearTimeout(tmr); tmr = setTimeout(() => draw(si.value), 150); });
+  }
+
   // ----- RUN SCREEN (current exercise) -----
   const idx = Math.min(runCtx.runIdx, totalEx - 1);
   runCtx.runIdx = idx;
@@ -11273,6 +11408,7 @@ function renderSessionRun(el) {
     <div class="detail-top">
       <button class="back-btn" data-back aria-label="${escapeHtml(t('back'))}">${icon('back', 20)}</button>
       <div class="detail-top-title">${escapeHtml(day?.name || dayName(dow, true))}</div>
+      <button type="button" class="run-ex-menu" data-ex-menu aria-label="${escapeHtml(t('run_ex_options'))}">${icon('grip', 18)}</button>
     </div>
 
     <div class="run-progress">
@@ -11485,6 +11621,8 @@ function renderSessionRun(el) {
     runCtx.runIdx = idx - 1;
     renderSessionRun(el);
   });
+
+  $('[data-ex-menu]', el)?.addEventListener('click', openRunExMenu);
 
   $('[data-next]', el)?.addEventListener('click', () => {
     hideToast();   // end this exercise's Undo window before moving on

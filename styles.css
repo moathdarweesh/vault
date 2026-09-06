@@ -4307,6 +4307,25 @@ body[dir="rtl"] .picker-row { text-align: right; }
 /* the save button while it waits on a row still being worked out */
 #rec-save.is-waiting { opacity: .72; }
 
+/* The overflow control on the guided run screen. It sits at the END of
+   .detail-top, whose middle child is flex:1, so it lands in the corner
+   opposite the back arrow: top-left in Arabic, top-right in English. Small on
+   purpose — it must not compete with Next — but it carries the 44px tap halo
+   the button scale requires of anything under that size. */
+.run-ex-menu {
+  flex: none;
+  width: var(--btn-h-s); height: var(--btn-h-s);
+  display: grid; place-items: center;
+  border: 1px solid var(--border); border-radius: var(--radius-btn-s);
+  background: var(--surface-2); color: var(--text-dim);
+  position: relative;
+  transition: background var(--dur-press) var(--ease), color var(--dur-press) var(--ease);
+}
+.run-ex-menu::after { content: ''; position: absolute; inset: 50% auto auto 50%;
+  width: 44px; height: 44px; transform: translate(-50%, -50%); }
+.run-ex-menu:active { transform: scale(var(--press-scale)); }
+@media (hover: hover) { .run-ex-menu:hover { background: var(--surface-3); color: var(--text); } }
+
 /* Turnstile. The widget is a fixed 300x65 iframe Cloudflare draws itself, so
    this centres it and reserves its height — without the reserve the card
    grows under the user's thumb about a second after the screen appears. */
