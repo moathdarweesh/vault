@@ -229,35 +229,42 @@ async function callerAllowed(request) {
   }
 }
 
-// Per-caller rate limit. Best-effort and dependency-free: the counter lives in the
-// Worker isolate, so every isolate/PoP has a separate bucket and a cold start
-// resets it. It will not stop a distributed or multi-PoP attacker from spending
-// the shared Gemini key; durable global enforcement needs KV/Durable Objects or
-// another shared store. It does cap the realistic one-caller loop at no extra cost.
+// Per-caller burst limit. ⚠️ MEASURED INEFFECTIVE, kept only because it costs
+// nothing: the counter lives in one isolate's memory, and the identical gate
+// above refused 0 of 100 requests from one IP in 12 seconds before it was
+// replaced by the binding. Treat this as documentation of intent, never as a
+// control you can rely on. The real bound on a determined caller is the durable
+// daily budget in Postgres — see budgetAllows.
 const RATE_MAX = 30;              // requests per window per caller
 const RATE_WINDOW_MS = 60 * 1000; // 1 minute
 const rateBuckets = new Map();
-// A SECOND, CHEAPER gate that runs BEFORE the Supabase auth lookup. Without it
-// every unauthenticated request costs a subrequest, so a loop of junk bearers
-// spends the Worker's 100,000/day free budget (and turns the AI off for
-// everyone) without ever holding an account. Same isolate-memory caveat as
-// below; it is a speed bump for the one-machine case, not a distributed one.
-const IP_MAX = 60;                // requests per window per edge IP, pre-auth
-const IP_WINDOW_MS = 60 * 1000;
-const ipBuckets = new Map();
-function ipFlooding(request) {
+// The gate BEFORE the Supabase auth lookup. Without it every unauthenticated
+// request costs a subrequest, so a loop of junk bearer tokens spends the
+// Worker's 100,000/day free budget — and turns the AI off for everyone —
+// without ever holding an account.
+//
+// ⚠️ THIS MUST NOT BE A Map. The first version of this function was one, and it
+// was measured against the deployed Worker: 100 POSTs from a single IP over one
+// keep-alive connection in 12 seconds, and a 60-per-minute limit refused
+// exactly NONE of them. Cloudflare spreads requests across isolates and each
+// gets its own memory, so an in-isolate counter is an illusion of protection —
+// it reads as a rate limit in review and is not one. `rateLimited` below is the
+// same shape and the same illusion; the DURABLE per-user and global day budget
+// in Postgres (budgetAllows) is what actually bounds a determined caller.
+//
+// env.RATE_LIMITER is Cloudflare's own rate-limiting binding: shared across
+// isolates, free, and declared in wrangler.toml. It fails OPEN — a binding that
+// is missing or erroring must not lock the app out of its own AI.
+async function ipFlooding(request, env) {
+  const limiter = env && env.RATE_LIMITER;
+  if (!limiter || typeof limiter.limit !== 'function') return false;
   const ip = request.headers.get('CF-Connecting-IP') || 'unknown';
-  const now = Date.now();
-  const b = ipBuckets.get(ip);
-  if (!b || now - b.start >= IP_WINDOW_MS) {
-    ipBuckets.set(ip, { start: now, n: 1 });
-    if (ipBuckets.size > 5000) {
-      for (const [k, v] of ipBuckets) if (now - v.start >= IP_WINDOW_MS) ipBuckets.delete(k);
-    }
+  try {
+    const { success } = await limiter.limit({ key: ip });
+    return !success;
+  } catch (_) {
     return false;
   }
-  b.n += 1;
-  return b.n > IP_MAX;
 }
 
 // THE DURABLE ONE. `rateBuckets` below lives in isolate memory: every PoP and
@@ -319,7 +326,7 @@ export default {
     // Cheapest gate first: an IP flood is refused before it can cost a Supabase
     // subrequest. Then the token, then the per-minute burst, then the durable
     // daily budget — each one more expensive than the last.
-    if (ipFlooding(request)) return json({ error: 'rate limited' }, 429, origin);
+    if (await ipFlooding(request, env)) return json({ error: 'rate limited' }, 429, origin);
     const caller = await callerAllowed(request);
     if (!caller.allowed) return json({ error: 'unauthorized' }, 401, origin);
     if (rateLimited(caller.userId)) return json({ error: 'rate limited' }, 429, origin);

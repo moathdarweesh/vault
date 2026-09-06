@@ -1,0 +1,30 @@
+# Deploy config for the Gemini proxy Worker.
+#
+# Until v306 this Worker was pasted into the Cloudflare dashboard by hand, which
+# is why every release note since v291 has carried a "needs the manual paste"
+# caveat and why the v302 hardening sat undeployed for a day. `wrangler deploy`
+# from this folder replaces that step.
+#
+# Every value below MATCHES what was already live (version d356f094, uploaded
+# 2026-09-02) — read back with `wrangler versions view` before the first deploy,
+# because a wrong compatibility_date or a missing workers_dev silently changes
+# behaviour or takes the endpoint offline.
+#
+# GEMINI_KEY is NOT here and must never be. Secrets live on the Worker itself and
+# survive a deploy; set one with `wrangler secret put NAME`, which prompts.
+name = "vault-calories"
+main = "gemini-worker.js"
+compatibility_date = "2026-06-26"
+account_id = "0a42647a2fbbceac9c5ae48e5399ecba"
+workers_dev = true
+
+# Cloudflare's own rate limiter: SHARED across isolates, unlike a Map in one
+# isolate's memory, which was measured refusing 0 of 100 requests from a single
+# IP in 12 seconds. Free, and declared as an unsafe binding because the feature
+# is still in open beta. namespace_id is a number chosen by this Worker, not a
+# resource to create; the gate fails open if the binding is ever absent.
+[[unsafe.bindings]]
+name = "RATE_LIMITER"
+type = "ratelimit"
+namespace_id = "1001"
+simple = { limit = 60, period = 60 }
