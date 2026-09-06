@@ -1,0 +1,73 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>CAPACITOR_DEBUG</key>
+	<string>$(CAPACITOR_DEBUG)</string>
+	<key>CFBundleDevelopmentRegion</key>
+	<string>en</string>
+	<key>CFBundleDisplayName</key>
+        <string>VAULT</string>
+	<key>CFBundleExecutable</key>
+	<string>$(EXECUTABLE_NAME)</string>
+	<key>CFBundleIdentifier</key>
+	<string>$(PRODUCT_BUNDLE_IDENTIFIER)</string>
+	<key>CFBundleInfoDictionaryVersion</key>
+	<string>6.0</string>
+	<key>CFBundleName</key>
+	<string>$(PRODUCT_NAME)</string>
+	<key>CFBundlePackageType</key>
+	<string>APPL</string>
+	<key>CFBundleShortVersionString</key>
+	<string>$(MARKETING_VERSION)</string>
+	<key>CFBundleVersion</key>
+	<string>$(CURRENT_PROJECT_VERSION)</string>
+	<!-- PERMISSION PROMPTS. iOS shows these strings verbatim in the system
+	     sheet, so they must say what the app does with the data, not what the
+	     API is called. A missing key here is not a warning: the app is killed
+	     the first time the feature runs, and App Review rejects it (2.1).
+	     Arabic lives in ar.lproj/InfoPlist.strings — iOS picks by device language. -->
+	<key>NSCameraUsageDescription</key>
+	<string>To photograph an exercise or scan a food barcode. Photos stay on your device unless you sign in to back them up.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>To choose a photo of an exercise or a meal from your library.</string>
+	<key>NSPhotoLibraryAddUsageDescription</key>
+	<string>To save a copy of your data export to your photos.</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>To let you log a meal by speaking it instead of typing.</string>
+	<!-- Arabic is a first-class language of this app, not a translation of it. -->
+	<key>CFBundleLocalizations</key>
+	<array>
+		<string>en</string>
+		<string>ar</string>
+	</array>
+	<!-- The app talks to HTTPS endpoints only and uses no proprietary crypto, so
+	     it qualifies for the exemption. Declaring it here stops App Store Connect
+	     asking for export paperwork on every single upload. -->
+	<key>ITSAppUsesNonExemptEncryption</key>
+	<false/>
+	<key>LSRequiresIPhoneOS</key>
+	<true/>
+	<key>UILaunchStoryboardName</key>
+	<string>LaunchScreen</string>
+	<key>UIMainStoryboardFile</key>
+	<string>Main</string>
+	<key>UIRequiredDeviceCapabilities</key>
+	<array>
+		<string>arm64</string>
+	</array>
+	<key>UISupportedInterfaceOrientations</key>
+	<array>
+		<string>UIInterfaceOrientationPortrait</string>
+	</array>
+	<key>UISupportedInterfaceOrientations~ipad</key>
+	<array>
+		<string>UIInterfaceOrientationPortrait</string>
+		<string>UIInterfaceOrientationPortraitUpsideDown</string>
+		<string>UIInterfaceOrientationLandscapeLeft</string>
+		<string>UIInterfaceOrientationLandscapeRight</string>
+	</array>
+	<key>UIViewControllerBasedStatusBarAppearance</key>
+	<true/>
+</dict>
+</plist>

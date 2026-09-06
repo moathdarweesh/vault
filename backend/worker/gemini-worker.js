@@ -43,6 +43,14 @@ const SYSTEM = [
 const ALLOWED_ORIGINS = new Set([
   'https://moathdarweesh.github.io',
   'https://localhost',
+  // The iOS app serves its own bundle, so its page origin is capacitor://localhost
+  // (Capacitor's default iosScheme) — NOT the site's origin, because unlike the
+  // Android shell it does not load the live URL. Without this line every AI call
+  // on iPhone fails the preflight with no message the user can act on. CORS is
+  // not the security boundary here in any case: a non-browser client can send any
+  // Origin it likes, and what actually gates this endpoint is the Supabase bearer
+  // token plus the durable daily budget.
+  'capacitor://localhost',
   'http://localhost',
   'http://localhost:8080',
 ]);

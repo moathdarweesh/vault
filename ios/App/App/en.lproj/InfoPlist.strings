@@ -1,0 +1,8 @@
+/* English permission strings. The Info.plist carries the same text; this file
+   exists so the development region is explicit and so a future edit updates
+   both languages side by side rather than one of them silently drifting. */
+"CFBundleDisplayName" = "VAULT";
+"NSCameraUsageDescription" = "To photograph an exercise or scan a food barcode. Photos stay on your device unless you sign in to back them up.";
+"NSPhotoLibraryUsageDescription" = "To choose a photo of an exercise or a meal from your library.";
+"NSPhotoLibraryAddUsageDescription" = "To save a copy of your data export to your photos.";
+"NSMicrophoneUsageDescription" = "To let you log a meal by speaking it instead of typing.";
