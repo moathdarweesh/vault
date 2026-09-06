@@ -1083,6 +1083,9 @@ window.VAULT_KEYS = Object.freeze({
     try {
       const { error } = await c.from('feedback')
         .insert({ user_id: s.user.id, username: username, message: msg, context: context || null });
+      // The hourly cap (migration 26) RAISES, so the row is genuinely not
+      // stored — the form must not claim it was sent.
+      if (error && /feedback rate limit/i.test(error.message || '')) return { error: 'ratelimit' };
       if (error) return { error: error.message };
       return { ok: true };
     } catch (e) { return { error: (e && e.message) || 'error' }; }

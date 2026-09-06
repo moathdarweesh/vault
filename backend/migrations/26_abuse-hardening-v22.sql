@@ -9,7 +9,7 @@
 --   1. anon loses EXECUTE on username_available() and is_admin()
 --   2. authenticated loses TRUNCATE / TRIGGER / REFERENCES on three tables
 --   3. two trigger functions get their search_path pinned
---   4. feedback gets length limits and a per-user hourly cap
+--   4. feedback gets length limits and a per-user hourly cap that RAISES
 --   5. profiles.display_name gets a length limit
 --   6. the blob history is bounded by BYTES as well as by count
 --   7. the image bucket gets a name shape and a per-user object cap
@@ -64,10 +64,14 @@ begin
   where f.user_id = new.user_id
     and f.created_at > pg_catalog.now() - interval '1 hour';
 
-  -- Silently drop rather than raise: feedback is fire-and-forget in the client
-  -- and an error here would surface as a broken form, not as a rate limit.
+  -- RAISE, do not return null. A BEFORE INSERT trigger that returns null drops
+  -- the row and PostgREST answers with no error, so Cloud.submitFeedback()
+  -- returns ok and the form says "sent" for a message nobody will ever read.
+  -- client_errors may drop silently — nothing is promised to the user there —
+  -- but feedback IS a promise, so it has to fail out loud. js/cloud.js maps
+  -- this exact string to 'ratelimit' and the form says so.
   if recent >= 5 then
-    return null;
+    raise exception 'feedback rate limit';
   end if;
   return new;
 end;
@@ -298,6 +302,10 @@ begin
     if not exists (select 1 from pg_trigger where tgrelid = 'public.feedback'::regclass
                      and tgname = 'feedback_rate_cap_trg' and not tgisinternal) then
       raise exception 'VERIFY failed: the feedback rate cap trigger is not attached';
+    end if;
+    -- and it RAISES rather than dropping: a null return would make the form lie
+    if pg_get_functiondef('public.feedback_rate_cap()'::regprocedure) not like '%raise exception ''feedback rate limit''%' then
+      raise exception 'VERIFY failed: the feedback cap drops rows silently instead of raising';
     end if;
   end;
   raise notice 'VERIFY ok: feedback and profiles bounds';

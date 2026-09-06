@@ -12,7 +12,7 @@
 // build. The literal below is the fallback (file://, or a stripped query) and is
 // still bumped by `npm run release` — see CLAUDE.md "CACHE WORKFLOW".
 const VAULT_BUILD = (() => {
-  const FALLBACK = 'v302';
+  const FALLBACK = 'v303';
   try {
     const src = (document.currentScript && document.currentScript.src) || '';
     const m = src.match(/[?&]v=(\d+)/);
@@ -670,6 +670,7 @@ const I18N = {
     feedback_ph: 'Your suggestion or feedback…',
     feedback_send: 'Send',
     feedback_sent: 'Thanks! Your feedback was sent',
+    feedback_too_many: 'You have sent several notes in the last hour — try again a little later',
     feedback_empty: 'Please write something first',
     account_blocked_title: 'Account unavailable',
     account_disabled_msg: 'Your account has been disabled. Please contact support.',
@@ -1534,6 +1535,7 @@ const I18N = {
     feedback_ph: 'اقتراحك أو ملاحظتك…',
     feedback_send: 'إرسال',
     feedback_sent: 'شكرًا! تم إرسال ملاحظتك',
+    feedback_too_many: 'أرسلت عدة ملاحظات خلال الساعة الماضية — أعد المحاولة بعد قليل',
     feedback_empty: 'اكتب شيئًا أولًا',
     account_blocked_title: 'الحساب غير متاح',
     account_disabled_msg: 'تم تعطيل حسابك. يرجى التواصل مع الدعم.',
@@ -7735,7 +7737,7 @@ function openRecipeEditor(date, existing, onDone) {
     };
     return '<div class="rec-row" data-id="' + it._id + '" data-state="idle" data-src="">' +
       '<div class="rec-line">' +
-        '<input type="text" class="rec-name" data-f="name" list="rec-foods" maxlength="60" enterkeyhint="next"' +
+        '<input type="text" class="rec-name" data-f="name" maxlength="60" enterkeyhint="next"' +
           ' placeholder="' + escapeHtml(t('rec_ing_name')) + '" aria-label="' + escapeHtml(t('rec_ing_name')) + '"' +
           ' value="' + escapeHtml(it.name || '') + '">' +
         // The amount is a free-text LABEL ("200 غ", "٣ حبات", "ملعقة زيت") — see
@@ -7765,13 +7767,13 @@ function openRecipeEditor(date, existing, onDone) {
     '</div>';
   };
 
-  // Steering a name toward a food this user already has turns the slowest path
-  // (900ms -> batch -> Worker, needs a session, can fail) into the fastest one
-  // (instant, offline, free). Native element, no CSS, no component.
-  var foodOpts = '';
-  try {
-    foodOpts = DB.foods.list().slice(0, 300).map(function (f) { return '<option value="' + escapeHtml(f.name) + '"></option>'; }).join('');
-  } catch (_) {}
+  // NO <datalist> HERE, deliberately. A suggestion list was tried and the owner
+  // rejected it on sight: the field grew a dropdown arrow and read as "pick one
+  // of the names I chose for you", when the promise of this screen is the
+  // opposite — write ANY ingredient and its figures appear. localLookup already
+  // matches whatever is typed against DB.foods, so the fast offline path is
+  // taken anyway when the name happens to be one he has saved; it simply is not
+  // advertised as a menu.
 
   var totalsCell = function (attr, key) {
     return '<span class="num"' + attr + '>0</span> ' + key;
@@ -7784,7 +7786,6 @@ function openRecipeEditor(date, existing, onDone) {
     '</div>' +
     '<input type="text" id="rec-name" class="input rec-name-top" maxlength="60" enterkeyhint="next" placeholder="' + escapeHtml(t('rec_name_ph')) + '" value="' + escapeHtml(name) + '">' +
     '<div id="rec-rows" class="rec-list"></div>' +
-    '<datalist id="rec-foods">' + foodOpts + '</datalist>' +
     '<button type="button" class="ledger-add rec-add" id="rec-add">' + icon('plus', 14) + ' <span>' + t('rec_add_ing') + '</span></button>' +
     '<div class="rec-totals" id="rec-totals">' +
       '<div class="rt-line"><span class="rt-k">' + t('rec_total') + '</span>' +
@@ -12674,7 +12675,9 @@ function showFeedback() {
     try {
       const res = await Cloud.submitFeedback(msg, VAULT_BUILD);
       if (res && res.ok) { closeModal(); showToast(t('feedback_sent')); return; }
-      err(res && res.error === 'offline' ? t('auth_err_network') : t('auth_err_generic'));
+      err(res && res.error === 'offline' ? t('auth_err_network')
+        : res && res.error === 'ratelimit' ? t('feedback_too_many')
+        : t('auth_err_generic'));
     } catch (_) { err(t('auth_err_generic')); }
     btn.disabled = false; btn.textContent = t('feedback_send');
   });
