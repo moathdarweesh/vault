@@ -473,6 +473,21 @@ window.VAULT_KEYS = Object.freeze({
   // ---- sync ----------------------------------------------------------------
   // Returns undefined (offline / no session), null (no row yet), or
   // { data, updatedAt }.
+  // The SAME row as pull(), minus the payload. `updated_at` and `version` are
+  // all the sync decision needs, and they are two small columns instead of the
+  // user's entire history — which is what pull() was moving on every glance at
+  // the phone, only to discover nothing had changed.
+  async function pullMeta() {
+    const c = sb(); const s = await getSession();
+    if (!c || !s) return undefined;
+    const { data, error } = await c.from(TABLE).select('updated_at,version').eq('user_id', s.user.id).maybeSingle();
+    if (error) throw new Error(error.message);
+    if (!data) return null;
+    return {
+      updatedAt: data.updated_at || '',
+      version: (typeof data.version === 'number' ? data.version : null),
+    };
+  }
   async function pull() {
     const c = sb(); const s = await getSession();
     if (!c || !s) return undefined;
@@ -915,6 +930,28 @@ window.VAULT_KEYS = Object.freeze({
   async function bootSyncCoreUnguarded() {
     const s = await getSession(); if (!s) return 'offline';
     const uid = s.user.id;
+
+    // FAST PATH — the overwhelmingly common one. A foreground where neither
+    // side has moved used to cost a full blob DOWN and a full blob UP; it now
+    // costs one two-column row. Every condition below has to hold, and each
+    // guards a branch further down that would otherwise be skipped:
+    //   not dirty      → nothing of ours is waiting to go up
+    //   versions equal → nothing of theirs is waiting to come down
+    //   linked         → the first-link question has already been answered
+    //   local has data → not the empty-device recovery case, which must pull
+    //   not pushing    → no push of ours is unaccounted for, which must adopt
+    // Any failure here falls through to the full path rather than guessing.
+    try {
+      const meta = await pullMeta();
+      const localVer0 = getVersion(uid);
+      if (meta && typeof meta.version === 'number' && typeof localVer0 === 'number'
+          && meta.version === localVer0
+          && !isDirty(uid) && isLinked(uid) && localHasData() && !getPushing(uid)) {
+        setStamp(uid, meta.updatedAt);
+        return 'synced';
+      }
+    } catch (_) { return 'offline'; }
+
     let remote;
     try { remote = await pull(); } catch (_) { return 'offline'; }
     if (remote === undefined) return 'offline';
@@ -1068,13 +1105,16 @@ window.VAULT_KEYS = Object.freeze({
     // below so admin broadcasts still appear promptly.
     let cached = null;
     try { cached = JSON.parse(localStorage.getItem(CATALOG_CACHE_KEY) || 'null'); } catch (_) {}
-    if (cached && cached.t && (Date.now() - cached.t) < CATALOG_TTL) {
+    // A cache written while signed OUT holds no global exercises, so a signed-in
+    // session must not be served it — that is the one case where it is stale by
+    // construction rather than by age.
+    let signedIn = false;
+    try { signedIn = !!(await getSession()); } catch (_) {}
+    if (cached && cached.t && (Date.now() - cached.t) < CATALOG_TTL && (!signedIn || cached.signedIn)) {
       result.exercises = cached.exercises || null;
       result.foods = cached.foods || null;
       result.presets = cached.presets || null;
     } else {
-      let signedIn = false;
-      try { signedIn = !!(await getSession()); } catch (_) {}
       if (signedIn) {
         try {
           const { data, error } = await c
@@ -1103,12 +1143,16 @@ window.VAULT_KEYS = Object.freeze({
           .order('position', { ascending: true });
         if (!error && Array.isArray(data)) result.presets = data;
       } catch (_) {}
-      // Only cache a successful fetch of the primary table — never cache a
-      // transient total failure (which would starve the app for 30 min).
-      if (result.exercises !== null) {
+      // Cache whenever ANYTHING came back — never a total failure, which would
+      // starve the app for 30 minutes. Keying this on `exercises` alone meant a
+      // SIGNED-OUT session never wrote the cache at all (that read needs a
+      // session), so food_catalog and preset_plans were re-fetched on every
+      // single foreground, forever, for nothing. `signedIn` is recorded so a
+      // logged-out cache is not later mistaken for a complete one.
+      if (result.exercises !== null || result.foods !== null || result.presets !== null) {
         try {
           localStorage.setItem(CATALOG_CACHE_KEY, JSON.stringify({
-            t: Date.now(), exercises: result.exercises, foods: result.foods, presets: result.presets,
+            t: Date.now(), signedIn: signedIn, exercises: result.exercises, foods: result.foods, presets: result.presets,
           }));
         } catch (_) {}
       }

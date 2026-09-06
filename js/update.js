@@ -70,9 +70,20 @@
     try { location.replace(withParam('u', latest)); }
     catch (_) { try { location.reload(); } catch (__) {} }
   }
+  // Throttled on RESUME only. This hangs off every foreground, and a live-URL
+  // shell does not need sub-five-minute update latency — the banner it can show
+  // is the same banner five minutes later. A cold BOOT always checks: that is
+  // the seamless auto-reload path, and delaying it would strand a device on an
+  // old build for the length of the session.
+  var lastWebCheck = 0;
   function checkWebUpdate(trigger) {
     var cur = currentWebBuild();
     if (!cur) return;                                  // can't read our build -> do nothing (fail safe)
+    if (trigger === 'resume') {
+      var now = Date.now();
+      if (now - lastWebCheck < 300000) return;
+      lastWebCheck = now;
+    }
     fetchJson().then(function (j) {
       var latest = j ? parseInt(j.web, 10) : NaN;
       if (isNaN(latest) || latest <= cur) return;      // no web field / already current

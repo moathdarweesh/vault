@@ -12,7 +12,7 @@
 // build. The literal below is the fallback (file://, or a stripped query) and is
 // still bumped by `npm run release` — see CLAUDE.md "CACHE WORKFLOW".
 const VAULT_BUILD = (() => {
-  const FALLBACK = 'v307';
+  const FALLBACK = 'v308';
   try {
     const src = (document.currentScript && document.currentScript.src) || '';
     const m = src.match(/[?&]v=(\d+)/);
@@ -11343,8 +11343,8 @@ function renderSessionRun(el) {
         if (!hits.length) return '';
         return `<div class="rot-section-sub" style="margin:6px 2px">${escapeHtml(head)}</div>` + hits.map((x) =>
           `<button type="button" class="picker-row" data-pick="${escapeHtml(x.id)}">
+             <span class="picker-row-cat" data-cat="${escapeHtml(x.category || '')}"></span>
              <span class="picker-row-name">${escapeHtml(exDisplayName(x))}</span>
-             <span class="picker-row-cat">${escapeHtml(t('cat_' + String(x.category || '').toLowerCase(), x.category || ''))}</span>
            </button>`).join('');
       };
       const html = rows(same, t('run_ex_same_muscle')) + rows(rest, t('run_ex_other'));
@@ -13003,7 +13003,9 @@ async function populateAccount(el) {
         // so the user was told their data was safe when it was still only local.
         const r = await Cloud.bootSync();
         if (r === 'pulled') { refreshAfterSync(); showToast(t('synced')); }
-        else if (r === 'pushed') showToast(t('synced'));
+        // 'synced' is the fast path: both sides already agreed, so nothing moved
+        // — but the user pressed Sync and is owed the same answer as a push.
+        else if (r === 'pushed' || r === 'synced') showToast(t('synced'));
         else if (r === 'conflict') showConflictDialog();
         else showToast(t('auth_err_network'));   // 'offline' / anything else
       } catch (_) { showToast(t('auth_err_network')); }
@@ -13273,8 +13275,16 @@ async function bootCloud() {
 // Every step is independently wrapped so a failure here is silent and can
 // NEVER block boot or break local/offline usage.
 // ==========================================================================
-async function bootCatalog() {
+// Throttled. It hangs off visibilitychange, which fires every time the phone is
+// glanced at, and the announcement it refreshes is edited by hand a few times a
+// year — a fresh read per glance bought nothing and cost a request each time.
+let __catalogAt = 0;
+async function bootCatalog(opts) {
   if (!window.Cloud || !Cloud.pullCatalog) return;
+  const force = !!(opts && opts.force);
+  const now = Date.now();
+  if (!force && now - __catalogAt < 300000) return;   // 5 minutes
+  __catalogAt = now;
   let catalog;
   try { catalog = await Cloud.pullCatalog(); } catch (_) { return; }
   if (!catalog) return;
