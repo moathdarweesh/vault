@@ -4144,58 +4144,169 @@ body[dir="rtl"] .picker-row { text-align: right; }
 .macro-total.fat .macro-total-value { color: var(--cat-shoulders); }
 
 /* ---- AI calorie chat ---- */
-/* ── Recipe calculator ─────────────────────────────────────────────────
-   Each ingredient is its OWN row of separate fields, per the owner brief.
-   Seven columns on a phone is unreadable, so the row wraps into a 2-line
-   grid: name spans the top, the five numbers sit under it. */
-.rec-top{display:flex; gap:8px; margin-bottom:10px}
-.rec-top #rec-name{flex:1; min-width:0}
-.rec-serv{display:flex; align-items:center; gap:6px; flex:none;
-  font-size:12px; font-weight:700; color:var(--text-dim)}
-.rec-serv input{width:64px; text-align:center}
-/* Five columns for the five numbers, and the name spanning the row above them.
-   Each number sits in its own labelled cell so a row is self-describing. */
-.rec-row{
-  display:grid;
-  grid-template-columns:repeat(5, 1fr) 30px;
-  grid-template-areas:"nm nm nm nm nm del" "qty calories protein carbs fat .";
-  gap:6px; margin-bottom:8px; padding:9px;
-  border:1px solid var(--border); border-radius:12px; background:var(--surface-2);
-}
-.rec-f{display:flex; flex-direction:column; gap: 4px; min-width:0}
-.rec-cap{font-size:11px; font-weight: 700; letter-spacing:.02em; color:var(--text-dim);
-  text-align:center; overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
-.rec-row input{width:100%; min-width:0; height:36px; padding:0 4px;
-  border:1px solid var(--border); border-radius:9px; background:var(--surface-3);
-  color:var(--text); font-size:13px; font-weight:700; text-align:center}
-.rec-row input[data-f="name"]{grid-area:nm; height:38px; padding:0 10px;
-  text-align:start; font-size:14px; font-weight:600}
-.rec-row input:focus{outline:none; border-color:var(--accent-soft)}
-/* A row whose figures are being worked out dims them; one that was filled
-   automatically keeps a faint accent edge, so a hand-typed figure is visibly
-   the user's own. */
-.rec-row.is-pending .rec-f input{opacity:.45; transition:opacity .2s}
-.rec-row.is-auto .rec-f input{border-color:var(--accent-line)}
-.rec-del{grid-area:del; align-self:start; justify-self:center; margin-top:2px}
+/* ── Recipe editor (v301): a LIST, not a spreadsheet ──────────────────────
+   Each ingredient is line 1 (name + amount + remove) and line 2 (a read-only
+   summary that opens a well). Rules obeyed: fill separates and a border MEANS
+   interactive (the two inputs and the pencil well are bordered, the row is
+   not); the 2:1 corner law (r16 well → r8 leaves); the 52/44/36 · r16/12/10 ·
+   15/14/13 scale; inputs ≥16px so iOS does not zoom on focus; --text-faint is
+   never used for text. The sheet is max-width 480, so no breakpoints. */
 
-/* Live totals. Two blocks: the whole recipe, then what ONE serving costs —
-   the second is the number that actually gets logged, so it carries the
-   accent border. */
-.rec-totals{display:grid; grid-template-columns:1fr 1fr; gap:8px; margin:12px 0 4px}
-.rt-block{border:1px solid var(--border); border-radius:14px;
-  background:var(--surface-2); padding:11px 12px}
-.rt-block.accent{border-color:var(--accent-soft, var(--border-hi))}
-.rt-title{font-size:11px; font-weight: 700; letter-spacing:.03em;
-  color:var(--text-dim); margin-bottom:8px}
-.rt-block.accent .rt-title{color:var(--accent-text)}
-.rt-grid{display:grid; grid-template-columns:1fr 1fr; gap:6px 10px}
-.rt-cell{display:flex; align-items:baseline; justify-content:space-between; gap:6px}
-.rt-k{font-size:11px; font-weight:700; color:var(--text-dim)}
-.rt-v{font-size:15px; font-weight: 700; color:var(--text)}
-.rt-block.accent .rt-v{color:var(--accent-text)}
-@media(max-width:380px){
-  .rec-totals{grid-template-columns:1fr}
+/* Screen-reader-only. The app had none; the source tag needs it so colour is
+   never the ONLY channel carrying meaning. */
+.sr-only {
+  position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
+  overflow: hidden; clip: rect(0 0 0 0); clip-path: inset(50%); white-space: nowrap; border: 0;
 }
+
+.rec-name-top { margin-bottom: var(--sp-3); }
+.rec-list { display: flex; flex-direction: column; }
+.rec-row { padding: 10px 0; border-top: 1px solid var(--border); }
+.rec-row:first-child { border-top: 0; padding-top: var(--sp-1); }
+
+/* line 1 — name + amount + remove */
+.rec-line { display: flex; align-items: center; gap: var(--sp-2); }
+.rec-line input {
+  height: var(--btn-h-m); padding: 0 12px;
+  border: 1px solid var(--border-hi); border-radius: var(--radius-btn-m);
+  background: var(--surface-2); color: var(--text);
+  font-size: 16px; font-weight: 600;             /* 16px: no iOS focus-zoom */
+}
+/* No input:focus override here. The global rule paints border-focus + a 4px
+   --accent-soft halo; the 10px margin under this line is what clears it. */
+.rec-name { flex: 1; min-width: 0; text-align: start; }
+/* The amount is a free-text LABEL ("200 غ", "٣ حبات"). Do NOT add
+   inputmode=decimal: that keypad has no letters, and eggs, spoons and cups
+   are how a recipe is actually written — the AI path reads them today. */
+.rec-qty { flex: none; width: 96px; text-align: center; font-weight: 700; }
+.rec-del {
+  position: relative; flex: none;
+  width: var(--btn-h-s); height: var(--btn-h-s); border-radius: var(--radius-btn-s);
+  display: inline-flex; align-items: center; justify-content: center;
+  border: 0; background: transparent; color: var(--text-dim); cursor: pointer;
+  appearance: none; -webkit-appearance: none; -webkit-tap-highlight-color: transparent;
+  transition: color 0.15s, background 0.15s;
+}
+.rec-del::after { content: ''; position: absolute; inset: -4px; }   /* 44px target on a 36px box */
+.rec-del svg { width: 16px; height: 16px; }
+/* Dim, not red: the complaint was a LOUD delete, not a present one. Red
+   arrives only under the finger. */
+.rec-del:active { color: var(--red); --icon-accent: var(--red); background: var(--surface-2); }
+
+/* line 2 — the summary. inset -6 on a 10px margin leaves 4px between this
+   halo and the inputs' focus glow, so tapping the bottom of a field can never
+   open the well (the pseudo is positioned and later in DOM order, so it would
+   win the tap). */
+.rec-sum {
+  position: relative; display: flex; align-items: center; gap: var(--sp-2);
+  width: 100%; min-height: 32px; margin-top: 10px; padding: 0;
+  background: transparent; border: 0; color: var(--text-mute);
+  font: inherit; font-size: 13px; font-weight: 600; text-align: start; cursor: pointer;
+  appearance: none; -webkit-appearance: none; -webkit-tap-highlight-color: transparent;
+}
+.rec-sum::after { content: ''; position: absolute; inset: -6px 0; }   /* 44px target on a 32px line */
+.rec-sum-t { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* Macros are whole numbers on THIS line (the well keeps the decimal): that is
+   what makes the string fit 354px. The ellipsis is a net, not the plan. */
+.rec-sum-t .num { color: var(--text); font-weight: 700; }
+.rec-sum-tag { flex: none; font-size: 11px; font-weight: 700; color: var(--accent-text); }
+/* A 28px well inside a 44px halo — deliberately off the button scale, because
+   it is an icon well inside a larger target, not a button. At 36 it would make
+   line 2 as heavy as line 1. */
+.rec-sum-ic {
+  flex: none; width: 28px; height: 28px;
+  display: inline-flex; align-items: center; justify-content: center;
+  border: 1px solid var(--border-hi); border-radius: var(--radius-sm);
+  background: var(--surface-2); color: var(--text-dim);
+}
+.rec-sum-ic svg { width: 14px; height: 14px; }
+.rec-sum:active .rec-sum-ic { background: var(--surface-3); }
+.rec-row[data-src="ai"] .rec-sum-ic,
+.rec-row.is-open .rec-sum-ic { border-color: var(--accent-line); color: var(--accent-text); --icon-accent: var(--accent-text); }
+.rec-row.is-open .rec-sum-t { white-space: normal; }
+.rec-row.is-open .rec-sum-tag { display: none; }
+
+/* state colours — text only; a collapsed row NEVER changes height */
+.rec-row[data-state="idle"] .rec-sum-t { color: var(--text-ghost); }   /* placeholder role — its sanctioned use */
+.rec-row[data-state="pending"] .rec-sum-t { color: var(--text-dim); animation: recPulse 1.2s ease-in-out infinite; }
+@keyframes recPulse { 0%, 100% { opacity: 1; } 50% { opacity: .5; } }
+.rec-row[data-state="fail"] .rec-sum-t { color: var(--red); }
+.rec-row[data-state="fail"][data-why="signin"] .rec-sum-t { color: var(--warn); }
+
+/* the override well: r16 container, r8 leaves */
+.rec-more { display: none; }
+.rec-row.is-open .rec-more {
+  display: grid; grid-template-columns: repeat(4, 1fr); gap: var(--sp-2);
+  margin-top: var(--sp-2); padding: var(--sp-3);
+  border-radius: var(--radius); background: var(--surface-2); box-shadow: var(--elev-1);
+}
+.rec-f { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.rec-cap {
+  font-size: 11px; font-weight: 700; letter-spacing: .02em; color: var(--text-dim);
+  text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.rec-f input {
+  height: var(--btn-h-m); padding: 0 4px;
+  border: 1px solid var(--border-hi); border-radius: var(--radius-sm);
+  background: var(--surface-3); color: var(--text);
+  font-size: 16px; font-weight: 700; text-align: center;
+}
+.rec-row[data-state="pending"] .rec-f input { opacity: .45; transition: opacity .2s; }
+.rec-more-foot { grid-column: 1 / -1; display: flex; align-items: center; gap: var(--sp-2); margin-top: var(--sp-1); }
+.rec-act {
+  position: relative; display: inline-flex; align-items: center; gap: 6px;
+  height: var(--btn-h-s); padding: 0 10px; border: 0; border-radius: var(--radius-btn-s);
+  background: transparent; color: var(--accent-text);
+  font: inherit; font-size: var(--fs-btn-s); font-weight: 700; cursor: pointer;
+  appearance: none; -webkit-appearance: none; -webkit-tap-highlight-color: transparent;
+}
+.rec-act::after { content: ''; position: absolute; inset: -4px 0; }
+.rec-act svg { width: 16px; height: 16px; }
+.rec-act:active { background: var(--surface-3); }
+
+/* add row — the app's own dashed empty-slot idiom. NOT .btn-ghost: the
+   identity layer gives that a solid border, which would beat the dash. */
+.rec-add { margin-top: var(--sp-2); }
+
+/* totals — ONE well, three lines. The per-serving line is what the food log
+   actually receives when the recipe is logged, so it carries the accent. */
+.rec-totals {
+  display: flex; flex-direction: column; gap: var(--sp-2);
+  margin: var(--sp-4) 0 0; padding: var(--sp-3) var(--sp-4);
+  border-radius: var(--radius); background: var(--surface-2); box-shadow: var(--elev-1);
+}
+.rt-line { display: flex; flex-direction: column; gap: 2px; }
+.rt-k { font-size: 11px; font-weight: 700; letter-spacing: .03em; color: var(--text-dim); }
+.rt-v { font-size: 13px; font-weight: 600; color: var(--text-mute); }
+.rt-v .num { color: var(--text); font-weight: 700; }
+.rt-line.accent .rt-k { color: var(--accent-text); }
+.rt-line.accent .rt-v .num { color: var(--accent-text); }
+.rt-line.accent .rt-cal { font-size: 17px; }
+.rt-serv {
+  display: flex; align-items: center; justify-content: space-between; gap: var(--sp-2);
+  padding: var(--sp-1) 0; border-top: 1px solid var(--border); border-bottom: 1px solid var(--border);
+}
+.rt-serv-k { font-size: 13px; font-weight: 700; color: var(--text); }
+.rt-step { display: flex; align-items: center; gap: var(--sp-1); }
+.rt-step button {
+  position: relative; width: var(--btn-h-s); height: var(--btn-h-s); border-radius: var(--radius-btn-s);
+  border: 1px solid var(--border-hi); background: var(--surface-3); color: var(--text);
+  display: inline-flex; align-items: center; justify-content: center; cursor: pointer;
+  appearance: none; -webkit-appearance: none; -webkit-tap-highlight-color: transparent;
+  transition: transform var(--dur-press), background 0.15s;
+}
+.rt-step button::after { content: ''; position: absolute; inset: -4px; }
+.rt-step button svg { width: 16px; height: 16px; }
+.rt-step button:active { transform: scale(var(--press-scale)); background: var(--surface-hi); }
+.rt-step input {
+  width: 52px; height: var(--btn-h-s); padding: 0; text-align: center;
+  border: 1px solid var(--border-hi); border-radius: var(--radius-btn-s);
+  background: var(--surface-3); color: var(--text); font-size: 16px; font-weight: 700;
+}
+
+/* the save button while it waits on a row still being worked out */
+#rec-save.is-waiting { opacity: .72; }
+
 /* ── Saved picker: أطعمة | وجباتي ──────────────────────────────────────── */
 .sfp-tabs {
   display: flex;

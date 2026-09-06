@@ -12,7 +12,7 @@
 // build. The literal below is the fallback (file://, or a stripped query) and is
 // still bumped by `npm run release` — see CLAUDE.md "CACHE WORKFLOW".
 const VAULT_BUILD = (() => {
-  const FALLBACK = 'v300';
+  const FALLBACK = 'v301';
   try {
     const src = (document.currentScript && document.currentScript.src) || '';
     const m = src.match(/[?&]v=(\d+)/);
@@ -945,7 +945,24 @@ const I18N = {
     rec_new: 'New recipe',
     rec_name_ph: 'Recipe name — e.g. my chicken and rice',
     rec_servings: 'Servings',
-    rec_ing: 'Ingredients',
+    rec_sub: 'Ingredient and its weight — the figures fill in by themselves',
+    rec_row_hint: 'The figures appear here',
+    rec_st_pending: 'Working it out…',
+    rec_st_fail: 'Could not work it out — type the figures',
+    rec_st_signin: 'Sign in for automatic figures, or type them',
+    rec_tag_local: 'saved food', rec_tag_ai: 'estimate', rec_tag_manual: 'typed', rec_tag_saved: 'saved',
+    rec_src_local: 'From your saved foods, scaled to this weight — change any figure if you know better',
+    rec_src_ai: 'An AI estimate for this amount — correct any figure you know better',
+    rec_src_manual: 'Your own figures — they are never changed automatically',
+    rec_src_saved: 'Figures saved with the recipe',
+    rec_src_empty: 'Type the figures for this amount',
+    rec_retry: 'Try again', rec_recompute: 'Compute again', rec_del_ing: 'Remove ingredient',
+    rec_removed: '{name} removed',
+    rec_need_figs: '{name} has no figures — type them or remove it',
+    rec_save_wait: 'Saving once the figures land',
+    rec_serv_less: 'One serving fewer', rec_serv_more: 'One serving more',
+    rec_serv_1: '1 serving', rec_serv_2: '2 servings', rec_serv_n: '{n} servings', rec_serv_many: '{n} servings',
+    rec_g: 'g',
     rec_u_ing: 'ingredients',
     rec_u_serv: 'servings',
     rec_u_per: 'per serving',
@@ -953,7 +970,6 @@ const I18N = {
     rec_ing_name: 'Ingredient',
     rec_qty: 'Amount',
     rec_qty_ph: '200 g',
-    rec_figures_hint: 'Type the ingredient and its weight in grams — calories and macros fill in by themselves. Edit any figure by hand if you know better.',
     rec_auto_wait: 'One moment — the figures are being worked out', date_future: 'That date has not come yet', date_future_tag: 'a date still to come',
     rec_auto_fail: 'Could not work out {name} — type its figures by hand',
     rec_auto_signin: 'Automatic figures need you to be signed in (the AI); saved foods still work',
@@ -1784,9 +1800,26 @@ const I18N = {
     sug_applied: 'وُضع الاقتراح في المجموعة التالية',
     tab_recipes: 'وصفاتي',
     rec_new: 'وصفة جديدة',
-    rec_name_ph: 'اسم الوصفة — مثلاً: دجاج ورز',
+    rec_name_ph: 'اسم الوصفة — مثلاً: دجاج وأرز',
     rec_servings: 'عدد الحصص',
-    rec_ing: 'المكوّنات',
+    rec_sub: 'المكوّن ووزنه، والأرقام تُحسب تلقائياً',
+    rec_row_hint: 'تظهر الأرقام هنا',
+    rec_st_pending: 'يُحسب…',
+    rec_st_fail: 'تعذّر الحساب — اكتب الأرقام',
+    rec_st_signin: 'سجّل الدخول للحساب التلقائي، أو اكتب الأرقام',
+    rec_tag_local: 'من أطعمتك', rec_tag_ai: 'تقدير', rec_tag_manual: 'يدوي', rec_tag_saved: 'محفوظ',
+    rec_src_local: 'من أطعمتك المحفوظة، محسوبة لهذا الوزن — عدّل أي رقم إن شئت',
+    rec_src_ai: 'تقدير الذكاء الاصطناعي لهذه الكمية — صحّح أي رقم تعرفه',
+    rec_src_manual: 'أرقامك أنت — لن تُغيَّر تلقائياً',
+    rec_src_saved: 'أرقام محفوظة مع الوصفة',
+    rec_src_empty: 'اكتب الأرقام لهذه الكمية',
+    rec_retry: 'أعد المحاولة', rec_recompute: 'أعد الحساب', rec_del_ing: 'حذف المكوّن',
+    rec_removed: 'حُذف {name}',
+    rec_need_figs: '{name}: لا أرقام له — اكتبها أو احذفه',
+    rec_save_wait: 'سيُحفظ بعد الحساب',
+    rec_serv_less: 'حصّة أقل', rec_serv_more: 'حصّة أكثر',
+    rec_serv_1: 'حصّة واحدة', rec_serv_2: 'حصّتان', rec_serv_n: '{n} حصص', rec_serv_many: '{n} حصّة',
+    rec_g: 'غ',
     rec_u_ing: 'مكوّنات',
     rec_u_serv: 'حصص',
     rec_u_per: 'للحصّة',
@@ -1794,7 +1827,6 @@ const I18N = {
     rec_ing_name: 'المكوّن',
     rec_qty: 'الكمية',
     rec_qty_ph: '200 غ',
-    rec_figures_hint: 'اكتب المكوّن ووزنه بالغرام وتُحسب سعراته وعناصره تلقائياً؛ عدّل أي رقم يدوياً إن كنت تعرفه.',
     rec_auto_wait: 'لحظة — الأرقام تُحسب', date_future: 'لا يمكن التسجيل لتاريخ لم يأتِ بعد', date_future_tag: 'تاريخ لم يأتِ بعد',
     rec_auto_fail: 'تعذّر حساب {name} — اكتب أرقامه يدوياً',
     rec_auto_signin: 'الحساب التلقائي يحتاج تسجيل الدخول (الذكاء الاصطناعي)؛ الأطعمة المحفوظة تعمل بدونه',
@@ -7657,112 +7689,215 @@ function openManualFoodEntry(date, onSave) {
 // Totals are never stored; DB.recipes.totals() derives them on read. A stored
 // total silently disagrees with its own ingredients the moment one is edited.
 function openRecipeEditor(date, existing, onDone) {
-  // Every row carries a transient _id (rows are matched by it after an await —
-  // an index shifts when a row above is deleted), and the auto machinery never
-  // touches a row that already holds figures unless IT filled them this session.
+  // THE INGREDIENT LEDGER (v301). The sheet is a LIST, not a spreadsheet.
+  //
+  // One ingredient = one input line (name + amount + remove) and ONE read-only
+  // summary line under it. The four figures are not inputs by default: they
+  // arrive from the auto-fill machinery below and a tap on the summary opens a
+  // well to override them. Per ingredient that is 4 visible controls and 0
+  // captions, against 7 and 5 before — which is the whole point: the owner's
+  // complaint was that the box does not fit what is in it.
+  //
+  // Two rules make it feel calm, and both are load-bearing:
+  //   1. A ROW IS NEVER RE-RENDERED WHILE IT IS BEING USED. drawRows() runs at
+  //      open and on undo-restore, nothing else. Everything after that patches
+  //      the DOM in place through updateSummary()/fill()/drawTotals(), so no
+  //      field loses focus, no caret moves, and no listener is ever re-bound
+  //      (three delegated listeners on #rec-rows, bound once).
+  //   2. THE SUMMARY LINE HAS THE SAME HEIGHT IN EVERY STATE, including empty
+  //      (it holds the ghost hint there). A row above the one you are typing in
+  //      changes its text, never its height, when figures land.
   var seq = 0;
   var newItem = function () { return { _id: ++seq, name: '', qty: '', calories: 0, protein: 0, carbs: 0, fat: 0 }; };
   var hasFigures = function (it) { return !!(Number(it.calories) || Number(it.protein) || Number(it.carbs) || Number(it.fat)); };
   var items = existing && existing.items ? existing.items.map(function (i) { return Object.assign({ _id: ++seq }, i); }) : [newItem()];
   var name = (existing && existing.name) || '';
   var servings = (existing && existing.servings) || 1;
+  var saveWanted = false;
 
+  // Arabic's dual and its 3-10 / 11+ split are real grammar. Used as the
+  // servings input's aria-label — the one place the number is SPOKEN beside a
+  // noun. It is not painted a second time: the digit is already on screen.
+  var servLabel = function (n) {
+    n = Math.max(1, parseInt(n, 10) || 1);
+    if (n === 1) return t('rec_serv_1');
+    if (n === 2) return t('rec_serv_2');
+    return (n <= 10 ? t('rec_serv_n') : t('rec_serv_many')).replace('{n}', fmtNum(n));
+  };
+
+  var rowHtml = function (it) {
+    var fld = function (f, cap, step, mode, hint) {
+      return '<label class="rec-f"><span class="rec-cap">' + cap + '</span>' +
+        '<input type="number" data-f="' + f + '" inputmode="' + mode + '" min="0" step="' + step + '"' +
+        ' enterkeyhint="' + hint + '" aria-label="' + escapeHtml(cap) + '" value="' + numAttr(it[f]) + '"></label>';
+    };
+    return '<div class="rec-row" data-id="' + it._id + '" data-state="idle" data-src="">' +
+      '<div class="rec-line">' +
+        '<input type="text" class="rec-name" data-f="name" list="rec-foods" maxlength="60" enterkeyhint="next"' +
+          ' placeholder="' + escapeHtml(t('rec_ing_name')) + '" aria-label="' + escapeHtml(t('rec_ing_name')) + '"' +
+          ' value="' + escapeHtml(it.name || '') + '">' +
+        // The amount is a free-text LABEL ("200 غ", "٣ حبات", "ملعقة زيت") — see
+        // DB.recipes.totals. NOT inputmode=decimal: that keypad has no letters,
+        // and parseGrams + the AI already read those amounts correctly.
+        '<input type="text" class="rec-qty" data-f="qty" dir="auto" maxlength="24" enterkeyhint="next"' +
+          ' placeholder="' + escapeHtml(t('rec_qty_ph')) + '" aria-label="' + escapeHtml(t('rec_qty')) + '"' +
+          ' value="' + escapeHtml(String(it.qty == null ? '' : it.qty)) + '">' +
+        '<button type="button" class="rec-del" data-del aria-label="' + escapeHtml(t('rec_del_ing')) + '">' + icon('trash', 16) + '</button>' +
+      '</div>' +
+      // No aria-label: it would REPLACE the content, and the content (the
+      // figures and the source word) is exactly what a screen reader must read.
+      '<button type="button" class="rec-sum" data-toggle aria-expanded="false" aria-controls="rec-more-' + it._id + '">' +
+        '<span class="rec-sum-t"></span><span class="rec-sum-tag"></span>' +
+        '<span class="rec-sum-ic">' + icon('edit', 14) + '</span>' +
+      '</button>' +
+      '<div class="rec-more" id="rec-more-' + it._id + '">' +
+        fld('calories', t('cal'), '1', 'numeric', 'next') +
+        fld('protein', t('protein_label'), '0.1', 'decimal', 'next') +
+        fld('carbs', t('carbs_label'), '0.1', 'decimal', 'next') +
+        fld('fat', t('fat_label'), '0.1', 'decimal', 'done') +
+        '<div class="rec-more-foot" hidden>' +
+          '<button type="button" class="rec-act" data-retry hidden>' + icon('refresh', 16) + ' ' + t('rec_retry') + '</button>' +
+          '<button type="button" class="rec-act" data-recompute hidden>' + icon('refresh', 16) + ' ' + t('rec_recompute') + '</button>' +
+        '</div>' +
+      '</div>' +
+    '</div>';
+  };
+
+  // Steering a name toward a food this user already has turns the slowest path
+  // (900ms -> batch -> Worker, needs a session, can fail) into the fastest one
+  // (instant, offline, free). Native element, no CSS, no component.
+  var foodOpts = '';
+  try {
+    foodOpts = DB.foods.list().slice(0, 300).map(function (f) { return '<option value="' + escapeHtml(f.name) + '"></option>'; }).join('');
+  } catch (_) {}
+
+  var totalsCell = function (attr, key) {
+    return '<span class="num"' + attr + '>0</span> ' + key;
+  };
   var overlay = openModal('' +
     '<div class="modal-header">' +
       '<div><div class="modal-title">' + (existing ? escapeHtml(existing.name) : t('rec_new')) + '</div>' +
-      '<div class="modal-subtitle">' + t('rec_ing') + '</div></div>' +
+      '<div class="modal-subtitle" id="rec-sub">' + t('rec_sub') + '</div></div>' +
       '<button class="icon-btn icon-btn-tile" data-close>' + icon('close', 20) + '</button>' +
     '</div>' +
-    '<div class="rec-top">' +
-      '<input type="text" id="rec-name" class="input" maxlength="60" placeholder="' + escapeHtml(t('rec_name_ph')) + '" value="' + escapeHtml(name) + '">' +
-      '<label class="rec-serv"><span>' + t('rec_servings') + '</span>' +
-        '<input type="number" id="rec-servings" inputmode="numeric" min="1" step="1" value="' + numAttr(servings) + '"></label>' +
+    '<input type="text" id="rec-name" class="input rec-name-top" maxlength="60" enterkeyhint="next" placeholder="' + escapeHtml(t('rec_name_ph')) + '" value="' + escapeHtml(name) + '">' +
+    '<div id="rec-rows" class="rec-list"></div>' +
+    '<datalist id="rec-foods">' + foodOpts + '</datalist>' +
+    '<button type="button" class="ledger-add rec-add" id="rec-add">' + icon('plus', 14) + ' <span>' + t('rec_add_ing') + '</span></button>' +
+    '<div class="rec-totals" id="rec-totals">' +
+      '<div class="rt-line"><span class="rt-k">' + t('rec_total') + '</span>' +
+        '<span class="rt-v">' + totalsCell(' data-t="calories"', t('cal')) + ' · ' + totalsCell(' data-t="protein"', t('protein_label')) +
+        ' · ' + totalsCell(' data-t="carbs"', t('carbs_label')) + ' · ' + totalsCell(' data-t="fat"', t('fat_label')) + '</span></div>' +
+      '<div class="rt-serv"><span class="rt-serv-k">' + t('rec_servings') + '</span>' +
+        '<span class="rt-step">' +
+          '<button type="button" data-step="-1" aria-label="' + escapeHtml(t('rec_serv_less')) + '">' + icon('minus', 16) + '</button>' +
+          '<input type="number" id="rec-servings" class="num" inputmode="numeric" min="1" max="99" step="1" value="' + numAttr(servings) + '" aria-label="' + escapeHtml(servLabel(servings)) + '">' +
+          '<button type="button" data-step="1" aria-label="' + escapeHtml(t('rec_serv_more')) + '">' + icon('plus', 16) + '</button>' +
+        '</span></div>' +
+      '<div class="rt-line accent"><span class="rt-k">' + t('rec_per') + '</span>' +
+        '<span class="rt-v"><span class="num rt-cal" data-p="calories">0</span> ' + t('cal') + ' · ' + totalsCell(' data-p="protein"', t('protein_label')) +
+        ' · ' + totalsCell(' data-p="carbs"', t('carbs_label')) + ' · ' + totalsCell(' data-p="fat"', t('fat_label')) + '</span></div>' +
     '</div>' +
-
-    '<div id="rec-rows"></div>' +
-    '<p class="calc-preview-hint" style="margin:4px 0 10px">' + t('rec_figures_hint') + '</p>' +
-    '<button type="button" class="btn btn-ghost btn-block" id="rec-add">' + icon('plus', 16) + ' ' + t('rec_add_ing') + '</button>' +
-    '<div class="rec-totals" id="rec-totals"></div>' +
     '<div class="form-actions sticky-actions">' +
       '<button type="button" class="btn btn-primary" id="rec-save">' + t('rec_save') + '</button>' +
     '</div>');
 
-  function drawRows() {
-    var host = overlay.querySelector('#rec-rows');
-    host.innerHTML = items.map(function (it, i) {
-      // type=number with plain digits: an <input type=number> silently rejects
-      // Arabic-Indic numerals, so numAttr must not localise here.
-      var fld = function (f, cap, step, mode) {
-        return '<label class="rec-f" style="grid-area:' + f + '">' +
-          '<span class="rec-cap">' + cap + '</span>' +
-          '<input type="number" data-f="' + f + '" inputmode="' + mode + '" min="0" step="' + step + '"' +
-          ' aria-label="' + escapeHtml(cap) + '" value="' + numAttr(it[f]) + '"></label>';
-      };
-      return '<div class="rec-row' + (it._auto === 'pending' ? ' is-pending' : it._auto === 'done' ? ' is-auto' : '') + '" data-row="' + i + '">' +
-        '<input type="text" data-f="name" placeholder="' + escapeHtml(t('rec_ing_name')) + '" value="' + escapeHtml(it.name || '') + '">' +
-        // The amount is a LABEL ("200 غ", "3 حبات"), and the four figures are
-        // for that amount. It used to be a numeric multiplier — 200 g at 330
-        // kcal became 66,000 kcal — which no one entering a recipe expects.
-        '<label class="rec-f" style="grid-area:qty"><span class="rec-cap">' + t('rec_qty') + '</span>' +
-          '<input type="text" data-f="qty" maxlength="24" placeholder="' + escapeHtml(t('rec_qty_ph')) + '" aria-label="' + escapeHtml(t('rec_qty')) + '" value="' + escapeHtml(String(it.qty == null ? '' : it.qty)) + '"></label>' +
-        fld('calories', t('cal'), '1', 'numeric') +
-        fld('protein', t('protein_label'), '0.1', 'decimal') +
-        fld('carbs', t('carbs_label'), '0.1', 'decimal') +
-        fld('fat', t('fat_label'), '0.1', 'decimal') +
-        '<button type="button" class="icon-btn danger rec-del" data-del="' + i + '" aria-label="' + escapeHtml(t('delete')) + '">' + icon('close', 16) + '</button>' +
-      '</div>';
-    }).join('');
+  var host = overlay.querySelector('#rec-rows');
+  // Items are addressed by their transient _id, NEVER by index: an index shifts
+  // the moment a row above is deleted, and a reply that lands after that would
+  // paint the chicken's figures onto the rice.
+  var rowOf = function (it) { return it ? host.querySelector('.rec-row[data-id="' + it._id + '"]') : null; };
+  var byId = function (id) { for (var i = 0; i < items.length; i++) if (items[i]._id === id) return items[i]; return null; };
+  var itemOf = function (el) { var r = el.closest ? el.closest('.rec-row') : null; return r ? byId(Number(r.dataset.id)) : null; };
 
-    host.querySelectorAll('.rec-row input').forEach(function (inp) {
-      inp.addEventListener('input', function () {
-        var i = Number(inp.closest('.rec-row').dataset.row);
-        var f = inp.dataset.f;
-        if (f === 'name' || f === 'qty') {
-          items[i][f] = inp.value;
-          scheduleAuto(i);
-        } else {
-          items[i][f] = parseFloat(inp.value) || 0;
-          // A figure typed by hand is the user's number: never overwrite it.
-          items[i]._manual = true; items[i]._auto = null;
-          inp.closest('.rec-row').classList.remove('is-pending', 'is-auto');
-        }
-        drawTotals();
-      });
-    });
-    host.querySelectorAll('[data-del]').forEach(function (b) {
-      b.addEventListener('click', function () {
-        // Never leave the sheet with zero rows — an empty editor gives the user
-        // nothing to type into and no way back to a row.
-        if (items.length === 1) items[0] = newItem();
-        else items.splice(Number(b.dataset.del), 1);
-        drawRows(); drawTotals();
-      });
-    });
-    drawTotals();
+  // ---- ONE writer for the summary line -------------------------------------
+  function figuresHtml(it) {
+    var n = function (v) { return '<span class="num">' + fmtNum(Math.round(Number(v) || 0)) + '</span>'; };
+    // Macros are rounded to WHOLE numbers on this line only (the well keeps the
+    // decimal). That is what makes the string fit 354px without truncating;
+    // the CSS ellipsis is a net, not the plan. Do not restore the decimals.
+    return n(it.calories) + ' ' + t('cal') + ' · ' + n(it.protein) + ' ' + t('protein_label') +
+      ' · ' + n(it.carbs) + ' ' + t('carbs_label') + ' · ' + n(it.fat) + ' ' + t('fat_label');
+  }
+  function updateSummary(it) {
+    var row = rowOf(it); if (!row) return;
+    var pending = it._auto === 'pending' || it._auto === 'sent';
+    var failed = it._auto === 'fail';
+    var done = !pending && !failed && (hasFigures(it) || it._manual);
+    var state = pending ? 'pending' : failed ? 'fail' : done ? 'done' : 'idle';
+    var src = done ? (it._src || 'saved') : '';
+    row.dataset.state = state;
+    row.dataset.src = src;
+    if (it._why) row.dataset.why = it._why; else row.removeAttribute('data-why');
+    var open = row.classList.contains('is-open');
+    var txt = row.querySelector('.rec-sum-t');
+    var tag = row.querySelector('.rec-sum-tag');
+    var ic = row.querySelector('.rec-sum-ic');
+    if (pending) txt.textContent = t('rec_st_pending');
+    else if (failed) txt.textContent = it._why === 'signin' ? t('rec_st_signin') : t('rec_st_fail');
+    else if (open) txt.textContent = done ? t('rec_src_' + src) : t('rec_src_empty');
+    else if (done) txt.innerHTML = figuresHtml(it);
+    else txt.textContent = t('rec_row_hint');
+    // The source word is ALWAYS in the accessible name; only the estimate is
+    // painted, so colour never carries meaning on its own.
+    tag.textContent = done ? t('rec_tag_' + src) : '';
+    tag.classList.toggle('sr-only', src !== 'ai');
+    ic.innerHTML = open ? icon('check', 14) : icon('edit', 14);
+    var retry = row.querySelector('[data-retry]');
+    var recompute = row.querySelector('[data-recompute]');
+    var canCompute = String(it.name || '').trim().length >= 3 && !!String(it.qty || '').trim();
+    retry.hidden = !failed;
+    recompute.hidden = !(done && (src === 'manual' || src === 'saved') && canCompute);
+    row.querySelector('.rec-more-foot').hidden = retry.hidden && recompute.hidden;
+  }
+  function setOpen(it, open) {
+    var row = rowOf(it); if (!row) return;
+    row.classList.toggle('is-open', !!open);
+    row.querySelector('.rec-sum').setAttribute('aria-expanded', open ? 'true' : 'false');
+    updateSummary(it);
+    if (open) {
+      var f = row.querySelector('[data-f="calories"]');
+      if (f) f.focus();
+      row.scrollIntoView({ block: 'nearest' });
+      row.querySelector('.rec-more').scrollIntoView({ block: 'nearest' });
+    }
+  }
+  function syncSubtitle() {
+    var el = overlay.querySelector('#rec-sub');
+    if (el) el.hidden = items.some(hasFigures);
+  }
+
+  // ---- rendering: whole rows only at open and on undo ----------------------
+  function drawRows() {
+    host.innerHTML = items.map(rowHtml).join('');
+    items.forEach(updateSummary);
+    drawTotals(); syncSubtitle();
+  }
+  function appendRow(it) { host.insertAdjacentHTML('beforeend', rowHtml(it)); updateSummary(it); }
+  function addRow() {
+    var it = newItem();
+    items.push(it);
+    appendRow(it);
+    var inp = rowOf(it).querySelector('[data-f="name"]');
+    inp.focus();
+    rowOf(it).scrollIntoView({ block: 'nearest' });
+    drawTotals(); syncSubtitle();
   }
 
   function drawTotals() {
     var n = Math.max(1, parseInt(overlay.querySelector('#rec-servings').value, 10) || 1);
     var rec = { servings: n, items: items };
     var tot = DB.recipes.totals(rec);
-    var per = DB.recipes.perServing(rec);
-    var cell = function (label, v, unit) {
-      return '<span class="rt-cell"><span class="rt-k">' + label + '</span>' +
-        '<span class="rt-v num">' + fmtNum(v) + (unit || '') + '</span></span>';
-    };
-    overlay.querySelector('#rec-totals').innerHTML =
-      '<div class="rt-block"><div class="rt-title">' + t('rec_total') + '</div><div class="rt-grid">' +
-        cell(t('cal'), Math.round(tot.calories)) +
-        cell(t('protein_label'), Math.round(tot.protein * 10) / 10, 'g') +
-        cell(t('carbs_label'), Math.round(tot.carbs * 10) / 10, 'g') +
-        cell(t('fat_label'), Math.round(tot.fat * 10) / 10, 'g') +
-      '</div></div>' +
-      '<div class="rt-block accent"><div class="rt-title">' + t('rec_per') + '</div><div class="rt-grid">' +
-        cell(t('cal'), per.calories) +
-        cell(t('protein_label'), per.protein, 'g') +
-        cell(t('carbs_label'), per.carbs, 'g') +
-        cell(t('fat_label'), per.fat, 'g') +
-      '</div></div>';
+    var per = DB.recipes.perServing(rec);   // already rounded and clamped in storage.js — never divide here
+    var put = function (sel, v) { var el = overlay.querySelector(sel); if (el) el.textContent = fmtNum(v); };
+    put('[data-t="calories"]', Math.round(tot.calories));
+    put('[data-t="protein"]', Math.round(tot.protein * 10) / 10);
+    put('[data-t="carbs"]', Math.round(tot.carbs * 10) / 10);
+    put('[data-t="fat"]', Math.round(tot.fat * 10) / 10);
+    put('[data-p="calories"]', per.calories);
+    put('[data-p="protein"]', per.protein);
+    put('[data-p="carbs"]', per.carbs);
+    put('[data-p="fat"]', per.fat);
   }
 
   // ---- AUTOMATIC FIGURES ---------------------------------------------------
@@ -7802,29 +7937,31 @@ function openRecipeEditor(date, existing, onDone) {
     var k = g / sg;
     return { calories: food.calories * k, protein: food.protein * k, carbs: food.carbs * k, fat: food.fat * k };
   };
-  var rowEl = function (i) { return overlay.querySelector('.rec-row[data-row="' + i + '"]'); };
-  var fill = function (i, m) {
-    var it = items[i]; if (!it) return;
+  var setFieldValues = function (it) {
+    var row = rowOf(it); if (!row) return;
+    ['calories', 'protein', 'carbs', 'fat'].forEach(function (f) {
+      var inp = row.querySelector('input[data-f="' + f + '"]');
+      if (inp) inp.value = numAttr(it[f]);
+    });
+  };
+  var fill = function (it, m, src) {
+    if (!it) return;
     if (it._manual || (hasFigures(it) && it._auto !== 'done' && it._auto !== 'sent')) return;   // figures that are not ours stay
     it.calories = Math.round(m.calories || 0);
     it.protein = Math.round((m.protein || 0) * 10) / 10;
     it.carbs = Math.round((m.carbs || 0) * 10) / 10;
     it.fat = Math.round((m.fat || 0) * 10) / 10;
-    it._auto = 'done';
-    var row = rowEl(i);
-    if (row) {
-      ['calories', 'protein', 'carbs', 'fat'].forEach(function (f) { var inp = row.querySelector('input[data-f="' + f + '"]'); if (inp) inp.value = numAttr(it[f]); });
-      row.classList.remove('is-pending'); row.classList.add('is-auto');
-    }
+    it._auto = 'done'; it._src = src; it._why = null;
+    setFieldValues(it);
+    updateSummary(it);
   };
-  var settle = function (i, state) { var it = items[i]; if (it) it._auto = state; var row = rowEl(i); if (row) row.classList.remove('is-pending'); };
-  function scheduleAuto(i) {
-    var it = items[i];
+  var settle = function (it, state, why) { if (!it) return; it._auto = state; it._why = why || null; updateSummary(it); };
+  function scheduleAuto(it) {
     if (!it || it._manual) return;
     if (hasFigures(it) && it._auto !== 'done' && it._auto !== 'sent' && it._auto !== 'pending') return;   // a reopened recipe keeps its saved figures
     if (String(it.name || '').trim().length < 3 || !String(it.qty || '').trim()) return;   // 'دج' is not an ingredient yet
-    it._auto = 'pending';
-    var row = rowEl(i); if (row) { row.classList.add('is-pending'); row.classList.remove('is-auto'); }
+    it._auto = 'pending'; it._why = null;
+    updateSummary(it);
     clearTimeout(autoTimer);
     autoTimer = setTimeout(runAuto, 900);   // a pause in typing, not every keystroke
   }
@@ -7833,20 +7970,23 @@ function openRecipeEditor(date, existing, onDone) {
     items.forEach(function (it) { if (it._auto === 'pending') { it._auto = 'sent'; pend.push({ id: it._id, key: it.name + '|' + it.qty }); } });   // 'sent': a later timer must not resend it
     if (!pend.length) return;
     var need = [];
-    var idx = function (id) { return items.findIndex(function (it) { return it._id === id; }); };
     pend.forEach(function (x) {
-      var i = idx(x.id); if (i < 0) return;
-      var hit = localLookup(items[i].name, items[i].qty);
-      if (hit) fill(i, hit); else need.push(x);
+      var it = byId(x.id); if (!it) return;
+      var hit = localLookup(it.name, it.qty);
+      if (hit) fill(it, hit, 'local'); else need.push(x);
     });
-    drawTotals();
-    if (!need.length) return;
-    if (!(window.FoodAI && FoodAI.analyze)) { need.forEach(function (x) { settle(idx(x.id), 'fail'); }); return; }
+    drawTotals(); syncSubtitle();
+    if (!need.length) { finishSaveIfWanted(true); return; }
+    if (!(window.FoodAI && FoodAI.analyze)) { need.forEach(function (x) { settle(byId(x.id), 'fail', 'ai'); }); finishSaveIfWanted(false); return; }
     // Batches under the Worker's 500-character text limit, one line per row.
     var batches = [], cur = [], len = 0;
     need.forEach(function (x) {
-      var it0 = items[idx(x.id)]; if (!it0) return;
-      var line = String(it0.qty).trim() + ' ' + String(it0.name).trim();
+      var it0 = byId(x.id); if (!it0) return;
+      // A bare number is grams to parseGrams, so say so to the model too —
+      // otherwise it is asked to price "200 دجاج".
+      var q = String(it0.qty).trim();
+      if (/^\d+(\.\d+)?$/.test(latinDigits(q))) q += ' ' + t('rec_g');
+      var line = q + ' ' + String(it0.name).trim();
       if (cur.length && len + line.length + 1 > 380) { batches.push(cur); cur = []; len = 0; }
       cur.push({ x: x, line: line }); len += line.length + 1;
     });
@@ -7864,7 +8004,7 @@ function openRecipeEditor(date, existing, onDone) {
       }
       if (!overlay.isConnected) return;   // the editor closed while the request was out
       batch.forEach(function (p, k) {
-        var i = idx(p.x.id); var it = items[i];
+        var it = byId(p.x.id);
         // the row is gone, changed while we were away, or the user typed a figure: leave it
         if (!it || it._manual || it._auto !== 'sent' || (it.name + '|' + it.qty) !== p.x.key) return;
         var m = null;
@@ -7872,37 +8012,166 @@ function openRecipeEditor(date, existing, onDone) {
           if (got.length === batch.length) m = got[k];
           else { var n = normName(it.name); m = got.find(function (g) { var gn = normName(g.name); return gn && (gn.indexOf(n) !== -1 || n.indexOf(gn) !== -1); }) || null; }
         }
-        if (m && (m.calories || m.protein || m.carbs || m.fat)) fill(i, m);
-        else { settle(i, 'fail'); failed.push(it.name); }
+        if (m && (m.calories || m.protein || m.carbs || m.fat)) fill(it, m, 'ai');
+        else { settle(it, 'fail', signin ? 'signin' : 'ai'); failed.push(it.name); }
       });
     }
-    drawTotals();
+    drawTotals(); syncSubtitle();
     if (signin) showToast(t('rec_auto_signin'));
     else if (failed.length) showToast(t('rec_auto_fail').replace('{name}', failed.join('، ')));
+    finishSaveIfWanted(!failed.length && !signin);
   }
 
-  overlay.querySelector('#rec-servings').addEventListener('input', drawTotals);
-  overlay.querySelector('#rec-add').addEventListener('click', function () {
-    items.push(newItem());
-    drawRows();
-    var rows = overlay.querySelectorAll('.rec-row input[data-f="name"]');
-    if (rows.length) rows[rows.length - 1].focus();
+  // ---- delegated events: bound once, never re-bound ------------------------
+  host.addEventListener('input', function (e) {
+    var inp = e.target;
+    var f = inp.dataset ? inp.dataset.f : null;
+    if (!f) return;
+    var it = itemOf(inp); if (!it) return;
+    if (f === 'name' || f === 'qty') {
+      it[f] = inp.value;
+      scheduleAuto(it);
+      updateSummary(it);
+    } else {
+      it[f] = parseFloat(inp.value) || 0;
+      // A figure typed by hand is the user's number: never overwritten. Only
+      // the explicit "compute again" button clears this.
+      it._manual = true; it._auto = null; it._src = 'manual'; it._why = null;
+      updateSummary(it);
+    }
+    saveWanted = false; setWaiting(false);
+    drawTotals(); syncSubtitle();
   });
-  overlay.querySelector('#rec-save').addEventListener('click', function () {
+  host.addEventListener('click', function (e) {
+    var el = e.target.closest ? e.target.closest('[data-toggle],[data-del],[data-retry],[data-recompute]') : null;
+    if (!el) return;
+    var it = itemOf(el); if (!it) return;
+    if (el.hasAttribute('data-toggle')) { setOpen(it, !rowOf(it).classList.contains('is-open')); return; }
+    if (el.hasAttribute('data-del')) { removeRow(it); return; }
+    if (el.hasAttribute('data-retry')) { it._auto = null; it._why = null; scheduleAuto(it); return; }
+    if (el.hasAttribute('data-recompute')) {
+      it._manual = false; it._src = null; it._why = null; it._auto = null;
+      it.calories = 0; it.protein = 0; it.carbs = 0; it.fat = 0;
+      var row = rowOf(it);
+      ['calories', 'protein', 'carbs', 'fat'].forEach(function (f) { var i2 = row.querySelector('input[data-f="' + f + '"]'); if (i2) i2.value = ''; });
+      scheduleAuto(it); drawTotals(); syncSubtitle();
+    }
+  });
+  host.addEventListener('keydown', function (e) {
+    if (e.key !== 'Enter') return;
+    var inp = e.target; var f = inp.dataset ? inp.dataset.f : null;
+    if (!f) return;
+    e.preventDefault();   // there is no <form> here; this only moves focus
+    var it = itemOf(inp); var row = rowOf(it); if (!it || !row) return;
+    var focus = function (sel, node) { var el = (node || row).querySelector(sel); if (el) el.focus(); };
+    if (f === 'name') { focus('[data-f="qty"]'); return; }
+    if (f === 'qty') {
+      var next = row.nextElementSibling;
+      if (next) { var n2 = next.querySelector('[data-f="name"]'); if (n2) n2.focus(); }
+      else addRow();
+      return;
+    }
+    var order = ['calories', 'protein', 'carbs', 'fat'];
+    var i = order.indexOf(f);
+    if (i >= 0 && i < order.length - 1) focus('[data-f="' + order[i + 1] + '"]');
+    else if (i === order.length - 1) { setOpen(it, false); focus('.rec-sum'); }
+  });
+
+  function removeRow(it) {
+    var at = items.indexOf(it); if (at < 0) return;
+    items.splice(at, 1);
+    var row = rowOf(it); if (row) row.remove();
+    // Never leave the sheet with zero rows — an empty editor gives the user
+    // nothing to type into and no way back to a row.
+    if (!items.length) { var fresh = newItem(); items.push(fresh); appendRow(fresh); }
+    drawTotals(); syncSubtitle();
+    showToast(t('rec_removed').replace('{name}', String(it.name || '').trim() || t('rec_ing_name')), {
+      actionLabel: t('undo'),
+      onAction: function () {
+        // A row deleted mid-flight had its reply skipped, so it would come back
+        // stuck on 'sent' and block every save with nothing on screen to explain
+        // it. Re-arm it instead.
+        if (it._auto === 'pending' || it._auto === 'sent') { it._auto = null; }
+        items.splice(Math.min(at, items.length), 0, it);
+        drawRows();
+        scheduleAuto(it);
+      },
+    });
+  }
+
+  // ---- servings + save -----------------------------------------------------
+  var servInput = overlay.querySelector('#rec-servings');
+  servInput.addEventListener('input', function () {
+    servInput.setAttribute('aria-label', servLabel(servInput.value));
+    drawTotals();
+  });
+  overlay.querySelector('#rec-totals').addEventListener('click', function (e) {
+    var b = e.target.closest ? e.target.closest('[data-step]') : null;
+    if (!b) return;
+    var v = Math.min(99, Math.max(1, (parseInt(servInput.value, 10) || 1) + Number(b.dataset.step)));
+    servInput.value = v;
+    servInput.setAttribute('aria-label', servLabel(v));
+    drawTotals();
+  });
+  overlay.querySelector('#rec-add').addEventListener('click', addRow);
+  overlay.querySelector('#rec-name').addEventListener('keydown', function (e) {
+    if (e.key !== 'Enter') return;
+    e.preventDefault();
+    var first = host.querySelector('[data-f="name"]');
+    if (first) first.focus();
+  });
+
+  function setWaiting(on) {
+    var b = overlay.querySelector('#rec-save');
+    if (!b) return;
+    b.classList.toggle('is-waiting', !!on);
+    b.textContent = on ? t('rec_save_wait') : t('rec_save');
+  }
+  function finishSaveIfWanted(ok) {
+    if (!saveWanted) return;
+    saveWanted = false; setWaiting(false);
+    if (ok) trySave();
+  }
+  function trySave() {
     var nm = overlay.querySelector('#rec-name').value.trim();
-    var n = Math.max(1, parseInt(overlay.querySelector('#rec-servings').value, 10) || 1);
-    // R4: a row still being worked out must not be saved as zeros
-    if (items.some(function (it) { return it._auto === 'pending' || it._auto === 'sent'; })) { showToast(t('rec_auto_wait')); return; }
-    var payload = { name: nm, servings: n, items: items.map(function (it) { var c = Object.assign({}, it); delete c._auto; delete c._manual; delete c._id; return c; }) };
+    var n = Math.max(1, parseInt(servInput.value, 10) || 1);
+    // A row still being worked out must not be saved as zeros. Instead of a bare
+    // refusal the intent is REMEMBERED, said out loud on the button, and spent
+    // when the figures land — any keystroke cancels it.
+    var pend = items.filter(function (it) { return it._auto === 'pending' || it._auto === 'sent'; });
+    if (pend.length) {
+      saveWanted = true; setWaiting(true);
+      var r = rowOf(pend[0]); if (r) r.scrollIntoView({ block: 'center' });
+      showToast(t('rec_auto_wait'));
+      return;
+    }
+    // DB.recipes.add's clean() keeps a row on 'name || calories || …', so a
+    // NAMED row with four zeros saves as zeros and the recipe under-counts
+    // forever — and perServing is what the food log receives. A row the user
+    // deliberately zeroed carries _manual and passes.
+    var blank = items.filter(function (it) { return String(it.name || '').trim() && !hasFigures(it) && !it._manual; });
+    if (blank.length) {
+      showToast(t('rec_need_figs').replace('{name}', String(blank[0].name).trim()));
+      setOpen(blank[0], true);
+      return;
+    }
+    var payload = { name: nm, servings: n, items: items.map(function (it) {
+      var c = Object.assign({}, it);
+      delete c._auto; delete c._manual; delete c._id; delete c._src; delete c._why;
+      return c;
+    }) };
     var made = existing ? DB.recipes.update(existing.id, payload) : DB.recipes.add(payload);
     if (!made) { showToast(t('rec_need_ing')); return; }
     closeModal();
     showToast(t('rec_saved'));
     if (typeof onDone === 'function') onDone();
-  });
+  }
+  overlay.querySelector('#rec-save').addEventListener('click', trySave);
 
   drawRows();
-  setTimeout(function () { overlay.querySelector('#rec-name').focus(); }, 60);
+  // A new recipe wants the name; an existing one must NOT pop a keyboard over
+  // figures the user came to read.
+  if (!existing) setTimeout(function () { var el = overlay.querySelector('#rec-name'); if (el) el.focus(); }, 60);
 }
 function openSavedFoodPicker(date, onSave, initialTab) {
   let query = '';
