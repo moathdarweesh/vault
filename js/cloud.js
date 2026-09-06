@@ -158,16 +158,102 @@ window.VAULT_KEYS = Object.freeze({
     const s = await getSession();
     return s && s.user ? s.user.email : null;
   }
-  async function signUp(email, password) {
+  // ---- Turnstile ---------------------------------------------------------
+  // Bot protection on the three unauthenticated doors: sign-up, sign-in and
+  // password reset. Sign-up is open, so without this one script can farm
+  // accounts, and every account carries its own slice of the shared AI budget
+  // and storage — which is what makes a ban undoable by re-registering.
+  //
+  // The SITE key is public by design (it identifies the widget to Cloudflare and
+  // is visible in the page source of every site that uses Turnstile). The SECRET
+  // key lives only in the Supabase dashboard and is never in this repo.
+  const CAPTCHA_SITE_KEY = '0x4AAAAAAEqRei1h4Kv8R2yP';
+  const CAPTCHA_API = 'https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit';
+  let capScript = null, capWidget = null, capToken = '', capWaiters = [];
+
+  function loadCaptcha() {
+    if (capScript) return capScript;
+    capScript = new Promise((resolve, reject) => {
+      if (window.turnstile) return resolve(window.turnstile);
+      const s = document.createElement('script');
+      s.src = CAPTCHA_API; s.async = true; s.defer = true;
+      s.onload = () => resolve(window.turnstile);
+      s.onerror = () => reject(new Error('captcha_unreachable'));
+      document.head.appendChild(s);
+      // A blocked or very slow challenges.cloudflare.com must not leave the
+      // sign-in button spinning forever with no explanation.
+      setTimeout(() => reject(new Error('captcha_unreachable')), 15000);
+    });
+    return capScript;
+  }
+
+  function settleCaptcha(tok) {
+    capToken = tok || '';
+    const w = capWaiters; capWaiters = [];
+    w.forEach((fn) => { try { fn(capToken); } catch (_) {} });
+  }
+
+  // Draw the widget into `el`. Safe to call again — the old one is removed
+  // first, which is what a language switch or a sign-in ⇄ sign-up flip does.
+  async function mountCaptcha(el, opts) {
+    if (!el) return;
+    const ts = await loadCaptcha();
+    if (!ts) return;
+    unmountCaptcha();
+    capToken = '';
+    capWidget = ts.render(el, {
+      sitekey: CAPTCHA_SITE_KEY,
+      theme: (opts && opts.theme) || 'auto',
+      language: (opts && opts.lang) || 'auto',
+      callback: (tok) => settleCaptcha(tok),
+      // A token is single-use and expires after about five minutes. Both of
+      // these clear it so the next attempt asks for a fresh one instead of
+      // replaying a dead token, which Supabase rejects as a failed challenge.
+      'expired-callback': () => settleCaptcha(''),
+      'error-callback': () => settleCaptcha(''),
+    });
+  }
+
+  function unmountCaptcha() {
+    try { if (capWidget !== null && window.turnstile) window.turnstile.remove(capWidget); } catch (_) {}
+    capWidget = null; capToken = '';
+  }
+
+  // The token for ONE attempt. Managed mode usually solves in about a second
+  // without the user doing anything, so this waits rather than failing fast.
+  function captchaToken(timeoutMs) {
+    if (capToken) return Promise.resolve(capToken);
+    if (capWidget === null) return Promise.resolve('');   // never mounted: send nothing
+    return new Promise((resolve) => {
+      capWaiters.push(resolve);
+      setTimeout(() => {
+        const i = capWaiters.indexOf(resolve);
+        if (i >= 0) { capWaiters.splice(i, 1); resolve(''); }
+      }, timeoutMs || 20000);
+    });
+  }
+
+  // Spend the token and ask for a new one: it is valid for a single call.
+  function resetCaptcha() {
+    capToken = '';
+    try { if (capWidget !== null && window.turnstile) window.turnstile.reset(capWidget); } catch (_) {}
+  }
+
+  // `captchaToken` is ignored by Supabase until CAPTCHA is switched on in the
+  // dashboard, so this client is safe to ship before that switch — and MUST be
+  // shipped before it, or every sign-in is refused for a missing challenge.
+  const withCaptcha = (tok) => (tok ? { captchaToken: tok } : {});
+
+  async function signUp(email, password, tok) {
     const c = sb(); if (!c) return { error: 'not_configured' };
-    const { data, error } = await c.auth.signUp({ email: email.trim(), password });
+    const { data, error } = await c.auth.signUp({ email: email.trim(), password, options: withCaptcha(tok) });
     if (error) return { error: error.message };
     // If email confirmation is OFF, a session is returned immediately.
     return { user: data.user, session: data.session };
   }
-  async function signIn(email, password) {
+  async function signIn(email, password, tok) {
     const c = sb(); if (!c) return { error: 'not_configured' };
-    const { data, error } = await c.auth.signInWithPassword({ email: email.trim(), password });
+    const { data, error } = await c.auth.signInWithPassword({ email: email.trim(), password, options: withCaptcha(tok) });
     if (error) return { error: error.message };
     return { user: data.user, session: data.session };
   }
@@ -196,10 +282,10 @@ window.VAULT_KEYS = Object.freeze({
   }
   // Send a password-reset email. The link opens the web app, which then fires a
   // PASSWORD_RECOVERY event (see onPasswordRecovery) so the user can set a new one.
-  async function resetPassword(email) {
+  async function resetPassword(email, tok) {
     const c = sb(); if (!c) return { error: 'not_configured' };
     const redirectTo = 'https://moathdarweesh.github.io/vault/';
-    const { error } = await c.auth.resetPasswordForEmail((email || '').trim(), { redirectTo });
+    const { error } = await c.auth.resetPasswordForEmail((email || '').trim(), Object.assign({ redirectTo }, withCaptcha(tok)));
     if (error) return { error: error.message };
     return { ok: true };
   }
@@ -1284,6 +1370,7 @@ window.VAULT_KEYS = Object.freeze({
     wasLinked: () => { const u = getLastUid(); return !!u && isLinked(u); },
     getClient: sb, // RLS-scoped client, exposed for auxiliary readers
     getUsername, checkUsername, setUsername,
+    captcha: { mount: mountCaptcha, unmount: unmountCaptcha, token: captchaToken, reset: resetCaptcha, siteKey: CAPTCHA_SITE_KEY },
     touchLastSeen, getMyFlags, submitFeedback, reportError,
     pullCatalog,
     backupExerciseImage, restoreExerciseImage, removeExerciseImage,

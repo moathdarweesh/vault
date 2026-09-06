@@ -4307,6 +4307,18 @@ body[dir="rtl"] .picker-row { text-align: right; }
 /* the save button while it waits on a row still being worked out */
 #rec-save.is-waiting { opacity: .72; }
 
+/* Turnstile. The widget is a fixed 300x65 iframe Cloudflare draws itself, so
+   this centres it and reserves its height — without the reserve the card
+   grows under the user's thumb about a second after the screen appears. */
+.auth-captcha { display: flex; justify-content: center; }
+/* NO reserved height. Turnstile in managed mode usually solves silently and
+   renders nothing visible, leaving its container non-empty but zero-high — a
+   min-height would have shown every user a permanent blank gap on the login
+   card for a check they never see. The margin appears only when a real
+   challenge is drawn (:has is ignored below WebView 105, which costs nothing
+   but a tighter gap on very old shells). */
+.auth-captcha:has(iframe) { margin: 2px 0 10px; }
+
 /* ── Saved picker: أطعمة | وجباتي ──────────────────────────────────────── */
 .sfp-tabs {
   display: flex;

@@ -12,7 +12,7 @@
 // build. The literal below is the fallback (file://, or a stripped query) and is
 // still bumped by `npm run release` — see CLAUDE.md "CACHE WORKFLOW".
 const VAULT_BUILD = (() => {
-  const FALLBACK = 'v304';
+  const FALLBACK = 'v305';
   try {
     const src = (document.currentScript && document.currentScript.src) || '';
     const m = src.match(/[?&]v=(\d+)/);
@@ -682,7 +682,8 @@ const I18N = {
     auth_reset_sent: 'Check your email for the reset link',
     auth_signing: 'Please wait…',
     auth_checking: 'Checking…',
-    auth_err_fields: 'Enter your email and password',
+    auth_err_fields: 'Enter an email and a password',
+    auth_err_captcha: 'The security check did not pass. Wait a moment and try again.',
     auth_pw_short: 'Password must be at least 8 characters',
     auth_signup_check_email: 'Account created — confirm via the email we sent, then sign in.',
     auth_err_invalid: 'Wrong email or password',
@@ -1549,6 +1550,7 @@ const I18N = {
     auth_signing: 'لحظة…',
     auth_checking: 'جارٍ التحقق…',
     auth_err_fields: 'أدخل البريد وكلمة السر',
+    auth_err_captcha: 'لم يكتمل فحص الأمان. انتظر لحظة ثم أعد المحاولة.',
     auth_pw_short: 'كلمة السر ٨ أحرف على الأقل',
     auth_signup_check_email: 'تم إنشاء الحساب — أكّد عبر الإيميل المُرسَل ثم سجّل دخول.',
     auth_err_invalid: 'البريد أو كلمة السر غير صحيحة',
@@ -12341,6 +12343,7 @@ function showAuthGate(mode) {
       <div class="auth-sub">${up ? t('auth_sub_up') : t('auth_sub_in')}</div>
       <input type="email" id="auth-email" class="auth-input" placeholder="${t('auth_email')}" autocomplete="email" inputmode="email">
       <input type="password" id="auth-password" class="auth-input" placeholder="${t('auth_password')}" autocomplete="${up ? 'new-password' : 'current-password'}">
+      <div class="auth-captcha" id="auth-captcha"></div>
       <div class="auth-err" id="auth-err" role="alert"></div>
       <button class="btn btn-primary btn-block" id="auth-submit">${up ? t('auth_signup') : t('auth_signin')}</button>
       ${up ? '' : `<button class="auth-toggle" id="auth-forgot">${t('auth_forgot')}</button>`}
@@ -12375,6 +12378,18 @@ function showAuthGate(mode) {
   const err = (msg) => { const e = document.getElementById('auth-err'); if (e) e.textContent = msg || ''; };
   const submit = document.getElementById('auth-submit');
 
+  // Bot protection. Mounted here rather than in the template because the widget
+  // is drawn by Cloudflare's script into a live node, and this card is rebuilt
+  // on every language switch and sign-in ⇄ sign-up flip.
+  try {
+    if (window.Cloud && Cloud.captcha) {
+      Cloud.captcha.mount(document.getElementById('auth-captcha'), {
+        theme: normalizeTheme(DB.prefs.get().theme) === 'light' ? 'light' : 'dark',
+        lang: lang === 'ar' ? 'ar' : 'en',
+      }).catch(() => {});
+    }
+  } catch (_) {}
+
   const run = async () => {
     // Enter on the password field calls run() directly, around the disabled
     // button: a keyboard bounce sent two sign-ins and two afterLogin()s.
@@ -12388,8 +12403,12 @@ function showAuthGate(mode) {
     const label = submit.textContent;
     submit.textContent = t('auth_signing');
     try {
-      const res = up ? await Cloud.signUp(email, pw) : await Cloud.signIn(email, pw);
+      const tok = await Cloud.captcha.token();
+      const res = up ? await Cloud.signUp(email, pw, tok) : await Cloud.signIn(email, pw, tok);
       if (res.error) {
+        // The token is spent whether or not the attempt succeeded: without this
+        // a mistyped password makes every retry fail on the challenge instead.
+        Cloud.captcha.reset();
         err(translateAuthError(res.error));
         submit.disabled = false; submit.textContent = label;
         return;
@@ -12403,6 +12422,7 @@ function showAuthGate(mode) {
       }
       await afterLogin();
     } catch (e) {
+      Cloud.captcha.reset();
       err(translateAuthError((e && e.message) || ''));
       submit.disabled = false; submit.textContent = label;
     }
@@ -12507,18 +12527,27 @@ function showForgotPassword(prefillEmail) {
     </div>
     <div class="confirm-text" style="margin-bottom:12px">${t('auth_reset_sub')}</div>
     <input type="email" id="reset-email" class="auth-input" placeholder="${t('auth_email')}" value="${escapeHtml(prefillEmail || '')}" autocomplete="email" inputmode="email">
+    <div class="auth-captcha" id="reset-captcha"></div>
     <div class="auth-err" id="reset-err"></div>
     <button class="btn btn-primary btn-block" id="reset-send">${t('auth_reset_send')}</button>
   `, { variant: 'confirm' });
   const err = (m) => { const e = overlay.querySelector('#reset-err'); if (e) e.textContent = m || ''; };
   const btn = overlay.querySelector('#reset-send');
+  try {
+    if (window.Cloud && Cloud.captcha) {
+      Cloud.captcha.mount(overlay.querySelector('#reset-captcha'), {
+        theme: normalizeTheme(DB.prefs.get().theme) === 'light' ? 'light' : 'dark',
+        lang: (DB.prefs.get().lang === 'ar') ? 'ar' : 'en',
+      }).catch(() => {});
+    }
+  } catch (_) {}
   btn.addEventListener('click', async () => {
     const email = (overlay.querySelector('#reset-email').value || '').trim();
     if (!email) { err(t('auth_err_email')); return; }
     err(''); btn.disabled = true; btn.textContent = t('auth_signing');
     try {
-      const res = await Cloud.resetPassword(email);
-      if (res.error) { err(translateAuthError(res.error)); btn.disabled = false; btn.textContent = t('auth_reset_send'); return; }
+      const res = await Cloud.resetPassword(email, await Cloud.captcha.token());
+      if (res.error) { Cloud.captcha.reset(); err(translateAuthError(res.error)); btn.disabled = false; btn.textContent = t('auth_reset_send'); return; }
       closeModal();
       showToast(t('auth_reset_sent'));
     } catch (e) {
@@ -12530,6 +12559,10 @@ function showForgotPassword(prefillEmail) {
 // Map common Supabase auth errors to friendly localized text.
 function translateAuthError(msg) {
   const m = String(msg).toLowerCase();
+  // Supabase reports a failed or missing challenge as a plain 'captcha
+  // protection: request disallowed', which would otherwise fall through to the
+  // generic message and read as a wrong password.
+  if (m.includes('captcha')) return t('auth_err_captcha');
   if (m.includes('invalid login')) return t('auth_err_invalid');
   if (m.includes('already registered') || m.includes('already been registered')) return t('auth_err_exists');
   if (m.includes('password')) return t('auth_pw_short');
