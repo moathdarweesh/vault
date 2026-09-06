@@ -628,5 +628,51 @@ const contract = (name, problems) => {
   contract(`every function ever locked against anon/PUBLIC is still locked after the replay (${Object.keys(everLocked).length} functions)`, problems);
 }
 
+// ---------------------------------------------------------------- 29. the CSP covers every origin the code reaches
+// A Content-Security-Policy that is missing an origin does not warn: the
+// request is simply blocked, and on this app that means fonts, exercise
+// photos, barcodes or the AI silently stop working for everyone at once. The
+// four pages must also carry the SAME policy, or hardening one page while
+// leaving another open is indistinguishable from having done the work.
+{
+  const problems = [];
+  const PAGES = ['index.html', 'admin.html', 'privacy.html', 'get/index.html'];
+  const policies = {};
+  for (const f of PAGES) {
+    const m = read(f).match(/<meta http-equiv="Content-Security-Policy" content="([^"]+)">/);
+    if (!m) { problems.push(`${f} has no Content-Security-Policy meta`); continue; }
+    policies[f] = m[1];
+  }
+  const values = [...new Set(Object.values(policies))];
+  if (values.length > 1) problems.push('the four pages carry ' + values.length + ' different policies; they must be identical');
+  const csp = values[0] || '';
+  const directive = (name) => {
+    const d = csp.split(';').map((x) => x.trim()).find((x) => x.startsWith(name + ' '));
+    return d ? d.slice(name.length + 1).split(/\s+/) : [];
+  };
+  if (csp) {
+    // frame-ancestors is IGNORED in a meta tag — its presence would be a lie
+    if (/frame-ancestors/.test(csp)) problems.push("the meta CSP names frame-ancestors, which browsers ignore there — it needs a real header");
+    for (const d of ['default-src', 'script-src', 'style-src', 'img-src', 'connect-src', 'font-src', 'object-src', 'base-uri', 'form-action']) {
+      if (!directive(d).length) problems.push(`the CSP has no ${d}`);
+    }
+    if (!directive('object-src').includes("'none'")) problems.push("object-src must be 'none'");
+    // every origin the code actually reaches must be allowed SOMEWHERE in the policy
+    const sources = [...JS.map((f) => src[f]), html, admin, read('privacy.html'), read('get/index.html')].join('\n');
+    const used = new Set();
+    for (const m of sources.matchAll(/https:\/\/([a-z0-9.-]+)/gi)) used.add('https://' + m[1].toLowerCase());
+    const selfHosts = new Set(['https://moathdarweesh.github.io']);   // 'self' covers the site's own origin
+    const allowed = new Set(csp.split(/[;\s]+/).filter((x) => x.startsWith('https://')));
+    for (const u of used) {
+      if (selfHosts.has(u) || allowed.has(u)) continue;
+      // a host named only inside a comment or a store URL is not a fetch target;
+      // require it to appear on a line that actually loads or connects
+      const re = new RegExp('(?:src|href|fetch\\(|PROXY_URL|SUPABASE_URL|REMOTE)[^\\n]{0,80}' + u.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'));
+      if (re.test(sources)) problems.push(`the code loads from ${u} but the CSP does not allow it — the request will be blocked with no error`);
+    }
+  }
+  contract(`the four pages carry one Content-Security-Policy, and it allows every origin the code loads from`, problems);
+}
+
 console.log(failures.length ? `\ncheck-contracts: ${failures.length} broken contract(s)` : '\ncheck-contracts: all contracts hold');
 process.exit(failures.length ? 1 : 0);

@@ -27,7 +27,7 @@
   // (scripts/check-contracts.js), after lower-casing and turning '_' into ' ' —
   // the Worker says both 'rate limited' and 'rate_limited', and the second used
   // to reach the screen raw.
-  const WORKER_ERR_RE = /^(unauthorized|rate limited|image too large|audio too large|too large|service unavailable|server misconfigured|upstream|no result|parse error|method not allowed|no input|http \d+)/;
+  const WORKER_ERR_RE = /^(unauthorized|rate limited|daily limit|image too large|audio too large|too large|service unavailable|server misconfigured|upstream|no result|parse error|method not allowed|no input|http \d+)/;
   function friendlyErr(e) {
     const raw = (e && e.message) || '';
     const m = raw.toLowerCase().replace(/_/g, ' ');
@@ -37,6 +37,10 @@
     if (/^unauthorized$/.test(m)) return tr('ai_err_signin');
     if (/too large/.test(m)) return tr('ai_err_too_large');
     if (/^rate limited/.test(m)) return tr('ai_err_busy');
+    // The DAILY budget, not the per-minute burst: migration 26 counts per user and
+    // globally, so one account can no longer spend everybody's day. Saying which
+    // one it is matters — 'try again in a minute' would be a lie here.
+    if (/^daily limit/.test(m)) return tr('ai_daily_limit');
     if (WORKER_ERR_RE.test(m)) return tr('ai_error');
     return raw || tr('ai_error');
   }

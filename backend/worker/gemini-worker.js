@@ -237,6 +237,56 @@ async function callerAllowed(request) {
 const RATE_MAX = 30;              // requests per window per caller
 const RATE_WINDOW_MS = 60 * 1000; // 1 minute
 const rateBuckets = new Map();
+// A SECOND, CHEAPER gate that runs BEFORE the Supabase auth lookup. Without it
+// every unauthenticated request costs a subrequest, so a loop of junk bearers
+// spends the Worker's 100,000/day free budget (and turns the AI off for
+// everyone) without ever holding an account. Same isolate-memory caveat as
+// below; it is a speed bump for the one-machine case, not a distributed one.
+const IP_MAX = 60;                // requests per window per edge IP, pre-auth
+const IP_WINDOW_MS = 60 * 1000;
+const ipBuckets = new Map();
+function ipFlooding(request) {
+  const ip = request.headers.get('CF-Connecting-IP') || 'unknown';
+  const now = Date.now();
+  const b = ipBuckets.get(ip);
+  if (!b || now - b.start >= IP_WINDOW_MS) {
+    ipBuckets.set(ip, { start: now, n: 1 });
+    if (ipBuckets.size > 5000) {
+      for (const [k, v] of ipBuckets) if (now - v.start >= IP_WINDOW_MS) ipBuckets.delete(k);
+    }
+    return false;
+  }
+  b.n += 1;
+  return b.n > IP_MAX;
+}
+
+// THE DURABLE ONE. `rateBuckets` below lives in isolate memory: every PoP and
+// every cold start has its own copy, so it cannot bound a DAY's spend of the
+// one Gemini key everybody shares — one account looping this endpoint used to
+// exhaust the free quota and switch the AI off for every user until midnight.
+// Postgres is the shared store this app already has. `ai_budget_take` (migration
+// 26) counts per user and globally per UTC day, SECURITY DEFINER, and is called
+// with the CALLER'S OWN token, so the row is attributed by auth.uid() and cannot
+// be forged. Fail-OPEN on a network/5xx failure (the same availability trade the
+// auth check makes) and fail-CLOSED only on an explicit refusal.
+async function budgetAllows(request) {
+  const auth = request.headers.get('Authorization') || '';
+  if (!auth.startsWith('Bearer ')) return { ok: true };          // the outage path has no user to bill
+  try {
+    const r = await fetch(SUPABASE_URL + '/rest/v1/rpc/ai_budget_take', {
+      method: 'POST',
+      headers: { Authorization: auth, apikey: SUPABASE_ANON, 'Content-Type': 'application/json' },
+      body: '{}',                                                 // both limits keep their SQL defaults
+    });
+    if (!r.ok) return { ok: true };                               // the RPC is missing or unwell: do not lock the app out
+    const v = await r.json();
+    if (v && v.allowed === false) return { ok: false, reason: v.reason || 'daily' };
+    return { ok: true };
+  } catch (_) {
+    return { ok: true };
+  }
+}
+
 function rateLimited(userId) {
   if (!userId) return true; // invariant guard: an allowed caller must have a key
   const now = Date.now();
@@ -260,11 +310,15 @@ export default {
     if (request.method === 'OPTIONS') return new Response(null, { headers: corsHeaders(origin) });
     if (request.method !== 'POST') return json({ error: 'method not allowed' }, 405, origin);
 
-    // Require an authenticated caller (see callerAllowed — fail-safe), then cap
-    // how fast that caller may spend the shared Gemini quota.
+    // Cheapest gate first: an IP flood is refused before it can cost a Supabase
+    // subrequest. Then the token, then the per-minute burst, then the durable
+    // daily budget — each one more expensive than the last.
+    if (ipFlooding(request)) return json({ error: 'rate limited' }, 429, origin);
     const caller = await callerAllowed(request);
     if (!caller.allowed) return json({ error: 'unauthorized' }, 401, origin);
     if (rateLimited(caller.userId)) return json({ error: 'rate limited' }, 429, origin);
+    const budget = await budgetAllows(request);
+    if (!budget.ok) return json({ error: 'daily limit', code: 'DAILY_LIMIT' }, 429, origin);
 
     const OK_MIME = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
     const OK_AUDIO = ['audio/webm', 'audio/mp4', 'audio/mpeg', 'audio/ogg', 'audio/wav', 'audio/aac', 'audio/m4a', 'audio/3gpp'];

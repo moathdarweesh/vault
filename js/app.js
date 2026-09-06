@@ -12,7 +12,7 @@
 // build. The literal below is the fallback (file://, or a stripped query) and is
 // still bumped by `npm run release` — see CLAUDE.md "CACHE WORKFLOW".
 const VAULT_BUILD = (() => {
-  const FALLBACK = 'v301';
+  const FALLBACK = 'v302';
   try {
     const src = (document.currentScript && document.currentScript.src) || '';
     const m = src.match(/[?&]v=(\d+)/);
@@ -636,6 +636,7 @@ const I18N = {
     ai_added: 'Added',
     ai_error: 'Something went wrong',
     ai_rate_limit: 'The free AI service is busy right now — please try again in a minute.',
+    ai_daily_limit: 'The AI has reached its daily limit. Your saved foods and typed figures still work.',
     ai_not_food: 'This chat is for food only — type a meal to calculate it.',
 
     // Auth / cloud sync
@@ -681,7 +682,7 @@ const I18N = {
     auth_signing: 'Please wait…',
     auth_checking: 'Checking…',
     auth_err_fields: 'Enter your email and password',
-    auth_pw_short: 'Password must be at least 6 characters',
+    auth_pw_short: 'Password must be at least 8 characters',
     auth_signup_check_email: 'Account created — confirm via the email we sent, then sign in.',
     auth_err_invalid: 'Wrong email or password',
     auth_err_exists: 'This email already has an account — sign in instead',
@@ -1499,6 +1500,7 @@ const I18N = {
     ai_added: 'تمت الإضافة',
     ai_error: 'صار خطأ',
     ai_rate_limit: 'خدمة الذكاء المجانية مشغولة حالياً — جرّب بعد دقيقة.',
+    ai_daily_limit: 'بلغ الذكاء الاصطناعي حدّه اليومي. أطعمتك المحفوظة والأرقام التي تكتبها تعمل كالمعتاد.',
     ai_not_food: 'هذا الشات للطعام فقط — اكتب وجبة لأحسبها.',
 
     // المصادقة / المزامنة السحابية
@@ -1544,7 +1546,7 @@ const I18N = {
     auth_signing: 'لحظة…',
     auth_checking: 'جارٍ التحقق…',
     auth_err_fields: 'أدخل البريد وكلمة السر',
-    auth_pw_short: 'كلمة السر 6 أحرف على الأقل',
+    auth_pw_short: 'كلمة السر ٨ أحرف على الأقل',
     auth_signup_check_email: 'تم إنشاء الحساب — أكّد عبر الإيميل المُرسَل ثم سجّل دخول.',
     auth_err_invalid: 'البريد أو كلمة السر غير صحيحة',
     auth_err_exists: 'هذا البريد له حساب — سجّل دخول بدلاً من الإنشاء',
@@ -12377,7 +12379,7 @@ function showAuthGate(mode) {
     const email = (document.getElementById('auth-email').value || '').trim();
     const pw = document.getElementById('auth-password').value || '';
     if (!email || !pw) { err(t('auth_err_fields')); return; }
-    if (up && pw.length < 6) { err(t('auth_pw_short')); return; }
+    if (up && pw.length < 8) { err(t('auth_pw_short')); return; }   // 8, not 6: Supabase allows ~1,800 sign-in attempts an hour from one IP
     err('');
     submit.disabled = true;
     const label = submit.textContent;
@@ -12635,7 +12637,7 @@ function showChangePassword() {
     const pw = overlay.querySelector('#cpw-new').value || '';
     const pw2 = overlay.querySelector('#cpw-confirm').value || '';
     if (!cur) { err(t('change_password_current_req')); return; }
-    if (pw.length < 6) { err(t('auth_pw_short')); return; }
+    if (pw.length < 8) { err(t('auth_pw_short')); return; }
     if (pw !== pw2) { err(t('change_password_mismatch')); return; }
     err(''); btn.disabled = true; btn.textContent = t('auth_signing');
     try {
