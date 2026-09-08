@@ -7474,6 +7474,34 @@ body.theme-light {
 }
 #mf-quick:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
 
+.plan-import-entry { margin: -4px 0 20px; }
+.plan-import-body { min-width: 0; }
+.plan-import-photo { display: block; max-width: 100%; max-height: 320px; margin: 12px auto; object-fit: contain; border-radius: var(--radius-sm); }
+.plan-import-placeholder { display: grid; place-items: center; min-height: 116px; color: var(--text-mute); background: var(--surface-2); margin: 16px 0; border-radius: var(--radius-sm); }
+.plan-import-actions { display: flex; flex-wrap: wrap; gap: 8px; margin: 14px 0; }
+.plan-import-actions > .btn { flex: 1; }
+.plan-import-hint { font-size: 13px; line-height: 1.65; color: var(--text-mute); margin: 10px 0; }
+.plan-import-source { margin: 14px 0; }
+.plan-import-source summary { cursor: pointer; color: var(--accent-text); padding: 12px 0; font-size: 14px; }
+.plan-import-day { margin: 16px 0 24px; }
+.plan-import-day-head { display: flex; gap: 8px; align-items: center; }
+.plan-import-day-head > input { min-width: 0; flex: 1; }
+.plan-import-day-head > .num { color: var(--accent-text); }
+.plan-import-row { min-width: 0; padding: 14px; margin: 12px 0; background: var(--surface-2); border-radius: var(--radius-sm); box-shadow: var(--elev-1); }
+.plan-import-row-head { display: flex; justify-content: space-between; align-items: center; color: var(--text-mute); }
+.plan-import-row .form-label { display: block; margin: 12px 0 6px; }
+.plan-import-row input, .plan-import-row select, .plan-import-row textarea { width: 100%; min-width: 0; max-width: 100%; font-size: 16px; }
+.plan-import-targets { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 2fr); gap: 10px; }
+.plan-import-targets > div { min-width: 0; }
+.plan-import-error { font-size: 14px; line-height: 1.65; color: var(--danger); margin: 14px 0; overflow-wrap: anywhere; }
+.plan-import-confirm { display: flex; gap: 10px; align-items: flex-start; margin: 16px 0; font-size: 14px; line-height: 1.6; cursor: pointer; }
+.plan-import-confirm[hidden] { display: none; }
+.plan-import-confirm input { width: 22px; height: 22px; flex-shrink: 0; accent-color: var(--accent); }
+.plan-import-save { padding-top: 16px; }
+.plan-target { margin: 12px 0; padding: 12px 14px; background: var(--surface-2); border-radius: var(--radius-sm); box-shadow: var(--elev-1); overflow-wrap: anywhere; }
+.plan-target .plan-import-hint { margin: 0 0 5px; }
+.plan-target p { font-size: 14px; line-height: 1.6; color: var(--text-mute); margin: 6px 0 0; }
+
 /* =========================================================================
    ^^^ EVERYTHING ABOVE, THEN THE IDENTITY LAYER BELOW. ^^^
 

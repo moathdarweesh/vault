@@ -511,15 +511,37 @@ function extraMap(p) { return dateSet(p, 'extraDates'); }
 // rotation model. Distinct workouts in Sun→Sat order (first occurrence wins)
 // become the cycle; the days that had a workout become the training days; the
 // anchor defaults to today. Idempotent for an already-rotation plan.
+// Optional per-slot prescriptions. They describe a plan, never completed work.
+// Allow only IDs still in this slot; stale targets must not return after a swap.
+function normalizePlanTargets(raw, ids) {
+  const targets = {};
+  if (!raw || typeof raw !== 'object') return targets;
+  for (const id of ids) {
+    if (!entityIdSafe(id) || !Object.prototype.hasOwnProperty.call(raw, id)) continue;
+    const p = raw[id];
+    if (!p || typeof p !== 'object') continue;
+    const sets = Number.isInteger(p.sets) && p.sets >= 1 && p.sets <= 20 ? p.sets : null;
+    const reps = typeof p.reps === 'string' ? p.reps.trim().slice(0, 50) : '';
+    const notes = typeof p.notes === 'string' ? p.notes.trim().slice(0, 240) : '';
+    if (sets || reps || notes) Object.defineProperty(targets, id, { value: { sets, reps, notes }, enumerable: true, configurable: true });
+  }
+  return targets;
+}
+
+function planSlot(s) {
+  const exerciseIds = Array.isArray(s && s.exerciseIds) ? s.exerciseIds.slice() : [];
+  return {
+    name: (s && s.name) || 'Workout', exerciseIds,
+    ...(s && s.targets ? { targets: normalizePlanTargets(s.targets, exerciseIds) } : {}),
+  };
+}
+
 function migratePlan(plan) {
   if (plan && plan.mode === 'rotation') {
     return {
       ...plan,   // any field this rebuild does not know rides through — it runs on EVERY load and used to erase them
       mode: 'rotation',
-      cycle: (Array.isArray(plan.cycle) ? plan.cycle : []).map((s) => ({
-        name: (s && s.name) || 'Workout',
-        exerciseIds: Array.isArray(s && s.exerciseIds) ? s.exerciseIds.slice() : [],
-      })),
+      cycle: (Array.isArray(plan.cycle) ? plan.cycle : []).map(planSlot),
       trainingDays: Array.isArray(plan.trainingDays) ? plan.trainingDays.slice() : [],
       anchor: plan.anchor || todayISO(),
       // This runs on EVERY load, not just on the legacy grid, and it rebuilds the
@@ -1109,7 +1131,7 @@ const DB = {
     setRotation({ cycle, trainingDays, anchor }) {
       STATE.plan = {
         mode: 'rotation',
-        cycle: (cycle || []).map((s) => ({ name: (s && s.name) || 'Workout', exerciseIds: Array.isArray(s && s.exerciseIds) ? s.exerciseIds.slice() : [] })),
+        cycle: (cycle || []).map(planSlot),
         trainingDays: (trainingDays || []).slice().sort((a, b) => a - b),
         anchor: anchor || todayISO(),
         // Carried over, not reset. This also rebuilds the object field by field,
@@ -1127,6 +1149,57 @@ const DB = {
       STATE.plan.trainingDays = (days || []).slice().sort((a, b) => a - b);
       if (!STATE.plan.anchor) STATE.plan.anchor = todayISO();
       save();
+    },
+
+    // One checked write for the reviewed image draft AND its new exercises.
+    // No partial catalog writes on cancel, validation failure or disk-full.
+    importImagePlan({ days, trainingDays, append, expectedPlan }) {
+      if (JSON.stringify(STATE.plan) !== expectedPlan) return { ok: false, reason: 'changed' };
+      if (STATE_LOAD_FAILED) return { ok: false, reason: 'storage' };
+      if (!Array.isArray(days) || !days.length || days.length > 14 ||
+          !Array.isArray(trainingDays) || !trainingDays.length || trainingDays.length > 7 ||
+          trainingDays.some((d) => !Number.isInteger(d) || d < 0 || d > 6) ||
+          new Set(trainingDays).size !== trainingDays.length) return { ok: false, reason: 'invalid' };
+      const additions = [], cycle = [], newByName = new Map();
+      for (const day of days) {
+        if (!day || typeof day.name !== 'string' || !day.name.trim() || day.name.length > 80 ||
+            !Array.isArray(day.exercises) || !day.exercises.length || day.exercises.length > 20) return { ok: false, reason: 'invalid' };
+        const exerciseIds = [], targets = {};
+        for (const row of day.exercises) {
+          if (!row || typeof row.name !== 'string' || !row.name.trim() || row.name.length > 100 ||
+              (row.sets !== null && (!Number.isInteger(row.sets) || row.sets < 1 || row.sets > 20)) ||
+              typeof row.reps !== 'string' || row.reps.length > 50 ||
+              typeof row.notes !== 'string' || row.notes.length > 240) return { ok: false, reason: 'invalid' };
+          let ex = STATE.exercises.find((e) => e.id === row.exerciseId);
+          if (!ex && row.exerciseId === 'new' && EXERCISE_CATEGORIES.includes(row.category)) {
+            const key = row.name.trim().toLowerCase();
+            ex = STATE.exercises.find((e) => e.name.trim().toLowerCase() === key) || newByName.get(key);
+            if (!ex) {
+              ex = { id: uid(), name: row.name.trim(), category: row.category, imageSlug: null,
+                imagePath: null, imageAt: null, imageCleared: false, isCustom: true,
+                inMyList: true, createdAt: new Date().toISOString() };
+              additions.push(ex); newByName.set(key, ex);
+            }
+          }
+          if (!ex || exerciseIds.includes(ex.id)) return { ok: false, reason: 'invalid' };
+          exerciseIds.push(ex.id);
+          Object.defineProperty(targets, ex.id, { value: { sets: row.sets, reps: row.reps, notes: row.notes }, enumerable: true });
+        }
+        cycle.push(planSlot({ name: day.name.trim(), exerciseIds, targets }));
+      }
+      const oldPlan = STATE.plan, oldExercises = STATE.exercises;
+      STATE.plan = { ...oldPlan, mode: 'rotation',
+        cycle: append ? [...(oldPlan.cycle || []), ...cycle] : cycle,
+        trainingDays: trainingDays.slice().sort((a, b) => a - b),
+        anchor: append && oldPlan.anchor ? oldPlan.anchor : todayISO() };
+      STATE.exercises = [...oldExercises, ...additions];
+      if (!writeStore()) {
+        STATE.plan = oldPlan; STATE.exercises = oldExercises;
+        return { ok: false, reason: 'storage' };
+      }
+      additions.forEach(defineImgAccessor);
+      if (typeof window !== 'undefined' && window.Cloud && window.Cloud.onLocalChange) window.Cloud.onLocalChange();
+      return { ok: true };
     },
     // ----- cycle-slot editing (planner) -----
     addSlot(name) {
@@ -1150,9 +1223,22 @@ const DB = {
       const s = STATE.plan.cycle && STATE.plan.cycle[i];
       if (s) { s.name = name || 'Workout'; save(); }
     },
+    setSlotTargets(i, targets, expectedPlan) {
+      if (JSON.stringify(STATE.plan) !== expectedPlan) return { ok: false, reason: 'changed' };
+      const slot = STATE.plan.cycle && STATE.plan.cycle[i];
+      if (!slot) return { ok: false, reason: 'invalid' };
+      const previous = slot.targets;
+      slot.targets = normalizePlanTargets(targets, slot.exerciseIds);
+      if (!writeStore()) {
+        if (previous === undefined) delete slot.targets; else slot.targets = previous;
+        return { ok: false, reason: 'storage' };
+      }
+      if (typeof window !== 'undefined' && window.Cloud && window.Cloud.onLocalChange) window.Cloud.onLocalChange();
+      return { ok: true };
+    },
     setSlotExercises(i, ids) {
       const s = STATE.plan.cycle && STATE.plan.cycle[i];
-      if (s) { s.exerciseIds = (ids || []).slice(); save(); }
+      if (s) { s.exerciseIds = (ids || []).slice(); if (s.targets) s.targets = normalizePlanTargets(s.targets, s.exerciseIds); save(); }
     },
     addExerciseToSlot(i, exId) {
       const s = STATE.plan.cycle && STATE.plan.cycle[i];
@@ -1160,7 +1246,7 @@ const DB = {
     },
     removeExerciseFromSlot(i, exId) {
       const s = STATE.plan.cycle && STATE.plan.cycle[i];
-      if (s) { s.exerciseIds = s.exerciseIds.filter((id) => id !== exId); save(); }
+      if (s) { s.exerciseIds = s.exerciseIds.filter((id) => id !== exId); if (s.targets) s.targets = normalizePlanTargets(s.targets, s.exerciseIds); save(); }
     },
     clearAll() {
       STATE.plan = { mode: 'rotation', cycle: [], trainingDays: [], anchor: todayISO(), ...RESET_PLAN_TAIL() };
@@ -1660,7 +1746,12 @@ const DB = {
       // ...and the plan. A deleted exercise used to stay in its cycle slot as a
       // dangling id: readers that filter(Boolean) hid it, three that count did not.
       if (STATE.plan && Array.isArray(STATE.plan.cycle)) {
-        STATE.plan.cycle.forEach((slot) => { if (slot && Array.isArray(slot.exerciseIds)) slot.exerciseIds = slot.exerciseIds.filter((x) => x !== id); });
+        STATE.plan.cycle.forEach((slot) => {
+          if (slot && Array.isArray(slot.exerciseIds)) {
+            slot.exerciseIds = slot.exerciseIds.filter((x) => x !== id);
+            if (slot.targets) slot.targets = normalizePlanTargets(slot.targets, slot.exerciseIds);
+          }
+        });
       }
       imgSet(id, null); imgAtSet(id, null);
       save();

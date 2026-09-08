@@ -75,7 +75,7 @@ a faster TTFB — not fewer bytes.
 npm run release          # bump every marker + verify, then commit all files together
 ```
 
-**Current version: v308.** APK: build 21 / v3.0.
+**Current version: v309.** APK: build 21 / v3.0.
 
 `scripts/release.js` rewrites **every** marker and then re-reads them from disk to confirm; it exits non-zero if any disagree, and prints the count per file (derived, never hard-coded — the docs used to say 16 while the real count was 15). The markers are `?v=N` in `index.html` (every script and stylesheet, the `js/vendor/supabase.js` preload, both `icons/icon.svg` links, `manifest.json`), the `__cleaned_vN` sessionStorage key, the `FALLBACK` literal in `app.js`, `version.json` → `web`, the `?v=` in `manifest.json`, `admin.html`, `privacy.html` and `get/index.html`, and the `Current version` line in this file. `scripts/check-contracts.js` (pre-commit) refuses a commit where any of them disagree.
 
@@ -676,6 +676,14 @@ Full findings + verification in `docs/CODEBASE_REVIEW.md`. The load-bearing rule
   - Measured on the running app, ten background→foreground cycles: **40 requests before, 1 after** (a single `version.json`). Signed in, the per-foreground cost falls from a full blob down plus a full blob up to one two-column row.
   - Also in this release: the swap chooser was painting the muscle name INSIDE `.picker-row-cat`, which is a 6px decorative colour stripe — every one of 144 rows overflowed its own box and the list grew a 49px horizontal scrollbar. The stripe now does its real job (`data-cat`, seven category colours) and the muscle is already named by the section headings above it.
 - **Pending SQL: NONE.** `20_vault-data-history-v16.sql` (server-side history of the last 10 blob versions, trigger-written, own-row SELECT) and `21_food-catalog-fat-v17.sql` (fat column + 7-arg `admin_upsert_food`) were written in v291 and **applied + verified live 2026-09-02** from the SQL editor (the MCP apply had been refused by the session's permission classifier; the editor was driven through the owner's signed-in Chrome, and 21 was verified by CALLING the new overload). The client is tolerant either way (`select('*')` on the catalog; the Console falls back to the 6-arg RPC). 11–14 (`client-errors-v9`, `ban-rls-v10`, `launch-hardening`, `hardening-v8`) were applied and verified live on 2026-08-05. **`backend/README.md` is the authority for what is applied**, derived from git rather than memory; this bullet has twice claimed the wrong thing when edited from memory instead.
+
+## Photo schedule import (v309)
+
+- Entry: **Program → Edit cycle → Import a workout photo** (`openPlanImageImport`, app.js). Pick/capture one JPG/PNG/WebP image, explicitly read, then review names, matches, sets, rep/duration text, notes and weekdays. Up to 14 workouts × 20 exercises. Exact bilingual matching only; ambiguous/unmatched names require choosing a library exercise or explicitly adding a custom one. Append is the default for an existing cycle; replacement requires a checkbox and preserves logged sessions.
+- `FoodAI.analyzePlanImage` uses `mode: 'workout-plan'` on the existing Worker, with the same auth and daily budget. The Worker owns the fixed transcription prompt; client text and instructions in the photo are not trusted. An older Worker response fails explicitly. The photo is compressed locally, never persisted in the blob or photo side store, and the request is cancelled on dismissal/timeout.
+- **Targets are not history.** Optional `cycle[i].targets[exerciseId] = {sets: number|null, reps: string, notes: string}` belongs to a particular cycle slot. `planSlot`/`normalizePlanTargets` preserve it through migration and rotation replacement, and prune removed IDs. The guided run displays the reviewed targets and starts fresh planned rows empty/unchecked. It never logs targets automatically or changes existing sessions. Targets remain editable from the cycle card.
+- `DB.plan.importImagePlan` writes the cycle and new exercises atomically, restores the old in-memory state if storage fails, and refuses a stale review if the plan changed. All draft edits are transient until explicit save. Do not create custom exercises during analysis/review.
+- Verification: `node scripts/test-plan-import.js`; `node scripts/preview-plan-import.js` is a **loopback-only synthetic QA environment** using the real UI and Worker with mocked auth/model responses. It must never replace production auth. Detailed scope and deployment status: `docs/PLAN_PHOTO_IMPORT.md`.
 
 ## Feature factory
 This machine has a `/feature-factory` skill (24 specialist subagents, tailored to THE VAULT) that builds a feature end-to-end. See the maintainer's Claude memory for the roster.

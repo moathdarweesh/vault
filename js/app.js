@@ -12,7 +12,7 @@
 // build. The literal below is the fallback (file://, or a stripped query) and is
 // still bumped by `npm run release` — see CLAUDE.md "CACHE WORKFLOW".
 const VAULT_BUILD = (() => {
-  const FALLBACK = 'v308';
+  const FALLBACK = 'v309';
   try {
     const src = (document.currentScript && document.currentScript.src) || '';
     const m = src.match(/[?&]v=(\d+)/);
@@ -1029,6 +1029,45 @@ const I18N = {
     mark_set_done: 'Mark set done',
     done_col: 'Done',
     workout_summary: 'Workout Summary',
+    pi_title: 'Import a workout photo',
+    pi_intro: 'Turn a clear photo or screenshot of your schedule into an editable plan.',
+    pi_privacy: 'Only the selected photo is sent to our AI service when you tap Read schedule. It is not added to your backup.',
+    pi_read: 'Read schedule',
+    pi_reading: 'Reading your schedule…',
+    pi_preparing: 'Preparing photo…',
+    pi_read_hint: 'You can cancel. Your current program stays saved.',
+    pi_review: 'Review your schedule',
+    pi_review_hint: 'AI can misread names and numbers. Check every workout against the photo. Blank targets mean they were not read.',
+    pi_source: 'View source photo',
+    pi_photo: 'Selected schedule photo',
+    pi_empty: 'No workout schedule was found. Choose a clearer photo with exercise names visible.',
+    pi_bad_file: 'Choose a JPG, PNG or WebP image, up to 15 MB. For other formats, use a screenshot.',
+    pi_timeout: 'Reading took too long. Try again, or choose a closer, clearer photo.',
+    pi_unavailable: 'Schedule reading is not available right now. Please try again later.',
+    pi_error: 'The photo could not be read. Try again or choose a clearer image.',
+    pi_daily_limit: 'Photo reading has reached its daily limit. Try again later; you can still edit your program manually.',
+    pi_confirm_needed: 'Confirm that you want to replace your current cycle before saving.',
+    pi_source_name: 'Name read from photo / new exercise name',
+    pi_match: 'Exercise in your library',
+    pi_choose: 'Choose an exercise…',
+    pi_new: 'Add as a new exercise',
+    pi_reps: 'Reps / duration target',
+    pi_notes: 'Notes from schedule',
+    pi_missing: 'Not specified',
+    pi_add_row: 'Add a missing exercise',
+    pi_remove_day: 'Remove workout',
+    pi_save: 'Save reviewed schedule',
+    pi_saved: 'Schedule saved. Targets are ready for your next workout.',
+    pi_invalid: 'Name every workout and exercise, choose a library match or a new exercise, and select training days. Sets must be 1–20 or blank. An exercise can appear once per workout.',
+    pi_changed: 'Your program changed while reviewing. Close this draft and reopen the importer to use the latest program.',
+    pi_storage: 'The schedule could not be saved on this device. Your previous program is unchanged; your draft is still here.',
+    pi_how: 'Add to your program',
+    pi_append: 'Append these workouts to my cycle',
+    pi_replace: 'Replace my current cycle',
+    pi_replace_confirm: 'Replace my workout cycle and start it today. Keep my logged sessions and history.',
+    pi_limits: 'Read one photo at a time: up to 14 workouts, with 20 exercises each.',
+    pi_target: 'From your program',
+    pi_targets_edit: 'Edit sets, reps and notes',
     save_session: 'Save Session',
     total_volume: 'Total Volume',
     back_to_workout: 'Back to workout',
@@ -1901,6 +1940,45 @@ const I18N = {
     mark_set_done: 'إنهاء المجموعة',
     done_col: 'تمّ',
     workout_summary: 'ملخّص الجلسة',
+    pi_title: 'استيراد جدول من صورة',
+    pi_intro: 'حوّل صورة واضحة أو لقطة شاشة لجدولك إلى برنامج قابل للتعديل.',
+    pi_privacy: 'تُرسل الصورة المختارة فقط لخدمة الذكاء الاصطناعي عند الضغط على «قراءة الجدول». لا تُضاف الصورة إلى نسختك الاحتياطية.',
+    pi_read: 'قراءة الجدول',
+    pi_reading: 'جارٍ قراءة جدولك…',
+    pi_preparing: 'جارٍ تجهيز الصورة…',
+    pi_read_hint: 'يمكنك الإلغاء. برنامجك الحالي يبقى محفوظًا.',
+    pi_review: 'مراجعة الجدول',
+    pi_review_hint: 'قد تخطئ القراءة في الأسماء والأرقام. راجع كل تمرين مع الصورة. الأهداف الفارغة لم تُقرأ من الصورة.',
+    pi_source: 'عرض الصورة الأصلية',
+    pi_photo: 'صورة الجدول المختارة',
+    pi_empty: 'لم نعثر على جدول تمارين. اختر صورة أوضح تظهر فيها أسماء التمارين.',
+    pi_bad_file: 'اختر صورة JPG أو PNG أو WebP بحجم لا يتجاوز ١٥ ميغابايت. للصيغ الأخرى، استخدم لقطة شاشة.',
+    pi_timeout: 'استغرقت القراءة وقتًا طويلًا. أعد المحاولة أو اختر صورة أقرب وأوضح.',
+    pi_unavailable: 'قراءة الجداول غير متاحة حاليًا. حاول مرة أخرى لاحقًا.',
+    pi_error: 'تعذّرت قراءة الصورة. أعد المحاولة أو اختر صورة أوضح.',
+    pi_daily_limit: 'بلغت قراءة الصور حدّها اليومي. حاول لاحقًا؛ يمكنك تعديل برنامجك يدويًا كالمعتاد.',
+    pi_confirm_needed: 'أكّد رغبتك في استبدال دورة التمرين الحالية قبل الحفظ.',
+    pi_source_name: 'الاسم المقروء من الصورة / اسم التمرين الجديد',
+    pi_match: 'التمرين في مكتبتك',
+    pi_choose: 'اختر التمرين…',
+    pi_new: 'إضافة كتمرين جديد',
+    pi_reps: 'هدف التكرارات / المدة',
+    pi_notes: 'ملاحظات الجدول',
+    pi_missing: 'غير محدد',
+    pi_add_row: 'إضافة تمرين لم تتم قراءته',
+    pi_remove_day: 'إزالة يوم التمرين',
+    pi_save: 'حفظ الجدول بعد المراجعة',
+    pi_saved: 'تم حفظ الجدول. أهدافك جاهزة للتمرين القادم.',
+    pi_invalid: 'سمِّ كل يوم وكل تمرين، واربطه بتمرين من المكتبة أو اختر إضافته كجديد، وحدد أيام التدريب. المجموعات من ١ إلى ٢٠ أو فارغة. لا تكرر التمرين داخل اليوم نفسه.',
+    pi_changed: 'تغيّر برنامجك أثناء المراجعة. أغلق المسودة وافتح الاستيراد مجددًا لاستخدام أحدث برنامج.',
+    pi_storage: 'تعذّر حفظ الجدول على الجهاز. برنامجك السابق لم يتغيّر والمسودة ما زالت متاحة.',
+    pi_how: 'الإضافة إلى برنامجك',
+    pi_append: 'إضافة أيام التمرين إلى دورتي الحالية',
+    pi_replace: 'استبدال دورتي الحالية',
+    pi_replace_confirm: 'استبدال دورة التمرين وبدؤها من اليوم، مع الاحتفاظ بالجلسات والسجل السابق.',
+    pi_limits: 'صورة واحدة في كل مرة: حتى ١٤ يوم تمرين، و٢٠ تمرينًا في كل يوم.',
+    pi_target: 'المطلوب في برنامجك',
+    pi_targets_edit: 'تعديل المجموعات والتكرارات والملاحظات',
     save_session: 'حفظ الجلسة',
     total_volume: 'إجمالي الحِمل',
     back_to_workout: 'العودة للتمرين',
@@ -9746,11 +9824,12 @@ function renderPlanner(el) {
                 <button type="button" class="icon-btn icon-btn-tile" data-edit="${i}" aria-label="${t('edit_workout')}">${icon('edit', 20)}</button>
               </span>
             </div>
-            <div class="rot-slot-ex">${
+      <div class="rot-slot-ex">${
               exObjs.length
                 ? exObjs.map((ex) => `<span class="today-plan-chip">${escapeHtml(exDisplayName(ex))}</span>`).join('')
                 : `<span class="planner-empty-hint">${t('empty_day_drop')}</span>`
             }</div>
+            ${slot.targets && Object.keys(slot.targets).length ? `<button type="button" class="btn btn-ghost btn-block" data-edit-targets="${i}">${t('pi_targets_edit')}</button>` : ''}
           </div>`;
       }).join('')
     : `<div class="planner-empty-hint" style="padding:16px 2px">${t('no_plan_today_sub')}</div>`;
@@ -9802,6 +9881,13 @@ function renderPlanner(el) {
     </div>
   `;
 
+  const importButton = document.createElement('button');
+  importButton.type = 'button';
+  importButton.className = 'btn btn-ghost btn-block plan-import-entry';
+  importButton.innerHTML = `${icon('camera', 20)} ${t('pi_title')}`;
+  $('#apply-template-btn', el)?.parentElement.after(importButton);
+  importButton.addEventListener('click', openPlanImageImport);
+  el.querySelectorAll('[data-edit-targets]').forEach((b) => b.onclick = () => openPlanTargetsEditor(Number(b.dataset.editTargets)));
   $('#apply-template-btn', el)?.addEventListener('click', openTemplatesModal);
   $('#add-slot-btn', el)?.addEventListener('click', () => openSlotEditorModal(null));
   // Tap a day in the rolling preview → open/log that day's session.
@@ -9839,6 +9925,249 @@ function renderPlanner(el) {
   el.querySelectorAll('[data-edit]').forEach((b) =>
     b.addEventListener('click', () => openSlotEditorModal(Number(b.dataset.edit)))
   );
+}
+
+// Photo import is a disposable draft until the explicit reviewed save. No DB
+// writes occur during image processing, model analysis, matching or editing.
+function openPlanImageImport() {
+  const baseline = JSON.stringify(DB.plan.get());
+  const hasPlan = !!DB.plan.get().cycle.length;
+  const library = DB.exercises.list();
+  const norm = (v) => String(v || '').toLowerCase().normalize('NFKC')
+    .replace(/[ـ\u064b-\u065f]/g, '').replace(/[أإآ]/g, 'ا').replace(/[^\p{L}\p{N}]/gu, '');
+  const match = (name) => {
+    const q = norm(name);
+    const hits = q ? library.filter((e) => [e.name, EXERCISE_NAME_AR[e.name], EXERCISE_NAME_AR_FULL[e.name]].some((n) => n && norm(n) === q)) : [];
+    return hits.length === 1 ? hits[0].id : ''; // ambiguous names always need a choice
+  };
+  let picture = null, days = null, controller = null, serial = 0, busy = false;
+  let mode = hasPlan ? 'append' : 'replace', confirmed = false;
+  const weekdays = new Set(DB.plan.get().trainingDays || []);
+  let ownerId;
+  const overlay = openModal(`
+    <div class="modal-header"><div class="modal-title">${t('pi_title')}</div>
+      <button type="button" class="icon-btn icon-btn-tile" data-pi-close aria-label="${escapeHtml(t('close'))}">${icon('close', 20)}</button></div>
+    <div class="plan-import-body"></div>`, { dismissible: false });
+  const body = overlay.querySelector('.plan-import-body');
+  // Back navigation, logout or another modal can remove this overlay too.
+  const observer = new MutationObserver(() => {
+    if (!overlay.isConnected) { serial++; controller?.abort(); picture = null; observer.disconnect(); }
+  });
+  observer.observe(document.getElementById('modal-root'), { childList: true });
+  overlay.querySelector('[data-pi-close]').onclick = () => { serial++; controller?.abort(); closeModal(); };
+  const showError = (message) => {
+    const error = body.querySelector('[data-pi-error]');
+    if (error) { error.textContent = message; error.hidden = false; error.focus(); }
+  };
+  const rowHtml = (row, d, r) => {
+    const key = `pi-${d}-${r}`;
+    return `<div class="plan-import-row" data-pi-row="${r}">
+      <div class="plan-import-row-head"><span class="num">${fmtNum(r + 1)}</span><div>
+        <button type="button" class="icon-btn icon-btn-tile" data-pi-row-up="${d}:${r}" aria-label="${escapeHtml(t('move_up'))}" ${r === 0 ? 'disabled' : ''}>${icon('arrowUp', 18)}</button>
+        <button type="button" class="icon-btn icon-btn-tile" data-pi-remove="${d}:${r}" aria-label="${escapeHtml(t('delete'))}">${icon('trash', 18)}</button></div></div>
+      <label class="form-label" for="${key}-name">${t('pi_source_name')}</label>
+      <input id="${key}-name" data-field="name" value="${escapeHtml(row.name)}" maxlength="100" dir="auto" required>
+      <label class="form-label" for="${key}-match">${t('pi_match')}</label>
+      <select id="${key}-match" data-field="exerciseId" required>
+        <option value="">${t('pi_choose')}</option>
+        <option value="new" ${row.exerciseId === 'new' ? 'selected' : ''}>${t('pi_new')}</option>
+        ${library.map((e) => `<option value="${escapeHtml(e.id)}" ${row.exerciseId === e.id ? 'selected' : ''}>${escapeHtml(exDisplayName(e))}</option>`).join('')}
+      </select>
+      <div data-pi-category ${row.exerciseId === 'new' ? '' : 'hidden'}>
+        <label class="form-label" for="${key}-category">${t('category')}</label>
+        <select id="${key}-category" data-field="category">${EXERCISE_CATEGORIES.map((c) => `<option value="${escapeHtml(c)}" ${row.category === c ? 'selected' : ''}>${escapeHtml(categoryLabel(c))}</option>`).join('')}</select>
+      </div>
+      <div class="plan-import-targets">
+        <div><label class="form-label" for="${key}-sets">${t('sets')}</label><input id="${key}-sets" data-field="sets" inputmode="numeric" value="${row.sets == null ? '' : escapeHtml(String(row.sets))}" maxlength="2" placeholder="${t('pi_missing')}"></div>
+        <div><label class="form-label" for="${key}-reps">${t('pi_reps')}</label><input id="${key}-reps" data-field="reps" value="${escapeHtml(row.reps)}" maxlength="50" dir="auto" placeholder="${t('pi_missing')}"></div>
+      </div>
+      <label class="form-label" for="${key}-notes">${t('pi_notes')}</label>
+      <textarea id="${key}-notes" data-field="notes" rows="2" maxlength="240" dir="auto">${escapeHtml(row.notes)}</textarea>
+    </div>`;
+  };
+  function draw() {
+    if (!overlay.isConnected) return;
+    if (!days) {
+      body.innerHTML = `<p class="modal-subtitle">${t('pi_intro')}</p>
+        ${picture ? `<img class="plan-import-photo" src="${picture.dataUrl}" alt="${t('pi_photo')}">` : `<div class="plan-import-placeholder" aria-hidden="true">${icon('camera', 40)}</div>`}
+        <div class="plan-import-actions">
+          <button type="button" class="btn btn-ghost" data-pi-pick ${busy ? 'disabled' : ''}>${t('choose_image')}</button>
+          <button type="button" class="btn btn-ghost" data-pi-camera ${busy ? 'disabled' : ''}>${icon('camera', 20)} ${t('take_photo')}</button>
+        </div>
+        <input type="file" accept="image/jpeg,image/png,image/webp" data-pi-file hidden>
+        <input type="file" accept="image/jpeg,image/png,image/webp" capture="environment" data-pi-cam-file hidden>
+        <p class="plan-import-hint">${t('pi_privacy')}</p><p class="plan-import-hint">${t('pi_limits')}</p>
+        <p data-pi-error role="alert" tabindex="-1" class="plan-import-error" hidden></p>
+        <p role="status" aria-live="polite" class="plan-import-hint">${busy ? t('pi_read_hint') : ''}</p>
+        <button type="button" class="btn btn-primary btn-block" data-pi-read ${!picture || busy ? 'disabled' : ''}>${busy ? (picture ? t('pi_reading') : t('pi_preparing')) : t('pi_read')}</button>`;
+      body.querySelector('[data-pi-pick]').onclick = () => body.querySelector('[data-pi-file]').click();
+      body.querySelector('[data-pi-camera]').onclick = () => body.querySelector('[data-pi-cam-file]').click();
+      body.querySelectorAll('input[type=file]').forEach((input) => input.onchange = () => pick(input.files[0]));
+      body.querySelector('[data-pi-read]').onclick = read;
+      return;
+    }
+    body.innerHTML = `<p class="modal-subtitle">${t('pi_review_hint')}</p>
+      <details class="plan-import-source"><summary>${t('pi_source')}</summary><img class="plan-import-photo" src="${picture.dataUrl}" alt="${t('pi_photo')}"></details>
+      <form data-pi-form novalidate>
+      ${days.map((day, d) => `<section class="plan-import-day" data-pi-day="${d}">
+        <div class="plan-import-day-head"><span class="num">${fmtNum(d + 1)}</span>
+          <label class="sr-only" for="pi-day-${d}">${t('workout_label')}</label><input id="pi-day-${d}" data-day-name value="${escapeHtml(day.name)}" maxlength="80" dir="auto" required>
+          <button type="button" class="icon-btn icon-btn-tile" data-pi-up="${d}" aria-label="${t('move_up')}" ${d === 0 ? 'disabled' : ''}>↑</button>
+          <button type="button" class="icon-btn icon-btn-tile" data-pi-drop-day="${d}" aria-label="${t('pi_remove_day')}">${icon('trash', 18)}</button></div>
+        ${day.exercises.map((row, r) => rowHtml(row, d, r)).join('')}
+        <button type="button" class="btn btn-ghost btn-block" data-pi-add="${d}" ${day.exercises.length >= 20 ? 'disabled' : ''}>${icon('plus', 18)} ${t('pi_add_row')}</button>
+      </section>`).join('')}
+      <button type="button" class="btn btn-ghost btn-block" data-pi-add-day ${days.length >= 14 ? 'disabled' : ''}>${icon('plus', 18)} ${t('add_workout')}</button>
+      <div class="rot-section"><div class="rot-section-title">${t('training_days')}</div>
+        <div class="schedule-days">${weekOrder().map((d) => `<button type="button" class="schedule-day ${weekdays.has(d) ? 'active' : ''}" data-pi-weekday="${d}" aria-pressed="${weekdays.has(d)}">${escapeHtml(dayName(d, true))}</button>`).join('')}</div></div>
+      ${hasPlan ? `<label class="form-label" for="pi-mode">${t('pi_how')}</label><select id="pi-mode"><option value="append" ${mode === 'append' ? 'selected' : ''}>${t('pi_append')}</option><option value="replace" ${mode === 'replace' ? 'selected' : ''}>${t('pi_replace')}</option></select>
+        <label class="plan-import-confirm" ${mode === 'replace' ? '' : 'hidden'}><input type="checkbox" data-pi-confirm ${confirmed ? 'checked' : ''}>${t('pi_replace_confirm')}</label>` : ''}
+      <p data-pi-error role="alert" tabindex="-1" class="plan-import-error" hidden></p>
+      <div class="plan-import-save"><button type="submit" class="btn btn-primary btn-block" data-pi-save>${t('pi_save')}</button></div>
+      </form>`;
+    overlay.querySelector('.modal-title').textContent = t('pi_review');
+    body.querySelector('[data-pi-form]').oninput = (event) => {
+      const target = event.target;
+      const section = target.closest('[data-pi-day]');
+      if (!section) return;
+      const day = days[Number(section.dataset.piDay)];
+      if (target.hasAttribute('data-day-name')) day.name = target.value;
+      const rowEl = target.closest('[data-pi-row]');
+      if (!rowEl || !target.dataset.field) return;
+      const row = day.exercises[Number(rowEl.dataset.piRow)];
+      const field = target.dataset.field;
+      row[field] = field === 'sets' ? planSetsInput(target.value) : target.value;
+      if (field === 'exerciseId') rowEl.querySelector('[data-pi-category]').hidden = target.value !== 'new';
+    };
+    body.querySelectorAll('[data-pi-remove]').forEach((b) => b.onclick = () => {
+      const [d, r] = b.dataset.piRemove.split(':').map(Number); days[d].exercises.splice(r, 1); draw();
+    });
+    body.querySelectorAll('[data-pi-row-up]').forEach((b) => b.onclick = () => {
+      const [d, r] = b.dataset.piRowUp.split(':').map(Number), rows = days[d].exercises;
+      [rows[r - 1], rows[r]] = [rows[r], rows[r - 1]]; draw();
+    });
+    body.querySelectorAll('[data-pi-add]').forEach((b) => b.onclick = () => { days[Number(b.dataset.piAdd)].exercises.push({ name: '', sets: null, reps: '', notes: '', exerciseId: '', category: 'Other' }); draw(); });
+    body.querySelector('[data-pi-add-day]').onclick = () => { days.push({ name: '', exercises: [] }); draw(); };
+    body.querySelectorAll('[data-pi-drop-day]').forEach((b) => b.onclick = () => { days.splice(Number(b.dataset.piDropDay), 1); draw(); });
+    body.querySelectorAll('[data-pi-up]').forEach((b) => b.onclick = () => {
+      const d = Number(b.dataset.piUp); [days[d - 1], days[d]] = [days[d], days[d - 1]]; draw();
+    });
+    body.querySelectorAll('[data-pi-weekday]').forEach((b) => b.onclick = () => {
+      const d = Number(b.dataset.piWeekday); weekdays.has(d) ? weekdays.delete(d) : weekdays.add(d);
+      b.classList.toggle('active', weekdays.has(d)); b.setAttribute('aria-pressed', weekdays.has(d));
+    });
+    const modeInput = body.querySelector('#pi-mode');
+    if (modeInput) modeInput.onchange = () => { mode = modeInput.value; confirmed = false; draw(); };
+    const check = body.querySelector('[data-pi-confirm]');
+    if (check) check.onchange = () => { confirmed = check.checked; };
+    body.querySelector('[data-pi-form]').onsubmit = saveDraft;
+  }
+  async function pick(file) {
+    if (!file) return;
+    const token = ++serial;
+    if (!['image/jpeg', 'image/png', 'image/webp'].includes(file.type) || file.size > 15 * 1024 * 1024) { showError(t('pi_bad_file')); return; }
+    busy = true; picture = null; draw();
+    try {
+      if (!window.FoodAI?.processImage) throw new Error(t('pi_unavailable'));
+      // Documents need more detail than a food thumbnail. Keep the existing
+      // Worker's 1.4 MB base64 limit by retrying compression locally if needed.
+      let pic = await FoodAI.processImage(file, 1800, 0.85);
+      if (pic.image.data.length > 1400000) pic = await FoodAI.processImage(file, 1600, 0.7);
+      if (pic.image.data.length > 1400000) throw new Error(t('pi_bad_file'));
+      if (token !== serial || !overlay.isConnected) return;
+      picture = pic; busy = false; draw();
+    } catch (_) {
+      if (token !== serial || !overlay.isConnected) return;
+      busy = false; draw(); showError(t('pi_bad_file'));
+    }
+  }
+  async function read() {
+    if (!picture || busy) return;
+    busy = true; draw();
+    controller = new AbortController();
+    const token = ++serial;
+    const timer = setTimeout(() => controller?.abort(), 45000);
+    try {
+      if (!window.FoodAI?.analyzePlanImage) throw new Error(t('pi_unavailable'));
+      ownerId = (await Cloud.getSession())?.user?.id;
+      if (!ownerId) throw new Error(t('ai_err_signin'));
+      const result = await FoodAI.analyzePlanImage(picture.image, controller.signal);
+      if (token !== serial || !overlay.isConnected) return;
+      if (!Array.isArray(result.days) || !result.days.length) throw new Error(t('pi_empty'));
+      if (result.days.length > 14 || result.days.some((d) => !d || !Array.isArray(d.exercises) || d.exercises.length > 20)) throw new Error(t('pi_unavailable'));
+      const text = (v, max) => typeof v === 'string' ? v.slice(0, max) : '';
+      days = result.days.map((d) => ({ name: text(d.name, 80), exercises: d.exercises.map((r) => ({
+        name: text(r?.name, 100), sets: Number.isInteger(r?.sets) && r.sets > 0 && r.sets <= 20 ? r.sets : null,
+        reps: text(r?.reps, 50), notes: text(r?.notes, 240), exerciseId: match(r?.name), category: 'Other',
+      })) }));
+      busy = false; draw(); overlay.querySelector('.modal')?.scrollTo(0, 0);
+    } catch (error) {
+      if (token !== serial || !overlay.isConnected) return;
+      busy = false; draw();
+      const message = error.name === 'AbortError' ? t('pi_timeout') : window.FoodAI ? FoodAI.friendlyErr(error) : t('pi_unavailable');
+      showError(message === t('ai_error') ? t('pi_error') : message);
+    } finally { clearTimeout(timer); }
+  }
+  async function saveDraft(event) {
+    event.preventDefault();
+    if (busy) return;
+    if (hasPlan && mode === 'replace' && !confirmed) { showError(t('pi_confirm_needed')); return; }
+    if (!days.length || !weekdays.size) { showError(t('pi_invalid')); return; }
+    busy = true;
+    const button = body.querySelector('[data-pi-save]'); button.disabled = true;
+    try {
+      if ((await Cloud.getSession())?.user?.id !== ownerId) { showError(t('ai_err_signin')); return; }
+      if (!overlay.isConnected) return;
+      const result = DB.plan.importImagePlan({ days, trainingDays: [...weekdays], append: mode === 'append', expectedPlan: baseline });
+      if (!result.ok) {
+        showError(result.reason === 'changed' ? t('pi_changed') : result.reason === 'storage' ? t('pi_storage') : t('pi_invalid')); return;
+      }
+      closeModal(); navigate('planner'); showToast(t('pi_saved'));
+    } catch (_) { showError(t('pi_storage')); }
+    finally { busy = false; if (button.isConnected) button.disabled = false; }
+  }
+  draw();
+}
+
+function planSetsInput(value) {
+  const digits = String(value).trim().replace(/[٠-٩۰-۹]/g, (c) => String(c.charCodeAt(0) - (c <= '٩' ? 0x660 : 0x6f0)));
+  return digits === '' ? null : /^\d+$/.test(digits) ? Number(digits) : NaN;
+}
+
+function planTargetHtml(target) {
+  if (!target || (!target.sets && !target.reps && !target.notes)) return '';
+  return `<div class="plan-target"><div class="plan-import-hint">${t('pi_target')}</div>
+    <div>${target.sets ? `${t('sets')}: <span class="num">${fmtNum(target.sets)}</span>` : ''}${target.sets && target.reps ? ' · ' : ''}${target.reps ? `${t('pi_reps')}: ${escapeHtml(target.reps)}` : ''}</div>
+    ${target.notes ? `<p>${escapeHtml(target.notes)}</p>` : ''}</div>`;
+}
+
+function openPlanTargetsEditor(index) {
+  const baseline = JSON.stringify(DB.plan.get());
+  const slot = DB.plan.get().cycle[index];
+  if (!slot) return;
+  const exercises = slot.exerciseIds.map((id) => DB.exercises.getById(id)).filter(Boolean);
+  const overlay = openModal(`<div class="modal-header"><div class="modal-title">${t('pi_targets_edit')}</div><button class="icon-btn icon-btn-tile" data-close>${icon('close', 20)}</button></div>
+    <form data-target-form>${exercises.map((ex, i) => {
+      const p = slot.targets?.[ex.id] || {};
+      return `<div class="plan-import-row" data-target-id="${escapeHtml(ex.id)}"><div class="form-label">${escapeHtml(exDisplayName(ex))}</div>
+        <div class="plan-import-targets"><div><label class="form-label" for="pt-${i}-sets">${t('sets')}</label><input id="pt-${i}-sets" data-sets inputmode="numeric" maxlength="2" value="${p.sets || ''}"></div>
+        <div><label class="form-label" for="pt-${i}-reps">${t('pi_reps')}</label><input id="pt-${i}-reps" data-reps dir="auto" maxlength="50" value="${escapeHtml(p.reps || '')}"></div></div>
+        <label class="form-label" for="pt-${i}-notes">${t('pi_notes')}</label><textarea id="pt-${i}-notes" data-notes dir="auto" maxlength="240">${escapeHtml(p.notes || '')}</textarea></div>`;
+    }).join('')}<p class="plan-import-error" role="alert" data-target-error hidden></p>
+      <button type="submit" class="btn btn-primary btn-block">${t('save')}</button></form>`);
+  overlay.querySelector('[data-target-form]').onsubmit = (event) => {
+    event.preventDefault();
+    const entries = [...overlay.querySelectorAll('[data-target-id]')].map((row) => [row.dataset.targetId, {
+      sets: planSetsInput(row.querySelector('[data-sets]').value), reps: row.querySelector('[data-reps]').value.trim(), notes: row.querySelector('[data-notes]').value.trim(),
+    }]);
+    const valid = entries.every(([, p]) => p.sets === null || (Number.isInteger(p.sets) && p.sets >= 1 && p.sets <= 20));
+    const result = valid ? DB.plan.setSlotTargets(index, Object.fromEntries(entries), baseline) : { ok: false, reason: 'invalid' };
+    if (!result.ok) {
+      const error = overlay.querySelector('[data-target-error]'); error.hidden = false;
+      error.textContent = result.reason === 'changed' ? t('pi_changed') : result.reason === 'storage' ? t('pi_storage') : t('pi_invalid'); return;
+    }
+    closeModal(); navigate('planner'); showToast(t('pi_saved'));
+  };
 }
 
 function openTemplatesModal() {
@@ -10937,6 +11266,11 @@ function renderSessionRun(el) {
       // and count as done.
       sets = today.sets.map((s) => ({ reps: s.reps, weight: s.weight, done: s.done !== false, phReps: s.reps, phWeight: s.weight }));
       savedId = today.id;
+    } else if (day?.targets?.[exId]?.sets) {
+      // Planned sets are EMPTY until performed; targets never become history.
+      sets = Array.from({ length: day.targets[exId].sets }, (_, i) => ({
+        reps: '', weight: '', done: false, phReps: last?.sets[i]?.reps ?? '', phWeight: last?.sets[i]?.weight ?? '',
+      }));
     } else if (last) {
       sets = last.sets.map((s) => ({ reps: '', weight: '', done: false, phReps: s.reps, phWeight: s.weight }));
     } else {
@@ -11105,6 +11439,7 @@ function renderSessionRun(el) {
   }
 
   function runSuggestHtml(exId) {
+    if (day?.targets?.[exId]) return ''; // the reviewed plan is the instruction for this slot
     const g = runSuggest(exId);
     if (!g) return '';
     const u = runCtx.runUnit.toUpperCase();
@@ -11420,6 +11755,7 @@ function renderSessionRun(el) {
       ${mediaHtml}
       <h1 class="run-ex-name">${escapeHtml(exDisplayName(ex))}</h1>
       ${runStatsHtml(ex.id)}
+      ${planTargetHtml(day?.targets?.[ex.id])}
       ${runSuggestHtml(ex.id)}
     </div>
 

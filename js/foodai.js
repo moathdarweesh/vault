@@ -402,6 +402,25 @@
     return analyzeViaProxy(imagePrompt(note), image);
   }
 
+  // Separate protocol on the existing authenticated proxy. Never use the food
+  // parser/cache for a training plan, and never persist the source photograph.
+  async function analyzePlanImage(image, signal) {
+    const res = await fetch(PROXY_URL, {
+      method: 'POST', headers: await authHeaders(), signal,
+      body: JSON.stringify({ mode: 'workout-plan', image }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      if (data.code === 'DAILY_LIMIT') throw new Error(tr('pi_daily_limit'));
+      if (res.status === 429) throw new Error(tr('ai_rate_limit'));
+      throw new Error(data.error || ('HTTP ' + res.status));
+    }
+    // A client ahead of the Worker receives {items:[]}. Fail explicitly rather
+    // than passing an old food response off as an empty workout image.
+    if (!data.plan || !Array.isArray(data.plan.days)) throw new Error(tr('pi_unavailable'));
+    return data.plan;
+  }
+
   // Downscale a picked image file to a JPEG (max 1024px, q0.7) so the upload
   // stays small. Returns { dataUrl (for the thumbnail), image: { mimeType, data } }.
   function processImage(file, maxDim, quality) {
@@ -411,12 +430,17 @@
       const url = URL.createObjectURL(file);
       img.onload = () => {
         URL.revokeObjectURL(url);
+        try {
         let w = img.width, h = img.height;
+        if (!w || !h || w * h > 40000000) throw new Error('image too large');
         if (Math.max(w, h) > maxDim) { const s = maxDim / Math.max(w, h); w = Math.round(w * s); h = Math.round(h * s); }
         const c = document.createElement('canvas'); c.width = w; c.height = h;
-        c.getContext('2d').drawImage(img, 0, 0, w, h);
+        const ctx = c.getContext('2d');
+        ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, w, h);
+        ctx.drawImage(img, 0, 0, w, h);
         const dataUrl = c.toDataURL('image/jpeg', quality);
         resolve({ dataUrl: dataUrl, image: { mimeType: 'image/jpeg', data: dataUrl.split(',')[1] } });
+        } catch (error) { reject(error); }
       };
       img.onerror = () => { URL.revokeObjectURL(url); reject(new Error('image load failed')); };
       img.src = url;
@@ -933,6 +957,6 @@
   // fills its boxes with it, and it must be the SAME rules the chat uses or the
   // two drift into disagreeing about the same sentence. Pure local matching —
   // it sends nothing anywhere.
-  window.FoodAI = { open, openPhoto, analyze, analyzeImage, analyzeAudio, ask, friendlyErr,
+  window.FoodAI = { open, openPhoto, analyze, analyzeImage, analyzeAudio, ask, friendlyErr, analyzePlanImage, processImage,
                     parseText: parseMacroText };
 })();
