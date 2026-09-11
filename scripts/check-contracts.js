@@ -36,6 +36,9 @@ const contract = (name, problems) => {
   const want = JS;
   contract('index.html loads the seven scripts in dependency order (cloud → storage → app → health → notify → foodai → update)',
     order.join(',') === want.join(',') ? [] : ['found: ' + order.join(' → ')]);
+  const tags = [...html.matchAll(/<script\b[^>]*\bsrc="js\/[^">]+"[^>]*>/g)].map(m => m[0]);
+  contract('startup scripts download in parallel and execute in order',
+    tags.filter(tag => !/\sdefer(?:\s|>)/.test(tag) || /\sasync(?:\s|>)/.test(tag)));
 }
 
 // ---------------------------------------------------------------- 2. every version marker agrees
