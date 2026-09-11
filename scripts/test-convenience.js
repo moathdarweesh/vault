@@ -76,8 +76,9 @@ run('reloadState()'); assert.equal(db.undo.list().length,0);
 assert.equal(db.shopping.list().length,1);
 assert.equal(db._idsSafe({...JSON.parse(snapshot),shoppingLists:[{id:'bad"',items:[]}]}),false);
 
-// The actual previous client must preserve new sections on load AND a write.
-const oldStorage = execFileSync('git',['show','HEAD:js/storage.js'],{encoding:'utf8'});
+// Pin v309: HEAD moves after release and would silently test the new client against itself.
+const compatibilityBaseline = '7e6ac93bbb9eb4cdce993645962113a8f44d3c8a';
+const oldStorage = execFileSync('git',['show',`${compatibilityBaseline}:js/storage.js`],{encoding:'utf8'});
 const old = context(); old.values.set(old.keys.store,snapshot);
 const legacy = { ...old.c, window:null }; legacy.window=legacy;
 vm.createContext(legacy); vm.runInContext(oldStorage,legacy); vm.runInContext('DB.prefs.setTheme("light")',legacy);
