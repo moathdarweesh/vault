@@ -329,6 +329,62 @@ window.VAULT_KEYS = Object.freeze({
   const LAST_UID_KEY = VAULT_KEYS.lastUid;
   const setLastUid = (uid) => { try { if (uid) localStorage.setItem(LAST_UID_KEY, uid); } catch (_) {} };
   const getLastUid = () => { try { return localStorage.getItem(LAST_UID_KEY) || ''; } catch (_) { return ''; } };
+  // Presentation state only. Durable dirty/version markers remain the authority;
+  // a successful older request must never claim a newer edit has been uploaded.
+  let syncActivity = { uid: '', active: 0, outcome: '', confirmedAt: '' };
+  function emitSyncState() {
+    try { window.dispatchEvent(new CustomEvent('vault:sync-state')); } catch (_) {}
+  }
+  function activityFor(uid) {
+    if (syncActivity.uid !== uid) syncActivity = { uid, active: 0, outcome: '', confirmedAt: '' };
+    return syncActivity;
+  }
+  function recordSyncOutcome(activity, outcome) {
+    if (activity !== syncActivity || activity.uid !== getLastUid()) return;
+    if (['ok', 'pushed', 'pulled', 'synced'].includes(outcome)) {
+      activity.outcome = '';
+      activity.confirmedAt = new Date().toISOString();
+    } else if (!['conflict', 'blocked', 'nosession'].includes(activity.outcome) ||
+               ['conflict', 'blocked', 'nosession'].includes(outcome)) {
+      activity.outcome = outcome;
+    }
+  }
+  async function trackSync(work) {
+    const activity = activityFor(getLastUid());
+    activity.active++;
+    emitSyncState();
+    try {
+      const result = await work();
+      recordSyncOutcome(activity, result);
+      return result;
+    } catch (error) {
+      recordSyncOutcome(activity, 'error');
+      throw error;
+    } finally {
+      activity.active--;
+      emitSyncState();
+    }
+  }
+  function syncState() {
+    const uid = getLastUid();
+    const activity = activityFor(uid);
+    const linked = !!uid && isLinked(uid), dirty = !!uid && isDirty(uid);
+    const stamp = uid ? getStamp(uid) : '';
+    const online = typeof navigator === 'undefined' || navigator.onLine !== false;
+    let status = 'unlinked';
+    if (uid) {
+      if (activity.active) status = 'syncing';
+      else if (activity.outcome === 'conflict' || activity.outcome === 'blocked') status = activity.outcome;
+      else if (!online) status = 'offline';
+      else if (activity.outcome === 'nosession') status = 'signin';
+      else if (['error', 'offline', 'failed'].includes(activity.outcome)) status = 'error';
+      else if (dirty) status = 'pending';
+      else if (linked && stamp) status = 'synced';
+      else status = 'pending';
+    }
+    return { linked, dirty, stamp, version: uid ? getVersion(uid) : null,
+      status, online, confirmedAt: activity.confirmedAt };
+  }
   const markLinked = (uid) => { try { localStorage.setItem(linkedKey(uid), '1'); setLastUid(uid); } catch (_) {} };
   const isDirty = (uid) => { try { return !!localStorage.getItem(dirtyKey(uid)); } catch (_) { return false; } };
   const setDirty = (uid, v) => { try { v ? localStorage.setItem(dirtyKey(uid), '1') : localStorage.removeItem(dirtyKey(uid)); } catch (_) {} };
@@ -477,6 +533,28 @@ window.VAULT_KEYS = Object.freeze({
   // all the sync decision needs, and they are two small columns instead of the
   // user's entire history — which is what pull() was moving on every glance at
   // the phone, only to discover nothing had changed.
+  async function listPlanHistory() {
+    const c = sb(), session = await getSession(), owner = getLastUid();
+    if (!c || !session || session.user.id !== owner) return { ok: false, code: 'AUTH' };
+    const { data, error } = await c.from('vault_data_history').select('id,version,replaced_at').eq('user_id', owner).order('replaced_at', { ascending: false }).limit(10);
+    if (getLastUid() !== owner) return { ok: false, code: 'STALE' };
+    return error ? { ok: false, code: 'NETWORK' } : { ok: true, rows: data || [] };
+  }
+  async function readPlanHistory(id) {
+    const c = sb(), session = await getSession(), owner = getLastUid();
+    if (!c || !session || session.user.id !== owner || !/^\d+$/.test(String(id))) return { ok: false, code: 'AUTH' };
+    const { data, error } = await c.from('vault_data_history').select('id,version,replaced_at,data').eq('user_id', owner).eq('id', id).maybeSingle();
+    if (getLastUid() !== owner) return { ok: false, code: 'STALE' };
+    if (error || !data || !DB._validateBlob(data.data) || !DB._idsSafe(data.data)) return { ok: false, code: 'NETWORK' };
+    // The caller gets only the selected program and the names needed to repair
+    // missing references, never food logs or other historic personal records.
+    return { ok: true, owner, plan: data.data.plan, exercises: (data.data.exercises || []).map(e => ({id:e.id,name:e.name,category:e.category})), version: getVersion(owner) };
+  }
+  async function checkPlanRestoreVersion(owner, expectedVersion) {
+    if (getLastUid() !== owner || !Number.isFinite(expectedVersion) || inFlight || isDirty(owner)) return false;
+    const remote = await pullMeta();
+    return getLastUid() === owner && !inFlight && !isDirty(owner) && remote?.version === expectedVersion && getVersion(owner) === expectedVersion;
+  }
   async function pullMeta() {
     const c = sb(); const s = await getSession();
     if (!c || !s) return undefined;
@@ -538,7 +616,7 @@ window.VAULT_KEYS = Object.freeze({
     // push lands again; without this a conflict the user simply dismissed would
     // silence every LATER conflict for the rest of the session, and a refusal
     // nobody is told about is worse than a refusal that nags.
-    inFlight = pushOnce(opts)
+    inFlight = trackSync(() => pushOnce(opts))
       .then((r) => {
         if (r === 'ok') {
           try { if (typeof window !== 'undefined') window.dispatchEvent(new CustomEvent('vault:push-ok')); } catch (_) {}
@@ -630,8 +708,8 @@ window.VAULT_KEYS = Object.freeze({
     // the row still being at it (atomic integer compare — no timestamp-format
     // fragility). A real conflict (another device advanced the row) is DETECTED and
     // NOT clobbered: we keep our edits local (dirty stays set) and let the next
-    // bootSync resolve it. Any error or unknown version falls through to the plain
-    // upsert below, so this path is never worse than the old last-writer-wins.
+    // bootSync resolve it. Errors stop here; an unknown version may only insert.
+    // Unconditional upsert is reserved for explicit conflict resolution.
     if (!force && known != null) {
       try {
         const { data: updated, error: updErr } = await c.from(TABLE)
@@ -668,14 +746,16 @@ window.VAULT_KEYS = Object.freeze({
             noteConflict('push-version-moved', uid, cur);
             return 'conflict';
           }
-          // no row exists → fall through to the insert path below
+          // Missing/unreadable row: retain local changes and require sync review.
         }
-      } catch (_) { /* fall through to the safe upsert */ }
+      } catch (error) { throw error; }
+      // A failed/uncertain conditional write must never become an unconditional
+      // overwrite. A missing row with a previously known version also stops here.
+      return 'error';
     }
-    const { data: up, error, status } = await c.from(TABLE).upsert(
-      { user_id: uid, data: payload, updated_at: iso },
-      { onConflict: 'user_id' }
-    ).select('*');
+    const row = { user_id: uid, data: payload, updated_at: iso };
+    const write = force ? c.from(TABLE).upsert(row, { onConflict: 'user_id' }) : c.from(TABLE).insert(row);
+    const { data: up, error, status } = await write.select('*');
     if (error) {
       // Only a genuine server answer proves nothing was committed. The SDK also
       // hands back {error} for a request that never got a response (status 0,
@@ -745,10 +825,10 @@ window.VAULT_KEYS = Object.freeze({
     return syncSettled;
   }
   async function bootSync() {
-    try { return await bootSyncCore(); } finally { syncSettled = true; try { window.dispatchEvent(new CustomEvent('vault:sync-settled')); } catch (_) {} }
+    try { return await trackSync(bootSyncCore); } finally { syncSettled = true; try { window.dispatchEvent(new CustomEvent('vault:sync-settled')); } catch (_) {} }
   }
   async function resolveOnLogin() {
-    try { return await resolveOnLoginCore(); } finally { syncSettled = true; try { window.dispatchEvent(new CustomEvent('vault:sync-settled')); } catch (_) {} }
+    try { return await trackSync(resolveOnLoginCore); } finally { syncSettled = true; try { window.dispatchEvent(new CustomEvent('vault:sync-settled')); } catch (_) {} }
   }
 
   // ---- RESUME --------------------------------------------------------------
@@ -780,7 +860,9 @@ window.VAULT_KEYS = Object.freeze({
     // returns 'conflict' instead of silently pulling an older cloud blob over it.
     const lastUid = getLastUid();
     if (lastUid) setDirty(lastUid, true);
-    const s = await getSession(); if (!s) return; // only push when logged in
+    emitSyncState();
+    const s = await getSession();
+    if (!s) { recordSyncOutcome(activityFor(lastUid), 'nosession'); emitSyncState(); return; }
     setDirty(s.user.id, true); // (same uid in the normal case)
     clearTimeout(pushTimer);
     // runPush(), not push().catch(() => {}): the failure has to start a retry
@@ -928,7 +1010,8 @@ window.VAULT_KEYS = Object.freeze({
     return syncInFlight;
   }
   async function bootSyncCoreUnguarded() {
-    const s = await getSession(); if (!s) return 'offline';
+    const s = await getSession();
+    if (!s) { recordSyncOutcome(activityFor(getLastUid()), 'nosession'); return 'offline'; }
     const uid = s.user.id;
 
     // FAST PATH — the overwhelmingly common one. A foreground where neither
@@ -1301,6 +1384,8 @@ window.VAULT_KEYS = Object.freeze({
   // (so a shared device doesn't leak the previous user's blob) and after account
   // deletion. A synced user restores from the cloud on next sign-in.
   function clearLocalUserData() {
+    if (typeof DB !== 'undefined' && DB.undo) DB.undo.clear();
+    syncActivity = { uid: '', active: 0, outcome: '', confirmedAt: '' };
     try {
       localStorage.removeItem(VAULT_KEYS.store);
       // The three OTHER full copies of the blob. The pre-sync rescue held the whole
@@ -1396,21 +1481,20 @@ window.VAULT_KEYS = Object.freeze({
     configured, ensureSdk, getSession, currentEmail,
     signUp, signIn, signOut, changePassword, resetPassword, onPasswordRecovery,
     pull, push, flush, onLocalChange, resume,
+    listPlanHistory, readPlanHistory, checkPlanRestoreVersion,
     snapshotLocal, recoveryInfo, recoveryFailedAt, restoreRecovery, isSettled,
     // Read-only view of this device's sync state, so the UI can finally SAY
     // "you have changes that have not reached the cloud" — neither flag was
     // exported before, which is why no screen could show it.
-    syncState: () => {
-      const uid = getLastUid();
-      if (!uid) return { linked: false, dirty: false, stamp: '', version: null };
-      return { linked: isLinked(uid), dirty: isDirty(uid), stamp: getStamp(uid), version: getVersion(uid) };
-    },
-    resolveOnLogin, chooseCloud, chooseLocal, bootSync, applyRemote,
+    syncState,
+    resolveOnLogin, chooseCloud: () => trackSync(chooseCloud),
+    chooseLocal: () => trackSync(chooseLocal), bootSync, applyRemote,
     localHasData, // so the UI can tell an empty device from one that already has data
     // Has this device EVER been signed in and linked to an account? Used by the
     // mandatory-account gate to tell a brand-new install (must sign up) apart from
     // a known user whose token merely expired while offline (must NOT be locked
     // out of data that is already on their device).
+    getLastUid,
     wasLinked: () => { const u = getLastUid(); return !!u && isLinked(u); },
     getClient: sb, // RLS-scoped client, exposed for auxiliary readers
     getUsername, checkUsername, setUsername,

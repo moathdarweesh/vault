@@ -75,7 +75,7 @@ a faster TTFB — not fewer bytes.
 npm run release          # bump every marker + verify, then commit all files together
 ```
 
-**Current version: v309.** APK: build 21 / v3.0.
+**Current version: v312.** APK: build 21 / v3.0.
 
 `scripts/release.js` rewrites **every** marker and then re-reads them from disk to confirm; it exits non-zero if any disagree, and prints the count per file (derived, never hard-coded — the docs used to say 16 while the real count was 15). The markers are `?v=N` in `index.html` (every script and stylesheet, the `js/vendor/supabase.js` preload, both `icons/icon.svg` links, `manifest.json`), the `__cleaned_vN` sessionStorage key, the `FALLBACK` literal in `app.js`, `version.json` → `web`, the `?v=` in `manifest.json`, `admin.html`, `privacy.html` and `get/index.html`, and the `Current version` line in this file. `scripts/check-contracts.js` (pre-commit) refuses a commit where any of them disagree.
 
@@ -684,6 +684,24 @@ Full findings + verification in `docs/CODEBASE_REVIEW.md`. The load-bearing rule
 - **Targets are not history.** Optional `cycle[i].targets[exerciseId] = {sets: number|null, reps: string, notes: string}` belongs to a particular cycle slot. `planSlot`/`normalizePlanTargets` preserve it through migration and rotation replacement, and prune removed IDs. The guided run displays the reviewed targets and starts fresh planned rows empty/unchecked. It never logs targets automatically or changes existing sessions. Targets remain editable from the cycle card.
 - `DB.plan.importImagePlan` writes the cycle and new exercises atomically, restores the old in-memory state if storage fails, and refuses a stale review if the plan changed. All draft edits are transient until explicit save. Do not create custom exercises during analysis/review.
 - Verification: `node scripts/test-plan-import.js`; `node scripts/preview-plan-import.js` is a **loopback-only synthetic QA environment** using the real UI and Worker with mocked auth/model responses. It must never replace production auth. Detailed scope and deployment status: `docs/PLAN_PHOTO_IMPORT.md`.
+
+## Save center (v310)
+
+- Settings owns one Saving & sync center. `saveCenterModel` maps storage/cloud outcomes; `updateSaveCenter` patches its text and actions. Save/sync events are coalesced without polling or extra network requests.
+- `DB.saveState()` returns a copy of the latest local write outcome. `writeStore` keeps its boolean contract; `save`/`saveLocal` return the outcome. This does not make legacy mutators transactional: undo and rollback are separate work.
+- `Cloud.syncState()` preserves linked/dirty/stamp/version and adds status/online/confirmedAt. Runtime outcomes are account-scoped; durable dirty/version markers remain authoritative. Conflict resolution updates the center too.
+- The center covers records, not separate exercise-photo backups. No schema, SQL, Worker, or application dependency changes. Scope and verification: `docs/SAVE_CENTER_PHASE_1.md`; tests: `scripts/test-sync-status.js` and optional `scripts/test-sync-status-ui.js` (external Playwright runtime).
+
+## Everyday convenience features (v312)
+
+- `docs/USER_CONVENIENCE_IMPLEMENTATION.md` records scope and validation. Keep all original iOS work separate.
+- `changeSlice` in storage.js owns scoped rollback and ephemeral Undo. `DB.undo.list/apply/clear` bounds history by age/count/size, verifies account and expected after-state, and is cleared on reload/logout. Feature transactions refuse when another tab changed the stored bytes. Do not restore a whole blob to undo one food or set.
+- Meals use `DB.mealBundles.update/log` and `DB.foodLogs.addMany`: one write, snapshot nutrition, explicit portion/date and operation deduplication. Recipes also edit in one write. `purchase` metadata is separate from nutrition math.
+- `DB.shopping` stores optional `shoppingLists` in the existing blob; unknown quantities stay unknown. Merge only an explicit ingredient identity with compatible units/preparation. Existing lists are snapshots, not live recipe references.
+- `DB.search` derives bounded local results on demand; no query history or persisted index. Modal results verify their owner and refresh on save. Use the real route contexts (`exercise-detail.exerciseId`, `foodlog.foodLog.date`).
+- `Cloud.listPlanHistory/readPlanHistory/checkPlanRestoreVersion` use existing own-row history, metadata first. Program restoration verifies references/current plan/catalog/version, snapshots before mutation, and changes only plan plus explicitly recreated exercise definitions.
+- Conditional push errors no longer fall back to unconditional upsert. Unknown versions insert only; force-upsert is reserved for explicit conflict resolution. Do not reintroduce fallback overwrite.
+- Verification: `test-convenience.js`, `test-convenience-cloud.js`, and `test-sync-status-ui.js` (which invokes `test-convenience-ui.js`). Browser/cloud faults use isolated synthetic data. The opt-in live probe was refused by Turnstile (600010), created no accounts, and is not a completed production RLS audit.
 
 ## Feature factory
 This machine has a `/feature-factory` skill (24 specialist subagents, tailored to THE VAULT) that builds a feature end-to-end. See the maintainer's Claude memory for the roster.

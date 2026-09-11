@@ -7502,6 +7502,16 @@ body.theme-light {
 .plan-target .plan-import-hint { margin: 0 0 5px; }
 .plan-target p { font-size: 14px; line-height: 1.6; color: var(--text-mute); margin: 6px 0 0; }
 
+/* Save center: uses the same section, button and color tokens as Settings. */
+.save-center .section-title { margin-top: 0; }
+.save-center-row { display: grid; grid-template-columns: minmax(90px, .7fr) minmax(0, 1.3fr); gap: 12px; padding: 10px 0; align-items: start; border-bottom: 1px solid var(--border); }
+.save-center-row > span { color: var(--text-mute); font-size: 13px; }
+.save-center-row > strong { font-size: 14px; line-height: 1.6; font-weight: 600; overflow-wrap: anywhere; }
+.save-center[data-state="failed"] #sc-device { color: var(--red); }
+.save-center #sc-detail { color: var(--red); font-size: 14px; line-height: 1.7; }
+.save-center .settings-hint { overflow-wrap: anywhere; line-height: 1.7; }
+.save-center #sc-action { min-height: 44px; white-space: normal; }
+
 /* =========================================================================
    ^^^ EVERYTHING ABOVE, THEN THE IDENTITY LAYER BELOW. ^^^
 
@@ -7520,6 +7530,26 @@ body.theme-light {
    KEEP THIS BLOCK LAST. Append new component CSS ABOVE this banner, never below
    it.
    ========================================================================= */
+/* Everyday tools: scoped to the convenience panels. */
+.cx-stack { display:flex; flex-direction:column; gap:14px; min-width:0; }
+.cx-stack label { display:flex; flex-direction:column; gap:6px; font-size:13px; color:var(--text-muted); min-width:0; }
+.cx-stack .input { width:100%; min-width:0; font-size:16px; }
+.cx-row { display:flex; align-items:center; justify-content:space-between; gap:10px; min-width:0; }
+.cx-row > span, .cx-row > label { flex:1; min-width:0; overflow-wrap:anywhere; }
+.cx-row input[type=number] { max-width:120px; }
+.cx-item { border:1px solid var(--border); border-radius:14px; padding:12px; display:flex; flex-direction:column; gap:10px; }
+.cx-tools { display:flex; gap:10px; margin-bottom:18px; }
+.cx-tools > * { flex:1; white-space:normal; }
+.cx-result { display:flex; flex-direction:column; align-items:flex-start; white-space:normal; text-align:start; gap:4px; }
+.cx-result span { font-size:12px; color:var(--text-muted); }
+.cx-stack .btn { min-height:44px; white-space:normal; overflow-wrap:anywhere; }
+.cx-stack input[type=checkbox] { width:22px; height:22px; }
+/* Keep Undo above these sheets, clear of their bottom action buttons. */
+body:has([data-convenience-owner]) #toast { bottom:auto; top:calc(var(--safe-t, 0px) + 12px); }
+.cx-stack label.cx-row { flex-direction:row; }
+.bundle-card:has([data-log-bundle]) { flex-wrap:wrap; }
+.bundle-card:has([data-log-bundle]) .bundle-main { flex-basis:100%; }
+
 /* =========================================================================
    IDENTITY LAYER  (v210)
 

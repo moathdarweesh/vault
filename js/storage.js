@@ -429,6 +429,7 @@ function defaultState() {
     // renaming or deleting a saved food must not silently rewrite history a
     // bundle was built from.
     mealBundles: [],
+    shoppingLists: [],
     // Recipes — ingredients you enter once, totalled, and divided into servings.
     // NOT the same thing as a meal bundle: a bundle re-logs rows you already
     // logged; a recipe COMPUTES a total from parts that were never log rows.
@@ -613,7 +614,7 @@ function loadState() {
     // a session without `sets`, or with reps typed as '8x', broke Home and the
     // Console's SQL. This is the one place the blob is made well-formed.
     let normChanged = false;   // → migrated below: the well-formed copy must reach localStorage and the cloud, not just memory
-    for (const k of ['exercises', 'sessions', 'cardio', 'cardioTypes', 'foods', 'sleep', 'supplements', 'mealBundles', 'recipes', 'bodyweight']) {
+    for (const k of ['exercises', 'sessions', 'cardio', 'cardioTypes', 'foods', 'sleep', 'supplements', 'mealBundles', 'recipes', 'bodyweight', 'shoppingLists']) {
       if (k in parsed && !Array.isArray(parsed[k])) { parsed[k] = []; normChanged = true; }
     }
     for (const k of ['supplementLogs', 'foodLogs', 'water']) {
@@ -629,6 +630,7 @@ function loadState() {
     if (JSON.stringify(parsed.sessions) !== sessionsBefore) normChanged = true;
     parsed.bodyweight = Array.isArray(parsed.bodyweight) ? parsed.bodyweight : [];
     parsed.mealBundles = Array.isArray(parsed.mealBundles) ? parsed.mealBundles : [];
+    parsed.shoppingLists = Array.isArray(parsed.shoppingLists) ? parsed.shoppingLists : [];
     parsed.recipes = Array.isArray(parsed.recipes) ? parsed.recipes : [];
     // Nutrition targets (added later) — backfill for existing users.
     if (!parsed.nutrition || typeof parsed.nutrition !== 'object') {
@@ -899,7 +901,10 @@ function mirrorUi(extra) {
     localStorage.setItem(VAULT_KEYS.ui, JSON.stringify({ ...cur, ...(extra || {}), theme: p.theme, lang: p.lang }));
   } catch (_) {}
 }
+let lastSaveResult = { ok: true, code: null, savedAt: '' };
 let STATE = withImageAccessors(loadState());
+let lastStoreBytes = null;
+try { lastStoreBytes = localStorage.getItem(STORAGE_KEY); } catch (_) {}
 BOOTING = false;
 mirrorUi();
 imgPrune();
@@ -913,6 +918,7 @@ imgPrune();
 //                NOTHING, and every set logged afterwards is lost on reload.
 function writeStore() {
   if (STATE_LOAD_FAILED) {
+    lastSaveResult = { ok: false, code: 'READ_ONLY', savedAt: lastSaveResult.savedAt };
     console.error('[VAULT] Refusing to write: stored data is unreadable (READ-ONLY mode).');
     // Say so to the app, exactly like the quota branch below. This branch only
     // logged, so a corrupt store looked like a working app that saved nothing.
@@ -924,11 +930,16 @@ function writeStore() {
     return false;
   }
   try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(STATE));
+    const bytes = JSON.stringify(STATE);
+    localStorage.setItem(STORAGE_KEY, bytes);
+    lastStoreBytes = bytes;
+    lastSaveResult = { ok: true, code: null, savedAt: new Date().toISOString() };
+    try { window.dispatchEvent(new CustomEvent('vault:save-state')); } catch (_) {}
     return true;
   } catch (err) {
     const quota = err && (err.name === 'QuotaExceededError' ||
       err.name === 'NS_ERROR_DOM_QUOTA_REACHED' || err.code === 22 || err.code === 1014);
+    lastSaveResult = { ok: false, code: quota ? 'QUOTA' : 'WRITE_FAILED', savedAt: lastSaveResult.savedAt };
     console.error('[VAULT] Save FAILED' + (quota ? ' (storage full)' : ''), err);
     try {
       if (typeof window !== 'undefined') {
@@ -940,11 +951,12 @@ function writeStore() {
 }
 
 function save() {
-  if (!writeStore()) return;
+  if (!writeStore()) return Object.assign({}, lastSaveResult);
   // Notify the cloud-sync layer (if present + logged in) to push the change.
   if (typeof window !== 'undefined' && window.Cloud && window.Cloud.onLocalChange) {
     window.Cloud.onLocalChange();
   }
+  return Object.assign({}, lastSaveResult);
 }
 
 // Persist WITHOUT telling the sync layer anything changed.
@@ -962,17 +974,22 @@ function save() {
 // along in the payload of the next genuine user edit.
 function saveLocal() {
   writeStore();
+  return Object.assign({}, lastSaveResult);
 }
 
 // Re-read the whole state from localStorage. Used after cloud sync replaces the
 // stored blob, so the in-memory STATE reflects the freshly pulled data.
 function reloadState() {
+  undoEntries.length = 0;
   // A cloud pull / backup restore / reset has DELIBERATELY replaced the stored
   // blob, so clear READ-ONLY mode first and let loadState() re-decide. Without
   // this, a device that once hit a corrupt blob could never be recovered — even
   // by pulling a known-good copy from the cloud.
   STATE_LOAD_FAILED = false;
   STATE = withImageAccessors(loadState());
+  try { lastStoreBytes = localStorage.getItem(STORAGE_KEY); } catch (_) {}
+  lastSaveResult = { ok: !STATE_LOAD_FAILED, code: STATE_LOAD_FAILED ? 'READ_ONLY' : null, savedAt: '' };
+  try { window.dispatchEvent(new CustomEvent('vault:save-state')); } catch (_) {}
   imgPrune();
 }
 
@@ -980,7 +997,97 @@ function reloadState() {
 // Public API
 // ==========================================================================
 
+// Only feature-owned slices participate in transactions; unrelated records are
+// never restored by Undo. The stack is ephemeral and invalidated by reload.
+const undoEntries = [];
+const copyData = value => value == null ? value : JSON.parse(JSON.stringify(value));
+const operationOwner = () => typeof Cloud !== 'undefined' && Cloud.getLastUid ? Cloud.getLastUid() : '';
+function changeSlice(read, write, next, label, remember = true) {
+  try { if (localStorage.getItem(STORAGE_KEY) !== lastStoreBytes) return { ok: false, code: 'STALE' }; }
+  catch (_) { return { ok: false, code: 'WRITE_FAILED' }; }
+  const before = copyData(read());
+  if (JSON.stringify(before) === JSON.stringify(next)) return { ok: true, changed: false };
+  write(copyData(next));
+  const result = save();
+  if (!result.ok) { write(before); return result; }
+  const token = uid();
+  if (remember) {
+    undoEntries.push({ token, owner: operationOwner(), time: Date.now(), label, read, write, before, after: copyData(next) });
+    while (undoEntries.length > 5 || JSON.stringify(undoEntries).length > 131072) undoEntries.shift();
+  }
+  return { ok: true, changed: true, undoToken: remember ? token : null };
+}
+function validDay(day) {
+  return /^\d{4}-\d{2}-\d{2}$/.test(day) && !isNaN(Date.parse(day)) && new Date(day).toISOString().slice(0, 10) === day;
+}
+function cleanMealItems(items) {
+  if (!Array.isArray(items) || !items.length || items.length > 30) return null;
+  if (items.some(it => !it || typeof it !== 'object' || Array.isArray(it))) return null;
+  const clean = items.map(it => ({ ...copyData(it), id: entityIdSafe(it.id) ? it.id : uid(),
+    name: String(it.name || '').trim().slice(0, 80), servings: Number(it.servings ?? 1),
+    calories: Number(it.calories || 0), protein: Number(it.protein || 0), carbs: Number(it.carbs || 0), fat: Number(it.fat || 0) }));
+  return clean.every(it => it.name && it.servings > 0 && it.servings <= 20 && (!it.purchase ||
+    Number.isFinite(it.purchase.quantity) && it.purchase.quantity > 0 && it.purchase.quantity <= 10000000 &&
+    ['g','kg','ml','l','piece'].includes(it.purchase.unit) && ['raw','cooked','unspecified'].includes(it.purchase.preparation)) &&
+    ['calories','protein','carbs','fat'].every(k => Number.isFinite(it[k]) && it[k] >= 0 && it[k] <= 100000)) ? clean : null;
+}
+
 const DB = {
+  search: {
+    normalize(value) {
+      return String(value || '').toLowerCase().normalize('NFKC').replace(/[٠-٩۰-۹]/g, c => String('٠١٢٣٤٥٦٧٨٩'.includes(c) ? '٠١٢٣٤٥٦٧٨٩'.indexOf(c) : '۰۱۲۳۴۵۶۷۸۹'.indexOf(c)))
+        .replace(/[\u064b-\u065f\u0670\u0640]/g, '').replace(/[أإآٱ]/g, 'ا').replace(/ى/g, 'ي').trim();
+    },
+    query(text, aliases = {}) {
+      const q = this.normalize(text).slice(0, 160);
+      if (!q) return [];
+      const results = [], words = q.split(/\s+/);
+      const add = (type, id, name, extra = '', date = '') => {
+        const value = this.normalize(name + ' ' + extra);
+        if (!words.every(word => value.includes(word))) return;
+        const title = this.normalize(name);
+        results.push({type, id, name, date, score: title === q ? 0 : title.startsWith(q) ? 1 : 2});
+      };
+      for (const ex of STATE.exercises) add('exercise',ex.id,ex.name,aliases[ex.id] || ex.category || '');
+      for (const f of STATE.foods) add('food',f.id,f.name);
+      for (const b of STATE.mealBundles || []) add('meal',b.id,b.name);
+      for (const r of STATE.recipes || []) add('recipe',r.id,r.name);
+      for (const l of STATE.shoppingLists || []) add('shopping',l.id,l.name);
+      const exerciseNames = new Map(STATE.exercises.map(ex => [ex.id,ex.name]));
+      for (const session of STATE.sessions) add('session',session.id,exerciseNames.get(session.exerciseId) || '',session.date + ' ' + (aliases[session.exerciseId] || ''),session.date);
+      for (const date of Object.keys(STATE.foodLogs)) for (const food of STATE.foodLogs[date] || []) add('log',food.id,food.name,date,date);
+      let date = q;
+      if (q === 'today' || q === 'اليوم') date = todayISO();
+      if (q === 'yesterday' || q === 'امس') { const d = new Date(); d.setDate(d.getDate()-1); date = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`; }
+      const match = q.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+      if (match) date = `${match[3]}-${match[2].padStart(2,'0')}-${match[1].padStart(2,'0')}`;
+      if (validDay(date)) results.unshift({type:'date',id:date,date,name:date,score:-1});
+      return results.sort((a,b) => a.score-b.score || b.date.localeCompare(a.date)).slice(0,60);
+    },
+  },
+  undo: {
+    list() {
+      const owner = operationOwner();
+      if (undoEntries.some(e => e.owner !== owner)) undoEntries.length = 0;
+      while (undoEntries.length && Date.now() - undoEntries[0].time > 1800000) undoEntries.shift();
+      return undoEntries.slice().reverse().map(({ token, label, time }) => ({ token, label, time }));
+    },
+    clear() { undoEntries.length = 0; },
+    apply(token) {
+      this.list();
+      const entry = undoEntries[undoEntries.length - 1];
+      if (!entry || entry.token !== token || JSON.stringify(entry.read()) !== JSON.stringify(entry.after)) return { ok: false, code: 'STALE' };
+      const result = changeSlice(entry.read, entry.write, entry.before, entry.label, false);
+      if (result.ok) undoEntries.pop();
+      return result;
+    },
+  },
+  // A copy: views can inspect the write outcome without owning persistence.
+  saveState() {
+    return STATE_LOAD_FAILED
+      ? { ok: false, code: 'READ_ONLY', savedAt: lastSaveResult.savedAt }
+      : Object.assign({}, lastSaveResult);
+  },
   // For Compare page / debugging
   getAll() { return STATE; },
 
@@ -1153,6 +1260,39 @@ const DB = {
 
     // One checked write for the reviewed image draft AND its new exercises.
     // No partial catalog writes on cancel, validation failure or disk-full.
+    restorePrevious({ plan, exercises, mappings, expectedPlan, expectedExercises, keepExceptions }) {
+      if (JSON.stringify(STATE.plan) !== expectedPlan || JSON.stringify(DB.exercises.list().map(e => ({id:e.id,name:e.name,category:e.category}))) !== expectedExercises) return { ok:false, code:'STALE' };
+      if (!plan || !Array.isArray(plan.cycle) || !plan.cycle.length || plan.cycle.length > 14 || !Array.isArray(plan.trainingDays) || !plan.trainingDays.length || plan.trainingDays.some(d => !Number.isInteger(d) || d < 0 || d > 6)) return {ok:false,code:'VALIDATION'};
+      const additions = [], cycle = [], created = new Map();
+      for (const slot of plan.cycle) {
+        if (!slot || !Array.isArray(slot.exerciseIds) || !slot.exerciseIds.length || slot.exerciseIds.length > 20 || typeof slot.name !== 'string' || slot.name.length > 80) return {ok:false,code:'VALIDATION'};
+        const ids = [], targets = {};
+        for (const oldId of slot.exerciseIds) {
+          let ex = STATE.exercises.find(e => e.id === oldId);
+          if (!ex) {
+            const chosen = mappings[oldId];
+            ex = STATE.exercises.find(e => e.id === chosen) || created.get(oldId);
+            if (!ex && chosen === 'new') {
+              const old = exercises.find(e => e.id === oldId);
+              if (!old || typeof old.name !== 'string' || !old.name.trim() || old.name.length > 100 || !EXERCISE_CATEGORIES.includes(old.category)) return {ok:false,code:'VALIDATION'};
+              ex = {id:uid(),name:old.name,category:old.category,isCustom:true,inMyList:true,imageSlug:null,imagePath:null,createdAt:new Date().toISOString()};
+              additions.push(ex); created.set(oldId,ex);
+            }
+          }
+          if (!ex || ids.includes(ex.id)) return {ok:false,code:'VALIDATION'};
+          ids.push(ex.id);
+          if (Object.prototype.hasOwnProperty.call(slot.targets || {}, oldId)) Object.defineProperty(targets, ex.id, {value:copyData(slot.targets[oldId]),enumerable:true});
+        }
+        cycle.push(planSlot({name:slot.name,exerciseIds:ids,targets}));
+      }
+      const nextPlan = {...STATE.plan,mode:'rotation',cycle,trainingDays:[...new Set(plan.trainingDays)].sort(),anchor:todayISO(),
+        restDates:keepExceptions ? (STATE.plan.restDates || []).filter(d => d >= todayISO()) : [],
+        extraDates:keepExceptions ? (STATE.plan.extraDates || []).filter(d => d >= todayISO()) : [],restPromptAt:null};
+      const addedIds = new Set(additions.map(e => e.id));
+      return changeSlice(() => ({plan:STATE.plan, additions:STATE.exercises.filter(e => addedIds.has(e.id)), sessions:STATE.sessions.filter(s => addedIds.has(s.exerciseId))}), next => {
+        STATE.plan = next.plan; STATE.exercises = STATE.exercises.filter(e => !addedIds.has(e.id)).concat(next.additions.map(e => { defineImgAccessor(e); return e; }));
+      }, {plan:nextPlan,additions,sessions:[]}, 'cx_plan_history');
+    },
     importImagePlan({ days, trainingDays, append, expectedPlan }) {
       if (JSON.stringify(STATE.plan) !== expectedPlan) return { ok: false, reason: 'changed' };
       if (STATE_LOAD_FAILED) return { ok: false, reason: 'storage' };
@@ -1355,6 +1495,21 @@ const DB = {
 
   // ----- Daily food log (date-keyed) -----
   foodLogs: {
+    dates() { return Object.keys(STATE.foodLogs).sort().reverse(); },
+    addMany(date, entries, operationId = uid()) {
+      const clean = cleanMealItems(entries);
+      if (!validDay(date) || !clean || !entityIdSafe(operationId)) return { ok: false, code: 'VALIDATION' };
+      const list = STATE.foodLogs[date] || [];
+      if (list.some(it => it.operationId === operationId)) return { ok: true, changed: false };
+      const rows = clean.map(it => ({ ...it, id: uid(), operationId, addedAt: new Date().toISOString() }));
+      // Read only the created rows: undo preserves other meals logged afterwards.
+      const ids = new Set(rows.map(it => it.id));
+      return changeSlice(() => (STATE.foodLogs[date] || []).filter(it => ids.has(it.id)), rowsToWrite => {
+        const rest = (STATE.foodLogs[date] || []).filter(it => !ids.has(it.id));
+        if (rest.length || rowsToWrite.length) STATE.foodLogs[date] = rest.concat(rowsToWrite);
+        else delete STATE.foodLogs[date];
+      }, rows, 'cx_meal_logged');
+    },
     listForDate(date) {
       return STATE.foodLogs[date] || [];
     },
@@ -1378,21 +1533,25 @@ const DB = {
       return item;
     },
     update(date, id, data) {
-      const list = STATE.foodLogs[date] || [];
-      const it = list.find((x) => x.id === id);
-      if (!it) return null;
-      if (data.servings != null) it.servings = Number(data.servings);
-      if (data.calories != null) it.calories = Number(data.calories);
-      if (data.protein != null) it.protein = Number(data.protein);
-      if (data.carbs != null) it.carbs = Number(data.carbs);
-      if (data.fat != null) it.fat = Number(data.fat);
-      save();
-      return it;
+      const list = STATE.foodLogs[date] || [], old = list.find(x => x.id === id);
+      if (!old) return null;
+      const next = { ...old };
+      for (const key of ['servings','calories','protein','carbs','fat']) {
+        if (data[key] != null) next[key] = Number(data[key]);
+        if (!Number.isFinite(next[key]) || next[key] < 0 || next[key] > 100000) return null;
+      }
+      if (next.servings <= 0 || next.servings > 20) return null;
+      const result = changeSlice(() => (STATE.foodLogs[date] || []).find(x => x.id === id) || null,
+        value => { STATE.foodLogs[date] = (STATE.foodLogs[date] || []).map(x => x.id === id ? value : x); }, next, 'fl_edited');
+      return result.ok ? next : null;
     },
     remove(date, id) {
-      STATE.foodLogs[date] = (STATE.foodLogs[date] || []).filter((x) => x.id !== id);
-      if (STATE.foodLogs[date].length === 0) delete STATE.foodLogs[date];
-      save();
+      const position = (STATE.foodLogs[date] || []).findIndex(x => x.id === id);
+      return changeSlice(() => (STATE.foodLogs[date] || []).find(x => x.id === id) || null, next => {
+        const list = (STATE.foodLogs[date] || []).filter(x => x.id !== id);
+        if (next) list.splice(Math.min(Math.max(position,0),list.length),0,next);
+        if (list.length) STATE.foodLogs[date] = list; else delete STATE.foodLogs[date];
+      }, null, 'food_removed');
     },
     totalsForDate(date) {
       const list = this.listForDate(date);
@@ -1556,6 +1715,7 @@ const DB = {
         // "empty": pulled over without a snapshot, and refused a push.
         (b.recipes && b.recipes.length) ||
         (b.mealBundles && b.mealBundles.length) ||
+        (b.shoppingLists && b.shoppingLists.length) ||
         // notif counts ONLY for content the user typed (supplement doses, meal
         // times). The object itself is written into every blob at boot by
         // migrateFromReminders(), so counting its mere presence made a fresh
@@ -1574,12 +1734,16 @@ const DB = {
   _validateBlob(data) {
     if (!data || typeof data !== 'object' || Array.isArray(data)) return false;
     if (!Array.isArray(data.exercises)) return false;
-    for (const k of ['sessions', 'cardio', 'cardioTypes', 'sleep', 'foods', 'supplements', 'mealBundles', 'recipes', 'bodyweight']) {
+    for (const k of ['sessions', 'cardio', 'cardioTypes', 'sleep', 'foods', 'supplements', 'mealBundles', 'recipes', 'bodyweight', 'shoppingLists']) {
       if (k in data && data[k] != null && !Array.isArray(data[k])) return false;
     }
     for (const k of ['prefs', 'foodLogs', 'supplementLogs', 'water', 'notif', 'plan', 'nutrition', 'reminders']) {
       if (k in data && data[k] != null && (typeof data[k] !== 'object' || Array.isArray(data[k]))) return false;
     }
+    if (Array.isArray(data.shoppingLists) && !data.shoppingLists.every(list => list && typeof list.name === 'string' &&
+      Array.isArray(list.items) && list.items.every(it => it && typeof it.name === 'string' &&
+        (it.quantity == null || Number.isFinite(it.quantity) && it.quantity > 0) &&
+        ['', 'g','kg','ml','l','piece'].includes(it.unit || '')))) return false;
     return true;
   },
   // Reject a blob whose entity IDs are not the safe charset our uid() produces.
@@ -1600,6 +1764,10 @@ const DB = {
     if (!listOk(data.sleep, ['id'])) return false;
     if (!listOk(data.foods, ['id'])) return false;
     if (!listOk(data.supplements, ['id'])) return false;
+    for (const key of ['mealBundles', 'recipes', 'shoppingLists']) {
+      if (!listOk(data[key], ['id'])) return false;
+      if (Array.isArray(data[key]) && !data[key].every(x => x && Array.isArray(x.items) && listOk(x.items, ['id']))) return false;
+    }
     const fl = data.foodLogs;
     if (fl && typeof fl === 'object' && !Array.isArray(fl)) {
       for (const d of Object.keys(fl)) if (!listOk(fl[d], ['id', 'foodId'])) return false;
@@ -1838,23 +2006,25 @@ const DB = {
         })),
         createdAt: new Date().toISOString(),
       };
-      STATE.sessions.push(session);
-      save();
-      return session;
+      const result = changeSlice(() => STATE.sessions.find(x => x.id === session.id) || null,
+        next => { STATE.sessions = STATE.sessions.filter(x => x.id !== session.id); if (next) STATE.sessions.push(next); }, session, 'session_saved');
+      return result.ok ? session : null;
     },
     update(id, { date, sets }) {
       const s = STATE.sessions.find((x) => x.id === id);
       if (!s) return null;
-      if (date) s.date = date;
+      const next = copyData(s);
+      if (date) next.date = date;
       if (sets) {
-        s.sets = sets.map((x) => ({ reps: Number(x.reps) || 0, weight: Number(x.weight) || 0, ...(x.done === false ? { done: false } : {}) }));
+        next.sets = sets.map((x) => ({ reps: Number(x.reps) || 0, weight: Number(x.weight) || 0, ...(x.done === false ? { done: false } : {}) }));
       }
-      save();
-      return s;
+      const result = changeSlice(() => STATE.sessions.find(x => x.id === id) || null,
+        value => { STATE.sessions = STATE.sessions.map(x => x.id === id ? value : x); }, next, 'session_updated');
+      return result.ok ? next : null;
     },
     remove(id) {
-      STATE.sessions = STATE.sessions.filter((s) => s.id !== id);
-      save();
+      return changeSlice(() => STATE.sessions.find(x => x.id === id) || null,
+        next => { STATE.sessions = STATE.sessions.filter(x => x.id !== id); if (next) STATE.sessions.push(next); }, null, 'session_deleted');
     },
     // Best stats across all sessions of an exercise
     bestStats(exerciseId, sessions) {
@@ -2875,78 +3045,108 @@ const DB = {
         fat: Math.round(t.fat / n * 10) / 10,
       };
     },
-    add({ name, servings, items }) {
-      const clean = (Array.isArray(items) ? items : []).map((it) => ({
-        name: String((it && it.name) || '').trim(),
-        qty: String(it && it.qty != null ? it.qty : '').trim().slice(0, 24),
-        calories: Math.max(0, Number(it && it.calories) || 0),
-        protein: Math.max(0, Number(it && it.protein) || 0),
-        carbs: Math.max(0, Number(it && it.carbs) || 0),
-        fat: Math.max(0, Number(it && it.fat) || 0),
-      })).filter((it) => it.name || it.calories || it.protein || it.carbs || it.fat);
-      if (!clean.length) return null;
-      const rec = {
-        id: uid(),
-        name: String(name || '').trim() || 'وصفة',
-        servings: Math.max(1, Number(servings) || 1),
-        items: clean,
-        createdAt: new Date().toISOString(),
-      };
-      if (!Array.isArray(STATE.recipes)) STATE.recipes = [];
-      STATE.recipes.push(rec);
-      save();
-      return rec;
-    },
+    add(data) { return this.update(null, data); },
     update(id, patch) {
-      const r = (STATE.recipes || []).find((x) => x.id === id);
-      if (!r) return null;
-      const made = this.add(Object.assign({ name: r.name, servings: r.servings, items: r.items }, patch || {}));
-      if (!made) return null;
-      // Replace in place so an edit does not jump the recipe to the end of the
-      // list, and drop the temporary the add() above appended.
-      STATE.recipes.pop();
-      made.id = r.id; made.createdAt = r.createdAt;
-      STATE.recipes[STATE.recipes.indexOf(r)] = made;
-      save();
-      return made;
+      const list = STATE.recipes || [], old = list.find(x => x.id === id);
+      if (id && !old) return null;
+      const data = { ...old, ...patch }, name = String(data.name || '').trim();
+      const clean = cleanMealItems((data.items || []).map(it => ({ ...it, servings: 1 })));
+      const servings = Number(data.servings || 1);
+      if (!clean || !name || name.length > 80 || !Number.isFinite(servings) || servings < 1 || servings > 99) return null;
+      const entity = { ...old, id: old?.id || uid(), name, servings,
+        items: clean.map(it => { const {servings, ...rest} = it; return {...rest, qty:String(it.qty || '').slice(0,24)}; }),
+        createdAt: old?.createdAt || new Date().toISOString(), updatedAt: new Date().toISOString() };
+      const result = changeSlice(() => STATE.recipes || [], next => { STATE.recipes = next; },
+        old ? list.map(x => x.id === id ? entity : x) : [...list,entity], 'cx_meal_changed');
+      return result.ok ? copyData(entity) : null;
     },
-    remove(id) {
-      if (!Array.isArray(STATE.recipes)) return;
-      const at = STATE.recipes.findIndex((r) => r.id === id);
-      if (at !== -1) { STATE.recipes.splice(at, 1); save(); }
-    },
+    remove(id) { return changeSlice(() => STATE.recipes || [], next => { STATE.recipes = next; }, (STATE.recipes || []).filter(x => x.id !== id), 'cx_meal_changed'); },
   },
 
   // ----- Meal bundles ("my usual breakfast" in one tap) -----
   mealBundles: {
-    list() { return [...(STATE.mealBundles || [])]; },
-    add({ name, items }) {
-      const clean = (Array.isArray(items) ? items : [])
-        .map((it) => ({
-          name: String((it && it.name) || '').trim() || '—',
-          servings: Number(it && it.servings) || 1,
-          calories: Number(it && it.calories) || 0,
-          protein: Number(it && it.protein) || 0,
-          carbs: Number(it && it.carbs) || 0,
-          fat: Number(it && it.fat) || 0,
-        }))
-        .filter((it) => it.calories > 0 || it.protein > 0 || it.carbs > 0 || it.fat > 0);
-      if (!clean.length) return null;
-      const bundle = {
-        id: uid(),
-        name: String(name || '').trim() || 'وجبة',
-        items: clean,
-        createdAt: new Date().toISOString(),
-      };
-      if (!Array.isArray(STATE.mealBundles)) STATE.mealBundles = [];
-      STATE.mealBundles.push(bundle);
-      save();
-      return bundle;
+    list() { return copyData(STATE.mealBundles || []).sort((a,b) => Number(!!b.favorite)-Number(!!a.favorite)); },
+    add(data) { const result = this.update(null, data); return result.ok ? result.entity : null; },
+    update(id, data) {
+      const list = STATE.mealBundles || [], old = list.find(b => b.id === id);
+      if (id && !old) return { ok: false, code: 'STALE' };
+      const items = cleanMealItems(data.items || old?.items);
+      const name = String(data.name ?? old?.name ?? '').trim();
+      if (!items || !name || name.length > 80 || (!old && list.length >= 100)) return { ok: false, code: 'VALIDATION' };
+      const entity = { ...old, id: old?.id || uid(), name, items, favorite: !!(data.favorite ?? old?.favorite),
+        createdAt: old?.createdAt || new Date().toISOString(), updatedAt: new Date().toISOString() };
+      const result = changeSlice(() => STATE.mealBundles || [], next => { STATE.mealBundles = next; },
+        old ? list.map(b => b.id === id ? entity : b) : [...list, entity], 'cx_meal_changed');
+      return { ...result, entity: result.ok ? copyData(entity) : null };
+    },
+    log(id, date, portion = 1, operationId = uid()) {
+      const bundle = (STATE.mealBundles || []).find(b => b.id === id);
+      if (!bundle || !Number.isFinite(portion) || portion <= 0 || portion > 20) return { ok: false, code: 'VALIDATION' };
+      return DB.foodLogs.addMany(date, bundle.items.map(it => ({ ...it, servings: (it.servings || 1) * portion, source: 'bundle', sourceId: id })), operationId);
     },
     remove(id) {
-      if (!Array.isArray(STATE.mealBundles)) return;
-      const at = STATE.mealBundles.findIndex((b) => b.id === id);
-      if (at !== -1) { STATE.mealBundles.splice(at, 1); save(); }
+      return changeSlice(() => STATE.mealBundles || [], next => { STATE.mealBundles = next; },
+        (STATE.mealBundles || []).filter(b => b.id !== id), 'bundle_deleted');
+    },
+  },
+
+  shopping: {
+    list() { return copyData(STATE.shoppingLists || []); },
+    preview(selections) {
+      if (!Array.isArray(selections) || selections.length > 100) return { ok: false, code: 'VALIDATION' };
+      const items = [];
+      for (const selection of selections) {
+        if (!selection || !['recipe','meal'].includes(selection.type)) return { ok:false,code:'VALIDATION' };
+        const isRecipe = selection.type === 'recipe';
+        const source = (isRecipe ? STATE.recipes : STATE.mealBundles).find(x => x.id === selection.id);
+        const count = Number(selection.servings);
+        if (!source || !Number.isFinite(count) || count <= 0 || count > 100) return { ok: false, code: 'VALIDATION' };
+        for (const ingredient of source.items) {
+          const p = ingredient.purchase;
+          const factor = count / (isRecipe ? Math.max(1, Number(source.servings) || 1) : 1);
+          const known = p && Number.isFinite(p.quantity) && p.quantity > 0 && ['g','kg','ml','l','piece'].includes(p.unit);
+          items.push({ id: uid(), name: ingredient.name, quantity: known ? p.quantity * factor : null,
+            unit: known ? p.unit : '', ingredientId: known ? p.ingredientId || '' : '', preparation: p?.preparation || 'unspecified',
+            originalText: p?.originalText || ingredient.qty || '', checked: false,
+            sourceRefs: [{ type: selection.type, id: source.id, name: source.name, servings: count }] });
+        }
+      }
+      return { ok: items.length > 0 && items.length <= 200, items };
+    },
+    combine(items) {
+      const result = [], groups = new Map();
+      for (const source of items) {
+        const item = copyData(source);
+        if (item.unit === 'kg') { item.quantity *= 1000; item.unit = 'g'; }
+        if (item.unit === 'l') { item.quantity *= 1000; item.unit = 'ml'; }
+        // Only an explicitly confirmed identity permits merging, never a name guess.
+        const key = item.ingredientId && item.quantity > 0 ? JSON.stringify([item.ingredientId, item.unit, item.preparation]) : null;
+        const existing = key && groups.get(key);
+        if (existing) { existing.quantity = Math.round((existing.quantity + item.quantity) * 1000000) / 1000000; existing.sourceRefs.push(...(item.sourceRefs || [])); }
+        else { result.push(item); if (key) groups.set(key, item); }
+      }
+      return result;
+    },
+    save(data, expected = null) {
+      const lists = STATE.shoppingLists || [], old = lists.find(x => x.id === data.id);
+      if (data.id && !old) return { ok: false, code: 'STALE' };
+      if (old && expected !== JSON.stringify(old)) return { ok: false, code: 'STALE' };
+      const name = String(data.name || '').trim();
+      if (!name || name.length > 80 || !Array.isArray(data.items) || data.items.length > 200 || data.items.some(it => !it || typeof it !== 'object') || (!old && lists.length >= 20)) return { ok: false, code: 'VALIDATION' };
+      const items = data.items.map(it => ({ id: entityIdSafe(it.id) ? it.id : uid(), name: String(it.name || '').trim().slice(0, 120),
+        quantity: it.quantity === null || it.quantity === '' ? null : Number(it.quantity), unit: String(it.unit || ''),
+        ingredientId: String(it.ingredientId || '').trim().slice(0, 80), preparation: it.preparation || 'unspecified',
+        originalText: String(it.originalText || '').slice(0, 120), category: String(it.category || '').slice(0, 40),
+        checked: !!it.checked, sourceRefs: copyData(it.sourceRefs || []) }));
+      if (!items.every(it => it.name && (it.quantity === null || Number.isFinite(it.quantity) && it.quantity > 0 && it.quantity <= 10000000) && ['', 'g','kg','ml','l','piece'].includes(it.unit) && ['raw','cooked','unspecified'].includes(it.preparation))) return { ok: false, code: 'VALIDATION' };
+      const entity = { id: old?.id || uid(), name, items, createdAt: old?.createdAt || new Date().toISOString(), updatedAt: new Date().toISOString() };
+      const result = changeSlice(() => STATE.shoppingLists || [], next => { STATE.shoppingLists = next; },
+        old ? lists.map(x => x.id === old.id ? entity : x) : [...lists, entity], 'cx_shopping_changed');
+      return { ...result, entity: result.ok ? copyData(entity) : null };
+    },
+    remove(id) {
+      return changeSlice(() => STATE.shoppingLists || [], next => { STATE.shoppingLists = next; },
+        (STATE.shoppingLists || []).filter(x => x.id !== id), 'cx_shopping_changed');
     },
   },
 

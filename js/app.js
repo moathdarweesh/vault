@@ -12,7 +12,7 @@
 // build. The literal below is the fallback (file://, or a stripped query) and is
 // still bumped by `npm run release` — see CLAUDE.md "CACHE WORKFLOW".
 const VAULT_BUILD = (() => {
-  const FALLBACK = 'v309';
+  const FALLBACK = 'v312';
   try {
     const src = (document.currentScript && document.currentScript.src) || '';
     const m = src.match(/[?&]v=(\d+)/);
@@ -998,6 +998,69 @@ const I18N = {
     rec_empty: 'No recipes yet. Enter the ingredients once and it totals them for you.',
     rec_need_ing: 'Add at least one ingredient with numbers',
     rec_edit: 'Edit',
+    cx_keep_exceptions: 'Keep the current future rest/extra days listed below',
+    cx_tools: "Everyday tools",
+    cx_search: "Search everything",
+    cx_query: "Exercise, meal, or YYYY-MM-DD",
+    cx_empty: "No results",
+    cx_recent: "Recent changes",
+    cx_stale: "This changed since you opened it. Reopen and try again.",
+    cx_invalid: "Check the name, quantities and limits.",
+    cx_meal_logged: "Meal logged",
+    cx_meal_changed: "Meal changed",
+    cx_shopping_changed: "Shopping list changed",
+    cx_meals: "My meals",
+    cx_shopping: "My shopping lists",
+    cx_favorite: "Favorite",
+    cx_portion: "Portion multiplier",
+    cx_date: "Log date",
+    cx_items: "Ingredients",
+    cx_new: "Create new",
+    cx_name: "Name",
+    cx_qty: "Quantity",
+    cx_unit: "Unit",
+    cx_unknown: "Needs a quantity",
+    cx_identity: "Matching ingredient ID (optional)",
+    cx_identity_hint: "Use the same ID only for the same ingredient. Units and preparation must also match.",
+    cx_raw: "Raw",
+    cx_cooked: "Cooked",
+    cx_unspecified: "Unspecified preparation",
+    cx_piece: "Piece",
+    cx_g: "g",
+    cx_kg: "kg",
+    cx_ml: "ml",
+    cx_l: "l",
+    cx_share: "Share as text",
+    cx_review: "Review ingredients",
+    cx_saved_food: "Add a saved food",
+    cx_amount_hint: "Nutrition values remain per original serving. Shopping quantities are separate.",
+    cx_plan_history: "Previous programs",
+    cx_loading: "Loading…",
+    cx_no_history: "No previous versions available",
+    cx_restore: "Restore this program",
+    cx_restore_hint: "Starts today. Food and logged sessions stay unchanged.",
+    cx_ambiguous: "Use a full date: YYYY-MM-DD or DD/MM/YYYY.",
+    cx_category: "Category",
+    cx_choose_sources: "Select meals or recipes and required servings",
+    cx_checked: "Purchased",
+    sc_title: 'Saving & sync',
+    sc_device: 'On this device', sc_cloud: 'Cloud copy',
+    sc_saved: 'Saved on this device', sc_failed: 'The latest change was not saved',
+    sc_quota: 'Device storage is full. Export your data before freeing space.',
+    sc_readonly: 'Stored data could not be read. Export a copy before restoring your data.',
+    sc_write_failed: 'Storage is unavailable. Keep the app open and export your data.',
+    sc_pending: 'Saved on this device — waiting to sync',
+    sc_syncing: 'Syncing…', sc_synced: 'Local changes synced',
+    sc_offline: 'No connection — your saved device copy is available',
+    sc_signin: 'Sign in to resume sync', sc_unlinked: 'Cloud sync is not linked on this device',
+    sc_error: 'Sync could not be confirmed — retry when connected',
+    sc_conflict: 'Another copy needs your review',
+    sc_blocked: 'Sync paused to protect your existing cloud data',
+    sc_older: 'Cloud status does not include the unsaved change',
+    sc_never: 'No confirmed cloud copy yet', sc_version_time: 'Cloud copy dated {time}',
+    sc_checked_time: 'Last confirmed in this session: {time}',
+    sc_photos: 'This status covers your saved records. Separate exercise photo backups are not verified here.',
+    sc_retry: 'Retry sync', sc_review: 'Review copies', sc_login: 'Sign in',
     tab_saved_foods: 'Foods',
     tab_bundles: 'My meals',
     bundle_new: 'New meal',
@@ -1909,6 +1972,69 @@ const I18N = {
     rec_empty: 'لا وصفات بعد. اكتب المكوّنات مرة واحدة وتُحسب لك.',
     rec_need_ing: 'أضف مكوّناً واحداً على الأقل بأرقامه',
     rec_edit: 'تعديل',
+    cx_keep_exceptions: "الاحتفاظ بأيام الراحة والإضافية المستقبلية الحالية المبينة أدناه",
+    cx_tools: "أدوات يومية",
+    cx_search: "ابحث في التطبيق",
+    cx_query: "تمرين أو وجبة أو YYYY-MM-DD",
+    cx_empty: "لا توجد نتائج",
+    cx_recent: "آخر التعديلات",
+    cx_stale: "تغيرت البيانات منذ فتحها. افتحها مجددًا وحاول مرة أخرى.",
+    cx_invalid: "راجع الاسم والكميات والحدود المسموحة.",
+    cx_meal_logged: "تم تسجيل الوجبة",
+    cx_meal_changed: "تم تعديل الوجبة",
+    cx_shopping_changed: "تم تعديل قائمة المشتريات",
+    cx_meals: "وجباتي",
+    cx_shopping: "مشترياتي",
+    cx_favorite: "مفضلة",
+    cx_portion: "معامل الحصة",
+    cx_date: "تاريخ التسجيل",
+    cx_items: "المكونات",
+    cx_new: "إنشاء جديد",
+    cx_name: "الاسم",
+    cx_qty: "الكمية",
+    cx_unit: "الوحدة",
+    cx_unknown: "تحتاج تحديد الكمية",
+    cx_identity: "هوية المكون للمطابقة (اختياري)",
+    cx_identity_hint: "استخدم نفس الهوية للمكون نفسه فقط. يجب تطابق الوحدة وحالة التحضير أيضًا.",
+    cx_raw: "نيء",
+    cx_cooked: "مطبوخ",
+    cx_unspecified: "تحضير غير محدد",
+    cx_piece: "حبة",
+    cx_g: "غ",
+    cx_kg: "كغ",
+    cx_ml: "مل",
+    cx_l: "لتر",
+    cx_share: "مشاركة كنص",
+    cx_review: "مراجعة المكونات",
+    cx_saved_food: "إضافة طعام محفوظ",
+    cx_amount_hint: "الأرقام الغذائية تبقى للحصة الأصلية. كميات المشتريات مستقلة عنها.",
+    cx_plan_history: "برامج سابقة",
+    cx_loading: "جارٍ التحميل…",
+    cx_no_history: "لا توجد نسخ سابقة متاحة",
+    cx_restore: "استعادة هذا البرنامج",
+    cx_restore_hint: "يبدأ من اليوم. يبقى الطعام والجلسات المسجلة كما هي.",
+    cx_ambiguous: "اكتب تاريخًا كاملًا: YYYY-MM-DD أو DD/MM/YYYY.",
+    cx_category: "الفئة",
+    cx_choose_sources: "اختر الوجبات أو الوصفات وعدد الحصص المطلوبة",
+    cx_checked: "تم الشراء",
+    sc_title: 'الحفظ والمزامنة',
+    sc_device: 'على هذا الجهاز', sc_cloud: 'النسخة السحابية',
+    sc_saved: 'محفوظ على هذا الجهاز', sc_failed: 'لم يُحفظ آخر تعديل',
+    sc_quota: 'مساحة الجهاز ممتلئة. صدّر بياناتك قبل تفريغ المساحة.',
+    sc_readonly: 'تعذرت قراءة البيانات المحفوظة. صدّر نسخة قبل استعادة بياناتك.',
+    sc_write_failed: 'التخزين غير متاح. أبقِ التطبيق مفتوحًا وصدّر بياناتك.',
+    sc_pending: 'محفوظ على الجهاز — بانتظار المزامنة',
+    sc_syncing: 'جارٍ المزامنة…', sc_synced: 'تمت مزامنة التعديلات المحلية',
+    sc_offline: 'لا يوجد اتصال — نسختك المحفوظة على الجهاز متاحة',
+    sc_signin: 'سجّل الدخول لاستئناف المزامنة', sc_unlinked: 'المزامنة السحابية غير مرتبطة بهذا الجهاز',
+    sc_error: 'تعذر تأكيد المزامنة — أعد المحاولة عند الاتصال',
+    sc_conflict: 'توجد نسخة أخرى تحتاج مراجعتك',
+    sc_blocked: 'توقفت المزامنة لحماية بياناتك السحابية الحالية',
+    sc_older: 'حالة السحابة لا تشمل التعديل غير المحفوظ',
+    sc_never: 'لا توجد نسخة سحابية مؤكدة بعد', sc_version_time: 'تاريخ النسخة السحابية: {time}',
+    sc_checked_time: 'آخر تأكيد خلال هذه الجلسة: {time}',
+    sc_photos: 'هذه الحالة تخص سجلاتك المحفوظة. النسخ الاحتياطية المنفصلة لصور التمارين غير متحقق منها هنا.',
+    sc_retry: 'إعادة المزامنة', sc_review: 'مراجعة النسخ', sc_login: 'تسجيل الدخول',
     tab_saved_foods: 'أطعمة',
     tab_bundles: 'وجباتي',
     bundle_new: 'وجبة جديدة',
@@ -3461,11 +3587,13 @@ function brandLockup(size = 'header') {
 function vaultBar({ action = '', actionLabel = '' } = {}) {
   return `
     <div class="vault-bar">
-      <div class="vault-logo">${brandLockup('header')}</div>
+      <div class="vault-logo">${brandLockup('header')}</div><button class="icon-btn" data-unified-search aria-label="${escapeHtml(t('cx_search'))}">${icon('search',20)}</button>
       ${action ? `<button class="vault-action" id="vault-action"${actionLabel ? ` aria-label="${escapeHtml(actionLabel)}"` : ''}>${action}</button>` : '<span style="width:40px"></span>'}
     </div>
   `;
 }
+
+document.addEventListener('click', event => { if (event.target.closest('[data-unified-search]')) openUnifiedSearch(); if (event.target.closest('[data-recent-changes]')) openRecentChanges(); if (event.target.closest('[data-plan-history]')) openPreviousPrograms(); });
 
 function bindVaultAction(handler) {
   // Each rendered view stays in the DOM (just hidden). Scope to the active
@@ -5957,9 +6085,10 @@ function renderExerciseDetail(el, exerciseId) {
         title: t('delete_session_q'),
         text: t('delete_session_text'),
         onConfirm: () => {
-          DB.sessions.remove(b.dataset.deleteSession);
-          showToast(t('session_deleted'));
+          const result = DB.sessions.remove(b.dataset.deleteSession);
+          if (!result.ok) { convenienceError(result); return; }
           renderExerciseDetail(el, exerciseId);
+          offerUndo(t('session_deleted'),result);
         },
       });
     })
@@ -6136,11 +6265,8 @@ function openSessionModal(exerciseId, sessionId = null) {
     if (cleaned.length === 0) { showToast(t('add_at_least_one')); return; }
     // Snapshot BEFORE write (full snapshot including the session being edited)
     const prior = DB.sessions.prSnapshot(exerciseId);
-    if (existing) {
-      DB.sessions.update(existing.id, { date, sets: cleaned });
-    } else {
-      DB.sessions.add({ exerciseId, date, sets: cleaned });
-    }
+    const saved = existing ? DB.sessions.update(existing.id, { date, sets: cleaned }) : DB.sessions.add({ exerciseId, date, sets: cleaned });
+    if (!saved) { convenienceError(DB.saveState()); return; }
     const prMsg = checkPR(exerciseId, prior, cleaned);
     if (prMsg) {
       showToast(prMsg);
@@ -6149,6 +6275,7 @@ function openSessionModal(exerciseId, sessionId = null) {
     }
     closeModal();
     renderView(currentView);
+    offerUndo(existing ? t('session_updated') : t('session_saved'));
     maybeAskNotifPermission();
   });
 }
@@ -6772,8 +6899,12 @@ function renderFood(el) {
         <button class="link-btn" data-goto="foodlog">${t('food_history')} <span class="icon-mirror">${icon('chevronRight', 16)}</span></button>
       </div>
     </div>
+    <div class="cx-tools"><button class="btn btn-ghost" data-my-meals>${t('cx_meals')}</button><button class="btn btn-ghost" data-shopping>${t('cx_shopping')}</button></div>
     <div id="nutri-host">${nutritionDashboardHtml(date)}</div>
   `;
+
+  el.querySelector('[data-my-meals]').onclick = () => openSavedFoodPicker(null, () => renderView(currentView), 'bundles');
+  el.querySelector('[data-shopping]').onclick = openShoppingLists;
 
   // todayISO() HERE, not the render-time `date`: rows now land on the day they
   // are written, so the repaint must show that same day.
@@ -8268,7 +8399,7 @@ function openRecipeEditor(date, existing, onDone) {
       return c;
     }) };
     var made = existing ? DB.recipes.update(existing.id, payload) : DB.recipes.add(payload);
-    if (!made) { showToast(t('rec_need_ing')); return; }
+    if (!made) { showToast(t(DB.saveState().ok ? 'rec_need_ing' : 'sc_failed')); return; }
     closeModal();
     showToast(t('rec_saved'));
     if (typeof onDone === 'function') onDone();
@@ -8300,6 +8431,7 @@ function openSavedFoodPicker(date, onSave, initialTab) {
     <div class="picker-list" id="sf-list"></div>
     <button class="btn btn-ghost btn-block" id="sf-new" style="margin-top:10px">${icon('plus', 20)} ${tab === 'bundles' ? t('bundle_new') : tab === 'recipes' ? t('rec_new') : t('saved_new')}</button>
   `);
+  guardConvenienceModal(overlay);
   const listEl = overlay.querySelector('#sf-list');
 
   // ---- "My recipes" — the computed ones ------------------------------------
@@ -8333,13 +8465,14 @@ function openSavedFoodPicker(date, onSave, initialTab) {
       const r = DB.recipes.list().find((x) => x.id === b.dataset.logRec);
       if (!r) return;
       const per = DB.recipes.perServing(r);
-      DB.foodLogs.add(date || todayISO(), {
+      const result = DB.foodLogs.addMany(date || todayISO(), [{
         name: r.name, servings: 1,
         calories: per.calories, protein: per.protein, carbs: per.carbs, fat: per.fat,
         source: 'recipe',
-      });
-      showToast(t('rec_logged').replace('{name}', r.name));
+      }]);
+      if (!result.ok) { convenienceError(result); return; }
       if (typeof onSave === 'function') onSave();
+      offerUndo(t('rec_logged').replace('{name}', r.name), result);
     }));
     listEl.querySelectorAll('[data-edit-rec]').forEach((b) => b.addEventListener('click', () => {
       const r = DB.recipes.list().find((x) => x.id === b.dataset.editRec);
@@ -8348,14 +8481,14 @@ function openSavedFoodPicker(date, onSave, initialTab) {
     listEl.querySelectorAll('[data-del-rec]').forEach((b) => b.addEventListener('click', () => {
       confirmDialog({
         title: t('delete') + '؟', text: '', confirmLabel: t('delete'), variant: 'danger',
-        onConfirm: () => { DB.recipes.remove(b.dataset.delRec); showToast(t('rec_deleted')); drawRecipes(); },
+        onConfirm: () => { const result = DB.recipes.remove(b.dataset.delRec); if (!result.ok) { convenienceError(result); return; } drawRecipes(); offerUndo(t('rec_deleted'),result); },
       });
     }));
   }
 
   // ---- "My meals" — several foods, one tap (فطوري المعتاد) -----------------
   function drawBundles() {
-    const bundles = DB.mealBundles.list();
+    const bundles = DB.mealBundles.list().filter(b => DB.search.normalize(b.name).includes(DB.search.normalize(query)));
     if (!bundles.length) {
       listEl.innerHTML = `<div class="calc-preview-hint" style="text-align:center;padding:18px">${t('bundle_empty')}</div>`;
       return;
@@ -8365,95 +8498,57 @@ function openSavedFoodPicker(date, onSave, initialTab) {
       return `
       <div class="bundle-card" data-bundle="${escapeHtml(b.id)}">
         <div class="bundle-main">
-          <div class="bundle-name">${escapeHtml(b.name)}</div>
+          <div class="bundle-name">${b.favorite ? '★ ' : ''}${escapeHtml(b.name)}</div>
           <div class="bundle-meta"><span class="num">${fmtNum(b.items.length)}</span> ${t('bundle_items')} · <span class="num">${fmtNum(Math.round(kcal))}</span> ${t('cal')}</div>
         </div>
-        <button type="button" class="btn btn-primary bundle-add" data-log-bundle="${escapeHtml(b.id)}">${icon('plus', 16)}</button>
+        <button type="button" class="icon-btn" data-edit-bundle="${escapeHtml(b.id)}" aria-label="${escapeHtml(t('edit'))}">${icon('edit',16)}</button>
+        <button type="button" class="btn btn-ghost" data-portion-bundle="${escapeHtml(b.id)}" aria-label="${escapeHtml(t('cx_portion'))}">×1</button>
+        <button type="button" class="btn btn-primary bundle-add" data-log-bundle="${escapeHtml(b.id)}" aria-label="${escapeHtml(t('add'))}">${icon('plus', 16)}</button>
         <button type="button" class="icon-btn danger bundle-del" data-del-bundle="${escapeHtml(b.id)}" aria-label="${escapeHtml(t('delete'))}">${icon('trash', 16)}</button>
       </div>`;
     }).join('');
     listEl.querySelectorAll('[data-log-bundle]').forEach((btn) => btn.addEventListener('click', () => {
       const b = DB.mealBundles.list().find((x) => x.id === btn.dataset.logBundle);
       if (!b) return;
-      // Itemized, not summed: each food lands as its own log row so the day's
-      // list stays editable piece by piece, exactly as if tapped one by one.
-      b.items.forEach((it) => DB.foodLogs.add(date || todayISO(), {
-        name: it.name, servings: it.servings || 1,
-        calories: it.calories, protein: it.protein, carbs: it.carbs, fat: it.fat,
-        source: 'bundle',
-      }));
-      showToast(t('bundle_added').replace('{name}', b.name).replace('{n}', fmtNum(b.items.length)));
-      if (typeof onSave === 'function') onSave();
+      btn.disabled = true;
+      const result = DB.mealBundles.log(b.id,date || todayISO(),1,uid());
+      if (result.ok && onSave) onSave();
+      offerUndo(t('cx_meal_logged'),result);
+      setTimeout(() => { btn.disabled = false; },800);
     }));
+    listEl.querySelectorAll('[data-portion-bundle]').forEach(btn => btn.onclick = () => { const bundle = DB.mealBundles.list().find(b => b.id === btn.dataset.portionBundle); if (bundle) openMealPortion(bundle,date,onSave); });
+    listEl.querySelectorAll('[data-edit-bundle]').forEach(btn => btn.onclick = () => {
+      const bundle = DB.mealBundles.list().find(b => b.id === btn.dataset.editBundle);
+      if (bundle) openMealEditor(bundle, () => openSavedFoodPicker(date, onSave, 'bundles'));
+    });
     listEl.querySelectorAll('[data-del-bundle]').forEach((btn) => btn.addEventListener('click', () => {
       confirmDialog({
         title: t('delete') + '؟', text: '', confirmLabel: t('delete'), variant: 'danger',
-        onConfirm: () => { DB.mealBundles.remove(btn.dataset.delBundle); showToast(t('bundle_deleted')); drawBundles(); },
+        onConfirm: () => { const result = DB.mealBundles.remove(btn.dataset.delBundle); drawBundles(); offerUndo(t('bundle_deleted'), result); },
       });
     }));
   }
 
-  // Creating a bundle starts from what THIS day already holds: log the items
-  // once by any path (chat, photo, barcode, manual), then keep them as one
-  // meal. A picker over the whole food library would be a second, worse form.
-  function openBundleCreator() {
-    const todays = DB.foodLogs.listForDate(date || todayISO()) || [];
-    const inner = todays.length
-      ? `<div class="calc-preview-hint" style="margin-bottom:8px">${t('bundle_pick_hint')}</div>
-         <div class="bundle-pick">${todays.map((e, i) => `
-           <label class="bundle-pick-row">
-             <input type="checkbox" checked data-pick="${i}">
-             <span class="bundle-pick-name">${escapeHtml(e.name)}</span>
-             <span class="bundle-pick-kcal num">${fmtNum(Math.round((e.calories || 0) * (e.servings || 1)))} ${t('cal')}</span>
-           </label>`).join('')}</div>
-         <input type="text" id="bundle-name" class="input" placeholder="${escapeHtml(t('bundle_name_ph'))}" maxlength="60" style="margin:10px 0">
-         <button class="btn btn-primary btn-block" id="bundle-save">${t('bundle_save')}</button>`
-      : `<div class="calc-preview-hint" style="text-align:center;padding:18px">${t('bundle_none_today')}</div>`;
-    const ov2 = openModal(`
-      <div class="modal-header">
-        <div class="modal-title">${t('bundle_new')}</div>
-        <button class="icon-btn icon-btn-tile" data-close>${icon('close', 20)}</button>
-      </div>${inner}`);
-    const saveBtn = ov2.querySelector('#bundle-save');
-    if (saveBtn) saveBtn.addEventListener('click', () => {
-      const items = [...ov2.querySelectorAll('[data-pick]')]
-        .filter((c) => c.checked)
-        .map((c) => todays[Number(c.dataset.pick)])
-        .filter(Boolean);
-      if (!items.length) return;
-      const name = ov2.querySelector('#bundle-name').value.trim();
-      const made = DB.mealBundles.add({ name, items });
-      closeModal();
-      showToast(made ? t('bundle_saved') : t('ai_error'));
-      // Back into the picker, on the meals tab, so the new bundle is visible.
-      openSavedFoodPicker(date, onSave);
-    });
-  }
-
   function draw() {
-    const q = query.toLowerCase();
-    const saved = DB.foods.list().map((f) => ({ name: f.name, calories: f.calories, protein: f.protein, carbs: f.carbs, fat: f.fat || 0, saved: true }));
-    const list = q ? saved.filter((f) => f.name.toLowerCase().includes(q)) : saved;
+    const q = DB.search.normalize(query);
+    const saved = DB.foods.list();
+    const list = q ? saved.filter(f => DB.search.normalize(f.name).includes(q)) : saved;
     if (!list.length) {
-      listEl.innerHTML = `<div class="calc-preview-hint" style="text-align:center;padding:18px">${DB.foods.list().length ? t('no_matches_simple') : t('saved_empty')}</div>`;
+      listEl.innerHTML = `<div class="calc-preview-hint" style="text-align:center;padding:18px">${saved.length ? t('no_matches_simple') : t('saved_empty')}</div>`;
       return;
     }
-    listEl.innerHTML = list.map((f, i) => `
-      <button type="button" class="picker-row" data-add-saved="${i}">
-        <span class="picker-row-cat" style="background:var(--cat-arms)"></span>
-        <span class="picker-row-name">${escapeHtml(f.name)}
-          <span style="color:var(--text-mute);font-weight:600;font-size:11px"> · <span class="num">${fmtNum(f.calories)}</span> ${t('cal')}</span>
-        </span>
-        <span class="picker-row-check">${icon('plus', 16)}</span>
-      </button>`).join('');
-    listEl.querySelectorAll('[data-add-saved]').forEach((b) => b.addEventListener('click', () => {
-      const f = list[Number(b.dataset.addSaved)];
-      DB.foodLogs.add(date || todayISO(), { name: f.name, servings: 1, calories: f.calories, protein: f.protein, carbs: f.carbs, fat: f.fat, source: 'saved' });
-      showToast(t('ai_added'));
-      b.querySelector('.picker-row-check').innerHTML = icon('check', 16);
-      b.classList.add('picked');
-      if (typeof onSave === 'function') onSave();
-    }));
+    listEl.innerHTML = list.map((f,i) => `<button type="button" class="picker-row" data-add-saved="${i}">
+      <span class="picker-row-cat" style="background:var(--cat-arms)"></span>
+      <span class="picker-row-name">${escapeHtml(f.name)} · <span class="num">${fmtNum(f.calories)}</span> ${t('cal')}</span>
+      <span class="picker-row-check">${icon('plus',16)}</span></button>`).join('');
+    listEl.querySelectorAll('[data-add-saved]').forEach(button => button.onclick = () => {
+      const f = list[Number(button.dataset.addSaved)];
+      const result = DB.foodLogs.addMany(date || todayISO(),[{name:f.name,servings:1,calories:f.calories,protein:f.protein,carbs:f.carbs,fat:f.fat || 0,source:'saved'}]);
+      if (!result.ok) { convenienceError(result); return; }
+      button.querySelector('.picker-row-check').innerHTML = icon('check',16);
+      button.classList.add('picked');
+      if (onSave) onSave(); offerUndo(t('ai_added'),result);
+    });
   }
   // draw() rebuilds the whole list, so a per-keystroke rebuild repeats the same
   // expensive work for every character.
@@ -8463,25 +8558,26 @@ function openSavedFoodPicker(date, onSave, initialTab) {
     // Route by tab: this used to redraw the SAVED-FOODS list regardless, so
     // typing on the recipes tab replaced the recipes with foods mid-word.
     if (tab === 'recipes') drawRecipes();
+    else if (tab === 'bundles') drawBundles();
     else drawSavedFoodSearch();
   });
   const newBtn = overlay.querySelector('#sf-new');
   newBtn.addEventListener('click', () => {
-    if (tab === 'bundles') { openBundleCreator(); return; }
+    if (tab === 'bundles') { openMealEditor(null, () => openSavedFoodPicker(date, onSave, 'bundles')); return; }
     if (tab === 'recipes') { openRecipeEditor(date, null, () => openSavedFoodPicker(date, onSave, 'recipes')); return; }
     closeModal(); openFoodLibraryModal();
   });
   overlay.querySelectorAll('.sfp-tab').forEach((b) => b.addEventListener('click', () => {
     tab = b.dataset.tab;
     overlay.querySelectorAll('.sfp-tab').forEach((x) => x.classList.toggle('on', x === b));
-    overlay.querySelector('#sf-search-wrap').style.display = tab === 'bundles' ? 'none' : '';
+    overlay.querySelector('#sf-search-wrap').style.display = '';
     newBtn.innerHTML = icon('plus', 20) + ' ' +
       (tab === 'bundles' ? t('bundle_new') : tab === 'recipes' ? t('rec_new') : t('saved_new'));
     if (tab === 'bundles') drawBundles();
     else if (tab === 'recipes') drawRecipes();
     else draw();
   }));
-  overlay.querySelector('#sf-search-wrap').style.display = tab === 'bundles' ? 'none' : '';
+  overlay.querySelector('#sf-search-wrap').style.display = '';
   if (tab === 'bundles') drawBundles();
   else if (tab === 'recipes') drawRecipes();
   else draw();
@@ -9471,6 +9567,371 @@ function modeToggleHtml(currentTheme) {
     </button>`).join('')}</div>`;
 }
 
+// Read-only presentation: state comes from DB/Cloud, never from a toast or timer.
+function saveCenterModel(local, cloud) {
+  const keys = { pending: 'sc_pending', syncing: 'sc_syncing', synced: 'sc_synced',
+    offline: 'sc_offline', signin: 'sc_signin', unlinked: 'sc_unlinked',
+    error: 'sc_error', conflict: 'sc_conflict', blocked: 'sc_blocked' };
+  const status = cloud.status || 'unlinked';
+  const failed = local.ok === false;
+  return {
+    status: failed ? 'failed' : status,
+    deviceKey: failed ? 'sc_failed' : 'sc_saved',
+    cloudKey: failed ? 'sc_older' : (keys[status] || 'sc_error'),
+    detailKey: failed ? (local.code === 'QUOTA' ? 'sc_quota' : local.code === 'READ_ONLY' ? 'sc_readonly' : 'sc_write_failed') : null,
+    action: failed ? 'export' : status === 'signin' || status === 'unlinked' ? 'login' :
+      status === 'conflict' || status === 'blocked' ? 'review' : 'retry',
+    disabled: !failed && (status === 'syncing' || cloud.online === false),
+  };
+}
+function updateSaveCenter() {
+  const card = document.getElementById('save-center');
+  if (!card || !window.DB) return;
+  const local = DB.saveState();
+  const cloud = window.Cloud && Cloud.syncState ? Cloud.syncState() : { status: 'unlinked' };
+  const model = saveCenterModel(local, cloud);
+  card.dataset.state = model.status;
+  $('#sc-device', card).textContent = t(model.deviceKey);
+  $('#sc-cloud', card).textContent = t(model.cloudKey);
+  const detail = $('#sc-detail', card);
+  detail.textContent = model.detailKey ? t(model.detailKey) : '';
+  detail.hidden = !model.detailKey;
+  const at = cloud.confirmedAt || cloud.stamp;
+  let time = '';
+  if (at && Number.isFinite(new Date(at).getTime())) {
+    time = new Date(at).toLocaleString(DB.prefs.get().lang === 'ar' ? 'ar' : 'en',
+      { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+  }
+  $('#sc-time', card).textContent = time
+    ? t(cloud.confirmedAt ? 'sc_checked_time' : 'sc_version_time').replace('{time}', time)
+    : t('sc_never');
+  const button = $('#sc-action', card);
+  button.dataset.action = model.action;
+  button.textContent = model.action === 'export' ? t('export_data') : model.action === 'login' ? t('sc_login') : model.action === 'review' ? t('sc_review') : t('sc_retry');
+  button.disabled = model.disabled;
+}
+let saveCenterUpdatePending = false;
+function scheduleSaveCenterUpdate() {
+  if (saveCenterUpdatePending) return;
+  saveCenterUpdatePending = true;
+  // Coalesce the successful write and synchronous dirty marking into one paint.
+  Promise.resolve().then(() => { saveCenterUpdatePending = false; updateSaveCenter(); });
+}
+window.addEventListener('vault:save-state', scheduleSaveCenterUpdate);
+window.addEventListener('vault:save-failed', scheduleSaveCenterUpdate);
+window.addEventListener('vault:sync-state', scheduleSaveCenterUpdate);
+window.addEventListener('online', scheduleSaveCenterUpdate);
+window.addEventListener('offline', scheduleSaveCenterUpdate);
+
+// Convenience features use the existing modal, translation and DB contracts.
+function convenienceError(result) {
+  showToast(t(result?.code === 'STALE' ? 'cx_stale' : result?.code === 'VALIDATION' ? 'cx_invalid' : 'sc_failed'));
+}
+function offerUndo(message, result) {
+  if (result && !result.ok) { convenienceError(result); return; }
+  const latest = DB.undo.list()[0];
+  if (!latest || result?.changed === false) return;
+  showToast(message, { duration: 10000, actionLabel: t('undo'), onAction: () => applyConvenienceUndo(latest.token) });
+}
+function applyConvenienceUndo(token) {
+  const result = DB.undo.apply(token);
+  if (!result.ok) { convenienceError(result); return; }
+  // Guided-run drafts are derived from sessions. A stale draft must not write
+  // the just-undone values back into persistence when leaving the screen.
+  if (viewContext.runState) viewContext.runState = {};
+  if (viewContext.sdState) viewContext.sdState = {};
+  closeModal();
+  renderView(currentView);
+  showToast(t('updated'));
+}
+function openRecentChanges() {
+  const entries = DB.undo.list();
+  const modal = convenienceModal(`<div class="modal-header"><h2 class="modal-title">${t('cx_recent')}</h2><button class="icon-btn" data-close>${icon('close',20)}</button></div>
+    <div class="cx-stack">${entries.length ? entries.map((e,i) => `<div class="cx-row"><span>${t(e.label)}</span><button class="btn btn-ghost" data-undo="${escapeHtml(e.token)}" ${i ? 'disabled' : ''}>${t('undo')}</button></div>`).join('') : `<p>${t('cx_empty')}</p>`}</div>`);
+  modal.querySelectorAll('[data-undo]').forEach(b => b.onclick = () => applyConvenienceUndo(b.dataset.undo));
+}
+function cxHeader(key) {
+  return `<div class="modal-header"><h2 class="modal-title">${t(key)}</h2><button class="icon-btn" data-close aria-label="${escapeHtml(t('close'))}">${icon('close',20)}</button></div>`;
+}
+function guardConvenienceModal(modal) {
+  const owner = Cloud.getLastUid();
+  modal.dataset.convenienceOwner = owner;
+  modal.addEventListener('click', event => {
+    if (owner === Cloud.getLastUid()) return;
+    event.preventDefault(); event.stopImmediatePropagation(); closeModal();
+  }, true);
+  return modal;
+}
+function convenienceModal(html) { return guardConvenienceModal(openModal(html)); }
+function openUnifiedSearch() {
+  const owner = Cloud.getLastUid();
+  const modal = convenienceModal(`${cxHeader('cx_search')}<div class="cx-stack"><label>${t('cx_query')}<input class="input" id="cx-query" type="search" maxlength="160" autocomplete="off"></label><div id="cx-results" class="cx-stack" aria-live="polite"></div></div>`);
+  const input = modal.querySelector('#cx-query'), host = modal.querySelector('#cx-results');
+  const labels = {exercise:'exercises',food:'tab_saved_foods',meal:'cx_meals',recipe:'tab_recipes',shopping:'cx_shopping',session:'history',log:'food_history',date:'cx_date'};
+  const search = debounce(() => {
+    if (!modal.isConnected) return;
+    if (owner !== Cloud.getLastUid()) { host.textContent = ''; closeModal(); return; }
+    const aliases = Object.fromEntries(DB.exercises.list().map(ex => [ex.id, [exDisplayName(ex), EXERCISE_NAME_AR_FULL[ex.name] || '', EXERCISE_NAME_AR[ex.name] || '', t('cat_' + ex.category)].join(' ')]));
+    const results = DB.search.query(input.value, aliases);
+    const groups = [...new Set(results.map(r => r.type))];
+    host.innerHTML = results.length ? groups.map(type => `<h3>${t(labels[type])}</h3>` + results.map((r,i) => ({r,i})).filter(({r}) => r.type === type).map(({r,i}) => `<button class="btn btn-ghost cx-result" data-result="${i}"><strong>${escapeHtml(r.type === 'exercise' ? exDisplayName(DB.exercises.getById(r.id)) : r.name)}</strong><span>${t(labels[r.type])}${r.date ? ' · ' + escapeHtml(r.date) : ''}</span></button>`).join('')).join('') : `<p>${t(/^\d{1,2}\/\d{1,2}$/.test(DB.search.normalize(input.value)) ? 'cx_ambiguous' : 'cx_empty')}</p>`;
+    host.querySelectorAll('[data-result]').forEach(b => b.onclick = () => {
+      if (owner !== Cloud.getLastUid()) { closeModal(); return; }
+      const result = results[Number(b.dataset.result)]; closeModal();
+      if (result.type === 'exercise') navigate('exercise-detail',{exerciseId:result.id});
+      else if (result.type === 'session') { const session = DB.sessions.get(result.id); if (session) navigate('exercise-detail',{exerciseId:session.exerciseId}); }
+      else if (result.type === 'date') openSearchDay(result.date);
+      else if (result.type === 'log') navigate('foodlog',{foodLog:{date:result.date}});
+      else if (result.type === 'meal') { const meal = DB.mealBundles.list().find(x => x.id === result.id); if (meal) openMealEditor(meal); }
+      else if (result.type === 'recipe') { const recipe = DB.recipes.list().find(x => x.id === result.id); if (recipe) openRecipeEditor(todayISO(),recipe); }
+      else if (result.type === 'shopping') { const list = DB.shopping.list().find(x => x.id === result.id); if (list) openShoppingDetail(list); }
+      else openFoodModal(result.id);
+    });
+  },150);
+  input.addEventListener('input',search); input.focus();
+}
+window.addEventListener('vault:save-state', () => {
+  const modal = document.querySelector('[data-convenience-owner]');
+  if (modal && modal.dataset.convenienceOwner !== Cloud.getLastUid()) { closeModal(); return; }
+  document.getElementById('cx-query')?.dispatchEvent(new Event('input'));
+});
+function openSearchDay(date) {
+  const modal = convenienceModal(`${cxHeader('cx_date')}<div class="cx-stack"><strong>${escapeHtml(formatDate(date))}</strong>
+    <button class="btn btn-ghost" id="cx-day-food">${t('food_history')}</button>
+    <button class="btn btn-ghost" id="cx-day-workout">${t('history')}</button></div>`);
+  modal.querySelector('#cx-day-food').onclick = () => {closeModal();navigate('foodlog',{foodLog:{date}});};
+  modal.querySelector('#cx-day-workout').onclick = () => {closeModal();navigate('session-day',{date});};
+}
+function openMealEditor(existing = null, onSave = () => {}) {
+  const owner = Cloud.getLastUid();
+  const snapshot = existing && JSON.stringify(existing);
+  let items = existing ? copyData(existing.items) : [];
+  const foods = [...DB.foods.list(), ...DB.foodLogs.listForDate(todayISO())];
+  const modal = convenienceModal(`${cxHeader('cx_meals')}<div class="cx-stack">
+    <label>${t('cx_name')}<input class="input" id="cx-meal-name" maxlength="80" value="${escapeHtml(existing?.name || '')}"></label>
+    <label><input type="checkbox" id="cx-favorite" ${existing?.favorite ? 'checked' : ''}> ${t('cx_favorite')}</label>
+    <p class="settings-hint">${t('cx_amount_hint')}</p><div id="cx-meal-items"></div>
+    <label>${t('cx_saved_food')}<select id="cx-food" class="input"><option value="">—</option>${foods.map((f,i) => `<option value="${i}">${escapeHtml(f.name)}</option>`).join('')}</select></label>
+    <button class="btn btn-ghost" id="cx-food-add">${t('add')}</button>
+    <button class="btn btn-primary" id="cx-meal-save">${t('save')}</button></div>`);
+  const draw = () => {
+    modal.querySelector('#cx-meal-items').innerHTML = items.map((it,i) => `<div class="cx-row"><span>${escapeHtml(it.name)}</span>
+      <label>${t('cx_portion')}<input class="input" type="number" min="0.25" max="20" step="0.25" data-portion="${i}" value="${Number(it.servings || 1)}"></label>
+      <button class="icon-btn danger" data-remove="${i}" aria-label="${escapeHtml(t('delete'))}">${icon('trash',18)}</button></div>`).join('');
+    modal.querySelectorAll('[data-portion]').forEach(input => input.onchange = () => { items[Number(input.dataset.portion)].servings = Number(input.value); });
+    modal.querySelectorAll('[data-remove]').forEach(b => b.onclick = () => { items.splice(Number(b.dataset.remove),1); draw(); });
+  };
+  draw();
+  modal.querySelector('#cx-food-add').onclick = () => {
+    const index = modal.querySelector('#cx-food').value;
+    if (index === '' || items.length >= 30) return;
+    const food = foods[Number(index)];
+    items.push({ name: food.name, calories: food.calories, protein: food.protein, carbs: food.carbs, fat: food.fat, servings: food.servings || 1 }); draw();
+  };
+  modal.querySelector('#cx-meal-save').onclick = () => {
+    if (owner !== Cloud.getLastUid() || existing && snapshot !== JSON.stringify(DB.mealBundles.list().find(b => b.id === existing.id))) { convenienceError({code:'STALE'}); return; }
+    const result = DB.mealBundles.update(existing?.id || null, { name: modal.querySelector('#cx-meal-name').value, favorite: modal.querySelector('#cx-favorite').checked, items });
+    if (!result.ok) { convenienceError(result); return; }
+    closeModal(); onSave(); offerUndo(t('saved'), result);
+  };
+}
+function openMealPortion(bundle, date, onSave) {
+  const owner = Cloud.getLastUid(), operationId = uid();
+  const modal = convenienceModal(`${cxHeader('cx_meals')}<div class="cx-stack"><strong>${escapeHtml(bundle.name)}</strong>
+    <label>${t('cx_date')}<input class="input" id="cx-log-date" type="date" value="${escapeHtml(date || todayISO())}"></label>
+    <label>${t('cx_portion')}<input class="input" id="cx-log-portion" type="number" min="0.25" max="20" step="0.25" value="1"></label>
+    <p id="cx-log-total" class="settings-hint"></p><button class="btn btn-primary" id="cx-log-meal">${t('add')}</button></div>`);
+  const amount = modal.querySelector('#cx-log-portion');
+  const preview = () => { modal.querySelector('#cx-log-total').textContent = fmtNum(Math.round(bundle.items.reduce((sum,it) => sum + it.calories * (it.servings || 1),0) * Number(amount.value))) + ' ' + t('cal'); };
+  amount.oninput = preview; preview();
+  modal.querySelector('#cx-log-meal').onclick = e => {
+    if (owner !== Cloud.getLastUid() || JSON.stringify(bundle) !== JSON.stringify(DB.mealBundles.list().find(b => b.id === bundle.id))) { convenienceError({code:'STALE'}); return; }
+    e.currentTarget.disabled = true;
+    const result = DB.mealBundles.log(bundle.id, modal.querySelector('#cx-log-date').value, Number(amount.value), operationId);
+    if (!result.ok) { e.currentTarget.disabled = false; convenienceError(result); return; }
+    closeModal(); if (onSave) onSave(); offerUndo(t('cx_meal_logged'), result);
+  };
+}
+
+function openShoppingLists() {
+  const lists = DB.shopping.list();
+  const modal = convenienceModal(`${cxHeader('cx_shopping')}<div class="cx-stack">
+    <button class="btn btn-primary" id="cx-shopping-new">${t('cx_new')}</button>
+    ${lists.length ? lists.map((list,i) => `<button class="btn btn-ghost cx-row" data-list="${i}"><span>${escapeHtml(list.name)}</span><span class="num">${list.items.filter(it => it.checked).length}/${list.items.length}</span></button>`).join('') : `<p>${t('cx_empty')}</p>`}</div>`);
+  modal.querySelector('#cx-shopping-new').onclick = openShoppingSources;
+  modal.querySelectorAll('[data-list]').forEach(b => b.onclick = () => openShoppingDetail(lists[Number(b.dataset.list)]));
+}
+function openShoppingDetail(list) {
+  const owner = Cloud.getLastUid(), expected = JSON.stringify(list);
+  const categories = [...new Set(list.items.map(it => it.category || ''))];
+  const modal = convenienceModal(`${cxHeader('cx_shopping')}<div class="cx-stack"><strong>${escapeHtml(list.name)}</strong>
+    ${categories.map(category => `<h3>${category ? escapeHtml(category) : t('cx_items')}</h3>${list.items.map((it,i) => ({it,i})).filter(({it}) => (it.category || '') === category).map(({it,i}) => `<label class="cx-row"><input type="checkbox" data-purchased="${i}" ${it.checked ? 'checked' : ''}><span>${escapeHtml(it.name)}<br><small>${it.quantity == null ? t('cx_unknown') : fmtNum(it.quantity)} ${it.unit ? t('cx_' + it.unit) : ''}</small></span></label>`).join('')}`).join('')}
+    <button class="btn btn-ghost" id="cx-shopping-edit">${t('edit')}</button><button class="btn btn-ghost" id="cx-list-share">${t('cx_share')}</button></div>`);
+  modal.querySelectorAll('[data-purchased]').forEach(input => input.onchange = () => {
+    if (owner !== Cloud.getLastUid()) { input.checked = !input.checked; convenienceError({code:'STALE'}); return; }
+    const items = copyData(list.items); items[Number(input.dataset.purchased)].checked = input.checked;
+    const result = DB.shopping.save({...list,items},expected);
+    if (!result.ok) { input.checked = !input.checked; convenienceError(result); return; }
+    openShoppingDetail(result.entity);
+    document.querySelector(`#modal-root [data-purchased="${input.dataset.purchased}"]`)?.focus();
+  });
+  modal.querySelector('#cx-shopping-edit').onclick = () => openShoppingEditor(list);
+  modal.querySelector('#cx-list-share').onclick = async () => {
+    if (owner !== Cloud.getLastUid()) return;
+    const text = list.name + '\n' + list.items.map(it => `${it.checked ? '☑' : '☐'} ${it.name} — ${it.quantity == null ? t('cx_unknown') : fmtNum(it.quantity)} ${it.unit ? t('cx_' + it.unit) : ''}`).join('\n');
+    try { if (navigator.share) await navigator.share({text}); else { await navigator.clipboard.writeText(text); showToast(t('export_copied')); } } catch (error) { if (error.name !== 'AbortError') showToast(t('export_failed')); }
+  };
+}
+function openShoppingSources() {
+  const owner = Cloud.getLastUid();
+  const sources = [...DB.mealBundles.list().map(x => ({...x,type:'meal'})), ...DB.recipes.list().map(x => ({...x,type:'recipe'}))];
+  const modal = convenienceModal(`${cxHeader('cx_shopping')}<div class="cx-stack"><p>${t('cx_choose_sources')}</p>
+    ${sources.map((s,i) => `<label class="cx-row"><span>${escapeHtml(s.name)} · ${t(s.type === 'recipe' ? 'tab_recipes' : 'cx_meals')}</span><input class="input" type="number" min="0" max="100" step="0.5" value="0" data-source="${i}" aria-label="${escapeHtml(s.name)}"><button type="button" class="icon-btn" data-purchase-source="${i}" aria-label="${escapeHtml(t('cx_qty'))}">${icon('edit',18)}</button></label>`).join('')}
+    <button class="btn btn-primary" id="cx-shopping-preview">${t('cx_review')}</button><button class="btn btn-ghost" id="cx-shopping-blank">${t('cx_new')}</button></div>`);
+  modal.querySelectorAll('[data-purchase-source]').forEach(b => b.onclick = () => openPurchaseEditor(sources[Number(b.dataset.purchaseSource)]));
+  modal.querySelector('#cx-shopping-blank').onclick = () => openShoppingEditor();
+  modal.querySelector('#cx-shopping-preview').onclick = () => {
+    if (owner !== Cloud.getLastUid()) { convenienceError({code:'STALE'}); return; }
+    const selections = [...modal.querySelectorAll('[data-source]')].filter(input => Number(input.value) > 0).map(input => ({ id: sources[Number(input.dataset.source)].id, type: sources[Number(input.dataset.source)].type, servings: Number(input.value) }));
+    const preview = DB.shopping.preview(selections);
+    if (!preview.ok) { convenienceError({code:'VALIDATION'}); return; }
+    openShoppingEditor(null, preview.items);
+  };
+}
+async function openPreviousPrograms() {
+  const owner = Cloud.getLastUid();
+  const modal = convenienceModal(`${cxHeader('cx_plan_history')}<div id="cx-history" class="cx-stack"><p>${t('cx_loading')}</p></div>`);
+  const host = modal.querySelector('#cx-history');
+  try {
+    const result = await Cloud.listPlanHistory();
+    if (!modal.isConnected || owner !== Cloud.getLastUid()) return;
+    if (!result.ok) { host.textContent = t('sc_error'); return; }
+    host.innerHTML = result.rows.length ? result.rows.map((row,i) => `<button class="btn btn-ghost" data-history="${i}">${escapeHtml(formatDate(String(row.replaced_at).slice(0,10)))} · ${escapeHtml(String(row.version))}</button>`).join('') : `<p>${t('cx_no_history')}</p>`;
+    host.querySelectorAll('[data-history]').forEach(button => button.onclick = async () => {
+      button.disabled = true;
+      try {
+        const preview = await Cloud.readPlanHistory(result.rows[Number(button.dataset.history)].id);
+        if (!modal.isConnected || owner !== Cloud.getLastUid()) return;
+        if (!preview.ok) { convenienceError(preview); return; }
+        openPreviousProgramPreview(preview);
+      } catch (_) { showToast(t('sc_error')); } finally { button.disabled = false; }
+    });
+  } catch (_) { if (modal.isConnected) host.textContent = t('sc_error'); }
+}
+function openPreviousProgramPreview(preview) {
+  const plan = preview.plan;
+  if (!plan || !Array.isArray(plan.cycle) || !plan.cycle.length || !plan.cycle.every(slot => slot && Array.isArray(slot.exerciseIds))) { showToast(t('cx_no_history')); return; }
+  const expectedPlan = JSON.stringify(DB.plan.get()), exercises = DB.exercises.list();
+  const expectedExercises = JSON.stringify(exercises.map(e => ({id:e.id,name:e.name,category:e.category})));
+  const missing = [...new Set(plan.cycle.flatMap(slot => slot.exerciseIds))].filter(id => !exercises.some(e => e.id === id));
+  const renderPlan = (value, catalog) => (value.cycle || []).map(slot => `<div class="cx-item"><strong>${escapeHtml(slot.name)}</strong>${slot.exerciseIds.map(id => {
+    const ex = catalog.find(e => e.id === id), target = slot.targets?.[id];
+    return `<span>${escapeHtml(ex?.name || id)}${target ? ' · ' + escapeHtml([target.sets,target.reps,target.notes].filter(Boolean).join(' / ')) : ''}</span>`;
+  }).join('')}</div>`).join('');
+  const modal = convenienceModal(`${cxHeader('cx_plan_history')}<div class="cx-stack"><p>${t('cx_restore_hint')}</p>
+    <details><summary>${t('program_title')}</summary>${renderPlan(DB.plan.get(),exercises)}</details>
+    ${renderPlan(plan,preview.exercises)}<p>${(plan.trainingDays || []).map(d => escapeHtml(dayName(d,true))).join(' · ')}</p><p>${t('cx_date')}: ${todayISO()}</p>
+    ${missing.map((id,i) => `<label>${escapeHtml(preview.exercises.find(e => e.id === id)?.name || id)}<select class="input" data-map="${i}"><option value="">—</option><option value="new">${t('cx_new')}</option>${exercises.map(e => `<option value="${escapeHtml(e.id)}">${escapeHtml(exDisplayName(e))}</option>`).join('')}</select></label>`).join('')}
+    <label><input type="checkbox" id="cx-keep-exceptions">${t('cx_keep_exceptions')}</label>
+    <p class="settings-hint">${escapeHtml([...(DB.plan.get().restDates || []),...(DB.plan.get().extraDates || [])].filter(d => d >= todayISO()).join(' · '))}</p>
+    <button class="btn btn-primary" id="cx-restore-plan">${t('cx_restore')}</button></div>`);
+  modal.querySelector('#cx-restore-plan').onclick = async event => {
+    event.currentTarget.disabled = true;
+    const button = event.currentTarget;
+    try {
+      if (!await Cloud.checkPlanRestoreVersion(preview.owner,preview.version)) { convenienceError({code:'STALE'}); return; }
+      if (!modal.isConnected || preview.owner !== Cloud.getLastUid()) return;
+      const mappings = Object.fromEntries([...modal.querySelectorAll('[data-map]')].map(input => [missing[Number(input.dataset.map)],input.value]));
+      if (missing.some(id => !mappings[id])) { convenienceError({code:'VALIDATION'}); return; }
+      if (DB.hasUserData() && !Cloud.snapshotLocal('pre-plan-restore')) { convenienceError({code:'WRITE_FAILED'}); return; }
+      const result = DB.plan.restorePrevious({plan,exercises:preview.exercises,mappings,expectedPlan,expectedExercises,keepExceptions:modal.querySelector('#cx-keep-exceptions').checked});
+      if (!result.ok) { convenienceError(result); return; }
+      closeModal(); renderView(currentView); offerUndo(t('saved'),result);
+    } catch (_) { showToast(t('sc_error')); } finally { button.disabled = false; }
+  };
+}
+function openPurchaseEditor(source) {
+  const owner = Cloud.getLastUid(), recipe = source.type === 'recipe';
+  const original = recipe ? DB.recipes.list().find(x => x.id === source.id) : DB.mealBundles.list().find(x => x.id === source.id);
+  const snapshot = JSON.stringify(original);
+  const modal = convenienceModal(`${cxHeader('cx_qty')}<div class="cx-stack"><strong>${escapeHtml(source.name)}</strong><p>${t('cx_amount_hint')}</p><p class="settings-hint">${t('cx_identity_hint')}</p>
+    ${source.items.map((it,i) => `<div class="cx-item" data-purchase="${i}"><strong>${escapeHtml(it.name)}</strong><p class="settings-hint">${escapeHtml(it.qty || '')}</p>
+      <label>${t('cx_qty')}<input class="input" type="number" min="0.001" step="any" data-quantity value="${it.purchase?.quantity == null ? '' : Number(it.purchase.quantity)}"></label>
+      <label>${t('cx_unit')}<select class="input" data-unit>${['g','kg','ml','l','piece'].map(u => `<option value="${u}" ${it.purchase?.unit === u ? 'selected' : ''}>${t('cx_' + u)}</option>`).join('')}</select></label>
+      <label>${t('cx_identity')}<input class="input" data-identity maxlength="80" value="${escapeHtml(it.purchase?.ingredientId || '')}"></label>
+      <select class="input" data-preparation aria-label="${escapeHtml(t('cx_unspecified'))}">${['unspecified','raw','cooked'].map(p => `<option value="${p}" ${it.purchase?.preparation === p ? 'selected' : ''}>${t('cx_' + p)}</option>`).join('')}</select></div>`).join('')}
+    <button class="btn btn-primary" id="cx-purchase-save">${t('save')}</button></div>`);
+  modal.querySelector('#cx-purchase-save').onclick = () => {
+    const current = recipe ? DB.recipes.list().find(x => x.id === source.id) : DB.mealBundles.list().find(x => x.id === source.id);
+    if (owner !== Cloud.getLastUid() || snapshot !== JSON.stringify(current)) { convenienceError({code:'STALE'}); return; }
+    const items = copyData(source.items);
+    for (const row of modal.querySelectorAll('[data-purchase]')) {
+      const it = items[Number(row.dataset.purchase)], quantity = row.querySelector('[data-quantity]').value;
+      if (!quantity) { delete it.purchase; continue; }
+      const value = Number(quantity);
+      if (!Number.isFinite(value) || value <= 0 || value > 10000000) { convenienceError({code:'VALIDATION'}); return; }
+      it.purchase = { quantity:value, unit:row.querySelector('[data-unit]').value, ingredientId:row.querySelector('[data-identity]').value.trim(), preparation:row.querySelector('[data-preparation]').value, originalText:it.qty || '' };
+    }
+    const result = recipe ? {ok:!!DB.recipes.update(source.id,{items})} : DB.mealBundles.update(source.id,{items});
+    if (!result.ok) { convenienceError(result); return; }
+    openShoppingSources(); offerUndo(t('saved'),result);
+  };
+}
+function openShoppingEditor(existing = null, initial = []) {
+  const owner = Cloud.getLastUid();
+  let saved = existing, expected = existing ? JSON.stringify(existing) : null;
+  let items = copyData(existing?.items || initial);
+  const units = ['', 'g','kg','ml','l','piece'];
+  const modal = convenienceModal(`${cxHeader('cx_shopping')}<div class="cx-stack">
+    <label>${t('cx_name')}<input class="input" id="cx-list-name" maxlength="80" value="${escapeHtml(existing?.name || '')}"></label>
+    <p class="settings-hint">${t('cx_identity_hint')}</p><div id="cx-shopping-items" class="cx-stack"></div>
+    <button class="btn btn-ghost" id="cx-shopping-add">${t('add')}</button>
+    <button class="btn btn-primary" id="cx-shopping-save">${t('save')}</button>
+    <button class="btn btn-ghost" id="cx-shopping-share">${t('cx_share')}</button>
+    ${existing ? `<button class="btn btn-ghost danger" id="cx-shopping-delete">${t('delete')}</button>` : ''}</div>`);
+  const read = () => {
+    modal.querySelectorAll('[data-shopping-row]').forEach(row => {
+      const it = items[Number(row.dataset.shoppingRow)];
+      for (const key of ['name','unit','ingredientId','preparation','category']) it[key] = row.querySelector(`[data-field="${key}"]`).value;
+      const quantity = row.querySelector('[data-field="quantity"]').value;
+      it.quantity = quantity === '' ? null : Number(quantity);
+      it.checked = row.querySelector('[data-field="checked"]').checked;
+    });
+  };
+  const draw = () => {
+    modal.querySelector('#cx-shopping-items').innerHTML = items.map((it,i) => `<div class="cx-item" data-shopping-row="${i}">
+      <label class="cx-row"><span>${t('cx_checked')}</span><input type="checkbox" data-field="checked" ${it.checked ? 'checked' : ''}></label>
+      <label>${t('cx_name')}<input class="input" data-field="name" maxlength="120" value="${escapeHtml(it.name || '')}"></label>
+      ${it.originalText ? `<p class="settings-hint">${escapeHtml(it.originalText)}</p>` : ''}
+      <div class="cx-row"><label>${t('cx_qty')}<input class="input" type="number" min="0.001" step="any" data-field="quantity" placeholder="${escapeHtml(t('cx_unknown'))}" value="${it.quantity == null ? '' : Number(it.quantity)}"></label>
+      <label>${t('cx_unit')}<select class="input" data-field="unit">${units.map(u => `<option value="${u}" ${u === it.unit ? 'selected' : ''}>${u ? t('cx_' + u) : '—'}</option>`).join('')}</select></label></div>
+      <label>${t('cx_identity')}<input class="input" data-field="ingredientId" maxlength="80" value="${escapeHtml(it.ingredientId || '')}"></label>
+      <select class="input" data-field="preparation" aria-label="${escapeHtml(t('cx_unspecified'))}">${['unspecified','raw','cooked'].map(p => `<option value="${p}" ${it.preparation === p ? 'selected' : ''}>${t('cx_' + p)}</option>`).join('')}</select>
+      <label>${t('cx_category')}<input class="input" data-field="category" maxlength="40" value="${escapeHtml(it.category || '')}"></label>
+      <button class="btn btn-ghost danger" data-remove-shopping="${i}">${t('delete')}</button></div>`).join('');
+    modal.querySelectorAll('[data-remove-shopping]').forEach(b => b.onclick = () => { read(); const at = Number(b.dataset.removeShopping), removed = items.splice(at,1)[0]; draw(); showToast(t('deleted'), { actionLabel:t('undo'), duration:10000, onAction:() => { if (modal.isConnected && owner === Cloud.getLastUid()) { read(); items.splice(Math.min(at,items.length),0,removed); draw(); } } }); });
+  };
+  draw();
+  modal.querySelector('#cx-shopping-add').onclick = () => { read(); if (items.length >= 200) return; items.push({id:uid(),name:'',quantity:null,unit:'',checked:false,sourceRefs:[]}); draw(); };
+  modal.querySelector('#cx-shopping-save').onclick = () => {
+    if (owner !== Cloud.getLastUid()) { convenienceError({code:'STALE'}); return; }
+    read();
+    const result = DB.shopping.save({id:saved?.id,name:modal.querySelector('#cx-list-name').value,items: saved ? items : DB.shopping.combine(items)},expected);
+    if (!result.ok) { convenienceError(result); return; }
+    saved = result.entity; expected = JSON.stringify(saved); items = copyData(saved.items); openShoppingDetail(saved); offerUndo(t('saved'),result);
+  };
+  modal.querySelector('#cx-shopping-share').onclick = async () => {
+    if (owner !== Cloud.getLastUid()) { convenienceError({code:'STALE'}); return; }
+    read();
+    const text = modal.querySelector('#cx-list-name').value + '\n' + items.map(it => `${it.checked ? '☑' : '☐'} ${it.name} — ${it.quantity == null ? t('cx_unknown') : fmtNum(it.quantity)} ${it.unit ? t('cx_' + it.unit) : ''}`).join('\n');
+    try { if (navigator.share) await navigator.share({text}); else await navigator.clipboard.writeText(text); } catch (error) { if (error.name !== 'AbortError') showToast(t('export_failed')); }
+  };
+  modal.querySelector('#cx-shopping-delete')?.addEventListener('click', () => {
+    if (owner !== Cloud.getLastUid() || expected !== JSON.stringify(DB.shopping.list().find(x => x.id === saved.id))) { convenienceError({code:'STALE'}); return; }
+    const result = DB.shopping.remove(saved.id); if (!result.ok) { convenienceError(result); return; } closeModal(); openShoppingLists(); offerUndo(t('deleted'),result);
+  });
+}
+
 function renderSettings(el) {
   const prefs = DB.prefs.get();
   const currentTheme = normalizeTheme(prefs.theme);
@@ -9486,6 +9947,20 @@ function renderSettings(el) {
       <div class="page-eyebrow">${icon('settings', 16)}</div>
       <h1 class="page-title">${t('settings_title')}</h1>
       <p class="page-subtitle">${t('settings_subtitle')}</p>
+    </div>
+
+    <button class="btn btn-ghost btn-block" data-plan-history>${t('cx_plan_history')}</button>
+    <button class="btn btn-ghost btn-block" data-recent-changes>${t('cx_recent')}</button>
+    <div class="settings-section save-center" id="save-center">
+      <div class="section-title">${t('sc_title')}</div>
+      <div class="save-center-status" role="status" aria-live="polite" aria-atomic="true">
+        <div class="save-center-row"><span>${t('sc_device')}</span><strong id="sc-device"></strong></div>
+        <div class="save-center-row"><span>${t('sc_cloud')}</span><strong id="sc-cloud"></strong></div>
+        <p id="sc-detail" hidden></p>
+      </div>
+      <p class="settings-hint" id="sc-time"></p>
+      <button type="button" class="btn btn-ghost btn-block" id="sc-action"></button>
+      <p class="settings-hint">${t('sc_photos')}</p>
     </div>
 
     ${(window.Cloud && Cloud.configured()) ? `
@@ -9615,6 +10090,22 @@ function renderSettings(el) {
   `;
 
   // Account (cloud sync) — populated async since the session check is async.
+  updateSaveCenter();
+  $('#sc-action', el)?.addEventListener('click', async (event) => {
+    const button = event.currentTarget;
+    const action = button.dataset.action;
+    if (action === 'export') { exportBackupFile(); return; }
+    if (action === 'login') { showAuthGate('in'); return; }
+    if (action === 'review') { showConflictDialog(); return; }
+    if (!window.Cloud || button.disabled) return;
+    button.disabled = true;
+    try {
+      const result = await Cloud.resume({ force: true });
+      if (result === 'pulled') refreshAfterSync();
+      if (result === 'conflict') showConflictDialog();
+    } catch (_) { /* Cloud owns the failure state shown below. */ }
+    finally { updateSaveCenter(); }
+  });
   if (window.Cloud && Cloud.configured()) populateAccount(el);
 
   // Exercise-name translation toggle (Arabic only)
@@ -10930,7 +11421,8 @@ function renderSessionDay(el) {
       // elsewhere), update() returns null and we create a fresh one instead of
       // silently losing the edit.
       let wasUpdate = false;
-      if (existingId && DB.sessions.update(existingId, { date: viewContext.sdDate, sets: cleaned })) {
+      if (existingId && DB.sessions.get(existingId)) {
+        if (!DB.sessions.update(existingId, { date: viewContext.sdDate, sets: cleaned })) { convenienceError(DB.saveState()); return; }
         wasUpdate = true;
       } else {
         // Tagged 'minimum' when this session came out of the rest-day sheet, so
@@ -10940,6 +11432,7 @@ function renderSessionDay(el) {
           exerciseId: exId, date: viewContext.sdDate, sets: cleaned,
           kind: viewContext.sdMinimum ? 'minimum' : undefined,
         });
+        if (!created) { convenienceError(DB.saveState()); return false; }
         st.savedSessionId = created.id;
       }
       const prMsg = checkPR(exId, prior, cleaned, viewContext.sdUnit);
@@ -10950,6 +11443,7 @@ function renderSessionDay(el) {
       }
       st.dirty = false;
       renderSessionDay(el);
+      offerUndo(wasUpdate ? t('session_updated') : t('session_saved'));
       // §7: the permission sheet waits for the FIRST logged workout, so EVERY
       // save path calls this — there are THREE (here, guided mode's summary and
       // the exercise-detail modal), and wiring only this one meant a user who
@@ -11300,7 +11794,8 @@ function renderSessionRun(el) {
     }
     if (cleaned.length === 0) {
       if (opts.removeEmpty && existingId) {
-        DB.sessions.remove(existingId);
+        const result = DB.sessions.remove(existingId);
+        if (!result.ok) { convenienceError(result); return false; }
         st.savedSessionId = null;
         delete st.prMsg;
         return true;
@@ -11313,7 +11808,8 @@ function renderSessionRun(el) {
     // did, so a PR set here was stored yet never celebrated. Must be taken before
     // the write, or the new set is already inside the "previous" best.
     const prior = DB.sessions.prSnapshot(exId);
-    if (existingId && DB.sessions.update(existingId, { date: runCtx.runDate, sets: cleaned })) {
+    if (existingId) {
+      if (!DB.sessions.update(existingId, { date: runCtx.runDate, sets: cleaned })) { convenienceError(DB.saveState()); return false; }
       st.savedSessionId = existingId;
     } else {
       // Tagged 'minimum' when the run inherited a reduced day from the rest-day
@@ -11324,6 +11820,7 @@ function renderSessionRun(el) {
         exerciseId: exId, date: runCtx.runDate, sets: cleaned,
         kind: runCtx.runMinimum ? 'minimum' : undefined,
       });
+      if (!created) { convenienceError(DB.saveState()); return false; }
       st.savedSessionId = created.id;
     }
     // Stash rather than toast: a mid-workout toast would fight the rest-timer bar
@@ -11636,7 +12133,7 @@ function renderSessionRun(el) {
       closeModal();
       setTimeout(() => {
         const go = () => {
-          if (logged) DB.sessions.remove(logged.id);
+          if (logged) { const result = DB.sessions.remove(logged.id); if (!result.ok) { convenienceError(result); return; } }
           replaceInRun(ex.id, null);
           // Stay on the same position: the next exercise slides into it. Past
           // the end (it was last) step back one.
@@ -11688,7 +12185,7 @@ function renderSessionRun(el) {
         const newId = b.dataset.pick;
         const logged = loggedToday(ex.id);
         const go = () => {
-          if (logged) DB.sessions.remove(logged.id);
+          if (logged) { const result = DB.sessions.remove(logged.id); if (!result.ok) { convenienceError(result); return; } }
           replaceInRun(ex.id, newId);
           closeModal();
           renderSessionRun(el);
@@ -11872,7 +12369,7 @@ function renderSessionRun(el) {
       const commitOnce = () => {
         if (commitQueued) return;
         commitQueued = true;
-        setTimeout(() => { commitQueued = false; commitExercise(ex.id); }, 0);
+        setTimeout(() => { commitQueued = false; const token = DB.undo.list()[0]?.token; if (commitExercise(ex.id) && DB.undo.list()[0]?.token !== token) offerUndo(t('session_updated')); }, 0);
       };
       inp.addEventListener('change', commitOnce);
       inp.addEventListener('blur', commitOnce);
@@ -11916,20 +12413,12 @@ function renderSessionRun(el) {
     // removed this way too; Undo puts it back at its original position.
     row.querySelector('[data-del-set]')?.addEventListener('click', () => {
       if (st.sets.length <= 1 && !st.savedSessionId) return;
-      const removed = st.sets[i];
-      const removedAt = i;
+      const previous = st.sets.slice();
       st.sets.splice(i, 1);
-      commitExercise(ex.id, { removeEmpty: true });
+      if (!commitExercise(ex.id, { removeEmpty: true })) { st.sets = previous; return; }
       renderSessionRun(el);
-      showToast(t('set_deleted'), {
-        actionLabel: t('undo'),
-        onAction: () => {
-          const at = Math.min(removedAt, st.sets.length);
-          st.sets.splice(at, 0, removed);
-          commitExercise(ex.id);
-          renderSessionRun(el);
-        },
-      });
+      offerUndo(t('set_deleted'));
+
     });
   });
 
@@ -12716,7 +13205,7 @@ function renderFoodLog(el) {
       refreshTotals();
       closeModal();
       try { list.querySelector(`[data-food-row="${CSS.escape(id)}"] [data-edit-food]`)?.focus(); } catch (_) {}
-      showToast(t('fl_edited'));
+      offerUndo(t('fl_edited'));
     });
   }
 
@@ -12726,14 +13215,15 @@ function renderFoodLog(el) {
     if (editBtn) { openFoodLogEditor(editBtn.dataset.editFood); return; }
     const btn = e.target.closest('[data-del-food]');
     if (!btn) return;
-    DB.foodLogs.remove(ctx.date, btn.dataset.delFood);
+    const result = DB.foodLogs.remove(ctx.date, btn.dataset.delFood);
+    if (!result.ok) { convenienceError(result); return; }
     const row = btn.closest('[data-food-row]');
     if (row) row.remove();
     if (!$('#food-log-list', el).querySelector('[data-food-row]')) {
       $('#food-log-list', el).innerHTML = emptyState({ iconName: 'apple', title: t('no_food_logged'), text: t('no_food_logged_text') });
     }
     refreshTotals();
-    showToast(t('food_removed'));
+    offerUndo(t('food_removed'), result);
   });
 }
 
@@ -13063,6 +13553,7 @@ async function afterLogin() {
     const r = await Cloud.resolveOnLogin();
     if (r === 'conflict') { hideAuthGate(); showConflictDialog(); return; }
     hideAuthGate();
+    if (r !== 'pushed' && r !== 'pulled') { showToast(t('sc_error')); return; }
     refreshAfterSync();
     showToast(t('synced'));
     syncExerciseImages(); // back up / heal custom images, best-effort
@@ -13239,22 +13730,6 @@ async function populateAccount(el) {
           <div class="settings-action-sub">${t('account_synced_sub')}</div>
         </div>
       </div>
-      <button class="settings-action-row" id="sync-now-btn">
-        <div class="settings-action-icon">${icon('refresh', 20)}</div>
-        <div class="settings-action-main">
-          <div class="settings-action-title">${t('sync_now')}</div>
-          <!-- The sub-line is the honest one now. isDirty/getStamp were never
-               exported from cloud.js, so NO screen could tell the user their
-               last set was still only on this phone; the app could only ever
-               say "synced" after a button press and nothing in between. -->
-          <div class="settings-action-sub">${(() => {
-            const st = (window.Cloud && Cloud.syncState) ? Cloud.syncState() : null;
-            if (st && st.dirty) return t('sync_unsynced');
-            if (st && st.stamp) return `${t('sync_now_sub')} · ${escapeHtml(formatDateShort(st.stamp.slice(0, 10)))}`;
-            return t('sync_now_sub');
-          })()}</div>
-        </div>
-      </button>
       ${(() => {
         const rec = (window.Cloud && Cloud.recoveryInfo) ? Cloud.recoveryInfo() : null;
         if (!rec) {
@@ -13330,21 +13805,6 @@ async function populateAccount(el) {
           if (ok) { refreshAfterSync(); renderView(currentView); }
         },
       });
-    });
-    $('#sync-now-btn', el)?.addEventListener('click', async () => {
-      showToast(t('auth_signing'));
-      try {
-        // Report what ACTUALLY happened. This used to say "Synced" for every
-        // outcome — including a failed/offline push and an unresolved conflict —
-        // so the user was told their data was safe when it was still only local.
-        const r = await Cloud.bootSync();
-        if (r === 'pulled') { refreshAfterSync(); showToast(t('synced')); }
-        // 'synced' is the fast path: both sides already agreed, so nothing moved
-        // — but the user pressed Sync and is owed the same answer as a push.
-        else if (r === 'pushed' || r === 'synced') showToast(t('synced'));
-        else if (r === 'conflict') showConflictDialog();
-        else showToast(t('auth_err_network'));   // 'offline' / anything else
-      } catch (_) { showToast(t('auth_err_network')); }
     });
     $('#logout-btn', el)?.addEventListener('click', () => {
       confirmDialog({
