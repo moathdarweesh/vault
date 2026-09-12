@@ -7612,11 +7612,155 @@ body:has(.toast.show) .modal { padding-bottom: calc(var(--nav-h) + var(--safe-b)
    heading, two rows carrying a "+" wedged between the workout hero and the
    calories card read as "add something", not "mark this done". */
 .home-sched { margin-bottom: 18px; }
-.home-sched .section-title { margin-bottom: 10px; }
-/* Done is carried by the toggle itself (check vs plus, plus aria-pressed). This
-   wash only reinforces it, so colour is never the sole signal. */
+/* Done is carried by the control's own label and the geometry. This wash only
+   reinforces it, so colour is never the sole signal. */
 .data-row.is-done .data-title { color: var(--text-mute); }
 .data-row.is-done .data-icon { opacity: 0.6; }
+
+/* ---- Today's cardio: a task card that shrinks when the task is paid --------
+   THREE SIZES, ONE FAMILY, and the ladder between them is the whole idea:
+   CARD (owed, primary, ~160px) → ROW (owed, queued, 68px) → STRIP (settled,
+   44px). Prime space under the workout hero stays proportional to what is still
+   owed, so a finished cardio cannot hold hero space for the rest of the day.
+
+   Why not simply the workout hero's own size: measured on this phone, that hero
+   is 184px and the calories hero below already ends 117px PAST the fold. A third
+   184px card would start the calories card at 646px, i.e. entirely below it. */
+.cardio-task {
+  padding: var(--sp-4);
+  padding-inline-start: calc(var(--sp-4) + var(--sp-2));   /* clears the rail */
+  margin-bottom: var(--sp-2h);
+}
+/* THE RADIAL GLOW IS REPLACED BY ONE BAR OF THE MARK (identity device 5). The
+   glow marks the two NAVIGATIONAL heroes — cards that take you somewhere. This
+   card completes in place, so it gets the tick instead, stood on end, where it
+   also inherits the job of the .section-title that used to sit above the block.
+   Declared at (0,2,0) and resetting every inherited side in full, for the same
+   reason .hero-card.hero-rest documents: it must beat .hero-card on specificity
+   rather than on source order. --accent-text and never --accent: as a GRAPHIC
+   mass #ff6a00 measures 2.65:1 on the light page, under the 3:1 floor. */
+.hero-card.cardio-task::before {
+  top: var(--sp-4);
+  bottom: var(--sp-4);
+  inset-inline-start: 0;
+  inset-inline-end: auto;
+  width: var(--bar-w);
+  height: auto;
+  background: var(--accent-text);
+}
+/* It is not a button, so it must not press like one. */
+.hero-card.cardio-task:active { transform: none; border-color: transparent; }
+
+.cardio-task-head {
+  position: relative;          /* above ::before, which is not positioned by it */
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  margin-top: var(--sp-2);
+}
+/* 19px, not the heroes' 24: subordinate, still a headline. 14px is .data-title's
+   own size, and a list item is exactly what this card exists to stop being. */
+.cardio-task .data-title { font-size: var(--fs-h2); margin-bottom: var(--sp-1); }
+/* 2:1 CORNER LAW: the tile is a leaf of a --radius-lg (24) container, so 12 —
+   not the 8 that is correct for the same tile inside a 16px .data-row. */
+.cardio-task .data-icon { border-radius: var(--radius-btn-m); }
+
+/* THE BAR IS SIZE M, NOT L, AND THAT IS THE HIERARCHY. --btn-h-l is "the
+   screen's one filled action", and that is the workout. Cardio is the same shape
+   one rank down — and 12 inside 24 is the 2:1 corner law, which 16 inside 24 is
+   not. It keeps .hero-cta, so it inherits the accent fill AND the identity
+   layer's `--icon-accent: currentColor`; without that the check's short leg
+   paints orange on orange, which is the .supp-toggle.taken bug this project has
+   already shipped once. A filled colour promises a task — and while this card
+   exists, there is one. */
+.cardio-done-cta {
+  height: var(--btn-h-m);
+  border-radius: var(--radius-btn-m);
+  font-size: var(--fs-btn-m);
+  margin-top: var(--sp-3);
+  overflow: hidden;            /* so the label cannot spill while it folds */
+  transition: height 180ms var(--ease), margin-top 180ms var(--ease), opacity 120ms var(--ease);
+}
+.cardio-done-cta:active { transform: scale(var(--press-scale)); }
+
+/* THE FOLD. The only element that genuinely ceases to exist is the button, so it
+   is the only thing animated: it retracts into the card while the icon, the name
+   and the duration sit perfectly still and survive into the strip below. The
+   card is not replaced — it is de-boned, and the surface closes around what is
+   left. The icon is the continuity anchor: it is the one element present at all
+   three sizes, in its own category colour, which is never orange. */
+.cardio-task.is-folding { pointer-events: none; }
+.cardio-task.is-folding .cardio-done-cta { height: 0; margin-top: 0; opacity: 0; }
+@keyframes cardio-cta-in {
+  from { height: 0; margin-top: 0; opacity: 0; }
+  to   { height: var(--btn-h-m); margin-top: var(--sp-3); opacity: 1; }
+}
+.cardio-task.is-unfolding .cardio-done-cta { animation: cardio-cta-in 200ms var(--ease); }
+
+/* ---- The settled strip: the same row, two thirds the height ---------------
+   It keeps var(--elev-1) from the identity layer. Dropping it was tempting —
+   settled things should recede — but --surface-1 on --bg is ~1.08:1 in dark,
+   and with no border and no bevel the strip would have no edge at all. */
+.data-row.cardio-settled {
+  padding: var(--sp-2) var(--sp-2h);
+  gap: var(--sp-2h);
+}
+.data-row.cardio-settled .data-icon { width: 28px; height: 28px; }
+.data-row.cardio-settled .data-icon svg { width: 16px; height: 16px; }
+.data-row.cardio-settled .data-main {
+  display: flex; align-items: baseline; gap: var(--sp-2);
+  min-width: 0; flex-wrap: wrap;
+}
+.data-row.cardio-settled .data-title { margin: 0; font-size: var(--fs-sub); }
+.data-row.cardio-settled .data-meta  { font-size: var(--fs-caption); }
+
+/* The two labelled controls. 28px visible with a 44px target via ::after — the
+   pattern .filter-pill and .ledger-add already use. A border because a border
+   MEANS interactive. `--icon-accent: currentColor` on both is NOT optional: the
+   duotone glyphs would otherwise resolve their accent leg to --accent-text and
+   paint brand orange on a muted control — the exact failure .supp-toggle.taken
+   shipped with. A styled button must also set `color` explicitly, or it inherits
+   the UA `buttontext` default, which measured 2.23:1 here once before. */
+.cardio-do, .cardio-undo {
+  position: relative;
+  flex: none;
+  display: flex; align-items: center; gap: var(--sp-1);
+  height: 28px;
+  padding: 0 var(--sp-2h);
+  border-radius: var(--radius-sm);
+  font-family: inherit;
+  font-size: var(--fs-btn-s);
+  font-weight: 700;
+  line-height: 1;
+  cursor: pointer;
+  --icon-accent: currentColor;
+  -webkit-tap-highlight-color: transparent;
+}
+.cardio-do svg, .cardio-undo svg { width: 16px; height: 16px; }
+.cardio-do::after, .cardio-undo::after { content: ''; position: absolute; inset: -8px -6px; }
+/* Still owed → filled, because a filled colour promises a task. */
+.cardio-do {
+  border: none;
+  background: var(--accent);
+  color: var(--accent-ink);
+}
+.cardio-do:active { transform: scale(var(--press-scale)); }
+/* Settled → an outline way back, never a ticked box: a check sitting in a square
+   still offers itself as something to tick, which is half the original problem. */
+.cardio-undo {
+  border: 1px solid var(--border-hi);
+  background: none;
+  color: var(--text-mute);
+}
+.cardio-undo:active { background: var(--surface-2); color: var(--text); }
+
+@media (prefers-reduced-motion: reduce) {
+  .cardio-done-cta { transition: none; }
+  .cardio-task.is-unfolding .cardio-done-cta { animation: none; }
+}
+@media (hover: hover) {
+  .cardio-undo:hover { border-color: var(--accent-line); color: var(--text); }
+}
 
 /* =========================================================================
    ^^^ EVERYTHING ABOVE, THEN THE IDENTITY LAYER BELOW. ^^^

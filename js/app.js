@@ -12,7 +12,7 @@
 // build. The literal below is the fallback (file://, or a stripped query) and is
 // still bumped by `npm run release` — see CLAUDE.md "CACHE WORKFLOW".
 const VAULT_BUILD = (() => {
-  const FALLBACK = 'v317';
+  const FALLBACK = 'v318';
   try {
     const src = (document.currentScript && document.currentScript.src) || '';
     const m = src.match(/[?&]v=(\d+)/);
@@ -429,6 +429,8 @@ const I18N = {
     cx_prep: 'Preparation', cx_portion_unset: 'Enter a portion',
     cardio_sched: 'Cardio schedule', cardio_sched_add: 'Add cardio', cardio_sched_days: 'Days',
     cardio_sched_today: "Today's cardio", cardio_sched_more: '+{n} more',
+    cardio_mark_done: 'Mark done', cardio_task_scheduled: 'scheduled for today', cardio_task_of: '{i} of {n}',
+    cardio_mark_done_a11y: 'Mark {x} done', cardio_undo_a11y: 'Undo {x}', cardio_sched_undone: 'Cardio unmarked',
     cardio_sched_need: 'Choose at least one day and a duration.',
     cardio_sched_limit: 'You have reached the limit of scheduled cardio.',
     cardio_sched_saved: 'Cardio schedule saved', cardio_sched_deleted: 'Removed from the schedule',
@@ -1421,6 +1423,8 @@ const I18N = {
     cx_prep: 'التحضير', cx_portion_unset: 'أدخل عدد الحصص',
     cardio_sched: 'جدول الكارديو', cardio_sched_add: 'إضافة كارديو', cardio_sched_days: 'الأيام',
     cardio_sched_today: 'كارديو اليوم', cardio_sched_more: '+{n} غيرها',
+    cardio_mark_done: 'تمّ', cardio_task_scheduled: 'مجدول اليوم', cardio_task_of: '{i} من {n}',
+    cardio_mark_done_a11y: 'سجّل إنجاز {x}', cardio_undo_a11y: 'تراجع عن تسجيل {x}', cardio_sched_undone: 'أُلغي تسجيل الكارديو',
     cardio_sched_need: 'اختر يوماً واحداً على الأقل ومدّة.',
     cardio_sched_limit: 'بلغتَ الحدّ الأقصى للكارديو المجدول.',
     cardio_sched_saved: 'حُفظ جدول الكارديو', cardio_sched_deleted: 'أُزيل من الجدول',
@@ -4334,38 +4338,98 @@ function renderHome(el) {
   // install still sees no empty shelf. It does not duplicate the stat strip's
   // cardio cell — that answers "how many minutes this week", this answers "is
   // today's walk done".
+  // THREE SIZES, ONE FAMILY, and the ladder between them IS the design:
+  //   CARD  — the cardio you owe NEXT. Never more than one, ever.
+  //   ROW   — another one still owed, queued underneath at list weight.
+  //   STRIP — settled. 44px, no accent, no filled bar, but still undoable.
+  // Prime space under the workout hero stays proportional to what is still owed,
+  // so a finished cardio cannot hold hero space for the rest of the day.
+  //
+  // The .section-title is GONE on purpose. A heading reading «كارديو اليوم» above
+  // one row saying «مشي · ٣٠ د» spent 26px to label a single item, and neither
+  // hero on this screen does that — each names itself in its own eyebrow. That
+  // inconsistency is most of why the block read as a lesser, list-shaped thing.
+  // The identical key moved into the card's eyebrow; the string count is unchanged.
   const cardioSchedHtml = (() => {
     const iso = todayISO();
     const rows = DB.cardioPlan.forDate(iso);
     if (!rows.length) return '';
-    // Done sinks to the bottom, and the list is capped: three rows is already the
-    // height of the hero above it, and pushing the calories card below the fold to
-    // show a ticked box is a bad trade.
-    const CAP = 3;
-    const ordered = rows.slice().sort((a, b) => Number(!!a.doneId) - Number(!!b.doneId));
-    const shown = ordered.slice(0, CAP);
-    const extra = ordered.length - shown.length;
-    return `
-    <div class="home-sched">
-      <div class="section-title">${t('cardio_sched_today')}</div>
-      <div class="data-list" id="home-cardio-sched" data-iso="${iso}">
-        ${shown.map((r) => {
-          const tm = resolveCardioType(r.type);
-          const done = !!r.doneId;
-          return `
-          <div class="data-row${done ? ' is-done' : ''}">
-            <div class="data-icon ${tm.cls}" aria-hidden="true">${icon(tm.iconName, 20)}</div>
-            <div class="data-main">
-              <div class="data-title">${escapeHtml(tm.label)}</div>
-              <div class="data-meta"><span class="num">${fmtNum(r.duration)}</span> ${t('unit_min')}</div>
-            </div>
-            <button type="button" class="supp-toggle${done ? ' taken' : ''}" data-cardio-done="${escapeHtml(r.id)}"
-                    aria-pressed="${done}" aria-label="${escapeHtml(t('done'))}">${icon(done ? 'check' : 'plus', 18)}</button>
-          </div>`;
-        }).join('')}
+    const owed = rows.filter((r) => !r.doneId);
+    const settled = rows.filter((r) => r.doneId);
+    const lead = owed[0] || null;
+    // Tighter when a card is already eating the space: the calories hero below
+    // must not be pushed off the fold to show a queue. Measured on a 375px phone,
+    // the calories card already ends 117px past the fold before any of this.
+    const CAP = lead ? 2 : 3;
+    const tail = owed.slice(1).concat(settled);
+    const shown = tail.slice(0, CAP);
+    const extra = tail.length - shown.length;
+
+    const leadHtml = !lead ? '' : (() => {
+      const tm = resolveCardioType(lead.type);
+      const pos = owed.length > 1
+        ? ' · ' + t('cardio_task_of').replace('{i}', fmtNum(1)).replace('{n}', fmtNum(owed.length))
+        : '';
+      return `
+      <div class="hero-card cardio-task">
+        <div class="hero-eyebrow">${t('cardio_sched_today')}</div>
+        <div class="cardio-task-head">
+          <div class="data-icon ${tm.cls}" aria-hidden="true">${icon(tm.iconName, 20)}</div>
+          <div class="data-main">
+            <div class="data-title">${escapeHtml(tm.label)}</div>
+            <div class="data-meta"><span class="num">${fmtNum(lead.duration)}</span> ${t('unit_min')} · ${t('cardio_task_scheduled')}${pos}</div>
+          </div>
+        </div>
+        <button type="button" class="hero-cta hero-cta-btn cardio-done-cta" data-cardio-done="${escapeHtml(lead.id)}"
+                aria-label="${escapeHtml(t('cardio_mark_done_a11y').replace('{x}', tm.label))}">${icon('check', 20)}<span>${t('cardio_mark_done')}</span></button>
+      </div>`;
+    })();
+
+    // A queued one still owed. No plus glyph anywhere in this block any more: a
+    // "+" in a square is what made the day's job read as "add something", which
+    // is the complaint. It says what it does, in the same words as the card.
+    const owedRowHtml = (r) => {
+      const tm = resolveCardioType(r.type);
+      return `
+      <div class="data-row">
+        <div class="data-icon ${tm.cls}" aria-hidden="true">${icon(tm.iconName, 20)}</div>
+        <div class="data-main">
+          <div class="data-title">${escapeHtml(tm.label)}</div>
+          <div class="data-meta"><span class="num">${fmtNum(r.duration)}</span> ${t('unit_min')}</div>
+        </div>
+        <button type="button" class="cardio-do" data-cardio-done="${escapeHtml(r.id)}"
+                aria-label="${escapeHtml(t('cardio_mark_done_a11y').replace('{x}', tm.label))}">${icon('check', 16)}<span>${t('cardio_mark_done')}</span></button>
+      </div>`;
+    };
+
+    // Settled. FOUR independent signals say so, because colour must never be the
+    // only one: the word, the .is-done wash, the geometry (44px against 160), and
+    // the accessible name of the control, which now says what pressing it DOES.
+    // The control is a labelled «تراجع», not a ticked box — a check in a square
+    // still offers itself as something to tick.
+    const settledHtml = (r) => {
+      const tm = resolveCardioType(r.type);
+      return `
+      <div class="data-row is-done cardio-settled">
+        <div class="data-icon ${tm.cls}" aria-hidden="true">${icon(tm.iconName, 16)}</div>
+        <div class="data-main">
+          <span class="data-title">${escapeHtml(tm.label)}</span>
+          <span class="data-meta"><span class="num">${fmtNum(r.duration)}</span> ${t('unit_min')} · ${t('done')}</span>
+        </div>
+        <button type="button" class="cardio-undo" data-cardio-done="${escapeHtml(r.id)}"
+                aria-label="${escapeHtml(t('cardio_undo_a11y').replace('{x}', tm.label))}">${icon('refresh', 16)}<span>${t('undo')}</span></button>
+      </div>`;
+    };
+
+    const listHtml = (shown.length || extra > 0) ? `
+      <div class="data-list">
+        ${shown.map((r) => (r.doneId ? settledHtml(r) : owedRowHtml(r))).join('')}
         ${extra > 0 ? `<button type="button" class="ledger-add" data-goto="workouts">${escapeHtml(t('cardio_sched_more').replace('{n}', fmtNum(extra)))}</button>` : ''}
-      </div>
-    </div>`;
+      </div>` : '';
+
+    // The id/data-iso host moved up from the inner list to the wrapper, so ONE
+    // delegated listener covers the card, the queued rows and the strips.
+    return `<div class="home-sched" id="home-cardio-sched" data-iso="${iso}">${leadHtml}${listHtml}</div>`;
   })();
 
   // TWO KINDS OF REST DAY, and they are not the same thing.
@@ -4569,10 +4633,28 @@ function renderHome(el) {
     if (shown !== now) { renderView('home'); return; }
     const row = DB.cardioPlan.forDate(now).find((r) => r.id === btn.dataset.cardioDone);
     if (!row) { renderView('home'); return; }
-    const result = row.doneId ? DB.cardioPlan.uncomplete(row.id, now) : DB.cardioPlan.complete(row.id, now);
+    const wasDone = !!row.doneId;
+    const result = wasDone ? DB.cardioPlan.uncomplete(row.id, now) : DB.cardioPlan.complete(row.id, now);
     if (!result.ok) { convenienceError(result); return; }
-    renderView('home');
-    offerUndo(t('cardio_sched_done'), result);
+    // The toast now says which direction it went; it used to claim "logged" for
+    // an un-tick as well.
+    const finish = () => {
+      renderView('home');
+      // If another cardio was owed, the next one is promoted into card position.
+      // Growing its bar in says "one down, next up" instead of "nothing moved".
+      if (!wasDone) document.querySelector('.cardio-task')?.classList.add('is-unfolding');
+      offerUndo(t(wasDone ? 'cardio_sched_undone' : 'cardio_sched_done'), result);
+    };
+    // THE FOLD. The write has ALREADY happened, so nothing is at risk if this
+    // teardown is interrupted — only the repaint waits. The single element that
+    // genuinely ceases to exist is the button, so it is the only thing animated:
+    // it retracts while the icon, the name and the duration sit perfectly still
+    // and survive into the strip. The card is not replaced, it is de-boned.
+    const card = wasDone ? null : btn.closest('.cardio-task');
+    if (!card || matchMedia('(prefers-reduced-motion: reduce)').matches) { finish(); return; }
+    card.classList.add('is-folding');   // also kills pointer-events: no double tap
+    btn.disabled = true;
+    setTimeout(finish, 180);
   });
   // "Start Workout" hero card → straight into today's session logging.
   // Recompute the day at click time so it stays correct if Home was left open

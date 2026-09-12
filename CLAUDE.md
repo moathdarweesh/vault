@@ -77,7 +77,7 @@ a faster TTFB — not fewer bytes.
 npm run release          # bump every marker + verify, then commit all files together
 ```
 
-**Current version: v317.** APK: build 21 / v3.0.
+**Current version: v318.** APK: build 21 / v3.0.
 
 `scripts/release.js` rewrites **every** marker and then re-reads them from disk to confirm; it exits non-zero if any disagree, and prints the count per file (derived, never hard-coded — the docs used to say 16 while the real count was 15). The markers are `?v=N` in `index.html` (every script and stylesheet, the `js/vendor/supabase.js` preload, both `icons/icon.svg` links, `manifest.json`), the `__cleaned_vN` sessionStorage key, the `FALLBACK` literal in `app.js`, `version.json` → `web`, the `?v=` in `manifest.json`, `admin.html`, `privacy.html` and `get/index.html`, and the `Current version` line in this file. `scripts/check-contracts.js` (pre-commit) refuses a commit where any of them disagree.
 
@@ -945,6 +945,75 @@ caught them. Both are recorded so they are not re-opened:**
 a spreadsheet — four controls per ingredient in one flat stack. Rebuilding it onto
 the v301 ingredient-ledger primitives (one summary line per row, a well that opens
 on tap) is the right shape and is its own piece of work.
+
+## v318 (2026-09-13) — Home's cardio is a task card that shrinks when the task is paid
+
+The owner's words: «مابدي خيار الكارديو كذا خليه قريب او نفس خيار ابدا التمرين لكن بدل ما
+اضغط عليه وابدا التمرين لا ينحط عليه تم». A judge panel scored three shapes (323 / 310 / 289)
+and the LITERAL one — the workout hero's exact size with «تمّ» on the bar — lost, scoring
+highest on project law (87) and **lowest on "the day after" (62)**. The measurement is why:
+the workout hero is 184px, and on a 375px phone the calories hero below it already ends 117px
+past the fold. A third 184px card starts the calories card at 646px — entirely below it.
+
+**THREE SIZES, ONE FAMILY, and the ladder between them IS the design.** CARD (owed, 163px) →
+ROW (owed, queued, 68px) → STRIP (settled, 44px). Prime space under the workout hero stays
+proportional to what is still owed. Measured through the whole cycle at 375×812:
+
+| | block | calories card visible |
+|---|---|---|
+| before (v317) | 95px | 192px |
+| owed — the card | 163px | 133px |
+| done — the strip | **44px** | **252px** |
+
+You pay 59px while you owe it and are repaid 60px when it is done, and the calories card never
+goes below the fold — which the literal shape could not promise.
+
+- **THE CARD IS ALWAYS "THE CARDIO YOU OWE NEXT" — exactly one, or none.** Everything else
+  queues below at row weight, capped at 2 while a card exists (3 when none does). Height is
+  bounded whatever the schedule holds, and `DB.cardioPlan.MAX` is 20. With more than one owed,
+  the card's meta says «١ من ٢» so the card never pretends to be the whole day.
+- **The `.section-title` is gone, and its job was inherited, not dropped.** A heading reading
+  «كارديو اليوم» above one row saying «مشي · ٣٠ د» spent 26px to label a single item, and
+  neither hero on this screen does that — each names itself in its own eyebrow. The identical
+  key moved into the card's eyebrow; no string was added or deleted. The identity layer's
+  device 5 (one bar of the mark, stamped ahead of a section label) survives as
+  `.hero-card.cardio-task::before` — the same `var(--bar-w)` bar stood on end down the card's
+  inline-start edge, where it doubles as the card's spine.
+- **The radial glow is deliberately NOT inherited.** It marks the two NAVIGATIONAL heroes —
+  cards that take you somewhere. This card completes in place, so it gets the tick instead.
+  That, the 163-vs-184 height, and the size-M bar are what keep three stacked cards legible.
+- **No plus glyph survives anywhere in the block**, on the card or the queued rows. A "+" in a
+  square is what made the day's job read as "add something", which was the whole complaint.
+  Both controls are labelled: «تمّ» filled while owed, «تراجع» outlined once settled.
+- **The settled strip is not a ticked box.** A check sitting in a square still offers itself as
+  something to tick. Four independent signals say "done" so colour is never alone: the word
+  «تم» in the meta, the `.is-done` wash, the geometry (44 against 163), and an accessible name
+  that says what pressing it DOES — «تراجع عن تسجيل مشي», not «تراجع».
+- **It keeps `var(--elev-1)`.** Dropping the elevation was tempting (settled things recede) but
+  `--surface-1` on `--bg` is ~1.08:1 in dark: with no border and no bevel the strip would have
+  had no edge at all.
+- **`--icon-accent: currentColor` on both controls is not optional.** The duotone `check` and
+  `refresh` glyphs would otherwise resolve their accent leg to `--accent-text` and paint brand
+  orange on a muted control — the exact `.supp-toggle.taken` failure recorded under v315.
+- **The fold animates the button and nothing else.** It is the one element that genuinely ceases
+  to exist; the icon, the name and the duration sit perfectly still and survive into the strip.
+  The card is not replaced, it is de-boned. The icon is the continuity anchor — the one element
+  present at all three sizes, in its own category colour, which is never orange. The write
+  happens BEFORE the 180ms fold, so an interrupted teardown costs nothing but a repaint, and
+  `prefers-reduced-motion` skips it entirely.
+- **Swipe was asked for as an alternative («او») and deliberately NOT built.** It fixes neither
+  half of the complaint (the control was the wrong size and the wrong verb; a full-width labelled
+  bar fixes both), it has no affordance so the button must ship anyway, `app.js` has exactly one
+  `pointerdown` listener in 14,800 lines, and "swipe right to complete" means the opposite
+  physical motion to an Arabic and an English reader in an app that flips `dir` on a preference.
+  A mis-swipe also writes a real `DB.cardio` row and can silently claim an unclaimed watch
+  import. If it is ever wanted: gesture on `.cardio-task` only, ≥56px travel with ≤14px drift,
+  `setPointerCapture` after the axis locks, either direction accepted, calling the same code path
+  the CTA calls.
+- The toast is direction-aware now (`cardio_sched_undone`); it used to say "logged" for an
+  un-tick too. The `DB.cardioPlan` completion contract is untouched: ticking still CLAIMS an
+  unclaimed same-type row rather than adding one, and un-ticking still never hard-deletes a row
+  the tick did not create.
 
 ## Superpowers — and the two places this project deliberately departs from it
 
