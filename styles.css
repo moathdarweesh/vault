@@ -7632,27 +7632,23 @@ body:has(.toast.show) .modal { padding-bottom: calc(var(--nav-h) + var(--safe-b)
    row — which is the thing it was built to stop reading as. */
 .cardio-task {
   padding: var(--sp-3);
-  padding-inline-start: calc(var(--sp-3) + var(--sp-2));   /* clears the rail */
   margin-bottom: var(--sp-2h);
 }
 .cardio-task .hero-eyebrow { margin-bottom: var(--sp-1); }
-/* THE RADIAL GLOW IS REPLACED BY ONE BAR OF THE MARK (identity device 5). The
-   glow marks the two NAVIGATIONAL heroes — cards that take you somewhere. This
-   card completes in place, so it gets the tick instead, stood on end, where it
-   also inherits the job of the .section-title that used to sit above the block.
-   Declared at (0,2,0) and resetting every inherited side in full, for the same
-   reason .hero-card.hero-rest documents: it must beat .hero-card on specificity
-   rather than on source order. --accent-text and never --accent: as a GRAPHIC
-   mass #ff6a00 measures 2.65:1 on the light page, under the 3:1 floor. */
-.hero-card.cardio-task::before {
-  top: var(--sp-3);
-  bottom: var(--sp-3);
-  inset-inline-start: 0;
-  inset-inline-end: auto;
-  width: var(--bar-w);
-  height: auto;
-  background: var(--accent-text);
-}
+/* NO RAIL, AND NO RADIAL GLOW EITHER.
+   v318 stood one bar of the mark (identity device 5) on end down this card's
+   inline-start edge, to inherit the tick from the .section-title it replaced.
+   It was a defect, and the owner spotted it as "why is there an orange line":
+   the bar was inset 12px top and bottom while the card's corner radius is 24px,
+   so `overflow: hidden` clipped it against the curve — fully hidden at 12px in,
+   half visible at 16, whole only at 24. What shipped was a tapered stroke stuck
+   to the edge, not a section mark. A mark that has to be explained has failed.
+   The identity layer already permits this: .rot-section-title deliberately does
+   NOT take the tick, "so the two section-header systems stay distinguishable".
+   The card names itself in its eyebrow, which is what the heroes around it do.
+   The glow stays absent for the v318 reason — it marks the two NAVIGATIONAL
+   heroes, and this card completes in place. */
+.hero-card.cardio-task::before { content: none; }
 /* It is not a button, so it must not press like one. */
 .hero-card.cardio-task:active { transform: none; border-color: transparent; }
 

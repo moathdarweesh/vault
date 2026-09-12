@@ -77,7 +77,7 @@ a faster TTFB — not fewer bytes.
 npm run release          # bump every marker + verify, then commit all files together
 ```
 
-**Current version: v319.** APK: build 21 / v3.0.
+**Current version: v320.** APK: build 21 / v3.0.
 
 `scripts/release.js` rewrites **every** marker and then re-reads them from disk to confirm; it exits non-zero if any disagree, and prints the count per file (derived, never hard-coded — the docs used to say 16 while the real count was 15). The markers are `?v=N` in `index.html` (every script and stylesheet, the `js/vendor/supabase.js` preload, both `icons/icon.svg` links, `manifest.json`), the `__cleaned_vN` sessionStorage key, the `FALLBACK` literal in `app.js`, `version.json` → `web`, the `?v=` in `manifest.json`, `admin.html`, `privacy.html` and `get/index.html`, and the `Current version` line in this file. `scripts/check-contracts.js` (pre-commit) refuses a commit where any of them disagree.
 
@@ -975,13 +975,20 @@ goes below the fold — which the literal shape could not promise.
 - **The `.section-title` is gone, and its job was inherited, not dropped.** A heading reading
   «كارديو اليوم» above one row saying «مشي · ٣٠ د» spent 26px to label a single item, and
   neither hero on this screen does that — each names itself in its own eyebrow. The identical
-  key moved into the card's eyebrow; no string was added or deleted. The identity layer's
-  device 5 (one bar of the mark, stamped ahead of a section label) survives as
-  `.hero-card.cardio-task::before` — the same `var(--bar-w)` bar stood on end down the card's
-  inline-start edge, where it doubles as the card's spine.
+  key moved into the card's eyebrow; no string was added or deleted.
+  > ⚠️ **The tick did NOT survive with it, and the attempt is worth recording.** v318 stood the
+  > identity layer's device 5 (one bar of the mark) on end down the card's inline-start edge as
+  > `.hero-card.cardio-task::before`. The owner's reaction was «ليش فيه خط برتقالي؟» — which is
+  > the verdict: a mark that has to be explained has failed. It was also broken, and measurably
+  > so: the bar was inset 12px top and bottom while the card's corner radius is 24px, so
+  > `overflow: hidden` clipped it against the curve — **fully hidden 12px in, half visible at 16,
+  > whole only at 24**. What shipped was a tapered stroke stuck to the edge. Removed in v320
+  > (`content: none`). **When you inset a decoration along a rounded edge, the inset must be at
+  > least the corner radius, or the curve eats its ends.** The identity layer already permits
+  > going without: `.rot-section-title` deliberately does not take the tick either.
 - **The radial glow is deliberately NOT inherited.** It marks the two NAVIGATIONAL heroes —
-  cards that take you somewhere. This card completes in place, so it gets the tick instead.
-  That, the 163-vs-184 height, and the size-M bar are what keep three stacked cards legible.
+  cards that take you somewhere. This card completes in place. That, the 145-vs-184 height, and
+  the size-M bar are what keep three stacked cards legible without it.
 - **No plus glyph survives anywhere in the block**, on the card or the queued rows. A "+" in a
   square is what made the day's job read as "add something", which was the whole complaint.
   Both controls are labelled: «تمّ» filled while owed, «تراجع» outlined once settled.
