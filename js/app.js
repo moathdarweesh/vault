@@ -12,7 +12,7 @@
 // build. The literal below is the fallback (file://, or a stripped query) and is
 // still bumped by `npm run release` — see CLAUDE.md "CACHE WORKFLOW".
 const VAULT_BUILD = (() => {
-  const FALLBACK = 'v313';
+  const FALLBACK = 'v314';
   try {
     const src = (document.currentScript && document.currentScript.src) || '';
     const m = src.match(/[?&]v=(\d+)/);
@@ -1001,7 +1001,7 @@ const I18N = {
     cx_keep_exceptions: 'Keep the current future rest/extra days listed below',
     cx_tools: "Everyday tools",
     cx_search: "Search everything",
-    cx_query: "Exercise, meal, or YYYY-MM-DD",
+    cx_query: "Search exercises, meals, dates",
     cx_empty: "No results",
     cx_recent: "Recent changes",
     cx_stale: "This changed since you opened it. Reopen and try again.",
@@ -1975,7 +1975,7 @@ const I18N = {
     cx_keep_exceptions: "الاحتفاظ بأيام الراحة والإضافية المستقبلية الحالية المبينة أدناه",
     cx_tools: "أدوات يومية",
     cx_search: "ابحث في التطبيق",
-    cx_query: "تمرين أو وجبة أو YYYY-MM-DD",
+    cx_query: "ابحث عن تمرين أو وجبة أو تاريخ",
     cx_empty: "لا توجد نتائج",
     cx_recent: "آخر التعديلات",
     cx_stale: "تغيرت البيانات منذ فتحها. افتحها مجددًا وحاول مرة أخرى.",
@@ -3587,8 +3587,11 @@ function brandLockup(size = 'header') {
 function vaultBar({ action = '', actionLabel = '' } = {}) {
   return `
     <div class="vault-bar">
-      <div class="vault-logo">${brandLockup('header')}</div><button class="icon-btn" data-unified-search aria-label="${escapeHtml(t('cx_search'))}">${icon('search',20)}</button>
-      ${action ? `<button class="vault-action" id="vault-action"${actionLabel ? ` aria-label="${escapeHtml(actionLabel)}"` : ''}>${action}</button>` : '<span style="width:40px"></span>'}
+      <div class="vault-logo">${brandLockup('header')}</div>
+      <div class="vault-bar-actions">
+        <button class="icon-btn" data-unified-search aria-label="${escapeHtml(t('cx_search'))}">${icon('search', 20)}</button>
+        ${action ? `<button class="vault-action" id="vault-action"${actionLabel ? ` aria-label="${escapeHtml(actionLabel)}"` : ''}>${action}</button>` : ''}
+      </div>
     </div>
   `;
 }
@@ -5194,7 +5197,12 @@ function renderProgram(el) {
     .slice(0, 3);
 
   el.innerHTML = `
-    ${vaultBar({ action: icon('search', 20), actionLabel: t('search_exercises') })}
+    <!-- NOT a magnifier. This button navigates to the exercise BROWSER
+         (bindVaultAction -> navigate('exercises'), which titles itself t('train')),
+         so a magnifier both lied about what it does and put a SECOND search glyph
+         beside the global one vaultBar now renders for every screen. The old
+         space-between layout hid the collision by parking 90px between them. -->
+    ${vaultBar({ action: icon('dumbbell', 20), actionLabel: t('train') })}
 
     <div class="page-header">
       <h1 class="page-title">${t('program_title')}</h1>
@@ -8497,14 +8505,12 @@ function openSavedFoodPicker(date, onSave, initialTab) {
       const kcal = b.items.reduce((n, it) => n + it.calories * (it.servings || 1), 0);
       return `
       <div class="bundle-card" data-bundle="${escapeHtml(b.id)}">
-        <div class="bundle-main">
+        <button type="button" class="bundle-main" data-edit-bundle="${escapeHtml(b.id)}">
           <div class="bundle-name">${b.favorite ? '★ ' : ''}${escapeHtml(b.name)}</div>
           <div class="bundle-meta"><span class="num">${fmtNum(b.items.length)}</span> ${t('bundle_items')} · <span class="num">${fmtNum(Math.round(kcal))}</span> ${t('cal')}</div>
-        </div>
-        <button type="button" class="icon-btn" data-edit-bundle="${escapeHtml(b.id)}" aria-label="${escapeHtml(t('edit'))}">${icon('edit',16)}</button>
-        <button type="button" class="btn btn-ghost" data-portion-bundle="${escapeHtml(b.id)}" aria-label="${escapeHtml(t('cx_portion'))}">×1</button>
+        </button>
+        <button type="button" class="btn btn-ghost bundle-portion" data-portion-bundle="${escapeHtml(b.id)}" aria-label="${escapeHtml(t('cx_portion'))}">×1</button>
         <button type="button" class="btn btn-primary bundle-add" data-log-bundle="${escapeHtml(b.id)}" aria-label="${escapeHtml(t('add'))}">${icon('plus', 16)}</button>
-        <button type="button" class="icon-btn danger bundle-del" data-del-bundle="${escapeHtml(b.id)}" aria-label="${escapeHtml(t('delete'))}">${icon('trash', 16)}</button>
       </div>`;
     }).join('');
     listEl.querySelectorAll('[data-log-bundle]').forEach((btn) => btn.addEventListener('click', () => {
@@ -8521,12 +8527,6 @@ function openSavedFoodPicker(date, onSave, initialTab) {
       const bundle = DB.mealBundles.list().find(b => b.id === btn.dataset.editBundle);
       if (bundle) openMealEditor(bundle, () => openSavedFoodPicker(date, onSave, 'bundles'));
     });
-    listEl.querySelectorAll('[data-del-bundle]').forEach((btn) => btn.addEventListener('click', () => {
-      confirmDialog({
-        title: t('delete') + '؟', text: '', confirmLabel: t('delete'), variant: 'danger',
-        onConfirm: () => { const result = DB.mealBundles.remove(btn.dataset.delBundle); drawBundles(); offerUndo(t('bundle_deleted'), result); },
-      });
-    }));
   }
 
   function draw() {
@@ -9665,7 +9665,9 @@ function guardConvenienceModal(modal) {
 function convenienceModal(html) { return guardConvenienceModal(openModal(html)); }
 function openUnifiedSearch() {
   const owner = Cloud.getLastUid();
-  const modal = convenienceModal(`${cxHeader('cx_search')}<div class="cx-stack"><label>${t('cx_query')}<input class="input" id="cx-query" type="search" maxlength="160" autocomplete="off"></label><div id="cx-results" class="cx-stack" aria-live="polite"></div></div>`);
+  const modal = convenienceModal(`${cxHeader('cx_search')}<div class="cx-stack">
+    <div class="search-wrap">${icon('search', 20)}<input class="input" id="cx-query" type="search" maxlength="160" autocomplete="off" placeholder="${escapeHtml(t('cx_query'))}" aria-label="${escapeHtml(t('cx_search'))}"></div>
+    <div id="cx-results" class="cx-stack" aria-live="polite"></div></div>`);
   const input = modal.querySelector('#cx-query'), host = modal.querySelector('#cx-results');
   const labels = {exercise:'exercises',food:'tab_saved_foods',meal:'cx_meals',recipe:'tab_recipes',shopping:'cx_shopping',session:'history',log:'food_history',date:'cx_date'};
   const search = debounce(() => {
@@ -9713,7 +9715,8 @@ function openMealEditor(existing = null, onSave = () => {}) {
     <p class="settings-hint">${t('cx_amount_hint')}</p><div id="cx-meal-items"></div>
     <label>${t('cx_saved_food')}<select id="cx-food" class="input"><option value="">—</option>${foods.map((f,i) => `<option value="${i}">${escapeHtml(f.name)}</option>`).join('')}</select></label>
     <button class="btn btn-ghost" id="cx-food-add">${t('add')}</button>
-    <button class="btn btn-primary" id="cx-meal-save">${t('save')}</button></div>`);
+    <button class="btn btn-primary" id="cx-meal-save">${t('save')}</button>
+    ${existing ? `<button class="btn btn-danger" id="cx-meal-delete">${t('delete')}</button>` : ''}</div>`);
   const draw = () => {
     modal.querySelector('#cx-meal-items').innerHTML = items.map((it,i) => `<div class="cx-row"><span>${escapeHtml(it.name)}</span>
       <label>${t('cx_portion')}<input class="input" type="number" min="0.25" max="20" step="0.25" data-portion="${i}" value="${Number(it.servings || 1)}"></label>
@@ -9734,6 +9737,20 @@ function openMealEditor(existing = null, onSave = () => {}) {
     if (!result.ok) { convenienceError(result); return; }
     closeModal(); onSave(); offerUndo(t('saved'), result);
   };
+  // Deleting a saved meal used to be an icon on the card, one 8px gap from the
+  // button that LOGS it. It belongs with the meal's other whole-object actions,
+  // behind the deliberate step of opening it.
+  modal.querySelector('#cx-meal-delete')?.addEventListener('click', () => {
+    confirmDialog({
+      title: t('delete') + '؟', text: '', confirmLabel: t('delete'), variant: 'danger',
+      onConfirm: () => {
+        if (owner !== Cloud.getLastUid()) { convenienceError({ code: 'STALE' }); return; }
+        const result = DB.mealBundles.remove(existing.id);
+        if (!result.ok) { convenienceError(result); return; }
+        closeModal(); onSave(); offerUndo(t('bundle_deleted'), result);
+      },
+    });
+  });
 }
 function openMealPortion(bundle, date, onSave) {
   const owner = Cloud.getLastUid(), operationId = uid();
@@ -9888,7 +9905,7 @@ function openShoppingEditor(existing = null, initial = []) {
     <button class="btn btn-ghost" id="cx-shopping-add">${t('add')}</button>
     <button class="btn btn-primary" id="cx-shopping-save">${t('save')}</button>
     <button class="btn btn-ghost" id="cx-shopping-share">${t('cx_share')}</button>
-    ${existing ? `<button class="btn btn-ghost danger" id="cx-shopping-delete">${t('delete')}</button>` : ''}</div>`);
+    ${existing ? `<button class="btn btn-danger" id="cx-shopping-delete">${t('delete')}</button>` : ''}</div>`);
   const read = () => {
     modal.querySelectorAll('[data-shopping-row]').forEach(row => {
       const it = items[Number(row.dataset.shoppingRow)];
@@ -9908,7 +9925,7 @@ function openShoppingEditor(existing = null, initial = []) {
       <label>${t('cx_identity')}<input class="input" data-field="ingredientId" maxlength="80" value="${escapeHtml(it.ingredientId || '')}"></label>
       <select class="input" data-field="preparation" aria-label="${escapeHtml(t('cx_unspecified'))}">${['unspecified','raw','cooked'].map(p => `<option value="${p}" ${it.preparation === p ? 'selected' : ''}>${t('cx_' + p)}</option>`).join('')}</select>
       <label>${t('cx_category')}<input class="input" data-field="category" maxlength="40" value="${escapeHtml(it.category || '')}"></label>
-      <button class="btn btn-ghost danger" data-remove-shopping="${i}">${t('delete')}</button></div>`).join('');
+      <button class="btn btn-danger" data-remove-shopping="${i}">${t('delete')}</button></div>`).join('');
     modal.querySelectorAll('[data-remove-shopping]').forEach(b => b.onclick = () => { read(); const at = Number(b.dataset.removeShopping), removed = items.splice(at,1)[0]; draw(); showToast(t('deleted'), { actionLabel:t('undo'), duration:10000, onAction:() => { if (modal.isConnected && owner === Cloud.getLastUid()) { read(); items.splice(Math.min(at,items.length),0,removed); draw(); } } }); });
   };
   draw();

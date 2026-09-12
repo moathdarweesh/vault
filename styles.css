@@ -4370,7 +4370,16 @@ body[dir="rtl"] .picker-row { text-align: right; }
   background: var(--surface-2);
   margin-bottom: 8px;
 }
+/* Layout only — the RECIPES tab still emits .bundle-main as a plain <div>
+   (drawRecipes), and it has no handler, so it must not look clickable. */
 .bundle-main { flex: 1; min-width: 0; }
+/* The button reset applies only where .bundle-main really is a button. */
+button.bundle-main {
+  display: block; text-align: start;
+  background: none; border: 0; padding: 0;
+  color: var(--text); font: inherit; cursor: pointer;
+}
+.bundle-portion { flex: none; }
 .bundle-name {
   font-size: 14px;
   font-weight: 700;
@@ -4388,7 +4397,6 @@ body[dir="rtl"] .picker-row { text-align: right; }
   align-items: center;
   justify-content: center;
 }
-.bundle-del { flex: none; }
 
 .bundle-pick { display: flex; flex-direction: column; gap: 6px; max-height: 40vh; overflow-y: auto; }
 .bundle-pick-row {
@@ -7512,6 +7520,33 @@ body.theme-light {
 .save-center .settings-hint { overflow-wrap: anywhere; line-height: 1.7; }
 .save-center #sc-action { min-height: 44px; white-space: normal; }
 
+/* The app bar's trailing group. .vault-bar is justify-content:space-between and
+   was designed for exactly TWO children — the mark, and the screen's action. The
+   v312 search button became a third, so space-between distributed it into the
+   MIDDLE of the bar (measured: 90px of dead space either side on a 375px phone).
+   The search button and the action share one group at the end instead, which is
+   also why the old width:40px spacer span is gone: with two children the mark
+   stays put whether or not the screen has an action. */
+.vault-bar-actions { display: flex; align-items: center; gap: 4px; }
+
+/* Everyday tools: scoped to the convenience panels. */
+.cx-stack { display:flex; flex-direction:column; gap:14px; min-width:0; }
+.cx-stack label { display:flex; flex-direction:column; gap:6px; font-size:13px; color:var(--text-mute); min-width:0; }
+.cx-stack .input { width:100%; min-width:0; font-size:16px; }
+.cx-row { display:flex; align-items:center; justify-content:space-between; gap:10px; min-width:0; }
+.cx-row > span, .cx-row > label { flex:1; min-width:0; overflow-wrap:anywhere; }
+.cx-row input[type=number] { max-width:120px; }
+.cx-item { border:1px solid var(--border); border-radius:14px; padding:12px; display:flex; flex-direction:column; gap:10px; }
+.cx-tools { display:flex; gap:10px; margin-bottom:18px; }
+.cx-tools > * { flex:1; white-space:normal; }
+.cx-result { display:flex; flex-direction:column; align-items:flex-start; white-space:normal; text-align:start; gap:4px; }
+.cx-result span { font-size:12px; color:var(--text-mute); }
+.cx-stack .btn { min-height:44px; white-space:normal; overflow-wrap:anywhere; }
+.cx-stack input[type=checkbox] { width:22px; height:22px; }
+/* Keep Undo above these sheets, clear of their bottom action buttons. */
+body:has([data-convenience-owner]) #toast { bottom:auto; top:calc(var(--safe-t, 0px) + 12px); }
+.cx-stack label.cx-row { flex-direction:row; }
+
 /* =========================================================================
    ^^^ EVERYTHING ABOVE, THEN THE IDENTITY LAYER BELOW. ^^^
 
@@ -7530,26 +7565,6 @@ body.theme-light {
    KEEP THIS BLOCK LAST. Append new component CSS ABOVE this banner, never below
    it.
    ========================================================================= */
-/* Everyday tools: scoped to the convenience panels. */
-.cx-stack { display:flex; flex-direction:column; gap:14px; min-width:0; }
-.cx-stack label { display:flex; flex-direction:column; gap:6px; font-size:13px; color:var(--text-muted); min-width:0; }
-.cx-stack .input { width:100%; min-width:0; font-size:16px; }
-.cx-row { display:flex; align-items:center; justify-content:space-between; gap:10px; min-width:0; }
-.cx-row > span, .cx-row > label { flex:1; min-width:0; overflow-wrap:anywhere; }
-.cx-row input[type=number] { max-width:120px; }
-.cx-item { border:1px solid var(--border); border-radius:14px; padding:12px; display:flex; flex-direction:column; gap:10px; }
-.cx-tools { display:flex; gap:10px; margin-bottom:18px; }
-.cx-tools > * { flex:1; white-space:normal; }
-.cx-result { display:flex; flex-direction:column; align-items:flex-start; white-space:normal; text-align:start; gap:4px; }
-.cx-result span { font-size:12px; color:var(--text-muted); }
-.cx-stack .btn { min-height:44px; white-space:normal; overflow-wrap:anywhere; }
-.cx-stack input[type=checkbox] { width:22px; height:22px; }
-/* Keep Undo above these sheets, clear of their bottom action buttons. */
-body:has([data-convenience-owner]) #toast { bottom:auto; top:calc(var(--safe-t, 0px) + 12px); }
-.cx-stack label.cx-row { flex-direction:row; }
-.bundle-card:has([data-log-bundle]) { flex-wrap:wrap; }
-.bundle-card:has([data-log-bundle]) .bundle-main { flex-basis:100%; }
-
 /* =========================================================================
    IDENTITY LAYER  (v210)
 

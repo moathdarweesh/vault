@@ -77,7 +77,7 @@ a faster TTFB — not fewer bytes.
 npm run release          # bump every marker + verify, then commit all files together
 ```
 
-**Current version: v313.** APK: build 21 / v3.0.
+**Current version: v314.** APK: build 21 / v3.0.
 
 `scripts/release.js` rewrites **every** marker and then re-reads them from disk to confirm; it exits non-zero if any disagree, and prints the count per file (derived, never hard-coded — the docs used to say 16 while the real count was 15). The markers are `?v=N` in `index.html` (every script and stylesheet, the `js/vendor/supabase.js` preload, both `icons/icon.svg` links, `manifest.json`), the `__cleaned_vN` sessionStorage key, the `FALLBACK` literal in `app.js`, `version.json` → `web`, the `?v=` in `manifest.json`, `admin.html`, `privacy.html` and `get/index.html`, and the `Current version` line in this file. `scripts/check-contracts.js` (pre-commit) refuses a commit where any of them disagree.
 
@@ -434,14 +434,18 @@ top bar is the cut wordmark) and no longer the status-bar icon (that is the slot
 mark). Do not reintroduce them as a logo.
 
 ### App icon vs LAUNCHER icon — two different files (v212)
-`icons/icon.svg` is the PWA / browser-tab / apple-touch icon **only**. The
+`icons/icon.svg` is the PWA / browser-tab icon **only** — since v314 the
+apple-touch icon is a separate PNG (`icons/apple-touch-icon-180.png`), because
+iOS ignores SVG there. The
 installed Android app takes its icon from `android/.../mipmap-*/ic_launcher*`,
 a completely separate asset baked into the APK.
 
 Nobody had ever replaced those, so **the app icon on every phone was the stock
 Capacitor placeholder — a blue "X" on white** — for the app's whole life, while
 `icon.svg` had carried the VAULT mark since v202. Updating one does not touch
-the other; when the mark changes, BOTH have to move.
+the other; when the mark changes, ALL THREE have to move — `icons/icon.svg`, the
+Android launcher vectors, and `icons/apple-touch-icon-180.png`, which is
+re-rendered from icon.svg by hand (see the v314 note).
 
 - The launcher icon is now a **VectorDrawable**
   (`res/drawable/ic_launcher_foreground.xml`) plus a black
@@ -704,6 +708,110 @@ Full findings + verification in `docs/CODEBASE_REVIEW.md`. The load-bearing rule
 - `Cloud.listPlanHistory/readPlanHistory/checkPlanRestoreVersion` use existing own-row history, metadata first. Program restoration verifies references/current plan/catalog/version, snapshots before mutation, and changes only plan plus explicitly recreated exercise definitions.
 - Conditional push errors no longer fall back to unconditional upsert. Unknown versions insert only; force-upsert is reserved for explicit conflict resolution. Do not reintroduce fallback overwrite.
 - Verification: `test-convenience.js`, `test-convenience-cloud.js`, and `test-sync-status-ui.js` (which invokes `test-convenience-ui.js`). Browser/cloud faults use isolated synthetic data. The opt-in live probe was refused by Turnstile (600010), created no accounts, and is not a completed production RLS audit.
+
+## v314 (2026-09-13) — the design pass over v309–v313, and the iOS build that runs without a Mac
+
+The owner's verdict on v309–v313 was «التصميم ما عجبني لكن الميزة عجبتني» — the features
+were right, the design was not. All five feature test suites passed and all 31 contracts
+held, because **no test in this project looks at design**. Every defect below was found
+by reading the shipped files and measuring the rendered DOM.
+
+**Three of them are one family, and that is the lesson worth keeping: v312 added its
+features ON TOP of existing components without first asking whether the app already had
+one.** A global search button was added beside a search button that already existed; a
+new search field was hand-built instead of using `.search-wrap`; and new CSS was appended
+under the banner that says not to append under it. Before adding a component, grep for it.
+
+- **The v312 convenience CSS sat BELOW the identity-layer banner** — 18 declarations
+  inside the region whose authority is pure source order. Exactly the v218–v227 drift that
+  `styles.css`'s own banner exists to prevent. Moved above it, and **the move was proved
+  inert the way v262's was**: 110 computed-style fingerprints across four sheets, of which
+  103 were byte-identical and the 7 that changed were the intended token fix.
+- **`--text-muted` does not exist in this project; the token is `--text-mute`.** It was
+  used twice, so `.cx-stack label` and `.cx-result span` painted at full `--text`. Measured:
+  `rgb(253,250,247)` where a real muted line is `rgb(176,166,158)`. Every field caption in
+  My Meals / Shopping / Search / Recent changes had no hierarchy at all — which is most of
+  what "crowded" looked like. **A CSS variable that does not exist fails silently**: the
+  property is simply dropped and the element inherits. Grep the definition before using a token.
+- **`.vault-bar` is `justify-content: space-between` and was built for TWO children.** The
+  v312 search button made it three, so `space-between` distributed it into the middle of the
+  bar — measured at 90px of dead space on each side on a 375px phone. Search and the
+  screen's action now share a trailing `.vault-bar-actions` group, which also retires the
+  `<span style="width:40px">` that only existed to balance the old layout.
+- **The Program tab's bar action was a MAGNIFIER labelled `search_exercises`, and its
+  handler is `navigate('exercises')`** — it never searched anything; it opens the exercise
+  browser, which titles itself `t('train')`. So it both lied about itself and put a second
+  magnifier beside the global one. It is `icon('dumbbell')` / `t('train')` now. The
+  duplication was always there; grouping the bar is what made it visible.
+- **`openUnifiedSearch` was the only search in the app not using `.search-wrap`** (the
+  exercise browser, food picker, exercise picker and swap chooser all do). It had a CAPTION
+  above an empty box reading «تمرين أو وجبة أو YYYY-MM-DD» — a format token shown to a user.
+  Rebuilt on the shared component: inline magnifier, placeholder, no caption, zero new CSS
+  (`.search-wrap` already mirrors the icon for RTL via `inset-inline-start`). The date format
+  moved to `cx_ambiguous`, which appears only when an ambiguous date is actually typed.
+- **The meal card carried four controls and was forced to wrap** — 179px of buttons in a
+  335px card, so v312 added `flex-wrap: wrap` rather than reduce it, and every card stood
+  115px tall. It is one row again (measured 66px, `nowrap`): the NAME is a `<button>` that
+  opens the editor, plus portion and add. **DELETE moved into `openMealEditor`, which had
+  none** — it used to sit 8px from the button that LOGS the meal. Same shape the v301
+  ingredient ledger settled on.
+- **`apple-touch-icon` pointed at an SVG, and iOS does not support SVG for it** — Safari
+  ignores it and puts a SCREENSHOT OF THE PAGE on the Home Screen. `icons/apple-touch-icon-180.png`
+  is rendered from `icon.svg` onto an opaque black tile (iOS applies its own squircle mask and
+  does not expect alpha). `rel="icon"` stays SVG for desktop.
+  > The first attempt wrote a CORRUPT file: the base64 was damaged in transit and the IDAT
+  > chunk's CRC was bad. **The browser did not error — it rendered the icon fully
+  > transparent.** Caught only by reading the bytes. If an image is ever generated this way
+  > again, verify the PNG's own chunk CRCs and defilter the rows before trusting a pixel
+  > count — raw IDAT bytes are per-row deltas, not pixels, so a naive read reports nonsense.
+
+### The plan is rebuilt in SEVEN places, not five — and `planSlot` is the dangerous one
+The "FIVE places rebuild the plan" note above is **half stale and half incomplete**, and
+both halves matter:
+- `migratePlan`'s ROTATION branch was fixed in v298 to spread (`...plan`), so an unknown
+  TOP-LEVEL plan field now survives a load. The load path is no longer where data dies.
+- But **`planSlot()` (storage.js) rebuilds every cycle SLOT field by field with no spread,
+  and `migratePlan` runs it on every slot on every load.** Anything attached to a rotation
+  slot that `planSlot` does not enumerate is erased silently, everywhere, forever. `targets`
+  survives only because v309 added it to `planSlot` explicitly.
+- The remaining write sites that rebuild from a literal and preserve nothing are
+  `setRotation`, `clearAll`, `defaultState`, `plan.get()`'s fallback and `migratePlan`'s
+  legacy branch. **`setRotation` is the trap**: adopting a template would silently delete any
+  plan field it does not name.
+- Practical rule: **new per-user data that is not part of the rotation belongs at the TOP
+  LEVEL of the blob, not inside `plan`.** `shoppingLists` (v312) is the template — 6 additive
+  edits (defaultState, the loadState presence backfill, the array-shape loop, `_validateBlob`,
+  `_idsSafe`, `hasUserData`), none of which can erase anything. The `hasUserData` line is
+  mandatory, not optional: without it a device whose only content is that field reads as
+  "empty" to cloud.js, gets pulled over with no rescue snapshot, and is refused a push.
+
+### iOS builds in CI now — no Mac, no Apple account, no signing
+`.github/workflows/ios-build.yml` builds the app for the simulator on **`macos-26`** and
+uploads the `.app`. The runner is pinned, and pinned to 26 on purpose: since **28 April
+2026** App Store Connect refuses any upload not built with Xcode 26 against the iOS 26 SDK,
+so an older runner would prove the app compiles against an SDK Apple will not accept.
+Never `macos-latest` — that label moves on Apple's schedule.
+- **The run log needs repo-admin rights** (the REST logs endpoint answers 403 to everyone
+  else), so `scripts/ci-step.sh` re-emits any failure as a GitHub `::error::` **annotation**,
+  which IS public on a public repo (verified: logs 403, `/check-runs/<id>/annotations` 200).
+  Every stage is its own step so the step NAME alone locates a failure.
+- Three defects it exposed, all the same shape — a file that exists and is invisible to the
+  thing that consumes it: **there was no shared scheme at all** (Xcode writes the automatic
+  one into `xcuserdata`, which is per-user and gitignored, so `xcodebuild -scheme App` could
+  never have worked on any other machine); and `PrivacyInfo.xcprivacy` plus both
+  `InfoPlist.strings` were tracked but **not referenced in `project.pbxproj`**, so Xcode would
+  have built an app without them — App Store Connect refuses an upload with no privacy
+  manifest, and every Arabic permission prompt would have been English.
+- CI reads the BUILT `.app` for the privacy manifest, the web bundle and `ar.lproj` — not the
+  source. This project has shipped an Android icon three times that was right in source and
+  wrong in the binary.
+- **A simulator build cannot run on a real iPhone** (unsigned, simulator slice). The free
+  route onto a phone today is the PWA: Safari → Share → Add to Home Screen. A native install
+  needs either the $99 Apple Developer Program (then CI → TestFlight) or self-signed
+  sideloading; both are the owner's decision and neither is code.
+- `scripts/sync-ios.js` must never apply `shell: true` to `process.execPath`: Node's own path
+  on Windows is `C:\Program Files\nodejs\node.exe` and cmd.exe splits it at the space. The
+  shell is for the `.cmd` shim only.
 
 ## Feature factory
 This machine has a `/feature-factory` skill (24 specialist subagents, tailored to THE VAULT) that builds a feature end-to-end. See the maintainer's Claude memory for the roster.
