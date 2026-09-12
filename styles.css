@@ -7790,6 +7790,40 @@ body:has(.toast.show) .modal { padding-bottom: calc(var(--nav-h) + var(--safe-b)
   .cardio-undo:hover { border-color: var(--accent-line); color: var(--text); }
 }
 
+/* ---- The purchase ledger (v322) -------------------------------------------
+   openPurchaseEditor was a spreadsheet — four always-open labelled controls per
+   ingredient, so an eight-ingredient recipe carried THIRTY-TWO controls and the
+   names they belonged to were lost among them. It is the v301 ingredient
+   ledger's shape now and reuses that component outright: .rec-row, .rec-line,
+   .rec-sum, .rec-more, .rec-f, .rec-cap are all inherited unchanged. Only the
+   differences are declared here — the recipe well holds four NUMBER inputs, and
+   this one holds two selects and a free-text id, which do not want equal columns. */
+.pur-name { flex: 1; min-width: 0; font-size: var(--fs-body); overflow-wrap: anywhere; }
+/* What the recipe asks for, beside what you will buy. Muted, because it is the
+   reference and not the thing being edited. */
+.pur-orig { flex: none; font-size: var(--fs-caption); color: var(--text-mute); }
+/* Two columns, not the recipe well's four: quantity + unit read as one measure
+   on the first line, preparation + the id get the second. */
+.pur-row.is-open .rec-more { grid-template-columns: repeat(2, 1fr); }
+/* The id is the one free-text field here and the only one that needs the row. */
+.pur-f-id { grid-column: 1 / -1; }
+/* .rec-f styles `input` only — the recipe well never had a select. Matching it
+   exactly keeps one control shape inside one well. A styled control MUST set
+   `color`, or it inherits the UA `buttontext` default, which measured 2.23:1
+   here once before. */
+.pur-row .rec-f select {
+  height: var(--btn-h-m); padding: 0 var(--sp-2);
+  border: 1px solid var(--border-hi); border-radius: var(--radius-sm);
+  background: var(--surface-3); color: var(--text);
+  font-family: inherit; font-size: 16px; font-weight: 700;
+}
+/* The identity rule belongs where identity is set, not stacked with the sheet's
+   own lead hint where it was one of two asides competing above the content. */
+.pur-hint {
+  grid-column: 1 / -1; margin: 0; text-align: start;
+  white-space: normal; overflow: visible; letter-spacing: normal;
+}
+
 /* =========================================================================
    THE EMBER — the void answers the hand  (v321)
 

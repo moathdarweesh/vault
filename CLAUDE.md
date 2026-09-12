@@ -77,7 +77,7 @@ a faster TTFB — not fewer bytes.
 npm run release          # bump every marker + verify, then commit all files together
 ```
 
-**Current version: v321.** APK: build 21 / v3.0.
+**Current version: v322.** APK: build 21 / v3.0.
 
 `scripts/release.js` rewrites **every** marker and then re-reads them from disk to confirm; it exits non-zero if any disagree, and prints the count per file (derived, never hard-coded — the docs used to say 16 while the real count was 15). The markers are `?v=N` in `index.html` (every script and stylesheet, the `js/vendor/supabase.js` preload, both `icons/icon.svg` links, `manifest.json`), the `__cleaned_vN` sessionStorage key, the `FALLBACK` literal in `app.js`, `version.json` → `web`, the `?v=` in `manifest.json`, `admin.html`, `privacy.html` and `get/index.html`, and the `Current version` line in this file. `scripts/check-contracts.js` (pre-commit) refuses a commit where any of them disagree.
 
@@ -1065,6 +1065,39 @@ at rgb(19,10,4) and a held press at **rgb(41,22,8) — 4.35× the luminance of t
 > gutters and the gaps between cards. That is not a flaw in this design; it is the budget every
 > background effect here has to live inside. If more presence is wanted, the lever is the peak
 > alpha in `--ember-grad`, not the mechanism.
+
+## v322 (2026-09-13) — the purchase editor becomes a ledger
+
+The last and largest of the v316 review's findings, deliberately deferred then and closed now.
+`openPurchaseEditor` was a spreadsheet: **four always-open labelled controls per ingredient**, so a
+six-ingredient recipe put **24 controls** on one sheet and the names they belonged to were lost
+among them.
+
+It is the **v301 ingredient ledger's** shape now, and it reuses that component outright —
+`.rec-row`, `.rec-line`, `.rec-sum`, `.rec-sum-t`, `.rec-sum-ic`, `.rec-more`, `.rec-f`, `.rec-cap`
+are all inherited unchanged. **There is one ledger idiom in this app now, not two that merely
+resemble each other.** Measured on a six-ingredient recipe: 6 rows of 86px, and **0 controls
+reachable at rest** where 24 used to be visible.
+
+- **Line 1 is the ingredient and what the recipe calls for** («أرز» · «200 غ»); line 2 is a
+  READ-ONLY summary of the shopping amount that opens a well on tap. Closed, the summary carries
+  the whole answer on one line — «500 غ · نيء · أرز أبيض» — so nothing has to be opened to read it.
+- **`paint(row)` is the ONE writer of line 2**, derived from that row's own fields and nothing
+  else, exactly as `updateSummary()` is in the recipe ledger. The line can never disagree with the
+  well underneath it.
+- **Three delegated listeners on the list, bound once** — the ledger's own rule. Editing a field
+  repaints only its own summary, so nothing the user is typing into is re-rendered underneath them.
+- **The well is two columns, not the recipe well's four.** That well holds four NUMBER inputs; this
+  one holds two selects and a free-text id, and `.pur-f-id` spans the row because the id is the only
+  free-text field here. `.rec-f` styles `input` only — the recipe well never had a select — so
+  `.pur-row .rec-f select` matches it exactly, and sets `color` explicitly because a styled control
+  that does not measured 2.23:1 here once before.
+- **`cx_identity_hint` moved into the well**, where identity is actually set. It used to be the
+  second of two asides stacked above the content before the user reached anything editable.
+- The save path is unchanged: it still reads `[data-quantity]`, `[data-unit]`, `[data-identity]`
+  and `[data-preparation]` out of each `[data-purchase]` row, and `originalText` still carries the
+  recipe's own wording through. Verified end to end — `{quantity: 500, unit: 'g', ingredientId:
+  'أرز أبيض', preparation: 'raw', originalText: '200 غ'}`.
 
 ## Superpowers — and the two places this project deliberately departs from it
 

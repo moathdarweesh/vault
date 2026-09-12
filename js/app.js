@@ -12,7 +12,7 @@
 // build. The literal below is the fallback (file://, or a stripped query) and is
 // still bumped by `npm run release` — see CLAUDE.md "CACHE WORKFLOW".
 const VAULT_BUILD = (() => {
-  const FALLBACK = 'v321';
+  const FALLBACK = 'v322';
   try {
     const src = (document.currentScript && document.currentScript.src) || '';
     const m = src.match(/[?&]v=(\d+)/);
@@ -426,7 +426,7 @@ const I18N = {
     workouts: 'Workouts', volume: 'Volume', cardio: 'Cardio', sleep_today: "Today's sleep",
     delete_recipe_q: 'Delete this recipe?', delete_meal_q: 'Delete this meal?', delete_cardio_sched_q: 'Delete this cardio schedule?', sfp_search_bundles: 'Search meals…', sfp_search_recipes: 'Search recipes…',
     cx_servings: 'Servings', cx_no_sources: 'No saved meals or recipes yet — start a blank list instead.',
-    cx_prep: 'Preparation', cx_portion_unset: 'Enter a portion',
+    cx_prep: 'Preparation', cx_portion_unset: 'Enter a portion', cx_purchase_unset: 'Set the shopping amount',
     cardio_sched: 'Cardio schedule', cardio_sched_add: 'Add cardio', cardio_sched_days: 'Days',
     cardio_sched_today: "Today's cardio", cardio_sched_more: '+{n} more',
     cardio_mark_done: 'Mark done', cardio_task_scheduled: 'scheduled for today', cardio_task_of: '{i} of {n}',
@@ -1420,7 +1420,7 @@ const I18N = {
     workouts: 'التمارين', volume: 'الحجم', cardio: 'الكارديو', sleep_today: 'نوم اليوم',
     delete_recipe_q: 'هل تريد حذف هذه الوصفة؟', delete_meal_q: 'هل تريد حذف هذه الوجبة؟', delete_cardio_sched_q: 'هل تريد حذف جدول الكارديو هذا؟', sfp_search_bundles: 'ابحث في وجباتي…', sfp_search_recipes: 'ابحث في وصفاتي…',
     cx_servings: 'عدد الحصص', cx_no_sources: 'لا توجد وجبات أو وصفات محفوظة بعد. ابدأ قائمة فارغة.',
-    cx_prep: 'التحضير', cx_portion_unset: 'أدخل عدد الحصص',
+    cx_prep: 'التحضير', cx_portion_unset: 'أدخل عدد الحصص', cx_purchase_unset: 'حدّد كمية الشراء',
     cardio_sched: 'جدول الكارديو', cardio_sched_add: 'إضافة كارديو', cardio_sched_days: 'الأيام',
     cardio_sched_today: 'كارديو اليوم', cardio_sched_more: '+{n} غيرها',
     cardio_mark_done: 'تمّ', cardio_task_scheduled: 'مجدول اليوم', cardio_task_of: '{i} من {n}',
@@ -10218,17 +10218,82 @@ function openPreviousProgramPreview(preview) {
     } catch (_) { showToast(t('sc_error')); } finally { button.disabled = false; }
   };
 }
+// THE PURCHASE LEDGER (v322). This was a spreadsheet: four always-open labelled
+// controls per ingredient, so an eight-ingredient recipe put THIRTY-TWO controls
+// on one sheet and the names they belonged to were lost among them. It is the
+// v301 ingredient ledger's shape now, and it reuses that component's vocabulary
+// outright — .rec-row, .rec-line, .rec-sum, .rec-more, .rec-f, .rec-cap — so
+// there is one ledger idiom in this app, not two that merely resemble each other.
+//
+// Line 1 names the ingredient and what the recipe calls for. Line 2 is a
+// READ-ONLY summary of the shopping amount that opens a well on tap. Four
+// controls per row become one line until you want them.
 function openPurchaseEditor(source) {
   const owner = Cloud.getLastUid(), recipe = source.type === 'recipe';
   const original = recipe ? DB.recipes.list().find(x => x.id === source.id) : DB.mealBundles.list().find(x => x.id === source.id);
   const snapshot = JSON.stringify(original);
-  const modal = convenienceModal(`${cxHeader('cx_qty')}<div class="cx-stack"><strong>${escapeHtml(source.name)}</strong><p class="settings-hint">${t('cx_amount_hint')}</p><p class="settings-hint">${t('cx_identity_hint')}</p>
-    ${source.items.map((it,i) => `<div class="cx-item" data-purchase="${i}"><strong>${escapeHtml(it.name)}</strong><p class="settings-hint">${escapeHtml(it.qty || '')}</p>
-      <label>${t('cx_qty')}<input class="input" type="number" min="0.001" step="any" data-quantity value="${it.purchase?.quantity == null ? '' : Number(it.purchase.quantity)}"></label>
-      <label>${t('cx_unit')}<select class="input" data-unit>${['g','kg','ml','l','piece'].map(u => `<option value="${u}" ${it.purchase?.unit === u ? 'selected' : ''}>${t('cx_' + u)}</option>`).join('')}</select></label>
-      <label>${t('cx_identity')}<input class="input" data-identity maxlength="80" dir="auto" value="${escapeHtml(it.purchase?.ingredientId || '')}"></label>
-      <label>${t('cx_prep')}<select class="input" data-preparation>${['unspecified','raw','cooked'].map(p => `<option value="${p}" ${it.purchase?.preparation === p ? 'selected' : ''}>${t('cx_' + p)}</option>`).join('')}</select></label></div>`).join('')}
+  const UNITS = ['g', 'kg', 'ml', 'l', 'piece'], PREPS = ['unspecified', 'raw', 'cooked'];
+  const modal = convenienceModal(`${cxHeader('cx_qty')}<div class="cx-stack"><strong>${escapeHtml(source.name)}</strong><p class="settings-hint">${t('cx_amount_hint')}</p>
+    <div class="rec-list pur-list">
+    ${source.items.map((it, i) => `<div class="rec-row pur-row" data-purchase="${i}" data-state="${it.purchase?.quantity == null ? 'idle' : 'done'}">
+      <div class="rec-line">
+        <strong class="pur-name">${escapeHtml(it.name)}</strong>
+        ${it.qty ? `<span class="pur-orig">${escapeHtml(it.qty)}</span>` : ''}
+      </div>
+      <button type="button" class="rec-sum" data-toggle aria-expanded="false" aria-controls="pur-more-${i}">
+        <span class="rec-sum-t"></span><span class="rec-sum-ic">${icon('edit', 14)}</span>
+      </button>
+      <div class="rec-more" id="pur-more-${i}">
+        <div class="rec-f"><label class="rec-cap" for="pur-q-${i}">${t('cx_qty')}</label>
+          <input id="pur-q-${i}" type="number" min="0.001" step="any" data-quantity value="${it.purchase?.quantity == null ? '' : Number(it.purchase.quantity)}"></div>
+        <div class="rec-f"><label class="rec-cap" for="pur-u-${i}">${t('cx_unit')}</label>
+          <select id="pur-u-${i}" data-unit>${UNITS.map(u => `<option value="${u}" ${it.purchase?.unit === u ? 'selected' : ''}>${t('cx_' + u)}</option>`).join('')}</select></div>
+        <div class="rec-f"><label class="rec-cap" for="pur-p-${i}">${t('cx_prep')}</label>
+          <select id="pur-p-${i}" data-preparation>${PREPS.map(p => `<option value="${p}" ${it.purchase?.preparation === p ? 'selected' : ''}>${t('cx_' + p)}</option>`).join('')}</select></div>
+        <div class="rec-f pur-f-id"><label class="rec-cap" for="pur-i-${i}">${t('cx_identity')}</label>
+          <input id="pur-i-${i}" data-identity maxlength="80" dir="auto" value="${escapeHtml(it.purchase?.ingredientId || '')}"></div>
+        <p class="rec-cap pur-hint">${t('cx_identity_hint')}</p>
+      </div>
+    </div>`).join('')}
+    </div>
     <button class="btn btn-primary" id="cx-purchase-save">${t('save')}</button></div>`);
+
+  // ONE writer of line 2, exactly as updateSummary() is in the recipe ledger.
+  // A row's summary is derived from its own fields and nothing else, so the line
+  // can never disagree with the well underneath it.
+  const paint = (row) => {
+    const q = row.querySelector('[data-quantity]').value;
+    const n = Number(q);
+    const set = q !== '' && Number.isFinite(n) && n > 0;
+    const parts = [];
+    if (set) {
+      parts.push('<span class="num">' + escapeHtml(fmtNum(n)) + '</span> ' + escapeHtml(t('cx_' + row.querySelector('[data-unit]').value)));
+      const prep = row.querySelector('[data-preparation]').value;
+      if (prep !== 'unspecified') parts.push(escapeHtml(t('cx_' + prep)));
+      const id = row.querySelector('[data-identity]').value.trim();
+      if (id) parts.push(escapeHtml(id));
+    }
+    row.dataset.state = set ? 'done' : 'idle';
+    row.querySelector('.rec-sum-t').innerHTML = set ? parts.join(' · ') : escapeHtml(t('cx_purchase_unset'));
+  };
+  modal.querySelectorAll('.pur-row').forEach(paint);
+
+  // Three delegated listeners, bound once — the ledger's own rule. Editing a
+  // field repaints only its own summary, so nothing the user is typing in is
+  // ever re-rendered underneath them.
+  const list = modal.querySelector('.pur-list');
+  list.addEventListener('click', (e) => {
+    const btn = e.target.closest('[data-toggle]');
+    if (!btn) return;
+    const row = btn.closest('.pur-row');
+    const open = !row.classList.contains('is-open');
+    row.classList.toggle('is-open', open);
+    btn.setAttribute('aria-expanded', String(open));
+    if (open) row.querySelector('[data-quantity]').focus();
+  });
+  list.addEventListener('input', (e) => { const row = e.target.closest('.pur-row'); if (row) paint(row); });
+  list.addEventListener('change', (e) => { const row = e.target.closest('.pur-row'); if (row) paint(row); });
+
   modal.querySelector('#cx-purchase-save').onclick = () => {
     const current = recipe ? DB.recipes.list().find(x => x.id === source.id) : DB.mealBundles.list().find(x => x.id === source.id);
     if (owner !== Cloud.getLastUid() || snapshot !== JSON.stringify(current)) { convenienceError({code:'STALE'}); return; }
