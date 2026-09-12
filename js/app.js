@@ -12,7 +12,7 @@
 // build. The literal below is the fallback (file://, or a stripped query) and is
 // still bumped by `npm run release` — see CLAUDE.md "CACHE WORKFLOW".
 const VAULT_BUILD = (() => {
-  const FALLBACK = 'v316';
+  const FALLBACK = 'v317';
   try {
     const src = (document.currentScript && document.currentScript.src) || '';
     const m = src.match(/[?&]v=(\d+)/);
@@ -424,9 +424,9 @@ const I18N = {
     streak_active: 'Active streak — keep it going!',
     streak_start: 'Log a session to start your streak',
     workouts: 'Workouts', volume: 'Volume', cardio: 'Cardio', sleep_today: "Today's sleep",
-    delete_q: 'Delete this?', sfp_search_bundles: 'Search meals…', sfp_search_recipes: 'Search recipes…',
+    delete_recipe_q: 'Delete this recipe?', delete_meal_q: 'Delete this meal?', delete_cardio_sched_q: 'Delete this cardio schedule?', sfp_search_bundles: 'Search meals…', sfp_search_recipes: 'Search recipes…',
     cx_servings: 'Servings', cx_no_sources: 'No saved meals or recipes yet — start a blank list instead.',
-    cx_prep: 'Preparation',
+    cx_prep: 'Preparation', cx_portion_unset: 'Enter a portion',
     cardio_sched: 'Cardio schedule', cardio_sched_add: 'Add cardio', cardio_sched_days: 'Days',
     cardio_sched_today: "Today's cardio", cardio_sched_more: '+{n} more',
     cardio_sched_need: 'Choose at least one day and a duration.',
@@ -1033,7 +1033,7 @@ const I18N = {
     cx_identity_hint: "Use the same ID only for the same ingredient. Units and preparation must also match.",
     cx_raw: "Raw",
     cx_cooked: "Cooked",
-    cx_unspecified: "Unspecified preparation",
+    cx_unspecified: "Unspecified",
     cx_piece: "Piece",
     cx_g: "g",
     cx_kg: "kg",
@@ -1416,9 +1416,9 @@ const I18N = {
     streak_active: 'سلسلة نشطة — واصل!',
     streak_start: 'سجّل جلسة لبدء سلسلتك',
     workouts: 'التمارين', volume: 'الحجم', cardio: 'الكارديو', sleep_today: 'نوم اليوم',
-    delete_q: 'هل تريد الحذف؟', sfp_search_bundles: 'ابحث في وجباتي…', sfp_search_recipes: 'ابحث في وصفاتي…',
+    delete_recipe_q: 'هل تريد حذف هذه الوصفة؟', delete_meal_q: 'هل تريد حذف هذه الوجبة؟', delete_cardio_sched_q: 'هل تريد حذف جدول الكارديو هذا؟', sfp_search_bundles: 'ابحث في وجباتي…', sfp_search_recipes: 'ابحث في وصفاتي…',
     cx_servings: 'عدد الحصص', cx_no_sources: 'لا توجد وجبات أو وصفات محفوظة بعد. ابدأ قائمة فارغة.',
-    cx_prep: 'التحضير',
+    cx_prep: 'التحضير', cx_portion_unset: 'أدخل عدد الحصص',
     cardio_sched: 'جدول الكارديو', cardio_sched_add: 'إضافة كارديو', cardio_sched_days: 'الأيام',
     cardio_sched_today: 'كارديو اليوم', cardio_sched_more: '+{n} غيرها',
     cardio_sched_need: 'اختر يوماً واحداً على الأقل ومدّة.',
@@ -2016,7 +2016,7 @@ const I18N = {
     cx_identity_hint: "استخدم المعرّف نفسه للمكوّن نفسه فقط. ويجب أن تتطابق الوحدة وحالة التحضير أيضاً.",
     cx_raw: "نيء",
     cx_cooked: "مطبوخ",
-    cx_unspecified: "تحضير غير محدد",
+    cx_unspecified: "غير محدّد",
     cx_piece: "حبة",
     cx_g: "غ",
     cx_kg: "كغ",
@@ -2139,7 +2139,7 @@ const I18N = {
     minutes_short: 'د',
     rest_is_the_plan: 'الراحة جزء من الخطة — العضلة تكبر اليوم لا أمس.',
     rest_sheet_title_1: 'لن تتمكّن من التمرين اليوم',
-    rest_sheet_body_1: 'مفهوم، فالأيام ليست سواءً. لكن تذكّر هذا: <b>لا تجعلهما يومين متتاليين.</b> الأول راحة، والثاني بداية انقطاع. والسلسلة تُحتسب بالتسجيل، فأيّ شيء تسجّله يُبقيها.',
+    rest_sheet_body_1: 'مفهوم، فالأيام ليست سواءً. لكن تذكّر هذا: <b>لا تأخذ يومَي راحة متتاليين.</b> الأول راحة، والثاني بداية انقطاع. والسلسلة تُحتسب بالتسجيل، فأيّ شيء تسجّله يُبقيها.',
     rest_sheet_title_2: 'هذا يومٌ ثانٍ على التوالي',
     rest_sheet_body_2: 'أخذتَ راحةً أمس. وإن أخذتها اليوم أيضاً، فالانقطاع يبدأ من هنا — والعودة تصير أثقل من التمرين نفسه.',
     rest_streak_line: 'سلسلتك {n} يوم — واليوم بلا تسجيل يقطعها',
@@ -3411,9 +3411,10 @@ function hideToast() {
 }
 // Plain text toast, OR — when `opts.actionLabel`/`opts.onAction` are given — a
 // toast with a tappable action (e.g. "Undo"). The action toast is interactive
-// only while shown (pointer-events are scoped to `.show` in CSS, and it fully
-// tears down on hide) so a dismissed toast can never become an invisible
-// tap-blocker. It also pauses its auto-hide while hovered/focused (WCAG 2.2.1).
+// only while shown — `.toast.show .toast-action` is what scopes that, and the
+// `.show` half is not optional: hideToast() leaves the button in the DOM, and a
+// hidden toast is opacity:0 rather than display:none, so without the gate it stays
+// hit-testable. It also pauses its auto-hide while hovered/focused (WCAG 2.2.1).
 function showToast(msg, opts) {
   const tEl = $('#toast');
   hideToast();   // clean any prior (action) toast + listeners first
@@ -6741,7 +6742,7 @@ function openCardioScheduleModal(id = null) {
   });
   overlay.querySelector('#cs-delete')?.addEventListener('click', () => {
     confirmDialog({
-      title: t('delete_q'), text: '', confirmLabel: t('delete'), variant: 'danger',
+      title: t('delete_cardio_sched_q'), text: '', confirmLabel: t('delete'), variant: 'danger',
       onConfirm: () => {
         // Removing the schedule never touches the cardio LOG: sessions already
         // performed are history, and history is not the schedule's to erase.
@@ -8642,15 +8643,15 @@ function openSavedFoodPicker(date, onSave, initialTab) {
       <button class="icon-btn icon-btn-tile" data-close>${icon('close', 20)}</button>
     </div>
     <div class="sfp-tabs" role="tablist">
-      <button type="button" class="sfp-tab${tab === 'foods' ? ' on' : ''}" data-tab="foods" role="tab" aria-selected="${tab === 'foods'}" aria-controls="sf-list">${t('tab_saved_foods')}</button>
-      <button type="button" class="sfp-tab${tab === 'bundles' ? ' on' : ''}" data-tab="bundles" role="tab" aria-selected="${tab === 'bundles'}" aria-controls="sf-list">${t('tab_bundles')}</button>
-      <button type="button" class="sfp-tab${tab === 'recipes' ? ' on' : ''}" data-tab="recipes" role="tab" aria-selected="${tab === 'recipes'}" aria-controls="sf-list">${t('tab_recipes')}</button>
+      <button type="button" class="sfp-tab${tab === 'foods' ? ' on' : ''}" id="sf-tab-foods" data-tab="foods" role="tab" aria-selected="${tab === 'foods'}" aria-controls="sf-list">${t('tab_saved_foods')}</button>
+      <button type="button" class="sfp-tab${tab === 'bundles' ? ' on' : ''}" id="sf-tab-bundles" data-tab="bundles" role="tab" aria-selected="${tab === 'bundles'}" aria-controls="sf-list">${t('tab_bundles')}</button>
+      <button type="button" class="sfp-tab${tab === 'recipes' ? ' on' : ''}" id="sf-tab-recipes" data-tab="recipes" role="tab" aria-selected="${tab === 'recipes'}" aria-controls="sf-list">${t('tab_recipes')}</button>
     </div>
     <div class="search-wrap" id="sf-search-wrap" style="margin-bottom:10px">
       ${icon('search', 20)}
       <input type="search" id="sf-search" placeholder="${t('search_foods')}">
     </div>
-    <div class="picker-list" id="sf-list"></div>
+    <div class="picker-list" id="sf-list" role="tabpanel" aria-labelledby="sf-tab-${tab}"></div>
     <button class="btn btn-ghost btn-block" id="sf-new" style="margin-top:10px">${icon('plus', 20)} ${tab === 'bundles' ? t('bundle_new') : tab === 'recipes' ? t('rec_new') : t('saved_new')}</button>
   `);
   guardConvenienceModal(overlay);
@@ -8702,8 +8703,15 @@ function openSavedFoodPicker(date, onSave, initialTab) {
     }));
     listEl.querySelectorAll('[data-del-rec]').forEach((b) => b.addEventListener('click', () => {
       confirmDialog({
-        title: t('delete_q'), text: '', confirmLabel: t('delete'), variant: 'danger',
-        onConfirm: () => { const result = DB.recipes.remove(b.dataset.delRec); if (!result.ok) { convenienceError(result); return; } drawRecipes(); offerUndo(t('rec_deleted'),result); },
+        title: t('delete_recipe_q'), text: '', confirmLabel: t('delete'), variant: 'danger',
+        onConfirm: () => {
+          const result = DB.recipes.remove(b.dataset.delRec);
+          if (!result.ok) { convenienceError(result); return; }
+          // NOT drawRecipes(): the confirm sheet replaced #modal-root, so this
+          // closure's listEl is detached and the picker is already gone.
+          openSavedFoodPicker(date, onSave, 'recipes');
+          offerUndo(t('rec_deleted'), result);
+        },
       });
     }));
   }
@@ -8712,7 +8720,9 @@ function openSavedFoodPicker(date, onSave, initialTab) {
   function drawBundles() {
     const bundles = DB.mealBundles.list().filter(b => DB.search.normalize(b.name).includes(DB.search.normalize(query)));
     if (!bundles.length) {
-      listEl.innerHTML = `<div class="calc-preview-hint" style="text-align:center;padding:18px">${t('bundle_empty')}</div>`;
+      // "You have no meals" and "your search matched none of your meals" are
+      // different facts. The other two tabs already tell them apart.
+      listEl.innerHTML = `<div class="calc-preview-hint" style="text-align:center;padding:18px">${DB.mealBundles.list().length ? t('no_matches_simple') : t('bundle_empty')}</div>`;
       return;
     }
     listEl.innerHTML = bundles.map((b) => {
@@ -8720,7 +8730,7 @@ function openSavedFoodPicker(date, onSave, initialTab) {
       return `
       <div class="bundle-card" data-bundle="${escapeHtml(b.id)}">
         ${b.favorite ? `<span class="bundle-star" aria-label="${escapeHtml(t('cx_favorite'))}">★</span>` : ''}
-        <button type="button" class="bundle-main" data-edit-bundle="${escapeHtml(b.id)}">
+        <button type="button" class="bundle-main" data-edit-bundle="${escapeHtml(b.id)}"${b.favorite ? ` aria-label="${escapeHtml(b.name + ' — ' + t('cx_favorite'))}"` : ''}>
           <div class="bundle-name">${escapeHtml(b.name)}</div>
           <div class="bundle-meta"><span class="num">${fmtNum(b.items.length)}</span> ${t('bundle_items')} · <span class="num">${fmtNum(Math.round(kcal))}</span> ${t('cal')}</div>
         </button>
@@ -8792,6 +8802,8 @@ function openSavedFoodPicker(date, onSave, initialTab) {
       x.classList.toggle('on', on);
       x.setAttribute('aria-selected', String(on));
     });
+    const panel = overlay.querySelector('#sf-list');
+    if (panel) panel.setAttribute('aria-labelledby', 'sf-tab-' + tab);
     const input = overlay.querySelector('#sf-search');
     if (input) input.placeholder = tab === 'bundles' ? t('sfp_search_bundles') : tab === 'recipes' ? t('sfp_search_recipes') : t('search_foods');
     overlay.querySelector('#sf-search-wrap').style.display = '';
@@ -9950,17 +9962,34 @@ function openMealEditor(existing = null, onSave = () => {}) {
     <button class="btn btn-primary" id="cx-meal-save">${t('save')}</button>
     ${existing ? `<button class="btn btn-danger" id="cx-meal-delete">${t('delete')}</button>` : ''}</div>`);
   const draw = () => {
-    const kcal = (it) => fmtNum(Math.round(Number(it.calories || 0) * Number(it.servings || 1))) + ' ' + t('cal');
-    modal.querySelector('#cx-meal-items').innerHTML = items.map((it,i) => `<div class="cx-row"><span>${escapeHtml(it.name)}<br><small class="num" data-kcal="${i}">${escapeHtml(kcal(it))}</small></span>
+    const kcal = (it) => `<span class="num">${escapeHtml(fmtNum(Math.round(Number(it.calories || 0) * Number(it.servings || 1))))}</span> ${escapeHtml(t('cal'))}`;
+    modal.querySelector('#cx-meal-items').innerHTML = items.map((it,i) => `<div class="cx-row"><span>${escapeHtml(it.name)}<br><small data-kcal="${i}">${kcal(it)}</small></span>
       <label>${t('cx_portion')}<input class="input" type="number" min="0.25" max="20" step="0.25" data-portion="${i}" value="${Number(it.servings || 1)}"></label>
       <button class="icon-btn danger" data-remove="${i}" aria-label="${escapeHtml(t('delete'))}">${icon('trash',18)}</button></div>`).join('');
     // Patched in place rather than redrawn: a redraw on every keystroke would
     // take the caret out of the field being typed in.
-    modal.querySelectorAll('[data-portion]').forEach(input => input.oninput = () => {
+    modal.querySelectorAll('[data-portion]').forEach(input => {
       const i = Number(input.dataset.portion), it = items[i];
-      it.servings = Number(input.value);
-      const cell = modal.querySelector(`[data-kcal="${i}"]`);
-      if (cell) cell.textContent = Number.isFinite(it.servings) ? kcal(it) : '';
+      const cell = () => modal.querySelector(`[data-kcal="${i}"]`);
+      const paint = (html) => { const el = cell(); if (el) el.innerHTML = html; };
+      input.oninput = () => {
+        // A number input reports '' for anything it cannot parse ('.', '-', 'abc'),
+        // so this one test covers every unreadable state.
+        const v = Number(input.value);
+        const ok = input.value !== '' && Number.isFinite(v) && v > 0 && v <= 20;
+        if (ok) it.servings = v;
+        paint(ok ? kcal(it) : escapeHtml(t('cx_portion_unset')));
+      };
+      // Leaving the field CLAMPS rather than reverting. Typing 25 used to snap
+      // silently back to the old figure and erase the hint in the same breath, so
+      // nothing on screen recorded that anything had been refused; 20 on screen
+      // says what happened. Only an unreadable field falls back to the last value.
+      input.onchange = () => {
+        const v = Number(input.value);
+        if (input.value !== '' && Number.isFinite(v) && v > 0) it.servings = Math.min(20, Math.max(0.25, v));
+        input.value = it.servings;
+        paint(kcal(it));
+      };
     });
     modal.querySelectorAll('[data-remove]').forEach(b => b.onclick = () => { items.splice(Number(b.dataset.remove),1); draw(); });
   };
@@ -9982,7 +10011,7 @@ function openMealEditor(existing = null, onSave = () => {}) {
   // behind the deliberate step of opening it.
   modal.querySelector('#cx-meal-delete')?.addEventListener('click', () => {
     confirmDialog({
-      title: t('delete_q'), text: '', confirmLabel: t('delete'), variant: 'danger',
+      title: t('delete_meal_q'), text: '', confirmLabel: t('delete'), variant: 'danger',
       onConfirm: () => {
         if (owner !== Cloud.getLastUid()) { convenienceError({ code: 'STALE' }); return; }
         const result = DB.mealBundles.remove(existing.id);
@@ -10088,7 +10117,7 @@ function openPreviousProgramPreview(preview) {
   const modal = convenienceModal(`${cxHeader('cx_plan_history')}<div class="cx-stack"><p>${t('cx_restore_hint')}</p>
     <details><summary>${t('program_title')}</summary>${renderPlan(DB.plan.get(),exercises)}</details>
     ${renderPlan(plan,preview.exercises)}<p>${(plan.trainingDays || []).map(d => escapeHtml(dayName(d,true))).join(' · ')}</p><p>${t('cx_date')}: ${escapeHtml(formatDate(todayISO()))}</p>
-    ${missing.map((id,i) => `<label>${escapeHtml(preview.exercises.find(e => e.id === id)?.name || id)}<select class="input" data-map="${i}"><option value="">—</option><option value="new">${t('cx_new')}</option>${exercises.map(e => `<option value="${escapeHtml(e.id)}">${escapeHtml(exDisplayName(e))}</option>`).join('')}</select></label>`).join('')}
+    ${missing.map((id,i) => `<label>${escapeHtml(preview.exercises.find(e => e.id === id)?.name || id)}<select class="input" data-map="${i}"><option value="">—</option><option value="new">${t('new_exercise')}</option>${exercises.map(e => `<option value="${escapeHtml(e.id)}">${escapeHtml(exDisplayName(e))}</option>`).join('')}</select></label>`).join('')}
     <label class="cx-row"><span>${t('cx_keep_exceptions')}</span><input type="checkbox" id="cx-keep-exceptions"></label>
     <p class="settings-hint">${escapeHtml([...(DB.plan.get().restDates || []),...(DB.plan.get().extraDates || [])].filter(d => d >= todayISO()).join(' · '))}</p>
     <button class="btn btn-primary" id="cx-restore-plan">${t('cx_restore')}</button></div>`);

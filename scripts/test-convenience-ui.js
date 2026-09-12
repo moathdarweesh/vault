@@ -9,7 +9,11 @@ module.exports = async function testConvenienceUI(page) {
   });
   for (const [lang,theme] of [['ar','dark'],['en','light']]) {
     await page.evaluate(({lang,theme}) => {closeModal();DB.prefs.setLang(lang);DB.prefs.setTheme(theme);applyLang(lang);applyTheme(theme);navigate('food');}, {lang,theme});
-    await page.locator('[data-my-meals]').click();
+    // v316 removed the «وجباتي» header link: the food FAB's add-sheet is the one
+    // door to this picker now. Drive that route, not the deleted one.
+    await page.locator('#food-fab').click();
+    await page.locator('[data-method="saved"]').click();
+    await page.locator('.sfp-tab[data-tab="bundles"]').click();
     await page.locator('#sf-new').click();
     await page.locator('#cx-meal-name').fill('QA breakfast '+lang);
     await page.locator('#cx-food').selectOption('0');

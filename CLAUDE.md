@@ -8,7 +8,7 @@ A fitness / workout-tracking **PWA**. Vanilla JS, **no build step**, bilingual *
 
 ## Stack & key files
 - `index.html` — markup, script wiring, and the cache-version markers.
-- `js/app.js` (~190KB) — ALL views/rendering, the router `navigate(view, ctx, opts)`, and the two EN/AR translation objects. Use `Grep` to find a function; don't assume from names.
+- `js/app.js` (**~800KB**) — ALL views/rendering, the router `navigate(view, ctx, opts)`, and the two EN/AR translation objects. Use `Grep` to find a function; don't assume from names.
 - `js/storage.js` — the `DB.*` localStorage API (all persistence). `MACHINE_SEED`, name-match migrations.
 - `js/cloud.js` — Supabase email/password auth + whole-blob sync to a per-user `vault_data` row (RLS-protected). Uses the **publishable** key only (never service-role). Loads before app.js. Also: `getUsername/checkUsername/setUsername` (the mandatory-handle feature) and `getClient` (RLS-scoped client for auxiliary readers).
 - ~~`js/tables.js`~~ — **the mirror was REMOVED in v278** (owner decision, migration `18_drop-mirror-v14.sql`): the 13 normalized projection tables are dropped, the admin panel reads `vault_data` blobs directly under a `vault_data_admin_read` (is_admin) SELECT policy, and `admin_user_stats`/`admin_activity`/`delete_own_account` were rewritten over the blobs IN THE SAME TRANSACTION as the drops — plpgsql binds table names at call time, so dropping first would have broken every account deletion. The mirror's projection was silently empty for workout_sessions (name-remap failures), which is half of why it went.
@@ -77,7 +77,7 @@ a faster TTFB — not fewer bytes.
 npm run release          # bump every marker + verify, then commit all files together
 ```
 
-**Current version: v316.** APK: build 21 / v3.0.
+**Current version: v317.** APK: build 21 / v3.0.
 
 `scripts/release.js` rewrites **every** marker and then re-reads them from disk to confirm; it exits non-zero if any disagree, and prints the count per file (derived, never hard-coded — the docs used to say 16 while the real count was 15). The markers are `?v=N` in `index.html` (every script and stylesheet, the `js/vendor/supabase.js` preload, both `icons/icon.svg` links, `manifest.json`), the `__cleaned_vN` sessionStorage key, the `FALLBACK` literal in `app.js`, `version.json` → `web`, the `?v=` in `manifest.json`, `admin.html`, `privacy.html` and `get/index.html`, and the `Current version` line in this file. `scripts/check-contracts.js` (pre-commit) refuses a commit where any of them disagree.
 
@@ -905,8 +905,11 @@ caught them. Both are recorded so they are not re-opened:**
   (the `on` class, `aria-selected`, the placeholder, the new-button label) and both
   the first render and the click handler call it, so they cannot drift.
 - **`.cx-stack .btn` set `white-space: normal` without `height: auto`.** `.btn`
-  fixes its height, so a label that wrapped overflowed its own button. (`.cx-tools`
-  went with it — v314 moved its only user to `.header-links` and left the rule.)
+  fixes its height, so a label that wrapped overflowed its own button. Measured: two
+  lines (21px) still fit the 44px box; at three the text is 63px and spilled 9.5px
+  past the button's edge, top and bottom. (`.cx-tools` went with it — THIS release
+  moved its only user to `.header-links`; an earlier draft of this line credited
+  v314, but `.header-links` does not exist in `4041fc5`.)
 - **Six free-text fields in the convenience sheets had no `dir="auto"`** — the meal
   name, the list name, the item name, both ingredient-identity fields and the
   category. The recipe editor and the photo import set it on every such field; a
