@@ -15,6 +15,16 @@
 # It deliberately does NOT upload to TestFlight. That needs the $99 membership
 # and real signing secrets, and it belongs in a separate workflow the owner
 # enables when he has them.
+#
+# EVERY STEP IS ITS OWN STEP, AND EVERY FAILURE ANNOTATES ITSELF.
+# The run log is admin-only (the REST logs endpoint answers 403 to everyone
+# else), and the maintainer has no admin token on the machine he works from. The
+# first version of this workflow bundled build+sync+guard into one step, failed,
+# and left literally no readable information anywhere — one red X reading
+# "Process completed with exit code 1". So: the stages are split so the step
+# NAME alone (which IS public) locates the failure, and scripts/ci-step.sh
+# copies the output into a check-run annotation, which is public too. See that
+# file for the mechanism.
 name: iOS build
 
 on:
@@ -32,6 +42,8 @@ on:
       - 'package-lock.json'
       - 'scripts/build-www.js'
       - 'scripts/sync-ios.js'
+      - 'scripts/ios-bundle-guard.js'
+      - 'scripts/ci-step.sh'
       - '.github/workflows/ios-build.yml'
   pull_request:
     branches: [main]
@@ -43,40 +55,72 @@ concurrency:
 
 jobs:
   build:
-    runs-on: macos-15
+    # PINNED, and pinned to 26 for a reason that is not cosmetic. Since
+    # 28 April 2026 App Store Connect REFUSES an upload that was not built with
+    # Xcode 26 or later against the iOS 26 SDK (Apple, "Upcoming requirements").
+    # Building here on an older runner would prove the app compiles against an
+    # SDK Apple will not accept, which is worse than not checking.
+    # Never `macos-latest`: that label moves on Apple's schedule, and the SDK
+    # floor will move again — it should move by an edit here, deliberately.
+    runs-on: macos-26
     timeout-minutes: 30
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v5
         with:
-          node-version: '20'
+          node-version: '22'
           cache: npm
 
       - name: Install dependencies
-        run: npm ci
+        run: bash scripts/ci-step.sh "npm ci" npm ci
 
-      - name: Build web assets and sync iOS
-        # This is the guarded sync, never a bare `cap sync ios`. It strips the
-        # `server` block that makes the Android build a live-URL shell and then
-        # re-reads the file to prove the strip happened.
-        run: npm run sync:ios
+      # Published as a NOTICE annotation, not just printed, for the same reason
+      # the errors are: the log cannot be read without admin rights, and when a
+      # build fails the first question is always "what did the runner actually
+      # have?". Answering it costs one annotation and saves a round trip.
+      - name: Runner facts
+        run: |
+          {
+            echo "node        $(node -v)"
+            echo "npm         $(npm -v)"
+            echo "cap cli     $(node -p "require('@capacitor/cli/package.json').version" 2>&1)"
+            echo "cap ios     $(node -p "require('@capacitor/ios/package.json').version" 2>&1)"
+            echo "xcodebuild  $(xcodebuild -version 2>&1 | tr '\n' ' ')"
+            echo "swift       $(swift --version 2>&1 | head -1)"
+            echo "cocoapods   $(pod --version 2>&1 | head -1)"
+            echo "ios/ files  $(git ls-files ios | wc -l | tr -d ' ') tracked"
+            echo "SPM project $(test -d ios/App/CapApp-SPM && echo yes || echo NO)"
+          } > /tmp/facts.txt
+          cat /tmp/facts.txt
+          echo "::notice title=runner::$(awk '{gsub(/%/,"%25"); printf "%s%%0A", $0}' /tmp/facts.txt)"
+
+      - name: Build the web bundle
+        run: bash scripts/ci-step.sh "build:www" npm run build:www
+
+      - name: Sync the iOS project
+        # Bare on purpose — the guard runs as its own step below, so a sync
+        # failure and a guard failure can never be confused for one another.
+        run: bash scripts/ci-step.sh "cap sync ios" npx cap sync ios
+
+      - name: Strip the live-URL server block (App Store 4.2)
+        run: bash scripts/ci-step.sh "ios-bundle-guard" node scripts/ios-bundle-guard.js
 
       - name: Refuse a build that would load the live site
-        # Defence in depth. sync-ios.js already asserts this, but the whole App
-        # Store question turns on it, so CI asserts it independently — a future
-        # edit that bypasses the script must not reach a build artifact.
+        # Defence in depth. ios-bundle-guard.js already asserts this, but the
+        # whole App Store question turns on it, so CI asserts it independently —
+        # a future edit that bypasses the script must not reach an artifact.
         run: |
           CONFIG=ios/App/App/capacitor.config.json
           echo "--- $CONFIG ---"
           cat "$CONFIG"
           if grep -q '"server"' "$CONFIG"; then
-            echo "::error::The iOS runtime config still carries a server block. A remote-URL build is rejected under App Store guideline 4.2."
+            echo "::error title=App Store 4.2::The iOS runtime config still carries a server block. A remote-URL build is rejected under guideline 4.2."
             exit 1
           fi
           if [ ! -f ios/App/App/public/index.html ]; then
-            echo "::error::No bundled index.html — the app would open blank."
+            echo "::error title=empty app::No bundled index.html — the app would open blank."
             exit 1
           fi
           echo "ok: bundled assets, no server block"
@@ -86,26 +130,40 @@ jobs:
         # time the feature runs, and App Review rejects it. The privacy manifest
         # is refused at UPLOAD time, not at review time.
         run: |
+          FAIL=0
           PLIST=ios/App/App/Info.plist
           for KEY in NSCameraUsageDescription NSPhotoLibraryUsageDescription NSMicrophoneUsageDescription ITSAppUsesNonExemptEncryption; do
             /usr/libexec/PlistBuddy -c "Print :$KEY" "$PLIST" >/dev/null 2>&1 \
-              || { echo "::error::$PLIST is missing $KEY"; exit 1; }
+              || { echo "::error title=Info.plist::missing $KEY"; FAIL=1; }
           done
           test -f ios/App/App/PrivacyInfo.xcprivacy \
-            || { echo "::error::PrivacyInfo.xcprivacy is missing — App Store Connect refuses the upload."; exit 1; }
-          plutil -lint ios/App/App/PrivacyInfo.xcprivacy
-          plutil -lint "$PLIST"
-          echo "ok: permission strings, privacy manifest, both plists well-formed"
+            || { echo "::error title=privacy manifest::PrivacyInfo.xcprivacy is missing — App Store Connect refuses the upload."; FAIL=1; }
+          # A file on disk is invisible to Xcode unless project.pbxproj names it.
+          # That is exactly how the privacy manifest and the Arabic strings were
+          # first added: present, tracked, and never bundled.
+          for REF in PrivacyInfo.xcprivacy InfoPlist.strings; do
+            grep -q "$REF in Resources" ios/App/App.xcodeproj/project.pbxproj \
+              || { echo "::error title=Xcode project::$REF exists on disk but is not in the Resources build phase — it would not be bundled."; FAIL=1; }
+          done
+          grep -q 'ar.lproj/InfoPlist.strings' ios/App/App.xcodeproj/project.pbxproj \
+            || { echo "::error title=Xcode project::the Arabic InfoPlist.strings is not referenced."; FAIL=1; }
+          plutil -lint ios/App/App/PrivacyInfo.xcprivacy || FAIL=1
+          plutil -lint "$PLIST" || FAIL=1
+          [ "$FAIL" -eq 0 ] || exit 1
+          echo "ok: permission strings, privacy manifest, both plists well-formed, all referenced by the project"
 
-      - name: Show the toolchain
+      - name: Show the schemes and the toolchain
+        # `-scheme App` needs a SHARED scheme (xcshareddata). Xcode writes the
+        # automatic one into xcuserdata, which is per-user and gitignored, so a
+        # project can build on its author's Mac and be unbuildable everywhere
+        # else. Listing them here says plainly whether this checkout has one.
         run: |
           xcodebuild -version
-          xcrun simctl list runtimes | head -20
+          xcodebuild -list -project ios/App/App.xcodeproj
 
       - name: Build for the simulator (no signing, no Apple account)
         run: |
-          set -o pipefail
-          xcodebuild \
+          bash scripts/ci-step.sh "xcodebuild" xcodebuild \
             -project ios/App/App.xcodeproj \
             -scheme App \
             -configuration Debug \
@@ -114,19 +172,31 @@ jobs:
             -derivedDataPath build-ios \
             CODE_SIGNING_ALLOWED=NO \
             CODE_SIGNING_REQUIRED=NO \
-            build 2>&1 | tail -40
+            build
 
       - name: Confirm the app bundle carries what we put in it
         run: |
+          FAIL=0
           APP=$(find build-ios/Build/Products -maxdepth 2 -name '*.app' | head -1)
-          test -n "$APP" || { echo "::error::No .app produced"; exit 1; }
+          if [ -z "$APP" ]; then
+            echo "::error title=no artifact::xcodebuild produced no .app"
+            exit 1
+          fi
           echo "built: $APP"
+          ls -R "$APP" | head -60
+          # Read what is INSIDE the built binary, never what the source claims.
+          # This project has already shipped an Android icon three times that was
+          # correct in source and wrong in the APK.
           test -f "$APP/PrivacyInfo.xcprivacy" \
-            || { echo "::error::PrivacyInfo.xcprivacy is not inside the built app"; exit 1; }
+            || { echo "::error title=bundle::PrivacyInfo.xcprivacy is not inside the built app"; FAIL=1; }
           test -f "$APP/public/index.html" \
-            || { echo "::error::The web bundle is not inside the built app"; exit 1; }
-          /usr/libexec/PlistBuddy -c 'Print :NSCameraUsageDescription' "$APP/Info.plist"
+            || { echo "::error title=bundle::the web bundle is not inside the built app"; FAIL=1; }
+          test -f "$APP/ar.lproj/InfoPlist.strings" \
+            || { echo "::error title=bundle::the Arabic permission strings are not inside the built app"; FAIL=1; }
+          /usr/libexec/PlistBuddy -c 'Print :NSCameraUsageDescription' "$APP/Info.plist" \
+            || { echo "::error title=bundle::the built Info.plist has no camera usage string"; FAIL=1; }
           du -sh "$APP"
+          [ "$FAIL" -eq 0 ] || exit 1
 
       - uses: actions/upload-artifact@v4
         with:
