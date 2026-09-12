@@ -77,7 +77,7 @@ a faster TTFB — not fewer bytes.
 npm run release          # bump every marker + verify, then commit all files together
 ```
 
-**Current version: v314.** APK: build 21 / v3.0.
+**Current version: v315.** APK: build 21 / v3.0.
 
 `scripts/release.js` rewrites **every** marker and then re-reads them from disk to confirm; it exits non-zero if any disagree, and prints the count per file (derived, never hard-coded — the docs used to say 16 while the real count was 15). The markers are `?v=N` in `index.html` (every script and stylesheet, the `js/vendor/supabase.js` preload, both `icons/icon.svg` links, `manifest.json`), the `__cleaned_vN` sessionStorage key, the `FALLBACK` literal in `app.js`, `version.json` → `web`, the `?v=` in `manifest.json`, `admin.html`, `privacy.html` and `get/index.html`, and the `Current version` line in this file. `scripts/check-contracts.js` (pre-commit) refuses a commit where any of them disagree.
 
@@ -812,6 +812,57 @@ Never `macos-latest` — that label moves on Apple's schedule.
 - `scripts/sync-ios.js` must never apply `shell: true` to `process.execPath`: Node's own path
   on Windows is `C:\Program Files\nodejs\node.exe` and cmd.exe splits it at the space. The
   shell is for the `.cmd` shim only.
+
+## v315 (2026-09-13) — scheduled cardio
+
+"Schedule cardio in Program, tick it off on Home." Designed by a judge panel
+(three shapes scored 262 / 256 / 213) and then attacked: 20 defects were found
+against the winner and folded in before a line was written. `scripts/test-cardio-plan.js`
+is the verification script — the project's form of TDD, per the deviation noted below.
+
+- **`STATE.cardioPlan` is a TOP-LEVEL slice, deliberately not a field of `plan`.**
+  The plan object is rebuilt from a literal in **seven** places, not the five named
+  above: `defaultState`, both `migratePlan` branches, `plan.get()`'s fallback,
+  `setRotation`, `clearAll` — **and `planSlot()`, which rebuilds every cycle SLOT on
+  every load**. `setRotation` is the trap: adopting a template would silently delete
+  a plan field it does not name, and "Clear plan" would take the cardio schedule
+  with the lifting one. `shoppingLists` (v312) is the template for the six additive
+  edits; the `hasUserData` line is mandatory, or a device whose only content is a
+  schedule reads as "empty" to cloud.js and is pulled over with no rescue snapshot.
+- **There is no second "done" store.** Completion is a real `DB.cardio` row carrying
+  `planId`. That is what buys the streak, the week strip, the stat strip and the day
+  ledger for free — a private done-map would have to be taught to every one of them.
+- **Ticking CLAIMS an existing unclaimed row rather than adding one.** A walk
+  imported from the watch on the same day, of the same type, is adopted. Without
+  this, using the app after a watch-tracked walk guaranteed the minutes were counted
+  twice with no way for the user to avoid it.
+- **Un-ticking never hard-deletes a row the tick did not create.** Rows the tick
+  wrote carry `planAuto: true` and are removed; a claimed row is merely UNCLAIMED,
+  so an imported walk's minutes and calories survive.
+- **The join is guarded on `entityIdSafe(r.id)`**, because `undefined === undefined`
+  would let one imported walk tick every id-less row at once — and `_idsSafe` now
+  refuses a `cardioPlan` row with no id rather than tolerating it.
+- `forDate` builds its weekday with the **numeric** Date constructor.
+  `new Date('2026-09-13')` parses as UTC and returns the previous day for every
+  UTC+ user — the bug class this codebase has now hit five times.
+- **Home stamps the rendered day into `data-iso` and checks it before writing.** A
+  phone left on Home across midnight never fires `visibilitychange`, so the card can
+  be painted for yesterday; it repaints instead of writing the wrong day. The row is
+  re-read at CLICK time, never captured at render time.
+- Home caps the list at 3 with done sunk to the bottom, and carries a `.section-title`
+  — without a heading, two rows with a "+" between the hero and the calories card
+  read as "add something", not "mark this done".
+- `resolveCardioType` was nested inside `renderCardio` and is now module scope:
+  Program and Home both render a cardio row, and a second copy would be an agreement
+  between three call sites with nothing keeping them equal.
+- ⚠️ **`.supp-toggle.taken` was missing from the identity layer's
+  `--icon-accent: currentColor` list**, whose comment claimed "these six" while
+  naming five. It fills with `--accent` while `--icon-accent` still resolved to
+  `--accent-text` — the same orange in dark mode — so the short leg of the duotone
+  check was painted orange on orange and the tick rendered as **a bare diagonal
+  slash**. Live in Supplements ever since that toggle shipped; scheduled cardio
+  reuses the control, which is how it finally surfaced. Verified after the fix:
+  the leg resolves to `rgb(26,8,0)` on the `rgb(255,106,0)` fill.
 
 ## Superpowers — and the two places this project deliberately departs from it
 

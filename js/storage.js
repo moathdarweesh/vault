@@ -409,6 +409,12 @@ function defaultState() {
     sessions: [],
     cardio: [],
     cardioTypes: [], // user-defined custom cardio types (built-ins live in CARDIO_TYPES)
+    // Scheduled cardio: "walk 30 min on Sun/Tue/Thu". A WEEKDAY pattern, and
+    // deliberately NOT a field of `plan` — seven places rebuild that object from
+    // a literal (setRotation and clearAll among them), so a field there is erased
+    // by adopting a template or clearing the lifting plan. It also never touches
+    // trainingDays/extraDates, so cardio can never advance the lifting cycle.
+    cardioPlan: [],
     foods: [],
     sleep: [],
     // Workout plan — a CONTINUOUS ROTATION: an ordered cycle of workouts rolled
@@ -601,6 +607,7 @@ function loadState() {
     parsed.sessions = parsed.sessions || [];
     parsed.cardio = parsed.cardio || [];
     parsed.cardioTypes = parsed.cardioTypes || [];
+    parsed.cardioPlan = parsed.cardioPlan || [];
     parsed.foods = parsed.foods || [];
     parsed.sleep = parsed.sleep || [];
     parsed.plan = migratePlan(parsed.plan);   // legacy dow-grid → continuous rotation
@@ -614,7 +621,7 @@ function loadState() {
     // a session without `sets`, or with reps typed as '8x', broke Home and the
     // Console's SQL. This is the one place the blob is made well-formed.
     let normChanged = false;   // → migrated below: the well-formed copy must reach localStorage and the cloud, not just memory
-    for (const k of ['exercises', 'sessions', 'cardio', 'cardioTypes', 'foods', 'sleep', 'supplements', 'mealBundles', 'recipes', 'bodyweight', 'shoppingLists']) {
+    for (const k of ['exercises', 'sessions', 'cardio', 'cardioTypes', 'cardioPlan', 'foods', 'sleep', 'supplements', 'mealBundles', 'recipes', 'bodyweight', 'shoppingLists']) {
       if (k in parsed && !Array.isArray(parsed[k])) { parsed[k] = []; normChanged = true; }
     }
     for (const k of ['supplementLogs', 'foodLogs', 'water']) {
@@ -643,6 +650,23 @@ function loadState() {
     }
     parsed.health = parsed.health || { data: null, syncedAt: 0, hidden: [] };
     if (!Array.isArray(parsed.health.hidden)) parsed.health.hidden = [];
+    // Scheduled-cardio ROWS, normalised like sessions. A row without a usable id
+    // is DROPPED rather than repaired: the id is the join key the Home tick writes
+    // into the cardio log as planId, and `undefined === undefined` would let one
+    // imported walk tick every id-less row at once.
+    const cardioPlanBefore = JSON.stringify(parsed.cardioPlan);
+    parsed.cardioPlan = parsed.cardioPlan
+      .filter((r) => r && typeof r === 'object' && !Array.isArray(r) && entityIdSafe(r.id) && typeof r.type === 'string' && r.type)
+      .map((r) => ({
+        ...r,
+        days: (Array.isArray(r.days) ? r.days : [])
+          .map(Number)
+          .filter((d) => Number.isInteger(d) && d >= 0 && d <= 6)
+          .filter((d, i, a) => a.indexOf(d) === i)
+          .sort((a, b) => a - b),
+        duration: Math.min(1440, Math.max(0, Math.round(Number(r.duration) || 0))),
+      }));
+    if (JSON.stringify(parsed.cardioPlan) !== cardioPlanBefore) normChanged = true;
 
     // Migration: backfill missing fields + add any new seed exercises
     const seedByName = Object.fromEntries(SEED_EXERCISES.map((e) => [e.name, e]));
@@ -1708,6 +1732,10 @@ const DB = {
         (b.bodyweight && b.bodyweight.length) ||
         (b.water && Object.keys(b.water).length) ||
         (b.cardioTypes && b.cardioTypes.length) ||
+        // Mandatory, not optional: without it a device whose ONLY content is a
+        // cardio schedule reads as "empty" to cloud.js, is pulled over with no
+        // rescue snapshot, and is then refused a push.
+        (b.cardioPlan && b.cardioPlan.length) ||
         (b.plan && Array.isArray(b.plan.cycle) && b.plan.cycle.length) ||
         (b.nutrition && b.nutrition.targets && b.nutrition.targets.calories) ||
         // Recipes, meal bundles and a configured notification setup are user
@@ -1734,7 +1762,7 @@ const DB = {
   _validateBlob(data) {
     if (!data || typeof data !== 'object' || Array.isArray(data)) return false;
     if (!Array.isArray(data.exercises)) return false;
-    for (const k of ['sessions', 'cardio', 'cardioTypes', 'sleep', 'foods', 'supplements', 'mealBundles', 'recipes', 'bodyweight', 'shoppingLists']) {
+    for (const k of ['sessions', 'cardio', 'cardioTypes', 'cardioPlan', 'sleep', 'foods', 'supplements', 'mealBundles', 'recipes', 'bodyweight', 'shoppingLists']) {
       if (k in data && data[k] != null && !Array.isArray(data[k])) return false;
     }
     for (const k of ['prefs', 'foodLogs', 'supplementLogs', 'water', 'notif', 'plan', 'nutrition', 'reminders']) {
@@ -1759,8 +1787,12 @@ const DB = {
     const listOk = (arr, keys) => !Array.isArray(arr) || arr.every((r) => !r || keys.every((k) => ok(r[k])));
     if (!listOk(data.exercises, ['id'])) return false;
     if (!listOk(data.sessions, ['id', 'exerciseId'])) return false;
-    if (!listOk(data.cardio, ['id', 'type'])) return false;
+    if (!listOk(data.cardio, ['id', 'type', 'planId'])) return false;
     if (!listOk(data.cardioTypes, ['id'])) return false;
+    // Every scheduled row MUST carry a safe id — it is interpolated into
+    // data-cardio-done / data-cardio-sched-edit, and it is the planId join key.
+    if (Array.isArray(data.cardioPlan) && !data.cardioPlan.every((r) => r && entityIdSafe(r.id))) return false;
+    if (!listOk(data.cardioPlan, ['id', 'type'])) return false;
     if (!listOk(data.sleep, ['id'])) return false;
     if (!listOk(data.foods, ['id'])) return false;
     if (!listOk(data.supplements, ['id'])) return false;
@@ -2912,13 +2944,16 @@ const DB = {
     list() {
       return [...STATE.cardio].sort((a, b) => isoDesc(a.date, b.date));
     },
-    add({ type, date, duration, calories }) {
+    add({ type, date, duration, calories, planId }) {
       const entry = {
         id: uid(),
         type,
         date,
         duration: Number(duration) || 0,
         calories: Number(calories) || 0,
+        // Set only when this row IS the completion of a scheduled item. There is
+        // no second "done" store: a cardio row carrying planId is the tick.
+        ...(entityIdSafe(planId) ? { planId } : {}),
         createdAt: new Date().toISOString(),
       };
       STATE.cardio.push(entry);
@@ -3003,6 +3038,129 @@ const DB = {
     remove(id) {
       STATE.cardioTypes = STATE.cardioTypes.filter((t) => t.id !== id);
       save();
+    },
+  },
+
+  // ----- Scheduled cardio -----
+  // "Walk 30 minutes on Sun/Tue/Thu." A weekday pattern the user ticks off on Home.
+  //
+  // THERE IS NO SECOND "DONE" STORE. Completion is a real DB.cardio row carrying
+  // `planId`. That is what buys the streak (computeStreak unions cardio dates), the
+  // week strip, the stat strip and the day ledger for free — a private done-map
+  // would have to be taught to every one of them.
+  cardioPlan: {
+    MAX: 20,
+    list() { return (STATE.cardioPlan || []).map((r) => ({ ...r, days: r.days.slice() })); },
+
+    // The LOCAL weekday of an ISO day. new Date('2026-09-13') parses as UTC and
+    // returns the previous day for every UTC+ user — the bug class this codebase
+    // has hit four times. Numeric constructor only.
+    _dow(iso) {
+      const p = String(iso || '').split('-').map(Number);
+      if (p.length !== 3 || p.some((n) => !Number.isFinite(n))) return -1;
+      return new Date(p[0], p[1] - 1, p[2]).getDay();
+    },
+
+    // Rows falling on `iso`, each carrying how it stands TODAY:
+    //   doneId    — the cardio row that is its tick, or null
+    //   doneAuto  — true when the tick CREATED that row (so an un-tick may delete
+    //               it). False when the tick merely claimed a row that already
+    //               existed, e.g. a walk imported from the watch.
+    forDate(iso) {
+      const dow = this._dow(iso);
+      if (dow < 0) return [];
+      const log = STATE.cardio || [];
+      return (STATE.cardioPlan || [])
+        .filter((r) => entityIdSafe(r.id) && Array.isArray(r.days) && r.days.indexOf(dow) !== -1)
+        .map((r) => {
+          // entityIdSafe above is what stops `undefined === undefined` matching
+          // every id-less row against one imported walk.
+          const hit = log.find((c) => c && c.planId === r.id && c.date === iso);
+          return { ...r, days: r.days.slice(), doneId: hit ? hit.id : null, doneAuto: !!(hit && hit.planAuto) };
+        });
+    },
+
+    add({ type, days, duration }) {
+      const list = STATE.cardioPlan || (STATE.cardioPlan = []);
+      if (list.length >= this.MAX) return { ok: false, code: 'LIMIT' };
+      const clean = this._clean({ type, days, duration });
+      if (!clean) return { ok: false, code: 'VALIDATION' };
+      const entry = { id: uid(), ...clean, createdAt: new Date().toISOString() };
+      return changeSlice(() => STATE.cardioPlan || [], (next) => { STATE.cardioPlan = next; },
+        [...list, entry], 'cardio_sched_saved');
+    },
+
+    update(id, data) {
+      const list = STATE.cardioPlan || [];
+      const old = list.find((r) => r.id === id);
+      if (!old) return { ok: false, code: 'STALE' };
+      const clean = this._clean({ type: data.type ?? old.type, days: data.days ?? old.days, duration: data.duration ?? old.duration });
+      if (!clean) return { ok: false, code: 'VALIDATION' };
+      return changeSlice(() => STATE.cardioPlan || [], (next) => { STATE.cardioPlan = next; },
+        list.map((r) => (r.id === id ? { ...old, ...clean } : r)), 'cardio_sched_saved');
+    },
+
+    // Deleting the SCHEDULE never touches the cardio LOG. Sessions already
+    // performed are history and are not the schedule's to erase; the rows simply
+    // stop being joined to anything.
+    remove(id) {
+      return changeSlice(() => STATE.cardioPlan || [], (next) => { STATE.cardioPlan = next; },
+        (STATE.cardioPlan || []).filter((r) => r.id !== id), 'cardio_sched_deleted');
+    },
+
+    _clean({ type, days, duration }) {
+      const d = (Array.isArray(days) ? days : []).map(Number)
+        .filter((x) => Number.isInteger(x) && x >= 0 && x <= 6)
+        .filter((x, i, a) => a.indexOf(x) === i).sort((a, b) => a - b);
+      const mins = Math.round(Number(duration) || 0);
+      if (typeof type !== 'string' || !type || !DB.cardioTypes.findById(type)) return null;
+      if (!d.length || mins <= 0 || mins > 1440) return null;
+      return { type, days: d, duration: mins };
+    },
+
+    // Tick. If an UNCLAIMED cardio row of the same type already exists on that day
+    // — a walk Health Connect imported from the watch — CLAIM it instead of adding
+    // a second. Without this, using the app after a watch-tracked walk guarantees
+    // the minutes are counted twice and there is no way for the user to avoid it.
+    complete(id, iso) {
+      const row = (STATE.cardioPlan || []).find((r) => r.id === id);
+      if (!row || !validDay(iso)) return { ok: false, code: 'VALIDATION' };
+      const log = STATE.cardio || [];
+      if (log.some((c) => c && c.planId === id && c.date === iso)) return { ok: true, changed: false };
+      const claimable = log.find((c) => c && c.date === iso && c.type === row.type && !c.planId);
+      const ids = new Set(log.filter((c) => c && c.date === iso).map((c) => c.id));
+      const next = claimable
+        ? log.filter((c) => ids.has(c.id)).map((c) => (c.id === claimable.id ? { ...c, planId: id } : c))
+        : log.filter((c) => ids.has(c.id)).concat([{
+            id: uid(), type: row.type, date: iso,
+            duration: row.duration, calories: 0,
+            planId: id, planAuto: true,          // planAuto: this row exists ONLY because of the tick
+            createdAt: new Date().toISOString(),
+          }]);
+      return changeSlice(
+        () => (STATE.cardio || []).filter((c) => c && c.date === iso),
+        (rows) => { STATE.cardio = (STATE.cardio || []).filter((c) => !(c && c.date === iso)).concat(rows); },
+        next, 'cardio_sched_done');
+    },
+
+    // Un-tick. NEVER hard-deletes a row the tick did not create: a claimed row (an
+    // imported walk, or one the user has since corrected in the Cardio tab) is only
+    // UNCLAIMED, so their minutes and calories survive.
+    uncomplete(id, iso) {
+      if (!validDay(iso)) return { ok: false, code: 'VALIDATION' };
+      const log = STATE.cardio || [];
+      const day = log.filter((c) => c && c.date === iso);
+      if (!day.some((c) => c.planId === id)) return { ok: true, changed: false };
+      const next = day.reduce((acc, c) => {
+        if (c.planId !== id) { acc.push(c); return acc; }
+        if (c.planAuto) return acc;                       // ours: drop it
+        const { planId, ...rest } = c; acc.push(rest);    // theirs: unclaim only
+        return acc;
+      }, []);
+      return changeSlice(
+        () => (STATE.cardio || []).filter((c) => c && c.date === iso),
+        (rows) => { STATE.cardio = (STATE.cardio || []).filter((c) => !(c && c.date === iso)).concat(rows); },
+        next, 'cardio_sched_done');
     },
   },
 

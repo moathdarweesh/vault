@@ -7547,6 +7547,16 @@ body.theme-light {
 body:has([data-convenience-owner]) #toast { bottom:auto; top:calc(var(--safe-t, 0px) + 12px); }
 .cx-stack label.cx-row { flex-direction:row; }
 
+/* Today's scheduled cardio on Home. The .section-title is load-bearing: without a
+   heading, two rows carrying a "+" wedged between the workout hero and the
+   calories card read as "add something", not "mark this done". */
+.home-sched { margin-bottom: 18px; }
+.home-sched .section-title { margin-bottom: 10px; }
+/* Done is carried by the toggle itself (check vs plus, plus aria-pressed). This
+   wash only reinforces it, so colour is never the sole signal. */
+.data-row.is-done .data-title { color: var(--text-mute); }
+.data-row.is-done .data-icon { opacity: 0.6; }
+
 /* =========================================================================
    ^^^ EVERYTHING ABOVE, THEN THE IDENTITY LAYER BELOW. ^^^
 
@@ -7755,9 +7765,15 @@ body { --icon-accent: var(--accent-text); }
 
 /* On a solid accent FILL the accent layer would be orange on orange — invisible.
    There the duotone collapses to a single mass in the container's own ink.
-   These six are the complete live set (found by walking every rendered svg and
-   testing its container's background, not by guessing). */
-.home-center-icon, .hero-cta, .btn-primary, .food-fab, .nutri-setup-icon {
+   Found by walking every rendered svg and testing its container's background.
+
+   .supp-toggle.taken was MISSING from this list, and the comment above used to
+   claim "these six" while naming five. It fills with --accent while --icon-accent
+   still resolves to --accent-text — the SAME orange in dark mode — so the short
+   leg of the duotone check was painted orange on orange and the tick rendered as
+   a bare diagonal slash. Live in Supplements since that toggle shipped; scheduled
+   cardio reuses the control, which is how it finally surfaced. */
+.home-center-icon, .hero-cta, .btn-primary, .food-fab, .nutri-setup-icon, .supp-toggle.taken {
   --icon-accent: currentColor;
 }
 

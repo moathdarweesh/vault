@@ -12,7 +12,7 @@
 // build. The literal below is the fallback (file://, or a stripped query) and is
 // still bumped by `npm run release` — see CLAUDE.md "CACHE WORKFLOW".
 const VAULT_BUILD = (() => {
-  const FALLBACK = 'v314';
+  const FALLBACK = 'v315';
   try {
     const src = (document.currentScript && document.currentScript.src) || '';
     const m = src.match(/[?&]v=(\d+)/);
@@ -424,6 +424,12 @@ const I18N = {
     streak_active: 'Active streak — keep it going!',
     streak_start: 'Log a session to start your streak',
     workouts: 'Workouts', volume: 'Volume', cardio: 'Cardio', sleep_today: "Today's sleep",
+    cardio_sched: 'Cardio schedule', cardio_sched_add: 'Add cardio', cardio_sched_days: 'Days',
+    cardio_sched_today: "Today's cardio", cardio_sched_more: '+{n} more',
+    cardio_sched_need: 'Choose at least one day and a duration.',
+    cardio_sched_limit: 'You have reached the limit of scheduled cardio.',
+    cardio_sched_saved: 'Cardio schedule saved', cardio_sched_deleted: 'Removed from the schedule',
+    cardio_sched_done: 'Cardio marked', cardio_sched_empty: 'Nothing scheduled yet.',
     sessions_label: 'Sessions',
     sessions_this_week: 'sets this week',
     this_week: 'this week',
@@ -1407,6 +1413,12 @@ const I18N = {
     streak_active: 'سلسلة نشطة — واصل!',
     streak_start: 'سجّل جلسة لبدء سلسلتك',
     workouts: 'التمارين', volume: 'الحجم', cardio: 'الكارديو', sleep_today: 'نوم اليوم',
+    cardio_sched: 'جدول الكارديو', cardio_sched_add: 'إضافة كارديو', cardio_sched_days: 'الأيام',
+    cardio_sched_today: 'كارديو اليوم', cardio_sched_more: '+{n} غيرها',
+    cardio_sched_need: 'اختر يوماً واحداً على الأقل ومدّة.',
+    cardio_sched_limit: 'بلغتَ الحدّ الأقصى للكارديو المجدول.',
+    cardio_sched_saved: 'حُفظ جدول الكارديو', cardio_sched_deleted: 'أُزيل من الجدول',
+    cardio_sched_done: 'سُجّل الكارديو', cardio_sched_empty: 'لا يوجد شيء مجدول بعد.',
     sessions_label: 'الجلسات',
     sessions_this_week: 'مجموعة هذا الأسبوع',
     this_week: 'هذا الأسبوع',
@@ -4311,6 +4323,44 @@ function renderHome(el) {
 
   const weekStripHtml = weekStrip(null, '', allSessions, allCardio);
 
+  // Today's scheduled cardio. Renders NOTHING when nothing falls today, so a fresh
+  // install still sees no empty shelf. It does not duplicate the stat strip's
+  // cardio cell — that answers "how many minutes this week", this answers "is
+  // today's walk done".
+  const cardioSchedHtml = (() => {
+    const iso = todayISO();
+    const rows = DB.cardioPlan.forDate(iso);
+    if (!rows.length) return '';
+    // Done sinks to the bottom, and the list is capped: three rows is already the
+    // height of the hero above it, and pushing the calories card below the fold to
+    // show a ticked box is a bad trade.
+    const CAP = 3;
+    const ordered = rows.slice().sort((a, b) => Number(!!a.doneId) - Number(!!b.doneId));
+    const shown = ordered.slice(0, CAP);
+    const extra = ordered.length - shown.length;
+    return `
+    <div class="home-sched">
+      <div class="section-title">${t('cardio_sched_today')}</div>
+      <div class="data-list" id="home-cardio-sched" data-iso="${iso}">
+        ${shown.map((r) => {
+          const tm = resolveCardioType(r.type);
+          const done = !!r.doneId;
+          return `
+          <div class="data-row${done ? ' is-done' : ''}">
+            <div class="data-icon ${tm.cls}" aria-hidden="true">${icon(tm.iconName, 20)}</div>
+            <div class="data-main">
+              <div class="data-title">${escapeHtml(tm.label)}</div>
+              <div class="data-meta"><span class="num">${fmtNum(r.duration)}</span> ${t('unit_min')}</div>
+            </div>
+            <button type="button" class="supp-toggle${done ? ' taken' : ''}" data-cardio-done="${escapeHtml(r.id)}"
+                    aria-pressed="${done}" aria-label="${escapeHtml(t('done'))}">${icon(done ? 'check' : 'plus', 18)}</button>
+          </div>`;
+        }).join('')}
+        ${extra > 0 ? `<button type="button" class="ledger-add" data-goto="workouts">${escapeHtml(t('cardio_sched_more').replace('{n}', fmtNum(extra)))}</button>` : ''}
+      </div>
+    </div>`;
+  })();
+
   // TWO KINDS OF REST DAY, and they are not the same thing.
   //   · DECLINED  — the plan had a workout and the user said no. The way out is
   //     undo, because nobody needs persuading INTO training.
@@ -4441,6 +4491,7 @@ function renderHome(el) {
 
     ${heroHtml}
 
+    ${cardioSchedHtml}
 
     ${foodHeroHtml}
 
@@ -4496,6 +4547,26 @@ function renderHome(el) {
   });
 
   bindVaultAction(() => navigate('settings'));
+
+  // The tick. The row is re-read at CLICK time, never captured at render time:
+  // Home is repainted by health.js after it loads, on a day rollover, and after a
+  // cloud pull — any of which can replace this node mid-gesture.
+  $('#home-cardio-sched', el)?.addEventListener('click', (e) => {
+    const btn = e.target.closest('[data-cardio-done]');
+    if (!btn) return;
+    const host = btn.closest('[data-iso]');
+    const shown = host && host.dataset.iso;
+    const now = todayISO();
+    // A phone left on Home across midnight never fires visibilitychange, so the
+    // card can be painted for yesterday. Repaint rather than write the wrong day.
+    if (shown !== now) { renderView('home'); return; }
+    const row = DB.cardioPlan.forDate(now).find((r) => r.id === btn.dataset.cardioDone);
+    if (!row) { renderView('home'); return; }
+    const result = row.doneId ? DB.cardioPlan.uncomplete(row.id, now) : DB.cardioPlan.complete(row.id, now);
+    if (!result.ok) { convenienceError(result); return; }
+    renderView('home');
+    offerUndo(t('cardio_sched_done'), result);
+  });
   // "Start Workout" hero card → straight into today's session logging.
   // Recompute the day at click time so it stays correct if Home was left open
   // across midnight.
@@ -5083,6 +5154,26 @@ function renderProgram(el) {
   // No exercise count on the chip: "1 Push 3" reads as if the 3 were part of the
   // workout's name. This strip answers "where am I in the cycle" — counts belong
   // in the editor, which already shows them per slot.
+  // One row per scheduled item. weekOrder() so the day list reads in the app's
+  // own week order, and '·' as the separator — a directional glyph points the
+  // wrong way once the row lays out right-to-left.
+  const cardioSchedRowsHtml = DB.cardioPlan.list().map((r) => {
+    const tm = resolveCardioType(r.type);
+    const dayList = weekOrder().filter((d) => r.days.indexOf(d) !== -1).map((d) => dayName(d, true)).join(' · ');
+    return `
+      <div class="data-row">
+        <div class="data-icon ${tm.cls}" aria-hidden="true">${icon(tm.iconName, 20)}</div>
+        <div class="data-main">
+          <div class="data-title">${escapeHtml(tm.label)}</div>
+          <div class="data-meta">
+            <span>${escapeHtml(dayList)}</span><span class="dot-sep"></span>
+            <span><span class="num">${fmtNum(r.duration)}</span> ${t('unit_min')}</span>
+          </div>
+        </div>
+        <button type="button" class="icon-btn" data-cardio-sched-edit="${escapeHtml(r.id)}" aria-label="${escapeHtml(t('edit'))}">${icon('edit', 16)}</button>
+      </div>`;
+  }).join('');
+
   const cycleHtml = cycle.map((slot, i) => `
       <div class="cycle-chip ${i === currentIdx ? 'current' : ''}">
         <span class="cycle-chip-num num">${fmtNum(i + 1)}</span>
@@ -5242,6 +5333,21 @@ function renderProgram(el) {
       </div>` : ''}
     `}
 
+    <!-- OUTSIDE the cycle ternary on purpose: cardio can be scheduled by someone
+         who has never built a lifting rotation, and either branch would hide it in
+         the other state. The add control is the LAST ITEM of the list rather than a
+         section action, so with nothing scheduled it is the only row and reads like
+         the day ledger's empty day — no separate empty state to design. -->
+    <div class="rot-section">
+      <div class="rot-section-title">${t('cardio_sched')}</div>
+      <div class="data-list" id="cardio-sched-list">
+        ${cardioSchedRowsHtml}
+        <button type="button" class="ledger-add" data-cardio-sched-add>
+          ${icon('plus', 14)} <span>${escapeHtml(t('cardio_sched_add'))}</span>
+        </button>
+      </div>
+    </div>
+
     <!-- Every block below is a .rot-section with a .rot-section-title. It used to
          mix two header systems on one screen — .section-title (700, plus a ::after
          rule) for "This week" and .rot-section-title (800, no rule) for the rest,
@@ -5314,6 +5420,14 @@ function renderProgram(el) {
 
   // Top-bar magnifier → the exercise browser (its own screen since v198).
   bindVaultAction(() => navigate('exercises'));
+
+  // One delegated listener for add and edit. No data-goto anywhere on these
+  // elements, so the global delegated handler cannot fire a second navigate().
+  $('#cardio-sched-list', el)?.addEventListener('click', (e) => {
+    if (e.target.closest('[data-cardio-sched-add]')) { openCardioScheduleModal(null); return; }
+    const edit = e.target.closest('[data-cardio-sched-edit]');
+    if (edit) openCardioScheduleModal(edit.dataset.cardioSchedEdit);
+  });
 
   // Tap a day in "next training days" → open/log that day's session.
   el.querySelector('.schedule-preview')?.addEventListener('click', (e) => {
@@ -6338,25 +6452,28 @@ function dayLedgerHtml({ entries, days, renderEntry, emptyText, addAttr }) {
   const older = entries.filter((x) => x.date < windowStart).length;
   return { html: rows.join(''), more: older > 0 || days < 28 };
 }
+// Module scope, not nested in renderCardio: the Program tab and Home both render
+// a cardio row now, and a second copy of this mapping would be an agreement
+// between three call sites with nothing keeping them equal.
+const builtInClsMap = {
+  treadmill: 'treadmill',
+  walking: 'walking',
+  running: 'running',
+  cycling: 'cycling',
+};
+
+function resolveCardioType(typeId) {
+  const def = DB.cardioTypes.findById(typeId);
+  if (def) return { label: def.isCustom ? def.label : t(def.id), iconName: def.iconName, cls: builtInClsMap[def.id] || 'custom' };
+  return { label: typeId, iconName: 'heart', cls: '' };
+}
+
 function renderCardio(el) {
   const list = DB.cardio.list();
   const { thisStart, thisEnd } = weekRanges();
   const weekItems = list.filter((c) => inRangeISO(c.date, thisStart, thisEnd));
   const weekMin = weekItems.reduce((s, c) => s + c.duration, 0);
   const weekCal = weekItems.reduce((s, c) => s + c.calories, 0);
-
-  const builtInClsMap = {
-    treadmill: 'treadmill',
-    walking: 'walking',
-    running: 'running',
-    cycling: 'cycling',
-  };
-
-  function resolveCardioType(typeId) {
-    const def = DB.cardioTypes.findById(typeId);
-    if (def) return { label: def.isCustom ? def.label : t(def.id), iconName: def.iconName, cls: builtInClsMap[def.id] || 'custom' };
-    return { label: typeId, iconName: 'heart', cls: '' };
-  }
 
   const cardioDays = viewContext.cardioDays || 7;
   const renderCardioEntry = (c) => {
@@ -6549,6 +6666,89 @@ function openCardioModal(cardioId = null, presetDate = null) {
 
 // Modal: create a custom cardio type. Persists into DB.cardioTypes and is
 // available immediately in the cardio type selector.
+
+// Schedule cardio: which one, which weekdays, how long. Deliberately NOT
+// openCardioModal — that one LOGS a finished session and is hard-capped at today.
+function openCardioScheduleModal(id = null) {
+  const existing = id ? DB.cardioPlan.list().find((r) => r.id === id) : null;
+  if (id && !existing) { showToast(t('cx_stale')); return; }
+  let selectedType = existing ? existing.type : (DB.cardioTypes.allTypes()[0] || {}).id;
+  const days = new Set(existing ? existing.days : []);
+
+  const typeOptions = () => DB.cardioTypes.allTypes().map((tt) => `
+    <button type="button" class="type-option ${tt.id === selectedType ? 'active' : ''}" data-type="${escapeHtml(tt.id)}">
+      <span class="type-option-icon" aria-hidden="true">${icon(tt.iconName || 'heart', 22)}</span>
+      <div class="type-option-label">${escapeHtml(tt.isCustom ? tt.label : t(tt.id))}</div>
+    </button>`).join('');
+
+  const overlay = openModal(`
+    <div class="modal-header">
+      <div class="modal-title">${existing ? t('cardio_sched') : t('cardio_sched_add')}</div>
+      <button class="icon-btn icon-btn-tile" data-close aria-label="${escapeHtml(t('close'))}">${icon('close', 20)}</button>
+    </div>
+    <div class="form-group">
+      <label class="form-label">${t('type')}</label>
+      <div class="type-selector" id="cs-type">${typeOptions()}</div>
+    </div>
+    <div class="form-group">
+      <label class="form-label">${t('cardio_sched_days')}</label>
+      <div class="schedule-days" id="cs-days">${weekOrder().map((d) => `
+        <button type="button" class="schedule-day ${days.has(d) ? 'active' : ''}" data-csd="${d}"
+                aria-pressed="${days.has(d)}">${escapeHtml(dayName(d, true))}</button>`).join('')}</div>
+    </div>
+    <div class="form-group">
+      <label class="form-label" for="cs-duration">${t('duration_min')}</label>
+      <input type="number" inputmode="numeric" id="cs-duration" step="1" min="1" placeholder="30"
+             value="${numAttr(existing && existing.duration)}">
+    </div>
+    <div class="form-actions">
+      <button class="btn btn-primary btn-block" id="cs-save">${t('save')}</button>
+      ${existing ? `<button class="btn btn-danger btn-block" id="cs-delete">${t('delete')}</button>` : ''}
+    </div>`);
+
+  overlay.querySelector('#cs-type').addEventListener('click', (e) => {
+    const b = e.target.closest('[data-type]');
+    if (!b) return;
+    selectedType = b.dataset.type;
+    overlay.querySelectorAll('#cs-type [data-type]').forEach((x) => x.classList.toggle('active', x === b));
+  });
+  overlay.querySelector('#cs-days').addEventListener('click', (e) => {
+    const b = e.target.closest('[data-csd]');
+    if (!b) return;
+    const d = Number(b.dataset.csd);
+    if (days.has(d)) days.delete(d); else days.add(d);
+    b.classList.toggle('active', days.has(d));
+    b.setAttribute('aria-pressed', days.has(d));
+  });
+  overlay.querySelector('#cs-save').addEventListener('click', () => {
+    const duration = Number(overlay.querySelector('#cs-duration').value);
+    const payload = { type: selectedType, days: [...days], duration };
+    const result = existing ? DB.cardioPlan.update(existing.id, payload) : DB.cardioPlan.add(payload);
+    if (!result.ok) {
+      showToast(result.code === 'LIMIT' ? t('cardio_sched_limit')
+        : result.code === 'STALE' ? t('cx_stale') : t('cardio_sched_need'));
+      return;
+    }
+    closeModal();
+    renderView(currentView);
+    offerUndo(t('cardio_sched_saved'), result);
+  });
+  overlay.querySelector('#cs-delete')?.addEventListener('click', () => {
+    confirmDialog({
+      title: t('delete') + '؟', text: '', confirmLabel: t('delete'), variant: 'danger',
+      onConfirm: () => {
+        // Removing the schedule never touches the cardio LOG: sessions already
+        // performed are history, and history is not the schedule's to erase.
+        const result = DB.cardioPlan.remove(existing.id);
+        if (!result.ok) { convenienceError(result); return; }
+        closeModal();
+        renderView(currentView);
+        offerUndo(t('cardio_sched_deleted'), result);
+      },
+    });
+  });
+}
+
 function openNewCardioTypeModal(onCreated) {
   let pickedIcon = 'heart';
 
