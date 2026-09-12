@@ -77,7 +77,7 @@ a faster TTFB — not fewer bytes.
 npm run release          # bump every marker + verify, then commit all files together
 ```
 
-**Current version: v322.** APK: build 21 / v3.0.
+**Current version: v323.** APK: build 21 / v3.0.
 
 `scripts/release.js` rewrites **every** marker and then re-reads them from disk to confirm; it exits non-zero if any disagree, and prints the count per file (derived, never hard-coded — the docs used to say 16 while the real count was 15). The markers are `?v=N` in `index.html` (every script and stylesheet, the `js/vendor/supabase.js` preload, both `icons/icon.svg` links, `manifest.json`), the `__cleaned_vN` sessionStorage key, the `FALLBACK` literal in `app.js`, `version.json` → `web`, the `?v=` in `manifest.json`, `admin.html`, `privacy.html` and `get/index.html`, and the `Current version` line in this file. `scripts/check-contracts.js` (pre-commit) refuses a commit where any of them disagree.
 
@@ -1098,6 +1098,26 @@ reachable at rest** where 24 used to be visible.
   and `[data-preparation]` out of each `[data-purchase]` row, and `originalText` still carries the
   recipe's own wording through. Verified end to end — `{quantity: 500, unit: 'g', ingredientId:
   'أرز أبيض', preparation: 'raw', originalText: '200 غ'}`.
+
+## v323 (2026-09-13) — the last four of the v316 review
+
+- **Chained sheets lost focus entirely.** `openModal` captured its return-focus anchor AFTER
+  `root.innerHTML` had already replaced the sheet that was open, so in a chain the captured node was
+  detached one line earlier and `closeModal`'s `document.contains()` check silently handed focus to
+  `<body>`. The capture now happens BEFORE the rewrite and only from OUTSIDE `#modal-root`, so a
+  sheet that opens a sheet still returns to the control that started the chain. Verified live:
+  Food → Shopping → "new list" → close now focuses `[data-shopping]`, not the body.
+- **A list is not a form.** Recent changes and the shopping-lists sheet put rows straight into
+  `.cx-stack`, whose 14px gap is the rhythm between FIELDS, so rows of the same kind floated apart
+  instead of reading as one object. `.cx-list` gives them the `.rec-row` recipe — 8px and a rule
+  between, none before the first.
+- **The save centre's one action had zero margin on every side**, jammed between two hints — and
+  `.settings-hint` carries `margin-top: -4px`, a pull-up meant for a hint that follows a control, so
+  the trailing line was drawn 4px INTO the button. Measured before: hint(mb 10) / button(0/0) /
+  hint(mt −4). Now 18px above and 12px below.
+- **The shopping editor's footer was four full-width slabs** with the one filled action buried
+  third. The two secondaries share a row (`.cx-actions`) and the primary keeps the full width:
+  **4 full-width slabs → 1**.
 
 ## Superpowers — and the two places this project deliberately departs from it
 

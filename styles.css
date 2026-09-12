@@ -7562,7 +7562,23 @@ body.theme-light {
 .save-center[data-state="failed"] #sc-device { color: var(--red); }
 .save-center #sc-detail { color: var(--red); font-size: 14px; line-height: 1.7; }
 .save-center .settings-hint { overflow-wrap: anywhere; line-height: 1.7; }
-.save-center #sc-action { min-height: 44px; white-space: normal; }
+/* The one action in this block had ZERO margin on either side and sat jammed
+   between two hints — and .settings-hint carries margin-top:-4px, a pull-up meant
+   for a hint that follows a CONTROL, so the trailing line was drawn 4px INTO the
+   button. Measured before: hint(mb 10) / button(mt 0, mb 0) / hint(mt -4). */
+.save-center #sc-action { min-height: 44px; white-space: normal; margin: var(--sp-2) 0 var(--sp-4); }
+
+/* A LIST IS NOT A FORM. .cx-stack's 14px gap is the rhythm between FIELDS; rows
+   of the same kind want to read as one object, so they sit tight and are
+   separated by a rule rather than by air. Same recipe .rec-row already uses. */
+.cx-list { display: flex; flex-direction: column; }
+.cx-list > * { border-top: 1px solid var(--border); padding-top: var(--sp-2); margin-top: var(--sp-2); }
+.cx-list > :first-child { border-top: 0; padding-top: 0; margin-top: 0; }
+
+/* Two secondaries share a row so the sheet's footer is a shape, not a wall of
+   four full-width slabs with the one filled action buried third. */
+.cx-actions { display: flex; gap: var(--sp-2h); }
+.cx-actions > .btn { flex: 1; min-width: 0; }
 
 /* The app bar's trailing group. .vault-bar is justify-content:space-between and
    was designed for exactly TWO children — the mark, and the screen's action. The
