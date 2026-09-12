@@ -813,5 +813,32 @@ Never `macos-latest` — that label moves on Apple's schedule.
   on Windows is `C:\Program Files\nodejs\node.exe` and cmd.exe splits it at the space. The
   shell is for the `.cmd` shim only.
 
+## Superpowers — and the two places this project deliberately departs from it
+
+The [superpowers](https://github.com/obra/superpowers) methodology (14 skills) is
+installed on this machine, with `/superpowers` as the single router. It is a good fit
+for this repo and most of it simply names what the project already does —
+`verification-before-completion` ("evidence before claims") and
+`systematic-debugging` ("root cause before any fix") are this codebase's two most
+expensive lessons, written down by someone else.
+
+**Two of its skills conflict with decisions recorded above. Neither is an oversight,
+and neither should be silently followed:**
+
+- **`test-driven-development`** prescribes red/green: write the test, watch it fail,
+  write minimal code. This project states **"No automated test framework"** and
+  **"no new dependencies, no build step"** — "tested" means verified in the running
+  app by driving the DOM. Since v309 there ARE Node-only behavioural scripts
+  (`scripts/test-*.js`), so the honest reading is: **every feature gets a verification
+  script or a measured DOM check, written alongside it** — not a red/green cycle.
+  Adopting literal TDD would be a real change and needs this line rewritten first.
+- **`using-git-worktrees` / `finishing-a-development-branch`** assume a branch
+  workflow. This project ships from `main` directly, because GitHub Pages builds the
+  branch with no CI — see "Deploy". Skip both unless the work is genuinely long-lived.
+
+`using-superpowers`'s own session-start hook is **not** installed: it would require a
+skill invocation before every reply in every project on this machine. The skills are
+available and routed; the always-on discipline is the owner's call, not a default.
+
 ## Feature factory
 This machine has a `/feature-factory` skill (24 specialist subagents, tailored to THE VAULT) that builds a feature end-to-end. See the maintainer's Claude memory for the roster.
