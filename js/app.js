@@ -12,7 +12,7 @@
 // build. The literal below is the fallback (file://, or a stripped query) and is
 // still bumped by `npm run release` — see CLAUDE.md "CACHE WORKFLOW".
 const VAULT_BUILD = (() => {
-  const FALLBACK = 'v320';
+  const FALLBACK = 'v321';
   try {
     const src = (document.currentScript && document.currentScript.src) || '';
     const m = src.match(/[?&]v=(\d+)/);
@@ -14585,6 +14585,90 @@ document.addEventListener('load', (e) => {
 // this covers BOTH keyboard modes: browsers that shrink only the visual
 // viewport AND WebViews (the APK) that resize the whole window.
 // ==========================================================================
+// ===========================================================================
+// THE EMBER — the void's reaction to the hand  (v321)
+//
+// Two class toggles and three custom-property writes per press. NOTHING runs
+// per frame and nothing is sampled: the ember anchors where the finger LANDED
+// and does not follow a drag, so the gesture that decides whether this app
+// feels smooth — scrolling — costs exactly zero here. Rise and decay are CSS
+// transitions on opacity and transform, which stay on the compositor.
+//
+// The custom properties are written on the .ember ELEMENT, never on .app or
+// :root. A custom property changed on .app would invalidate style for every
+// descendant that inherits it — hundreds of nodes, on every touch. On a leaf
+// with no children the invalidation set is one element.
+// ===========================================================================
+function setupEmber() {
+  const app = document.querySelector('.app');
+  if (!app) return;
+  // Reduced motion gets no ember AT ALL. The global 0.01ms clamp would make
+  // this a flash under every tap, so bail before creating the element: the
+  // cost is not "cheap", it is zero.
+  try {
+    if (window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+  } catch (_) {}
+
+  const clip = document.createElement('div');
+  clip.className = 'ember-clip';
+  clip.setAttribute('aria-hidden', 'true');
+  const el = document.createElement('div');
+  el.className = 'ember';
+  clip.appendChild(el);
+  app.insertBefore(clip, app.firstChild);
+
+  let left = 0, top = 0;
+  const measure = () => { const r = app.getBoundingClientRect(); left = r.left; top = r.top; };
+  measure();
+
+  // The top of the shell is the one place a warm pixel could argue with
+  // <meta name="theme-color">, so the ember's CENTRE never rises above this.
+  // At 140px the screen's top edge sits at 61% of the radius, where the
+  // gradient is ~0.02 alpha — less than --bg-grad's own static bloom already
+  // puts at y=0, so the ember can never be the brightest thing at the top edge
+  // and cannot create a seam that does not already exist.
+  const TOP_GUARD = 140;
+
+  let lastUp = 0;
+  const down = (e) => {
+    if (e.clientX == null) return;                 // synthetic / keyboard-driven
+    // Behind an opaque gate the ember is invisible work; behind a blur surface
+    // it is expensive work — .modal-overlay carries backdrop-filter: blur(10px),
+    // and a moving backdrop makes the compositor re-rasterise it every frame.
+    if (document.querySelector('.modal-overlay, .sheet-overlay.open, .auth-gate')) return;
+    const x = e.clientX - left;
+    const y = Math.max(e.clientY - top, TOP_GUARD);
+    // A COLD ember has nothing to slide: snap it, and spend no compositor work
+    // animating an invisible layer across the screen. A WARM one migrates —
+    // heat moving to the new hand rather than reappearing there.
+    const warm = (Date.now() - lastUp) < 1400;
+    const s = el.style;
+    s.setProperty('--ember-move', warm ? '900ms' : '0ms');
+    s.setProperty('--ember-x', x + 'px');
+    s.setProperty('--ember-y', y + 'px');
+    document.body.classList.add('ember-on');
+  };
+  const up = () => { lastUp = Date.now(); document.body.classList.remove('ember-on'); };
+
+  // CAPTURE: a stopPropagation() inside any card or sheet handler must not be
+  // able to starve this. PASSIVE: this never calls preventDefault, and saying
+  // so keeps it off the critical path of a scroll start.
+  const opts = { passive: true, capture: true };
+  document.addEventListener('pointerdown', down, opts);
+  document.addEventListener('pointerup', up, opts);
+  // Chrome fires pointercancel the moment a touch is claimed by scrolling. That
+  // is not a loss to work around, it IS the design: a scroll is not a still
+  // hand, so the most frequent gesture in the app makes the least heat.
+  document.addEventListener('pointercancel', up, opts);
+  // A finger still down when the app is backgrounded never produces a pointerup,
+  // and the ember would sit lit on a screen nobody is looking at.
+  document.addEventListener('visibilitychange', () => { if (document.hidden) up(); });
+  window.addEventListener('blur', up);
+  window.addEventListener('resize', measure);
+  // Orientation settles after the event — the same 350ms the keyboard handler uses.
+  window.addEventListener('orientationchange', () => setTimeout(measure, 350));
+}
+
 function setupKeyboardHandling() {
   const vp = window.visualViewport;
   const curH = () => (vp ? vp.height : window.innerHeight);
@@ -14770,6 +14854,7 @@ function afterScripts(fn) {
   applyLang(prefs.lang || 'en');
   navigate('home', {}, { fromPop: true }); // root entry — don't grow history
   setupKeyboardHandling(); // hide the nav + keep the focused field above the keyboard
+  setupEmber();            // the void's reaction to the hand (no-op under reduced motion)
 
   // First-run welcome — brand-new installs only. Existing users (any real
   // history) are silently marked onboarded so an update never re-shows it.

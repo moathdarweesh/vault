@@ -32,6 +32,20 @@
   /* One low bloom above the fold — heat entering from off-screen, not a glow.
      --text on its brightest point is 18.12:1. */
   --bg-grad:     radial-gradient(680px 380px at 50% -140px, #1a0f05 0%, transparent 70%), #000000;
+  /* THE EMBER — the void's answer to the hand. The peak was designed at 0.085
+     and MEASURED invisible: a 120ms tap on the original 700ms linear rise
+     reached rgba .0145, which over #000 is rgb(4,2,1) — a 4/255 delta nobody
+     can see. At 0.16 a held press lands on rgb(41,22,8) and a tap on rgb(19,10,4),
+     against a measured rgb(13,7,3) for the brightest pixel --bg-grad already
+     paints. So the hand can outshine the static bloom, but only just.
+     Whole gradient in one token, like --bg-grad, so no var() or calc() lands
+     inside a colour function on a WebView 80 build. Four stops, not two: a
+     straight ramp to transparent reads as a disc with an edge. */
+  --ember-grad:  radial-gradient(closest-side,
+                   rgba(255, 138, 48, 0.160)  0%,
+                   rgba(255, 138, 48, 0.074) 36%,
+                   rgba(255, 138, 48, 0.019) 66%,
+                   rgba(255, 138, 48, 0)     92%);
   /* THE ramp. --surface-1 used to equal --bg exactly (1.00:1), so every tile,
      row and card was an invisible fill and its 1px outline did 100% of the
      separating — the single most template-like construction in the file. */
@@ -234,6 +248,16 @@ body.theme-light {
   --overlay:     rgba(28, 18, 10, 0.50);
   --bg:          #faf5f0;
   --bg-grad:     radial-gradient(1200px 600px at 50% -200px, #fff0e0 0%, transparent 60%), #faf5f0;
+  /* Light has no void to heat, so the hand does the other physical thing a hand
+     does to paper: it SHADES it. Same layer, same timings, warm ink instead of
+     warm light — a moving warm BLOOM on a bone ground is a smudge, a moving
+     soft SHADE is a hand. Lower peak because the eye reads darkening on paper
+     far more readily than glow on black. */
+  --ember-grad:  radial-gradient(closest-side,
+                   rgba(150, 88, 34, 0.055)  0%,
+                   rgba(150, 88, 34, 0.026) 36%,
+                   rgba(150, 88, 34, 0.007) 66%,
+                   rgba(150, 88, 34, 0)     92%);
   /* Pure white against a warm ground reads distinctly BLUE by simultaneous
      contrast — the card would fight the page. A 3-point warm white keeps cards
      reading as clean sheets on paper; --text is still 17.71:1 on it. */
@@ -7764,6 +7788,99 @@ body:has(.toast.show) .modal { padding-bottom: calc(var(--nav-h) + var(--safe-b)
 }
 @media (hover: hover) {
   .cardio-undo:hover { border-color: var(--accent-line); color: var(--text); }
+}
+
+/* =========================================================================
+   THE EMBER — the void answers the hand  (v321)
+
+   «خلي الخلفيه السودا الي ورا يكون الها تفاعل» — the black behind the app is not
+   a backdrop, it is a surface, and a surface you are touching gets warm. It
+   lands on the identity rather than decorating it: "the page is a void, and
+   anything lifted toward the viewer is heated metal". The hand is the nearest
+   thing to the viewer, so it is the warmest.
+
+   AT REST IT IS EXACTLY ZERO. With no finger on the glass opacity is 0 and
+   nothing animates, so the void is byte-identical to v320: pure #000000
+   everywhere --bg-grad does not reach, which measured 80% of the shell. This is
+   not an always-running animation and is not a battery decision.
+
+   THE PHYSICS ARE THE THROTTLE, not a rate limiter. Rise is LINEAR over 260ms,
+   so contact time and brightness are the same number — and a scroll fires
+   pointercancel the instant Chrome claims the touch, so the single most
+   frequent gesture in the app produces the LEAST heat. Heat belongs to a still
+   hand. Nothing is sampled and nothing runs per frame: two class toggles and
+   three property writes per press.
+
+   PHYSICAL left/top and margin-left on purpose, NOT inset-inline-start: the
+   coordinate comes from pointer clientX, which is physical, so a logical
+   property would mirror the ember away from the finger in Arabic.
+   ========================================================================= */
+
+/* Contains the z-index:-1 layer. VERIFIED against index.html, not assumed: .app
+   closes at line 117 and #modal-root (181) and #toast (182) are SIBLINGS of it
+   at body level, so the whole subtree was already below them and isolating it
+   traps nothing. Isolation creates no containing block, so no position:fixed
+   descendant moves. */
+.app { isolation: isolate; }
+
+/* THE CLIP IS NOT COSMETIC. .bottom-nav lives INSIDE .app and carries
+   backdrop-filter: blur(24px) saturate(180%) (styles.css:625). A moving warm
+   mass drifting under it would make the compositor re-rasterise that blur on
+   every frame of every press — and this project already DELETED the per-card
+   backdrop-filter layers once, for exactly this cost (v297). Stopping the ember
+   at the nav's top edge means the nav never sees a changing backdrop. */
+.ember-clip {
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  bottom: calc(var(--nav-h) + var(--safe-b));
+  overflow: hidden;
+  pointer-events: none;
+  z-index: -1;
+}
+
+.ember {
+  position: absolute;
+  top: 0;
+  left: 0;
+  /* A mass wider than the hand, not a spotlight under it — a tight bright disc
+     reads as a torch, which is the cliché this is not. A fixed box also means
+     the composited layer is 460x460, never the whole shell. */
+  width: 460px;
+  height: 460px;
+  margin-top: -230px;
+  margin-left: -230px;
+  opacity: 0;
+  background: var(--ember-grad);
+  transform: translate3d(var(--ember-x, 50vw), var(--ember-y, 50vh), 0);
+  /* COOLING is the default direction — this is what removing the class
+     transitions TO. Decelerate: drops fast, then a long tail, which is how heat
+     actually leaves metal. --ember-move is written by JS: 0ms while the ember
+     is cold, so no compositor work is spent sliding an invisible layer, and
+     900ms while it is still warm, so the mass MIGRATES to the new hand rather
+     than teleporting there. */
+  transition:
+    opacity 1600ms cubic-bezier(0, 0, 0.2, 1),
+    transform var(--ember-move, 0ms) cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/* HEATING. Linear on purpose: an ease-out curve would make a 120ms tap flash to
+   40% and turn this into the thing it is built to avoid. 260ms, not the 700ms
+   first drafted — at 700ms a real tap reached a 4/255 delta over black, which
+   is below anything a person can see. */
+body.ember-on .ember {
+  opacity: 1;
+  transition:
+    opacity 260ms linear,
+    transform var(--ember-move, 0ms) cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/* styles.css's global block forces transition-duration: 0.01ms !important on *,
+   which would turn this into a HARD FLASH under every tap — precisely the
+   failure this design is shaped around. setupEmber() returns before it even
+   creates the element; this is the belt to that brace, for a user who flips the
+   OS setting mid-session. */
+@media (prefers-reduced-motion: reduce) {
+  body.ember-on .ember { opacity: 0; }
 }
 
 /* =========================================================================

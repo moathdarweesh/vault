@@ -77,7 +77,7 @@ a faster TTFB — not fewer bytes.
 npm run release          # bump every marker + verify, then commit all files together
 ```
 
-**Current version: v320.** APK: build 21 / v3.0.
+**Current version: v321.** APK: build 21 / v3.0.
 
 `scripts/release.js` rewrites **every** marker and then re-reads them from disk to confirm; it exits non-zero if any disagree, and prints the count per file (derived, never hard-coded — the docs used to say 16 while the real count was 15). The markers are `?v=N` in `index.html` (every script and stylesheet, the `js/vendor/supabase.js` preload, both `icons/icon.svg` links, `manifest.json`), the `__cleaned_vN` sessionStorage key, the `FALLBACK` literal in `app.js`, `version.json` → `web`, the `?v=` in `manifest.json`, `admin.html`, `privacy.html` and `get/index.html`, and the `Current version` line in this file. `scripts/check-contracts.js` (pre-commit) refuses a commit where any of them disagree.
 
@@ -1021,6 +1021,50 @@ goes below the fold — which the literal shape could not promise.
   un-tick too. The `DB.cardioPlan` completion contract is untouched: ticking still CLAIMS an
   unclaimed same-type row rather than adding one, and un-ticking still never hard-deletes a row
   the tick did not create.
+
+## v321 (2026-09-13) — THE EMBER: the void answers the hand
+
+«خلي الخلفيه السودا الي ورا يكون الها تفاعل منظر رائع بشكل سلس». A judge panel scored three
+takes: react to the hand (308), to the day's progress (280), to scroll depth (258).
+
+**The headline is not the winner. All three scored LOWEST on "can you even see it" — 56 / 42 / 42
+— and three independent judges reached that separately.** Verified here rather than taken on
+trust: the winner's own numbers put a 120ms tap at `rgba(255,138,48,0.0145)` over `#000`, which is
+**rgb(4,2,1) — a 4/255 delta**. Beautiful, cheap, law-abiding, and invisible. The fix applied is
+the owner-intent judge's: rise **700ms → 260ms** and dark peak **0.085 → 0.16**, which puts a tap
+at rgb(19,10,4) and a held press at **rgb(41,22,8) — 4.35× the luminance of the brightest pixel
+`--bg-grad` already paints** (measured rgb(13,7,3)). `--text-mute` over that peak still measures
+**7.25:1**.
+
+- **At rest it is exactly zero.** No finger on the glass means `opacity: 0` and nothing animating,
+  so the void is byte-identical to v320. This is not an always-running animation.
+- **The physics ARE the throttle.** The rise is LINEAR, so contact time and brightness are the same
+  number — and a scroll fires `pointercancel` the instant Chrome claims the touch, so the single
+  most frequent gesture in the app makes the LEAST heat. Nothing is sampled and nothing runs per
+  frame: two class toggles and three custom-property writes per press. Those properties are written
+  on the `.ember` LEAF, never on `.app` or `:root` — a custom property changed on `.app` invalidates
+  style for every descendant that inherits it, which is hundreds of nodes on every touch.
+- **`.ember-clip` stops at the nav's top edge, and that is not cosmetic.** `.bottom-nav` lives inside
+  `.app` and carries `backdrop-filter: blur(24px) saturate(180%)`. A warm mass drifting under it
+  would make the compositor re-rasterise that blur on every frame of every press — the same cost
+  this project already deleted the per-card `backdrop-filter` layers for (v297). `down()` also
+  returns early when a `.modal-overlay`, an open `.sheet-overlay` or the `.auth-gate` is up: behind
+  an opaque gate the work is invisible, behind a blur surface it is expensive.
+- **`isolation: isolate` on `.app` was verified against index.html, not assumed.** `.app` closes at
+  line 117 while `#modal-root` (181) and `#toast` (182) are SIBLINGS at body level, so the subtree
+  was already below them and isolating it traps nothing.
+- **Physical `left`/`top`, never `inset-inline-start`.** The coordinate comes from pointer `clientX`,
+  which is physical, so a logical property would mirror the ember away from the finger in Arabic.
+- **Reduced motion gets no ember at all** — `setupEmber()` returns before it creates the element,
+  because the global `0.01ms !important` clamp would turn this into a hard flash under every tap.
+  The CSS rule is only the belt to that brace, for a user who flips the OS setting mid-session.
+
+> ⚠️ **THE CEILING, measured, and worth knowing before anyone tries to make this grander.** The
+> effect paints BEHIND the content, and **87% of the Home screen is covered by cards — only 13% of
+> the shell is exposed void.** So any background effect in this app can only ever read in the
+> gutters and the gaps between cards. That is not a flaw in this design; it is the budget every
+> background effect here has to live inside. If more presence is wanted, the lever is the peak
+> alpha in `--ember-grad`, not the mechanism.
 
 ## Superpowers — and the two places this project deliberately departs from it
 
