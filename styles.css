@@ -558,10 +558,16 @@ img { display: block; max-width: 100%; }
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 14px 0 18px;
-  position: relative;
-  z-index: 5;
-  background: transparent;
+  /* Chrome, not content: it used to scroll away with the page and re-animate on
+     every tab tap. Same recipe .detail-top already uses on every child screen —
+     the negative margin + matching padding let the background reach the screen
+     edges once it is stuck, so content does not show through beside it. */
+  margin: 0 -16px;
+  padding: 14px 16px 18px;
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  background: var(--bg);
 }
 
 /* The mark's slot in the top bar. The mark itself is .brand-lockup, defined at
@@ -2620,7 +2626,9 @@ body[dir="rtl"] .w-unit { margin-left: 0; margin-right: 2px; }
   padding-right: 8px;
   padding-left: 8px;
 }
-.toast.has-action.show { pointer-events: auto; }
+/* ONLY the button takes pointer events, never the bar. `.toast.has-action.show`
+   used to carry them, which made the whole ~300px pill a tap-blocker for the full
+   ten seconds — over the sheet that raised it, with no way to dismiss it. */
 .toast.has-action .toast-msg { min-width: 0; }
 /* When the floating rest timer is up, lift the toast clear above it so the two
    never overlap (they otherwise share the same bottom anchor). The timer bar is
@@ -2632,6 +2640,7 @@ body.rest-active .toast { bottom: calc(var(--safe-b) + var(--rest-h, 72px) + 28p
 .toast .toast-msg { padding-inline-start: 10px; }
 .toast-action {
   flex-shrink: 0;
+  pointer-events: auto;   /* the only tappable part of the bar */
   background: transparent;
   border: none;
   color: var(--accent-text);
@@ -3444,6 +3453,7 @@ body[data-view="session-run"] .bottom-nav { display: none; }
 /* Three more 36px controls that a thumb has to hit: the header action, the
    calendar's month arrows, and the set-remove in session-day. Same treatment. */
 .vault-action::after, .calendar-nav-btn::after, .sd-set-remove::after { content: ''; position: absolute; inset: -4px; }
+.bundle-add::after { content: ''; position: absolute; inset: -4px -2px; }   /* 44x44 over a 40x36 button */
 /* (.data-actions .icon-btn is an .icon-btn: the centred 44px halo above already
    applies. A second, inset-based ::after on top of it shifted the box 22px
    up-left and onto the Edit button beside it.) */
@@ -4368,7 +4378,8 @@ body[dir="rtl"] .picker-row { text-align: right; }
   border: 1px solid var(--border);
   border-radius: 14px;
   background: var(--surface-2);
-  margin-bottom: 8px;
+  /* No margin-bottom: .picker-list is a flex column with gap:6px and already owns
+     the rhythm, exactly as it does for .picker-row. The two together were 14px. */
 }
 /* Layout only — the RECIPES tab still emits .bundle-main as a plain <div>
    (drawRecipes), and it has no handler, so it must not look clickable. */
@@ -4390,6 +4401,10 @@ button.bundle-main {
 }
 .bundle-meta { font-size: 12px; font-weight: 700; color: var(--text-dim); margin-top: 2px; }
 .bundle-add {
+  /* The 44px tap halo the button scale requires of anything smaller. It stays
+     40x36 beside the ghost; only the target grows. It was the PRIMARY action and
+     the one control on the card without one, between 44px neighbours. */
+  position: relative;
   width: 40px;
   height: 36px;
   padding: 0;
@@ -7537,15 +7552,39 @@ body.theme-light {
 .cx-row > span, .cx-row > label { flex:1; min-width:0; overflow-wrap:anywhere; }
 .cx-row input[type=number] { max-width:120px; }
 .cx-item { border:1px solid var(--border); border-radius:14px; padding:12px; display:flex; flex-direction:column; gap:10px; }
-.cx-tools { display:flex; gap:10px; margin-bottom:18px; }
-.cx-tools > * { flex:1; white-space:normal; }
 .cx-result { display:flex; flex-direction:column; align-items:flex-start; white-space:normal; text-align:start; gap:4px; }
 .cx-result span { font-size:12px; color:var(--text-mute); }
-.cx-stack .btn { min-height:44px; white-space:normal; overflow-wrap:anywhere; }
+/* height:auto is what makes white-space:normal work here — .btn sets a fixed
+   height, so a wrapped second line used to overflow its own button. */
+.cx-stack .btn { height:auto; min-height:44px; white-space:normal; overflow-wrap:anywhere; padding-block:6px; }
 .cx-stack input[type=checkbox] { width:22px; height:22px; }
-/* Keep Undo above these sheets, clear of their bottom action buttons. */
-body:has([data-convenience-owner]) #toast { bottom:auto; top:calc(var(--safe-t, 0px) + 12px); }
+/* The food name is the row subject; the portion is a fixed-width control beside
+   it. Both were flex:1, so a long name ellipsised at 126px of a 316px row while
+   a two-character number field held the other half. */
+#cx-meal-items .cx-row > label { flex:0 0 auto; }
+/* Keep Undo clear of a sheet's action buttons WITHOUT moving it.
+   This used to be `#toast { bottom:auto; top:... }`, which had four faults at once:
+   the bar teleported the full height of the screen mid-life with no animation; at
+   a top anchor the base translateY(20px) made it slide UPWARD into the notch
+   instead of down out of it; the #toast ID silently outranked every other toast
+   rule including `body.rest-active .toast`; and it depended on --safe-t, which is
+   0 in development so the collision it caused was invisible until a real notch.
+   The bar now stays where it always is, and the SHEET makes room for it. */
+body:has(.toast.has-action.show) .modal { padding-bottom: calc(22px + var(--safe-b) + 68px); }
 .cx-stack label.cx-row { flex-direction:row; }
+
+/* One focus ring for the whole app. Six controls declared one and about a
+   hundred did not, falling back to the UA default — a thin ring that is nearly
+   invisible on a black ground. Same recipe the six already used, so nothing that
+   had a ring changes. :focus-visible, not :focus, so a mouse press never draws it. */
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+/* The favourite mark, outside the name it used to truncate. */
+.bundle-star { flex: none; color: var(--accent-text); font-size: 13px; line-height: 1; }
+
+/* The Food header's two text links. A column so a long Arabic label never fights
+   the page title for width, end-aligned so both read as one trailing group. */
+.header-links { display: flex; flex-direction: column; align-items: flex-end; gap: 2px; flex: none; }
 
 /* Today's scheduled cardio on Home. The .section-title is load-bearing: without a
    heading, two rows carrying a "+" wedged between the workout hero and the
@@ -7801,4 +7840,5 @@ body { --icon-accent: var(--accent-text); }
 
 /* Destructive controls carry their own pair. */
 .icon-btn.danger, #reset-btn { color: var(--red); --icon-accent: var(--red); }
+
 

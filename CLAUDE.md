@@ -77,7 +77,7 @@ a faster TTFB — not fewer bytes.
 npm run release          # bump every marker + verify, then commit all files together
 ```
 
-**Current version: v315.** APK: build 21 / v3.0.
+**Current version: v316.** APK: build 21 / v3.0.
 
 `scripts/release.js` rewrites **every** marker and then re-reads them from disk to confirm; it exits non-zero if any disagree, and prints the count per file (derived, never hard-coded — the docs used to say 16 while the real count was 15). The markers are `?v=N` in `index.html` (every script and stylesheet, the `js/vendor/supabase.js` preload, both `icons/icon.svg` links, `manifest.json`), the `__cleaned_vN` sessionStorage key, the `FALLBACK` literal in `app.js`, `version.json` → `web`, the `?v=` in `manifest.json`, `admin.html`, `privacy.html` and `get/index.html`, and the `Current version` line in this file. `scripts/check-contracts.js` (pre-commit) refuses a commit where any of them disagree.
 
@@ -863,6 +863,85 @@ is the verification script — the project's form of TDD, per the deviation note
   slash**. Live in Supplements ever since that toggle shipped; scheduled cardio
   reuses the control, which is how it finally surfaced. Verified after the fix:
   the leg resolves to `rgb(26,8,0)` on the `rgb(255,106,0)` fill.
+
+## v316 (2026-09-13) — the design pass, continued: 38 defects across the v312 sheets
+
+v314 fixed the seven worst. This finishes the sweep the owner asked for
+(«صلحهم كلهم»). Same method, and it is the only method that works here: **no test
+in this project looks at design**, so every one of these was found by reading the
+shipped files and then proved by measuring the rendered DOM.
+
+**Two of the fifty-six "confirmed" findings were wrong, and measuring is what
+caught them. Both are recorded so they are not re-opened:**
+
+- **Positive `letter-spacing` does NOT break Arabic joins in this app.** The
+  theory was sound — Arabic is cursive, forty-two label rules pair
+  `text-transform: uppercase` (a no-op in a script with no uppercase) with
+  +0.01em..+1px of tracking, and tracking a joined script should pull it apart. A
+  42-selector RTL override and a contract to keep it honest were written, and
+  then measured in the live browser: at 0.18em on 11px IBM Plex Sans Arabic, a
+  12-character Arabic string grows by **1.98px** and the identical-length Latin
+  string by **23.77px**. The delta is exactly `spaces × 1.98`; a single Arabic
+  word of ANY length grows by **zero**. Blink applies letter-spacing at run
+  boundaries, not between joined glyphs. The fix was a no-op with a false comment
+  attached, so it was reverted. Contract count stays 31.
+- **Arabic-Indic numerals in `pi_*` are the house style, not an anomaly.**
+  `١٥ ميغابايت` was flagged as inconsistent. It is not: `username_rules` (٣–٢٠),
+  `auth_pw_short` (٨), `last_7_days` (آخر ٧ أيام), the progression reasons and all
+  219 `FOOD_PRESETS` Arabic serving strings (`١٠٠غ`) use them. Latin digits are
+  for RENDERED figures (`.num`, JetBrains Mono); Arabic-Indic digits are for
+  digits embedded in Arabic prose. Changing `pi_*` would have been the defect.
+
+### What actually shipped
+
+- **`t('delete') + '؟'` titled three confirm sheets** — an English word beside an
+  Arabic question mark in the Arabic UI, naming nothing. One `delete_q` key, both
+  scripts, all three sites.
+- **The saved-foods picker's three `role="tab"` buttons carried no
+  `aria-selected` and no `aria-controls`**, so the tablist announced three
+  unselected tabs pointing at no panel. And its search box was built once, from
+  the Foods tab, and never changed: standing on Recipes the empty field still read
+  «ابحث عن أكل…». **`applyTab()` is now the one writer of every per-tab surface**
+  (the `on` class, `aria-selected`, the placeholder, the new-button label) and both
+  the first render and the click handler call it, so they cannot drift.
+- **`.cx-stack .btn` set `white-space: normal` without `height: auto`.** `.btn`
+  fixes its height, so a label that wrapped overflowed its own button. (`.cx-tools`
+  went with it — v314 moved its only user to `.header-links` and left the rule.)
+- **Six free-text fields in the convenience sheets had no `dir="auto"`** — the meal
+  name, the list name, the item name, both ingredient-identity fields and the
+  category. The recipe editor and the photo import set it on every such field; a
+  Latin name typed into an RTL page put its punctuation on the wrong end.
+- **The meal editor asked for a portion without ever saying what it was worth.**
+  Each row now carries its own calorie figure under the name, patched in place on
+  `input` — a redraw per keystroke would take the caret out of the field being
+  typed in (verified: 130 × 3 → 390, focus retained). The portion control is
+  `flex: 0 0 auto` so the NAME takes the leftover width instead of splitting it
+  50/50 with a two-character number field (126px → 132px, and the long-name row
+  no longer overflows).
+- **`cx_amount_hint` was a muted `.settings-hint` in the meal editor and
+  full-strength body text in the purchase editor** — the same sentence, two
+  weights, and in the louder place it was the loudest line on the sheet, sitting
+  above a second aside that was correctly muted. Measured after: both
+  `rgb(176,166,158)`.
+- **The shopping-sources sheet asked the user to choose sources and then listed
+  none.** With no saved meals and no recipes it showed «اختر الوجبات أو الوصفات»
+  over empty space, with «Review» (primary) above the only thing that could
+  actually work. The instruction is now conditional, the empty state says why, and
+  the blank-list button becomes the primary — and `#cx-shopping-preview`'s handler
+  is guarded, because the button it binds is no longer always there.
+- **Two accessible names were lies.** The servings field on each source row was
+  named after the MEAL, so a screen reader repeated the row's own heading and never
+  said what the number meant; and both preparation `<select>`s were named
+  `cx_unspecified` — **the name of one of their own options** — so each announced
+  itself as its default value. The servings and edit controls now name the field
+  AND the meal; preparation is `<label>`-wrapped like its three siblings, which
+  also gives it the visible caption it was the only control on those sheets to
+  lack (measured: zero uncaptioned controls left in the purchase editor).
+
+**Still open, and deliberately not attempted here:** `openPurchaseEditor` is still
+a spreadsheet — four controls per ingredient in one flat stack. Rebuilding it onto
+the v301 ingredient-ledger primitives (one summary line per row, a well that opens
+on tap) is the right shape and is its own piece of work.
 
 ## Superpowers — and the two places this project deliberately departs from it
 

@@ -12,7 +12,7 @@
 // build. The literal below is the fallback (file://, or a stripped query) and is
 // still bumped by `npm run release` — see CLAUDE.md "CACHE WORKFLOW".
 const VAULT_BUILD = (() => {
-  const FALLBACK = 'v315';
+  const FALLBACK = 'v316';
   try {
     const src = (document.currentScript && document.currentScript.src) || '';
     const m = src.match(/[?&]v=(\d+)/);
@@ -424,6 +424,9 @@ const I18N = {
     streak_active: 'Active streak — keep it going!',
     streak_start: 'Log a session to start your streak',
     workouts: 'Workouts', volume: 'Volume', cardio: 'Cardio', sleep_today: "Today's sleep",
+    delete_q: 'Delete this?', sfp_search_bundles: 'Search meals…', sfp_search_recipes: 'Search recipes…',
+    cx_servings: 'Servings', cx_no_sources: 'No saved meals or recipes yet — start a blank list instead.',
+    cx_prep: 'Preparation',
     cardio_sched: 'Cardio schedule', cardio_sched_add: 'Add cardio', cardio_sched_days: 'Days',
     cardio_sched_today: "Today's cardio", cardio_sched_more: '+{n} more',
     cardio_sched_need: 'Choose at least one day and a duration.',
@@ -1021,7 +1024,7 @@ const I18N = {
     cx_portion: "Portion multiplier",
     cx_date: "Log date",
     cx_items: "Ingredients",
-    cx_new: "Create new",
+    cx_new: "Create a new list",
     cx_name: "Name",
     cx_qty: "Quantity",
     cx_unit: "Unit",
@@ -1413,6 +1416,9 @@ const I18N = {
     streak_active: 'سلسلة نشطة — واصل!',
     streak_start: 'سجّل جلسة لبدء سلسلتك',
     workouts: 'التمارين', volume: 'الحجم', cardio: 'الكارديو', sleep_today: 'نوم اليوم',
+    delete_q: 'هل تريد الحذف؟', sfp_search_bundles: 'ابحث في وجباتي…', sfp_search_recipes: 'ابحث في وصفاتي…',
+    cx_servings: 'عدد الحصص', cx_no_sources: 'لا توجد وجبات أو وصفات محفوظة بعد. ابدأ قائمة فارغة.',
+    cx_prep: 'التحضير',
     cardio_sched: 'جدول الكارديو', cardio_sched_add: 'إضافة كارديو', cardio_sched_days: 'الأيام',
     cardio_sched_today: 'كارديو اليوم', cardio_sched_more: '+{n} غيرها',
     cardio_sched_need: 'اختر يوماً واحداً على الأقل ومدّة.',
@@ -1814,9 +1820,9 @@ const I18N = {
     schedule_title: 'أيام تمرينك',
     schedule_days_label: 'أيام تمرين',
     schedule_hint: 'اختر الأيام التي تريد التمرّن فيها؛ تبقى أيام الراحة فارغة، وتُوزَّع التمارين على أيام تمرينك بالترتيب.',
-    training_days: 'أيام التمرين',
+    training_days: 'أيام التدريب في الأسبوع',
     rotation_cycle: 'دورة التمارين',
-    add_workout: 'إضافة تمرين',
+    add_workout: 'إضافة يوم تمرين',
     slot_editor_sub_new: 'سمِّه ثم اختر تمارينه بالترتيب الذي ستؤدّيه',
     rotation_preview: 'الأيام السبعة القادمة',
     min_logged: 'أقل مجهود — تم',
@@ -1866,7 +1872,7 @@ const I18N = {
     program_no_plan_title: 'لا يوجد برنامج بعد',
     program_no_plan_sub: 'اختر خطة جاهزة أو ابنِ دورتك الخاصة.',
     program_build: 'ابنِ برنامجي',
-    workout_label: 'تمرين',
+    workout_label: 'يوم تمرين',
     view_all: 'عرض الكل',
     prev_month: 'الشهر السابق',
     next_month: 'الشهر التالي',
@@ -1986,7 +1992,7 @@ const I18N = {
     rec_edit: 'تعديل',
     cx_keep_exceptions: "الاحتفاظ بأيام الراحة والإضافية المستقبلية الحالية المبينة أدناه",
     cx_tools: "أدوات يومية",
-    cx_search: "ابحث في التطبيق",
+    cx_search: "البحث في التطبيق",
     cx_query: "ابحث عن تمرين أو وجبة أو تاريخ",
     cx_empty: "لا توجد نتائج",
     cx_recent: "آخر التعديلات",
@@ -1996,18 +2002,18 @@ const I18N = {
     cx_meal_changed: "تم تعديل الوجبة",
     cx_shopping_changed: "تم تعديل قائمة المشتريات",
     cx_meals: "وجباتي",
-    cx_shopping: "مشترياتي",
+    cx_shopping: "قوائم المشتريات",
     cx_favorite: "مفضلة",
     cx_portion: "معامل الحصة",
     cx_date: "تاريخ التسجيل",
     cx_items: "المكونات",
-    cx_new: "إنشاء جديد",
+    cx_new: "إنشاء قائمة جديدة",
     cx_name: "الاسم",
     cx_qty: "الكمية",
     cx_unit: "الوحدة",
     cx_unknown: "تحتاج تحديد الكمية",
-    cx_identity: "هوية المكون للمطابقة (اختياري)",
-    cx_identity_hint: "استخدم نفس الهوية للمكون نفسه فقط. يجب تطابق الوحدة وحالة التحضير أيضًا.",
+    cx_identity: "معرّف المكوّن للمطابقة (اختياري)",
+    cx_identity_hint: "استخدم المعرّف نفسه للمكوّن نفسه فقط. ويجب أن تتطابق الوحدة وحالة التحضير أيضاً.",
     cx_raw: "نيء",
     cx_cooked: "مطبوخ",
     cx_unspecified: "تحضير غير محدد",
@@ -2089,7 +2095,7 @@ const I18N = {
     pi_review_hint: 'قد تخطئ القراءة في الأسماء والأرقام. راجع كل تمرين مع الصورة. الأهداف الفارغة لم تُقرأ من الصورة.',
     pi_source: 'عرض الصورة الأصلية',
     pi_photo: 'صورة الجدول المختارة',
-    pi_empty: 'لم نعثر على جدول تمارين. اختر صورة أوضح تظهر فيها أسماء التمارين.',
+    pi_empty: 'لم يُعثر على جدول تمارين. اختر صورة أوضح تظهر فيها أسماء التمارين.',
     pi_bad_file: 'اختر صورة JPG أو PNG أو WebP بحجم لا يتجاوز ١٥ ميغابايت. للصيغ الأخرى، استخدم لقطة شاشة.',
     pi_timeout: 'استغرقت القراءة وقتًا طويلًا. أعد المحاولة أو اختر صورة أقرب وأوضح.',
     pi_unavailable: 'قراءة الجداول غير متاحة حاليًا. حاول مرة أخرى لاحقًا.',
@@ -2132,22 +2138,22 @@ const I18N = {
     rest_short: 'راحة',
     minutes_short: 'د',
     rest_is_the_plan: 'الراحة جزء من الخطة — العضلة تكبر اليوم لا أمس.',
-    rest_sheet_title_1: 'للأسف ما حتقدر تتمرّن اليوم',
-    rest_sheet_body_1: 'مفهوم، الأيام مو كلها زي بعضها. بس خلّ هذي بذهنك: <b>لا تسحب يومين ورا بعض.</b> اليوم الأول راحة، والثاني بداية انقطاع. والسلسلة اليوم تُحسب بالتسجيل — فأي شي مسجّل يبقيها.',
-    rest_sheet_title_2: 'هذا ثاني يوم ورا بعض',
-    rest_sheet_body_2: 'أمس أخذت راحة. لو أخذت اليوم كذلك، الانقطاع يبدأ من هنا — والرجعة تصير أثقل من التمرين نفسه.',
+    rest_sheet_title_1: 'لن تتمكّن من التمرين اليوم',
+    rest_sheet_body_1: 'مفهوم، فالأيام ليست سواءً. لكن تذكّر هذا: <b>لا تجعلهما يومين متتاليين.</b> الأول راحة، والثاني بداية انقطاع. والسلسلة تُحتسب بالتسجيل، فأيّ شيء تسجّله يُبقيها.',
+    rest_sheet_title_2: 'هذا يومٌ ثانٍ على التوالي',
+    rest_sheet_body_2: 'أخذتَ راحةً أمس. وإن أخذتها اليوم أيضاً، فالانقطاع يبدأ من هنا — والعودة تصير أثقل من التمرين نفسه.',
     rest_streak_line: 'سلسلتك {n} يوم — واليوم بلا تسجيل يقطعها',
-    rest_do_what_i_can: 'راح أعمل الي بوسعي',
+    rest_do_what_i_can: 'سأفعل ما بوسعي',
     rest_full_rest: 'لا، أحتاج راحة كاملة',
     rest_full_again: 'راحة ثانية — أتحمّل النتيجة',
-    rest_min_title: 'وش تقدر عليه اليوم؟',
-    rest_min_sub: 'اختر أقل شي تقدر تنهيه. المهم ما ينكسر الخط.',
+    rest_min_title: 'ما الذي تستطيعه اليوم؟',
+    rest_min_sub: 'اختر أقلّ ما تستطيع إتمامه. المهمّ ألّا تنكسر السلسلة.',
     rest_min_one: 'تمرين واحد',
-    rest_min_one_sub: 'أثقل حركة بالخطة، ٣ مجموعات',
+    rest_min_one_sub: 'أثقل حركة في الخطة، ثلاث مجموعات',
     rest_min_half: 'نصف الجلسة',
-    rest_min_half_sub: 'أول تمرينين وخلاص',
+    rest_min_half_sub: 'أوّل تمرينين فقط',
     rest_min_walk: 'مشي فقط',
-    rest_min_walk_sub: 'يُحسب كارديو خفيف',
+    rest_min_walk_sub: 'يُحتسب كارديو خفيف',
     rest_min_logged: 'سُجِّل. السلسلة سليمة.',
     apply_template: 'طبّق قالب',
     clear_plan: 'امسح الخطة',
@@ -3601,8 +3607,8 @@ function vaultBar({ action = '', actionLabel = '' } = {}) {
     <div class="vault-bar">
       <div class="vault-logo">${brandLockup('header')}</div>
       <div class="vault-bar-actions">
-        <button class="icon-btn" data-unified-search aria-label="${escapeHtml(t('cx_search'))}">${icon('search', 20)}</button>
-        ${action ? `<button class="vault-action" id="vault-action"${actionLabel ? ` aria-label="${escapeHtml(actionLabel)}"` : ''}>${action}</button>` : ''}
+        <button class="vault-action" data-unified-search aria-label="${escapeHtml(t('cx_search'))}">${icon('search', 19)}</button>
+        ${action ? `<button class="vault-action" data-vault-action${actionLabel ? ` aria-label="${escapeHtml(actionLabel)}"` : ''}>${action}</button>` : ''}
       </div>
     </div>
   `;
@@ -3614,7 +3620,7 @@ function bindVaultAction(handler) {
   // Each rendered view stays in the DOM (just hidden). Scope to the active
   // view so we don't bind the handler to a stale vault-action from a previous
   // view — that was making top-bar + buttons fire the wrong action.
-  const btn = document.querySelector('.view.active #vault-action');
+  const btn = document.querySelector('.view.active [data-vault-action]');
   if (btn && handler) btn.addEventListener('click', handler);
 }
 
@@ -5293,7 +5299,7 @@ function renderProgram(el) {
          so a magnifier both lied about what it does and put a SECOND search glyph
          beside the global one vaultBar now renders for every screen. The old
          space-between layout hid the collision by parking 90px between them. -->
-    ${vaultBar({ action: icon('dumbbell', 20), actionLabel: t('train') })}
+    ${vaultBar({ action: icon('dumbbell', 19), actionLabel: t('train') })}
 
     <div class="page-header">
       <h1 class="page-title">${t('program_title')}</h1>
@@ -6735,7 +6741,7 @@ function openCardioScheduleModal(id = null) {
   });
   overlay.querySelector('#cs-delete')?.addEventListener('click', () => {
     confirmDialog({
-      title: t('delete') + '؟', text: '', confirmLabel: t('delete'), variant: 'danger',
+      title: t('delete_q'), text: '', confirmLabel: t('delete'), variant: 'danger',
       onConfirm: () => {
         // Removing the schedule never touches the cardio LOG: sessions already
         // performed are history, and history is not the schedule's to erase.
@@ -7104,14 +7110,22 @@ function renderFood(el) {
           <h1 class="page-title">${t('food')}</h1>
           <p class="page-subtitle">${escapeHtml(formatDate(date))}</p>
         </div>
-        <button class="link-btn" data-goto="foodlog">${t('food_history')} <span class="icon-mirror">${icon('chevronRight', 16)}</span></button>
+        <!-- Both entry points are text links, in the slot that already held one.
+             They used to be a .cx-tools row of two 44px ghost slabs directly under
+             here, which cost 62px ABOVE the user's calories and pushed the water
+             steppers under the bottom nav — and .link-btn is the idiom this
+             stylesheet already names for exactly this job, 20px away.
+             «وجباتي» is gone entirely: the food FAB's add-sheet already opens that
+             same picker, so it was a second front door to one room. -->
+        <div class="header-links">
+          <button class="link-btn" data-shopping>${t('cx_shopping')}</button>
+          <button class="link-btn" data-goto="foodlog">${t('food_history')} <span class="icon-mirror">${icon('chevronRight', 16)}</span></button>
+        </div>
       </div>
     </div>
-    <div class="cx-tools"><button class="btn btn-ghost" data-my-meals>${t('cx_meals')}</button><button class="btn btn-ghost" data-shopping>${t('cx_shopping')}</button></div>
     <div id="nutri-host">${nutritionDashboardHtml(date)}</div>
   `;
 
-  el.querySelector('[data-my-meals]').onclick = () => openSavedFoodPicker(null, () => renderView(currentView), 'bundles');
   el.querySelector('[data-shopping]').onclick = openShoppingLists;
 
   // todayISO() HERE, not the render-time `date`: rows now land on the day they
@@ -8628,9 +8642,9 @@ function openSavedFoodPicker(date, onSave, initialTab) {
       <button class="icon-btn icon-btn-tile" data-close>${icon('close', 20)}</button>
     </div>
     <div class="sfp-tabs" role="tablist">
-      <button type="button" class="sfp-tab${tab === 'foods' ? ' on' : ''}" data-tab="foods" role="tab">${t('tab_saved_foods')}</button>
-      <button type="button" class="sfp-tab${tab === 'bundles' ? ' on' : ''}" data-tab="bundles" role="tab">${t('tab_bundles')}</button>
-      <button type="button" class="sfp-tab${tab === 'recipes' ? ' on' : ''}" data-tab="recipes" role="tab">${t('tab_recipes')}</button>
+      <button type="button" class="sfp-tab${tab === 'foods' ? ' on' : ''}" data-tab="foods" role="tab" aria-selected="${tab === 'foods'}" aria-controls="sf-list">${t('tab_saved_foods')}</button>
+      <button type="button" class="sfp-tab${tab === 'bundles' ? ' on' : ''}" data-tab="bundles" role="tab" aria-selected="${tab === 'bundles'}" aria-controls="sf-list">${t('tab_bundles')}</button>
+      <button type="button" class="sfp-tab${tab === 'recipes' ? ' on' : ''}" data-tab="recipes" role="tab" aria-selected="${tab === 'recipes'}" aria-controls="sf-list">${t('tab_recipes')}</button>
     </div>
     <div class="search-wrap" id="sf-search-wrap" style="margin-bottom:10px">
       ${icon('search', 20)}
@@ -8688,7 +8702,7 @@ function openSavedFoodPicker(date, onSave, initialTab) {
     }));
     listEl.querySelectorAll('[data-del-rec]').forEach((b) => b.addEventListener('click', () => {
       confirmDialog({
-        title: t('delete') + '؟', text: '', confirmLabel: t('delete'), variant: 'danger',
+        title: t('delete_q'), text: '', confirmLabel: t('delete'), variant: 'danger',
         onConfirm: () => { const result = DB.recipes.remove(b.dataset.delRec); if (!result.ok) { convenienceError(result); return; } drawRecipes(); offerUndo(t('rec_deleted'),result); },
       });
     }));
@@ -8705,11 +8719,12 @@ function openSavedFoodPicker(date, onSave, initialTab) {
       const kcal = b.items.reduce((n, it) => n + it.calories * (it.servings || 1), 0);
       return `
       <div class="bundle-card" data-bundle="${escapeHtml(b.id)}">
+        ${b.favorite ? `<span class="bundle-star" aria-label="${escapeHtml(t('cx_favorite'))}">★</span>` : ''}
         <button type="button" class="bundle-main" data-edit-bundle="${escapeHtml(b.id)}">
-          <div class="bundle-name">${b.favorite ? '★ ' : ''}${escapeHtml(b.name)}</div>
+          <div class="bundle-name">${escapeHtml(b.name)}</div>
           <div class="bundle-meta"><span class="num">${fmtNum(b.items.length)}</span> ${t('bundle_items')} · <span class="num">${fmtNum(Math.round(kcal))}</span> ${t('cal')}</div>
         </button>
-        <button type="button" class="btn btn-ghost bundle-portion" data-portion-bundle="${escapeHtml(b.id)}" aria-label="${escapeHtml(t('cx_portion'))}">×1</button>
+        <button type="button" class="btn btn-ghost bundle-portion" data-portion-bundle="${escapeHtml(b.id)}" aria-label="${escapeHtml(t('cx_portion') + ' ×1')}"><span class="num">×1</span></button>
         <button type="button" class="btn btn-primary bundle-add" data-log-bundle="${escapeHtml(b.id)}" aria-label="${escapeHtml(t('add'))}">${icon('plus', 16)}</button>
       </div>`;
     }).join('');
@@ -8767,17 +8782,30 @@ function openSavedFoodPicker(date, onSave, initialTab) {
     if (tab === 'recipes') { openRecipeEditor(date, null, () => openSavedFoodPicker(date, onSave, 'recipes')); return; }
     closeModal(); openFoodLibraryModal();
   });
-  overlay.querySelectorAll('.sfp-tab').forEach((b) => b.addEventListener('click', () => {
-    tab = b.dataset.tab;
-    overlay.querySelectorAll('.sfp-tab').forEach((x) => x.classList.toggle('on', x === b));
+  // The search box was built once, from the FOODS tab, and never changed — so on
+  // Recipes the empty field still read "Search foods…" while the list under it held
+  // recipes. Every per-tab surface is set here; the click handler and the first
+  // render both call it, so they cannot drift.
+  const applyTab = () => {
+    overlay.querySelectorAll('.sfp-tab').forEach((x) => {
+      const on = x.dataset.tab === tab;
+      x.classList.toggle('on', on);
+      x.setAttribute('aria-selected', String(on));
+    });
+    const input = overlay.querySelector('#sf-search');
+    if (input) input.placeholder = tab === 'bundles' ? t('sfp_search_bundles') : tab === 'recipes' ? t('sfp_search_recipes') : t('search_foods');
     overlay.querySelector('#sf-search-wrap').style.display = '';
     newBtn.innerHTML = icon('plus', 20) + ' ' +
       (tab === 'bundles' ? t('bundle_new') : tab === 'recipes' ? t('rec_new') : t('saved_new'));
+  };
+  overlay.querySelectorAll('.sfp-tab').forEach((b) => b.addEventListener('click', () => {
+    tab = b.dataset.tab;
+    applyTab();
     if (tab === 'bundles') drawBundles();
     else if (tab === 'recipes') drawRecipes();
     else draw();
   }));
-  overlay.querySelector('#sf-search-wrap').style.display = '';
+  applyTab();
   if (tab === 'bundles') drawBundles();
   else if (tab === 'recipes') drawRecipes();
   else draw();
@@ -9876,7 +9904,7 @@ function openUnifiedSearch() {
     const aliases = Object.fromEntries(DB.exercises.list().map(ex => [ex.id, [exDisplayName(ex), EXERCISE_NAME_AR_FULL[ex.name] || '', EXERCISE_NAME_AR[ex.name] || '', t('cat_' + ex.category)].join(' ')]));
     const results = DB.search.query(input.value, aliases);
     const groups = [...new Set(results.map(r => r.type))];
-    host.innerHTML = results.length ? groups.map(type => `<h3>${t(labels[type])}</h3>` + results.map((r,i) => ({r,i})).filter(({r}) => r.type === type).map(({r,i}) => `<button class="btn btn-ghost cx-result" data-result="${i}"><strong>${escapeHtml(r.type === 'exercise' ? exDisplayName(DB.exercises.getById(r.id)) : r.name)}</strong><span>${t(labels[r.type])}${r.date ? ' · ' + escapeHtml(r.date) : ''}</span></button>`).join('')).join('') : `<p>${t(/^\d{1,2}\/\d{1,2}$/.test(DB.search.normalize(input.value)) ? 'cx_ambiguous' : 'cx_empty')}</p>`;
+    host.innerHTML = results.length ? groups.map(type => `<h3>${t(labels[type])}</h3>` + results.map((r,i) => ({r,i})).filter(({r}) => r.type === type).map(({r,i}) => `<button class="btn btn-ghost cx-result" data-result="${i}"><strong>${escapeHtml(r.type === 'exercise' ? exDisplayName(DB.exercises.getById(r.id)) : (r.type === 'date' ? formatDate(r.name) : r.name))}</strong><span>${t(labels[r.type])}${r.date ? ' · ' + escapeHtml(formatDate(r.date)) : ''}</span></button>`).join('')).join('') : `<p>${t(/^\d{1,2}\/\d{1,2}$/.test(DB.search.normalize(input.value)) ? 'cx_ambiguous' : 'cx_empty')}</p>`;
     host.querySelectorAll('[data-result]').forEach(b => b.onclick = () => {
       if (owner !== Cloud.getLastUid()) { closeModal(); return; }
       const result = results[Number(b.dataset.result)]; closeModal();
@@ -9910,18 +9938,30 @@ function openMealEditor(existing = null, onSave = () => {}) {
   let items = existing ? copyData(existing.items) : [];
   const foods = [...DB.foods.list(), ...DB.foodLogs.listForDate(todayISO())];
   const modal = convenienceModal(`${cxHeader('cx_meals')}<div class="cx-stack">
-    <label>${t('cx_name')}<input class="input" id="cx-meal-name" maxlength="80" value="${escapeHtml(existing?.name || '')}"></label>
-    <label><input type="checkbox" id="cx-favorite" ${existing?.favorite ? 'checked' : ''}> ${t('cx_favorite')}</label>
+    <label>${t('cx_name')}<input class="input" id="cx-meal-name" maxlength="80" dir="auto" value="${escapeHtml(existing?.name || '')}"></label>
+    <!-- .cx-row, because .cx-stack label is a flex COLUMN: a bare checkbox label
+         put the box on its own line with its name stranded underneath in caption
+         grey. .cx-stack label.cx-row restores the row, and the <span> is what
+         picks up the flex:1 that .cx-row grants only to a span or a label. -->
+    <label class="cx-row"><span>${t('cx_favorite')}</span><input type="checkbox" id="cx-favorite" ${existing?.favorite ? 'checked' : ''}></label>
     <p class="settings-hint">${t('cx_amount_hint')}</p><div id="cx-meal-items"></div>
     <label>${t('cx_saved_food')}<select id="cx-food" class="input"><option value="">—</option>${foods.map((f,i) => `<option value="${i}">${escapeHtml(f.name)}</option>`).join('')}</select></label>
     <button class="btn btn-ghost" id="cx-food-add">${t('add')}</button>
     <button class="btn btn-primary" id="cx-meal-save">${t('save')}</button>
     ${existing ? `<button class="btn btn-danger" id="cx-meal-delete">${t('delete')}</button>` : ''}</div>`);
   const draw = () => {
-    modal.querySelector('#cx-meal-items').innerHTML = items.map((it,i) => `<div class="cx-row"><span>${escapeHtml(it.name)}</span>
+    const kcal = (it) => fmtNum(Math.round(Number(it.calories || 0) * Number(it.servings || 1))) + ' ' + t('cal');
+    modal.querySelector('#cx-meal-items').innerHTML = items.map((it,i) => `<div class="cx-row"><span>${escapeHtml(it.name)}<br><small class="num" data-kcal="${i}">${escapeHtml(kcal(it))}</small></span>
       <label>${t('cx_portion')}<input class="input" type="number" min="0.25" max="20" step="0.25" data-portion="${i}" value="${Number(it.servings || 1)}"></label>
       <button class="icon-btn danger" data-remove="${i}" aria-label="${escapeHtml(t('delete'))}">${icon('trash',18)}</button></div>`).join('');
-    modal.querySelectorAll('[data-portion]').forEach(input => input.onchange = () => { items[Number(input.dataset.portion)].servings = Number(input.value); });
+    // Patched in place rather than redrawn: a redraw on every keystroke would
+    // take the caret out of the field being typed in.
+    modal.querySelectorAll('[data-portion]').forEach(input => input.oninput = () => {
+      const i = Number(input.dataset.portion), it = items[i];
+      it.servings = Number(input.value);
+      const cell = modal.querySelector(`[data-kcal="${i}"]`);
+      if (cell) cell.textContent = Number.isFinite(it.servings) ? kcal(it) : '';
+    });
     modal.querySelectorAll('[data-remove]').forEach(b => b.onclick = () => { items.splice(Number(b.dataset.remove),1); draw(); });
   };
   draw();
@@ -9942,7 +9982,7 @@ function openMealEditor(existing = null, onSave = () => {}) {
   // behind the deliberate step of opening it.
   modal.querySelector('#cx-meal-delete')?.addEventListener('click', () => {
     confirmDialog({
-      title: t('delete') + '؟', text: '', confirmLabel: t('delete'), variant: 'danger',
+      title: t('delete_q'), text: '', confirmLabel: t('delete'), variant: 'danger',
       onConfirm: () => {
         if (owner !== Cloud.getLastUid()) { convenienceError({ code: 'STALE' }); return; }
         const result = DB.mealBundles.remove(existing.id);
@@ -10002,12 +10042,12 @@ function openShoppingDetail(list) {
 function openShoppingSources() {
   const owner = Cloud.getLastUid();
   const sources = [...DB.mealBundles.list().map(x => ({...x,type:'meal'})), ...DB.recipes.list().map(x => ({...x,type:'recipe'}))];
-  const modal = convenienceModal(`${cxHeader('cx_shopping')}<div class="cx-stack"><p>${t('cx_choose_sources')}</p>
-    ${sources.map((s,i) => `<label class="cx-row"><span>${escapeHtml(s.name)} · ${t(s.type === 'recipe' ? 'tab_recipes' : 'cx_meals')}</span><input class="input" type="number" min="0" max="100" step="0.5" value="0" data-source="${i}" aria-label="${escapeHtml(s.name)}"><button type="button" class="icon-btn" data-purchase-source="${i}" aria-label="${escapeHtml(t('cx_qty'))}">${icon('edit',18)}</button></label>`).join('')}
-    <button class="btn btn-primary" id="cx-shopping-preview">${t('cx_review')}</button><button class="btn btn-ghost" id="cx-shopping-blank">${t('cx_new')}</button></div>`);
+  const modal = convenienceModal(`${cxHeader('cx_shopping')}<div class="cx-stack">${sources.length ? `<p>${t('cx_choose_sources')}</p>` : ''}
+    ${sources.length ? sources.map((s,i) => `<label class="cx-row"><span>${escapeHtml(s.name)} · ${t(s.type === 'recipe' ? 'tab_recipes' : 'cx_meals')}</span><input class="input" type="number" min="0" max="100" step="0.5" value="0" data-source="${i}" aria-label="${escapeHtml(t('cx_servings') + ' — ' + s.name)}"><button type="button" class="icon-btn" data-purchase-source="${i}" aria-label="${escapeHtml(t('cx_qty') + ' — ' + s.name)}">${icon('edit',18)}</button></label>`).join('') : `<p class="settings-hint">${t('cx_no_sources')}</p>`}
+    ${sources.length ? `<button class="btn btn-primary" id="cx-shopping-preview">${t('cx_review')}</button><button class="btn btn-ghost" id="cx-shopping-blank">${t('cx_new')}</button>` : `<button class="btn btn-primary" id="cx-shopping-blank">${t('cx_new')}</button>`}</div>`);
   modal.querySelectorAll('[data-purchase-source]').forEach(b => b.onclick = () => openPurchaseEditor(sources[Number(b.dataset.purchaseSource)]));
   modal.querySelector('#cx-shopping-blank').onclick = () => openShoppingEditor();
-  modal.querySelector('#cx-shopping-preview').onclick = () => {
+  if (modal.querySelector('#cx-shopping-preview')) modal.querySelector('#cx-shopping-preview').onclick = () => {
     if (owner !== Cloud.getLastUid()) { convenienceError({code:'STALE'}); return; }
     const selections = [...modal.querySelectorAll('[data-source]')].filter(input => Number(input.value) > 0).map(input => ({ id: sources[Number(input.dataset.source)].id, type: sources[Number(input.dataset.source)].type, servings: Number(input.value) }));
     const preview = DB.shopping.preview(selections);
@@ -10047,9 +10087,9 @@ function openPreviousProgramPreview(preview) {
   }).join('')}</div>`).join('');
   const modal = convenienceModal(`${cxHeader('cx_plan_history')}<div class="cx-stack"><p>${t('cx_restore_hint')}</p>
     <details><summary>${t('program_title')}</summary>${renderPlan(DB.plan.get(),exercises)}</details>
-    ${renderPlan(plan,preview.exercises)}<p>${(plan.trainingDays || []).map(d => escapeHtml(dayName(d,true))).join(' · ')}</p><p>${t('cx_date')}: ${todayISO()}</p>
+    ${renderPlan(plan,preview.exercises)}<p>${(plan.trainingDays || []).map(d => escapeHtml(dayName(d,true))).join(' · ')}</p><p>${t('cx_date')}: ${escapeHtml(formatDate(todayISO()))}</p>
     ${missing.map((id,i) => `<label>${escapeHtml(preview.exercises.find(e => e.id === id)?.name || id)}<select class="input" data-map="${i}"><option value="">—</option><option value="new">${t('cx_new')}</option>${exercises.map(e => `<option value="${escapeHtml(e.id)}">${escapeHtml(exDisplayName(e))}</option>`).join('')}</select></label>`).join('')}
-    <label><input type="checkbox" id="cx-keep-exceptions">${t('cx_keep_exceptions')}</label>
+    <label class="cx-row"><span>${t('cx_keep_exceptions')}</span><input type="checkbox" id="cx-keep-exceptions"></label>
     <p class="settings-hint">${escapeHtml([...(DB.plan.get().restDates || []),...(DB.plan.get().extraDates || [])].filter(d => d >= todayISO()).join(' · '))}</p>
     <button class="btn btn-primary" id="cx-restore-plan">${t('cx_restore')}</button></div>`);
   modal.querySelector('#cx-restore-plan').onclick = async event => {
@@ -10071,12 +10111,12 @@ function openPurchaseEditor(source) {
   const owner = Cloud.getLastUid(), recipe = source.type === 'recipe';
   const original = recipe ? DB.recipes.list().find(x => x.id === source.id) : DB.mealBundles.list().find(x => x.id === source.id);
   const snapshot = JSON.stringify(original);
-  const modal = convenienceModal(`${cxHeader('cx_qty')}<div class="cx-stack"><strong>${escapeHtml(source.name)}</strong><p>${t('cx_amount_hint')}</p><p class="settings-hint">${t('cx_identity_hint')}</p>
+  const modal = convenienceModal(`${cxHeader('cx_qty')}<div class="cx-stack"><strong>${escapeHtml(source.name)}</strong><p class="settings-hint">${t('cx_amount_hint')}</p><p class="settings-hint">${t('cx_identity_hint')}</p>
     ${source.items.map((it,i) => `<div class="cx-item" data-purchase="${i}"><strong>${escapeHtml(it.name)}</strong><p class="settings-hint">${escapeHtml(it.qty || '')}</p>
       <label>${t('cx_qty')}<input class="input" type="number" min="0.001" step="any" data-quantity value="${it.purchase?.quantity == null ? '' : Number(it.purchase.quantity)}"></label>
       <label>${t('cx_unit')}<select class="input" data-unit>${['g','kg','ml','l','piece'].map(u => `<option value="${u}" ${it.purchase?.unit === u ? 'selected' : ''}>${t('cx_' + u)}</option>`).join('')}</select></label>
-      <label>${t('cx_identity')}<input class="input" data-identity maxlength="80" value="${escapeHtml(it.purchase?.ingredientId || '')}"></label>
-      <select class="input" data-preparation aria-label="${escapeHtml(t('cx_unspecified'))}">${['unspecified','raw','cooked'].map(p => `<option value="${p}" ${it.purchase?.preparation === p ? 'selected' : ''}>${t('cx_' + p)}</option>`).join('')}</select></div>`).join('')}
+      <label>${t('cx_identity')}<input class="input" data-identity maxlength="80" dir="auto" value="${escapeHtml(it.purchase?.ingredientId || '')}"></label>
+      <label>${t('cx_prep')}<select class="input" data-preparation>${['unspecified','raw','cooked'].map(p => `<option value="${p}" ${it.purchase?.preparation === p ? 'selected' : ''}>${t('cx_' + p)}</option>`).join('')}</select></label></div>`).join('')}
     <button class="btn btn-primary" id="cx-purchase-save">${t('save')}</button></div>`);
   modal.querySelector('#cx-purchase-save').onclick = () => {
     const current = recipe ? DB.recipes.list().find(x => x.id === source.id) : DB.mealBundles.list().find(x => x.id === source.id);
@@ -10100,7 +10140,7 @@ function openShoppingEditor(existing = null, initial = []) {
   let items = copyData(existing?.items || initial);
   const units = ['', 'g','kg','ml','l','piece'];
   const modal = convenienceModal(`${cxHeader('cx_shopping')}<div class="cx-stack">
-    <label>${t('cx_name')}<input class="input" id="cx-list-name" maxlength="80" value="${escapeHtml(existing?.name || '')}"></label>
+    <label>${t('cx_name')}<input class="input" id="cx-list-name" maxlength="80" dir="auto" value="${escapeHtml(existing?.name || '')}"></label>
     <p class="settings-hint">${t('cx_identity_hint')}</p><div id="cx-shopping-items" class="cx-stack"></div>
     <button class="btn btn-ghost" id="cx-shopping-add">${t('add')}</button>
     <button class="btn btn-primary" id="cx-shopping-save">${t('save')}</button>
@@ -10118,13 +10158,13 @@ function openShoppingEditor(existing = null, initial = []) {
   const draw = () => {
     modal.querySelector('#cx-shopping-items').innerHTML = items.map((it,i) => `<div class="cx-item" data-shopping-row="${i}">
       <label class="cx-row"><span>${t('cx_checked')}</span><input type="checkbox" data-field="checked" ${it.checked ? 'checked' : ''}></label>
-      <label>${t('cx_name')}<input class="input" data-field="name" maxlength="120" value="${escapeHtml(it.name || '')}"></label>
+      <label>${t('cx_name')}<input class="input" data-field="name" maxlength="120" dir="auto" value="${escapeHtml(it.name || '')}"></label>
       ${it.originalText ? `<p class="settings-hint">${escapeHtml(it.originalText)}</p>` : ''}
       <div class="cx-row"><label>${t('cx_qty')}<input class="input" type="number" min="0.001" step="any" data-field="quantity" placeholder="${escapeHtml(t('cx_unknown'))}" value="${it.quantity == null ? '' : Number(it.quantity)}"></label>
       <label>${t('cx_unit')}<select class="input" data-field="unit">${units.map(u => `<option value="${u}" ${u === it.unit ? 'selected' : ''}>${u ? t('cx_' + u) : '—'}</option>`).join('')}</select></label></div>
-      <label>${t('cx_identity')}<input class="input" data-field="ingredientId" maxlength="80" value="${escapeHtml(it.ingredientId || '')}"></label>
-      <select class="input" data-field="preparation" aria-label="${escapeHtml(t('cx_unspecified'))}">${['unspecified','raw','cooked'].map(p => `<option value="${p}" ${it.preparation === p ? 'selected' : ''}>${t('cx_' + p)}</option>`).join('')}</select>
-      <label>${t('cx_category')}<input class="input" data-field="category" maxlength="40" value="${escapeHtml(it.category || '')}"></label>
+      <label>${t('cx_identity')}<input class="input" data-field="ingredientId" maxlength="80" dir="auto" value="${escapeHtml(it.ingredientId || '')}"></label>
+      <label>${t('cx_prep')}<select class="input" data-field="preparation">${['unspecified','raw','cooked'].map(p => `<option value="${p}" ${it.preparation === p ? 'selected' : ''}>${t('cx_' + p)}</option>`).join('')}</select></label>
+      <label>${t('cx_category')}<input class="input" data-field="category" maxlength="40" dir="auto" value="${escapeHtml(it.category || '')}"></label>
       <button class="btn btn-danger" data-remove-shopping="${i}">${t('delete')}</button></div>`).join('');
     modal.querySelectorAll('[data-remove-shopping]').forEach(b => b.onclick = () => { read(); const at = Number(b.dataset.removeShopping), removed = items.splice(at,1)[0]; draw(); showToast(t('deleted'), { actionLabel:t('undo'), duration:10000, onAction:() => { if (modal.isConnected && owner === Cloud.getLastUid()) { read(); items.splice(Math.min(at,items.length),0,removed); draw(); } } }); });
   };
