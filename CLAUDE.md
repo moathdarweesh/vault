@@ -77,7 +77,7 @@ a faster TTFB — not fewer bytes.
 npm run release          # bump every marker + verify, then commit all files together
 ```
 
-**Current version: v318.** APK: build 21 / v3.0.
+**Current version: v319.** APK: build 21 / v3.0.
 
 `scripts/release.js` rewrites **every** marker and then re-reads them from disk to confirm; it exits non-zero if any disagree, and prints the count per file (derived, never hard-coded — the docs used to say 16 while the real count was 15). The markers are `?v=N` in `index.html` (every script and stylesheet, the `js/vendor/supabase.js` preload, both `icons/icon.svg` links, `manifest.json`), the `__cleaned_vN` sessionStorage key, the `FALLBACK` literal in `app.js`, `version.json` → `web`, the `?v=` in `manifest.json`, `admin.html`, `privacy.html` and `get/index.html`, and the `Current version` line in this file. `scripts/check-contracts.js` (pre-commit) refuses a commit where any of them disagree.
 
@@ -955,17 +955,17 @@ highest on project law (87) and **lowest on "the day after" (62)**. The measurem
 the workout hero is 184px, and on a 375px phone the calories hero below it already ends 117px
 past the fold. A third 184px card starts the calories card at 646px — entirely below it.
 
-**THREE SIZES, ONE FAMILY, and the ladder between them IS the design.** CARD (owed, 163px) →
+**THREE SIZES, ONE FAMILY, and the ladder between them IS the design.** CARD (owed, 145px) →
 ROW (owed, queued, 68px) → STRIP (settled, 44px). Prime space under the workout hero stays
 proportional to what is still owed. Measured through the whole cycle at 375×812:
 
 | | block | calories card visible |
 |---|---|---|
 | before (v317) | 95px | 192px |
-| owed — the card | 163px | 133px |
+| owed — the card | 145px | 151px |
 | done — the strip | **44px** | **252px** |
 
-You pay 59px while you owe it and are repaid 60px when it is done, and the calories card never
+You pay 41px while you owe it and are repaid 60px when it is done, and the calories card never
 goes below the fold — which the literal shape could not promise.
 
 - **THE CARD IS ALWAYS "THE CARDIO YOU OWE NEXT" — exactly one, or none.** Everything else
@@ -987,7 +987,7 @@ goes below the fold — which the literal shape could not promise.
   Both controls are labelled: «تمّ» filled while owed, «تراجع» outlined once settled.
 - **The settled strip is not a ticked box.** A check sitting in a square still offers itself as
   something to tick. Four independent signals say "done" so colour is never alone: the word
-  «تم» in the meta, the `.is-done` wash, the geometry (44 against 163), and an accessible name
+  «تم» in the meta, the `.is-done` wash, the geometry (44 against 145), and an accessible name
   that says what pressing it DOES — «تراجع عن تسجيل مشي», not «تراجع».
 - **It keeps `var(--elev-1)`.** Dropping the elevation was tempting (settled things recede) but
   `--surface-1` on `--bg` is ~1.08:1 in dark: with no border and no bevel the strip would have

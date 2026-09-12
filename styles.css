@@ -7626,11 +7626,16 @@ body:has(.toast.show) .modal { padding-bottom: calc(var(--nav-h) + var(--safe-b)
    Why not simply the workout hero's own size: measured on this phone, that hero
    is 184px and the calories hero below already ends 117px PAST the fold. A third
    184px card would start the calories card at 646px, i.e. entirely below it. */
+/* The chrome is cut, not the content: 163px → 145px comes entirely out of padding
+   and the gaps between the three lines. The 19px title, the 42px tile and the
+   44px bar are all untouched, because those are what stop this reading as a list
+   row — which is the thing it was built to stop reading as. */
 .cardio-task {
-  padding: var(--sp-4);
-  padding-inline-start: calc(var(--sp-4) + var(--sp-2));   /* clears the rail */
+  padding: var(--sp-3);
+  padding-inline-start: calc(var(--sp-3) + var(--sp-2));   /* clears the rail */
   margin-bottom: var(--sp-2h);
 }
+.cardio-task .hero-eyebrow { margin-bottom: var(--sp-1); }
 /* THE RADIAL GLOW IS REPLACED BY ONE BAR OF THE MARK (identity device 5). The
    glow marks the two NAVIGATIONAL heroes — cards that take you somewhere. This
    card completes in place, so it gets the tick instead, stood on end, where it
@@ -7640,8 +7645,8 @@ body:has(.toast.show) .modal { padding-bottom: calc(var(--nav-h) + var(--safe-b)
    rather than on source order. --accent-text and never --accent: as a GRAPHIC
    mass #ff6a00 measures 2.65:1 on the light page, under the 3:1 floor. */
 .hero-card.cardio-task::before {
-  top: var(--sp-4);
-  bottom: var(--sp-4);
+  top: var(--sp-3);
+  bottom: var(--sp-3);
   inset-inline-start: 0;
   inset-inline-end: auto;
   width: var(--bar-w);
@@ -7656,11 +7661,12 @@ body:has(.toast.show) .modal { padding-bottom: calc(var(--nav-h) + var(--safe-b)
   display: flex;
   align-items: center;
   gap: var(--sp-3);
-  margin-top: var(--sp-2);
+  margin-top: var(--sp-1);
 }
 /* 19px, not the heroes' 24: subordinate, still a headline. 14px is .data-title's
-   own size, and a list item is exactly what this card exists to stop being. */
-.cardio-task .data-title { font-size: var(--fs-h2); margin-bottom: var(--sp-1); }
+   own size, and a list item is exactly what this card exists to stop being. The
+   line-height already separates it from the meta, so the extra margin was slack. */
+.cardio-task .data-title { font-size: var(--fs-h2); margin-bottom: 0; }
 /* 2:1 CORNER LAW: the tile is a leaf of a --radius-lg (24) container, so 12 —
    not the 8 that is correct for the same tile inside a 16px .data-row. */
 .cardio-task .data-icon { border-radius: var(--radius-btn-m); }
@@ -7677,7 +7683,7 @@ body:has(.toast.show) .modal { padding-bottom: calc(var(--nav-h) + var(--safe-b)
   height: var(--btn-h-m);
   border-radius: var(--radius-btn-m);
   font-size: var(--fs-btn-m);
-  margin-top: var(--sp-3);
+  margin-top: var(--sp-2h);
   overflow: hidden;            /* so the label cannot spill while it folds */
   transition: height 180ms var(--ease), margin-top 180ms var(--ease), opacity 120ms var(--ease);
 }
@@ -7691,9 +7697,11 @@ body:has(.toast.show) .modal { padding-bottom: calc(var(--nav-h) + var(--safe-b)
    three sizes, in its own category colour, which is never orange. */
 .cardio-task.is-folding { pointer-events: none; }
 .cardio-task.is-folding .cardio-done-cta { height: 0; margin-top: 0; opacity: 0; }
+/* The `to` frame MUST equal .cardio-done-cta's own height and margin-top, or the
+   bar animates to one value and snaps to another on the last frame. */
 @keyframes cardio-cta-in {
   from { height: 0; margin-top: 0; opacity: 0; }
-  to   { height: var(--btn-h-m); margin-top: var(--sp-3); opacity: 1; }
+  to   { height: var(--btn-h-m); margin-top: var(--sp-2h); opacity: 1; }
 }
 .cardio-task.is-unfolding .cardio-done-cta { animation: cardio-cta-in 200ms var(--ease); }
 
