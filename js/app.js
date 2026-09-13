@@ -12,7 +12,7 @@
 // build. The literal below is the fallback (file://, or a stripped query) and is
 // still bumped by `npm run release` — see CLAUDE.md "CACHE WORKFLOW".
 const VAULT_BUILD = (() => {
-  const FALLBACK = 'v323';
+  const FALLBACK = 'v324';
   try {
     const src = (document.currentScript && document.currentScript.src) || '';
     const m = src.match(/[?&]v=(\d+)/);
@@ -429,8 +429,8 @@ const I18N = {
     cx_prep: 'Preparation', cx_portion_unset: 'Enter a portion', cx_purchase_unset: 'Set the shopping amount',
     cardio_sched: 'Cardio schedule', cardio_sched_add: 'Add cardio', cardio_sched_days: 'Days',
     cardio_sched_today: "Today's cardio", cardio_sched_more: '+{n} more',
-    cardio_mark_done: 'Mark done', cardio_task_scheduled: 'scheduled for today', cardio_task_of: '{i} of {n}',
-    cardio_mark_done_a11y: 'Mark {x} done', cardio_undo_a11y: 'Undo {x}', cardio_sched_undone: 'Cardio unmarked',
+    cardio_mark_done: 'Log it', cardio_task_scheduled: 'scheduled today', cardio_task_of: '{i} of {n}',
+    cardio_mark_done_a11y: 'Log it — {x}', cardio_undo_a11y: 'Undo — {x}', cardio_sched_undone: 'Cardio unmarked',
     cardio_sched_need: 'Choose at least one day and a duration.',
     cardio_sched_limit: 'You have reached the limit of scheduled cardio.',
     cardio_sched_saved: 'Cardio schedule saved', cardio_sched_deleted: 'Removed from the schedule',
@@ -1423,8 +1423,8 @@ const I18N = {
     cx_prep: 'التحضير', cx_portion_unset: 'أدخل عدد الحصص', cx_purchase_unset: 'حدّد كمية الشراء',
     cardio_sched: 'جدول الكارديو', cardio_sched_add: 'إضافة كارديو', cardio_sched_days: 'الأيام',
     cardio_sched_today: 'كارديو اليوم', cardio_sched_more: '+{n} غيرها',
-    cardio_mark_done: 'تمّ', cardio_task_scheduled: 'مجدول اليوم', cardio_task_of: '{i} من {n}',
-    cardio_mark_done_a11y: 'سجّل إنجاز {x}', cardio_undo_a11y: 'تراجع عن تسجيل {x}', cardio_sched_undone: 'أُلغي تسجيل الكارديو',
+    cardio_mark_done: 'سجّله', cardio_task_scheduled: 'في جدول اليوم', cardio_task_of: '{i} من {n}',
+    cardio_mark_done_a11y: 'سجّله — {x}', cardio_undo_a11y: 'تراجع — {x}', cardio_sched_undone: 'أُلغي تسجيل الكارديو',
     cardio_sched_need: 'اختر يوماً واحداً على الأقل ومدّة.',
     cardio_sched_limit: 'بلغتَ الحدّ الأقصى للكارديو المجدول.',
     cardio_sched_saved: 'حُفظ جدول الكارديو', cardio_sched_deleted: 'أُزيل من الجدول',
@@ -3466,15 +3466,6 @@ function showToast(msg, opts) {
 // launch can silently overwrite real data.
 function openModal(innerHtml, { variant = 'sheet', dismissible = true } = {}) {
   const root = $('#modal-root');
-  // BEFORE the rewrite below, and only from OUTSIDE the root. Writing innerHTML
-  // destroys the sheet that is currently open, so a capture taken after it would
-  // either be a detached node or <body> — and closeModal's document.contains()
-  // check would then hand focus to nothing. Keeping the outermost anchor means a
-  // sheet that opens another sheet still returns to the control that started it.
-  const opener = document.activeElement;
-  if (opener instanceof HTMLElement && opener !== document.body && !root.contains(opener)) {
-    __modalReturnFocus = opener;
-  }
   root.innerHTML = `
     <div class="modal-overlay ${variant === 'confirm' ? 'confirm-overlay' : ''}">
       <div class="${variant === 'confirm' ? 'confirm-dialog' : 'modal'}" role="dialog" aria-modal="true" tabindex="-1">
@@ -3494,6 +3485,11 @@ function openModal(innerHtml, { variant = 'sheet', dismissible = true } = {}) {
     if (!el.getAttribute('aria-label')) el.setAttribute('aria-label', t('close'));
     el.addEventListener('click', () => closeModal());
   });
+  // Remember what had focus so we can hand it back on close — otherwise closing a
+  // dialog drops focus to <body> and a keyboard/screen-reader user is dumped at
+  // the top of the page, losing their place in the list they were working through.
+  __modalReturnFocus = (document.activeElement instanceof HTMLElement) ? document.activeElement : null;
+
   // Move focus into the dialog so keyboard/SR users start inside it (unless a
   // field inside will self-focus via autofocus).
   if (!overlay.querySelector('[autofocus]')) overlay.querySelector('.modal, .confirm-dialog')?.focus();
@@ -3625,11 +3621,16 @@ function vaultBar({ action = '', actionLabel = '' } = {}) {
 
 document.addEventListener('click', event => { if (event.target.closest('[data-unified-search]')) openUnifiedSearch(); if (event.target.closest('[data-recent-changes]')) openRecentChanges(); if (event.target.closest('[data-plan-history]')) openPreviousPrograms(); });
 
-function bindVaultAction(handler) {
-  // Each rendered view stays in the DOM (just hidden). Scope to the active
-  // view so we don't bind the handler to a stale vault-action from a previous
-  // view — that was making top-bar + buttons fire the wrong action.
-  const btn = document.querySelector('.view.active [data-vault-action]');
+function bindVaultAction(handler, scope) {
+  // SCOPE TO THE ELEMENT BEING RENDERED, never to "whatever is active". Every
+  // view stays in the DOM, and a render can be DEFERRED (the cardio fold waits
+  // 180ms before repainting Home), so the active view is not necessarily the
+  // view this handler belongs to. Asking for .view.active bound Home's Settings
+  // action onto Program's top-bar button whenever the user switched tabs inside
+  // that window. The fallback keeps the old behaviour for any caller with no
+  // element to hand.
+  const root = scope || document.querySelector('.view.active');
+  const btn = root && root.querySelector('[data-vault-action]');
   if (btn && handler) btn.addEventListener('click', handler);
 }
 
@@ -4376,7 +4377,6 @@ function renderHome(el) {
         : '';
       return `
       <div class="hero-card cardio-task">
-        <div class="hero-eyebrow">${t('cardio_sched_today')}</div>
         <div class="cardio-task-head">
           <div class="data-icon ${tm.cls}" aria-hidden="true">${icon(tm.iconName, 20)}</div>
           <div class="data-main">
@@ -4433,7 +4433,11 @@ function renderHome(el) {
 
     // The id/data-iso host moved up from the inner list to the wrapper, so ONE
     // delegated listener covers the card, the queued rows and the strips.
-    return `<div class="home-sched" id="home-cardio-sched" data-iso="${iso}">${leadHtml}${listHtml}</div>`;
+    // The heading belongs to the BLOCK. It used to live inside the card, so
+    // ticking the last owed cardio removed the only «كارديو اليوم» on screen and
+    // left the settled strips labelled by nothing.
+    return `<div class="home-sched" id="home-cardio-sched" data-iso="${iso}">
+      <div class="hero-eyebrow home-sched-title">${t('cardio_sched_today')}</div>${leadHtml}${listHtml}</div>`;
   })();
 
   // TWO KINDS OF REST DAY, and they are not the same thing.
@@ -4621,7 +4625,7 @@ function renderHome(el) {
     animateNum(n, target, fixed ? { fmt: (v) => (v / 10).toFixed(1) } : undefined);
   });
 
-  bindVaultAction(() => navigate('settings'));
+  bindVaultAction(() => navigate('settings'), el);
 
   // The tick. The row is re-read at CLICK time, never captured at render time:
   // Home is repainted by health.js after it loads, on a day rollover, and after a
@@ -4642,12 +4646,20 @@ function renderHome(el) {
     if (!result.ok) { convenienceError(result); return; }
     // The toast now says which direction it went; it used to claim "logged" for
     // an un-tick as well.
+    // The toast confirms a write that has already landed, so it is raised NOW.
+    // Deferred, it arrived AFTER any navigate() that was meant to clear it and
+    // survived onto the next screen — and a second tick inside the window left
+    // one toast describing the other row.
+    offerUndo(t(wasDone ? 'cardio_sched_undone' : 'cardio_sched_done'), result);
     const finish = () => {
+      // Left Home inside the fold window? Do not repaint it. Home rebuilds
+      // itself on return, and repainting an inactive view is what let its
+      // handlers escape onto the view the user actually moved to.
+      if (currentView !== 'home') return;
       renderView('home');
       // If another cardio was owed, the next one is promoted into card position.
       // Growing its bar in says "one down, next up" instead of "nothing moved".
       if (!wasDone) document.querySelector('.cardio-task')?.classList.add('is-unfolding');
-      offerUndo(t(wasDone ? 'cardio_sched_undone' : 'cardio_sched_done'), result);
     };
     // THE FOLD. The write has ALREADY happened, so nothing is at risk if this
     // teardown is interrupted — only the repaint waits. The single element that
@@ -5512,7 +5524,7 @@ function renderProgram(el) {
   // screen — from the magnifier in this screen's top bar, bound just below.)
 
   // Top-bar magnifier → the exercise browser (its own screen since v198).
-  bindVaultAction(() => navigate('exercises'));
+  bindVaultAction(() => navigate('exercises'), el);
 
   // One delegated listener for add and edit. No data-goto anywhere on these
   // elements, so the global delegated handler cannot fire a second navigate().
@@ -8816,7 +8828,7 @@ function openSavedFoodPicker(date, onSave, initialTab) {
       return `
       <div class="bundle-card" data-bundle="${escapeHtml(b.id)}">
         ${b.favorite ? `<span class="bundle-star" aria-label="${escapeHtml(t('cx_favorite'))}">★</span>` : ''}
-        <button type="button" class="bundle-main" data-edit-bundle="${escapeHtml(b.id)}"${b.favorite ? ` aria-label="${escapeHtml(b.name + ' — ' + t('cx_favorite'))}"` : ''}>
+        <button type="button" class="bundle-main" data-edit-bundle="${escapeHtml(b.id)}"${b.favorite ? ` aria-label="${escapeHtml(b.name + ' — ' + t('cx_favorite') + ' — ' + fmtNum(b.items.length) + ' ' + t('bundle_items') + ' — ' + fmtNum(Math.round(kcal)) + ' ' + t('cal'))}"` : ''}>
           <div class="bundle-name">${escapeHtml(b.name)}</div>
           <div class="bundle-meta"><span class="num">${fmtNum(b.items.length)}</span> ${t('bundle_items')} · <span class="num">${fmtNum(Math.round(kcal))}</span> ${t('cal')}</div>
         </button>
@@ -9973,7 +9985,7 @@ function applyConvenienceUndo(token) {
 function openRecentChanges() {
   const entries = DB.undo.list();
   const modal = convenienceModal(`<div class="modal-header"><h2 class="modal-title">${t('cx_recent')}</h2><button class="icon-btn" data-close>${icon('close',20)}</button></div>
-    <div class="cx-stack">${entries.length ? `<div class="cx-list">${entries.map((e,i) => `<div class="cx-row"><span>${t(e.label)}</span><button class="btn btn-ghost" data-undo="${escapeHtml(e.token)}" ${i ? 'disabled' : ''}>${t('undo')}</button></div>`).join('')}</div>` : `<p>${t('cx_empty')}</p>`}</div>`);
+    <div class="cx-stack">${entries.length ? entries.map((e,i) => `<div class="cx-row"><span>${t(e.label)}</span><button class="btn btn-ghost" data-undo="${escapeHtml(e.token)}" ${i ? 'disabled' : ''}>${t('undo')}</button></div>`).join('') : `<p>${t('cx_empty')}</p>`}</div>`);
   modal.querySelectorAll('[data-undo]').forEach(b => b.onclick = () => applyConvenienceUndo(b.dataset.undo));
 }
 function cxHeader(key) {
@@ -10129,7 +10141,7 @@ function openShoppingLists() {
   const lists = DB.shopping.list();
   const modal = convenienceModal(`${cxHeader('cx_shopping')}<div class="cx-stack">
     <button class="btn btn-primary" id="cx-shopping-new">${t('cx_new')}</button>
-    ${lists.length ? `<div class="cx-list">${lists.map((list,i) => `<button class="btn btn-ghost cx-row" data-list="${i}"><span>${escapeHtml(list.name)}</span><span class="num">${list.items.filter(it => it.checked).length}/${list.items.length}</span></button>`).join('')}</div>` : `<p>${t('cx_empty')}</p>`}</div>`);
+    ${lists.length ? lists.map((list,i) => `<button class="btn btn-ghost cx-row" data-list="${i}"><span>${escapeHtml(list.name)}</span><span class="num">${list.items.filter(it => it.checked).length}/${list.items.length}</span></button>`).join('') : `<p>${t('cx_empty')}</p>`}</div>`);
   modal.querySelector('#cx-shopping-new').onclick = openShoppingSources;
   modal.querySelectorAll('[data-list]').forEach(b => b.onclick = () => openShoppingDetail(lists[Number(b.dataset.list)]));
 }
@@ -10244,7 +10256,8 @@ function openPurchaseEditor(source) {
         <strong class="pur-name">${escapeHtml(it.name)}</strong>
         ${it.qty ? `<span class="pur-orig">${escapeHtml(it.qty)}</span>` : ''}
       </div>
-      <button type="button" class="rec-sum" data-toggle aria-expanded="false" aria-controls="pur-more-${i}">
+      <button type="button" class="rec-sum" data-toggle aria-expanded="false" aria-controls="pur-more-${i}"
+              aria-label="${escapeHtml(t('cx_qty') + ' — ' + it.name)}">
         <span class="rec-sum-t"></span><span class="rec-sum-ic">${icon('edit', 14)}</span>
       </button>
       <div class="rec-more" id="pur-more-${i}">
@@ -10322,11 +10335,9 @@ function openShoppingEditor(existing = null, initial = []) {
   const modal = convenienceModal(`${cxHeader('cx_shopping')}<div class="cx-stack">
     <label>${t('cx_name')}<input class="input" id="cx-list-name" maxlength="80" dir="auto" value="${escapeHtml(existing?.name || '')}"></label>
     <p class="settings-hint">${t('cx_identity_hint')}</p><div id="cx-shopping-items" class="cx-stack"></div>
-    <div class="cx-actions">
-      <button class="btn btn-ghost" id="cx-shopping-add">${t('add')}</button>
-      <button class="btn btn-ghost" id="cx-shopping-share">${t('cx_share')}</button>
-    </div>
+    <button class="btn btn-ghost" id="cx-shopping-add">${t('add')}</button>
     <button class="btn btn-primary" id="cx-shopping-save">${t('save')}</button>
+    <button class="btn btn-ghost" id="cx-shopping-share">${t('cx_share')}</button>
     ${existing ? `<button class="btn btn-danger" id="cx-shopping-delete">${t('delete')}</button>` : ''}</div>`);
   const read = () => {
     modal.querySelectorAll('[data-shopping-row]').forEach(row => {

@@ -77,7 +77,7 @@ a faster TTFB — not fewer bytes.
 npm run release          # bump every marker + verify, then commit all files together
 ```
 
-**Current version: v323.** APK: build 21 / v3.0.
+**Current version: v324.** APK: build 21 / v3.0.
 
 `scripts/release.js` rewrites **every** marker and then re-reads them from disk to confirm; it exits non-zero if any disagree, and prints the count per file (derived, never hard-coded — the docs used to say 16 while the real count was 15). The markers are `?v=N` in `index.html` (every script and stylesheet, the `js/vendor/supabase.js` preload, both `icons/icon.svg` links, `manifest.json`), the `__cleaned_vN` sessionStorage key, the `FALLBACK` literal in `app.js`, `version.json` → `web`, the `?v=` in `manifest.json`, `admin.html`, `privacy.html` and `get/index.html`, and the `Current version` line in this file. `scripts/check-contracts.js` (pre-commit) refuses a commit where any of them disagree.
 
@@ -1099,25 +1099,58 @@ reachable at rest** where 24 used to be visible.
   recipe's own wording through. Verified end to end — `{quantity: 500, unit: 'g', ingredientId:
   'أرز أبيض', preparation: 'raw', originalText: '200 غ'}`.
 
-## v323 (2026-09-13) — the last four of the v316 review
+## v324 (2026-09-13) — what the pre-push review found, and one block instead of two boxes
 
-- **Chained sheets lost focus entirely.** `openModal` captured its return-focus anchor AFTER
-  `root.innerHTML` had already replaced the sheet that was open, so in a chain the captured node was
-  detached one line earlier and `closeModal`'s `document.contains()` check silently handed focus to
-  `<body>`. The capture now happens BEFORE the rewrite and only from OUTSIDE `#modal-root`, so a
-  sheet that opens a sheet still returns to the control that started the chain. Verified live:
-  Food → Shopping → "new list" → close now focuses `[data-shopping]`, not the body.
-- **A list is not a form.** Recent changes and the shopping-lists sheet put rows straight into
-  `.cx-stack`, whose 14px gap is the rhythm between FIELDS, so rows of the same kind floated apart
-  instead of reading as one object. `.cx-list` gives them the `.rec-row` recipe — 8px and a rule
-  between, none before the first.
-- **The save centre's one action had zero margin on every side**, jammed between two hints — and
-  `.settings-hint` carries `margin-top: -4px`, a pull-up meant for a hint that follows a control, so
-  the trailing line was drawn 4px INTO the button. Measured before: hint(mb 10) / button(0/0) /
-  hint(mt −4). Now 18px above and 12px below.
-- **The shopping editor's footer was four full-width slabs** with the one filled action buried
-  third. The two secondaries share a row (`.cx-actions`) and the primary keeps the full width:
-  **4 full-width slabs → 1**.
+A 74-agent adversarial review of the whole unpushed range (v316–v322) before it reached any device.
+Two blockers, fourteen more confirmed, seven killed by refutation.
+
+### The two blockers
+
+- **`bindVaultAction` asked for "the ACTIVE view" instead of the view it was rendering.** Every view
+  stays in the DOM, and v318 gave this app **its first DEFERRED render** (the cardio fold waits
+  180ms) — so those two stopped being the same thing. Tick «سجّله» then switch to Program inside the
+  window and Home's Settings handler was attached to **Program's** top-bar button: reproduced live,
+  the dumbbell landed on Settings and pushed a junk history entry. It now takes the element being
+  rendered, which kills the class for any future deferred render. The fold also bails if the user
+  left Home, and the toast is raised immediately instead of 180ms later — deferred, it arrived after
+  a `navigate()` that was meant to clear it, and a second tick could leave one toast describing the
+  other row.
+  > **A deferred render is a different animal from a synchronous one.** Anything that queries
+  > `.view.active` from inside a render is correct only while renders are synchronous, and this app
+  > is no longer that.
+- **v322 broke the browser QA suite and "all five suites pass" was wrong twice.**
+  `test-convenience-ui.js` fills `[data-quantity]`, which the purchase ledger now keeps
+  `display:none` inside a collapsed well. That suite needs an external Playwright runtime, so it
+  **skips silently** in ordinary runs. This is the SECOND time in one range the same blind spot hid
+  a break (the first was `[data-my-meals]` in v316). **The honest claim for a normal run is four
+  suites, not five** — `test-convenience-ui.js` is only exercised under Playwright.
+
+### One block, not two boxes
+
+The owner, on the Home cardio block: **«هذي كلها كارديو ليش كذا منفصلين؟»** — and he was right. The
+lead cardio was a raised `.hero-card` and each queued one a raised `.data-row`, every one carrying
+its own `--elev-1`, so two things of the same kind sat in two unrelated boxes. **Today's cardio is
+one object, so it now gets one surface**: `.home-sched` is the card, and the lead cardio and the
+rows are flat inside it, divided by a rule instead of by a gap. Measured after: exactly **one**
+raised surface in the block.
+
+### The rest
+
+- «كارديو اليوم» lived inside the CARD, so ticking the last owed cardio removed the only heading on
+  screen and left the settled strips labelled by nothing. It belongs to the block now.
+- **WCAG 2.5.3 Label in Name**: visible «تمّ» against an accessible name of «سجّل إنجاز مشي» shares
+  no word, so voice control could not address it — and «تمّ» collided with the «تم» the settled strip
+  prints one row below, a state word doing an action's job. Both names start from «سجّله» now.
+- An `aria-label` REPLACES an element's whole text, so labelling a favourited meal button silenced
+  the item count and calories a screen reader otherwise reads from inside it. The label carries them.
+- Every summary button in the purchase ledger took its name from the summary text, so all of them
+  announced the same sentence and none said which ingredient it belonged to.
+- `body:has(.toast.show) .modal` fired for EVERY toast, so an ordinary «تم الحفظ» resized an open
+  sheet by 134px mid-interaction. Only an action toast is tall enough to reach a sheet's buttons and
+  only it needs to stay reachable, so only it earns the reservation.
+- `.link-btn` is ~28px of text reaching 44px through `inset: -6px -8px`, so the Food header's two
+  links at `gap: 2px` had halos **overlapping by 10px** and the lower one won the shared strip — the
+  bottom edge of «قوائم المشتريات» opened Food history. 14px of gap clears them with 2px to spare.
 
 ## Superpowers — and the two places this project deliberately departs from it
 

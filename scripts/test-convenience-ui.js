@@ -33,6 +33,9 @@ module.exports = async function testConvenienceUI(page) {
     await page.locator('#cx-shopping-new').click();
     const row = page.locator('.cx-row').filter({hasText:'QA rice'});
     await row.locator('[data-purchase-source]').click();
+    // v322 rebuilt this sheet as a ledger: the fields live in a collapsed well
+    // and are display:none until the row's summary is tapped.
+    await page.locator('.pur-row .rec-sum').first().click();
     await page.locator('[data-quantity]').fill('200');
     await page.locator('[data-identity]').fill('rice');
     await page.locator('#cx-purchase-save').click();

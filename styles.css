@@ -7562,23 +7562,7 @@ body.theme-light {
 .save-center[data-state="failed"] #sc-device { color: var(--red); }
 .save-center #sc-detail { color: var(--red); font-size: 14px; line-height: 1.7; }
 .save-center .settings-hint { overflow-wrap: anywhere; line-height: 1.7; }
-/* The one action in this block had ZERO margin on either side and sat jammed
-   between two hints — and .settings-hint carries margin-top:-4px, a pull-up meant
-   for a hint that follows a CONTROL, so the trailing line was drawn 4px INTO the
-   button. Measured before: hint(mb 10) / button(mt 0, mb 0) / hint(mt -4). */
-.save-center #sc-action { min-height: 44px; white-space: normal; margin: var(--sp-2) 0 var(--sp-4); }
-
-/* A LIST IS NOT A FORM. .cx-stack's 14px gap is the rhythm between FIELDS; rows
-   of the same kind want to read as one object, so they sit tight and are
-   separated by a rule rather than by air. Same recipe .rec-row already uses. */
-.cx-list { display: flex; flex-direction: column; }
-.cx-list > * { border-top: 1px solid var(--border); padding-top: var(--sp-2); margin-top: var(--sp-2); }
-.cx-list > :first-child { border-top: 0; padding-top: 0; margin-top: 0; }
-
-/* Two secondaries share a row so the sheet's footer is a shape, not a wall of
-   four full-width slabs with the one filled action buried third. */
-.cx-actions { display: flex; gap: var(--sp-2h); }
-.cx-actions > .btn { flex: 1; min-width: 0; }
+.save-center #sc-action { min-height: 44px; white-space: normal; }
 
 /* The app bar's trailing group. .vault-bar is justify-content:space-between and
    was designed for exactly TWO children — the mark, and the screen's action. The
@@ -7626,7 +7610,7 @@ body.theme-light {
    It fires for ANY shown toast, not just action ones: the rule this replaced moved
    every toast clear of the sheet, and narrowing it to action toasts left plain ones
    («saved», «deleted») covering the same buttons. */
-body:has(.toast.show) .modal { padding-bottom: calc(var(--nav-h) + var(--safe-b) + 16px + 76px); }
+body:has(.toast.has-action.show) .modal { padding-bottom: calc(var(--nav-h) + var(--safe-b) + 16px + 76px); }
 .cx-stack label.cx-row { flex-direction:row; }
 
 /* One focus ring for the whole app. Six controls declared one and about a
@@ -7646,12 +7630,51 @@ body:has(.toast.show) .modal { padding-bottom: calc(var(--nav-h) + var(--safe-b)
 
 /* The Food header's two text links. A column so a long Arabic label never fights
    the page title for width, end-aligned so both read as one trailing group. */
-.header-links { display: flex; flex-direction: column; align-items: flex-end; gap: 2px; flex: none; }
+/* 14px, not 2: .link-btn is ~28px of text that reaches its 44px target through
+   `inset: -6px -8px`, so at a 2px gap the two halos OVERLAPPED by 10px and the
+   lower link won the shared strip — the bottom edge of the upper link opened the
+   lower one's screen. 28 + 2*6 = 40px of halo per link, so 14px of gap clears it. */
+.header-links { display: flex; flex-direction: column; align-items: flex-end; gap: 14px; flex: none; }
 
 /* Today's scheduled cardio on Home. The .section-title is load-bearing: without a
    heading, two rows carrying a "+" wedged between the workout hero and the
    calories card read as "add something", not "mark this done". */
-.home-sched { margin-bottom: 18px; }
+/* ONE BLOCK, NOT TWO BOXES. «هذي كلها كارديو ليش كذا منفصلين؟» — and the owner
+   was right: the lead cardio was a raised .hero-card and every queued one was a
+   raised .data-row, each with its own --elev-1, so two things of the SAME kind
+   sat in two unrelated boxes. Today's cardio is one object, so it gets one
+   surface: the BLOCK is the card, and everything inside it is flat and divided
+   by a rule instead of by a gap. */
+.home-sched {
+  margin-bottom: 18px;
+  background: var(--card-bg);
+  border-radius: var(--radius-lg);
+  padding: var(--sp-3);
+  box-shadow: var(--elev-1);
+}
+/* The lead cardio becomes a SECTION of that surface rather than a card on it. */
+.hero-card.cardio-task {
+  background: none;
+  box-shadow: none;
+  border-radius: 0;
+  padding: 0;
+  margin: 0;
+  overflow: visible;
+}
+/* The queued rows and settled strips likewise. (0,2,0) on purpose: the identity
+   layer hands every .data-row `border:0; box-shadow: var(--elev-1)` at (0,1,0)
+   LAST in the file, and a row inside this block must lose that lit edge. */
+.home-sched .data-list { gap: 0; margin-top: var(--sp-3); }
+.home-sched .data-row {
+  background: none;
+  box-shadow: none;
+  border-radius: 0;
+  border-top: 1px solid var(--border);
+  padding-inline: 0;
+}
+/* The rule above the FIRST row is what ties it to the lead cardio above it. */
+.home-sched .data-list > :first-child { border-top: 1px solid var(--border); }
+.home-sched .ledger-add { margin-top: var(--sp-2); }
 /* Done is carried by the control's own label and the geometry. This wash only
    reinforces it, so colour is never the sole signal. */
 .data-row.is-done .data-title { color: var(--text-mute); }
@@ -7670,6 +7693,9 @@ body:has(.toast.show) .modal { padding-bottom: calc(var(--nav-h) + var(--safe-b)
    and the gaps between the three lines. The 19px title, the 42px tile and the
    44px bar are all untouched, because those are what stop this reading as a list
    row — which is the thing it was built to stop reading as. */
+/* The heading sits above whatever the block contains — card, rows, or only
+   settled strips — so ticking the last cardio no longer takes it off screen. */
+.home-sched-title { margin-bottom: var(--sp-2); }
 .cardio-task {
   padding: var(--sp-3);
   margin-bottom: var(--sp-2h);
