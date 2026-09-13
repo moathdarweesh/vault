@@ -12,7 +12,7 @@
 // build. The literal below is the fallback (file://, or a stripped query) and is
 // still bumped by `npm run release` — see CLAUDE.md "CACHE WORKFLOW".
 const VAULT_BUILD = (() => {
-  const FALLBACK = 'v327';
+  const FALLBACK = 'v328';
   try {
     const src = (document.currentScript && document.currentScript.src) || '';
     const m = src.match(/[?&]v=(\d+)/);
@@ -3464,6 +3464,15 @@ function showToast(msg, opts) {
 // launch can silently overwrite real data.
 function openModal(innerHtml, { variant = 'sheet', dismissible = true } = {}) {
   const root = $('#modal-root');
+  // BEFORE the rewrite below, and only from OUTSIDE the root. Writing innerHTML
+  // destroys the sheet that is currently open, so a capture taken after it is
+  // either a detached node or <body> — and closeModal's document.contains()
+  // check then hands focus to nothing. Keeping the OUTERMOST anchor means a
+  // sheet that opens another sheet still returns to the control that started it.
+  const opener = document.activeElement;
+  if (opener instanceof HTMLElement && opener !== document.body && !root.contains(opener)) {
+    __modalReturnFocus = opener;
+  }
   root.innerHTML = `
     <div class="modal-overlay ${variant === 'confirm' ? 'confirm-overlay' : ''}">
       <div class="${variant === 'confirm' ? 'confirm-dialog' : 'modal'}" role="dialog" aria-modal="true" tabindex="-1">
@@ -3483,11 +3492,6 @@ function openModal(innerHtml, { variant = 'sheet', dismissible = true } = {}) {
     if (!el.getAttribute('aria-label')) el.setAttribute('aria-label', t('close'));
     el.addEventListener('click', () => closeModal());
   });
-  // Remember what had focus so we can hand it back on close — otherwise closing a
-  // dialog drops focus to <body> and a keyboard/screen-reader user is dumped at
-  // the top of the page, losing their place in the list they were working through.
-  __modalReturnFocus = (document.activeElement instanceof HTMLElement) ? document.activeElement : null;
-
   // Move focus into the dialog so keyboard/SR users start inside it (unless a
   // field inside will self-focus via autofocus).
   if (!overlay.querySelector('[autofocus]')) overlay.querySelector('.modal, .confirm-dialog')?.focus();
@@ -9940,7 +9944,7 @@ function applyConvenienceUndo(token) {
 function openRecentChanges() {
   const entries = DB.undo.list();
   const modal = convenienceModal(`<div class="modal-header"><h2 class="modal-title">${t('cx_recent')}</h2><button class="icon-btn" data-close>${icon('close',20)}</button></div>
-    <div class="cx-stack">${entries.length ? entries.map((e,i) => `<div class="cx-row"><span>${t(e.label)}</span><button class="btn btn-ghost" data-undo="${escapeHtml(e.token)}" ${i ? 'disabled' : ''}>${t('undo')}</button></div>`).join('') : `<p>${t('cx_empty')}</p>`}</div>`);
+    <div class="cx-stack">${entries.length ? `<div class="cx-list">${entries.map((e,i) => `<div class="cx-row"><span>${t(e.label)}</span><button class="btn btn-ghost" data-undo="${escapeHtml(e.token)}" ${i ? 'disabled' : ''}>${t('undo')}</button></div>`).join('')}</div>` : `<p>${t('cx_empty')}</p>`}</div>`);
   modal.querySelectorAll('[data-undo]').forEach(b => b.onclick = () => applyConvenienceUndo(b.dataset.undo));
 }
 function cxHeader(key) {
@@ -10290,9 +10294,11 @@ function openShoppingEditor(existing = null, initial = []) {
   const modal = convenienceModal(`${cxHeader('cx_shopping')}<div class="cx-stack">
     <label>${t('cx_name')}<input class="input" id="cx-list-name" maxlength="80" dir="auto" value="${escapeHtml(existing?.name || '')}"></label>
     <p class="settings-hint">${t('cx_identity_hint')}</p><div id="cx-shopping-items" class="cx-stack"></div>
-    <button class="btn btn-ghost" id="cx-shopping-add">${t('add')}</button>
+    <div class="cx-actions">
+      <button class="btn btn-ghost" id="cx-shopping-add">${t('add')}</button>
+      <button class="btn btn-ghost" id="cx-shopping-share">${t('cx_share')}</button>
+    </div>
     <button class="btn btn-primary" id="cx-shopping-save">${t('save')}</button>
-    <button class="btn btn-ghost" id="cx-shopping-share">${t('cx_share')}</button>
     ${existing ? `<button class="btn btn-danger" id="cx-shopping-delete">${t('delete')}</button>` : ''}</div>`);
   const read = () => {
     modal.querySelectorAll('[data-shopping-row]').forEach(row => {

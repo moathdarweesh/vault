@@ -7572,7 +7572,27 @@ body.theme-light {
 .save-center[data-state="failed"] #sc-device { color: var(--red); }
 .save-center #sc-detail { color: var(--red); font-size: 14px; line-height: 1.7; }
 .save-center .settings-hint { overflow-wrap: anywhere; line-height: 1.7; }
-.save-center #sc-action { min-height: 44px; white-space: normal; }
+/* [16] The one action here had ZERO margin on either side, jammed between two
+   hints — and .settings-hint carries margin-top:-4px, a pull-up meant for a hint
+   that follows a CONTROL, so the trailing line was drawn 4px INTO the button.
+   Measured before: hint(mb 10) / button(mt 0, mb 0) / hint(mt -4). */
+.save-center #sc-action { min-height: 44px; white-space: normal; margin: var(--sp-2) 0 var(--sp-4); }
+
+/* [13] A LIST IS NOT A FORM. .cx-stack's 14px gap is the rhythm between FIELDS;
+   rows of the same kind want to read as one object, so they sit tight and are
+   divided by a rule. Same recipe .rec-row uses.
+   ⚠️ ITS CHILDREN MUST BE BORDERLESS. The first-child rule takes the top edge
+   off, and on a child that carries its own border — a .btn-ghost, say — that
+   leaves a three-sided outline. That shipped once and a review caught it, which
+   is why the shopping-lists sheet (whose rows ARE .btn-ghost) does not use this. */
+.cx-list { display: flex; flex-direction: column; }
+.cx-list > * { border-top: 1px solid var(--border); padding-top: var(--sp-2); margin-top: var(--sp-2); }
+.cx-list > :first-child { border-top: 0; padding-top: 0; margin-top: 0; }
+
+/* [20] Two secondaries share a row so the sheet's footer is a shape rather than
+   a wall of four full-width slabs with the one filled action buried third. */
+.cx-actions { display: flex; gap: var(--sp-2h); }
+.cx-actions > .btn { flex: 1; min-width: 0; }
 
 /* The app bar's trailing group. .vault-bar is justify-content:space-between and
    was designed for exactly TWO children — the mark, and the screen's action. The

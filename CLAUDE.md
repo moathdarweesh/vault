@@ -77,7 +77,7 @@ a faster TTFB — not fewer bytes.
 npm run release          # bump every marker + verify, then commit all files together
 ```
 
-**Current version: v327.** APK: build 21 / v3.0.
+**Current version: v328.** APK: build 21 / v3.0.
 
 `scripts/release.js` rewrites **every** marker and then re-reads them from disk to confirm; it exits non-zero if any disagree, and prints the count per file (derived, never hard-coded — the docs used to say 16 while the real count was 15). The markers are `?v=N` in `index.html` (every script and stylesheet, the `js/vendor/supabase.js` preload, both `icons/icon.svg` links, `manifest.json`), the `__cleaned_vN` sessionStorage key, the `FALLBACK` literal in `app.js`, `version.json` → `web`, the `?v=` in `manifest.json`, `admin.html`, `privacy.html` and `get/index.html`, and the `Current version` line in this file. `scripts/check-contracts.js` (pre-commit) refuses a commit where any of them disagree.
 
@@ -1227,6 +1227,34 @@ the part a generic hide-on-scroll header would get wrong. Verified: hidden at 30
   `navigate()` restores each view's saved offset by WRITING `main.scrollTop`, which fires the same
   scroll event. When two views share an offset nothing moves, and the bar is already in the right
   state for it.
+
+## v328 (2026-09-13) — the last four, restored and corrected
+
+These four were written as v323, then removed when the owner reverted that turn, and never made it
+back into the shipped tree — v324's work was the review's findings, not these. Re-applied now, with
+one of them corrected by what the review had since found.
+
+- **Chained sheets lost focus entirely.** `openModal` captured its return-focus anchor AFTER
+  `root.innerHTML` had already replaced the sheet that was open, so in a chain the captured node was
+  detached one line earlier and `closeModal`'s `document.contains()` check handed focus to `<body>`.
+  Captured BEFORE the rewrite now, and only from OUTSIDE `#modal-root`, so a sheet that opens a
+  sheet returns to the control that started the chain. Verified: Food → Shopping → "new list" →
+  close now focuses `[data-shopping]`.
+- **The save centre's one action had zero margin on every side**, jammed between two hints — and
+  `.settings-hint` carries `margin-top: -4px`, a pull-up meant for a hint that follows a control, so
+  the trailing line was drawn 4px INTO the button. Now 18px above and 12px below.
+- **The shopping editor's footer was four full-width slabs** with the one filled action buried
+  third. The secondaries share a row and the primary keeps the width: **4 slabs → 1** (measured:
+  164px each against a 337px Save).
+- **`.cx-list`, and the correction that matters.** A list is not a form: `.cx-stack`'s 14px gap is
+  the rhythm between FIELDS, so rows of the same kind floated apart. But the first draft applied it
+  to BOTH list-shaped sheets, and the pre-push review caught what that did to the second one —
+  > ⚠️ **`.cx-list`'s children MUST be borderless.** `.cx-list > :first-child` takes the top edge
+  > off, at (0,2,0). On a child that carries its own border — `openShoppingLists`' rows are
+  > `.btn-ghost`, `border: 1px solid var(--border)` at (0,1,0) — that leaves a rounded box with
+  > left, right and bottom edges and an open top. It is applied to `openRecentChanges` only, whose
+  > rows are borderless `div.cx-row`. Verified in the running app: first row `border-top: 0`, the
+  > rest `1px`, 8px between, and every child genuinely borderless.
 
 ## Superpowers — and the two places this project deliberately departs from it
 
