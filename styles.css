@@ -7781,40 +7781,6 @@ body:has(.toast.has-action.show) .modal { padding-bottom: calc(var(--nav-h) + va
   .cardio-undo:hover { border-color: var(--accent-line); color: var(--text); }
 }
 
-/* ---- The purchase ledger (v322) -------------------------------------------
-   openPurchaseEditor was a spreadsheet — four always-open labelled controls per
-   ingredient, so an eight-ingredient recipe carried THIRTY-TWO controls and the
-   names they belonged to were lost among them. It is the v301 ingredient
-   ledger's shape now and reuses that component outright: .rec-row, .rec-line,
-   .rec-sum, .rec-more, .rec-f, .rec-cap are all inherited unchanged. Only the
-   differences are declared here — the recipe well holds four NUMBER inputs, and
-   this one holds two selects and a free-text id, which do not want equal columns. */
-.pur-name { flex: 1; min-width: 0; font-size: var(--fs-body); overflow-wrap: anywhere; }
-/* What the recipe asks for, beside what you will buy. Muted, because it is the
-   reference and not the thing being edited. */
-.pur-orig { flex: none; font-size: var(--fs-caption); color: var(--text-mute); }
-/* Two columns, not the recipe well's four: quantity + unit read as one measure
-   on the first line, preparation + the id get the second. */
-.pur-row.is-open .rec-more { grid-template-columns: repeat(2, 1fr); }
-/* The id is the one free-text field here and the only one that needs the row. */
-.pur-f-id { grid-column: 1 / -1; }
-/* .rec-f styles `input` only — the recipe well never had a select. Matching it
-   exactly keeps one control shape inside one well. A styled control MUST set
-   `color`, or it inherits the UA `buttontext` default, which measured 2.23:1
-   here once before. */
-.pur-row .rec-f select {
-  height: var(--btn-h-m); padding: 0 var(--sp-2);
-  border: 1px solid var(--border-hi); border-radius: var(--radius-sm);
-  background: var(--surface-3); color: var(--text);
-  font-family: inherit; font-size: 16px; font-weight: 700;
-}
-/* The identity rule belongs where identity is set, not stacked with the sheet's
-   own lead hint where it was one of two asides competing above the content. */
-.pur-hint {
-  grid-column: 1 / -1; margin: 0; text-align: start;
-  white-space: normal; overflow: visible; letter-spacing: normal;
-}
-
 /* =========================================================================
    THE EMBER — the void answers the hand  (v321)
 
@@ -7907,6 +7873,67 @@ body.ember-on .ember {
 @media (prefers-reduced-motion: reduce) {
   body.ember-on .ember { opacity: 0; }
 }
+
+/* ---- The one running shopping list (v329) ---------------------------------
+   Five sheets became one, so the styling is one list and one composer. Reused
+   unchanged: .cx-stack, .cx-actions, .input, .btn, .rec-del (the dim trash with
+   its 44px ::after halo), .num.                                             */
+.sl-chips { display: flex; flex-wrap: wrap; gap: var(--sp-2); }
+/* A source is a CHIP, not a row with a number field: there is no servings to
+   set, because there is no arithmetic left to do. */
+.sl-chip {
+  position: relative;
+  display: inline-flex; align-items: center; gap: var(--sp-1);
+  max-width: 100%; height: var(--btn-h-s); padding: 0 var(--sp-3);
+  border: 1px solid var(--border-hi); border-radius: var(--radius-btn-s);
+  background: var(--surface-2); color: var(--text);
+  font-family: inherit; font-size: var(--fs-btn-s); font-weight: 700;
+  cursor: pointer; --icon-accent: var(--accent-text);
+  -webkit-tap-highlight-color: transparent;
+}
+.sl-chip span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sl-chip svg { width: 14px; height: 14px; flex: none; }
+.sl-chip::after { content: ''; position: absolute; inset: -4px 0; }   /* 44px on a 36px chip */
+.sl-chip:active { border-color: var(--accent-line); background: var(--surface-3); }
+
+/* 4px of inline room so .rec-del’s 44px ::after halo (inset:-4px) stays INSIDE
+   the sheet. Without it the halo pushed .cx-stack 4px wide and the sheet
+   scrolled horizontally — measured 341 against 337. */
+.sl-list { list-style: none; margin: 0; padding: 0 4px; display: flex; flex-direction: column; }
+.sl-row { display: flex; align-items: center; gap: var(--sp-2); border-top: 1px solid var(--border); }
+.sl-list > :first-child { border-top: 0; }
+/* THE WHOLE ROW IS THE TARGET, not the 24px box. One hand, in an aisle. */
+/* .cx-stack label is a flex COLUMN with a 6px gap — so the box and the text
+   STACKED and every row stood 71px tall instead of ~44. Same trap .cx-row
+   already documents, same fix: name the label so the row direction wins. */
+.cx-stack label.sl-tick {
+  flex: 1; min-width: 0;
+  flex-direction: row; align-items: center; gap: var(--sp-3);
+  padding: var(--sp-2h) 0; cursor: pointer;
+}
+/* .cx-stack input[type=checkbox] pins 22px at (0,2,1); the mark is the tick, and
+   the TARGET is the whole row, so 22 is right — this just has to out-specify it
+   for accent-color. */
+.cx-stack .sl-tick input[type=checkbox] { width: 22px; height: 22px; flex: none; accent-color: var(--accent); }
+.sl-text { flex: 1; }
+.sl-text { min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.sl-name { font-size: var(--fs-body); font-weight: 700; overflow-wrap: anywhere; }
+/* The recipe's own wording, carried verbatim. Never parsed, never summed. */
+.sl-amt { font-size: var(--fs-caption); color: var(--text-mute); overflow-wrap: anywhere; }
+/* Bought: muted and struck, IN PLACE. It must not sink to the bottom — the next
+   unticked item has to stay where the eye already is. */
+.sl-row.is-done .sl-name { color: var(--text-mute); text-decoration: line-through; }
+.sl-row.is-done .sl-amt { color: var(--text-faint); }
+.sl-empty { padding: var(--sp-4) 0; color: var(--text-mute); font-size: var(--fs-sub); text-align: center; }
+
+/* The composer sits BELOW the list: at item 25 the add field is where the thumb
+   already is, which is the moment it is actually used. */
+.sl-compose { display: flex; gap: var(--sp-2); align-items: center; }
+.sl-compose .input { flex: 1; min-width: 0; }
+.sl-add { flex: none; width: var(--btn-h-m); height: var(--btn-h-m); padding: 0; }
+.sl-add svg { width: 20px; height: 20px; }
+/* The outstanding count on the Food header link. */
+.sl-count { color: var(--accent-text); font-weight: 700; }
 
 /* =========================================================================
    ^^^ EVERYTHING ABOVE, THEN THE IDENTITY LAYER BELOW. ^^^

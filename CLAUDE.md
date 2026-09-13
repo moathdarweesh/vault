@@ -77,7 +77,7 @@ a faster TTFB — not fewer bytes.
 npm run release          # bump every marker + verify, then commit all files together
 ```
 
-**Current version: v328.** APK: build 21 / v3.0.
+**Current version: v329.** APK: build 21 / v3.0.
 
 `scripts/release.js` rewrites **every** marker and then re-reads them from disk to confirm; it exits non-zero if any disagree, and prints the count per file (derived, never hard-coded — the docs used to say 16 while the real count was 15). The markers are `?v=N` in `index.html` (every script and stylesheet, the `js/vendor/supabase.js` preload, both `icons/icon.svg` links, `manifest.json`), the `__cleaned_vN` sessionStorage key, the `FALLBACK` literal in `app.js`, `version.json` → `web`, the `?v=` in `manifest.json`, `admin.html`, `privacy.html` and `get/index.html`, and the `Current version` line in this file. `scripts/check-contracts.js` (pre-commit) refuses a commit where any of them disagree.
 
@@ -1255,6 +1255,74 @@ one of them corrected by what the review had since found.
   > left, right and bottom edges and an open top. It is applied to `openRecentChanges` only, whose
   > rows are borderless `div.cx-row`. Verified in the running app: first row `border-top: 0`, the
   > rest `1px`, 8px between, and every child genuinely borderless.
+
+## v329 (2026-09-13) — the shopping list, rebuilt from its foundation
+
+«عدل الميزه من اساسها جذريا خليها اسهل وابسط وتاخذ المكونات من وصفاتي». A judge panel scored three
+rebuilds (343 / 337 / 333) and **three judges independently caught the same dangerous instruction in
+the winner**: its "delete js/app.js 10099–10371" would have destroyed `openPreviousPrograms`,
+`openPreviousProgramPreview` and `renderSettings`, which sit inside that span. Functions are deleted
+BY NAME here, with an assertion that the neighbours survived.
+
+### The measurement that decided the design
+
+Taken from the owner's own live data before a line was written:
+
+| | |
+|---|---|
+| recipes / meals | 3 / 7 |
+| **shopping lists ever saved** | **0** |
+| **ingredients carrying purchase data** | **0** |
+| **ingredient IDs ever typed** | **0** |
+
+**The quantity/unit/identity/preparation layer was never filled in once.** It existed so `combine()`
+could merge, and `combine()` merged only on the one field nobody ever entered — so every row arrived
+saying «تحتاج تحديد الكمية» and the feature was never completed. Five sheets became **one**.
+
+- **One tap** from Food to a usable list; **two** to fill it from a recipe. There is no create, no
+  list name, no list-of-lists. Recipes and meals are CHIPS that pour their ingredient names in.
+- **Amounts are the recipe's own words**, carried as a caption and joined as text — «أرز · 200 غ +
+  كوب». Never parsed, never scaled, never summed. That is v301's decision for `recipe.qty` applied
+  one layer out. **A meal bundle has no `qty` field at all**, so it contributes names only; the old
+  design treating that as an error is half of why it felt broken.
+  > `combine()`'s old law — "never a name guess" — is a rule about ARITHMETIC: 500 g + 1 kg is wrong
+  > unless you know the two rows are the same substance. Joining TEXT computes nothing, so a name
+  > match is safe here for the first time. `DB.search.normalize` is the one normaliser.
+- **A tick never moves its row and never enters undo history.** One class on one `<li>`, no redraw —
+  the next unticked item stays where the eye already is. `changeSlice(..., remember = false)`:
+  twenty ticks would otherwise flush «آخر التعديلات» of every change that matters.
+- **Re-adding a name you already have un-ticks it** — you need it again.
+
+### Two traps the panel missed, both caught by reading storage.js
+
+> ⚠️ **`_validateBlob` REQUIRED `typeof list.name === 'string'`.** Dropping the list name would have
+> made the blob fail validation, so a sync pull would refuse. The gate now permits every legacy
+> field (`list.name`, `it.quantity`, `it.unit`) and requires none — a device on an older build still
+> syncs the old shape into this row. Verified: legacy shape validates, new shape validates, a
+> non-array `amounts` is rejected.
+> ⚠️ **`hasUserData()` counts `shoppingLists.length`.** A list auto-created on first render would
+> make a FRESH INSTALL read as "has data" and defeat the empty-device guard — the exact failure that
+> guard exists to prevent. **The list is never materialised while empty**: `get()` returns a virtual
+> one and writes nothing, and removing the last item drops it again. It stays `shoppingLists[0]`, an
+> array of one, so all six blob registrations keep working untouched.
+
+### What was deleted
+
+`openShoppingLists`, `openShoppingDetail`, `openShoppingSources`, `openPurchaseEditor`,
+`openShoppingEditor` — **195 lines**; `DB.shopping.preview/combine/save/remove/list`; the shopping
+branch of the search index; the v322 purchase-ledger CSS; and **24 i18n keys × 2 dictionaries**.
+> Contract 5 caught a real break while I did it: `cx_portion_unset` has a live call site in the meal
+> editor and my line replacement had taken it as collateral. `cx_amount_hint` and `cx_name` are also
+> still in use and were never candidates. **Never delete a key without grepping its `t()` sites,
+> including the dynamic `t('cx_' + x)` families.**
+
+### One more trap, in the CSS
+
+`.sl-tick` is a `<label>` inside `.cx-stack`, and `.cx-stack label` sets `flex-direction: column` at
+higher specificity — so the checkbox and the text **stacked** and every row stood 71px instead of 44.
+`.cx-stack label.cx-row` already exists as the precedent for exactly this; the fix is the same idiom.
+And `.rec-del`'s 44px `::after` halo pushed the sheet 4px wide (341 against 337), so the list carries
+4px of inline padding to keep the halo inside.
 
 ## Superpowers — and the two places this project deliberately departs from it
 

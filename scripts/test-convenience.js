@@ -47,22 +47,58 @@ const totals = json(db.recipes.totals(recipe)); const priorCalls = calls;
 const edited = db.recipes.update(recipe.id,{name:'rice edited'});
 assert.equal(calls,priorCalls+1,'recipe edit writes once');
 assert.equal(json(db.recipes.totals(edited)),totals,'quantity does not multiply nutrition');
-const preview = db.shopping.preview([{type:'recipe',id:recipe.id,servings:2}]);
-assert.equal(preview.items[0].quantity,100);
-const combined = db.shopping.combine([
- {name:'Rice',quantity:500,unit:'g',ingredientId:'rice',preparation:'raw',sourceRefs:[]},
- {name:'Rice',quantity:1,unit:'kg',ingredientId:'rice',preparation:'raw',sourceRefs:[]},
- {name:'Rice',quantity:200,unit:'ml',ingredientId:'rice',preparation:'raw',sourceRefs:[]},
- {name:'Rice',quantity:200,unit:'g',ingredientId:'rice',preparation:'cooked',sourceRefs:[]},
- {name:'Rice',quantity:null,unit:'',sourceRefs:[]}
-]);
-assert.equal(combined.length,4); assert.equal(combined[0].quantity,1500);
-let shopping = db.shopping.save({name:'week',items:combined});
-assert.equal(shopping.ok,true);
-const savedList = json(shopping.entity);
+// ---- THE ONE RUNNING SHOPPING LIST (v329) --------------------------------
+// An empty list is NEVER materialised: hasUserData() counts shoppingLists.length,
+// so a list created on first render would make a fresh install read as "has data"
+// and defeat the empty-device guard.
+assert.equal(db.shopping.get().items.length,0,'starts empty');
+assert.equal(run('(STATE.shoppingLists||[]).length'),0,'an empty list is not written to the blob');
+
+// A recipe contributes NAME + its own qty TEXT. Nothing is parsed or scaled.
+assert.equal(db.shopping.addFrom('recipe',recipe.id).ok,true);
+let sl = db.shopping.get();
+assert.equal(sl.items.length,1);
+assert.equal(sl.items[0].name,food.name);
+assert.equal(json(sl.items[0].amounts),json(['200 غ']),'the recipe\'s own words, verbatim');
+assert.equal(run('(STATE.shoppingLists||[]).length'),1,'now it exists');
+
+// Merging is by NORMALISED name and the amounts JOIN — they are never added up.
+// combine()'s old law ("never a name guess") was about ARITHMETIC; joining text
+// computes nothing, so a name match is safe here for the first time.
+assert.equal(db.shopping.addNames([{name:food.name,amount:'كوب'},{name:'خبز'}]).ok,true);
+sl = db.shopping.get();
+assert.equal(sl.items.length,2,'same name merged, new name added');
+assert.equal(json(sl.items[0].amounts),json(['200 غ','كوب']),'amounts join, never sum');
+// A duplicate wording is not repeated.
+db.shopping.addNames([{name:food.name,amount:'كوب'}]);
+assert.equal(db.shopping.get().items[0].amounts.length,2,'a repeated wording is not appended twice');
+
+// A tick does NOT enter undo history: twenty of them would flush the undo list
+// of every change that actually matters.
+const undoBefore = db.undo.list().length;
+const firstId = db.shopping.get().items[0].id;
+assert.equal(db.shopping.toggle(firstId).ok,true);
+assert.equal(db.shopping.get().items[0].checked,true);
+assert.equal(db.undo.list().length,undoBefore,'a tick is not an undoable change');
+
+// Re-adding a name you already have un-ticks it — you need it again.
+db.shopping.addNames([{name:food.name}]);
+assert.equal(db.shopping.get().items[0].checked,false,'re-adding un-ticks');
+
+// A saved list is a SNAPSHOT: deleting the recipe cannot rewrite it.
+const beforeDelete = json(db.shopping.get());
 db.recipes.remove(recipe.id);
-assert.equal(json(db.shopping.list()[0]),savedList,'source deletion cannot rewrite shopping snapshot');
-assert.equal(db.shopping.save({...shopping.entity,name:'other'},'old').code,'STALE');
+assert.equal(json(db.shopping.get()),beforeDelete,'source deletion cannot rewrite the list');
+
+// Removing the last item drops the list from the blob again.
+for (const it of db.shopping.get().items) db.shopping.removeItem(it.id);
+assert.equal(run('(STATE.shoppingLists||[]).length'),0,'the list is dropped when it empties');
+db.shopping.addNames([{name:'زيت'}]);
+
+// The validator tolerates a LEGACY shape arriving from a device on an older build.
+assert.equal(db._validateBlob({exercises:[],shoppingLists:[{id:'a',name:'week',items:[{id:'b',name:'Rice',quantity:500,unit:'g'}]}]}),true,'legacy shape still validates');
+assert.equal(db._validateBlob({exercises:[],shoppingLists:[{id:'a',items:[{id:'b',name:'Rice',amounts:['200 غ']}]}]}),true,'new shape validates');
+assert.equal(db._validateBlob({exercises:[],shoppingLists:[{id:'a',items:[{id:'b',name:'Rice',amounts:'nope'}]}]}),false,'amounts must be an array');
 assert.equal(db.search.normalize('إِفْطَار ۱۲٣'),'افطار 123');
 assert.ok(db.search.query('فطوري').some(x=>x.type==='meal'));
 assert.equal(db.search.query('١٠/٠٩/٢٠٢٦')[0].date,date);
@@ -71,9 +107,9 @@ assert.equal(db.search.query('2026-02-30').some(x=>x.type==='date'),false);
 db.recipes.add({name:'legacy metadata',servings:4,items:[{...food,qty:'200 غ',purchase:{quantity:200,unit:'g',ingredientId:'rice',preparation:'raw'}}]});
 const snapshot = run('JSON.stringify(STATE)');
 state.values.set(state.keys.store,snapshot+' ');
-assert.equal(db.shopping.remove(shopping.entity.id).code,'STALE','another tab changed storage');
+assert.equal(db.shopping.addNames([{name:'ملح'}]).code,'STALE','another tab changed storage');
 run('reloadState()'); assert.equal(db.undo.list().length,0);
-assert.equal(db.shopping.list().length,1);
+assert.equal(db.shopping.get().items.length,1,'the list survived the reload');
 assert.equal(db._idsSafe({...JSON.parse(snapshot),shoppingLists:[{id:'bad"',items:[]}]}),false);
 
 // Pin v309: HEAD moves after release and would silently test the new client against itself.

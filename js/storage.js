@@ -1076,7 +1076,6 @@ const DB = {
       for (const f of STATE.foods) add('food',f.id,f.name);
       for (const b of STATE.mealBundles || []) add('meal',b.id,b.name);
       for (const r of STATE.recipes || []) add('recipe',r.id,r.name);
-      for (const l of STATE.shoppingLists || []) add('shopping',l.id,l.name);
       const exerciseNames = new Map(STATE.exercises.map(ex => [ex.id,ex.name]));
       for (const session of STATE.sessions) add('session',session.id,exerciseNames.get(session.exerciseId) || '',session.date + ' ' + (aliases[session.exerciseId] || ''),session.date);
       for (const date of Object.keys(STATE.foodLogs)) for (const food of STATE.foodLogs[date] || []) add('log',food.id,food.name,date,date);
@@ -1768,8 +1767,13 @@ const DB = {
     for (const k of ['prefs', 'foodLogs', 'supplementLogs', 'water', 'notif', 'plan', 'nutrition', 'reminders']) {
       if (k in data && data[k] != null && (typeof data[k] !== 'object' || Array.isArray(data[k]))) return false;
     }
-    if (Array.isArray(data.shoppingLists) && !data.shoppingLists.every(list => list && typeof list.name === 'string' &&
+    // `name` on the list and `quantity`/`unit` on an item are LEGACY: a device on
+    // an older build still syncs them into this row, so they are permitted and
+    // never required. What must hold is the shape a reader depends on.
+    if (Array.isArray(data.shoppingLists) && !data.shoppingLists.every(list => list &&
+      (list.name == null || typeof list.name === 'string') &&
       Array.isArray(list.items) && list.items.every(it => it && typeof it.name === 'string' &&
+        (it.amounts == null || Array.isArray(it.amounts) && it.amounts.every(a => typeof a === 'string')) &&
         (it.quantity == null || Number.isFinite(it.quantity) && it.quantity > 0) &&
         ['', 'g','kg','ml','l','piece'].includes(it.unit || '')))) return false;
     return true;
@@ -3248,64 +3252,93 @@ const DB = {
     },
   },
 
+  // ONE RUNNING SHOPPING LIST. There is no create, no name, no list-of-lists —
+  // the owner used the five-sheet version zero times and never once filled in the
+  // quantity/unit/identity/preparation layer it was gated behind.
+  //
+  // It is still stored as `shoppingLists[0]`, an array of one, so every place the
+  // blob already registers this slice keeps working untouched: defaultState, the
+  // loadState backfill, the array-shape loop, _validateBlob, _idsSafe and
+  // hasUserData. Adding a field to the blob means touching SIX places; changing
+  // the contents of a slice that is already registered means touching none.
+  //
+  // ⚠️ IT IS NEVER MATERIALISED WHILE EMPTY. hasUserData() counts
+  // `shoppingLists.length`, so a list auto-created on first render would make a
+  // FRESH INSTALL read as "has data" — which is the exact failure that guard
+  // exists to prevent: a second device pulled over without a rescue snapshot and
+  // then refused a push. get() returns a virtual empty list and writes nothing;
+  // removing the last item drops the list again.
   shopping: {
-    list() { return copyData(STATE.shoppingLists || []); },
-    preview(selections) {
-      if (!Array.isArray(selections) || selections.length > 100) return { ok: false, code: 'VALIDATION' };
-      const items = [];
-      for (const selection of selections) {
-        if (!selection || !['recipe','meal'].includes(selection.type)) return { ok:false,code:'VALIDATION' };
-        const isRecipe = selection.type === 'recipe';
-        const source = (isRecipe ? STATE.recipes : STATE.mealBundles).find(x => x.id === selection.id);
-        const count = Number(selection.servings);
-        if (!source || !Number.isFinite(count) || count <= 0 || count > 100) return { ok: false, code: 'VALIDATION' };
-        for (const ingredient of source.items) {
-          const p = ingredient.purchase;
-          const factor = count / (isRecipe ? Math.max(1, Number(source.servings) || 1) : 1);
-          const known = p && Number.isFinite(p.quantity) && p.quantity > 0 && ['g','kg','ml','l','piece'].includes(p.unit);
-          items.push({ id: uid(), name: ingredient.name, quantity: known ? p.quantity * factor : null,
-            unit: known ? p.unit : '', ingredientId: known ? p.ingredientId || '' : '', preparation: p?.preparation || 'unspecified',
-            originalText: p?.originalText || ingredient.qty || '', checked: false,
-            sourceRefs: [{ type: selection.type, id: source.id, name: source.name, servings: count }] });
+    MAX: 200,
+    get() {
+      const l = (STATE.shoppingLists || [])[0];
+      return copyData(l && Array.isArray(l.items) ? l : { id: 'shopping', items: [] });
+    },
+    _commit(items, label, remember = true) {
+      const cur = (STATE.shoppingLists || [])[0];
+      const next = items.length ? [{ id: (cur && cur.id) || uid(), items }] : [];
+      return changeSlice(() => STATE.shoppingLists || [], n => { STATE.shoppingLists = n; }, next, label, remember);
+    },
+    _clean(name) { return String(name || '').trim().slice(0, 120); },
+    // Adds names, merging by NORMALISED name. DB.search.normalize is the app's one
+    // normaliser — it already folds أ/إ/آ→ا, ى→ي, diacritics, tatweel and
+    // Arabic-Indic digits — so there is no second one here.
+    //
+    // The amounts are the recipe's OWN WORDS, joined as text and never added up.
+    // combine()'s old law ("never a name guess") was about ARITHMETIC: 500 g + 1 kg
+    // is wrong unless you know the two rows are the same substance. Joining text
+    // computes nothing, so «أرز · 200 غ + كوب» is true either way and a name match
+    // becomes safe for the first time.
+    addNames(entries, label) {
+      if (!Array.isArray(entries) || !entries.length) return { ok: false, code: 'VALIDATION' };
+      const items = this.get().items;
+      let added = 0;
+      for (const e of entries) {
+        const name = this._clean(e && e.name);
+        if (!name) continue;
+        const amount = this._clean(e && e.amount);
+        const key = DB.search.normalize(name);
+        const found = items.find(it => DB.search.normalize(it.name) === key);
+        if (found) {
+          // Already on the list and you need it again — so it comes back unticked.
+          found.checked = false;
+          if (amount && !found.amounts.includes(amount)) found.amounts = [...found.amounts, amount].slice(0, 6);
+        } else {
+          if (items.length >= this.MAX) break;
+          items.push({ id: uid(), name, amounts: amount ? [amount] : [], checked: false });
+          added++;
         }
       }
-      return { ok: items.length > 0 && items.length <= 200, items };
+      if (!added && !entries.length) return { ok: false, code: 'VALIDATION' };
+      return { ...this._commit(items, label || 'cx_shopping_changed'), added };
     },
-    combine(items) {
-      const result = [], groups = new Map();
-      for (const source of items) {
-        const item = copyData(source);
-        if (item.unit === 'kg') { item.quantity *= 1000; item.unit = 'g'; }
-        if (item.unit === 'l') { item.quantity *= 1000; item.unit = 'ml'; }
-        // Only an explicitly confirmed identity permits merging, never a name guess.
-        const key = item.ingredientId && item.quantity > 0 ? JSON.stringify([item.ingredientId, item.unit, item.preparation]) : null;
-        const existing = key && groups.get(key);
-        if (existing) { existing.quantity = Math.round((existing.quantity + item.quantity) * 1000000) / 1000000; existing.sourceRefs.push(...(item.sourceRefs || [])); }
-        else { result.push(item); if (key) groups.set(key, item); }
-      }
-      return result;
+    // A recipe contributes name + its own qty TEXT. A meal bundle has no qty field
+    // at all, so it contributes names only — that is not a degraded case, it is
+    // everything a meal knows, and the old design treating it as an error is half
+    // of why every row arrived saying «تحتاج تحديد الكمية».
+    addFrom(type, id, label) {
+      const src = (type === 'recipe' ? STATE.recipes : STATE.mealBundles) || [];
+      const source = src.find(x => x.id === id);
+      if (!source || !Array.isArray(source.items)) return { ok: false, code: 'VALIDATION' };
+      return this.addNames(source.items.map(it => ({ name: it.name, amount: it.qty || '' })), label);
     },
-    save(data, expected = null) {
-      const lists = STATE.shoppingLists || [], old = lists.find(x => x.id === data.id);
-      if (data.id && !old) return { ok: false, code: 'STALE' };
-      if (old && expected !== JSON.stringify(old)) return { ok: false, code: 'STALE' };
-      const name = String(data.name || '').trim();
-      if (!name || name.length > 80 || !Array.isArray(data.items) || data.items.length > 200 || data.items.some(it => !it || typeof it !== 'object') || (!old && lists.length >= 20)) return { ok: false, code: 'VALIDATION' };
-      const items = data.items.map(it => ({ id: entityIdSafe(it.id) ? it.id : uid(), name: String(it.name || '').trim().slice(0, 120),
-        quantity: it.quantity === null || it.quantity === '' ? null : Number(it.quantity), unit: String(it.unit || ''),
-        ingredientId: String(it.ingredientId || '').trim().slice(0, 80), preparation: it.preparation || 'unspecified',
-        originalText: String(it.originalText || '').slice(0, 120), category: String(it.category || '').slice(0, 40),
-        checked: !!it.checked, sourceRefs: copyData(it.sourceRefs || []) }));
-      if (!items.every(it => it.name && (it.quantity === null || Number.isFinite(it.quantity) && it.quantity > 0 && it.quantity <= 10000000) && ['', 'g','kg','ml','l','piece'].includes(it.unit) && ['raw','cooked','unspecified'].includes(it.preparation))) return { ok: false, code: 'VALIDATION' };
-      const entity = { id: old?.id || uid(), name, items, createdAt: old?.createdAt || new Date().toISOString(), updatedAt: new Date().toISOString() };
-      const result = changeSlice(() => STATE.shoppingLists || [], next => { STATE.shoppingLists = next; },
-        old ? lists.map(x => x.id === old.id ? entity : x) : [...lists, entity], 'cx_shopping_changed');
-      return { ...result, entity: result.ok ? copyData(entity) : null };
+    toggle(itemId) {
+      const items = this.get().items;
+      const it = items.find(x => x.id === itemId);
+      if (!it) return { ok: false, code: 'STALE' };
+      it.checked = !it.checked;
+      // remember=false: a tick is undone by ticking again, and twenty of them
+      // would flush «آخر التعديلات» of every change that actually matters.
+      return this._commit(items, 'cx_shopping_changed', false);
     },
-    remove(id) {
-      return changeSlice(() => STATE.shoppingLists || [], next => { STATE.shoppingLists = next; },
-        (STATE.shoppingLists || []).filter(x => x.id !== id), 'cx_shopping_changed');
+    removeItem(itemId) {
+      const items = this.get().items.filter(x => x.id !== itemId);
+      return this._commit(items, 'cx_shopping_changed');
     },
+    clearChecked() {
+      return this._commit(this.get().items.filter(x => !x.checked), 'cx_shopping_changed');
+    },
+    clearAll() { return this._commit([], 'cx_shopping_changed'); },
   },
 
   foods: {

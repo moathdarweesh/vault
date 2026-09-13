@@ -30,6 +30,7 @@ module.exports = async function testConvenienceUI(page) {
     await page.locator('.toast-action').click();
     assert.equal(await page.evaluate(()=>DB.foodLogs.listForDate('2026-09-09').length),0);
     await page.locator('[data-shopping]').click();
+    // v329: one sheet. No create, no sources, no purchase editor, no per-item form.
     await page.locator('#cx-shopping-new').click();
     const row = page.locator('.cx-row').filter({hasText:'QA rice'});
     await row.locator('[data-purchase-source]').click();

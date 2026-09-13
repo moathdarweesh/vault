@@ -12,7 +12,7 @@
 // build. The literal below is the fallback (file://, or a stripped query) and is
 // still bumped by `npm run release` — see CLAUDE.md "CACHE WORKFLOW".
 const VAULT_BUILD = (() => {
-  const FALLBACK = 'v328';
+  const FALLBACK = 'v329';
   try {
     const src = (document.currentScript && document.currentScript.src) || '';
     const m = src.match(/[?&]v=(\d+)/);
@@ -425,8 +425,10 @@ const I18N = {
     streak_start: 'Log a session to start your streak',
     workouts: 'Workouts', volume: 'Volume', cardio: 'Cardio', sleep_today: "Today's sleep",
     delete_recipe_q: 'Delete this recipe?', delete_meal_q: 'Delete this meal?', delete_cardio_sched_q: 'Delete this cardio schedule?', sfp_search_bundles: 'Search meals…', sfp_search_recipes: 'Search recipes…',
-    cx_servings: 'Servings', cx_no_sources: 'No saved meals or recipes yet — start a blank list instead.',
-    cx_prep: 'Preparation', cx_portion_unset: 'Enter a portion', cx_purchase_unset: 'Set the shopping amount',
+    cx_portion_unset: 'Enter a portion',
+    sl_add_ph: 'Add an item…', sl_empty: 'Nothing on the list yet. Tap a recipe above, or type an item.',
+    sl_clear_done: 'Clear bought', sl_clear_all: 'Empty the list', sl_clear_all_q: 'Empty the whole list?',
+    sl_added: '{n} added', sl_cleared: 'List updated',
     cardio_sched: 'Cardio schedule', cardio_sched_add: 'Add cardio', cardio_sched_days: 'Days',
     cardio_sched_today: "Today's cardio", cardio_sched_more: '+{n} more',
     cardio_mark_done_a11y: 'Log it — {x}', cardio_undo_a11y: 'Undo — {x}', cardio_sched_undone: 'Cardio unmarked',
@@ -1020,28 +1022,11 @@ const I18N = {
     cx_meal_changed: "Meal changed",
     cx_shopping_changed: "Shopping list changed",
     cx_meals: "My meals",
-    cx_shopping: "My shopping lists",
+    cx_shopping: "Shopping list",
     cx_favorite: "Favorite",
     cx_portion: "Portion multiplier",
     cx_date: "Log date",
-    cx_items: "Ingredients",
-    cx_new: "Create a new list",
     cx_name: "Name",
-    cx_qty: "Quantity",
-    cx_unit: "Unit",
-    cx_unknown: "Needs a quantity",
-    cx_identity: "Matching ingredient ID (optional)",
-    cx_identity_hint: "Use the same ID only for the same ingredient. Units and preparation must also match.",
-    cx_raw: "Raw",
-    cx_cooked: "Cooked",
-    cx_unspecified: "Unspecified",
-    cx_piece: "Piece",
-    cx_g: "g",
-    cx_kg: "kg",
-    cx_ml: "ml",
-    cx_l: "l",
-    cx_share: "Share as text",
-    cx_review: "Review ingredients",
     cx_saved_food: "Add a saved food",
     cx_amount_hint: "Nutrition values remain per original serving. Shopping quantities are separate.",
     cx_plan_history: "Previous programs",
@@ -1050,9 +1035,6 @@ const I18N = {
     cx_restore: "Restore this program",
     cx_restore_hint: "Starts today. Food and logged sessions stay unchanged.",
     cx_ambiguous: "Use a full date: YYYY-MM-DD or DD/MM/YYYY.",
-    cx_category: "Category",
-    cx_choose_sources: "Select meals or recipes and required servings",
-    cx_checked: "Purchased",
     sc_title: 'Saving & sync',
     sc_device: 'On this device', sc_cloud: 'Cloud copy',
     sc_saved: 'Saved on this device', sc_failed: 'The latest change was not saved',
@@ -1418,8 +1400,10 @@ const I18N = {
     streak_start: 'سجّل جلسة لبدء سلسلتك',
     workouts: 'التمارين', volume: 'الحجم', cardio: 'الكارديو', sleep_today: 'نوم اليوم',
     delete_recipe_q: 'هل تريد حذف هذه الوصفة؟', delete_meal_q: 'هل تريد حذف هذه الوجبة؟', delete_cardio_sched_q: 'هل تريد حذف جدول الكارديو هذا؟', sfp_search_bundles: 'ابحث في وجباتي…', sfp_search_recipes: 'ابحث في وصفاتي…',
-    cx_servings: 'عدد الحصص', cx_no_sources: 'لا توجد وجبات أو وصفات محفوظة بعد. ابدأ قائمة فارغة.',
-    cx_prep: 'التحضير', cx_portion_unset: 'أدخل عدد الحصص', cx_purchase_unset: 'حدّد كمية الشراء',
+    cx_portion_unset: 'أدخل عدد الحصص',
+    sl_add_ph: 'أضف صنفًا…', sl_empty: 'لا شيء في القائمة بعد. اضغط وصفةً في الأعلى، أو اكتب صنفًا.',
+    sl_clear_done: 'امسح المشترى', sl_clear_all: 'أفرغ القائمة', sl_clear_all_q: 'هل تريد إفراغ القائمة كلها؟',
+    sl_added: 'أُضيف {n}', sl_cleared: 'حُدّثت القائمة',
     cardio_sched: 'جدول الكارديو', cardio_sched_add: 'إضافة كارديو', cardio_sched_days: 'الأيام',
     cardio_sched_today: 'كارديو اليوم', cardio_sched_more: '+{n} غيرها',
     cardio_mark_done_a11y: 'سجّله — {x}', cardio_undo_a11y: 'تراجع — {x}', cardio_sched_undone: 'أُلغي تسجيل الكارديو',
@@ -2004,28 +1988,11 @@ const I18N = {
     cx_meal_changed: "تم تعديل الوجبة",
     cx_shopping_changed: "تم تعديل قائمة المشتريات",
     cx_meals: "وجباتي",
-    cx_shopping: "قوائم المشتريات",
+    cx_shopping: "قائمة المشتريات",
     cx_favorite: "مفضلة",
     cx_portion: "معامل الحصة",
     cx_date: "تاريخ التسجيل",
-    cx_items: "المكونات",
-    cx_new: "إنشاء قائمة جديدة",
     cx_name: "الاسم",
-    cx_qty: "الكمية",
-    cx_unit: "الوحدة",
-    cx_unknown: "تحتاج تحديد الكمية",
-    cx_identity: "معرّف المكوّن للمطابقة (اختياري)",
-    cx_identity_hint: "استخدم المعرّف نفسه للمكوّن نفسه فقط. ويجب أن تتطابق الوحدة وحالة التحضير أيضاً.",
-    cx_raw: "نيء",
-    cx_cooked: "مطبوخ",
-    cx_unspecified: "غير محدّد",
-    cx_piece: "حبة",
-    cx_g: "غ",
-    cx_kg: "كغ",
-    cx_ml: "مل",
-    cx_l: "لتر",
-    cx_share: "مشاركة كنص",
-    cx_review: "مراجعة المكونات",
     cx_saved_food: "إضافة طعام محفوظ",
     cx_amount_hint: "الأرقام الغذائية تبقى للحصة الأصلية. كميات المشتريات مستقلة عنها.",
     cx_plan_history: "برامج سابقة",
@@ -2034,9 +2001,6 @@ const I18N = {
     cx_restore: "استعادة هذا البرنامج",
     cx_restore_hint: "يبدأ من اليوم. يبقى الطعام والجلسات المسجلة كما هي.",
     cx_ambiguous: "اكتب تاريخًا كاملًا: YYYY-MM-DD أو DD/MM/YYYY.",
-    cx_category: "الفئة",
-    cx_choose_sources: "اختر الوجبات أو الوصفات وعدد الحصص المطلوبة",
-    cx_checked: "تم الشراء",
     sc_title: 'الحفظ والمزامنة',
     sc_device: 'على هذا الجهاز', sc_cloud: 'النسخة السحابية',
     sc_saved: 'محفوظ على هذا الجهاز', sc_failed: 'لم يُحفظ آخر تعديل',
@@ -7184,7 +7148,8 @@ function renderFood(el) {
     <div id="nutri-host">${nutritionDashboardHtml(date)}</div>
   `;
 
-  el.querySelector('[data-shopping]').onclick = openShoppingLists;
+  el.querySelector('[data-shopping]').onclick = openShoppingList;
+  updateFoodShoppingLink();
 
   // todayISO() HERE, not the render-time `date`: rows now land on the day they
   // are written, so the repaint must show that same day.
@@ -9966,7 +9931,7 @@ function openUnifiedSearch() {
     <div class="search-wrap">${icon('search', 20)}<input class="input" id="cx-query" type="search" maxlength="160" autocomplete="off" placeholder="${escapeHtml(t('cx_query'))}" aria-label="${escapeHtml(t('cx_search'))}"></div>
     <div id="cx-results" class="cx-stack" aria-live="polite"></div></div>`);
   const input = modal.querySelector('#cx-query'), host = modal.querySelector('#cx-results');
-  const labels = {exercise:'exercises',food:'tab_saved_foods',meal:'cx_meals',recipe:'tab_recipes',shopping:'cx_shopping',session:'history',log:'food_history',date:'cx_date'};
+  const labels = {exercise:'exercises',food:'tab_saved_foods',meal:'cx_meals',recipe:'tab_recipes',session:'history',log:'food_history',date:'cx_date'};
   const search = debounce(() => {
     if (!modal.isConnected) return;
     if (owner !== Cloud.getLastUid()) { host.textContent = ''; closeModal(); return; }
@@ -9983,7 +9948,6 @@ function openUnifiedSearch() {
       else if (result.type === 'log') navigate('foodlog',{foodLog:{date:result.date}});
       else if (result.type === 'meal') { const meal = DB.mealBundles.list().find(x => x.id === result.id); if (meal) openMealEditor(meal); }
       else if (result.type === 'recipe') { const recipe = DB.recipes.list().find(x => x.id === result.id); if (recipe) openRecipeEditor(todayISO(),recipe); }
-      else if (result.type === 'shopping') { const list = DB.shopping.list().find(x => x.id === result.id); if (list) openShoppingDetail(list); }
       else openFoodModal(result.id);
     });
   },150);
@@ -10096,51 +10060,140 @@ function openMealPortion(bundle, date, onSave) {
   };
 }
 
-function openShoppingLists() {
-  const lists = DB.shopping.list();
-  const modal = convenienceModal(`${cxHeader('cx_shopping')}<div class="cx-stack">
-    <button class="btn btn-primary" id="cx-shopping-new">${t('cx_new')}</button>
-    ${lists.length ? lists.map((list,i) => `<button class="btn btn-ghost cx-row" data-list="${i}"><span>${escapeHtml(list.name)}</span><span class="num">${list.items.filter(it => it.checked).length}/${list.items.length}</span></button>`).join('') : `<p>${t('cx_empty')}</p>`}</div>`);
-  modal.querySelector('#cx-shopping-new').onclick = openShoppingSources;
-  modal.querySelectorAll('[data-list]').forEach(b => b.onclick = () => openShoppingDetail(lists[Number(b.dataset.list)]));
-}
-function openShoppingDetail(list) {
-  const owner = Cloud.getLastUid(), expected = JSON.stringify(list);
-  const categories = [...new Set(list.items.map(it => it.category || ''))];
-  const modal = convenienceModal(`${cxHeader('cx_shopping')}<div class="cx-stack"><strong>${escapeHtml(list.name)}</strong>
-    ${categories.map(category => `<h3>${category ? escapeHtml(category) : t('cx_items')}</h3>${list.items.map((it,i) => ({it,i})).filter(({it}) => (it.category || '') === category).map(({it,i}) => `<label class="cx-row"><input type="checkbox" data-purchased="${i}" ${it.checked ? 'checked' : ''}><span>${escapeHtml(it.name)}<br><small>${it.quantity == null ? t('cx_unknown') : fmtNum(it.quantity)} ${it.unit ? t('cx_' + it.unit) : ''}</small></span></label>`).join('')}`).join('')}
-    <button class="btn btn-ghost" id="cx-shopping-edit">${t('edit')}</button><button class="btn btn-ghost" id="cx-list-share">${t('cx_share')}</button></div>`);
-  modal.querySelectorAll('[data-purchased]').forEach(input => input.onchange = () => {
-    if (owner !== Cloud.getLastUid()) { input.checked = !input.checked; convenienceError({code:'STALE'}); return; }
-    const items = copyData(list.items); items[Number(input.dataset.purchased)].checked = input.checked;
-    const result = DB.shopping.save({...list,items},expected);
-    if (!result.ok) { input.checked = !input.checked; convenienceError(result); return; }
-    openShoppingDetail(result.entity);
-    document.querySelector(`#modal-root [data-purchased="${input.dataset.purchased}"]`)?.focus();
-  });
-  modal.querySelector('#cx-shopping-edit').onclick = () => openShoppingEditor(list);
-  modal.querySelector('#cx-list-share').onclick = async () => {
-    if (owner !== Cloud.getLastUid()) return;
-    const text = list.name + '\n' + list.items.map(it => `${it.checked ? '☑' : '☐'} ${it.name} — ${it.quantity == null ? t('cx_unknown') : fmtNum(it.quantity)} ${it.unit ? t('cx_' + it.unit) : ''}`).join('\n');
-    try { if (navigator.share) await navigator.share({text}); else { await navigator.clipboard.writeText(text); showToast(t('export_copied')); } } catch (error) { if (error.name !== 'AbortError') showToast(t('export_failed')); }
-  };
-}
-function openShoppingSources() {
+// ===========================================================================
+// THE ONE RUNNING SHOPPING LIST  (v329)
+//
+// «عدل الميزه من اساسها جذريا خليها اسهل وابسط وتاخذ المكونات من وصفاتي»
+//
+// It replaces FIVE sheets with one. The old route was: lists → create → set
+// servings per source → a pencil → quantity + unit + a free-text "matching
+// ingredient ID" + preparation → review → a seven-control editor per item →
+// name the list → save → the checklist. Measured in the owner's own data before
+// this was written: recipes carrying purchase data ZERO, ingredient IDs typed
+// ZERO, lists ever saved ZERO. The machinery existed to let combine() merge, and
+// combine() merged only on the one field nobody ever filled in.
+//
+// There is no create, no name, no list-of-lists. Recipes and meals are chips
+// that pour their ingredient NAMES in. Amounts are the recipe's own words,
+// carried as a caption and joined as text — never parsed, never scaled, never
+// added up.
+// ===========================================================================
+function openShoppingList() {
   const owner = Cloud.getLastUid();
-  const sources = [...DB.mealBundles.list().map(x => ({...x,type:'meal'})), ...DB.recipes.list().map(x => ({...x,type:'recipe'}))];
-  const modal = convenienceModal(`${cxHeader('cx_shopping')}<div class="cx-stack">${sources.length ? `<p>${t('cx_choose_sources')}</p>` : ''}
-    ${sources.length ? sources.map((s,i) => `<label class="cx-row"><span>${escapeHtml(s.name)} · ${t(s.type === 'recipe' ? 'tab_recipes' : 'cx_meals')}</span><input class="input" type="number" min="0" max="100" step="0.5" value="0" data-source="${i}" aria-label="${escapeHtml(t('cx_servings') + ' — ' + s.name)}"><button type="button" class="icon-btn" data-purchase-source="${i}" aria-label="${escapeHtml(t('cx_qty') + ' — ' + s.name)}">${icon('edit',18)}</button></label>`).join('') : `<p class="settings-hint">${t('cx_no_sources')}</p>`}
-    ${sources.length ? `<button class="btn btn-primary" id="cx-shopping-preview">${t('cx_review')}</button><button class="btn btn-ghost" id="cx-shopping-blank">${t('cx_new')}</button>` : `<button class="btn btn-primary" id="cx-shopping-blank">${t('cx_new')}</button>`}</div>`);
-  modal.querySelectorAll('[data-purchase-source]').forEach(b => b.onclick = () => openPurchaseEditor(sources[Number(b.dataset.purchaseSource)]));
-  modal.querySelector('#cx-shopping-blank').onclick = () => openShoppingEditor();
-  if (modal.querySelector('#cx-shopping-preview')) modal.querySelector('#cx-shopping-preview').onclick = () => {
-    if (owner !== Cloud.getLastUid()) { convenienceError({code:'STALE'}); return; }
-    const selections = [...modal.querySelectorAll('[data-source]')].filter(input => Number(input.value) > 0).map(input => ({ id: sources[Number(input.dataset.source)].id, type: sources[Number(input.dataset.source)].type, servings: Number(input.value) }));
-    const preview = DB.shopping.preview(selections);
-    if (!preview.ok) { convenienceError({code:'VALIDATION'}); return; }
-    openShoppingEditor(null, preview.items);
+  const sources = [
+    ...DB.recipes.list().map((x) => ({ id: x.id, name: x.name, type: 'recipe' })),
+    ...DB.mealBundles.list().map((x) => ({ id: x.id, name: x.name, type: 'meal' })),
+  ];
+  const modal = convenienceModal(`${cxHeader('cx_shopping')}<div class="cx-stack sl-sheet">
+    ${sources.length ? `<div class="sl-chips">${sources.map((s, i) =>
+      `<button type="button" class="sl-chip" data-src="${i}">${icon('plus', 14)}<span>${escapeHtml(s.name)}</span></button>`).join('')}</div>` : ''}
+    <ul class="sl-list" id="sl-list"></ul>
+    <div class="sl-compose">
+      <input class="input" id="sl-new" maxlength="120" dir="auto" enterkeyhint="done" placeholder="${escapeHtml(t('sl_add_ph'))}">
+      <button type="button" class="btn btn-primary sl-add" id="sl-add" aria-label="${escapeHtml(t('add'))}">${icon('plus', 20)}</button>
+    </div>
+    <div class="cx-actions sl-foot" hidden>
+      <button type="button" class="btn btn-ghost" id="sl-clear-done">${t('sl_clear_done')}</button>
+      <button type="button" class="btn btn-ghost" id="sl-clear-all">${t('sl_clear_all')}</button>
+    </div>
+  </div>`);
+
+  const host = modal.querySelector('#sl-list');
+  const foot = modal.querySelector('.sl-foot');
+  const field = modal.querySelector('#sl-new');
+  const mine = () => owner === Cloud.getLastUid();
+
+  const rowHtml = (it) => `<li class="sl-row${it.checked ? ' is-done' : ''}" data-id="${escapeHtml(it.id)}">
+      <label class="sl-tick">
+        <input type="checkbox"${it.checked ? ' checked' : ''} data-tick>
+        <span class="sl-text"><span class="sl-name">${escapeHtml(it.name)}</span>${
+          it.amounts && it.amounts.length ? `<span class="sl-amt">${escapeHtml(it.amounts.join(' + '))}</span>` : ''}</span>
+      </label>
+      <button type="button" class="rec-del" data-del aria-label="${escapeHtml(t('delete') + ' — ' + it.name)}">${icon('trash', 16)}</button>
+    </li>`;
+
+  const draw = () => {
+    const items = DB.shopping.get().items;
+    host.innerHTML = items.length ? items.map(rowHtml).join('')
+      : `<li class="sl-empty">${t('sl_empty')}</li>`;
+    foot.hidden = !items.length;
+    modal.querySelector('#sl-clear-done').disabled = !items.some((x) => x.checked);
+    updateFoodShoppingLink();
+  };
+  draw();
+
+  // ONE delegated listener for the whole list: rows are replaced on every
+  // structural change, so a per-row binding would be rebound constantly.
+  host.addEventListener('click', (e) => {
+    if (!mine()) { convenienceError({ code: 'STALE' }); return; }
+    const row = e.target.closest('.sl-row');
+    if (!row) return;
+    if (e.target.closest('[data-del]')) {
+      const result = DB.shopping.removeItem(row.dataset.id);
+      if (!result.ok) { convenienceError(result); return; }
+      draw(); offerUndo(t('deleted'), result);
+      return;
+    }
+    if (e.target.closest('[data-tick]')) {
+      const result = DB.shopping.toggle(row.dataset.id);
+      if (!result.ok) { convenienceError(result); draw(); return; }
+      // A TICKED ROW NEVER MOVES. One class on one <li>, no redraw — the next
+      // unticked item stays exactly where the eye already is, which is the whole
+      // point in a supermarket aisle.
+      row.classList.toggle('is-done', row.querySelector('[data-tick]').checked);
+      modal.querySelector('#sl-clear-done').disabled = !DB.shopping.get().items.some((x) => x.checked);
+    }
+  });
+
+  const addTyped = () => {
+    const name = field.value.trim();
+    if (!name || !mine()) return;
+    const result = DB.shopping.addNames([{ name }]);
+    if (!result.ok) { convenienceError(result); return; }
+    field.value = '';
+    draw();
+    field.focus();
+  };
+  modal.querySelector('#sl-add').onclick = addTyped;
+  field.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); addTyped(); } });
+
+  modal.querySelectorAll('[data-src]').forEach((b) => b.addEventListener('click', () => {
+    if (!mine()) { convenienceError({ code: 'STALE' }); return; }
+    const s = sources[Number(b.dataset.src)];
+    const result = DB.shopping.addFrom(s.type, s.id);
+    if (!result.ok) { convenienceError(result); return; }
+    draw();
+    offerUndo(t('sl_added').replace('{n}', fmtNum(result.added || 0)), result);
+  }));
+
+  modal.querySelector('#sl-clear-done').onclick = () => {
+    if (!mine()) { convenienceError({ code: 'STALE' }); return; }
+    const result = DB.shopping.clearChecked();
+    if (!result.ok) { convenienceError(result); return; }
+    draw(); offerUndo(t('sl_cleared'), result);
+  };
+  modal.querySelector('#sl-clear-all').onclick = () => {
+    confirmDialog({
+      title: t('sl_clear_all_q'), text: '', confirmLabel: t('sl_clear_all'), variant: 'danger',
+      onConfirm: () => {
+        if (!mine()) { convenienceError({ code: 'STALE' }); return; }
+        const result = DB.shopping.clearAll();
+        if (!result.ok) { convenienceError(result); return; }
+        draw(); offerUndo(t('sl_cleared'), result);
+      },
+    });
   };
 }
+
+// The Food header link carries the outstanding count, so the list says how much
+// is left without being opened.
+function updateFoodShoppingLink() {
+  const link = document.querySelector('[data-shopping]');
+  if (!link) return;
+  const left = DB.shopping.get().items.filter((x) => !x.checked).length;
+  link.innerHTML = escapeHtml(t('cx_shopping')) + (left ? ` <span class="num sl-count">${fmtNum(left)}</span>` : '');
+}
+
 async function openPreviousPrograms() {
   const owner = Cloud.getLastUid();
   const modal = convenienceModal(`${cxHeader('cx_plan_history')}<div id="cx-history" class="cx-stack"><p>${t('cx_loading')}</p></div>`);
@@ -10193,156 +10246,6 @@ function openPreviousProgramPreview(preview) {
     } catch (_) { showToast(t('sc_error')); } finally { button.disabled = false; }
   };
 }
-// THE PURCHASE LEDGER (v322). This was a spreadsheet: four always-open labelled
-// controls per ingredient, so an eight-ingredient recipe put THIRTY-TWO controls
-// on one sheet and the names they belonged to were lost among them. It is the
-// v301 ingredient ledger's shape now, and it reuses that component's vocabulary
-// outright — .rec-row, .rec-line, .rec-sum, .rec-more, .rec-f, .rec-cap — so
-// there is one ledger idiom in this app, not two that merely resemble each other.
-//
-// Line 1 names the ingredient and what the recipe calls for. Line 2 is a
-// READ-ONLY summary of the shopping amount that opens a well on tap. Four
-// controls per row become one line until you want them.
-function openPurchaseEditor(source) {
-  const owner = Cloud.getLastUid(), recipe = source.type === 'recipe';
-  const original = recipe ? DB.recipes.list().find(x => x.id === source.id) : DB.mealBundles.list().find(x => x.id === source.id);
-  const snapshot = JSON.stringify(original);
-  const UNITS = ['g', 'kg', 'ml', 'l', 'piece'], PREPS = ['unspecified', 'raw', 'cooked'];
-  const modal = convenienceModal(`${cxHeader('cx_qty')}<div class="cx-stack"><strong>${escapeHtml(source.name)}</strong><p class="settings-hint">${t('cx_amount_hint')}</p>
-    <div class="rec-list pur-list">
-    ${source.items.map((it, i) => `<div class="rec-row pur-row" data-purchase="${i}" data-state="${it.purchase?.quantity == null ? 'idle' : 'done'}">
-      <div class="rec-line">
-        <strong class="pur-name">${escapeHtml(it.name)}</strong>
-        ${it.qty ? `<span class="pur-orig">${escapeHtml(it.qty)}</span>` : ''}
-      </div>
-      <button type="button" class="rec-sum" data-toggle aria-expanded="false" aria-controls="pur-more-${i}"
-              aria-label="${escapeHtml(t('cx_qty') + ' — ' + it.name)}">
-        <span class="rec-sum-t"></span><span class="rec-sum-ic">${icon('edit', 14)}</span>
-      </button>
-      <div class="rec-more" id="pur-more-${i}">
-        <div class="rec-f"><label class="rec-cap" for="pur-q-${i}">${t('cx_qty')}</label>
-          <input id="pur-q-${i}" type="number" min="0.001" step="any" data-quantity value="${it.purchase?.quantity == null ? '' : Number(it.purchase.quantity)}"></div>
-        <div class="rec-f"><label class="rec-cap" for="pur-u-${i}">${t('cx_unit')}</label>
-          <select id="pur-u-${i}" data-unit>${UNITS.map(u => `<option value="${u}" ${it.purchase?.unit === u ? 'selected' : ''}>${t('cx_' + u)}</option>`).join('')}</select></div>
-        <div class="rec-f"><label class="rec-cap" for="pur-p-${i}">${t('cx_prep')}</label>
-          <select id="pur-p-${i}" data-preparation>${PREPS.map(p => `<option value="${p}" ${it.purchase?.preparation === p ? 'selected' : ''}>${t('cx_' + p)}</option>`).join('')}</select></div>
-        <div class="rec-f pur-f-id"><label class="rec-cap" for="pur-i-${i}">${t('cx_identity')}</label>
-          <input id="pur-i-${i}" data-identity maxlength="80" dir="auto" value="${escapeHtml(it.purchase?.ingredientId || '')}"></div>
-        <p class="rec-cap pur-hint">${t('cx_identity_hint')}</p>
-      </div>
-    </div>`).join('')}
-    </div>
-    <button class="btn btn-primary" id="cx-purchase-save">${t('save')}</button></div>`);
-
-  // ONE writer of line 2, exactly as updateSummary() is in the recipe ledger.
-  // A row's summary is derived from its own fields and nothing else, so the line
-  // can never disagree with the well underneath it.
-  const paint = (row) => {
-    const q = row.querySelector('[data-quantity]').value;
-    const n = Number(q);
-    const set = q !== '' && Number.isFinite(n) && n > 0;
-    const parts = [];
-    if (set) {
-      parts.push('<span class="num">' + escapeHtml(fmtNum(n)) + '</span> ' + escapeHtml(t('cx_' + row.querySelector('[data-unit]').value)));
-      const prep = row.querySelector('[data-preparation]').value;
-      if (prep !== 'unspecified') parts.push(escapeHtml(t('cx_' + prep)));
-      const id = row.querySelector('[data-identity]').value.trim();
-      if (id) parts.push(escapeHtml(id));
-    }
-    row.dataset.state = set ? 'done' : 'idle';
-    row.querySelector('.rec-sum-t').innerHTML = set ? parts.join(' · ') : escapeHtml(t('cx_purchase_unset'));
-  };
-  modal.querySelectorAll('.pur-row').forEach(paint);
-
-  // Three delegated listeners, bound once — the ledger's own rule. Editing a
-  // field repaints only its own summary, so nothing the user is typing in is
-  // ever re-rendered underneath them.
-  const list = modal.querySelector('.pur-list');
-  list.addEventListener('click', (e) => {
-    const btn = e.target.closest('[data-toggle]');
-    if (!btn) return;
-    const row = btn.closest('.pur-row');
-    const open = !row.classList.contains('is-open');
-    row.classList.toggle('is-open', open);
-    btn.setAttribute('aria-expanded', String(open));
-    if (open) row.querySelector('[data-quantity]').focus();
-  });
-  list.addEventListener('input', (e) => { const row = e.target.closest('.pur-row'); if (row) paint(row); });
-  list.addEventListener('change', (e) => { const row = e.target.closest('.pur-row'); if (row) paint(row); });
-
-  modal.querySelector('#cx-purchase-save').onclick = () => {
-    const current = recipe ? DB.recipes.list().find(x => x.id === source.id) : DB.mealBundles.list().find(x => x.id === source.id);
-    if (owner !== Cloud.getLastUid() || snapshot !== JSON.stringify(current)) { convenienceError({code:'STALE'}); return; }
-    const items = copyData(source.items);
-    for (const row of modal.querySelectorAll('[data-purchase]')) {
-      const it = items[Number(row.dataset.purchase)], quantity = row.querySelector('[data-quantity]').value;
-      if (!quantity) { delete it.purchase; continue; }
-      const value = Number(quantity);
-      if (!Number.isFinite(value) || value <= 0 || value > 10000000) { convenienceError({code:'VALIDATION'}); return; }
-      it.purchase = { quantity:value, unit:row.querySelector('[data-unit]').value, ingredientId:row.querySelector('[data-identity]').value.trim(), preparation:row.querySelector('[data-preparation]').value, originalText:it.qty || '' };
-    }
-    const result = recipe ? {ok:!!DB.recipes.update(source.id,{items})} : DB.mealBundles.update(source.id,{items});
-    if (!result.ok) { convenienceError(result); return; }
-    openShoppingSources(); offerUndo(t('saved'),result);
-  };
-}
-function openShoppingEditor(existing = null, initial = []) {
-  const owner = Cloud.getLastUid();
-  let saved = existing, expected = existing ? JSON.stringify(existing) : null;
-  let items = copyData(existing?.items || initial);
-  const units = ['', 'g','kg','ml','l','piece'];
-  const modal = convenienceModal(`${cxHeader('cx_shopping')}<div class="cx-stack">
-    <label>${t('cx_name')}<input class="input" id="cx-list-name" maxlength="80" dir="auto" value="${escapeHtml(existing?.name || '')}"></label>
-    <p class="settings-hint">${t('cx_identity_hint')}</p><div id="cx-shopping-items" class="cx-stack"></div>
-    <div class="cx-actions">
-      <button class="btn btn-ghost" id="cx-shopping-add">${t('add')}</button>
-      <button class="btn btn-ghost" id="cx-shopping-share">${t('cx_share')}</button>
-    </div>
-    <button class="btn btn-primary" id="cx-shopping-save">${t('save')}</button>
-    ${existing ? `<button class="btn btn-danger" id="cx-shopping-delete">${t('delete')}</button>` : ''}</div>`);
-  const read = () => {
-    modal.querySelectorAll('[data-shopping-row]').forEach(row => {
-      const it = items[Number(row.dataset.shoppingRow)];
-      for (const key of ['name','unit','ingredientId','preparation','category']) it[key] = row.querySelector(`[data-field="${key}"]`).value;
-      const quantity = row.querySelector('[data-field="quantity"]').value;
-      it.quantity = quantity === '' ? null : Number(quantity);
-      it.checked = row.querySelector('[data-field="checked"]').checked;
-    });
-  };
-  const draw = () => {
-    modal.querySelector('#cx-shopping-items').innerHTML = items.map((it,i) => `<div class="cx-item" data-shopping-row="${i}">
-      <label class="cx-row"><span>${t('cx_checked')}</span><input type="checkbox" data-field="checked" ${it.checked ? 'checked' : ''}></label>
-      <label>${t('cx_name')}<input class="input" data-field="name" maxlength="120" dir="auto" value="${escapeHtml(it.name || '')}"></label>
-      ${it.originalText ? `<p class="settings-hint">${escapeHtml(it.originalText)}</p>` : ''}
-      <div class="cx-row"><label>${t('cx_qty')}<input class="input" type="number" min="0.001" step="any" data-field="quantity" placeholder="${escapeHtml(t('cx_unknown'))}" value="${it.quantity == null ? '' : Number(it.quantity)}"></label>
-      <label>${t('cx_unit')}<select class="input" data-field="unit">${units.map(u => `<option value="${u}" ${u === it.unit ? 'selected' : ''}>${u ? t('cx_' + u) : '—'}</option>`).join('')}</select></label></div>
-      <label>${t('cx_identity')}<input class="input" data-field="ingredientId" maxlength="80" dir="auto" value="${escapeHtml(it.ingredientId || '')}"></label>
-      <label>${t('cx_prep')}<select class="input" data-field="preparation">${['unspecified','raw','cooked'].map(p => `<option value="${p}" ${it.preparation === p ? 'selected' : ''}>${t('cx_' + p)}</option>`).join('')}</select></label>
-      <label>${t('cx_category')}<input class="input" data-field="category" maxlength="40" dir="auto" value="${escapeHtml(it.category || '')}"></label>
-      <button class="btn btn-danger" data-remove-shopping="${i}">${t('delete')}</button></div>`).join('');
-    modal.querySelectorAll('[data-remove-shopping]').forEach(b => b.onclick = () => { read(); const at = Number(b.dataset.removeShopping), removed = items.splice(at,1)[0]; draw(); showToast(t('deleted'), { actionLabel:t('undo'), duration:10000, onAction:() => { if (modal.isConnected && owner === Cloud.getLastUid()) { read(); items.splice(Math.min(at,items.length),0,removed); draw(); } } }); });
-  };
-  draw();
-  modal.querySelector('#cx-shopping-add').onclick = () => { read(); if (items.length >= 200) return; items.push({id:uid(),name:'',quantity:null,unit:'',checked:false,sourceRefs:[]}); draw(); };
-  modal.querySelector('#cx-shopping-save').onclick = () => {
-    if (owner !== Cloud.getLastUid()) { convenienceError({code:'STALE'}); return; }
-    read();
-    const result = DB.shopping.save({id:saved?.id,name:modal.querySelector('#cx-list-name').value,items: saved ? items : DB.shopping.combine(items)},expected);
-    if (!result.ok) { convenienceError(result); return; }
-    saved = result.entity; expected = JSON.stringify(saved); items = copyData(saved.items); openShoppingDetail(saved); offerUndo(t('saved'),result);
-  };
-  modal.querySelector('#cx-shopping-share').onclick = async () => {
-    if (owner !== Cloud.getLastUid()) { convenienceError({code:'STALE'}); return; }
-    read();
-    const text = modal.querySelector('#cx-list-name').value + '\n' + items.map(it => `${it.checked ? '☑' : '☐'} ${it.name} — ${it.quantity == null ? t('cx_unknown') : fmtNum(it.quantity)} ${it.unit ? t('cx_' + it.unit) : ''}`).join('\n');
-    try { if (navigator.share) await navigator.share({text}); else await navigator.clipboard.writeText(text); } catch (error) { if (error.name !== 'AbortError') showToast(t('export_failed')); }
-  };
-  modal.querySelector('#cx-shopping-delete')?.addEventListener('click', () => {
-    if (owner !== Cloud.getLastUid() || expected !== JSON.stringify(DB.shopping.list().find(x => x.id === saved.id))) { convenienceError({code:'STALE'}); return; }
-    const result = DB.shopping.remove(saved.id); if (!result.ok) { convenienceError(result); return; } closeModal(); openShoppingLists(); offerUndo(t('deleted'),result);
-  });
-}
-
 function renderSettings(el) {
   const prefs = DB.prefs.get();
   const currentTheme = normalizeTheme(prefs.theme);
