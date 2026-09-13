@@ -77,7 +77,7 @@ a faster TTFB — not fewer bytes.
 npm run release          # bump every marker + verify, then commit all files together
 ```
 
-**Current version: v324.** APK: build 21 / v3.0.
+**Current version: v325.** APK: build 21 / v3.0.
 
 `scripts/release.js` rewrites **every** marker and then re-reads them from disk to confirm; it exits non-zero if any disagree, and prints the count per file (derived, never hard-coded — the docs used to say 16 while the real count was 15). The markers are `?v=N` in `index.html` (every script and stylesheet, the `js/vendor/supabase.js` preload, both `icons/icon.svg` links, `manifest.json`), the `__cleaned_vN` sessionStorage key, the `FALLBACK` literal in `app.js`, `version.json` → `web`, the `?v=` in `manifest.json`, `admin.html`, `privacy.html` and `get/index.html`, and the `Current version` line in this file. `scripts/check-contracts.js` (pre-commit) refuses a commit where any of them disagree.
 
@@ -1151,6 +1151,35 @@ raised surface in the block.
 - `.link-btn` is ~28px of text reaching 44px through `inset: -6px -8px`, so the Food header's two
   links at `gap: 2px` had halos **overlapping by 10px** and the lower one won the shared strip — the
   bottom edge of «قوائم المشتريات» opened Food history. 14px of gap clears them with 2px to spare.
+
+## v325 (2026-09-13) — every cardio is the same row, and the tick is the whole control
+
+Two rounds of the owner's own feedback on the block v318 built, and both retired code rather than
+adding it.
+
+- **«هذي كلها كارديو ليش كذا منفصلين؟»** The lead cardio was a raised `.hero-card` and each queued
+  one a raised `.data-row`, every one carrying its own `--elev-1` — so two things of the SAME kind
+  sat in two unrelated boxes. Fixed in v324: the BLOCK is the one surface, everything inside is flat
+  and divided by a rule.
+- **«خلي تصميم المشي نفس الجري احلا»** — and having seen both shapes he chose the row. So the card
+  form is **gone entirely**: one row shape, one height (measured: 68px each), sorted owed-first.
+- **«وخلي علامه صح بدون كلمه سجله»** — the owed control is now the check ALONE, a 36px square with a
+  20px glyph and the 44px halo every sub-44 control here carries. The word repeated what the tick
+  already said and cost more width than the duration beside it. Its accessible name still says the
+  action and the activity («سجّله — مشي»), because an icon-only button has no visible label to
+  match. The settled control KEEPS its «تراجع»: that is a different action, and a second unlabelled
+  glyph on the same row would be a riddle.
+
+**What this deleted is the point.** The card form took `.cardio-task`, `.cardio-task-head`,
+`.cardio-done-cta`, `.is-folding`, `.is-unfolding`, the `cardio-cta-in` keyframes and their
+reduced-motion pair with it — styles.css lost 4.4KB — plus the `cardio_task_of` and
+`cardio_task_scheduled` keys and the `cardio_mark_done` word.
+
+> ⚠️ **And it retired the 180ms deferred render with them.** That fold was this app's first async
+> render, and it is what let Home's handlers escape onto whatever view the user switched to inside
+> the window (see v324). The repaint is synchronous again. The structural fix in `bindVaultAction` —
+> scope to the element being rendered, never to `.view.active` — stays, because it is what makes the
+> NEXT deferred render safe.
 
 ## Superpowers — and the two places this project deliberately departs from it
 
