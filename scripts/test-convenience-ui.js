@@ -29,25 +29,34 @@ module.exports = async function testConvenienceUI(page) {
     assert.equal(await page.evaluate(()=>DB.foodLogs.totalsForDate('2026-09-09').calories),50);
     await page.locator('.toast-action').click();
     assert.equal(await page.evaluate(()=>DB.foodLogs.listForDate('2026-09-09').length),0);
+    // ---- THE SHOPPING LIST, as v329 rebuilt it and v332 reshaped it ---------
+    // This block used to drive FIVE sheets that no longer exist (#cx-shopping-new,
+    // the purchase ledger, the preview, the list name). It kept 'passing' in
+    // review and failing in reality because nothing ever ran it - see test-all.js.
+    await page.evaluate(() => DB.shopping.clearAll());
     await page.locator('[data-shopping]').click();
-    // v329: one sheet. No create, no sources, no purchase editor, no per-item form.
-    await page.locator('#cx-shopping-new').click();
-    const row = page.locator('.cx-row').filter({hasText:'QA rice'});
-    await row.locator('[data-purchase-source]').click();
-    // v322 rebuilt this sheet as a ledger: the fields live in a collapsed well
-    // and are display:none until the row's summary is tapped.
-    await page.locator('.pur-row .rec-sum').first().click();
-    await page.locator('[data-quantity]').fill('200');
-    await page.locator('[data-identity]').fill('rice');
-    await page.locator('#cx-purchase-save').click();
-    await page.locator('.cx-row').filter({hasText:'QA rice'}).locator('[data-source]').fill('2');
-    await page.locator('#cx-shopping-preview').click();
-    assert.equal(await page.locator('[data-field="quantity"]').inputValue(),'100');
-    await page.locator('#cx-list-name').fill('QA shopping '+lang);
-    await page.locator('#cx-shopping-save').click();
-    await page.locator('[data-purchased]').check();
-    const saved = await page.evaluate(name => DB.shopping.list().find(l=>l.name===name),'QA shopping '+lang);
-    assert.equal(saved.items[0].checked,true);
+    // Two named boxes over the list. WHICH one is open is DERIVED from the list
+    // being empty, so open the recipes box explicitly rather than assuming.
+    const recipesBox = page.locator('.sl-grp').filter({has: page.locator('#sl-grp-recipe')}).locator('.sl-grp-head');
+    if (await recipesBox.getAttribute('aria-expanded') !== 'true') await recipesBox.click();
+    await page.locator('#sl-grp-recipe .sl-chip').filter({hasText:'QA rice'}).click();
+    // The recipe's ingredient NAMES arrive, carrying the recipe's own wording as a
+    // caption. Nothing is parsed, scaled or summed.
+    const poured = await page.evaluate(() => DB.shopping.get().items);
+    assert.equal(poured.length, 1, lang+' one ingredient poured');
+    assert.equal(poured[0].name, 'Rice');
+    assert.deepEqual(poured[0].amounts, ['200 g'], lang+' the recipe own words, verbatim');
+    // Ticking never moves the row and never enters undo history.
+    const undoBefore = await page.evaluate(() => DB.undo.list().length);
+    await page.locator('.sl-row [data-tick]').first().check();
+    assert.equal(await page.evaluate(() => DB.shopping.get().items[0].checked), true, lang+' ticked');
+    assert.equal(await page.evaluate(() => DB.undo.list().length), undoBefore, lang+' a tick is not undoable');
+    // The composer adds a typed item; the footer appears only with items on it.
+    await page.locator('#sl-new').fill('QA salt '+lang);
+    await page.locator('#sl-add').click();
+    const names = await page.evaluate(() => DB.shopping.get().items.map(i=>i.name));
+    assert.ok(names.includes('QA salt '+lang), lang+' typed item added');
+    assert.ok(await page.locator('.sl-foot').isVisible(), lang+' the footer shows with items');
     const size = await page.locator('.modal').evaluate(el=>({width:el.clientWidth,scroll:el.scrollWidth}));
     assert.ok(size.scroll<=size.width+1,lang+' shopping overflow');
     if (process.env.QA_SCREENSHOT_DIR) await page.locator('.modal').screenshot({path:require('node:path').join(process.env.QA_SCREENSHOT_DIR,`shopping-${lang}.png`)});

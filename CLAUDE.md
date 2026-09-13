@@ -1696,6 +1696,75 @@ still comes out `B, D, outsider`. The owner's plan was restored byte-for-byte.
 tests app.js at all — every other suite exercises `storage.js`, `cloud.js` or the Worker.
 
 
+## CI — the web app has a gate now (no version bump: nothing shipped changed)
+
+«انا بختصار بدي احسن بنيه تحتيه للكود والباك اند». Measured the infrastructure before
+touching it, and three gaps came out of it:
+
+| | |
+|---|---|
+| CI for the web app | **none** — only `ios-build.yml` existed |
+| one command that runs the suites | **none** — six filenames had to be known by hand |
+| anything comparing the live database to `backend/migrations/` | **none** — contract 4 replays the FILES, never the server |
+
+**The first is the one that matters.** The only gate was `.githooks/pre-commit`: local,
+opt-in (`npm run hooks` sets `core.hooksPath`), and bypassable with `--no-verify`. GitHub
+Pages serves the branch directly with no build, so anything past the hook is live on every
+device at the next app open. `ea6c74e` — "the change reached nobody" — was exactly a lapse of
+local discipline. The hook is a brace; `.github/workflows/ci.yml` is the belt.
+
+### The runner, and the lie it was built to stop
+
+`scripts/test-all.js` runs every suite and **never counts one that did not run**. Twice the
+claim "all five suites pass" was wrong, both times because a Playwright-needing suite threw
+`MODULE_NOT_FOUND` and read as noise.
+
+> ⚠️ **My own first draft reproduced the exact bug it was written to prevent.**
+> `test-convenience-ui.js` is `module.exports = async function(page)` — a library, not a
+> script. Running it alone does nothing and exits 0, and the runner printed **PASS**. Then the
+> correction over-reached: a rule of "exports ⇒ module" silently dropped `test-sync-status.js`,
+> which exports `context` for its sibling **and** runs its own suite behind
+> `if (require.main === module)`. The rules that survived:
+> - a file is a MODULE only if it exports **and has no main guard**;
+> - delegation is a `require('./test-…')` **call**, never a mention in a comment (the first
+>   draft read line 1 of a comment and marked the CALLER as delegated);
+> - **exit 0 with no output is a FAILURE**, not a pass — every real suite here ends with a
+>   PASS line, so silence means nothing executed.
+
+### What running them for the first time found
+
+Installing Playwright and running everything caught a **third** instance of the same blind
+spot, live: `test-sync-status-ui.js` was waiting on `#cx-shopping-new` — a control **v329
+deleted** when five shopping sheets became one. The suite had been driving a UI that no longer
+existed, and nothing said so because nothing ran it. Its shopping block is rewritten against
+the real v332 sheet: open the وصفاتي box, pour a recipe, assert the amounts arrive verbatim,
+assert a tick does not enter undo history, add a typed item, assert the footer appears.
+
+**8 passed · 0 failed · 0 skipped** — the first time every suite in this project has actually run.
+
+### The commands
+
+```bash
+npm run check        # contracts only
+npm test             # every suite; a skip is reported, loudly
+npm run test:strict  # a skip is a FAILURE — what CI runs
+npm run verify       # contracts + suites
+```
+
+Playwright is installed `--no-save` in CI: never in `package.json`, never shipped. The "no new
+dependencies" law is about the bundle the user downloads.
+
+### Still open on the backend, and named honestly
+
+**Nothing compares the live database to `backend/migrations/`.** Contract 4 replays the files
+and proves the CLIENT's tables/RPCs/buckets exist in that replay — it cannot see the server. So
+a migration applied live but edited afterwards, or a file never applied, is invisible to every
+check in this repo; `backend/README.md` is prose maintained by hand, and it "has twice claimed
+the wrong thing when edited from memory". A real drift check needs a read-only credential in CI
+and is its own piece of work. Backups are likewise still a manual runbook
+(`backend/docs/DB-BACKUP-RESTORE.md`), with no automation and no restore drill.
+
+
 ## Superpowers — and the two places this project deliberately departs from it
 
 The [superpowers](https://github.com/obra/superpowers) methodology (14 skills) is

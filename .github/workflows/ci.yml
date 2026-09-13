@@ -1,0 +1,82 @@
+# Proves the WEB app is sound, on every push and every pull request.
+#
+# WHY THIS EXISTS
+# Until now the only gate on this project was a LOCAL pre-commit hook. That hook
+# is real and it is good — but it is opt-in (`npm run hooks` sets
+# core.hooksPath), it is bypassable (`--no-verify`, `SKIP_RELEASE_CHECK=1`), and
+# it does not exist at all on a machine that has never run that command. GitHub
+# Pages then serves the branch DIRECTLY, with no build and no gate, so anything
+# that slips past the hook is live for every user on their next app open.
+#
+# This project's most expensive documented failure — `ea6c74e`, "the change
+# reached nobody" — was exactly a lapse of local discipline. A hook is a brace;
+# this is the belt.
+#
+# IT INSTALLS A BROWSER, AND THAT IS THE POINT.
+# Two suites (test-startup.js, test-sync-status-ui.js) need Playwright. Locally
+# it is absent, so they throw MODULE_NOT_FOUND and are easy to read as noise —
+# and THREE separate breaks hid behind that silence: v316 (`[data-my-meals]`),
+# v322 (`[data-quantity]`) and v329's shopping rebuild, which this workflow's
+# first real run is what finally caught. Here they always run, and
+# `--strict` makes a skip a failure, so that blind spot cannot reopen.
+#
+# Playwright is installed with `--no-save`: it never enters package.json and
+# never ships. The project's "no new dependencies" law is about the bundle the
+# user downloads, and nothing here reaches it.
+
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+# A second push while the first is still running makes the first answer stale.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    name: contracts + suites
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      # Pinned, not "latest": the local runs these suites are verified against
+      # are Node 24, and a runtime that moves on someone else's schedule is not
+      # a control. Same reasoning as ios-build.yml pinning macos-26.
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      # Its own step so a failure here is never mistaken for a failing test.
+      - name: Install Playwright + Chromium
+        run: |
+          npm i --no-save playwright
+          npx playwright install --with-deps chromium
+
+      # Version markers, script order, i18n, the client-to-backend agreements.
+      # This is the same check the pre-commit hook runs, now where it cannot be
+      # skipped.
+      - name: Contracts
+        run: npm run check
+
+      # --strict: a suite that did not RUN is a failure here. Locally a missing
+      # browser is a tolerable skip; in CI it means the install step lied.
+      - name: Test suites
+        run: node scripts/test-all.js --strict
+
+      # The release markers must agree with each other. `--check` does not
+      # bump anything; it only reports disagreement.
+      - name: Release markers agree
+        run: npm run release:check

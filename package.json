@@ -15,7 +15,10 @@
     "check": "node scripts/check-contracts.js",
     "sync:ios": "node scripts/sync-ios.js",
     "ios": "node scripts/sync-ios.js && cap open ios",
-    "graph": "node scripts/graph-build.js"
+    "graph": "node scripts/graph-build.js",
+    "test": "node scripts/test-all.js",
+    "test:strict": "node scripts/test-all.js --strict",
+    "verify": "npm run check && npm test"
   },
   "dependencies": {
     "@capacitor/android": "^8.4.1",
