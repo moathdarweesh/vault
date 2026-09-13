@@ -12,7 +12,7 @@
 // build. The literal below is the fallback (file://, or a stripped query) and is
 // still bumped by `npm run release` — see CLAUDE.md "CACHE WORKFLOW".
 const VAULT_BUILD = (() => {
-  const FALLBACK = 'v326';
+  const FALLBACK = 'v327';
   try {
     const src = (document.currentScript && document.currentScript.src) || '';
     const m = src.match(/[?&]v=(\d+)/);
@@ -14636,6 +14636,43 @@ document.addEventListener('load', (e) => {
 // descendant that inherits it — hundreds of nodes, on every touch. On a leaf
 // with no children the invalidation set is one element.
 // ===========================================================================
+// ===========================================================================
+// THE TOP BAR LEAVES WHILE YOU READ  (v327)
+//
+// «البار هذا اذا نزلت خليه يختفي وما يطلع الا اذا طلعت فوق اخر شي» — it goes on
+// the way down and comes back only at the very top.
+//
+// ONE listener, not twenty: .main is the single scroll container every view
+// shares, and exactly one .vault-bar is in the DOM at a time, so the state lives
+// as a class on .main and whichever bar is mounted obeys it.
+//
+// Passive + rAF-coalesced: scrolling is the gesture that decides whether this app
+// feels smooth, so the handler never blocks it and never runs more than once a
+// frame. It reads one number and toggles one class — no layout is forced.
+// ===========================================================================
+function setupBarAutoHide() {
+  const main = document.querySelector('.main');
+  if (!main || main.dataset.barAutohide) return;   // idempotent, like setupEmber
+  main.dataset.barAutohide = '1';
+  // A few pixels of tolerance so sub-pixel jitter at rest cannot flicker it.
+  const TOP = 8;
+  let ticking = false;
+  const apply = () => {
+    ticking = false;
+    main.classList.toggle('bar-hidden', main.scrollTop > TOP);
+  };
+  const onScroll = () => {
+    if (ticking) return;
+    ticking = true;
+    requestAnimationFrame(apply);
+  };
+  main.addEventListener('scroll', onScroll, { passive: true });
+  // No view-change hook is needed: navigate() restores each view's saved offset
+  // by WRITING main.scrollTop, which fires this same scroll event. When the two
+  // views share an offset nothing moves, and the bar is already in the right
+  // state for it.
+  apply();
+}
 function setupEmber() {
   const app = document.querySelector('.app');
   if (!app) return;
@@ -14892,6 +14929,7 @@ function afterScripts(fn) {
   navigate('home', {}, { fromPop: true }); // root entry — don't grow history
   setupKeyboardHandling(); // hide the nav + keep the focused field above the keyboard
   setupEmber();            // the void's reaction to the hand (no-op under reduced motion)
+  setupBarAutoHide();      // the top bar leaves on the way down, returns at the top
 
   // First-run welcome — brand-new installs only. Existing users (any real
   // history) are silently marked onboarded so an update never re-shows it.

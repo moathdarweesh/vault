@@ -592,7 +592,17 @@ img { display: block; max-width: 100%; }
   top: 0;
   z-index: 20;
   background: var(--bg);
+  /* Named, never `transition: all` — the v296 rule. */
+  transition: transform 220ms var(--ease);
 }
+/* CHROME LEAVES WHILE YOU READ. The bar is 68px of a phone screen spent on a
+   wordmark and two icons, so it goes on the way down and comes back only at the
+   very top — the owner's own spec. The class sits on .main because .main is the
+   ONE scroll container all twenty views share, and exactly one .vault-bar is in
+   the DOM at a time, so a single listener and a single class cover every screen.
+   translateY, not height or display: it stays on the compositor, and a sticky
+   element keeps its place in flow either way, so nothing below it reflows. */
+.main.bar-hidden .vault-bar { transform: translateY(-100%); }
 
 /* The mark's slot in the top bar. The mark itself is .brand-lockup, defined at
    the end of this file — this rule only positions it. It carries no type of its

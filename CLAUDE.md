@@ -77,7 +77,7 @@ a faster TTFB — not fewer bytes.
 npm run release          # bump every marker + verify, then commit all files together
 ```
 
-**Current version: v326.** APK: build 21 / v3.0.
+**Current version: v327.** APK: build 21 / v3.0.
 
 `scripts/release.js` rewrites **every** marker and then re-reads them from disk to confirm; it exits non-zero if any disagree, and prints the count per file (derived, never hard-coded — the docs used to say 16 while the real count was 15). The markers are `?v=N` in `index.html` (every script and stylesheet, the `js/vendor/supabase.js` preload, both `icons/icon.svg` links, `manifest.json`), the `__cleaned_vN` sessionStorage key, the `FALLBACK` literal in `app.js`, `version.json` → `web`, the `?v=` in `manifest.json`, `admin.html`, `privacy.html` and `get/index.html`, and the `Current version` line in this file. `scripts/check-contracts.js` (pre-commit) refuses a commit where any of them disagree.
 
@@ -1205,6 +1205,28 @@ controls, name columns and row heights all identical.
 - The title's 8px margin and the list's 12px were stacking into 20px above the first divider against
   12px of row padding below it. One 12px value now, so the rhythm above the list matches the rhythm
   inside it.
+
+## v327 (2026-09-13) — the top bar leaves while you read
+
+«البار هذا اذا نزلت خليه يختفي وما يطلع الا اذا طلعت فوق اخر شي». It goes on the way down and
+comes back **only at the very top** — not on the way up, which is the stricter half of the spec and
+the part a generic hide-on-scroll header would get wrong. Verified: hidden at 300, **still hidden at
+120 on the way back up**, visible again at 0.
+
+- **ONE listener, not twenty.** `.main` is the single scroll container all twenty views share, and
+  exactly one `.vault-bar` is in the DOM at a time — so the state is a class on `.main` and whichever
+  bar is mounted obeys it. `setupBarAutoHide()` is idempotent the same way `setupEmber()` is.
+- **Passive and rAF-coalesced.** Scrolling is the gesture that decides whether this app feels
+  smooth, so the handler never blocks it and never runs more than once a frame. It reads one number
+  and toggles one class; no layout is forced.
+- **`translateY`, not height or display.** It stays on the compositor, and a sticky element keeps its
+  place in flow either way, so nothing below it reflows.
+- **No view-change hook is needed, and I nearly added a fake one.** The first draft listened for a
+  `vault:view` event that **this codebase never dispatches** — contract 7 ("every `vault:*` event is
+  both dispatched and listened for") is what would have caught it. It is unnecessary anyway:
+  `navigate()` restores each view's saved offset by WRITING `main.scrollTop`, which fires the same
+  scroll event. When two views share an offset nothing moves, and the bar is already in the right
+  state for it.
 
 ## Superpowers — and the two places this project deliberately departs from it
 
