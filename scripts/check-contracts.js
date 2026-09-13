@@ -19,7 +19,7 @@ const root = path.resolve(__dirname, '..');
 const read = (p) => fs.readFileSync(path.join(root, p), 'utf8');
 const exists = (p) => fs.existsSync(path.join(root, p));
 
-const JS = ['js/cloud.js', 'js/storage.js', 'js/app.js', 'js/health.js', 'js/notify.js', 'js/foodai.js', 'js/update.js'];
+const JS = ['js/i18n.js', 'js/cloud.js', 'js/storage.js', 'js/app.js', 'js/health.js', 'js/notify.js', 'js/foodai.js', 'js/update.js'];
 const src = Object.fromEntries(JS.map((f) => [f, read(f)]));
 const html = read('index.html');
 const admin = read('admin.html');
@@ -34,7 +34,7 @@ const contract = (name, problems) => {
 {
   const order = [...html.matchAll(/<script src="(js\/[\w./-]+?)(?:\?v=\d+)?"/g)].map((m) => m[1]).filter((s) => !s.startsWith('js/vendor/'));
   const want = JS;
-  contract('index.html loads the seven scripts in dependency order (cloud → storage → app → health → notify → foodai → update)',
+  contract('index.html loads the eight scripts in dependency order (i18n → cloud → storage → app → health → notify → foodai → update)',
     order.join(',') === want.join(',') ? [] : ['found: ' + order.join(' → ')]);
   const tags = [...html.matchAll(/<script\b[^>]*\bsrc="js\/[^">]+"[^>]*>/g)].map(m => m[0]);
   contract('startup scripts download in parallel and execute in order',
@@ -122,7 +122,7 @@ const contract = (name, problems) => {
 
 // ---------------------------------------------------------------- 5. i18n: every literal key exists in BOTH dictionaries, and the dictionaries match
 {
-  const app = src['js/app.js'].split(/\r?\n/);
+  const app = src['js/i18n.js'].split(/\r?\n/);
   const range = (start) => {
     const s = app.findIndex((l) => l.startsWith(start));
     let e = -1; for (let i = s + 1; i < app.length; i++) if (/^  \},?\s*$/.test(app[i])) { e = i; break; }

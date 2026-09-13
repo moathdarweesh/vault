@@ -8,7 +8,8 @@ A fitness / workout-tracking **PWA**. Vanilla JS, **no build step**, bilingual *
 
 ## Stack & key files
 - `index.html` — markup, script wiring, and the cache-version markers.
-- `js/app.js` (**~800KB**) — ALL views/rendering, the router `navigate(view, ctx, opts)`, and the two EN/AR translation objects. Use `Grep` to find a function; don't assume from names.
+- `js/i18n.js` — the two EN/AR dictionaries (1,931 lines) and nothing else. **Loads FIRST of the eight scripts**: `const I18N` is shared through the global lexical scope, which only works if it has already executed when app.js's `t()` runs.
+- `js/app.js` (**~700KB**) — ALL views/rendering and the router `navigate(view, ctx, opts)`. Use `Grep` to find a function; don't assume from names.
 - `js/storage.js` — the `DB.*` localStorage API (all persistence). `MACHINE_SEED`, name-match migrations.
 - `js/cloud.js` — Supabase email/password auth + whole-blob sync to a per-user `vault_data` row (RLS-protected). Uses the **publishable** key only (never service-role). Loads before app.js. Also: `getUsername/checkUsername/setUsername` (the mandatory-handle feature) and `getClient` (RLS-scoped client for auxiliary readers).
 - ~~`js/tables.js`~~ — **the mirror was REMOVED in v278** (owner decision, migration `18_drop-mirror-v14.sql`): the 13 normalized projection tables are dropped, the admin panel reads `vault_data` blobs directly under a `vault_data_admin_read` (is_admin) SELECT policy, and `admin_user_stats`/`admin_activity`/`delete_own_account` were rewritten over the blobs IN THE SAME TRANSACTION as the drops — plpgsql binds table names at call time, so dropping first would have broken every account deletion. The mirror's projection was silently empty for workout_sessions (name-remap failures), which is half of why it went.
@@ -77,7 +78,7 @@ a faster TTFB — not fewer bytes.
 npm run release          # bump every marker + verify, then commit all files together
 ```
 
-**Current version: v332.** APK: build 21 / v3.0.
+**Current version: v333.** APK: build 21 / v3.0.
 
 `scripts/release.js` rewrites **every** marker and then re-reads them from disk to confirm; it exits non-zero if any disagree, and prints the count per file (derived, never hard-coded — the docs used to say 16 while the real count was 15). The markers are `?v=N` in `index.html` (every script and stylesheet, the `js/vendor/supabase.js` preload, both `icons/icon.svg` links, `manifest.json`), the `__cleaned_vN` sessionStorage key, the `FALLBACK` literal in `app.js`, `version.json` → `web`, the `?v=` in `manifest.json`, `admin.html`, `privacy.html` and `get/index.html`, and the `Current version` line in this file. `scripts/check-contracts.js` (pre-commit) refuses a commit where any of them disagree.
 
@@ -1541,6 +1542,55 @@ deliberately and shuts with one tap, not the state that greets him every time. A
 their ragged widths inside the box: ellipsising a long recipe name so it lines up with its
 neighbours would break the first law — the box fits what is in it, you do not trim what is in it to
 fit the box.
+
+## v333 — the translations move out of js/app.js
+
+«حسن من الكود عشان يتحسن القراف» — improve the CODE so the graph improves. The graph is a
+measurement of the codebase, so the route to a better graph is a better-shaped source tree, not a
+better-looking picture.
+
+The graph was mined for structural defects and every candidate measured before acting. **Two of the
+three leads were false**, which is the part worth keeping:
+
+- **"83 functions in storage.js are never called."** The AST extractor does not see a call through
+  an object literal (`DB.prefs.setTheme`), a handler binding (`el.onclick = fn`), or a
+  `window.X = {…}` public surface — so most of its own "dead" list is alive. A source-level scan of
+  all **256** top-level functions across the seven scripts found **zero** genuinely dead ones.
+  (`$` and `$$` looked dead only because `$` is a regex anchor — my scan's bug, not the code's.)
+- **"three helper names are defined in more than one file."** `pull`, `open` and `sync` — each in
+  its own module namespace (`Cloud.pull` vs `Health.pull`). Correct as they are.
+
+### What the measurement did find
+
+| js/app.js | |
+|---|---|
+| total | **15,191 lines · 815 KB** |
+| `I18N` (both dictionaries) | **1,931 lines · 115 KB — 13% of the lines, 14% of the bytes** |
+| all pure-data blocks | 2,501 lines · 171 KB — 21% of the bytes |
+| references to `I18N` inside app.js | **one**, in `t()` |
+
+A dictionary is not a view and not a router, and this file is documented as being "ALL
+views/rendering + the router". 1,931 lines of data in the middle of it is most of why this guide has
+to tell readers to Grep rather than trust the file's shape.
+
+`js/i18n.js` holds it now. **app.js: 15,191 → 13,260 lines, 815 → 698 KB.**
+
+> ⚠️ **A top-level `const` in a classic script is NOT on `window` — but it IS shared.** It lives in
+> the global LEXICAL environment, which every later classic script can read, so app.js's `t()` still
+> resolves `I18N` — **only because i18n.js executes first**. It is the first of the eight `defer`
+> scripts and contract 1 enforces that order. Verified in a real browser rather than assumed:
+> `typeof I18N !== 'undefined'` from app.js's scope, 1073 keys in each dictionary, `t()` correct in
+> both languages, switching both ways, `body[dir=rtl]` intact, and no raw key on screen.
+
+Contract changes: the `JS` list gains `js/i18n.js` (first), contract 1's title says **eight**
+scripts, and contract 5 reads the dictionaries from their own file. The key counts are unchanged —
+937 literal keys + 12 prefixes, en 1073 / ar 1073 — which is the proof nothing was lost in transit.
+
+**Still in app.js, measured and deliberately left:** `FOOD_PRESETS` (235 lines), the two exercise
+name maps (150), `EXERCISE_MUSCLES` (74), `ICONS` (66), `WORKOUT_TEMPLATES` (45) — ~570 lines
+together. Each is read by a contract that would have to move with it, and none is 13% of the file.
+Worth doing as one `js/catalog.js` when there is a reason to touch them; not worth the contract
+churn on its own.
 
 ## Superpowers — and the two places this project deliberately departs from it
 
