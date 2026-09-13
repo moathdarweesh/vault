@@ -63,11 +63,38 @@ vm.runInContext('reloadState()', s.c);
 assert.equal(DB.plan.get().cycle[0].targets[id].sets, 2);
 DB.plan.removeExerciseFromSlot(0, id); DB.plan.addExerciseToSlot(0, id);
 assert.equal(DB.plan.get().cycle[0].targets[id], undefined, 'removed prescriptions cannot resurrect');
+// ---- THE PERMANENT SWAP (v331) -------------------------------------------
+// «دائمًا» on the swap toast writes the run's substitution back into the cycle
+// slot. It goes through setSlotExercises — the NARROW slot API — and not
+// setRotation, which rebuilds the plan object field by field and drops every
+// field it is not handed. What must hold: the replacement takes the old
+// exercise's POSITION (an exercise order is a session order, not a set), the
+// survivors keep their prescriptions, the departed exercise's prescription goes
+// with it, and the newcomer inherits nothing.
+const cat = DB.exercises.list();
+const trio = [cat[0].id, cat[1].id, cat[2].id], spare = cat[3].id;
+DB.plan.setRotation({ cycle: [{ name: 'Swap', exerciseIds: trio }], trainingDays: [1, 3, 5] });
+assert.equal(DB.plan.setSlotTargets(0, Object.fromEntries(trio.map((x, i) => [x, { sets: i + 2, reps: String(i + 8), notes: '' }])), snapshot()).ok, true);
+const keptTargets = JSON.stringify(DB.plan.get().cycle[0].targets[trio[1]]);
+DB.plan.setSlotExercises(0, trio.map((x) => (x === trio[0] ? spare : x)));
+const swapped = DB.plan.get().cycle[0];
+// Compared as JSON, like everything else in this file: DB returns arrays built
+// inside the vm realm, and deepStrictEqual compares prototypes — two identical
+// lists of strings are not deepEqual across realms.
+assert.equal(JSON.stringify(swapped.exerciseIds), JSON.stringify([spare, trio[1], trio[2]]), 'the replacement takes the old position, not the end of the list');
+assert.equal(new Set(swapped.exerciseIds).size, 3, 'no duplicate');
+assert.equal(JSON.stringify(swapped.targets[trio[1]]), keptTargets, 'a survivor keeps its prescription');
+assert.equal(swapped.targets[trio[0]], undefined, "the departed exercise's prescription leaves with it");
+assert.equal(swapped.targets[spare], undefined, 'and the newcomer inherits none of it');
+vm.runInContext('reloadState()', s.c);
+assert.equal(JSON.stringify(DB.plan.get().cycle[0].exerciseIds), JSON.stringify([spare, trio[1], trio[2]]), 'and it survives a reload');
+assert.equal(JSON.stringify(DB.sessions.listAll()), history, 'a swap never touches logged sets');
+
 const beforeReadOnly = snapshot();
 vm.runInContext('STATE_LOAD_FAILED = true', s.c);
 assert.equal(DB.plan.importImagePlan(request()).reason, 'storage');
 assert.equal(snapshot(), beforeReadOnly);
-console.log('PASS storage: append, replace, no logged sets, reload, edit, duplicate save, validation, disk-full rollback, custom dedupe, stale-target cleanup, read-only');
+console.log('PASS storage: append, replace, no logged sets, reload, edit, duplicate save, validation, disk-full rollback, custom dedupe, stale-target cleanup, permanent swap, read-only');
 
 // Run the real Worker handler with deterministic Supabase and Gemini responses.
 async function workerTests() {

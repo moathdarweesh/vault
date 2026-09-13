@@ -2691,6 +2691,12 @@ body.rest-active .toast { bottom: calc(var(--safe-b) + var(--rest-h, 72px) + 28p
   border-radius: 999px;
   cursor: pointer;
 }
+.toast-action { position: relative; }
+/* 44px of hit area on a 31.5px control, grown DOWNWARD into the empty gap below
+   the toast. Upward is not available: while a rest timer runs the toast already
+   clears .run-nav by only 7px, and a symmetric halo would start stealing the
+   run's own Next/Prev taps. Measured both ways before choosing. */
+.toast-action::after { content: ''; position: absolute; inset: 0 -8px -14px; }
 .toast-action:active { transform: scale(var(--press-scale)); opacity: 0.7; }
 
 /* =========================================================================
@@ -7963,6 +7969,22 @@ body.ember-on .ember {
 .sl-add svg { width: 20px; height: 20px; }
 /* The outstanding count on the Food header link. */
 .sl-count { color: var(--accent-text); font-weight: 700; }
+
+/* ---- Quick log (v331) -----------------------------------------------------
+   The search sheet's empty state. Everything here is an existing component:
+   .cx-actions puts the two cups on one row, .cx-stack .btn already gives every
+   button its 44px floor and its wrapping label, and <h3> matches the group
+   headings the search results render into the same box.                     */
+.ql { display: flex; flex-direction: column; gap: var(--sp-2h); }
+.ql > h3 { margin: 0; }
+.ql-btn { display: flex; align-items: center; justify-content: center; gap: var(--sp-2); }
+.ql-btn svg { flex: none; }
+/* The −250 undo is a fixed square beside the two cups, exactly as on the Food
+   hero: it is a correction, not a third thing to choose between. */
+.cx-actions > .ql-minus { flex: 0 0 var(--btn-h-m); padding: 0; color: var(--text-mute); }
+/* The day's running total, directly under the cups that change it — the whole
+   feedback loop, with no toast to cover the buttons. */
+.ql-now { margin: 0; text-align: center; font-size: var(--fs-caption); color: var(--text-mute); }
 
 /* =========================================================================
    ^^^ EVERYTHING ABOVE, THEN THE IDENTITY LAYER BELOW. ^^^

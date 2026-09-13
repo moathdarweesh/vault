@@ -12,7 +12,7 @@
 // build. The literal below is the fallback (file://, or a stripped query) and is
 // still bumped by `npm run release` — see CLAUDE.md "CACHE WORKFLOW".
 const VAULT_BUILD = (() => {
-  const FALLBACK = 'v330';
+  const FALLBACK = 'v331';
   try {
     const src = (document.currentScript && document.currentScript.src) || '';
     const m = src.match(/[?&]v=(\d+)/);
@@ -959,14 +959,19 @@ const I18N = {
     sug_applied: 'Suggestion filled into the next set',
     tab_recipes: 'Recipes',
     run_ex_options: 'Exercise options',
-    run_ex_options_sub: 'For today only — your plan does not change',
+    run_ex_options_sub: 'For today, unless you choose otherwise',
     run_ex_swap: 'Swap exercise',
     run_ex_drop: 'Skip today',
-    run_ex_today_only: 'Both change today\'s workout only. Edit the rotation to change it for good.',
+    run_ex_today_only: 'Today\'s workout only. After a swap you can also make it permanent.',
     run_ex_only_one: 'This is the only exercise left, so it cannot be skipped. Swap it instead.',
     run_ex_drop_logged: 'You already logged sets for this exercise today. They will be deleted.',
     run_ex_dropped: 'Skipped for today',
     run_ex_swapped: 'Exercise swapped',
+    run_ex_swapped_today: 'Swapped for today',
+    run_ex_swap_always: 'Always',
+    run_ex_swap_always_done: 'Swapped in your program too',
+    run_ex_swap_always_gone: 'Your program already changed',
+    ql_title: 'Quick log',
     run_ex_same_muscle: 'Same muscle',
     run_ex_other: 'Everything else',
     rec_new: 'New recipe',
@@ -1925,14 +1930,19 @@ const I18N = {
     sug_applied: 'وُضع الاقتراح في المجموعة التالية',
     tab_recipes: 'وصفاتي',
     run_ex_options: 'خيارات التمرين',
-    run_ex_options_sub: 'لهذا اليوم فقط — لا يتغيّر برنامجك',
+    run_ex_options_sub: 'لهذا اليوم، إلا أن تختار غير ذلك',
     run_ex_swap: 'استبدال التمرين',
     run_ex_drop: 'تخطّيه اليوم',
-    run_ex_today_only: 'كلا الخيارين يغيّران تمرين اليوم وحده. لتغييرٍ دائم، عدّل الدورة من شاشة البرنامج.',
+    run_ex_today_only: 'لتمرين اليوم وحده. وبعد الاستبدال يمكنك جعله دائمًا في برنامجك.',
     run_ex_only_one: 'هذا آخر تمرين متبقٍّ، فلا يمكن تخطّيه. استبدله بغيره.',
     run_ex_drop_logged: 'سجّلت مجموعات لهذا التمرين اليوم، وستُحذف.',
     run_ex_dropped: 'تم تخطّي التمرين اليوم',
     run_ex_swapped: 'استُبدل التمرين',
+    run_ex_swapped_today: 'استُبدل لهذا اليوم',
+    run_ex_swap_always: 'دائمًا',
+    run_ex_swap_always_done: 'واستُبدل في برنامجك أيضًا',
+    run_ex_swap_always_gone: 'تغيّر برنامجك قبل ذلك',
+    ql_title: 'تسجيل سريع',
     run_ex_same_muscle: 'العضلة نفسها',
     run_ex_other: 'بقيّة التمارين',
     rec_new: 'وصفة جديدة',
@@ -3373,6 +3383,13 @@ function hideToast() {
   clearTimeout(toastTimeout);
   tEl.classList.remove('show');
   tEl.classList.remove('has-action');
+  // `.toast.show .toast-action` already drops pointer-events, and showToast's own
+  // `spent` flag refuses the handler — measured: a click after expiry fires
+  // nothing. But a hidden toast is opacity:0, not display:none, so the button
+  // stayed FOCUSABLE: a keyboard or switch user tabbed to the end of the page
+  // and landed on an announced, invisible "Undo" that does nothing.
+  const spentAction = tEl.querySelector('.toast-action');
+  if (spentAction) { spentAction.tabIndex = -1; spentAction.setAttribute('aria-hidden', 'true'); }
   if (tEl.__toastCleanup) { try { tEl.__toastCleanup(); } catch (_) {} tEl.__toastCleanup = null; }
 }
 // Plain text toast, OR — when `opts.actionLabel`/`opts.onAction` are given — a
@@ -4784,6 +4801,7 @@ function openWeightSheet() {
       if (!val || val <= 0) { input.focus(); return; }
       DB.bodyweight.log(todayISO(), convertWeightToStorage(val));
       host.innerHTML = body(); bind();
+      refreshCaller();
     };
     saveBtn?.addEventListener('click', doSave);
     input?.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); doSave(); } });
@@ -4791,10 +4809,19 @@ function openWeightSheet() {
       b.addEventListener('click', () => {
         DB.bodyweight.remove(b.getAttribute('data-del-weight'));
         host.innerHTML = body(); bind();
+        refreshCaller();
       })
     );
   };
   bind();
+}
+// The screen BEHIND an open sheet. renderView rewrites .view; the sheet lives in
+// #modal-root and is untouched, so a number the sheet just changed stops lying
+// while the sheet is still open. Without this the Home weight card still read
+// «سجّل وزنك» after a weight was logged from its own sheet — measured — and the
+// same staleness reached the Food water card and calorie ring through quick log.
+function refreshCaller() {
+  try { if (currentView) renderView(currentView); } catch (_) {}
 }
 
 // ==========================================================================
@@ -9927,14 +9954,83 @@ function guardConvenienceModal(modal) {
 function convenienceModal(html) { return guardConvenienceModal(openModal(html)); }
 function openUnifiedSearch() {
   const owner = Cloud.getLastUid();
+  // ---- QUICK LOG: the sheet's empty state ---------------------------------
+  // Water, weight and a saved meal were 2, 4 (below Home's fold) and 6 taps
+  // away, each on a different screen. They are the three things logged most
+  // often and the three least worth navigating for.
+  //
+  // It adds NO new control: this sheet is opened by the search button, which is
+  // the one thing already on every screen's top bar, and before v331 the space
+  // under the field was empty — worse, any save elsewhere in the app fires
+  // vault:save-state, which re-dispatches input here, so an untouched sheet
+  // would repaint itself as «no results». Now the empty query has an answer.
+  // The cups carry the Food hero's exact wording — literal +250/+500, fmtNum'd
+  // totals — so the control a user already knows reads the same in both places,
+  // including its −250 undo: a mis-tap here must not be fixable only by the
+  // navigation this feature exists to remove.
+  const waterBtn = (ml, label) => `<button type="button" class="btn btn-ghost ql-btn${ml < 0 ? ' ql-minus' : ''}" data-ql="water" data-ml="${ml}"
+      aria-label="${escapeHtml(label)}">${ml < 0 ? icon('minus', 16) : icon('droplet', 18) + `<span class="num">+${Math.abs(ml)}</span>`}</button>`;
+  const waterNow = () => `<span class="num" data-ql-now>${fmtNum(DB.water.get(todayISO()))}</span> / <span class="num">${fmtNum(DB.water.goal())}</span> ${t('unit_ml')}`;
+  const quickLog = () => `<div class="ql">
+      <h3>${t('ql_title')}</h3>
+      <div class="cx-actions">
+        ${waterBtn(250, t('water') + ' +250 ' + t('unit_ml'))}
+        ${waterBtn(500, t('water') + ' +500 ' + t('unit_ml'))}
+        ${waterBtn(-250, t('water_undo'))}
+      </div>
+      <p class="ql-now">${waterNow()}</p>
+      <button type="button" class="btn btn-ghost ql-btn" data-ql="weight"><span class="icon-mirror">${icon('trendLine', 18)}</span><span>${t('bodyweight')}</span></button>
+      <button type="button" class="btn btn-ghost ql-btn" data-ql="meal">${icon('meal', 18)}<span>${t('tab_bundles')}</span></button>
+    </div>`;
+  // Quick log sits OUTSIDE #cx-results, which is an aria-live region. A live
+  // region is for results that arrive on their own; interactive controls inside
+  // one get the whole block re-announced on every tap and on every background
+  // save. Results stay live, the launcher does not.
   const modal = convenienceModal(`${cxHeader('cx_search')}<div class="cx-stack">
     <div class="search-wrap">${icon('search', 20)}<input class="input" id="cx-query" type="search" maxlength="160" autocomplete="off" placeholder="${escapeHtml(t('cx_query'))}" aria-label="${escapeHtml(t('cx_search'))}"></div>
+    <div id="cx-quick" class="cx-stack">${quickLog()}</div>
     <div id="cx-results" class="cx-stack" aria-live="polite"></div></div>`);
   const input = modal.querySelector('#cx-query'), host = modal.querySelector('#cx-results');
+  const quick = modal.querySelector('#cx-quick');
+  // ONLY the number is rewritten, never the block: replacing it would destroy the
+  // button under the user's thumb (focus fell to <body> on every tap) and
+  // re-announce four controls for a changed digit. Called from the tap AND from
+  // the save-state repaint, so a cup logged on the Food screen — or arriving in a
+  // sync pull — still moves this number while the sheet is open.
+  const syncWaterNow = () => {
+    const cell = quick.querySelector('[data-ql-now]');
+    if (cell) cell.textContent = fmtNum(DB.water.get(todayISO()));
+  };
+  // ONE delegated listener, bound once on a box that is never rewritten.
+  quick.addEventListener('click', (event) => {
+    const b = event.target.closest('[data-ql]');
+    if (!b) return;
+    if (owner !== Cloud.getLastUid()) { closeModal(); return; }
+    if (b.dataset.ql === 'water') {
+      DB.water.add(todayISO(), Number(b.dataset.ml) || 0);
+      // ONLY the number is rewritten. Replacing the block would destroy the
+      // button under the user's thumb — focus fell to <body> on every tap — and
+      // re-announce four controls to a screen reader for a changed digit.
+      syncWaterNow();
+      // The running total is the confirmation INSIDE the sheet; the screen
+      // behind it holds the same number and would otherwise keep the old one
+      // until the user navigated away, which invites logging the cup twice.
+      refreshCaller();
+      return;
+    }
+    // Both REPLACE this sheet — openModal rewrites #modal-root — so there is
+    // nothing to close first, and the focus anchor captured on the way in is
+    // kept because the opener is inside the root openModal is about to rewrite.
+    if (b.dataset.ql === 'weight') { openWeightSheet(); return; }
+    if (b.dataset.ql === 'meal') { openSavedFoodPicker(todayISO(), refreshCaller, 'bundles'); }
+  });
   const labels = {exercise:'exercises',food:'tab_saved_foods',meal:'cx_meals',recipe:'tab_recipes',session:'history',log:'food_history',date:'cx_date'};
   const search = debounce(() => {
     if (!modal.isConnected) return;
     if (owner !== Cloud.getLastUid()) { host.textContent = ''; closeModal(); return; }
+    const typing = !!input.value.trim();
+    quick.hidden = typing;
+    if (!typing) { host.innerHTML = ''; syncWaterNow(); return; }
     const aliases = Object.fromEntries(DB.exercises.list().map(ex => [ex.id, [exDisplayName(ex), EXERCISE_NAME_AR_FULL[ex.name] || '', EXERCISE_NAME_AR[ex.name] || '', t('cat_' + ex.category)].join(' ')]));
     const results = DB.search.query(input.value, aliases);
     const groups = [...new Set(results.map(r => r.type))];
@@ -12015,8 +12111,22 @@ function renderSessionRun(el) {
   // its button was sitting on.
   const runOnly = Array.isArray(viewContext.runOnly) ? viewContext.runOnly : null;
   const runPlanIds = (day?.exerciseIds || []);
+  // runOnly arrives in TWO different meanings and they need different maths.
+  //   A SELECTION (navigate('session-run', {runOnly})) is a set of ids chosen on
+  //     another screen: it carries no order of its own, so the order comes from
+  //     the plan, with anything outside the plan appended.
+  //   THE RUN'S OWN LIST, once runListNow() has materialised it, IS the order —
+  //     replaceInRun puts a substitute at the position it replaced, and a drop
+  //     slides the next exercise into the gap.
+  // Re-deriving the second from the plan threw that position away. Before v331
+  // that only meant a swapped-in exercise moved to the END of the run (and the
+  // screen jumped forward one). With «دائمًا» writing the substitution into the
+  // plan it became worse: the plan then re-sorted the run UNDER a positional
+  // runIdx, so the exercise just made permanent sat behind the cursor and was
+  // never reached, while its neighbour was presented twice.
   const runIds = runOnly
-    ? runPlanIds.filter((id) => runOnly.includes(id)).concat(runOnly.filter((id) => !runPlanIds.includes(id)))
+    ? (viewContext.runOrdered ? runOnly.slice()
+      : runPlanIds.filter((id) => runOnly.includes(id)).concat(runOnly.filter((id) => !runPlanIds.includes(id))))
     : runPlanIds;
   const exObjs = runIds.map((id) => exerciseById[id]).filter(Boolean);
   const totalEx = exObjs.length;
@@ -12412,6 +12522,8 @@ function renderSessionRun(el) {
   // first edit MATERIALISES it from the ids showing right now.
   function runListNow() {
     if (!Array.isArray(runCtx.runOnly)) runCtx.runOnly = runIds.slice();
+    // From here on this list IS the run's order — see the note at runIds.
+    runCtx.runOrdered = true;
     return runCtx.runOnly;
   }
   // A session already logged for this exercise today. Swapping or dropping has
@@ -12426,6 +12538,52 @@ function renderSessionRun(el) {
     if (newId) list[i] = newId; else list.splice(i, 1);
     // Drop the old exercise's in-memory sets so the slot does not inherit them.
     if (runCtx.runState) delete runCtx.runState[oldId];
+  }
+  // A swap changes TODAY'S list — runOnly, which dies with viewContext. "The
+  // machine is taken" is usually not a one-day fact, but asking "and for good?"
+  // BEFORE the swap puts a commitment in front of someone who is mid-set. So the
+  // permanent change is offered AFTERWARDS, as an action on the confirmation
+  // toast: one tap takes it, ignoring it lets it expire, and the workout never
+  // stops either way.
+  //
+  // Resolved AT ACTION TIME, never captured: the toast outlives this render, and
+  // between the swap and the tap the plan can be edited on another device and
+  // pulled in. It writes through setSlotExercises(i, ids) — the narrow slot API
+  // — because setRotation() rewrites the whole plan object and erases every
+  // field it is not handed.
+  function permanentSwapSlot(oldId, newId) {
+    const w = DB.plan.workoutForDate(runDateObj);
+    if (!w) return null;                                     // rest day / no plan
+    const i = (DB.plan.get().cycle || []).indexOf(w);         // workoutForDate returns the live element
+    if (i === -1) return null;
+    const ids = (w.exerciseIds || []);
+    // Already replaced, or the new exercise is ALSO in the slot — a write would
+    // duplicate it rather than swap it. Neither is offerable.
+    if (!ids.includes(oldId) || ids.includes(newId)) return null;
+    return { i, ids };
+  }
+  function offerPermanentSwap(oldId, newId) {
+    if (!permanentSwapSlot(oldId, newId)) { showToast(t('run_ex_swapped')); return; }
+    // The only deferred WRITE handle on this screen: it stays live for 8s and
+    // survives navigation, so it is scoped to the account that raised it — the
+    // same rule the convenience sheets and scoped undo already follow.
+    const owner = Cloud.getLastUid();
+    showToast(t('run_ex_swapped_today'), {
+      duration: 8000,
+      actionLabel: t('run_ex_swap_always'),
+      onAction: () => {
+        const slot = owner === Cloud.getLastUid() ? permanentSwapSlot(oldId, newId) : null;
+        if (!slot) { showToast(t('run_ex_swap_always_gone')); return; }
+        const ids = slot.ids.slice();
+        ids[ids.indexOf(oldId)] = newId;
+        DB.plan.setSlotExercises(slot.i, ids);
+        // Same as the day editor: an exercise that is now IN the program belongs
+        // in the Train list, or it is scheduled and unfindable.
+        const nx = DB.exercises.getById(newId);
+        if (nx && !nx.inMyList) DB.exercises.setInMyList(newId, true);
+        showToast(t('run_ex_swap_always_done'));
+      },
+    });
   }
 
   function openRunExMenu() {
@@ -12503,7 +12661,7 @@ function renderSessionRun(el) {
           replaceInRun(ex.id, newId);
           closeModal();
           renderSessionRun(el);
-          showToast(t('run_ex_swapped'));
+          offerPermanentSwap(ex.id, newId);
         };
         if (logged) confirmDialog({ title: t('run_ex_swap'), text: t('run_ex_drop_logged'), confirmLabel: t('run_ex_swap'), variant: 'danger', onConfirm: go });
         else go();

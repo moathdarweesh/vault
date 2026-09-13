@@ -77,7 +77,7 @@ a faster TTFB — not fewer bytes.
 npm run release          # bump every marker + verify, then commit all files together
 ```
 
-**Current version: v330.** APK: build 21 / v3.0.
+**Current version: v331.** APK: build 21 / v3.0.
 
 `scripts/release.js` rewrites **every** marker and then re-reads them from disk to confirm; it exits non-zero if any disagree, and prints the count per file (derived, never hard-coded — the docs used to say 16 while the real count was 15). The markers are `?v=N` in `index.html` (every script and stylesheet, the `js/vendor/supabase.js` preload, both `icons/icon.svg` links, `manifest.json`), the `__cleaned_vN` sessionStorage key, the `FALLBACK` literal in `app.js`, `version.json` → `web`, the `?v=` in `manifest.json`, `admin.html`, `privacy.html` and `get/index.html`, and the `Current version` line in this file. `scripts/check-contracts.js` (pre-commit) refuses a commit where any of them disagree.
 
@@ -1345,6 +1345,137 @@ transparent until ticked, then `--accent` fill with an `--accent-ink` mark. Veri
 - ⚠️ **The global `input, select, textarea` rule sets `padding: 13px 14px`, and under `border-box`
   that padding is a SIZE FLOOR.** With `width/height: 26px` the box still came out **30×28**. Any
   input styled to a fixed small size in this app must zero its padding explicitly.
+
+## v331 (2026-09-13) — the second decision, and three logs behind one button
+
+«ابني الثنتين الاخيرات بشكل احترافي سلس» — the two features the owner picked out of a shortlist.
+
+### 1. A swap can now be made permanent, afterwards
+
+A swap in the guided run has always been TODAY-ONLY: it edits `runCtx.runOnly`, an in-memory list
+that dies with `viewContext`. But «الجهاز مشغول» is rarely a one-day fact, and the only way to make
+it stick was to leave the run, open Program, and edit the rotation by hand.
+
+**The decision is offered AFTER the swap, not before it.** A "and for good?" dialog in the chooser
+would put a commitment in front of someone mid-set; the confirmation toast carries «دائمًا» as an
+action instead. One tap takes it, ignoring it lets it expire in 8s, and the workout never stops
+either way.
+
+- **The slot is resolved at ACTION time, never captured.** The toast outlives the render that raised
+  it, and between the swap and the tap the plan can be edited on another device and pulled in.
+- **It writes through `DB.plan.setSlotExercises(i, ids)`** — the narrow slot API — because
+  `setRotation()` rebuilds the plan object field by field and erases every field it is not handed.
+  `i` comes from `cycle.indexOf(workoutForDate(D))`, which is sound because `workoutForDate`
+  returns the live cycle element (the same idiom `renderSessionDay` already uses).
+- **Three states are NOT offerable, and fall back to the plain toast:** a rest day or no plan
+  (`workoutForDate` → null); the slot no longer holding the old exercise; and the slot ALREADY
+  holding the new one — reachable when `runOnly` has narrowed the run, where a write would
+  *duplicate* an exercise rather than swap it. All three measured against a live run.
+- **The replacement takes the old exercise's POSITION**, because an exercise order is a session
+  order. Survivors keep their `targets`; the departed exercise's prescription leaves with it and the
+  newcomer inherits none of it — `normalizePlanTargets` already guarantees this, and
+  `scripts/test-plan-import.js` now asserts it.
+- The new exercise is added to the Train list, the same as the day editor's save: an exercise that is
+  in the program but not in the list is scheduled and unfindable.
+- **The toast is scoped to the account that raised it.** It is the only deferred *write handle* on
+  the run screen — live for 8s and surviving navigation — so it follows the rule the convenience
+  sheets and scoped undo already follow: a `Cloud.getLastUid()` captured at offer time, compared at
+  tap time. Verified by swapping the uid under a live toast: the write is refused and the plan is
+  byte-identical.
+- `run_ex_today_only` was rewritten — it used to end "edit the rotation to change it for good",
+  which is now false.
+
+> ⚠️ **`scripts/test-plan-import.js` compares arrays as JSON, and that is not a style choice.**
+> `DB` builds its arrays inside the `vm` realm, and `assert.deepStrictEqual` compares prototypes —
+> two identical lists of strings are **not** deepEqual across realms. The failure looks like data
+> corruption (both arrays print the same) and is not.
+
+### 2. Quick log — the search sheet's empty state
+
+Water, weight and a saved meal were **2, 4 and 6 taps** away, each on a different screen (weight's
+card is below Home's fold). They are the three things logged most often and the three least worth
+navigating for.
+
+**It adds no new control.** `openUnifiedSearch()` is opened by the search button, which is the one
+thing already in every screen's top bar, and the space under its field was blank — worse, any save
+anywhere in the app fires `vault:save-state`, which re-dispatches `input` here, so an untouched
+sheet would repaint itself as «لا توجد نتائج». The empty query has an answer now: +250 / +500,
+الوزن, وجباتي — every one of them an existing component (`.cx-actions`, `.cx-stack .btn`, the
+existing water/weight/meal APIs), and every one two taps from anywhere.
+
+- **The launcher lives OUTSIDE `#cx-results`, in its own `#cx-quick`.** `#cx-results` is an
+  `aria-live` region, and a live region is for results that arrive on their own — interactive
+  controls inside one get the whole block re-announced on every tap and every background save.
+  Results stay live; the launcher does not. One delegated listener, on a box that is never rewritten.
+- **A water tap rewrites ONE number, never the block.** Replacing it destroyed the button under the
+  user's thumb (measured: focus fell to `<body>` on every tap). `syncWaterNow()` is called from the
+  tap *and* from the save-state repaint, so a cup logged on the Food screen still moves this number
+  while the sheet is open.
+- **The running total under the cups IS the confirmation.** A toast would sit on top of the two
+  buttons that produced it, and the sheet stays open for a second tap. The `−250` undo comes across
+  from the Food hero too: a mis-tap must not be fixable only by the navigation this feature removes.
+- Weight and وجباتي simply call `openWeightSheet()` / `openSavedFoodPicker(todayISO(), null,
+  'bundles')`: `openModal` rewrites `#modal-root`, so the search sheet is replaced, not stacked.
+- **Measured at a keyboard-shrunk viewport (375×500):** the whole block, last button included, is
+  visible without scrolling — so auto-focusing the search field costs nothing.
+
+
+### What the pre-push review found
+
+Thirty-four agents read the change before it reached a device; 29 findings, 13 confirmed after
+adversarial verification. **Two of the confirmed ones I then measured to be wrong**, and both are
+recorded here because the measurement is the useful part.
+
+**HIGH — «دائمًا» re-sorted the live run, and the exercise it had just made permanent was never
+reached.** Confirmed by walking a five-exercise run in the browser:
+
+    before   start A → swap A→X → screen jumps to B → «دائمًا» → Next shows B AGAIN → C, D, E, end
+                                                                 X is never displayed
+    after    start A → swap A→X → screen stays on X  → «دائمًا» → Next shows B, C, D, E, end
+
+> ⚠️ **`runOnly` carries TWO different meanings and they need different maths.** A *selection*
+> (`navigate('session-run', {runOnly})`) is a set of ids chosen on another screen: it has no order,
+> so the order comes from the plan with non-plan ids appended. **The run's own list**, once
+> `runListNow()` has materialised it, IS the order — `replaceInRun` puts a substitute at the
+> position it replaced, and a drop slides the next exercise into the gap. Re-deriving the second
+> from the plan threw that position away.
+
+`runCtx.runOrdered` distinguishes them. This also repairs a **pre-existing v307 defect**: before
+v331 a swap already moved the new exercise to the END of the run and jumped the screen forward one.
+And the drop path's comment — "the next exercise slides into it" — was a *lie* until this fix;
+it now measurably does.
+
+**MEDIUM — a write from the quick log never repainted the screen behind the sheet**, which invites
+logging the same cup twice. `refreshCaller()` (`renderView(currentView)`; the sheet lives in
+`#modal-root` and survives) now runs after each. Chasing it turned up **a pre-existing bug at a door
+that has nothing to do with this feature**: logging 77.7 kg from Home's *own* weight card and closing
+the sheet left the card still reading «سجّل وزنك». `openWeightSheet` refreshes its caller now, so
+both doors are fixed.
+
+**MEDIUM — the «دائمًا» button was a 31.5px target**, under the project's 44px floor, and it is the
+only route into the whole feature. It gets a `::after` halo that grows **downward only**: while a
+rest timer runs the toast clears `.run-nav` by just 7px, and a symmetric halo measurably started
+stealing the run's own Next/Prev taps. Measured 44×61 in both geometries.
+
+**LOW — a spent toast action stayed in the tab order.** `.toast.show .toast-action` already drops
+`pointer-events`, and `showToast`'s `spent` flag refuses the handler — measured, a click after
+expiry fires nothing. But a hidden toast is `opacity: 0`, not `display: none`, so the button stayed
+*focusable*: a keyboard user tabbed to the end of the page and landed on an announced, invisible
+"Undo". `hideToast` sets `tabIndex = -1` + `aria-hidden` now. Pre-existing for every Undo toast
+the app has ever shown.
+
+**LOW — the options sheet contradicted itself**, promising «لا يتغيّر برنامجك» four lines above a hint
+that says it can. The subtitle is «لهذا اليوم، إلا أن تختار غير ذلك» now.
+
+**Refuted by measurement — "hideToast never disarms the action, so the cancelled button still
+rewrites the program."** It does not: after expiry the computed `pointer-events` is `none` *and*
+the `spent` flag returns early, so a synthetic `.click()` fired the handler **zero** times. Only the
+focusability half of that finding was real.
+
+**Refuted by measurement — "the action toast covers the run's controls."** With a real live rest
+timer the toast box overlaps `.run-nav` by 4px, but `#toast` is `pointer-events: none` and the
+action button sat 7px clear, so no tap was ever stolen. Cosmetic, pre-existing, and left alone
+rather than risking shared toast geometry for 4px.
 
 ## Superpowers — and the two places this project deliberately departs from it
 
