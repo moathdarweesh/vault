@@ -7902,6 +7902,61 @@ body.ember-on .ember {
 .sl-chip::after { content: ''; position: absolute; inset: -4px 0; }   /* 44px on a 36px chip */
 .sl-chip:active { border-color: var(--accent-line); background: var(--surface-3); }
 
+/* ---- The two named boxes over the list (v332) -------------------------------
+   «ليش ما نحطهم بخانه اسمها … عشان تكون ارتب». Measured on the owner's own data
+   at 375x812 BEFORE this was written: 10 sources wrapped to FIVE ragged rows —
+   212px, 34% of a 632px sheet — and the first shopping item began at y=325, past
+   half the screen, on the sheet whose whole subject IS the list.
+   Grouping ALONE makes that worse: two headings ADD 2x44 + 2x8 = 104px to a block
+   already too tall. The heading has to be able to CLOSE. Shut, the block is two
+   44px rows whatever the source count is — 96px at 10 sources and 96px at 40.
+   Reused unchanged: .sl-chips, .sl-chip (its 36px body, its ellipsis, its ::after
+   inset:-4px halo), .num, and .cx-stack's rhythm. The two names are the food
+   picker's own tab labels — tab_recipes / tab_bundles — so nothing new is taught. */
+.sl-sources { display: flex; flex-direction: column; gap: var(--sp-2); }
+.sl-grp { display: flex; flex-direction: column; gap: var(--sp-2); }
+.sl-grp-head {
+  display: flex; align-items: center; gap: var(--sp-2);
+  width: 100%; height: var(--btn-h-m); padding: 0 var(--sp-3);
+  border: 1px solid var(--border-hi); border-radius: var(--radius-btn-m);
+  background: var(--surface-2); color: var(--text);
+  font-family: inherit; font-size: var(--fs-btn-m); font-weight: 700;
+  cursor: pointer; --icon-accent: var(--accent-text);
+  -webkit-tap-highlight-color: transparent;
+}
+.sl-grp-head svg { width: 16px; height: 16px; flex: none; }
+/* text-align: start, never left — the name is the row's one line of prose, and it
+   ellipsises so a 292px meal name cannot push the count or the arrow out. */
+.sl-grp-name {
+  flex: 1; min-width: 0; text-align: start;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.sl-grp-n { color: var(--text-mute); }
+/* arrowDown, NOT a rotated chevron, and deliberately WITHOUT .icon-mirror: the
+   icon law above names the six glyphs that flip in Arabic and says in its own
+   words that vertical arrows are not among them. rotate(180deg) reads "open"
+   identically in both directions. */
+.sl-grp-chev { display: inline-flex; color: var(--text-dim);
+  transition: transform var(--dur) var(--ease); }
+.sl-grp-head[aria-expanded="true"] { border-color: var(--accent-line); background: var(--surface-3); }
+.sl-grp-head[aria-expanded="true"] .sl-grp-chev { transform: rotate(180deg); }
+.sl-grp-head:active { background: var(--surface-3); }
+/* MANDATORY. .sl-chips sets display:flex sixteen lines above, and an AUTHOR
+   display beats the UA [hidden] rule whatever the specificity — measured live:
+   a [hidden] .sl-chips computed display:flex and stood 22.5px tall. Without this
+   line every "shut" box ships wide open and the change is a no-op that looks
+   delivered. */
+.sl-chips[hidden] { display: none; }
+/* The chips read as the box's CONTENTS, not a second list beside it. Logical
+   property, so it indents from the right in Arabic with no RTL override. */
+.sl-grp .sl-chips { padding-inline-start: var(--sp-3); }
+/* THE SAME TRAP, ALREADY LIVE SINCE v329, found while verifying the line above
+   and measured before fixing: .cx-actions is display:flex and .sl-foot had no
+   rule at all, so `foot.hidden = !items.length` has never hidden anything —
+   «امسح المشترى» and «أفرغ القائمة» render under an EMPTY list today. Scoped to
+   .sl-foot so no other sheet's .cx-actions is touched. */
+.sl-foot[hidden] { display: none; }
+
 /* 4px of inline room so .rec-del’s 44px ::after halo (inset:-4px) stays INSIDE
    the sheet. Without it the halo pushed .cx-stack 4px wide and the sheet
    scrolled horizontally — measured 341 against 337. */

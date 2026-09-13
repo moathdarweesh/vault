@@ -77,7 +77,7 @@ a faster TTFB — not fewer bytes.
 npm run release          # bump every marker + verify, then commit all files together
 ```
 
-**Current version: v331.** APK: build 21 / v3.0.
+**Current version: v332.** APK: build 21 / v3.0.
 
 `scripts/release.js` rewrites **every** marker and then re-reads them from disk to confirm; it exits non-zero if any disagree, and prints the count per file (derived, never hard-coded — the docs used to say 16 while the real count was 15). The markers are `?v=N` in `index.html` (every script and stylesheet, the `js/vendor/supabase.js` preload, both `icons/icon.svg` links, `manifest.json`), the `__cleaned_vN` sessionStorage key, the `FALLBACK` literal in `app.js`, `version.json` → `web`, the `?v=` in `manifest.json`, `admin.html`, `privacy.html` and `get/index.html`, and the `Current version` line in this file. `scripts/check-contracts.js` (pre-commit) refuses a commit where any of them disagree.
 
@@ -1476,6 +1476,71 @@ focusability half of that finding was real.
 timer the toast box overlaps `.run-nav` by 4px, but `#toast` is `pointer-events: none` and the
 action button sat 7px clear, so no tap was ever stolen. Cosmetic, pre-existing, and left alone
 rather than risking shared toast geometry for 4px.
+
+## v332 — the two named boxes over the shopping list
+
+«ليش ما نحطهم بخانه اسمها … عشان تكون ارتب»
+
+The sheet's whole subject is the list, and its top third was not the list. Measured on the owner's
+own data at 375×812 BEFORE anything was designed — these are the numbers the change is judged by:
+
+| | before | after (shut) |
+|---|---|---|
+| top block | **212px** | **96px** |
+| share of a 632px sheet | **34%** | **15%** |
+| first shopping item at | y=**325**, past half the screen | y=**209** |
+| his 6 items | needed a scroll | **all visible** |
+| at 36 sources | ~20 rows, ~850px | **96px — unchanged** |
+
+> ⚠️ **GROUPING ALONE MAKES IT WORSE.** Two headings *add* 2×44 + 2×8 = 104px to a block that is
+> already too tall — 212px becomes ~316px, half the sheet. The heading has to be able to **CLOSE**.
+> That is the whole design: a box without a lid is not a box.
+
+**Which box is open is DERIVED FROM THE LIST, once, at render** — `const srcOpen =
+!DB.shopping.get().items.length`. An empty list is the one moment filling it IS the task, so وجباتي
+opens itself and the pour stays **one tap**; a list with items on it is a list he came to read, so
+both are shut. It is never re-read: `draw()` rewrites `#sl-list` only, so a box can never open or
+shut under the thumb — and `sl_empty` is worded to be true in BOTH states, which is what lets
+`draw()` stay untouched.
+
+The two names are not new vocabulary: `tab_recipes` (وصفاتي) and `tab_bundles` (وجباتي) are the
+literal tabs he already taps in `openSavedFoodPicker`. Both are passed as `t('…')` **literals** at
+the call site so contract 5's usage scanner keeps counting them.
+
+### Two traps, one of them already shipped
+
+> ⚠️ **`[hidden]` DOES NOT HIDE AN ELEMENT THIS FILE GAVE A `display` TO.** An author `display`
+> beats the UA `[hidden]` rule at any specificity. Measured live before writing the fix: a
+> `[hidden]` `.sl-chips` computed `display: flex` and stood 22.5px tall. Without
+> `.sl-chips[hidden] { display: none }` every "shut" box ships **wide open** — a no-op that looks
+> delivered.
+
+Looking for that trap found **its twin, live since v329**: `.cx-actions` is `display: flex` and
+`.sl-foot` had no rule at all, so `foot.hidden = !items.length` had **never hidden anything** —
+«امسح المشترى» and «أفرغ القائمة» rendered under an empty list. Measured (`hidden: true`,
+`display: flex`, height > 0), then fixed with `.sl-foot[hidden] { display: none }`.
+
+The third catch is one no contract can make: `sl_empty` read «اضغط وصفةً في الأعلى» — a string that
+became a **lie** the moment the chips went behind a lid. The key still existed in both dictionaries,
+so contract 5 stayed green. Only reading the string catches it. Now: «اختر من «وصفاتي» أو «وجباتي»
+في الأعلى» — true whether a box is open or shut.
+
+### Two details worth keeping
+
+- `data-src` stays the index into the **FLAT** `sources` array (`map` then `filter`, never a
+  per-group index) — the existing `[data-src]` handler indexes `sources[]` directly, so a
+  per-group index would silently pour the wrong recipe in. That handler is untouched.
+- The chevron is `arrowDown` rotated 180°, **not** a rotated `chevronRight`, and deliberately
+  carries **no** `.icon-mirror`: the icon law in styles.css names the six glyphs that flip in
+  Arabic and says in its own words that vertical arrows are not among them.
+
+### The honest cost
+
+Open, وجباتي is 272px — taller than the 212px he complained about. That is a state he opens
+deliberately and shuts with one tap, not the state that greets him every time. And the chips keep
+their ragged widths inside the box: ellipsising a long recipe name so it lines up with its
+neighbours would break the first law — the box fits what is in it, you do not trim what is in it to
+fit the box.
 
 ## Superpowers — and the two places this project deliberately departs from it
 

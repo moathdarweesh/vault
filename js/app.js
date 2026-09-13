@@ -12,7 +12,7 @@
 // build. The literal below is the fallback (file://, or a stripped query) and is
 // still bumped by `npm run release` — see CLAUDE.md "CACHE WORKFLOW".
 const VAULT_BUILD = (() => {
-  const FALLBACK = 'v331';
+  const FALLBACK = 'v332';
   try {
     const src = (document.currentScript && document.currentScript.src) || '';
     const m = src.match(/[?&]v=(\d+)/);
@@ -426,7 +426,7 @@ const I18N = {
     workouts: 'Workouts', volume: 'Volume', cardio: 'Cardio', sleep_today: "Today's sleep",
     delete_recipe_q: 'Delete this recipe?', delete_meal_q: 'Delete this meal?', delete_cardio_sched_q: 'Delete this cardio schedule?', sfp_search_bundles: 'Search meals…', sfp_search_recipes: 'Search recipes…',
     cx_portion_unset: 'Enter a portion',
-    sl_add_ph: 'Add an item…', sl_empty: 'Nothing on the list yet. Tap a recipe above, or type an item.',
+    sl_add_ph: 'Add an item…', sl_empty: 'Nothing on the list yet. Pick from Recipes or My meals above, or type an item.',
     sl_clear_done: 'Clear bought', sl_clear_all: 'Empty the list', sl_clear_all_q: 'Empty the whole list?',
     sl_added: '{n} added', sl_cleared: 'List updated',
     cardio_sched: 'Cardio schedule', cardio_sched_add: 'Add cardio', cardio_sched_days: 'Days',
@@ -1406,7 +1406,7 @@ const I18N = {
     workouts: 'التمارين', volume: 'الحجم', cardio: 'الكارديو', sleep_today: 'نوم اليوم',
     delete_recipe_q: 'هل تريد حذف هذه الوصفة؟', delete_meal_q: 'هل تريد حذف هذه الوجبة؟', delete_cardio_sched_q: 'هل تريد حذف جدول الكارديو هذا؟', sfp_search_bundles: 'ابحث في وجباتي…', sfp_search_recipes: 'ابحث في وصفاتي…',
     cx_portion_unset: 'أدخل عدد الحصص',
-    sl_add_ph: 'أضف صنفًا…', sl_empty: 'لا شيء في القائمة بعد. اضغط وصفةً في الأعلى، أو اكتب صنفًا.',
+    sl_add_ph: 'أضف صنفًا…', sl_empty: 'لا شيء في القائمة بعد. اختر من «وصفاتي» أو «وجباتي» في الأعلى، أو اكتب صنفًا.',
     sl_clear_done: 'امسح المشترى', sl_clear_all: 'أفرغ القائمة', sl_clear_all_q: 'هل تريد إفراغ القائمة كلها؟',
     sl_added: 'أُضيف {n}', sl_cleared: 'حُدّثت القائمة',
     cardio_sched: 'جدول الكارديو', cardio_sched_add: 'إضافة كارديو', cardio_sched_days: 'الأيام',
@@ -10180,9 +10180,49 @@ function openShoppingList() {
     ...DB.recipes.list().map((x) => ({ id: x.id, name: x.name, type: 'recipe' })),
     ...DB.mealBundles.list().map((x) => ({ id: x.id, name: x.name, type: 'meal' })),
   ];
+  // THE TWO NAMED BOXES (v332). «ليش ما نحطهم بخانه اسمها … عشان تكون ارتب».
+  // Measured on the owner's own data at 375x812 BEFORE this was written: 10
+  // sources wrapped to FIVE ragged rows — 212px, 34% of a 632px sheet — and the
+  // first shopping item began at y=325, past half the screen, on the sheet whose
+  // whole subject is the list.
+  //
+  // Grouping ALONE makes that WORSE: two headings ADD 2x44 + 2x8 = 104px to a
+  // block already too tall, which is why the heading has to CLOSE. Shut, the
+  // block is two 44px rows whatever the source count is — 96px at 10 sources and
+  // 96px at 40.
+  //
+  // WHICH BOX IS OPEN IS DERIVED FROM THE LIST, ONCE, AT RENDER. An empty list is
+  // the one moment filling it IS the task, so وجباتي opens itself and the pour
+  // stays ONE tap; a list with items on it is a list he came to read, so both are
+  // shut. draw() rewrites #sl-list only, so this is decided once and never
+  // re-read — a box must never open or shut under the thumb. sl_empty is worded
+  // to be true in BOTH states, which is what lets draw() stay untouched.
+  const openType = sources.some((s) => s.type === 'meal') ? 'meal' : 'recipe';
+  const srcOpen = !DB.shopping.get().items.length;
+  // Both glyphs as LITERAL icon() calls so contract 23's scanner keeps covering
+  // them: it reads icon('name'), never icon(cond ? 'a' : 'b').
+  const SRC_GLYPH = { recipe: icon('utensils', 16), meal: icon('meal', 16) };
+  // data-src stays the index into the FLAT sources array — the [data-src] handler
+  // indexes sources[] directly, so a per-group index would silently pour the
+  // wrong recipe in. map-then-filter keeps that index without depending on the
+  // order the array was built in.
+  const srcGroup = (type, label) => {
+    const rows = sources.map((s, i) => [s, i]).filter(([s]) => s.type === type);
+    if (!rows.length) return '';          // a box with nothing in it is not tidier
+    const on = srcOpen && openType === type;
+    return `<section class="sl-grp">
+      <button type="button" class="sl-grp-head" aria-expanded="${on}" aria-controls="sl-grp-${type}">
+        ${SRC_GLYPH[type]}<span class="sl-grp-name">${escapeHtml(label)}</span>
+        <span class="num sl-grp-n">${fmtNum(rows.length)}</span>
+        <span class="sl-grp-chev">${icon('arrowDown', 16)}</span>
+      </button>
+      <div class="sl-chips" id="sl-grp-${type}"${on ? '' : ' hidden'}>${rows.map(([s, i]) =>
+        `<button type="button" class="sl-chip" data-src="${i}">${icon('plus', 14)}<span>${escapeHtml(s.name)}</span></button>`).join('')}</div>
+    </section>`;
+  };
+
   const modal = convenienceModal(`${cxHeader('cx_shopping')}<div class="cx-stack sl-sheet">
-    ${sources.length ? `<div class="sl-chips">${sources.map((s, i) =>
-      `<button type="button" class="sl-chip" data-src="${i}">${icon('plus', 14)}<span>${escapeHtml(s.name)}</span></button>`).join('')}</div>` : ''}
+    ${sources.length ? `<div class="sl-sources">${srcGroup('recipe', t('tab_recipes'))}${srcGroup('meal', t('tab_bundles'))}</div>` : ''}
     <ul class="sl-list" id="sl-list"></ul>
     <div class="sl-compose">
       <input class="input" id="sl-new" maxlength="120" dir="auto" enterkeyhint="done" placeholder="${escapeHtml(t('sl_add_ph'))}">
@@ -10252,6 +10292,20 @@ function openShoppingList() {
   };
   modal.querySelector('#sl-add').onclick = addTyped;
   field.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); addTyped(); } });
+
+  // ONE OPEN BOX AT A TIME. Two open boxes is the 212px blob again with two
+  // headings stacked on top of it — the thing being fixed. The panel is the
+  // head's next sibling inside its own <section>, so no id lookup is needed.
+  // Every chip is in the DOM from first paint and merely [hidden], so the
+  // [data-src] bindings below are made once and survive every open and close.
+  modal.querySelectorAll('.sl-grp-head').forEach((head) => head.addEventListener('click', () => {
+    const opening = head.getAttribute('aria-expanded') !== 'true';
+    modal.querySelectorAll('.sl-grp-head').forEach((h) => {
+      const on = h === head && opening;
+      h.setAttribute('aria-expanded', String(on));
+      h.nextElementSibling.hidden = !on;
+    });
+  }));
 
   modal.querySelectorAll('[data-src]').forEach((b) => b.addEventListener('click', () => {
     if (!mine()) { convenienceError({ code: 'STALE' }); return; }
