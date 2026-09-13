@@ -12,7 +12,7 @@
 // build. The literal below is the fallback (file://, or a stripped query) and is
 // still bumped by `npm run release` — see CLAUDE.md "CACHE WORKFLOW".
 const VAULT_BUILD = (() => {
-  const FALLBACK = 'v334';
+  const FALLBACK = 'v335';
   try {
     const src = (document.currentScript && document.currentScript.src) || '';
     const m = src.match(/[?&]v=(\d+)/);
@@ -9605,6 +9605,62 @@ function startRestTimer(seconds, setIndex, exId, setRef) {
   });
   bar.querySelector('[data-rest-skip]').addEventListener('click', () => stopRestTimer());
 }
+// ==========================================================================
+// THE RUN LIST — the guided run's order, as pure functions
+// ==========================================================================
+// Lifted out of renderSessionRun (847 lines, the largest function in this file)
+// so the logic that decides WHICH exercise is on screen can be read and tested
+// without a browser. It has broken SILENTLY twice: v307 moved a swapped-in
+// exercise to the END of the run, and v331's «دائمًا» left it behind the
+// positional cursor so it was never reached at all. Both times every contract
+// and every suite stayed green, because nothing here was reachable from a test.
+//
+// These four take plain arrays and return plain values — no DOM, no DB, no
+// viewContext. scripts/test-run-list.js covers them.
+
+// runOnly arrives in TWO meanings and they need different maths.
+//   A SELECTION (navigate('session-run', {runOnly})) is a set of ids chosen on
+//     another screen. It carries no order, so the order comes from the plan,
+//     with anything outside the plan appended.
+//   THE RUN'S OWN LIST, once runListNow() has materialised it, IS the order —
+//     a substitute sits where the exercise it replaced sat, and a drop slides
+//     the next one into the gap.
+// Re-deriving the second from the plan is what threw that position away.
+function runOrder(planIds, only, ordered) {
+  const plan = Array.isArray(planIds) ? planIds : [];
+  if (!Array.isArray(only)) return plan;
+  if (ordered) return only.slice();
+  return plan.filter((id) => only.includes(id)).concat(only.filter((id) => !plan.includes(id)));
+}
+
+// A substitute takes the POSITION of what it replaced — an exercise order is a
+// session order. newId null drops instead, closing the gap.
+function runReplace(list, oldId, newId) {
+  const next = Array.isArray(list) ? list.slice() : [];
+  const i = next.indexOf(oldId);
+  if (i === -1) return next;
+  if (newId) next[i] = newId; else next.splice(i, 1);
+  return next;
+}
+
+// After a drop, stay on the same POSITION so the next exercise slides into it.
+// Past the end (the dropped one was last) step back one; an empty list is 0.
+function runIdxAfterDrop(idx, len) {
+  if (!(len > 0)) return 0;
+    return idx >= len ? len - 1 : Math.max(0, idx);
+}
+
+// Is making this swap permanent offerable against a slot holding `ids`?
+// Three states are NOT: the slot no longer holds the old exercise (someone
+// already changed it), it ALREADY holds the new one (a write would DUPLICATE
+// rather than swap — reachable whenever runOnly has narrowed the run), and
+// oldId === newId, which is not a swap at all.
+function runSwapAllowed(ids, oldId, newId) {
+  const a = Array.isArray(ids) ? ids : [];
+  if (!oldId || !newId || oldId === newId) return false;
+  return a.includes(oldId) && !a.includes(newId);
+}
+
 function renderSessionRun(el) {
   // Resolve the workout by DATE (continuous rotation), like session-day.
   if (!viewContext.runDate) viewContext.runDate = viewContext.date || todayISO();
@@ -9618,23 +9674,8 @@ function renderSessionRun(el) {
   // its button was sitting on.
   const runOnly = Array.isArray(viewContext.runOnly) ? viewContext.runOnly : null;
   const runPlanIds = (day?.exerciseIds || []);
-  // runOnly arrives in TWO different meanings and they need different maths.
-  //   A SELECTION (navigate('session-run', {runOnly})) is a set of ids chosen on
-  //     another screen: it carries no order of its own, so the order comes from
-  //     the plan, with anything outside the plan appended.
-  //   THE RUN'S OWN LIST, once runListNow() has materialised it, IS the order —
-  //     replaceInRun puts a substitute at the position it replaced, and a drop
-  //     slides the next exercise into the gap.
-  // Re-deriving the second from the plan threw that position away. Before v331
-  // that only meant a swapped-in exercise moved to the END of the run (and the
-  // screen jumped forward one). With «دائمًا» writing the substitution into the
-  // plan it became worse: the plan then re-sorted the run UNDER a positional
-  // runIdx, so the exercise just made permanent sat behind the cursor and was
-  // never reached, while its neighbour was presented twice.
-  const runIds = runOnly
-    ? (viewContext.runOrdered ? runOnly.slice()
-      : runPlanIds.filter((id) => runOnly.includes(id)).concat(runOnly.filter((id) => !runPlanIds.includes(id))))
-    : runPlanIds;
+  // See runOrder() above the function for why the two meanings differ.
+  const runIds = runOrder(runPlanIds, runOnly, viewContext.runOrdered);
   const exObjs = runIds.map((id) => exerciseById[id]).filter(Boolean);
   const totalEx = exObjs.length;
 
@@ -10039,10 +10080,8 @@ function renderSessionRun(el) {
     return DB.sessions.listByExercise(exId).find((s) => s.date === runCtx.runDate) || null;
   }
   function replaceInRun(oldId, newId) {
-    const list = runListNow();
-    const i = list.indexOf(oldId);
-    if (i === -1) return;
-    if (newId) list[i] = newId; else list.splice(i, 1);
+    runListNow();                       // materialise + mark the list as ordered
+    runCtx.runOnly = runReplace(runCtx.runOnly, oldId, newId);
     // Drop the old exercise's in-memory sets so the slot does not inherit them.
     if (runCtx.runState) delete runCtx.runState[oldId];
   }
@@ -10064,9 +10103,7 @@ function renderSessionRun(el) {
     const i = (DB.plan.get().cycle || []).indexOf(w);         // workoutForDate returns the live element
     if (i === -1) return null;
     const ids = (w.exerciseIds || []);
-    // Already replaced, or the new exercise is ALSO in the slot — a write would
-    // duplicate it rather than swap it. Neither is offerable.
-    if (!ids.includes(oldId) || ids.includes(newId)) return null;
+    if (!runSwapAllowed(ids, oldId, newId)) return null;   // see runSwapAllowed
     return { i, ids };
   }
   function offerPermanentSwap(oldId, newId) {
@@ -10116,7 +10153,7 @@ function renderSessionRun(el) {
           replaceInRun(ex.id, null);
           // Stay on the same position: the next exercise slides into it. Past
           // the end (it was last) step back one.
-          if (runCtx.runIdx >= runListNow().length) runCtx.runIdx = Math.max(0, runListNow().length - 1);
+          runCtx.runIdx = runIdxAfterDrop(runCtx.runIdx, runListNow().length);
           renderSessionRun(el);
           showToast(t('run_ex_dropped'));
         };

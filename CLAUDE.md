@@ -79,7 +79,7 @@ a faster TTFB — not fewer bytes.
 npm run release          # bump every marker + verify, then commit all files together
 ```
 
-**Current version: v334.** APK: build 21 / v3.0.
+**Current version: v335.** APK: build 21 / v3.0.
 
 `scripts/release.js` rewrites **every** marker and then re-reads them from disk to confirm; it exits non-zero if any disagree, and prints the count per file (derived, never hard-coded — the docs used to say 16 while the real count was 15). The markers are `?v=N` in `index.html` (every script and stylesheet, the `js/vendor/supabase.js` preload, both `icons/icon.svg` links, `manifest.json`), the `__cleaned_vN` sessionStorage key, the `FALLBACK` literal in `app.js`, `version.json` → `web`, the `?v=` in `manifest.json`, `admin.html`, `privacy.html` and `get/index.html`, and the `Current version` line in this file. `scripts/check-contracts.js` (pre-commit) refuses a commit where any of them disagree.
 
@@ -1640,6 +1640,60 @@ lines**, followed by `openRecipeEditor` (484) and `renderHome` (483). Splitting 
 splitting by DOMAIN — food, workout, settings — and those sections call freely across each other
 through the shared global scope, so the boundary would have to be designed rather than measured.
 That is a different kind of work from these two commits, and it should not be started by accident.
+
+
+## v335 — the run's order becomes four pure functions, with teeth
+
+«انت شوف الافضل وطبق». The v334 note said splitting app.js by DOMAIN needs a designed boundary, so
+that is deliberately not what this is. The better answer was the other thing that note named: the
+largest function in the file, and the fact that **the logic deciding which exercise is on screen has
+broken silently twice while every contract and every suite stayed green.**
+
+| | |
+|---|---|
+| v307 | a swapped-in exercise moved to the END of the run; you finished on the one you replaced |
+| v331 | «دائمًا» re-sorted the run under a positional cursor — the exercise just made permanent sat behind it and was **never reached**, while its neighbour was shown twice |
+
+Neither was reachable from a test, because it lived inside `renderSessionRun`'s closure.
+
+`runOrder`, `runReplace`, `runIdxAfterDrop` and `runSwapAllowed` are top-level now — plain arrays
+in, plain values out, no DOM, no `DB`, no `viewContext`. `renderSessionRun` 847 → 828 lines; the
+point is not the 19 lines, it is that the part that can be *wrong* is now the part that is *tested*.
+
+### The test reads the shipped source
+
+`scripts/test-run-list.js` pulls the four declarations out of `js/app.js` by name and runs them in a
+bare `vm` context. **Nothing is copied into the test**, so it cannot drift from what the app
+executes — and app.js is never evaluated whole (it touches `document` at top level), so no DOM shim
+is needed. If a function is renamed or stops being top-level, the test fails on that, by name.
+
+> ⚠️ **A passing test proves nothing until it can fail.** Eight mutations were written back into
+> `js/app.js` — both shipped regressions and six plausible neighbours — and the suite was run
+> against each. **8 of 8 caught**, and app.js restored byte-for-byte afterwards. A suite that
+> survives its own bug being reintroduced is decoration.
+
+The four, and what each refuses:
+
+- **`runOrder(planIds, only, ordered)`** — the whole v331 fix in one expression. `runOnly` carries
+  two meanings: a SELECTION from another screen has no order of its own (the plan orders it, with
+  non-plan ids appended), while the run's OWN list, once `runListNow()` materialised it, **is** the
+  order. The test asserts both, and asserts that the same input without the flag produces exactly
+  the v307 defect — so the difference between the two is itself pinned down.
+- **`runReplace(list, oldId, newId)`** — a substitute takes the POSITION of what it replaced; a
+  drop closes the gap. Returns a NEW array, which one mutation exists to keep true.
+- **`runIdxAfterDrop(idx, len)`** — stay on the position so the next exercise slides in; past the
+  end step back one; an empty run is 0, never −1.
+- **`runSwapAllowed(ids, oldId, newId)`** — the three states where «دائمًا» must not be offered:
+  the slot no longer holds the old exercise, it ALREADY holds the new one (a write would duplicate
+  rather than swap — reachable whenever `runOnly` has narrowed the run), and `oldId === newId`.
+
+Verified live afterwards as well, because a pure function being right is not the same as the screen
+being right: swap → stays in place, «دائمًا» → plan written and every exercise reached exactly once,
+drop → the next slides in with the plan untouched, and a scrambled selection `[D, outsider, B]`
+still comes out `B, D, outsider`. The owner's plan was restored byte-for-byte.
+
+**Six Node suites now**, not five. `scripts/test-run-list.js` is the first one in this project that
+tests app.js at all — every other suite exercises `storage.js`, `cloud.js` or the Worker.
 
 
 ## Superpowers — and the two places this project deliberately departs from it
