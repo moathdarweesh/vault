@@ -7911,10 +7911,39 @@ body.ember-on .ember {
   flex-direction: row; align-items: center; gap: var(--sp-3);
   padding: var(--sp-2h) 0; cursor: pointer;
 }
-/* .cx-stack input[type=checkbox] pins 22px at (0,2,1); the mark is the tick, and
-   the TARGET is the whole row, so 22 is right — this just has to out-specify it
-   for accent-color. */
-.cx-stack .sl-tick input[type=checkbox] { width: 22px; height: 22px; flex: none; accent-color: var(--accent); }
+/* THE SAME TICK THE REST OF THE APP USES. accent-color only paints the CHECKED
+   state, so an EMPTY native box fell back to the browser’s white and read as a
+   foreign control beside .run-set-done and .supp-toggle. Same values as
+   .run-set-done: 26px, r8, transparent until ticked, then an accent fill with an
+   --accent-ink mark. Transparent when empty and NOT --surface-2, for the reason
+   that rule documents: a filled empty box reads as a STATE, not an absence. */
+.cx-stack .sl-tick input[type=checkbox] {
+  appearance: none; -webkit-appearance: none;
+  position: relative;
+  width: 26px; height: 26px; flex: none; margin: 0;
+  /* The global `input, select, textarea` rule sets padding: 13px 14px, and under
+     border-box that padding becomes the SIZE FLOOR — the box came out 30x28. */
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: transparent;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s;
+}
+.cx-stack .sl-tick input[type=checkbox]:checked {
+  background: var(--accent); border-color: var(--accent);
+}
+/* The mark is DRAWN, not loaded: an <input> cannot hold an <svg>, and keeping it
+   a real checkbox is what lets the whole row stay a <label> target. */
+.cx-stack .sl-tick input[type=checkbox]:checked::after {
+  content: '';
+  position: absolute;
+  left: 9px; top: 4px;
+  width: 6px; height: 11px;
+  border: solid var(--accent-ink);
+  border-width: 0 2px 2px 0;
+  transform: rotate(45deg);
+}
 .sl-text { flex: 1; }
 .sl-text { min-width: 0; display: flex; flex-direction: column; gap: 2px; }
 .sl-name { font-size: var(--fs-body); font-weight: 700; overflow-wrap: anywhere; }

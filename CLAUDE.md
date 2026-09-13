@@ -77,7 +77,7 @@ a faster TTFB — not fewer bytes.
 npm run release          # bump every marker + verify, then commit all files together
 ```
 
-**Current version: v329.** APK: build 21 / v3.0.
+**Current version: v330.** APK: build 21 / v3.0.
 
 `scripts/release.js` rewrites **every** marker and then re-reads them from disk to confirm; it exits non-zero if any disagree, and prints the count per file (derived, never hard-coded — the docs used to say 16 while the real count was 15). The markers are `?v=N` in `index.html` (every script and stylesheet, the `js/vendor/supabase.js` preload, both `icons/icon.svg` links, `manifest.json`), the `__cleaned_vN` sessionStorage key, the `FALLBACK` literal in `app.js`, `version.json` → `web`, the `?v=` in `manifest.json`, `admin.html`, `privacy.html` and `get/index.html`, and the `Current version` line in this file. `scripts/check-contracts.js` (pre-commit) refuses a commit where any of them disagree.
 
@@ -1323,6 +1323,28 @@ higher specificity — so the checkbox and the text **stacked** and every row st
 `.cx-stack label.cx-row` already exists as the precedent for exactly this; the fix is the same idiom.
 And `.rec-del`'s 44px `::after` halo pushed the sheet 4px wide (341 against 337), so the list carries
 4px of inline padding to keep the halo inside.
+
+## v330 (2026-09-13) — the shopping tick is the app's own square
+
+«ليش المربعات بيضه مش نفس كل مربعات التم الي الاخرى في التطبيق البرتقاليه». Correct, and the reason
+is worth keeping:
+
+> ⚠️ **`accent-color` only paints a checkbox's CHECKED state.** An UNCHECKED native box keeps the
+> browser's own chrome — white on this palette — so it reads as a foreign control beside
+> `.run-set-done` and `.supp-toggle`. Every other native checkbox in this app
+> (`.bundle-pick-row`, `.mf-keep`, `.plan-import-confirm`) has the same latent problem.
+
+The box is now `appearance: none` and drawn to `.run-set-done`'s exact values — 26px, r8,
+transparent until ticked, then `--accent` fill with an `--accent-ink` mark. Verified against a live
+`.run-set-done.done`: same `rgb(255,106,0)` fill and border, same radius.
+
+- **Transparent when empty, deliberately not `--surface-2`** — the reason `.run-set-done` documents:
+  a filled empty box reads as a STATE rather than as an absence.
+- **The mark is DRAWN** (two rotated borders), because an `<input>` cannot hold an `<svg>` — and
+  keeping it a real checkbox is what lets the whole row stay a `<label>` target.
+- ⚠️ **The global `input, select, textarea` rule sets `padding: 13px 14px`, and under `border-box`
+  that padding is a SIZE FLOOR.** With `width/height: 26px` the box still came out **30×28**. Any
+  input styled to a fixed small size in this app must zero its padding explicitly.
 
 ## Superpowers — and the two places this project deliberately departs from it
 
