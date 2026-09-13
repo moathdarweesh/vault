@@ -1765,6 +1765,102 @@ and is its own piece of work. Backups are likewise still a manual runbook
 (`backend/docs/DB-BACKUP-RESTORE.md`), with no automation and no restore drill.
 
 
+## The backend audit — and the one thing that is broken right now
+
+«كمل فحص الباك اند وترابطه وتماسكه وسهوله صيانته». Fifty-three agents read the backend against the
+**LIVE** database, read-only, and every finding went through an adversarial verifier. I then
+re-proved the headline myself before writing it down, because this project's rule is that a
+reviewer's claim is a lead, not a fact.
+
+### ⚠️ HIGH — the daily AI budget has been dead for seven days, failing OPEN
+
+`backend/pending/29_ai-usage-fk-repair-v25.sql` is the fix. **It is NOT applied** — it is a live
+write and only the owner runs it.
+
+Migration 28 added a foreign key from `ai_usage.user_id` to `auth.users(id)`, and its own header
+states in writing that **`NOT VALID` "enforces the cascade for every FUTURE delete without
+rejecting the existing sentinel row."**
+
+> ⚠️ **`NOT VALID` skips validation of rows that ALREADY EXIST. It does not disable enforcement on
+> INSERT.** Both RI check triggers are live and enabled (`tgenabled = 'O'`).
+
+`ai_budget_take()` charges the GLOBAL counter as a row whose `user_id` is the all-zero sentinel —
+which is not a user (`select count(*) from auth.users where id = '00000000-…'` → **0**, that is
+*why* the FK had to be NOT VALID). On the first call of each new UTC day there is no sentinel row
+for `today`, so `ON CONFLICT` cannot deflect it: it is a genuine INSERT, the FK fires, 23503 aborts
+the whole SECURITY DEFINER call — **rolling back the per-user increment with it** — and
+`gemini-worker.js:339` (`if (!r.ok) return { ok: true };`) fails OPEN.
+
+Measured live, read-only: `ai_usage` still holds exactly **2 rows, both `day = 2026-09-06`, n = 10**,
+while today is **2026-09-13**. Nothing has been billed for seven days. This is precisely the failure
+26 and 27 exist to prevent — one account exhausting the shared free Gemini quota and switching the
+AI off for everyone until midnight. The only bound left is Cloudflare's per-IP limiter, which caps a
+burst and never a day's spend across accounts.
+
+**HIGH, not CRITICAL, and the distinction is honest:** no user data is exposed, lost or reachable
+across accounts, and nothing is corrupted. It is an unbounded shared-resource hole that has been
+silently true for a week while every file, every contract and every VERIFY block stayed green.
+
+> **28's VERIFY was not lazy — and that is the lesson.** It deletes a throwaway `auth.users` row
+> inside a rolled-back block and asserts the counter cascades 1 → 0. It genuinely proves the cascade
+> fires. It simply never calls `ai_budget_take()`, **the only function that writes the table it had
+> just constrained.** The project's rule "a migration that defines a function must END BY CALLING
+> IT" needs its other half: *a migration that constrains a TABLE must end by exercising every write
+> path into that table.*
+
+### Nothing else is unsafe, and that was checked rather than assumed
+
+43 policies in `public` + 6 in `storage`; every permissive owner policy keyed on `auth.uid()`;
+`authenticated` is `rolbypassrls = false`, so a grant without a matching policy denies rather than
+leaks. `ai_usage` is grant-less to `anon` and `authenticated` — probed as `authenticated` and it
+answers `42501 permission denied`, not an empty array. The two anon-executable SECURITY DEFINER
+functions (`feedback_rate_cap`, `own_row_cap`) `return trigger`, so PostgREST excludes them from its
+schema cache and both named endpoints answer 404 PGRST202. The `exercise-images` bucket is private,
+has six policies, and its mime allowlist still has **no `image/svg+xml`**.
+
+### Where the three records disagree (files · live · README)
+
+- **`vault_delete_own`** exists in `01_supabase-setup.sql` behind its own never-actioned "ACTION
+  REQUIRED" banner. Live, `vault_data` has **no DELETE policy at all**. README row 39 and migration
+  09 both say "four owner-only policies"; live has three. Harmless — no client deletes from
+  `vault_data`, and erasure runs through `delete_own_account()` (DEFINER, and
+  `relforcerowsecurity = false`, so it genuinely bypasses RLS) — and the drift points the safe way.
+  > ⚠️ **If that policy is ever applied, read this first:** `vault_data_history`'s FK is to
+  > `auth.users`, not to `vault_data`, and `vault_data` has no DELETE trigger. A client-side "erase
+  > my cloud copy" would delete the live blob and leave up to ten prior **full** blobs in history,
+  > readable by the owner's own SELECT policy. A half-erase that reads as complete is worse than none.
+- **README row 06** describes `feedback` as having "no client write policy, so a user can read their
+  own row but never escalate". That is true of `user_flags` and false of `feedback`, which has
+  `feedback_insert_own` (a client write policy) and **no own-row SELECT at all** — the author of a
+  feedback row cannot read it back. The policies are right; the prose is wrong.
+- **The storage cap.** CLAUDE.md says the `exercise-images` bucket has a "5 MB cap". Live
+  `file_size_limit` is **524288 — 512 KB**. Anyone sizing a compression step against 5 MB would ship
+  uploads that are refused.
+- **The live migration ledger holds 2 rows, not 28.** `supabase_migrations.schema_migrations`
+  carries only files 18 and 19 — everything else was applied by SQL-editor paste, which writes no
+  ledger row. So the server cannot tell you what has been applied; `backend/README.md` is genuinely
+  the only record, exactly as its header says.
+
+### What I refuted myself, before reporting it
+
+`client_errors_rate_cap()` is SECURITY **INVOKER** — the identical shape to `feedback_rate_cap()`,
+which v304 had to convert to DEFINER because, under RLS, its own count saw zero and the cap was a
+no-op for weeks. It looked like the same bug, unfixed, in a sibling. **It is not**, and the reason is
+one policy: `feedback` has no own-row SELECT, so its count really did see zero, while
+`client_errors` **does** have `client_errors_select_own`, so an INVOKER count over
+`user_id = new.user_id` reads exactly the rows it needs. Correct as written.
+
+### Still open, and none of it is code I can write
+
+- **Nothing compares the live database to `backend/migrations/`.** Contract 4 replays the FILES.
+- **`pg_cron` is not installed**, so `admin_prune_client_errors()` and `admin_prune_ai_usage()` exist
+  and **nothing ever calls them**. Retention is aspirational.
+- **All 18 rows in `client_errors` are `sync-conflict`** — zero crashes in a week of real use, which
+  is good news — but nine of them read `at=push-version-moved` with `localVer` **equal to**
+  `remoteVer`, which is the app raising a conflict against itself. Worth its own investigation.
+- Backups remain a manual runbook with no automation and no restore drill.
+
+
 ## Superpowers — and the two places this project deliberately departs from it
 
 The [superpowers](https://github.com/obra/superpowers) methodology (14 skills) is
