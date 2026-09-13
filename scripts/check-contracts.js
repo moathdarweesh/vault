@@ -19,7 +19,7 @@ const root = path.resolve(__dirname, '..');
 const read = (p) => fs.readFileSync(path.join(root, p), 'utf8');
 const exists = (p) => fs.existsSync(path.join(root, p));
 
-const JS = ['js/i18n.js', 'js/cloud.js', 'js/storage.js', 'js/app.js', 'js/health.js', 'js/notify.js', 'js/foodai.js', 'js/update.js'];
+const JS = ['js/i18n.js', 'js/catalog.js', 'js/cloud.js', 'js/storage.js', 'js/app.js', 'js/health.js', 'js/notify.js', 'js/foodai.js', 'js/update.js'];
 const src = Object.fromEntries(JS.map((f) => [f, read(f)]));
 const html = read('index.html');
 const admin = read('admin.html');
@@ -34,7 +34,7 @@ const contract = (name, problems) => {
 {
   const order = [...html.matchAll(/<script src="(js\/[\w./-]+?)(?:\?v=\d+)?"/g)].map((m) => m[1]).filter((s) => !s.startsWith('js/vendor/'));
   const want = JS;
-  contract('index.html loads the eight scripts in dependency order (i18n → cloud → storage → app → health → notify → foodai → update)',
+  contract('index.html loads the nine scripts in dependency order (i18n → catalog → cloud → storage → app → health → notify → foodai → update)',
     order.join(',') === want.join(',') ? [] : ['found: ' + order.join(' → ')]);
   const tags = [...html.matchAll(/<script\b[^>]*\bsrc="js\/[^">]+"[^>]*>/g)].map(m => m[0]);
   contract('startup scripts download in parallel and execute in order',
@@ -302,9 +302,10 @@ const contract = (name, problems) => {
 // ---------------------------------------------------------------- 13. the two exercise-name maps cover every seed exercise, and each other
 {
   const app = src['js/app.js'];
+  const cat = src['js/catalog.js'];
   const mapKeys = (name) => {
-    const i = app.indexOf('const ' + name + ' = {'); if (i < 0) return null;
-    const body = app.slice(i, app.indexOf('\n};', i));
+    const i = cat.indexOf('const ' + name + ' = {'); if (i < 0) return null;
+    const body = cat.slice(i, cat.indexOf('\n};', i));
     return new Set([...body.matchAll(/^\s*'([^']+)':\s*'/gm)].map((m) => m[1]));
   };
   const a = mapKeys('EXERCISE_NAME_AR'), b = mapKeys('EXERCISE_NAME_AR_FULL');
@@ -473,7 +474,7 @@ const contract = (name, problems) => {
 // ---------------------------------------------------------------- 22. the seven glyphs copied outside ICONS are byte-for-byte the masters
 {
   const problems = [];
-  const app = src['js/app.js'];
+  const app = src['js/catalog.js'];
   const block = app.slice(app.indexOf('const ICONS = {'), app.indexOf('\n};', app.indexOf('const ICONS = {')));
   const icons = {}; for (const m of block.matchAll(/^\s+(\w+):\s*'((?:[^'\\]|\\.)*)',?\s*(?:\/\/.*)?$/gm)) icons[m[1]] = m[2];
   const norm = (x) => x.replace(/\s+/g, ' ').replace(/> </g, '><').trim();
@@ -490,7 +491,7 @@ const contract = (name, problems) => {
 // ---------------------------------------------------------------- 23. every icon name is an ICONS key (a wrong name renders nothing, silently)
 {
   const problems = [];
-  const app = src['js/app.js'];
+  const app = src['js/catalog.js'];
   const block = app.slice(app.indexOf('const ICONS = {'), app.indexOf('\n};', app.indexOf('const ICONS = {')));
   const keys = new Set([...block.matchAll(/^\s+(\w+):\s*'/gm)].map((m) => m[1]));
   for (const m of app.matchAll(/^ICONS\.(\w+) = ICONS\.(\w+);/gm)) { if (!keys.has(m[2])) problems.push(`alias ICONS.${m[1]} points at missing ICONS.${m[2]}`); keys.add(m[1]); }

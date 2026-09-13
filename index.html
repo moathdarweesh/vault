@@ -27,18 +27,18 @@
   <!-- Critical inline paint: black background from the very first frame so a
        slow styles.css load never flashes unstyled white content (FOUC). -->
   <style>html,body{margin:0;background:#000;color:#fff}</style>
-  <link rel="manifest" href="manifest.json?v=333">
+  <link rel="manifest" href="manifest.json?v=334">
   <!-- These carry ?v=N like every other asset: without it a browser that has
        already cached the favicon keeps serving the OLD mark forever, so an icon
        redesign reaches nobody. `npm run release` rewrites every ?v= in this
        file, so these stay in step automatically. -->
-  <link rel="icon" type="image/svg+xml" href="icons/icon.svg?v=333">
+  <link rel="icon" type="image/svg+xml" href="icons/icon.svg?v=334">
   <!-- iOS does NOT support SVG for apple-touch-icon: Safari ignores it and puts a
        SCREENSHOT of the page on the Home Screen instead of the mark. This PNG is
        rendered from icons/icon.svg on an opaque black tile (iOS applies its own
        squircle mask and does not expect alpha). rel=icon below stays SVG for
        desktop browsers, which do support it. -->
-  <link rel="apple-touch-icon" sizes="180x180" href="icons/apple-touch-icon-180.png?v=333">
+  <link rel="apple-touch-icon" sizes="180x180" href="icons/apple-touch-icon-180.png?v=334">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <!-- Warm the Supabase connection (DNS + TLS) during page load so the first
@@ -50,17 +50,18 @@
   <!-- Must carry the SAME ?v=N that cloud.js appends when it injects this script,
        or the preload warms a different URL and is wasted. `npm run release` bumps
        both (this one by regex, cloud.js by deriving from its own marker). -->
-  <link rel="preload" href="js/vendor/supabase.js?v=333" as="script">
+  <link rel="preload" href="js/vendor/supabase.js?v=334" as="script">
   <!-- Discover startup files before the first inline body script waits for CSS.
        Download together; defer preserves dependency order and waits for the DOM. -->
-  <script src="js/i18n.js?v=333" defer></script>
-  <script src="js/cloud.js?v=333" defer></script>
-  <script src="js/storage.js?v=333" defer></script>
-  <script src="js/app.js?v=333" defer></script>
-  <script src="js/health.js?v=333" defer></script>
-  <script src="js/notify.js?v=333" defer></script>
-  <script src="js/foodai.js?v=333" defer></script>
-  <script src="js/update.js?v=333" defer></script>
+  <script src="js/i18n.js?v=334" defer></script>
+  <script src="js/catalog.js?v=334" defer></script>
+  <script src="js/cloud.js?v=334" defer></script>
+  <script src="js/storage.js?v=334" defer></script>
+  <script src="js/app.js?v=334" defer></script>
+  <script src="js/health.js?v=334" defer></script>
+  <script src="js/notify.js?v=334" defer></script>
+  <script src="js/foodai.js?v=334" defer></script>
+  <script src="js/update.js?v=334" defer></script>
   <!-- The brand kit's three faces, and only three:
          IBM Plex Sans Arabic — the body face, for BOTH scripts (it carries a
            full Latin set, so this replaces the old Inter + Tajawal pair and one
@@ -91,7 +92,7 @@
        roughly one launch in four. One reflow beats no brand font. -->
   <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@400;500;600;700&family=Archivo:wght@800&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet" media="print" onload="this.media='all'">
   <noscript><link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@400;500;600;700&family=Archivo:wght@800&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet"></noscript>
-  <link rel="stylesheet" href="styles.css?v=333">
+  <link rel="stylesheet" href="styles.css?v=334">
 </head>
 <body class="theme-dark">
   <script>
@@ -190,8 +191,8 @@
           await Promise.all(regs.map((r) => r.unregister()));
           const keys = await caches.keys();
           await Promise.all(keys.map((k) => caches.delete(k)));
-          if (!sessionStorage.getItem('__cleaned_v333')) {
-            sessionStorage.setItem('__cleaned_v333', '1');
+          if (!sessionStorage.getItem('__cleaned_v334')) {
+            sessionStorage.setItem('__cleaned_v334', '1');
             location.reload();
           }
         }

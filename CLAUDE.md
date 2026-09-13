@@ -9,6 +9,7 @@ A fitness / workout-tracking **PWA**. Vanilla JS, **no build step**, bilingual *
 ## Stack & key files
 - `index.html` — markup, script wiring, and the cache-version markers.
 - `js/i18n.js` — the two EN/AR dictionaries (1,931 lines) and nothing else. **Loads FIRST of the eight scripts**: `const I18N` is shared through the global lexical scope, which only works if it has already executed when app.js's `t()` runs.
+- `js/catalog.js` — the app's static data and nothing else: `ICONS` (+ its two back-compat aliases), `WORKOUT_TEMPLATES`, `EXERCISE_MUSCLES`, both exercise-name maps and `FOOD_PRESETS`. Loads second, before app.js, for the same lexical-scope reason. **Contracts 13, 22 and 23 read THIS file now, not app.js.**
 - `js/app.js` (**~700KB**) — ALL views/rendering and the router `navigate(view, ctx, opts)`. Use `Grep` to find a function; don't assume from names.
 - `js/storage.js` — the `DB.*` localStorage API (all persistence). `MACHINE_SEED`, name-match migrations.
 - `js/cloud.js` — Supabase email/password auth + whole-blob sync to a per-user `vault_data` row (RLS-protected). Uses the **publishable** key only (never service-role). Loads before app.js. Also: `getUsername/checkUsername/setUsername` (the mandatory-handle feature) and `getClient` (RLS-scoped client for auxiliary readers).
@@ -78,7 +79,7 @@ a faster TTFB — not fewer bytes.
 npm run release          # bump every marker + verify, then commit all files together
 ```
 
-**Current version: v333.** APK: build 21 / v3.0.
+**Current version: v334.** APK: build 21 / v3.0.
 
 `scripts/release.js` rewrites **every** marker and then re-reads them from disk to confirm; it exits non-zero if any disagree, and prints the count per file (derived, never hard-coded — the docs used to say 16 while the real count was 15). The markers are `?v=N` in `index.html` (every script and stylesheet, the `js/vendor/supabase.js` preload, both `icons/icon.svg` links, `manifest.json`), the `__cleaned_vN` sessionStorage key, the `FALLBACK` literal in `app.js`, `version.json` → `web`, the `?v=` in `manifest.json`, `admin.html`, `privacy.html` and `get/index.html`, and the `Current version` line in this file. `scripts/check-contracts.js` (pre-commit) refuses a commit where any of them disagree.
 
@@ -1591,6 +1592,55 @@ name maps (150), `EXERCISE_MUSCLES` (74), `ICONS` (66), `WORKOUT_TEMPLATES` (45)
 together. Each is read by a contract that would have to move with it, and none is 13% of the file.
 Worth doing as one `js/catalog.js` when there is a reason to touch them; not worth the contract
 churn on its own.
+
+## v334 — the catalog follows the translations out
+
+«حسن الكود اكثر ومنظم اكثر». Same move as v333, on what the v333 note said was left:
+`ICONS` (66 lines), `WORKOUT_TEMPLATES` (45), `EXERCISE_MUSCLES` (74), the two exercise-name maps
+(150) and `FOOD_PRESETS` (235) — **570 lines of static data** that no view reads line by line and
+that never changes at runtime. All six were referenced from **app.js only**, which is what made the
+move mechanical rather than a refactor.
+
+`js/catalog.js` holds them. Across v333 and v334 together:
+
+| js/app.js | lines | KB |
+|---|---|---|
+| before v333 | 15,191 | 815 |
+| after v333 (i18n out) | 13,260 | 698 |
+| **after v334 (catalog out)** | **12,644** | **637** |
+
+**17% of the lines and 22% of the bytes** left the file, and nothing about the app changed. Nine
+`defer` scripts now, in the order i18n → catalog → cloud → storage → app → health → notify →
+foodai → update, which contract 1 enforces.
+
+**`icon()` deliberately stayed in app.js.** The icon SET is data; rendering one is code — the same
+split as `t()` against `js/i18n.js`. A file called "catalog" that also contains a renderer is the
+shape this was moving away from.
+
+**Three contracts now read `js/catalog.js` instead of app.js** — the exercise-name maps agreeing
+with each other and with the seeds (13), the seven glyphs duplicated in index.html and update.js
+matching their masters (22), and every `icon('name')` in the scripts being a real key (23). Their
+counts are unchanged: 73 seed exercises, 7 glyphs, 51 names against 54 keys.
+
+Verified in a real browser, because every icon in the app now depends on a second file having
+executed: all six globals visible from app.js's scope with their exact sizes (ICONS 54,
+FOOD_PRESETS 219, EXERCISE_MUSCLES 72, EXERCISE_NAME_AR 73, WORKOUT_TEMPLATES 4), **all 54 keys
+render non-empty svg content**, both back-compat aliases resolve, an unknown name still renders
+empty exactly as documented, and six views paint with zero empty `<svg>` elements.
+
+> My first check asserted `icon('dumbbell')` contains `<path` and it came back false — because that
+> glyph starts with `<rect`. The assertion was wrong, not the code. Check every key for *content*,
+> never one key for a particular element.
+
+### What is left in app.js, and what it would cost
+
+Pure data is now **0 lines**. What remains is genuinely views and router — 34 declared sections,
+12,644 lines. The next largest thing is not data but a single function: **`renderSessionRun` at 847
+lines**, followed by `openRecipeEditor` (484) and `renderHome` (483). Splitting app.js further means
+splitting by DOMAIN — food, workout, settings — and those sections call freely across each other
+through the shared global scope, so the boundary would have to be designed rather than measured.
+That is a different kind of work from these two commits, and it should not be started by accident.
+
 
 ## Superpowers — and the two places this project deliberately departs from it
 
