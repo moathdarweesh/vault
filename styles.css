@@ -7655,7 +7655,7 @@ body:has(.toast.has-action.show) .modal { padding-bottom: calc(var(--nav-h) + va
 /* The queued rows and settled strips likewise. (0,2,0) on purpose: the identity
    layer hands every .data-row `border:0; box-shadow: var(--elev-1)` at (0,1,0)
    LAST in the file, and a row inside this block must lose that lit edge. */
-.home-sched .data-list { gap: 0; margin-top: var(--sp-3); }
+.home-sched .data-list { gap: 0; }
 .home-sched .data-row {
   background: none;
   box-shadow: none;
@@ -7686,7 +7686,9 @@ body:has(.toast.has-action.show) .modal { padding-bottom: calc(var(--nav-h) + va
    row — which is the thing it was built to stop reading as. */
 /* The heading sits above whatever the block contains — card, rows, or only
    settled strips — so ticking the last cardio no longer takes it off screen. */
-.home-sched-title { margin-bottom: var(--sp-2); }
+/* 12px to the first divider, matching the 12px of padding every row carries
+   below it — the title's 8px and the list's 12px used to stack into 20. */
+.home-sched-title { margin-bottom: var(--sp-3); }
 /* ---- The settled strip: the same row, two thirds the height ---------------
    It keeps var(--elev-1) from the identity layer. Dropping it was tempting —
    settled things should recede — but --surface-1 on --bg is ~1.08:1 in dark,
@@ -7703,13 +7705,21 @@ body:has(.toast.has-action.show) .modal { padding-bottom: calc(var(--nav-h) + va
    muted control — the exact failure .supp-toggle.taken shipped with. A styled
    button must also set `color`, or it inherits the UA `buttontext` default,
    which measured 2.23:1 here once before. */
+/* ONE GEOMETRY FOR BOTH. They were 36x36 and 70x36 — a 34px difference that
+   moved the name column between rows (217px against 183px) and made two rows of
+   the same kind look like two different things. Both are now the SAME SQUARE as
+   the category tile that opens the row, so a row reads [42][name][42] and every
+   row is the mirror of every other. The undo lost its word for the same reason
+   the check did; «تم» still sits in the meta line, so the done state is carried
+   by text and the .is-done wash, never by colour alone. */
 .cardio-do, .cardio-undo {
   position: relative;
   flex: none;
-  display: flex; align-items: center; justify-content: center; gap: var(--sp-1);
-  height: 36px;
-  padding: 0 var(--sp-2h);
-  border-radius: var(--radius-btn-s);
+  display: flex; align-items: center; justify-content: center;
+  width: 42px;
+  height: 42px;
+  padding: 0;
+  border-radius: var(--radius-sm);
   font-family: inherit;
   font-size: var(--fs-btn-s);
   font-weight: 700;
@@ -7718,15 +7728,11 @@ body:has(.toast.has-action.show) .modal { padding-bottom: calc(var(--nav-h) + va
   --icon-accent: currentColor;
   -webkit-tap-highlight-color: transparent;
 }
-.cardio-undo svg { width: 16px; height: 16px; }
-.cardio-do svg { width: 20px; height: 20px; }
-/* 36px visible, 44px target — the halo every sub-44 control in this app carries. */
-.cardio-do::after, .cardio-undo::after { content: ''; position: absolute; inset: -4px; }
-/* Still owed → filled, because a filled colour promises a task. Square, because
-   with no label there is nothing to set beside the glyph. */
+.cardio-do svg, .cardio-undo svg { width: 20px; height: 20px; }
+/* 42px visible, 44px target. */
+.cardio-do::after, .cardio-undo::after { content: ''; position: absolute; inset: -1px; }
+/* Still owed → filled, because a filled colour promises a task. */
 .cardio-do {
-  width: 36px;
-  padding: 0;
   border: none;
   background: var(--accent);
   color: var(--accent-ink);

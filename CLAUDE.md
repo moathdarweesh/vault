@@ -77,7 +77,7 @@ a faster TTFB — not fewer bytes.
 npm run release          # bump every marker + verify, then commit all files together
 ```
 
-**Current version: v325.** APK: build 21 / v3.0.
+**Current version: v326.** APK: build 21 / v3.0.
 
 `scripts/release.js` rewrites **every** marker and then re-reads them from disk to confirm; it exits non-zero if any disagree, and prints the count per file (derived, never hard-coded — the docs used to say 16 while the real count was 15). The markers are `?v=N` in `index.html` (every script and stylesheet, the `js/vendor/supabase.js` preload, both `icons/icon.svg` links, `manifest.json`), the `__cleaned_vN` sessionStorage key, the `FALLBACK` literal in `app.js`, `version.json` → `web`, the `?v=` in `manifest.json`, `admin.html`, `privacy.html` and `get/index.html`, and the `Current version` line in this file. `scripts/check-contracts.js` (pre-commit) refuses a commit where any of them disagree.
 
@@ -1180,6 +1180,31 @@ reduced-motion pair with it — styles.css lost 4.4KB — plus the `cardio_task_
 > the window (see v324). The repaint is synchronous again. The structural fix in `bindVaultAction` —
 > scope to the element being rendered, never to `.view.active` — stays, because it is what makes the
 > NEXT deferred render safe.
+
+## v326 (2026-09-13) — one geometry for every cardio row
+
+«عدل الابعاد وخليها متناسقه». Measured before touching anything, and the numbers named the fault:
+
+| | owed row | settled row |
+|---|---|---|
+| category tile | 42 × 42 | 42 × 42 |
+| **control** | **36 × 36** | **70 × 36** |
+| **name column** | **217px** | **183px** |
+
+A 34px difference between the two controls moved the name column between rows, so two rows of the
+same kind did not line up. **Both controls are now the SAME SQUARE as the tile that opens the row**,
+so a row reads `[42][name][42]` and every row is the mirror of every other — measured after: tiles,
+controls, name columns and row heights all identical.
+
+- The undo lost its «تراجع» for the same reason the check lost «سجّله». **The done state is still
+  carried by text, never by colour alone**: «تم» sits in the meta line and the `.is-done` wash mutes
+  the title and dims the tile. The accessible name still says the action and the activity
+  («تراجع — جري»), which is what an icon-only control needs.
+- The 44px tap target is preserved on a 42px control by `inset: -1px`, the same halo pattern every
+  sub-44 control in this app uses.
+- The title's 8px margin and the list's 12px were stacking into 20px above the first divider against
+  12px of row padding below it. One 12px value now, so the rhythm above the list matches the rhythm
+  inside it.
 
 ## Superpowers — and the two places this project deliberately departs from it
 
