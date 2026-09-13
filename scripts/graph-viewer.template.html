@@ -153,9 +153,17 @@ let W = 0, H = 0, DPR = 1;
 function resize(){
   DPR = Math.min(window.devicePixelRatio || 1, 2);
   const r = cv.parentElement.getBoundingClientRect();
+  const oldW = W, oldH = H;
   W = r.width; H = r.height;
   cv.width = Math.round(W*DPR); cv.height = Math.round(H*DPR);
   ctx.setTransform(DPR,0,0,DPR,0,0);
+  // Keep the same world area visible. Without this the scale stays pinned to
+  // whatever the canvas measured when fit() last ran — and on a cold open that
+  // is a canvas that has not finished laying out.
+  if (oldW > 0 && oldH > 0 && W > 0 && H > 0){
+    const s = Math.min(W/oldW, H/oldH);
+    if (s > 0 && isFinite(s)) view.k *= s;
+  }
   draw();
 }
 const commColor = (cid) => {
@@ -476,7 +484,8 @@ addEventListener('keydown', e => {
   if (e.key==='Escape'){ show(null); }
   if (e.key==='/' && document.activeElement!==$('#q')){ e.preventDefault(); $('#q').focus(); }
 });
-addEventListener('resize', resize);
+// no window 'resize' listener: the ResizeObserver below covers every case that
+// changes the canvas box, and both firing would apply the reframe scale twice.
 
 // ---------- boot ----------
 const __boot = (d) => {
@@ -494,7 +503,17 @@ const __boot = (d) => {
     }
   }
   $('#brandsub').textContent = `${nodes.length} nodes · ${links.length} edges · ${Object.keys(comms).length} clusters`;
-  buildRail(); resize(); fit();
+  buildRail();
+  // The canvas is sized by flex, so its box is not final when this runs.
+  // ResizeObserver fires when it genuinely has one — including in a tab that is
+  // not painting, which is why this is not two requestAnimationFrames.
+  let fitted = false;
+  new ResizeObserver(() => {
+    resize();
+    if (!fitted && W > 40 && H > 40){ fitted = true; fit(); }
+  }).observe(cv.parentElement);
+  resize();
+  if (W > 40 && H > 40){ fitted = true; fit(); }   // already laid out: no wait
 };
 if (window.__GRAPH__) __boot(window.__GRAPH__);
 else fetch('graph.json').then(r=>r.json()).then(__boot).catch(err=>{
