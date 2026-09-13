@@ -9,9 +9,9 @@
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@400;600;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
 <style>
 :root{
-  --bg:#000; --surface-1:#0d0a07; --surface-2:#17120d; --surface-3:#221a13;
-  --border:rgba(255,232,212,.11); --border-hi:rgba(255,232,212,.2);
-  --text:#fdfaf7; --text-mute:#b0a69e; --text-dim:#9a8f86;
+  --bg:#0b0b16; --surface-1:#10101d; --surface-2:#181828; --surface-3:#222236;
+  --border:rgba(220,224,255,.10); --border-hi:rgba(220,224,255,.19);
+  --text:#f2f3fa; --text-mute:#a4a7bd; --text-dim:#8b8ea6;
   --accent:#ff6a00; --accent-soft:rgba(255,106,0,.16);
   --pad:14px; --r:12px;
   --ui:'IBM Plex Sans Arabic',system-ui,-apple-system,Segoe UI,sans-serif;
@@ -53,20 +53,20 @@ button{font-family:inherit;color:inherit;cursor:pointer}
 
 /* ---------- stage ---------- */
 #stage{position:relative;min-width:0;background:
-  radial-gradient(ellipse 90% 70% at 50% 45%, #120c07 0%, #000 72%)}
+  radial-gradient(ellipse 92% 74% at 50% 46%, #14142a 0%, #0b0b16 68%)}
 canvas{display:block;width:100%;height:100%}
 #hud{position:absolute;top:12px;left:12px;display:flex;gap:6px}
 .hbtn{height:32px;padding:0 12px;border-radius:9px;border:1px solid var(--border-hi);
-  background:rgba(13,10,7,.86);backdrop-filter:blur(8px);font-size:12px;font-weight:600;color:var(--text-mute)}
+  background:rgba(16,16,29,.86);backdrop-filter:blur(8px);font-size:12px;font-weight:600;color:var(--text-mute)}
 .hbtn:hover{color:var(--text);border-color:var(--accent)}
 #tip{position:absolute;pointer-events:none;opacity:0;transition:opacity .1s;z-index:5;
-  background:rgba(23,18,13,.97);border:1px solid var(--border-hi);border-radius:9px;padding:7px 10px;
+  background:rgba(24,24,40,.97);border:1px solid var(--border-hi);border-radius:9px;padding:7px 10px;
   font-size:12px;max-width:300px;box-shadow:0 8px 26px rgba(0,0,0,.6)}
 #tip .t{font-weight:700;margin-bottom:2px;word-break:break-word}
 #tip .m{font-size:10px;color:var(--text-dim);font-family:var(--mono)}
 
 /* ---------- detail panel ---------- */
-#panel{position:absolute;top:0;right:0;bottom:0;width:330px;background:rgba(13,10,7,.97);
+#panel{position:absolute;top:0;right:0;bottom:0;width:330px;background:rgba(16,16,29,.97);
   backdrop-filter:blur(12px);border-left:1px solid var(--border);transform:translateX(100%);
   transition:transform .22s cubic-bezier(.4,0,.2,1);display:flex;flex-direction:column;z-index:6}
 #panel.open{transform:none}
@@ -110,7 +110,7 @@ canvas{display:block;width:100%;height:100%}
     <canvas id="cv"></canvas>
     <div id="hud">
       <button class="hbtn" id="reset">Fit</button>
-      <button class="hbtn" id="lbl">Labels: auto</button>
+      <button class="hbtn" id="lbl">Labels: off</button>
       <button class="hbtn" id="clear">Clear filters</button>
     </div>
     <div id="tip"></div>
@@ -137,16 +137,22 @@ const MONO_FONT = "'JetBrains Mono', ui-monospace, monospace";
 // noise; the cluster bubbles carry the structure instead.
 const MAP_K = 0.30;
 let mapEdges = {}, hoverComm = null;
+// Soft, evenly-weighted hues. Nothing is pure saturated brand orange: at 1684
+// dots one loud hue drags the eye and the rest read as background.
+const PALETTE = ['#e8646e','#6b9bd2','#8cc152','#e6c34a','#e8913c','#e88fb0',
+                 '#4db6ac','#a1887f','#d6d2ce','#a58fc4','#ef8a72','#9ccc65',
+                 '#5c9ead','#d98cb3','#c2a84a','#7e9fd4','#b0d06a','#e0a3a0'];
+// Kept only for the Kinds chips' dots, so a filter still reads as itself.
 const TYPE_COLOR = {
-  'function':'#ff6a00','api-method':'#ffa04d','api':'#ffc98a','method':'#e8873a',
-  'doc':'#4da3ff','file':'#f5f0ea','ui':'#b57bff','config':'#8a8f98',
-  'sql-table':'#2ed3a7','sql-function':'#64e3c0','sql-trigger':'#9ef0da','sql-object':'#2ed3a7',
-  'class':'#ffd84d','constant':'#7a7f88','script':'#6ee7ff','symbol':'#6b7079'
+  'function':'#ff8a3c','api-method':'#ffa96b','api':'#ffc98a','method':'#e8873a',
+  'doc':'#6b9bd2','file':'#d6d2ce','ui':'#a58fc4','config':'#8a8f98',
+  'sql-table':'#4db6ac','sql-function':'#64e3c0','sql-trigger':'#9ef0da','sql-object':'#4db6ac',
+  'class':'#e6c34a','constant':'#7a7f88','script':'#5c9ead','symbol':'#6b7079'
 };
 const $ = (s) => document.querySelector(s);
 let G, nodes, links, byId, comms, adj = new Map();
 let view = {x:0, y:0, k:1}, hover = null, selected = null;
-let typeOff = new Set(), commFilter = null, query = '', labelMode = 'auto';
+let typeOff = new Set(), commFilter = null, query = '', labelMode = 'off';
 const cv = $('#cv'), ctx = cv.getContext('2d');
 let W = 0, H = 0, DPR = 1;
 
@@ -166,11 +172,14 @@ function resize(){
   }
   draw();
 }
+// Stable: the same cluster keeps its colour across rebuilds as long as its id
+// does, and adjacent ids do not land on adjacent hues.
 const commColor = (cid) => {
-  let h = 0; const s = String(cid);
-  for (let i=0;i<s.length;i++) h = (h*31 + s.charCodeAt(i)) >>> 0;
-  return `hsl(${h % 360} 62% 58%)`;
+  let x = 0; const s = String(cid);
+  for (let i=0;i<s.length;i++) x = (x*131 + s.charCodeAt(i)) >>> 0;
+  return PALETTE[x % PALETTE.length];
 };
+const nodeColor = (n) => commColor(n.community);
 const norm = (s) => String(s||'').toLowerCase();
 
 function visible(n){
@@ -181,7 +190,14 @@ function visible(n){
 }
 const toScreen = (x,y) => [ (x - view.x)*view.k + W/2, (y - view.y)*view.k + H/2 ];
 const toWorld  = (sx,sy) => [ (sx - W/2)/view.k + view.x, (sy - H/2)/view.k + view.y ];
-const radius = (n) => Math.max(2.1, Math.min(11, 2.1 + Math.sqrt(n.deg||0)*1.35));
+// Small and close to uniform, with real hubs allowed to grow. Big dots at this
+// count turn every cluster into a blob.
+const radius = (n) => Math.max(1.7, Math.min(9, 1.7 + Math.sqrt(n.deg||0)*1.05));
+// hex + alpha, for edges that carry their cluster's colour
+const withAlpha = (hex, a) => {
+  const v = parseInt(hex.slice(1), 16);
+  return `rgba(${(v>>16)&255},${(v>>8)&255},${v&255},${a})`;
+};
 
 let lastT = performance.now(), frames = 0;
 function draw(){
@@ -190,71 +206,19 @@ function draw(){
   for (const n of nodes) if (visible(n)) vis.add(n.id);
   const focus = selected ? (adj.get(selected.id) || new Set()) : null;
 
-  // ---- THE MAP LEVEL ------------------------------------------------------
-  // One bubble per cluster instead of 1643 unresolvable dots. Entered only on
-  // the unfiltered overview: the moment the user searches or picks a cluster
-  // they have asked about NODES, so the detail level answers even at this zoom.
-  if (view.k < MAP_K && !query && commFilter === null && !selected){
-    const taken = [];
-    const free = (x,y,w,hh) => {
-      for (const r of taken) if (x < r[2] && x+w > r[0] && y < r[3] && y+hh > r[1]) return false;
-      taken.push([x,y,x+w,y+hh]); return true;
-    };
-    // the cross-cluster edges, drawn once per pair and weighted by how many
-    ctx.lineWidth = 1;
-    for (const [key,w] of Object.entries(mapEdges)){
-      const [a,b] = key.split('|');
-      const ca = comms[a], cb = comms[b];
-      if (!ca || !cb) continue;
-      const [x1,y1] = toScreen(ca.x,ca.y), [x2,y2] = toScreen(cb.x,cb.y);
-      ctx.strokeStyle = 'rgba(255,106,0,' + Math.min(.34, .05 + w*0.012) + ')';
-      ctx.lineWidth = Math.min(3, .5 + w*0.08);
-      ctx.beginPath(); ctx.moveTo(x1,y1); ctx.lineTo(x2,y2); ctx.stroke();
-    }
-    // biggest last, so the largest clusters win the label collision test
-    const order = Object.entries(comms).sort((a,b)=>b[1].n-a[1].n);
-    for (const [cid,c] of order){
-      const [sx,sy] = toScreen(c.x,c.y);
-      const r = Math.max(7, Math.min(64, 5.5*Math.sqrt(c.n)) * Math.max(.75, view.k*4.2));
-      if (sx<-r-200||sx>W+r+200||sy<-r-60||sy>H+r+60) continue;
-      const col = commColor(cid);
-      ctx.globalAlpha = hoverComm === cid ? .34 : .17;
-      ctx.fillStyle = col; ctx.beginPath(); ctx.arc(sx,sy,r,0,6.283); ctx.fill();
-      ctx.globalAlpha = 1;
-      ctx.strokeStyle = col; ctx.lineWidth = hoverComm === cid ? 2 : 1;
-      ctx.beginPath(); ctx.arc(sx,sy,r,0,6.283); ctx.stroke();
-      // the count sits inside the bubble; the name below it, if it fits
-      if (r > 15){
-        ctx.textAlign='center'; ctx.textBaseline='middle';
-        ctx.font = '600 ' + Math.max(9, Math.min(13, r*0.42)) + 'px ' + MONO_FONT;
-        ctx.fillStyle = 'rgba(253,250,247,.78)';
-        ctx.fillText(String(c.n), sx, sy);
-      }
-      ctx.font = '600 12px ' + CANVAS_FONT;
-      const tw = ctx.measureText(c.name).width;
-      if (free(sx-tw/2-3, sy+r+3, tw+6, 15)){
-        ctx.textAlign='center'; ctx.textBaseline='top';
-        ctx.fillStyle = hoverComm === cid ? '#fdfaf7' : 'rgba(253,250,247,.62)';
-        ctx.fillText(c.name, sx, sy+r+4);
-      }
-    }
-    $('#shown').textContent = order.length + ' clusters · zoom in for nodes';
-    frames++;
-    const now0 = performance.now();
-    if (now0-lastT > 900){ $('#fps').textContent = Math.round(frames*1000/(now0-lastT)) + ' fps'; frames=0; lastT=now0; }
-    return;
-  }
-
   // edges
-  ctx.lineWidth = Math.max(.35, .7*view.k);
+  ctx.lineWidth = Math.max(.45, .9*view.k);
   for (const e of links){
     if (!vis.has(e.source) || !vis.has(e.target)) continue;
     const a = byId.get(e.source), b = byId.get(e.target);
     const lit = focus && (focus.has(a.id) && focus.has(b.id)) &&
                 (a.id === selected.id || b.id === selected.id);
     if (focus && !lit) { if (view.k < .8) continue; ctx.strokeStyle = 'rgba(255,232,212,.045)'; }
-    else if (lit) ctx.strokeStyle = 'rgba(255,106,0,.72)';
-    else ctx.strokeStyle = a.community === b.community ? 'rgba(255,232,212,.11)' : 'rgba(255,106,0,.20)';
+    else if (lit) ctx.strokeStyle = '#ffffff';
+    // An edge belongs to the cluster it leaves. Inside a cluster that paints the
+    // star's own spokes in its colour; between clusters it shows which one
+    // reached out, which grey edges cannot say.
+    else ctx.strokeStyle = withAlpha(commColor(a.community), a.community === b.community ? .34 : .17);
     const [x1,y1] = toScreen(a.x,a.y), [x2,y2] = toScreen(b.x,b.y);
     if ((x1<0&&x2<0)||(x1>W&&x2>W)||(y1<0&&y2<0)||(y1>H&&y2>H)) continue;
     ctx.beginPath(); ctx.moveTo(x1,y1); ctx.lineTo(x2,y2); ctx.stroke();
@@ -269,7 +233,7 @@ function draw(){
     if (sx<-r-2||sx>W+r+2||sy<-r-2||sy>H+r+2) continue;
     const dim = focus && !focus.has(n.id) && n.id !== selected.id;
     ctx.globalAlpha = dim ? .17 : 1;
-    ctx.fillStyle = TYPE_COLOR[n.type] || '#6b7079';
+    ctx.fillStyle = nodeColor(n);
     ctx.beginPath(); ctx.arc(sx,sy,r,0,6.283); ctx.fill();
     if (n === selected || n === hover){
       ctx.globalAlpha = 1; ctx.strokeStyle = '#fff'; ctx.lineWidth = 2;
@@ -284,9 +248,9 @@ function draw(){
   for (const [n,sx,sy,r] of labelled.slice(0,420)){
     const t = n.label.length>34 ? n.label.slice(0,33)+'…' : n.label;
     const w = ctx.measureText(t).width;
-    ctx.fillStyle='rgba(0,0,0,.62)';
+    ctx.fillStyle='rgba(11,11,22,.72)';
     ctx.fillRect(sx+r+4, sy-8, w+7, 16);
-    ctx.fillStyle = n===selected ? '#ff6a00' : 'rgba(253,250,247,.92)';
+    ctx.fillStyle = n===selected ? '#ffffff' : 'rgba(242,243,250,.92)';
     ctx.fillText(t, sx+r+7.5, sy+.5);
   }
   $('#shown').textContent = vis.size + ' / ' + nodes.length + ' nodes';
@@ -397,19 +361,6 @@ addEventListener('mouseup', e => {
   if (drag && !drag.moved){
     const r=cv.getBoundingClientRect();
     const sx=e.clientX-r.left, sy=e.clientY-r.top;
-    if (view.k < MAP_K && !query && commFilter === null && !selected){
-      const c = pickComm(sx,sy);
-      if (c){
-        // a bubble is a place — opening it selects it in the rail too, so the
-        // two halves of the screen never disagree about where the user is
-        commFilter = c; hoverComm = null; $('#tip').style.opacity='0';
-        [...$('#comms').children].forEach(el=>el.classList.toggle('on', el.dataset.cid===c));
-        const row = [...$('#comms').children].find(el=>el.dataset.cid===c);
-        if (row) row.scrollIntoView({block:'nearest'});
-        fit(nodes.filter(n=>String(n.community)===c));
-      }
-      drag=null; return;
-    }
     show(pick(sx,sy));
   }
   drag=null;
@@ -422,23 +373,6 @@ cv.addEventListener('mousemove', e => {
     view.y = drag.vy - (e.clientY-drag.y)/view.k;
     cv.style.cursor='grabbing'; draw(); return;
   }
-  if (view.k < MAP_K && !query && commFilter === null && !selected){
-    const c = pickComm(sx,sy);
-    cv.style.cursor = c ? 'pointer' : 'grab';
-    const tip=$('#tip');
-    if (c !== hoverComm){
-      hoverComm = c;
-      if (c){
-        tip.innerHTML=`<div class="t">${esc(comms[c].name)}</div><div class="m">${comms[c].n} nodes · click to open</div>`;
-        tip.style.opacity='1';
-        tip.style.left=Math.min(sx+16, W-310)+'px';
-        tip.style.top=Math.max(8, sy-14)+'px';
-      } else tip.style.opacity='0';
-      draw();
-    }
-    return;
-  }
-  if (hoverComm){ hoverComm=null; $('#tip').style.opacity='0'; }
   const n = pick(sx,sy);
   cv.style.cursor = n ? 'pointer' : 'grab';
   if (n !== hover){
@@ -476,7 +410,7 @@ $('#clear').onclick = () => {
   show(null); fit();
 };
 $('#lbl').onclick = () => {
-  labelMode = labelMode==='auto' ? 'all' : labelMode==='all' ? 'off' : 'auto';
+  labelMode = labelMode==='off' ? 'auto' : labelMode==='auto' ? 'all' : 'off';
   $('#lbl').textContent = 'Labels: ' + labelMode; draw();
 };
 $('#px').onclick = () => show(null);
