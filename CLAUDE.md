@@ -8,7 +8,7 @@ A fitness / workout-tracking **PWA**. Vanilla JS, **no build step**, bilingual *
 
 ## Stack & key files
 - `index.html` — markup, script wiring, and the cache-version markers.
-- `js/i18n.js` — the two EN/AR dictionaries (1,931 lines) and nothing else. **Loads FIRST of the eight scripts**: `const I18N` is shared through the global lexical scope, which only works if it has already executed when app.js's `t()` runs.
+- `js/i18n.js` — the two EN/AR dictionaries (1,931 lines) and nothing else. **Loads FIRST of the ten scripts**: `const I18N` is shared through the global lexical scope, which only works if it has already executed when app.js's `t()` runs.
 - `js/catalog.js` — the app's static data and nothing else: `ICONS` (+ its two back-compat aliases), `WORKOUT_TEMPLATES`, `EXERCISE_MUSCLES`, both exercise-name maps and `FOOD_PRESETS`. Loads second, before app.js, for the same lexical-scope reason. **Contracts 13, 22 and 23 read THIS file now, not app.js.**
 - `js/app.js` (**~700KB**) — ALL views/rendering and the router `navigate(view, ctx, opts)`. Use `Grep` to find a function; don't assume from names.
 - `js/storage.js` — the `DB.*` localStorage API (all persistence). `MACHINE_SEED`, name-match migrations.
@@ -79,7 +79,7 @@ a faster TTFB — not fewer bytes.
 npm run release          # bump every marker + verify, then commit all files together
 ```
 
-**Current version: v338.** APK: build 21 / v3.0.
+**Current version: v339.** APK: build 21 / v3.0.
 
 `scripts/release.js` rewrites **every** marker and then re-reads them from disk to confirm; it exits non-zero if any disagree, and prints the count per file (derived, never hard-coded — the docs used to say 16 while the real count was 15). The markers are `?v=N` in `index.html` (every script and stylesheet, the `js/vendor/supabase.js` preload, both `icons/icon.svg` links, `manifest.json`), the `__cleaned_vN` sessionStorage key, the `FALLBACK` literal in `app.js`, `version.json` → `web`, the `?v=` in `manifest.json`, `admin.html`, `privacy.html` and `get/index.html`, and the `Current version` line in this file. `scripts/check-contracts.js` (pre-commit) refuses a commit where any of them disagree.
 
@@ -2073,6 +2073,80 @@ master.
 > deadness grep across the whole tree reported `.bundle-pick` as alive with 8 references; every one was
 > in a stale build copy. Scope the check to `js/*.js` plus the four HTML pages, or a dead class looks
 > load-bearing.
+
+
+## v339 — the motion engine (APPLY-motion.md, part one)
+
+`js/motion.js` is the tenth `defer` script and the first new one since v334. It publishes
+`window.VltMotion` — `stagger · count · bar · pulse · numFlip · dragToDismiss` — and reads no
+other module, so it only has to sit ahead of app.js. Contract 1 now fixes TEN scripts:
+i18n → catalog → cloud → storage → **motion** → app → health → notify → foodai → update.
+
+> ⚠️ **EVERY SELECTOR IN THE SPEC MATCHED ZERO RULES IN THIS APP.** `.screen`, `.tab-indicator`,
+> `.tab-icon`, `.bar-fill`, `.toggle-knob`, `.sheet`, `.sheet-scrim`, `.btn-secondary`,
+> `.row-tappable`, `.chip-tappable` — checked before a line was written, all zero. Pasted
+> verbatim the handoff would have shipped ~120 lines of CSS styling nothing and a module nothing
+> calls. The real vocabulary is `.view`, `.nav-btn`, `.modal`/`.modal-overlay`, `.btn-ghost`,
+> `.data-row`, `.ntfs-switch`, `.run-progress-fill`. **The spec's VALUES and RULES are kept
+> exactly; only the names are translated.** A design spec names the app it was drawn against, not
+> necessarily the one in front of you.
+
+### ⚠️ I SHIPPED A DUPLICATE AND THE MEASUREMENT CAUGHT IT
+
+The app has raised its sheets since long before this spec — `.modal` runs `sheetUp`,
+`.modal-overlay` runs `overlayIn`. I added a SECOND mechanism on top (a transform transition
+behind `.vlt-sheet.is-in`) without grepping for the one that existed, which is **verbatim the
+failure v314 recorded**: "v312 added its features ON TOP of existing components without first
+asking whether the app already had one. Before adding a component, grep for it."
+
+Caught by reading `getAnimations()` on a live sheet: TWO effects on one element, the wrong one
+winning. The entrance is the app's own again, merely retuned to the tokens — `sheetUp` 300ms/`--ease`
+→ **400ms/`--ease-out`**, and the scrim 200ms → **400ms linear** so the two now arrive together
+instead of the scrim finishing first. What the app genuinely LACKED is what stayed new: an EXIT
+(260ms — an arrival is worth watching, a departure is not) and drag-to-dismiss at the spec's 120px.
+
+### Two defects that only a hidden document exposes
+
+> ⚠️ **`requestAnimationFrame` DOES NOT FIRE IN A HIDDEN DOCUMENT, AND NEITHER DOES
+> `animationend`.** Both bit here, and both would have shipped:
+>
+> - The sheet got its `is-in` class from a double rAF. In a hidden or backgrounded document it
+>   never arrived, so the sheet sat at `translateY(100%)` — invisible, stuck, no error. Replaced
+>   with a synchronous reflow flush (`void el.offsetWidth`), which is all a transition needs and
+>   works whatever the visibility.
+> - The stagger removed its `.enter` class on `animationend`. Measured: the class survived, and
+>   a later re-render of the same screen replayed the WHOLE stagger at once, every child at delay
+>   0, because the new children still match `.enter > *`. It is a TIMER now, sized to the real
+>   window — `min(n-1,5) × --stagger + --dur-base`. **Every save re-renders a view in this app**,
+>   so "the animating children are gone before they finish" is the ordinary case, not the edge one.
+
+### The stagger, measured
+
+First render of `cardio`: six children at **0 / 140 / 280 / 420 / 560 / 700ms** — the cap is in the
+calc (`min(var(--i), 5)`), so a twenty-row list cannot make the reader wait three seconds for
+content that has already arrived. Revisiting the screen: **0 animations**. Re-rendering it in place
+(what a save does): **0 animations**. The guard is `data-entered` on the container, and the
+distinction it draws is the whole point — the stagger says "this screen just arrived", and a screen
+that was already here must not claim it.
+
+`--stagger` is a token and not the spec's literal 140ms because the global reduced-motion clamp
+flattens `animation-duration` and never touches `animation-DELAY` (see v337).
+
+### What contract 15 caught in my own code
+
+It refused `wrap.querySelector('svg')` as "JS queries #svg". The scanner is RIGHT: this app's `$()`
+helper accepts `$('modal-root')` meaning `#modal-root`, so a bare word inside a query genuinely is
+ambiguous — and the ambiguity was mine. `getElementsByTagName('svg')[0]` says TAG and means tag.
+
+### Deliberately NOT in this release
+
+**§3, the tab slide.** It contradicts rule 11 of its own spec: sliding `.view` for 500ms under a
+`.bottom-nav` that carries `backdrop-filter: blur(24px)` IS animated blur, and `js/app.js:12376`
+already states the mechanism in this codebase's own words. It is its own piece of work with an
+owner decision in front of it. The nav also has FIVE tabs, not the four the spec assumes.
+
+Also not here: the `.pulse-ring` uses `--radius-btn-m`, **not** the spec's `border-radius: 50%` —
+device 4 of the identity layer forbids circles.
 
 
 ## Superpowers — and the two places this project deliberately departs from it

@@ -12,7 +12,7 @@
 // build. The literal below is the fallback (file://, or a stripped query) and is
 // still bumped by `npm run release` — see CLAUDE.md "CACHE WORKFLOW".
 const VAULT_BUILD = (() => {
-  const FALLBACK = 'v338';
+  const FALLBACK = 'v339';
   try {
     const src = (document.currentScript && document.currentScript.src) || '';
     const m = src.match(/[?&]v=(\d+)/);
@@ -1300,7 +1300,13 @@ function showToast(msg, opts) {
 // dismissible:false is for a dialog that MUST be answered — currently only the
 // sync conflict, where walking away leaves the device in a state whose next
 // launch can silently overwrite real data.
+// The timer that removes a sheet AFTER its exit plays. It is cancelled by any
+// new openModal, because that call rewrites #modal-root and the old node is
+// gone already — letting the timer survive would let it wipe the NEW sheet.
+let __modalExit = null;
+
 function openModal(innerHtml, { variant = 'sheet', dismissible = true } = {}) {
+  if (__modalExit) { clearTimeout(__modalExit); __modalExit = null; }
   const root = $('#modal-root');
   // BEFORE the rewrite below, and only from OUTSIDE the root. Writing innerHTML
   // destroys the sheet that is currently open, so a capture taken after it is
@@ -1321,6 +1327,21 @@ function openModal(innerHtml, { variant = 'sheet', dismissible = true } = {}) {
   `;
   const overlay = root.querySelector('.modal-overlay');
   overlay.dataset.dismissible = dismissible ? '1' : '0';
+
+  // The sheet RISES on its own — `.modal` has run `sheetUp` since long before
+  // the motion spec, and a second mechanism here would fight it. All that is
+  // marked is that this IS a bottom sheet, so closeModal knows to play an exit
+  // and the drag knows what it may throw away. A confirm dialog gets neither:
+  // it is a question and it should already be there.
+  if (variant === 'sheet' && window.VltMotion) {
+    overlay.classList.add('vlt-sheet');
+    if (dismissible) {
+      const sheet = overlay.querySelector('.modal');
+      // The drag only REPORTS a dismissal; closeModal still owns closing, so
+      // there is one answer to "what is on screen" and not two.
+      VltMotion.dragToDismiss(sheet, closeModal);
+    }
+  }
   overlay.addEventListener('click', (e) => {
     if (!dismissible) return;
     if (e.target === overlay) closeModal();
@@ -1366,10 +1387,25 @@ let __modalKeydown = null;
 
 function closeModal() {
   if (__modalKeydown) { document.removeEventListener('keydown', __modalKeydown, true); __modalKeydown = null; }
-  $('#modal-root').innerHTML = '';
-  // Hand focus back to whatever opened the dialog.
+  const root = $('#modal-root');
+  const leaving = root.querySelector('.modal-overlay.vlt-sheet');
+
+  // Focus goes back FIRST and synchronously. It must not wait on an animation:
+  // a caller that closes and immediately opens another sheet, or navigates,
+  // would otherwise land with focus on <body>.
   try { if (__modalReturnFocus && document.contains(__modalReturnFocus)) __modalReturnFocus.focus(); } catch (_) {}
   __modalReturnFocus = null;
+
+  if (!leaving) { root.innerHTML = ''; return; }
+  leaving.classList.add('is-out');
+  if (__modalExit) clearTimeout(__modalExit);
+  // +60ms of slack over the token, and the node identity is re-checked: if a
+  // new sheet opened in the meantime this timer must not wipe it.
+  const ms = (window.VltMotion ? VltMotion.token('--dur-fast', 260) : 260) + 60;
+  __modalExit = setTimeout(() => {
+    __modalExit = null;
+    if (root.querySelector('.modal-overlay') === leaving) root.innerHTML = '';
+  }, ms);
 }
 
 function confirmDialog({ title, text, onConfirm, confirmLabel, variant = 'danger' }) {
@@ -1843,6 +1879,23 @@ function renderView(view) {
   el.querySelectorAll('.back-btn:not([aria-label])').forEach((b) => b.setAttribute('aria-label', t('back')));
   // Set the sticky bar title's initial visibility for this freshly-rendered view.
   requestAnimationFrame(syncDetailTopTitle);
+
+  // STAGGERED ENTRY — APPLY-motion.md §1, first render of a screen only.
+  // The guard is `data-entered` on the container, so every later re-render of
+  // the same screen (a set logged, a cup of water, a sync landing) arrives
+  // instantly. That distinction is the whole point: the stagger says "this
+  // screen just arrived", and a screen that was already here must not claim it.
+  //
+  // Some views render one wrapper and some render their cards directly into the
+  // section, so descend through a lone element child — staggering a single
+  // wrapper animates one box and says nothing.
+  if (window.VltMotion) {
+    let host = el;
+    while (host.children.length === 1 && host.firstElementChild.children.length > 1) {
+      host = host.firstElementChild;
+    }
+    VltMotion.stagger(host);
+  }
 }
 
 $('#bottom-nav').addEventListener('click', (e) => {

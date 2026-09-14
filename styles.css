@@ -2132,7 +2132,7 @@ body[dir="rtl"] .w-unit { margin-left: 0; margin-right: 2px; }
   display: flex;
   align-items: flex-end;
   justify-content: center;
-  animation: overlayIn var(--dur) var(--ease);
+  animation: overlayIn var(--dur-base) linear;   /* APPLY-motion.md §5 */
 }
 
 @keyframes overlayIn {
@@ -2148,7 +2148,7 @@ body[dir="rtl"] .w-unit { margin-left: 0; margin-right: 2px; }
   padding: 22px 18px calc(22px + var(--safe-b));
   max-height: 92dvh;
   overflow-y: auto;
-  animation: sheetUp var(--dur-slow) var(--ease);
+  animation: sheetUp var(--dur-base) var(--ease-out);   /* APPLY-motion.md §5 */
   border-top: 1px solid var(--border);
   border-left: 1px solid var(--border);
   border-right: 1px solid var(--border);
@@ -8066,6 +8066,114 @@ body.ember-on .ember {
 /* The day's running total, directly under the cups that change it — the whole
    feedback loop, with no toast to cover the buttons. */
 .ql-now { margin: 0; text-align: center; font-size: var(--fs-caption); color: var(--text-mute); }
+
+/* =========================================================================
+   MOTION  (APPLY-motion.md)
+
+   ⚠️ THE SPEC'S SELECTORS ARE NOT THIS APP'S SELECTORS. Checked before a line
+   was written: .screen, .tab-indicator, .tab-icon, .bar-fill, .toggle-knob,
+   .sheet, .sheet-scrim, .btn-secondary, .row-tappable and .chip-tappable each
+   matched ZERO rules in this file. Pasted verbatim the block would have been
+   ~120 lines styling nothing — the failure this project has recorded twice
+   (a design spec naming a control that had been deleted). The spec's VALUES
+   and RULES are kept exactly; the names are translated to the real ones.
+
+   The tokens themselves live in :root (added in v337) — nothing here writes a
+   duration or a curve as a literal, which is the spec's second rule.
+   ========================================================================= */
+
+/* ── 1. STAGGERED ENTRY ────────────────────────────────────────────────────
+   First render of a screen only; js/motion.js owns the `data-entered` guard.
+   The cap is IN THE CALC: past the sixth child everything lands together, so
+   a twenty-row list cannot make the reader wait three seconds for content
+   that has already arrived. --stagger is a token because the global
+   reduced-motion clamp flattens durations and never DELAYS. */
+.enter > * {
+  opacity: 0;
+  transform: translateY(24px);
+  animation: vlt-enter var(--dur-base) var(--ease-out) both;
+  animation-delay: calc(min(var(--i, 0), 5) * var(--stagger));
+}
+@keyframes vlt-enter { to { opacity: 1; transform: none; } }
+
+/* ── 2. PROGRESS BARS ──────────────────────────────────────────────────────
+   scaleX, never width — width lays out and this sits inside scrolling lists.
+   transform-origin is LOGICAL so the bar grows from the reading edge in both
+   directions; the spec hard-codes `right` for RTL, which would fill backwards
+   in English. */
+.vlt-bar-fill {
+  transform: scaleX(var(--p, 0));
+  transform-origin: left center;
+  transition: transform 900ms var(--ease-inout);
+  will-change: transform;
+}
+body[dir="rtl"] .vlt-bar-fill { transform-origin: right center; }
+
+/* ── 3. TOGGLES ────────────────────────────────────────────────────────────
+   The app has FOUR toggle shapes and only .ntfs-switch has a sliding knob;
+   the rest are tick boxes that already have their own state. Only the knob
+   gets the spring. */
+.ntfs-switch { transition: background-color 200ms linear, border-color 200ms linear; }
+.ntfs-knob { transition: transform var(--dur-fast) var(--ease-back); }
+
+/* ── 4. SHEETS — the EXIT and the DRAG, not the entrance ───────────────────
+   ⚠️ The app already raises its sheets: `.modal` runs `sheetUp` and
+   `.modal-overlay` runs `overlayIn`, both long before this spec. A first
+   draft here added a SECOND mechanism on top without grepping for the one
+   that existed — the exact mistake v314 recorded ("before adding a
+   component, grep for it"). The entrance above is now simply retuned to the
+   spec's tokens; only what the app genuinely lacked is new.
+
+   What it lacked: an EXIT. A sheet that rises over 400ms and then vanishes
+   the instant innerHTML is cleared reads as a glitch, not a dismissal.
+
+   `animation: none` on the way out is load-bearing: without it the entrance
+   keyframes still own `transform` and the transition below has nothing to
+   move. An exit is also faster than an entrance — an arrival is worth
+   watching, a departure is not — which also bounds how long a dismissed
+   sheet can linger over a screen navigate() has already changed. */
+.modal-overlay.vlt-sheet.is-out {
+  animation: none;
+  opacity: 0;
+  transition: opacity var(--dur-fast) linear;
+}
+.modal-overlay.vlt-sheet.is-out .modal {
+  animation: none;
+  transform: translateY(100%);
+  transition: transform var(--dur-fast) var(--ease-out);
+}
+
+/* While a finger is on it the sheet tracks 1:1 — no animation, no transition,
+   or every pointermove would be chasing a 400ms ease and feel like syrup. */
+.modal-overlay.vlt-sheet .modal.dragging { animation: none; transition: none; }
+
+/* ── 5. ACHIEVEMENT PULSE ──────────────────────────────────────────────────
+   The elastic curve is the ONE literal in this block, and deliberately: it is
+   an overshoot past 1.6 that no --ease-* token expresses, and inventing a
+   token used in one place would be worse than naming it here. */
+.zap-pop { animation: vlt-zap 750ms cubic-bezier(.22, 1.6, .36, 1) both; }
+@keyframes vlt-zap { from { transform: scale(.4); opacity: 0; } to { transform: none; opacity: 1; } }
+
+.pulse-ring {
+  position: absolute;
+  inset: 0;
+  border-radius: var(--radius-btn-m);   /* NOT 50% — device 4 of the identity layer forbids circles */
+  border: 2px solid var(--accent);
+  opacity: .7;
+  pointer-events: none;
+  animation: vlt-ring var(--dur-open) var(--ease-out) both;
+}
+@keyframes vlt-ring { to { transform: scale(1.6); opacity: 0; } }
+
+/* ── 6. NUMBER FLIP ────────────────────────────────────────────────────────
+   Only for a number the USER just changed. A figure moved by a background
+   sync must simply be true (rule 10) — animating it would claim the user did
+   something they did not. */
+.numflip { position: relative; overflow: hidden; display: inline-block; }
+.numflip .old { display: inline-block; animation: vlt-num-out var(--dur-base) var(--ease-inout) both; }
+.numflip .new { position: absolute; inset: 0; animation: vlt-num-in var(--dur-base) var(--ease-inout) both; }
+@keyframes vlt-num-out { to   { transform: translateY(-100%); opacity: 0; } }
+@keyframes vlt-num-in  { from { transform: translateY(100%);  opacity: 0; } }
 
 /* =========================================================================
    ^^^ EVERYTHING ABOVE, THEN THE IDENTITY LAYER BELOW. ^^^
