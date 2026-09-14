@@ -79,7 +79,7 @@ a faster TTFB — not fewer bytes.
 npm run release          # bump every marker + verify, then commit all files together
 ```
 
-**Current version: v335.** APK: build 21 / v3.0.
+**Current version: v336.** APK: build 21 / v3.0.
 
 `scripts/release.js` rewrites **every** marker and then re-reads them from disk to confirm; it exits non-zero if any disagree, and prints the count per file (derived, never hard-coded — the docs used to say 16 while the real count was 15). The markers are `?v=N` in `index.html` (every script and stylesheet, the `js/vendor/supabase.js` preload, both `icons/icon.svg` links, `manifest.json`), the `__cleaned_vN` sessionStorage key, the `FALLBACK` literal in `app.js`, `version.json` → `web`, the `?v=` in `manifest.json`, `admin.html`, `privacy.html` and `get/index.html`, and the `Current version` line in this file. `scripts/check-contracts.js` (pre-commit) refuses a commit where any of them disagree.
 
@@ -543,6 +543,36 @@ accent in `var(--icon-accent)`. Nothing is stroked.
 The `?v=N` busting alone does NOT reach phones, because the **entry `index.html` itself** is HTTP-cached by GitHub Pages (`Cache-Control: max-age=600`) and the SPA/APK-WebView never re-fetches it while open. `js/update.js` fixes this: on boot it fetches `version.json` fresh (`no-store`), compares `web` to the page's own `?v=N` (parsed from the script src), and if newer **reloads the entry html with a `?u=<build>` cache-buster** → fresh index.html + fresh `?v=N` scripts. Runs on web AND inside the APK WebView. Four guards make a reload loop impossible (unknown-build no-op, `<=` no-op, url-already-`?u=`-targeted no-op, once-per-session `sessionStorage` guard). On resume it re-pulls admin content + shows a tap-to-update banner. **Bootstrap caveat:** a device only gains the auto-updater once it is already ON a build that has it (≥v113) — the first arrival of ≥v113 still relies on the 10-min HTTP cache expiring (or a manual hard-refresh / clear-cache). Every update after that is automatic within seconds of app open.
 - **Admin announcement** (`app_config.announcement_*`): shown by `showAnnouncementBanner`. Dismissal is keyed on the config's `updated_at`, so **editing or re-saving the announcement in the admin panel re-broadcasts it to everyone**, even users who dismissed the previous one. `pullCatalog` selects `updated_at`; `init()` re-runs `bootCatalog` on foreground so a freshly-activated announcement appears without a restart.
 
+## SHIPPING IS PRE-AUTHORIZED — do not ask, just ship (standing, 2026-09-14)
+
+The owner's instruction, verbatim: **«ثاني مرة لا تسألني إنّه أنشره أو لا — على طول انشر»**
+(next time do not ask me whether to publish — publish straight away).
+
+So when work is finished and verified, **run the release and push it without asking.** Do not
+end a turn with "shall I commit and push?" — that question is now noise. The full sequence:
+
+```bash
+npm run verify && npm run release && git add <the files> && git commit && git push
+```
+
+This authorization is about the QUESTION, not about the standards. Everything that made the
+question worth asking still applies, and none of it is waived:
+
+- **Verified first.** `npm run verify` (31 contracts + 8 suites) must pass, and any change to
+  shipped code must be measured in the running app. Pushing unverified work is not "shipping
+  without asking", it is shipping something unknown — GitHub Pages serves the branch directly
+  with no gate, so a bad push reaches every device at the next app open.
+- **Stage explicitly, never `git add -A`.** `docs/PLAN_PHOTO_IMPORT.md` and
+  `docs/CLAUDE_HANDOFF_V313_AR.md` are the owner's own working files and must NOT be
+  committed. `release.js` deliberately does not commit for you; it prints the file list and
+  leaves staging deliberate. Keep it that way.
+- **Still ask about the genuinely irreversible**, which shipping the web app is not (a bad
+  push is fixed by `git revert` + a forward release — see Rollback). The list that still
+  needs the owner: running SQL against the live database, anything in `backend/pending/`,
+  deploying the Worker when it carries a secret change, and publishing a new APK.
+- **Report what was pushed**, with the version number and what is now live.
+
+---
 ## Deploy
 - **Web:** commit + push to `main`; GitHub Pages auto-rebuilds.
 - **Cloudflare Worker:** changes to `backend/worker/gemini-worker.js` are deployed with `npx wrangler deploy` from `backend/worker/` (since v306; the dashboard paste is no longer needed). CORS is locked to an origin allowlist — if the AI breaks on the Android app, add the Capacitor origin to `ALLOWED_ORIGINS`.
@@ -1861,6 +1891,119 @@ one policy: `feedback` has no own-row SELECT, so its count really did see zero, 
 - Backups remain a manual runbook with no automation and no restore drill.
 
 
+## v336 — the ingredient weight becomes optional, and the rest day stops speaking slang
+
+«خلي اضافة الوزن اختيارية مش الزامية — لأنه لما أقولك حبة فليفلة غالباً ما راح أعرف وزنها».
+He was right, and it was worse than "inconvenient": **the weight was mandatory in practice,
+and nothing said so.** Measured on the live app before a line was written — «حبة فليفلة» with
+no weight stayed `data-state="idle"` forever (the auto-fill gate never even fired), and the
+save guard then refused the row with «لا أرقام له — اكتبها أو احذفه». A dead end with no exit.
+
+### The weight is optional — but a different signal had to replace it
+
+Simply deleting the qty requirement from `scheduleAuto` costs a SECOND model call in the
+common case: you type the name, pause to think, the debounce fires on the name alone, then you
+type the weight and it fires again. That breaks v299's law — **never one call per row** — on a
+quota that is per-UTC-day and shared by every user.
+
+> **A row with a weight waits for a PAUSE IN TYPING. A row without one waits for the row to be
+> LEFT.** `scheduleAuto(it, settled)`: `settled` comes from a new fourth delegated `focusout`
+> listener and from `trySave`. Leaving the row is the moment you have demonstrably declined to
+> give a weight. Both paths arm the SAME `autoTimer`, so rows still batch into one request.
+
+Measured, model stubbed, no network and no write to the owner's data:
+
+| | before | after |
+|---|---|---|
+| «حبة فليفلة», no weight | **never computed, then refused** | 1 call on leaving the row |
+| name typed, still in the row | — | **0 calls** |
+| …then the weight typed | 1 call | **1 call** (not 2) |
+| a saved food, no weight | refused | **0 calls** — its own serving, offline |
+| leaving the same finished row again | — | **0 calls** |
+| triple-tapping save | — | **1 call** |
+
+`localLookup` answers a weightless row from the saved food's OWN serving, unscaled — the
+offline path, no model call at all. The line sent to the model is `(q ? q + ' ' : '') + name`,
+so a weightless row sends `حبة فليفلة` and the name carries the amount.
+
+### What the pre-push review found — 49 raised, 12 confirmed, TWO blockers
+
+Both blockers were mine, both introduced by this change, and neither was reachable from any
+contract or suite. They collapse to two root causes, and each carries a lesson.
+
+> ⚠️ **`!hasFigures(it)` IS NOT "this row has been settled".** A row can compute, honestly and
+> successfully, to 0/0/0/0 — a zero-macro saved food is trivially reachable (`ماء`, `شاي`,
+> and the shipped presets `كولا دايت` and `كرياتين` are all zeros; `DB.foods.add` requires only
+> a name). My first guard on the `trySave` sweep tested `!hasFigures`, so such a row was armed,
+> settled at zero, re-entered `trySave` through `finishSaveIfWanted(true)`, and **looped**.
+> Measured before the fix: 7 toasts in 6 seconds, the save button frozen on «سيُحفظ بعد الحساب»,
+> the recipe unsaveable — and on the AI variant **66 model calls a minute** against the shared
+> daily quota, from a tab the user could simply walk away from. `NaN` reaches the same place
+> (`Math.round('165 kcal')`) from an imported blob.
+
+> ⚠️ **`parseGrams()` RETURNS null FOR TWO DIFFERENT STATES** — "no amount was given" and "an
+> amount was given that is not grams". My no-weight branch keyed on `!g` and so treated
+> «٣ حبات», «٢ كوب», «ملعقة زيت» — the wordings the amount field deliberately invites, and which
+> v301 chose free text precisely to allow — as *no amount at all*, answering with ONE unscaled
+> serving. «٣ حبات بطاطا» came out 90 kcal instead of ~400, tagged «محسوبة لهذا الوزن», flowing
+> through `perServing` into the food log permanently. It fired on the ORDINARY weighted path,
+> with no new gesture, for exactly the users who have saved foods. Ask about the STRING
+> (`!String(qtyRaw||'').trim()`), never about what `parseGrams` did with it.
+
+**The fix for both lives in ONE place.** `scheduleAuto` now owns the rule and the callers carry
+no copy of it: `if (settled && (hasFigures(it) || it._auto)) return;`. The settled path is not
+an edit — nothing about the row changed, the user just left it — so it may only start work that
+has **never** been done. `it._auto` is truthy for every one of pending/sent/done/fail; the retry
+and recompute buttons clear it to null first, which is exactly what lets them through. That one
+line closes the loop, stops a focusout through N finished rows costing N calls, and stops a
+save tapped twice from re-sending a request that is already in flight.
+
+Verified by reproducing each blocker first and watching it stop: zero-macro row → no loop, 0
+calls, an honest refusal; «٣ حبات بطاطا» → 1 call to the model, 400 kcal; «200 غ بطاطا» → 0
+calls, 180 kcal offline (correctly scaled); focusout through a finished row → 0 extra calls.
+
+**Known and deliberately NOT changed:** a genuinely zero-calorie ingredient (water) still cannot
+be saved in a recipe — v301's named-zero guard refuses it. That is pre-existing, identical at
+HEAD with a weight, and fixing it means changing what `rec_need_figs` is for. It is a separate
+decision, not a side effect of this one.
+
+### The rest day stops speaking slang
+
+«خلي التطبيق يكون لهجة بيضاء خاصة لأهل الرياض — طلع لي البارح باللهجة العامية (صار خطأ)».
+
+Measured before rewriting anything: ~1,070 Arabic strings are clean, and **one family** broke
+ranks. `git log -S` on a known-bad string dated it to **v226**, not yesterday — he only SAW it
+yesterday, because that screen appears only on a rest day.
+
+> ⚠️ **A REGISTER CHANGE IS PER-SCREEN, NOT PER-STRING.** A later pass had converted HALF of
+> v226's family — `rest_sheet_*` and `rest_min_*` became فصحى — and left the `anyway_*` block
+> beside them in slang. So one screen spoke in **two voices at once**, which is more jarring
+> than either voice alone, and is what finally produced the complaint. When converting, sweep
+> every key the SCREEN renders.
+
+A keyword scan would not have found this family — «حاس», «نشوفك» and «بقائمتك» match no common
+marker list. What found it was `git log -S` on one known-bad string, then reading every Arabic
+string that commit introduced.
+
+Ten strings moved to the neutral register: «حاس إنك قادر اليوم؟» → «أتشعر أنك قادر اليوم؟»,
+«ما في تمرين بقائمتك يشتغل على هذي العضلة» → «لا يوجد في قائمتك تمرين يعمل على هذه العضلة»,
+«نشوفك بكرة» → «إلى الغد», «بكرة» → «الغد», «ما يتعب» → «لا يُجهد», «رجع» → «عاد». No key was
+added or removed, so the dictionaries stay at parity and contract 5 is untouched. Both sheets
+render in AR and EN with zero box overflow and no raw key on screen.
+
+> **THE v226 DIALECT EXCEPTION IS REVOKED.** From 2026-07-30 a design spec's Arabic copy was
+> pasted verbatim, dialect included, because asked directly the owner chose «طبّق المواصفة
+> حرفيًا — باللهجة». He has reversed it: a spec supplies the MEANING and the tone, never the
+> dialect. Every shipped Arabic string is translated into this register first.
+
+### One measurement that corrects an earlier note
+
+Asked why the background has no interaction, I measured rather than answered: THE EMBER (v321)
+is intact and live. But the exposed void on Home measures **22.7%** at 329×687, not the **13%**
+this file records — the conclusion is unchanged (it can only read in the gutters) but the number
+was wrong. A real tab switch was also measured to fire **zero** `focusout` events, which is why
+the new listener needs no `document.hasFocus()` guard; adding one would have been a dead line
+with a false comment attached, which this project has reverted before.
 ## Superpowers — and the two places this project deliberately departs from it
 
 The [superpowers](https://github.com/obra/superpowers) methodology (14 skills) is

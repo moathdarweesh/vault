@@ -12,7 +12,7 @@
 // build. The literal below is the fallback (file://, or a stripped query) and is
 // still bumped by `npm run release` — see CLAUDE.md "CACHE WORKFLOW".
 const VAULT_BUILD = (() => {
-  const FALLBACK = 'v335';
+  const FALLBACK = 'v336';
   try {
     const src = (document.currentScript && document.currentScript.src) || '';
     const m = src.match(/[?&]v=(\d+)/);
@@ -5808,7 +5808,7 @@ function openRecipeEditor(date, existing, onDone) {
     ic.innerHTML = open ? icon('check', 14) : icon('edit', 14);
     var retry = row.querySelector('[data-retry]');
     var recompute = row.querySelector('[data-recompute]');
-    var canCompute = String(it.name || '').trim().length >= 3 && !!String(it.qty || '').trim();
+    var canCompute = String(it.name || '').trim().length >= 3;
     retry.hidden = !failed;
     recompute.hidden = !(done && (src === 'manual' || src === 'saved') && canCompute);
     row.querySelector('.rec-more-foot').hidden = retry.hidden && recompute.hidden;
@@ -5890,12 +5890,24 @@ function openRecipeEditor(date, existing, onDone) {
   };
   var normName = function (s) { return String(s || '').trim().toLowerCase().replace(/[\u0640\u064B-\u0652]/g, '').replace(/\s+/g, ' '); };
   var localLookup = function (nameRaw, qtyRaw) {
-    var g = parseGrams(qtyRaw); if (!g) return null;
     var name = normName(nameRaw); if (name.length < 2) return null;
     var foods = DB.foods.list();
     var food = foods.find(function (f) { return normName(f.name) === name; }) ||
                foods.find(function (f) { var n = normName(f.name); return n.length >= 3 && (n.indexOf(name) === 0 || name.indexOf(n) === 0); });
     if (!food) return null;
+    // ⚠️ parseGrams() RETURNS null FOR TWO DIFFERENT STATES: «no amount was
+    // given» and «an amount was given that is not grams» («٣ حبات», «٢ كوب»,
+    // «ملعقة زيت» — the wordings this field deliberately invites). Only the FIRST
+    // is a weightless row. Conflating them priced three potatoes as one — 90 kcal
+    // instead of ~400, tagged «محسوبة لهذا الوزن», flowing through perServing into
+    // the food log forever. Ask about the STRING, exactly as scheduleAuto does.
+    var qty = String(qtyRaw == null ? '' : qtyRaw).trim();
+    // NO AMOUNT AT ALL: the saved food's own serving IS the answer, exactly as
+    // stored. This is the offline path for a weightless row — no model call.
+    if (!qty) return { calories: food.calories, protein: food.protein, carbs: food.carbs, fat: food.fat };
+    // An amount that was typed but is not in grams must fall through to the model,
+    // which is the only thing here that can read a count or a volume.
+    var g = parseGrams(qty); if (!g) return null;
     var sg = parseGrams(food.serving, true); if (!sg) return null;   // a 'cup' or a bare '1' serving cannot be scaled by weight
     var k = g / sg;
     return { calories: food.calories * k, protein: food.protein * k, carbs: food.carbs * k, fat: food.fat * k };
@@ -5919,10 +5931,37 @@ function openRecipeEditor(date, existing, onDone) {
     updateSummary(it);
   };
   var settle = function (it, state, why) { if (!it) return; it._auto = state; it._why = why || null; updateSummary(it); };
-  function scheduleAuto(it) {
+  function scheduleAuto(it, settled) {
     if (!it || it._manual) return;
     if (hasFigures(it) && it._auto !== 'done' && it._auto !== 'sent' && it._auto !== 'pending') return;   // a reopened recipe keeps its saved figures
-    if (String(it.name || '').trim().length < 3 || !String(it.qty || '').trim()) return;   // 'دج' is not an ingredient yet
+    if (String(it.name || '').trim().length < 3) return;   // 'دج' is not an ingredient yet
+    // THE WEIGHT IS OPTIONAL (v336). «حبة فليفلة» has no weight the user knows,
+    // and requiring one is what made the field mandatory in practice: without it
+    // this gate returned, nothing ever computed, and the save guard then refused
+    // the row for having no figures.
+    //
+    // But a row whose weight is ABOUT to be typed must not spend a model call on
+    // the name alone, so a weightless row waits for a different signal: the row
+    // being LEFT (focusout, or save). That is the moment the user has
+    // demonstrably declined to give one. Both paths arm the SAME timer, so rows
+    // still batch into one request.
+    if (!String(it.qty || '').trim() && !settled) return;
+    // ⚠️ THE SETTLED PATH MAY ONLY START WORK THAT HAS NEVER BEEN DONE.
+    // focusout and save are not edits — nothing about the row changed, the user
+    // just left it. Re-arming a row that is finished, in flight, or already
+    // carrying figures is wrong three separate ways, and all three were measured:
+    //   · a row that legitimately computes to 0/0/0/0 (a zero-macro saved food —
+    //     «ماء», «كولا دايت», «كرياتين») is !hasFigures forever, so trySave armed
+    //     it, runAuto settled it, finishSaveIfWanted re-entered trySave, and it
+    //     LOOPED — 66 model calls a minute against a quota shared by every user,
+    //     and the recipe could never be saved.
+    //   · merely passing focus through N finished rows cost N model calls, which
+    //     is exactly the 'never one call per row' rule v299 exists to state.
+    //   · tapping save while a request was out clobbered 'sent' back to 'pending'
+    //     and sent the same row twice.
+    // it._auto is truthy for every one of pending/sent/done/fail; the retry and
+    // recompute buttons clear it to null first, which is what lets THEM through.
+    if (settled && (hasFigures(it) || it._auto)) return;
     it._auto = 'pending'; it._why = null;
     updateSummary(it);
     clearTimeout(autoTimer);
@@ -5948,8 +5987,8 @@ function openRecipeEditor(date, existing, onDone) {
       // A bare number is grams to parseGrams, so say so to the model too —
       // otherwise it is asked to price "200 دجاج".
       var q = String(it0.qty).trim();
-      if (/^\d+(\.\d+)?$/.test(latinDigits(q))) q += ' ' + t('rec_g');
-      var line = q + ' ' + String(it0.name).trim();
+      if (q && /^\d+(\.\d+)?$/.test(latinDigits(q))) q += ' ' + t('rec_g');
+      var line = (q ? q + ' ' : '') + String(it0.name).trim();   // no weight: the name carries the amount («حبة فليفلة»)
       if (cur.length && len + line.length + 1 > 380) { batches.push(cur); cur = []; len = 0; }
       cur.push({ x: x, line: line }); len += line.length + 1;
     });
@@ -6011,14 +6050,25 @@ function openRecipeEditor(date, existing, onDone) {
     var it = itemOf(el); if (!it) return;
     if (el.hasAttribute('data-toggle')) { setOpen(it, !rowOf(it).classList.contains('is-open')); return; }
     if (el.hasAttribute('data-del')) { removeRow(it); return; }
-    if (el.hasAttribute('data-retry')) { it._auto = null; it._why = null; scheduleAuto(it); return; }
+    if (el.hasAttribute('data-retry')) { it._auto = null; it._why = null; scheduleAuto(it, true); return; }
     if (el.hasAttribute('data-recompute')) {
       it._manual = false; it._src = null; it._why = null; it._auto = null;
       it.calories = 0; it.protein = 0; it.carbs = 0; it.fat = 0;
       var row = rowOf(it);
       ['calories', 'protein', 'carbs', 'fat'].forEach(function (f) { var i2 = row.querySelector('input[data-f="' + f + '"]'); if (i2) i2.value = ''; });
-      scheduleAuto(it); drawTotals(); syncSubtitle();
+      scheduleAuto(it, true); drawTotals(); syncSubtitle();
     }
+  });
+  // Leaving a row is what arms a WEIGHTLESS row's estimate — see scheduleAuto.
+  // A null relatedTarget (tapped a non-focusable area, or the window lost focus)
+  // counts as leaving: the row is not being worked on either way. Bound once,
+  // like the other three; focusout bubbles, blur does not.
+  host.addEventListener('focusout', function (e) {
+    var row = e.target.closest ? e.target.closest('.rec-row') : null;
+    if (!row) return;
+    if (e.relatedTarget && row.contains(e.relatedTarget)) return;   // still inside this row
+    var it = itemOf(row); if (!it) return;
+    scheduleAuto(it, true);
   });
   host.addEventListener('keydown', function (e) {
     if (e.key !== 'Enter') return;
@@ -6101,6 +6151,11 @@ function openRecipeEditor(date, existing, onDone) {
     // A row still being worked out must not be saved as zeros. Instead of a bare
     // refusal the intent is REMEMBERED, said out loud on the button, and spent
     // when the figures land — any keystroke cancels it.
+    // Tapping save is leaving every row. On iOS a button does not take focus, so
+    // focusout may never have fired for the row still under the thumb: arm any
+    // weightless row here and let the pending branch below WAIT for it, instead
+    // of refusing it for having no figures.
+    items.forEach(function (it) { scheduleAuto(it, true); });   // scheduleAuto owns which rows may be armed
     var pend = items.filter(function (it) { return it._auto === 'pending' || it._auto === 'sent'; });
     if (pend.length) {
       saveWanted = true; setWaiting(true);
