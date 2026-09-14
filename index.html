@@ -27,18 +27,18 @@
   <!-- Critical inline paint: black background from the very first frame so a
        slow styles.css load never flashes unstyled white content (FOUC). -->
   <style>html,body{margin:0;background:#000;color:#fff}</style>
-  <link rel="manifest" href="manifest.json?v=342">
+  <link rel="manifest" href="manifest.json?v=343">
   <!-- These carry ?v=N like every other asset: without it a browser that has
        already cached the favicon keeps serving the OLD mark forever, so an icon
        redesign reaches nobody. `npm run release` rewrites every ?v= in this
        file, so these stay in step automatically. -->
-  <link rel="icon" type="image/svg+xml" href="icons/icon.svg?v=342">
+  <link rel="icon" type="image/svg+xml" href="icons/icon.svg?v=343">
   <!-- iOS does NOT support SVG for apple-touch-icon: Safari ignores it and puts a
        SCREENSHOT of the page on the Home Screen instead of the mark. This PNG is
        rendered from icons/icon.svg on an opaque black tile (iOS applies its own
        squircle mask and does not expect alpha). rel=icon below stays SVG for
        desktop browsers, which do support it. -->
-  <link rel="apple-touch-icon" sizes="180x180" href="icons/apple-touch-icon-180.png?v=342">
+  <link rel="apple-touch-icon" sizes="180x180" href="icons/apple-touch-icon-180.png?v=343">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <!-- Warm the Supabase connection (DNS + TLS) during page load so the first
@@ -50,21 +50,21 @@
   <!-- Must carry the SAME ?v=N that cloud.js appends when it injects this script,
        or the preload warms a different URL and is wasted. `npm run release` bumps
        both (this one by regex, cloud.js by deriving from its own marker). -->
-  <link rel="preload" href="js/vendor/supabase.js?v=342" as="script">
+  <link rel="preload" href="js/vendor/supabase.js?v=343" as="script">
   <!-- Discover startup files before the first inline body script waits for CSS.
        Download together; defer preserves dependency order and waits for the DOM. -->
-  <script src="js/i18n.js?v=342" defer></script>
-  <script src="js/catalog.js?v=342" defer></script>
-  <script src="js/cloud.js?v=342" defer></script>
-  <script src="js/storage.js?v=342" defer></script>
+  <script src="js/i18n.js?v=343" defer></script>
+  <script src="js/catalog.js?v=343" defer></script>
+  <script src="js/cloud.js?v=343" defer></script>
+  <script src="js/storage.js?v=343" defer></script>
   <!-- Motion primitives. No dependencies of its own; it only has to be here
        before app.js, which calls VltMotion from its render paths. -->
-  <script src="js/motion.js?v=342" defer></script>
-  <script src="js/app.js?v=342" defer></script>
-  <script src="js/health.js?v=342" defer></script>
-  <script src="js/notify.js?v=342" defer></script>
-  <script src="js/foodai.js?v=342" defer></script>
-  <script src="js/update.js?v=342" defer></script>
+  <script src="js/motion.js?v=343" defer></script>
+  <script src="js/app.js?v=343" defer></script>
+  <script src="js/health.js?v=343" defer></script>
+  <script src="js/notify.js?v=343" defer></script>
+  <script src="js/foodai.js?v=343" defer></script>
+  <script src="js/update.js?v=343" defer></script>
   <!-- The brand kit's three faces, and only three:
          IBM Plex Sans Arabic — the body face, for BOTH scripts (it carries a
            full Latin set, so this replaces the old Inter + Tajawal pair and one
@@ -95,7 +95,7 @@
        roughly one launch in four. One reflow beats no brand font. -->
   <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@400;500;600;700&family=Archivo:wght@800&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet" media="print" onload="this.media='all'">
   <noscript><link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@400;500;600;700&family=Archivo:wght@800&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet"></noscript>
-  <link rel="stylesheet" href="styles.css?v=342">
+  <link rel="stylesheet" href="styles.css?v=343">
 </head>
 <body class="theme-dark">
   <script>
@@ -177,17 +177,40 @@
       // Tells app.js to hold its first stagger: the cards must rise as the door
       // parts, not 1.7s earlier behind a closed one.
       window.__vltSplash = 1;
-      // Start Archivo NOW. Left alone it is discovered only when the non-blocking
-      // font stylesheet is promoted, which is two sequential round trips AFTER
-      // first paint — and the wordmark is due at 1650ms.
-      try { if (document.fonts && document.fonts.load) document.fonts.load('800 38px Archivo', 'VAULT'); } catch (_) {}
+      // Start Archivo as early as it can be started. Left alone the face is
+      // discovered only when the non-blocking font stylesheet is promoted — two
+      // sequential round trips AFTER first paint — and the wordmark is due at
+      // 1650ms.
+      //
+      // ⚠️ ONE CALL HERE FETCHES NOTHING. This runs at parse time, when the
+      // Google Fonts sheet is still media="print" and its @font-face rules are
+      // not in the document yet: fonts.load() finds no matching face and
+      // resolves without requesting anything. So it is armed again when that
+      // sheet lands, and once more on a short timer for the case where it had
+      // already landed before this script ran.
+      function warmFont() {
+        try { if (document.fonts && document.fonts.load) document.fonts.load('800 38px Archivo', 'VAULT'); } catch (_) {}
+      }
+      warmFont();
+      try { var fl = document.querySelector('link[href*="fonts.googleapis.com"]');
+           if (fl) fl.addEventListener('load', warmFont); } catch (_) {}
+      setTimeout(warmFont, 250);
 
       el.classList.add('vs-a');
 
-      var CAP = 2500, t0 = Date.now();
+      // ⚠️ performance.now(), NOT Date.now(). The wall clock can be corrected
+      // backwards mid-boot (NTP, a timezone-aware device waking up), and this
+      // clock decides both when the door may open and when it MUST. A backward
+      // jump on a wall clock holds the door shut past its own cap.
+      var CAP = 2500, t0 = performance.now();
       function open() {
         el.classList.add('vs-b');
-        el.style.pointerEvents = 'none';   // the door is opening; taps belong to the app
+        // ⚠️ THE DOOR KEEPS EATING TAPS UNTIL IT IS GONE. An earlier draft went
+        // pointer-transparent here, at the START of phase B — but the leaves do
+        // not begin to move for another 400ms and are not clear of the screen
+        // for 1100ms, so for most of a second a tap passed THROUGH a closed
+        // door onto controls the user could not see. The node is removed 50ms
+        // after the swing ends, which is the moment the app really is reachable.
         setTimeout(function () {
           window.__vltSplash = 0;
           try {
@@ -203,9 +226,9 @@
       // than one that opens early.
       (function tick() {
         setTimeout(function () {
-          if (window.__vltReady || Date.now() - t0 > CAP) open();
+          if (window.__vltReady || performance.now() - t0 > CAP) open();
           else tick();
-        }, Date.now() - t0 < 1300 ? 1300 - (Date.now() - t0) : 60);
+        }, performance.now() - t0 < 1300 ? 1300 - (performance.now() - t0) : 60);
       })();
     })();
   </script>
@@ -284,8 +307,8 @@
           await Promise.all(regs.map((r) => r.unregister()));
           const keys = await caches.keys();
           await Promise.all(keys.map((k) => caches.delete(k)));
-          if (!sessionStorage.getItem('__cleaned_v342')) {
-            sessionStorage.setItem('__cleaned_v342', '1');
+          if (!sessionStorage.getItem('__cleaned_v343')) {
+            sessionStorage.setItem('__cleaned_v343', '1');
             location.reload();
           }
         }

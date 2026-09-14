@@ -12,7 +12,7 @@
 // build. The literal below is the fallback (file://, or a stripped query) and is
 // still bumped by `npm run release` — see CLAUDE.md "CACHE WORKFLOW".
 const VAULT_BUILD = (() => {
-  const FALLBACK = 'v342';
+  const FALLBACK = 'v343';
   try {
     const src = (document.currentScript && document.currentScript.src) || '';
     const m = src.match(/[?&]v=(\d+)/);
@@ -1948,6 +1948,10 @@ function renderView(view) {
       // splash clock, which fires it at the moment the leaves part.
       window.__vltSplashHost = host;
       delete host.dataset.entered;
+      // A tab can be tapped in the ~400ms between the door opening and this flag
+      // clearing, which sets __vltSlid on the way in. Consume it here too, or it
+      // survives to the NEXT arrival and silently eats that screen`s entrance.
+      __vltSlid = false;
     } else if (__vltSlid) {
       // A tab slide IS the arrival — rule 5's one true half: the two never run
       // together, or the cards climb while the screen is still moving.

@@ -8312,7 +8312,20 @@ body[dir="rtl"] .vlt-bar-fill { transform-origin: right center; }
   position: fixed;
   inset: 0;
   z-index: 4000;              /* above everything: the ladder tops out at 3000 */
-  background: #000000;
+  /* ⚠️ THE STAGE IS TRANSPARENT. THE LEAVES CARRY THE BLACK.
+
+     The design gives `.stage` a black background because in the canvas the
+     thing behind the door is a FAKE app drawn inside the stage. Here the
+     real app is BEHIND this element, so an opaque stage means the leaves
+     swing away to reveal... the stage. Measured on the live site at full
+     open: both leaves off screen, and a 375x812 sheet of rgb(0,0,0) still
+     covering the app — the whole reveal was invisible, and the app appeared
+     by popping in when the node was removed 50ms later.
+
+     At rest the two leaves are 50% + 0.5px and 50%, so they cover the stage
+     completely and frame 0 is still solid black. index.html`s critical
+     inline style paints the page black underneath in any case. */
+  background: transparent;
   overflow: hidden;
   /* ONE DESIGN UNIT. The 82-unit group at 21% of the short edge, exactly as
      the PNG encoder computes it: 0.21 / 82 = 0.0025610 of a vmin. */

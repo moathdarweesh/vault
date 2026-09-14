@@ -79,7 +79,7 @@ a faster TTFB — not fewer bytes.
 npm run release          # bump every marker + verify, then commit all files together
 ```
 
-**Current version: v342.** APK: build 22 / v3.1.
+**Current version: v343.** APK: build 22 / v3.1.
 
 `scripts/release.js` rewrites **every** marker and then re-reads them from disk to confirm; it exits non-zero if any disagree, and prints the count per file (derived, never hard-coded — the docs used to say 16 while the real count was 15). The markers are `?v=N` in `index.html` (every script and stylesheet, the `js/vendor/supabase.js` preload, both `icons/icon.svg` links, `manifest.json`), the `__cleaned_vN` sessionStorage key, the `FALLBACK` literal in `app.js`, `version.json` → `web`, the `?v=` in `manifest.json`, `admin.html`, `privacy.html` and `get/index.html`, and the `Current version` line in this file. `scripts/check-contracts.js` (pre-commit) refuses a commit where any of them disagree.
 
@@ -2466,6 +2466,59 @@ never opens is worse than one that opens early.
   image is black on every device and cannot be themed; a bone-coloured door would
   disagree with the frame the phone just painted. The reveal is a wipe, not a
   flash — the leaves part to show the app rather than cross-fading to it.
+
+## v343 — what the review found in the door, an hour after it shipped
+
+A 10-agent adversarial pass over v342. Three findings were real, and one of them
+was **visible on the live site**, so it is recorded before anything else.
+
+> ⚠️ **THE DOOR OPENED ONTO ITSELF.** `.vs` carried `background: #000000`,
+> straight from the design's `.stage`. In the canvas that is right — the thing
+> behind the door there is a FAKE app drawn INSIDE the stage. Here the real app
+> is behind the whole element, so the leaves swung away to reveal a 375×812
+> sheet of opaque black, and the app appeared by POPPING IN when the node was
+> removed 50ms later. **The entire reveal — the one beat the sequence exists
+> for — was invisible.** Measured on the live site at full open: both leaves off
+> screen, `rgb(0, 0, 0)` still covering everything.
+
+The stage is transparent now. The two leaves (50% + 0.5px and 50%) cover it
+completely at rest, so frame 0 is still solid black, and `index.html`'s critical
+inline style paints the page black underneath in any case.
+
+**Nothing in the CSS or the DOM said this was wrong.** Every computed style,
+every colour, every keyframe measured correct. It is only wrong in relation to
+what sits BEHIND the element — which is the one thing a design file cannot tell
+you, because in the design file there is nothing behind it.
+
+- **The door went pointer-transparent 600ms before it stopped covering the
+  screen.** `pointerEvents = none` was set at the START of phase B, but the
+  leaves do not begin to move for another 400ms and are not clear of the screen
+  for 1100ms — so for most of a second a tap passed THROUGH a closed door onto
+  controls the user could not see. The door now blocks taps for exactly as long
+  as it is on screen: the node is removed 50ms after the swing ends, which is
+  when the app really is reachable.
+- **`document.fonts.load()` was fetching nothing.** It runs at parse time, when
+  the Google Fonts sheet is still `media="print"` and its `@font-face` rules are
+  not in the document yet — so it finds no matching face and resolves without
+  requesting anything. It is armed again on that sheet's load event, and once
+  more on a short timer for the case where the sheet had already landed.
+- **The splash branch of `renderView` did not consume `__vltSlid`.** A tab tapped
+  in the ~400ms between the door opening and that flag clearing sets it on the
+  way in, and it then survived to eat the NEXT screen's entrance.
+- **`performance.now()`, not `Date.now()`.** The wall clock can be corrected
+  backwards mid-boot, and that clock decides both when the door MAY open and when
+  it MUST.
+
+**Two findings were deliberately not acted on, and the reasoning is the record:**
+
+- *"The app behind the door is not `aria-hidden`."* Correct, and left that way on
+  purpose. The splash is `aria-hidden` decoration; hiding the app for 2.4 seconds
+  would give a screen-reader user **silence** instead of the app they can already
+  use. The visual door is not their door.
+- *"The 2500ms cap can open onto an empty shell."* That is the trade the cap
+  exists to make, and a late render is not stranded: `__vltSplash` is cleared when
+  the door opens, so the render that eventually arrives finds `__vltArriving` set
+  and staggers itself.
 
 ## APK build 22 (v3.1) — the native half of v337–v341 reaches the phone
 
