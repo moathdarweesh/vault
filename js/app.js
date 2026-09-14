@@ -12,7 +12,7 @@
 // build. The literal below is the fallback (file://, or a stripped query) and is
 // still bumped by `npm run release` — see CLAUDE.md "CACHE WORKFLOW".
 const VAULT_BUILD = (() => {
-  const FALLBACK = 'v339';
+  const FALLBACK = 'v340';
   try {
     const src = (document.currentScript && document.currentScript.src) || '';
     const m = src.match(/[?&]v=(\d+)/);
@@ -1514,6 +1514,17 @@ function bindVaultAction(handler, scope) {
 // Router
 // ==========================================================================
 let currentView = 'home';
+// Set for exactly one render when a tab slide is carrying the screen in, so the
+// staggered entry stands down (APPLY-motion.md rule 5).
+let __vltSlid = false;
+// OWNER OVERRIDE of APPLY-motion.md rule 5 ('first render only'): the entry
+// plays EVERY time you arrive at a screen, not once per session.
+//
+// But arriving is not the same as re-rendering. Every save in this app calls
+// renderView again — log a set, tick a cardio row, land a sync — and staggering
+// there would make the screen jump under your thumb while you work. So the flag
+// is set by navigate() alone, and a re-render in place stays still.
+let __vltArriving = false;
 let viewContext = {};
 // In-app navigation history so the Android hardware back button steps back one
 // screen instead of quitting the app. Each entry is { view, context }.
@@ -1530,6 +1541,9 @@ function navigate(view, context = {}, opts = {}) {
     if (ae && typeof ae.blur === 'function' && ae.closest?.('.run-set-row')) ae.blur();
   } catch (_) {}
 
+  // The tab slide needs to know where you came FROM, and currentView is about
+  // to become where you are going.
+  const currentViewBefore = currentView;
   currentView = view;
   viewContext = context;
 
@@ -1555,7 +1569,37 @@ function navigate(view, context = {}, opts = {}) {
   // scroller and its scrollTop reads 0 from then on.
   const mainEl = $('.main');
   if (!opts.fromPop) { const leaving = navStack[navStack.length - 1]; if (leaving && mainEl) leaving.scrollY = mainEl.scrollTop; }
+  // ── TAB SLIDE — APPLY-motion.md §3, owner-chosen variant (2) ─────────────
+  // Only between the five BOTTOM-NAV tabs. A detail screen is a step INTO the
+  // tab you are already on, not a move across the row, and sliding it would
+  // say something untrue about where you went.
+  //
+  // This must run BEFORE the toggle below: the leaving view's rectangle has to
+  // be read while it is still laid out, and pinning it right then is what takes
+  // it out of flow so the scroller never sees two screens at once.
+  const TABS = ['workouts', 'cardio', 'home', 'food', 'sleep'];
+  let slid = false;
+  if (window.VltMotion && !opts.noSlide) {
+    const fromEl = document.querySelector('.view.active');
+    const toEl = document.querySelector(`.view[data-view="${view}"]`);
+    const a = TABS.indexOf(currentViewBefore), b = TABS.indexOf(view);
+    if (fromEl && toEl && fromEl !== toEl && a >= 0 && b >= 0) {
+      // A later tab arrives from the trailing side. The ORDER is the whole
+      // answer: Back to an earlier tab is the same physical move as tapping
+      // that earlier tab, so it is already reversed. Multiplying by fromPop as
+      // well negated it twice — measured: forward and Back both gave -1.
+      const dir = b > a ? 1 : -1;
+      const btn = document.querySelector(`.nav-btn[data-view="${view}"]`);
+      VltMotion.switchTab({ from: fromEl, to: toEl, dir, btn });
+      slid = true;
+    }
+  }
   $$('.view').forEach((v) => v.classList.toggle('active', v.dataset.view === view));
+  // Rule 5: the stagger and the slide never run together. Arriving by slide IS
+  // the entrance, so the screen is marked as entered and will not stagger later
+  // either — a screen gets one arrival, not two different ones.
+  if (slid) __vltSlid = true;
+  __vltArriving = true;
   // Publish the active view on <body>: .bottom-nav is a SIBLING of <main>, so
   // nothing rooted at .view can select it, and the guided-run screen needs to
   // opt out of the keyboard-open nav hide (see styles.css).
@@ -1894,7 +1938,17 @@ function renderView(view) {
     while (host.children.length === 1 && host.firstElementChild.children.length > 1) {
       host = host.firstElementChild;
     }
-    VltMotion.stagger(host);
+    if (__vltSlid) {
+      // A tab slide IS the arrival — rule 5's one true half: the two never run
+      // together, or the cards climb while the screen is still moving.
+      __vltSlid = false;
+    } else if (__vltArriving) {
+      // Clearing the guard is what replays it. stagger() sets it again itself,
+      // so a re-render that is NOT an arrival still finds it set and stands down.
+      delete host.dataset.entered;
+      VltMotion.stagger(host);
+    }
+    __vltArriving = false;
   }
 }
 

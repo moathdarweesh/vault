@@ -79,7 +79,7 @@ a faster TTFB — not fewer bytes.
 npm run release          # bump every marker + verify, then commit all files together
 ```
 
-**Current version: v339.** APK: build 21 / v3.0.
+**Current version: v340.** APK: build 21 / v3.0.
 
 `scripts/release.js` rewrites **every** marker and then re-reads them from disk to confirm; it exits non-zero if any disagree, and prints the count per file (derived, never hard-coded — the docs used to say 16 while the real count was 15). The markers are `?v=N` in `index.html` (every script and stylesheet, the `js/vendor/supabase.js` preload, both `icons/icon.svg` links, `manifest.json`), the `__cleaned_vN` sessionStorage key, the `FALLBACK` literal in `app.js`, `version.json` → `web`, the `?v=` in `manifest.json`, `admin.html`, `privacy.html` and `get/index.html`, and the `Current version` line in this file. `scripts/check-contracts.js` (pre-commit) refuses a commit where any of them disagree.
 
@@ -2147,6 +2147,79 @@ owner decision in front of it. The nav also has FIVE tabs, not the four the spec
 
 Also not here: the `.pulse-ring` uses `--radius-btn-m`, **not** the spec's `border-radius: 50%` —
 device 4 of the identity layer forbids circles.
+
+
+## v340 — the tab slide, and the Capacitor logo finally leaves
+
+### §3 — the owner chose variant (2)
+
+> ⚠️ **THE SPEC ASSUMES `.screen { position: absolute; inset: 0 }`. THIS APP HAS TWENTY `.view`
+> SECTIONS IN NORMAL FLOW** inside the `.main` scroller, so two of them displayed at once stack
+> VERTICALLY rather than overlapping. Making them absolute for the slide would pin them to the
+> scroller's padding box and throw the scroll position away — with the sticky rest bar and the
+> v327 bar-auto-hide both reading that same scroller.
+
+So the OUTGOING view leaves as a **GHOST**: `position: fixed` at the rectangle it already
+occupied, read while it is still laid out. That takes it out of flow instantly, `.main` is left
+holding only the arriving view, and the two overlap for exactly one slide. `.main` contains
+nothing but the twenty views, which is what makes this safe.
+
+> ⚠️ **AND §3 CONTRADICTS RULE 11 OF ITS OWN SPEC.** Rule 11 forbids animated blur;
+> `.bottom-nav` carries `backdrop-filter: blur(24px)` and samples exactly the view that slides.
+> The owner chose variant (2): the live blur is LIFTED for the slide and the bar wears
+> `--nav-bg-solid`, the same colour at full alpha. Over this app's near-black ground the blurred
+> and the solid read the same, so the swap is invisible — and the bar stops re-rasterising a
+> 24px blur every frame, which is what v297 deleted every per-card backdrop-filter to avoid.
+
+**`--dir` is +1/−1 and already carries the RTL flip**, so ONE keyframe pair serves both
+directions and both writing systems. `translateX` is physical; deriving the sign in JS is what
+keeps the keyframes logical.
+
+> ⚠️ **I NEGATED THE DIRECTION TWICE.** The first draft multiplied tab order by `opts.fromPop`.
+> But Back to an earlier tab is the same physical move as TAPPING that earlier tab — the order
+> is the whole answer. Measured: forward and Back both came out −1. The order alone now decides,
+> and home→food (−1) mirrors food→home (+1).
+
+Only the five BOTTOM-NAV tabs slide. A detail screen is a step INTO the tab you are on, not a
+move across the row, and sliding it would say something untrue about where you went.
+
+### ⚠️ OWNER OVERRIDE: the entry plays EVERY time, not once
+
+«خلي حتى لو رجعت لصفحة وطلعت ورجعت» — rule 5 of the spec says first render only. The owner
+overruled it. But **arriving is not the same as re-rendering**: every save in this app calls
+`renderView` again (log a set, tick a cardio row, land a sync), and staggering there would make
+the screen jump under your thumb while you work. So `__vltArriving` is set by `navigate()` alone
+and cleared by the render that consumes it.
+
+Measured: three separate visits to Settings → **15 stagger animations each time**. A re-render in
+place → **0**. A tab slide → **0**, because the slide IS the arrival — that half of rule 5 stays,
+or the cards would climb while the screen is still moving.
+
+### The Capacitor logo is gone from all fourteen files
+
+The blue ✕ had been the native splash since the FIRST Android commit (`e7b5d3a`) and was never
+touched — v212 fixed the LAUNCHER icon, which is a different asset. Eleven Android densities
+and three iOS images, all replaced.
+
+> **THE NATIVE SPLASH IS FRAME 0 OF THE WEB SPLASH, and that is not decoration.** Android paints
+> this PNG as the window background (`styles.xml`: `android:background="@drawable/splash"`) before
+> the WebView has anything, and the web splash then plays from 0ms. Draw the lock already thrown
+> and the sequence jumps BACKWARDS the instant the web takes over. So the image is literally
+> t=0 from `.design/Main.dc.html`: five bolts, tight, flat, the middle one orange — composited
+> over black by hand, because a PNG has no CSS opacity.
+
+Written with a ~60-line PNG encoder (zlib + CRC32 in Node) because no image library is installed
+on this machine. Rounded ends are antialiased from a signed-distance field — a jagged 2px cap is
+visible on a 320-wide mdpi screen. Every file also got **smaller** (40.3K → 26.5K on iOS).
+
+⚠️ **These are NATIVE assets: they need a new APK to reach an installed device.** Until then a
+phone still flashes the blue ✕ on launch.
+
+### Three scale fixes the owner picked
+
+`.sd-set-remove` 36px circle → `--radius-btn-s`; `.img-lightbox-close` 42px/50% → the M rung
+(44/`--radius-btn-m`, which also clears the tap floor it was 2px under); the update banner's two
+buttons off the scale on all three axes → 44/12/14. Measured after: 36/r10, 44/r12, 44/r12/14px.
 
 
 ## Superpowers — and the two places this project deliberately departs from it

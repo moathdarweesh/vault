@@ -86,6 +86,12 @@
   /* Chrome that used to be hard-coded, and was still TEAL-NAVY from the era
      before the brand orange — on the one bar visible on every single screen. */
   --nav-bg:      rgba(13, 10, 7, 0.82);
+  /* The same colour at full alpha. Worn only while a screen is sliding: the
+     bar's live blur is lifted then, and 0.82 over a moving backdrop would
+     show the motion through the bar. Over this app's near-black ground the
+     blurred and the solid read the same, so the swap is not visible.
+     Measured on the live bar: blurred rgb(15,12,9) vs solid rgb(13,10,7). */
+  --nav-bg-solid: rgb(13, 10, 7);
   /* Photo scrims. Mode-INVARIANT by design: these sit over a photograph with
      white text on them, so they must stay dark in light mode too. Do not
      "fix" this to follow the surface. */
@@ -320,6 +326,7 @@ body.theme-light {
   --accent-ink:  #1a0800;
 
   --nav-bg:      rgba(250, 245, 240, 0.82);
+  --nav-bg-solid: rgb(250, 245, 240);
 
   /* Elevation, physically inverted: in dark the LIT edge is on top; here the
      visible edge is the shadow seam at the bottom. Same token, opposite physics
@@ -2107,9 +2114,12 @@ body[dir="rtl"] .w-unit { margin-left: 0; margin-right: 2px; }
   position: absolute;
   top: calc(env(safe-area-inset-top, 0px) + 14px);
   inset-inline-end: 14px;
-  width: 42px;
-  height: 42px;
-  border-radius: 50%;
+  /* Was 42px/50%: a circle, on no rung of the scale (42 is neither 44 nor 36),
+     and 2px under the 44px tap floor with no halo to make it up. The M rung
+     fixes all three at once. */
+  width: var(--btn-h-m);
+  height: var(--btn-h-m);
+  border-radius: var(--radius-btn-m);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -3199,7 +3209,10 @@ body.rest-active .toast { bottom: calc(var(--safe-b) + var(--rest-h, 72px) + 28p
   position: relative;
   width: var(--btn-h-s);
   height: var(--btn-h-s);
-  border-radius: 50%;
+  /* The S rung pairs 36px with --radius-btn-s, not 50%. Device 4 of the identity
+     layer forbids circles, and this button's own twin in the modal (.set-remove)
+     has always been square. */
+  border-radius: var(--radius-btn-s);
   background: transparent;
   border: 1px solid var(--border);
   color: var(--text-dim);
@@ -6418,11 +6431,14 @@ body[data-view="food"] .food-fab { display: inline-flex; }
 }
 .update-banner-later,
 .update-banner-get {
-  height: 38px;
+  /* Off the v291 scale on all three axes: 38px is on no rung, --radius-lg (22px)
+     is a CARD radius and not a button's, and 15px is the L type size worn by a
+     small button. The M rung answers all three. */
+  height: var(--btn-h-m);
   padding: 0 var(--sp-4);
-  border-radius: var(--radius-lg);
+  border-radius: var(--radius-btn-m);
   font-weight: 700;
-  font-size: var(--fs-body, 15px);
+  font-size: var(--fs-btn-m);
   cursor: pointer;
   border: 1px solid transparent;
   transition: transform var(--dur-press, 120ms) var(--ease), background var(--dur, 200ms) var(--ease);
@@ -8174,6 +8190,66 @@ body[dir="rtl"] .vlt-bar-fill { transform-origin: right center; }
 .numflip .new { position: absolute; inset: 0; animation: vlt-num-in var(--dur-base) var(--ease-inout) both; }
 @keyframes vlt-num-out { to   { transform: translateY(-100%); opacity: 0; } }
 @keyframes vlt-num-in  { from { transform: translateY(100%);  opacity: 0; } }
+
+/* ── 7. TAB SWITCHING — APPLY-motion.md §3, owner-chosen variant (2) ───────
+
+   ⚠️ THE SPEC ASSUMES `.screen { position: absolute; inset: 0 }`. This app's
+   screens are twenty `.view` SECTIONS IN NORMAL FLOW inside the `.main`
+   scroller, so two of them displayed at once would stack VERTICALLY, not
+   overlap. Making them absolute for the slide would pin them to the scroller's
+   padding box and throw the scroll position away — with the sticky rest bar
+   and the v327 bar-auto-hide both reading that same scroller.
+
+   So the OUTGOING view leaves as a GHOST: pinned with position:fixed to the
+   rectangle it already occupied, which takes it out of flow instantly. `.main`
+   is left holding only the incoming view, its height and scroll are never
+   disturbed, and the two are free to overlap for exactly one slide.
+
+   ⚠️ AND THE SPEC CONTRADICTS ITSELF HERE. Rule 11 forbids animated blur;
+   `.bottom-nav` carries backdrop-filter: blur(24px) and samples exactly the
+   view that is sliding, so obeying §3 breaks rule 11. The owner chose variant
+   (2): the live blur is LIFTED for the duration and the bar wears its opaque
+   twin instead. js/app.js:12376 states the same mechanism in this codebase's
+   own words, and it is why v297 deleted every per-card backdrop-filter.
+
+   --dir is +1 or -1 and already carries the RTL flip, so ONE keyframe pair
+   serves both directions and both writing systems. translateX is physical;
+   deriving the sign in JS is what keeps the keyframes logical. */
+
+.view.vlt-in {
+  animation: vlt-slide-in var(--dur-slide) var(--ease-inout) 50ms both;
+}
+@keyframes vlt-slide-in {
+  from { transform: translateX(calc(var(--dir, 1) * 100%)); }
+  to   { transform: none; }
+}
+
+.view.vlt-ghost {
+  /* It has already lost `.active` by the time it ghosts, so it needs its own
+     display — .view{display:none} is (0,1,0) and this is (0,2,0). */
+  display: block;
+  position: fixed;
+  z-index: 1;                 /* under .bottom-nav (z-index 10) — it must not cover the bar */
+  pointer-events: none;       /* it is a departing picture, not a screen any more */
+  overflow: hidden;
+  margin: 0;
+  animation: vlt-slide-out var(--dur-slide) var(--ease-inout) 50ms both;
+}
+@keyframes vlt-slide-out {
+  to { transform: translateX(calc(var(--dir, 1) * -22%)); opacity: .4; }
+}
+
+/* The bar keeps its exact colour and loses only the live sampling. */
+.app.vlt-sliding .bottom-nav {
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  background: var(--nav-bg-solid);
+}
+
+/* The tab that was just chosen answers the touch itself — 500ms --ease-back,
+   which is why it is still going when the screen lands. */
+.nav-btn > svg { transition: transform 500ms var(--ease-back); }
+.nav-btn.vlt-pulse > svg { transform: scale(1.16); }
 
 /* =========================================================================
    ^^^ EVERYTHING ABOVE, THEN THE IDENTITY LAYER BELOW. ^^^

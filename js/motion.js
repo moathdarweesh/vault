@@ -203,5 +203,54 @@ window.VltMotion = (function () {
     el.addEventListener('pointercancel', release);
   }
 
-  return { stagger, count, bar, pulse, numFlip, dragToDismiss, reduced, token };
+  /* ── TAB SWITCHING ───────────────────────────────────────────────────────
+     CALL THIS BEFORE THE CALLER TOGGLES `.active`. The leaving view's rectangle
+     has to be read while it is still laid out, and pinning it with
+     position:fixed right then is what takes it out of flow — so `.main` is left
+     holding only the arriving view and its scroll is never disturbed.
+
+     `dir` is +1 or -1 and already carries the RTL flip, so one keyframe pair
+     serves both directions and both writing systems.
+
+     Every class and inline style is undone by a TIMER, not by animationend:
+     animation events do not fire in a hidden or backgrounded document, and a
+     ghost left pinned would sit over the app forever. */
+  function switchTab(o) {
+    o = o || {};
+    const from = o.from, to = o.to, btn = o.btn;
+    if (!to) return;
+    const app = document.querySelector('.app');
+    const dir = (o.dir < 0 ? -1 : 1) * (document.body.dir === 'rtl' ? -1 : 1);
+
+    if (btn) {
+      btn.classList.add('vlt-pulse');
+      setTimeout(() => btn.classList.remove('vlt-pulse'), 500);
+    }
+    if (reduced() || !from || from === to) return;
+
+    // Read the rectangle while it is still in flow, then pin it to exactly that.
+    const r = from.getBoundingClientRect();
+    const pin = { position: 'fixed', top: r.top + 'px', left: r.left + 'px',
+                  width: r.width + 'px', height: r.height + 'px' };
+    for (const k in pin) from.style.setProperty(k === 'position' ? 'position' : k, pin[k]);
+    from.style.setProperty('--dir', String(dir));
+    from.classList.add('vlt-ghost');
+
+    to.style.setProperty('--dir', String(dir));
+    to.classList.add('vlt-in');
+    if (app) app.classList.add('vlt-sliding');   // lifts the bar's live blur
+
+    const ms = token('--dur-slide', 500) + 50 + 90;
+    clearTimeout(switchTab.__t);
+    switchTab.__t = setTimeout(() => {
+      from.classList.remove('vlt-ghost');
+      for (const k in pin) from.style.removeProperty(k);
+      from.style.removeProperty('--dir');
+      to.classList.remove('vlt-in');
+      to.style.removeProperty('--dir');
+      if (app) app.classList.remove('vlt-sliding');
+    }, ms);
+  }
+
+  return { stagger, count, bar, pulse, numFlip, dragToDismiss, switchTab, reduced, token };
 })();
