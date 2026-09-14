@@ -85,7 +85,7 @@
 
   /* Chrome that used to be hard-coded, and was still TEAL-NAVY from the era
      before the brand orange — on the one bar visible on every single screen. */
-  --nav-bg:      rgba(13, 10, 7, 0.82);
+
   /* The same colour at full alpha. Worn only while a screen is sliding: the
      bar's live blur is lifted then, and 0.82 over a moving backdrop would
      show the motion through the bar. Over this app's near-black ground the
@@ -325,7 +325,7 @@ body.theme-light {
   --accent-line: rgba(255, 106, 0, 0.30);
   --accent-ink:  #1a0800;
 
-  --nav-bg:      rgba(250, 245, 240, 0.82);
+
   --nav-bg-solid: rgb(250, 245, 240);
 
   /* Elevation, physically inverted: in dark the LIT edge is on top; here the
@@ -690,9 +690,16 @@ img { display: block; max-width: 100%; }
   /* Was a hard-coded rgba(10,25,32,.82) — a teal-navy bar left over from the
      era before the brand orange, on the one chrome element visible on every
      screen, that no theme class ever overrode. */
-  background: var(--nav-bg);
-  backdrop-filter: blur(24px) saturate(180%);
-  -webkit-backdrop-filter: blur(24px) saturate(180%);
+  /* NO BACKDROP-FILTER. Owner's call, and it is the right one: a live blur
+     here has to be re-rasterised on every frame of anything moving beneath
+     it — a tab slide, a scroll, the ember. The earlier answer lifted it for
+     the slide and restored it after, which meant the bar changed appearance
+     in the middle of the motion; removing it means nothing changes at all.
+     v297 deleted every per-card backdrop-filter for this same cost and this
+     bar was the one survivor. Measured before removing: blurred rgb(15,12,9)
+     against this solid rgb(13,10,7) — three levels apart on a near-black
+     ground, which is why the loss is not visible. */
+  background: var(--nav-bg-solid);
   border-top: 1px solid var(--border);
   display: flex;
   justify-content: space-around;
@@ -8055,7 +8062,12 @@ body.ember-on .ember {
 /* Bought: muted and struck, IN PLACE. It must not sink to the bottom — the next
    unticked item has to stay where the eye already is. */
 .sl-row.is-done .sl-name { color: var(--text-mute); text-decoration: line-through; }
-.sl-row.is-done .sl-amt { color: var(--text-faint); }
+/* --text-dim, not --text-faint. A bought item's amount is still a FIGURE the
+   user reads back while shopping; --text-faint is decorative by definition
+   (dots and bars, ~1.4:1 in light) and device 3 of the identity layer repairs
+   exactly this in five other places. Fixed at source rather than adding a
+   sixth selector to the layer — it has no other reason to know this sheet. */
+.sl-row.is-done .sl-amt { color: var(--text-dim); }
 .sl-empty { padding: var(--sp-4) 0; color: var(--text-mute); font-size: var(--fs-sub); text-align: center; }
 
 /* The composer sits BELOW the list: at item 25 the add field is where the thumb
@@ -8152,6 +8164,11 @@ body[dir="rtl"] .vlt-bar-fill { transform-origin: right center; }
   animation: none;
   opacity: 0;
   transition: opacity var(--dur-fast) linear;
+  /* ⚠️ A LEAVING SHEET MUST NOT EAT TAPS. The exit defers the DOM removal, so
+     for 320ms a full-screen overlay was still hit-testable over the app — the
+     user dismisses a sheet and the next tap goes nowhere. It is a departing
+     picture from the moment it starts to leave. */
+  pointer-events: none;
 }
 .modal-overlay.vlt-sheet.is-out .modal {
   animation: none;
@@ -8162,6 +8179,13 @@ body[dir="rtl"] .vlt-bar-fill { transform-origin: right center; }
 /* While a finger is on it the sheet tracks 1:1 — no animation, no transition,
    or every pointermove would be chasing a 400ms ease and feel like syrup. */
 .modal-overlay.vlt-sheet .modal.dragging { animation: none; transition: none; }
+/* An abandoned drag springs back. `animation: none` stays on, or dropping
+   .dragging would restart the entrance and the sheet would fly in again from
+   off-screen for a gesture the user cancelled. */
+.modal-overlay.vlt-sheet .modal.settling {
+  animation: none;
+  transition: transform var(--dur-fast) var(--ease-back);
+}
 
 /* ── 5. ACHIEVEMENT PULSE ──────────────────────────────────────────────────
    The elastic curve is the ONE literal in this block, and deliberately: it is
@@ -8205,12 +8229,13 @@ body[dir="rtl"] .vlt-bar-fill { transform-origin: right center; }
    is left holding only the incoming view, its height and scroll are never
    disturbed, and the two are free to overlap for exactly one slide.
 
-   ⚠️ AND THE SPEC CONTRADICTS ITSELF HERE. Rule 11 forbids animated blur;
-   `.bottom-nav` carries backdrop-filter: blur(24px) and samples exactly the
-   view that is sliding, so obeying §3 breaks rule 11. The owner chose variant
-   (2): the live blur is LIFTED for the duration and the bar wears its opaque
-   twin instead. js/app.js:12376 states the same mechanism in this codebase's
-   own words, and it is why v297 deleted every per-card backdrop-filter.
+   ⚠️ THE SPEC CONTRADICTS ITSELF HERE, and the owner settled it by removing
+   the conflict rather than scheduling around it. Rule 11 forbids animated
+   blur; `.bottom-nav` used to carry backdrop-filter: blur(24px) and sampled
+   exactly the view that slides. The first answer lifted the blur for the
+   slide and restored it after — but that made the bar change appearance in
+   the middle of the motion. The bar simply has no blur now, so there is
+   nothing to schedule and nothing to restore.
 
    --dir is +1 or -1 and already carries the RTL flip, so ONE keyframe pair
    serves both directions and both writing systems. translateX is physical;
@@ -8239,12 +8264,6 @@ body[dir="rtl"] .vlt-bar-fill { transform-origin: right center; }
   to { transform: translateX(calc(var(--dir, 1) * -22%)); opacity: .4; }
 }
 
-/* The bar keeps its exact colour and loses only the live sampling. */
-.app.vlt-sliding .bottom-nav {
-  backdrop-filter: none;
-  -webkit-backdrop-filter: none;
-  background: var(--nav-bg-solid);
-}
 
 /* The tab that was just chosen answers the touch itself — 500ms --ease-back,
    which is why it is still going when the screen lands. */

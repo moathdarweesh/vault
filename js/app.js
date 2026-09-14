@@ -12,7 +12,7 @@
 // build. The literal below is the fallback (file://, or a stripped query) and is
 // still bumped by `npm run release` — see CLAUDE.md "CACHE WORKFLOW".
 const VAULT_BUILD = (() => {
-  const FALLBACK = 'v340';
+  const FALLBACK = 'v341';
   try {
     const src = (document.currentScript && document.currentScript.src) || '';
     const m = src.match(/[?&]v=(\d+)/);
@@ -1661,7 +1661,10 @@ function goBack() {
   // "back" dismisses the sheet instead of popping the view (or exiting the app).
   const addSheet = document.getElementById('add-sheet-overlay');
   if (addSheet) { addSheet.remove(); return true; }
-  if ($('#modal-root') && $('#modal-root').innerHTML.trim()) { closeModal(); return true; }
+  // `:not(.is-out)` — a sheet the user already dismissed lingers in the DOM for
+  // its 260ms exit. Reading the root as 'non-empty' there made Back close a
+  // corpse instead of popping the view, so one press did nothing.
+  if (document.querySelector('#modal-root .modal-overlay:not(.is-out)')) { closeModal(); return true; }
   if (document.getElementById('auth-gate')) return true; // don't slip behind login
   if (navStack.length > 1) {
     navStack.pop();
@@ -1981,8 +1984,10 @@ document.addEventListener('keydown', (e) => {
   const root = $('#modal-root');
   // The GLOBAL Escape handler is a second door into closeModal() and would have
   // walked straight past the modal's own guard.
-  if (root && root.querySelector('.modal-overlay[data-dismissible="0"]')) return;
-  if (root && root.innerHTML.trim()) closeModal();
+  // Both tests skip a LEAVING sheet: it is already closing, so it must neither
+  // veto Escape with its stale data-dismissible nor be closed a second time.
+  if (root && root.querySelector('.modal-overlay[data-dismissible="0"]:not(.is-out)')) return;
+  if (root && root.querySelector('.modal-overlay:not(.is-out)')) closeModal();
 });
 
 // ==========================================================================
@@ -12482,7 +12487,7 @@ function setupEmber() {
     // Behind an opaque gate the ember is invisible work; behind a blur surface
     // it is expensive work — .modal-overlay carries backdrop-filter: blur(10px),
     // and a moving backdrop makes the compositor re-rasterise it every frame.
-    if (document.querySelector('.modal-overlay, .sheet-overlay.open, .auth-gate')) return;
+    if (document.querySelector('.modal-overlay:not(.is-out), .sheet-overlay.open, .auth-gate')) return;
     const x = e.clientX - left;
     const y = Math.max(e.clientY - top, TOP_GUARD);
     // A COLD ember has nothing to slide: snap it, and spend no compositor work

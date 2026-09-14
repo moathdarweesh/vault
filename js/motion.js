@@ -186,7 +186,14 @@ window.VltMotion = (function () {
       const d = e.clientY - y0;
       if (d <= 0) { dy = 0; el.style.transform = ''; return; }
       if (dy === 0 && d < 6) return;            // let a tap stay a tap
-      if (dy === 0) { el.classList.add('dragging'); el.setPointerCapture(id); }
+      if (dy === 0) {
+        el.classList.add('dragging');
+        // setPointerCapture throws on a pointer the element does not own — a
+        // synthetic event, or a pointer already released. Unguarded it aborted
+        // the rest of this handler, leaving `.dragging` on with no transform:
+        // a sheet with its animation suspended and nothing moving it.
+        try { el.setPointerCapture(id); } catch (_) {}
+      }
       dy = d;
       el.style.transform = 'translateY(' + dy + 'px)';
     });
@@ -194,13 +201,53 @@ window.VltMotion = (function () {
     const release = (e) => {
       if (!down || (e && e.pointerId !== id)) return;
       down = false;
-      el.classList.remove('dragging');
-      el.style.transform = '';
-      if (dy > THRESHOLD) onDismiss();
+      if (dy > THRESHOLD) {
+        el.classList.remove('dragging');
+        el.style.transform = '';
+        onDismiss();
+      } else if (dy > 0) {
+        /* ⚠️ DO NOT HAND IT BACK TO THE BARE RULE. `.dragging` suspends the
+           entrance with `animation: none`; simply dropping that class RESTARTS
+           sheetUp — the same restart idiom pulse() uses on purpose — so a drag
+           the user abandoned replayed the whole 400ms entrance from off-screen.
+           `.settling` keeps the animation suspended and springs the inline
+           transform back instead. Dropped on a TIMER: transitionend does not
+           fire in a hidden document, and a sheet stuck in .settling could never
+           be dragged again. */
+        el.classList.remove('dragging');
+        el.classList.add('settling');
+        el.style.transform = '';
+        clearTimeout(el.__vltSettle);
+        el.__vltSettle = setTimeout(() => {
+          el.classList.remove('settling');
+        }, token('--dur-fast', 260) + 60);
+      } else {
+        el.classList.remove('dragging');
+        el.style.transform = '';
+      }
       dy = 0; id = null;
     };
     el.addEventListener('pointerup', release);
     el.addEventListener('pointercancel', release);
+  }
+
+  /* One slide at a time, and its teardown travels WITH it. `__slideDone` is the
+     pending cleanup; flushSlide() runs it now rather than dropping it. */
+  let __slideTimer = null;
+  let __slideDone = null;
+  function flushSlide() {
+    clearTimeout(__slideTimer);
+    __slideTimer = null;
+    if (__slideDone) __slideDone();
+  }
+  /* Everything a slide puts on a node, taken off in one place — so the teardown
+     and the defensive sweep can never disagree about what a slide leaves. */
+  function clearSlideMarks(el) {
+    if (!el) return;
+    el.classList.remove('vlt-ghost', 'vlt-in');
+    for (const k of ['position', 'top', 'left', 'width', 'height', '--dir']) {
+      el.style.removeProperty(k);
+    }
   }
 
   /* ── TAB SWITCHING ───────────────────────────────────────────────────────
@@ -219,7 +266,6 @@ window.VltMotion = (function () {
     o = o || {};
     const from = o.from, to = o.to, btn = o.btn;
     if (!to) return;
-    const app = document.querySelector('.app');
     const dir = (o.dir < 0 ? -1 : 1) * (document.body.dir === 'rtl' ? -1 : 1);
 
     if (btn) {
@@ -227,6 +273,30 @@ window.VltMotion = (function () {
       setTimeout(() => btn.classList.remove('vlt-pulse'), 500);
     }
     if (reduced() || !from || from === to) return;
+
+    /* ⚠️ FINISH THE PREVIOUS SLIDE BEFORE STARTING THIS ONE, SYNCHRONOUSLY.
+
+       The first draft kept ONE timer on the function object and cancelled it
+       here — but each timer closes over ITS OWN from/to/pin, so cancelling did
+       not cancel the work, it ABANDONED it. Two bottom-nav taps inside the
+       cleanup window (a mis-tap and its correction — ordinary use) left the
+       first view pinned as a ghost FOREVER: position:fixed, pointer-events:none
+       and vlt-slide-out holding it at 22% and .4 opacity by its `both` fill.
+       Returning to that tab then showed it displayed but DEAD TO TOUCH, with
+       the scroller empty — .view.vlt-ghost is (0,2,0) and later in the file
+       than .view.active, so losing `.active` could not even hide it.
+
+       It must run BEFORE the rect is read: otherwise getBoundingClientRect()
+       returns the stale PINNED rectangle of a ghost that has not been undone,
+       and the new ghost inherits a position from two navigations ago. */
+    flushSlide();
+
+    // A node must never be both a live ghost and an arriving screen. This is the
+    // brace to that belt: even if a cleanup were lost some other way, no .view
+    // can enter a slide still wearing the last one.
+    for (const v of document.querySelectorAll('.view.vlt-ghost, .view.vlt-in')) {
+      clearSlideMarks(v);
+    }
 
     // Read the rectangle while it is still in flow, then pin it to exactly that.
     const r = from.getBoundingClientRect();
@@ -238,18 +308,17 @@ window.VltMotion = (function () {
 
     to.style.setProperty('--dir', String(dir));
     to.classList.add('vlt-in');
-    if (app) app.classList.add('vlt-sliding');   // lifts the bar's live blur
 
     const ms = token('--dur-slide', 500) + 50 + 90;
-    clearTimeout(switchTab.__t);
-    switchTab.__t = setTimeout(() => {
-      from.classList.remove('vlt-ghost');
-      for (const k in pin) from.style.removeProperty(k);
-      from.style.removeProperty('--dir');
-      to.classList.remove('vlt-in');
-      to.style.removeProperty('--dir');
-      if (app) app.classList.remove('vlt-sliding');
-    }, ms);
+    // The cleanup is kept as a CLOSURE beside its timer, so the next slide can
+      // run it instead of merely cancelling it.
+    __slideDone = () => {
+      __slideDone = null;
+      clearSlideMarks(from);
+      clearSlideMarks(to);
+    };
+    clearTimeout(__slideTimer);
+    __slideTimer = setTimeout(() => { if (__slideDone) __slideDone(); }, ms);
   }
 
   return { stagger, count, bar, pulse, numFlip, dragToDismiss, switchTab, reduced, token };

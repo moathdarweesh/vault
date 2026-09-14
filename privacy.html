@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://challenges.cloudflare.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com data:; img-src 'self' data: blob: https://raw.githubusercontent.com https://ilmusnuchqlpirywonzx.supabase.co; media-src 'self' blob: data:; connect-src 'self' https://challenges.cloudflare.com https://ilmusnuchqlpirywonzx.supabase.co https://vault-calories.moathdarweesh2000.workers.dev https://world.openfoodfacts.org https://raw.githubusercontent.com; frame-src https://challenges.cloudflare.com; object-src 'none'; base-uri 'self'; form-action 'self'">
 <title>VAULT — سياسة الخصوصية والشروط / Privacy & Terms</title>
-<link rel="icon" type="image/svg+xml" href="icons/icon.svg?v=340">
+<link rel="icon" type="image/svg+xml" href="icons/icon.svg?v=341">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <!-- Two of the brand's three faces. JetBrains Mono is not loaded: this page has
@@ -62,7 +62,10 @@
   }
   .langs button.active { background:var(--accent); color:var(--accent-ink); }
 
-  h1 { font-size:27px; font-weight:800; margin:.2em 0 .3em; line-height:1.3; }
+  /* 700, not 800: the loaded faces top out at 700, so 800 was the browser
+     smearing 700 into a synthetic bold. v293 set the cap; Archivo's wordmark
+     is the one real 800 in this project. */
+  h1 { font-size:27px; font-weight:700; margin:.2em 0 .3em; line-height:1.3; }
   h2 { font-size:17px; font-weight:700; margin:2em 0 .5em; color:var(--accent); }
   p, li { color:var(--text-mute); }
   b { color:var(--text); font-weight:600; }

@@ -79,7 +79,7 @@ a faster TTFB — not fewer bytes.
 npm run release          # bump every marker + verify, then commit all files together
 ```
 
-**Current version: v340.** APK: build 21 / v3.0.
+**Current version: v341.** APK: build 21 / v3.0.
 
 `scripts/release.js` rewrites **every** marker and then re-reads them from disk to confirm; it exits non-zero if any disagree, and prints the count per file (derived, never hard-coded — the docs used to say 16 while the real count was 15). The markers are `?v=N` in `index.html` (every script and stylesheet, the `js/vendor/supabase.js` preload, both `icons/icon.svg` links, `manifest.json`), the `__cleaned_vN` sessionStorage key, the `FALLBACK` literal in `app.js`, `version.json` → `web`, the `?v=` in `manifest.json`, `admin.html`, `privacy.html` and `get/index.html`, and the `Current version` line in this file. `scripts/check-contracts.js` (pre-commit) refuses a commit where any of them disagree.
 
@@ -2220,6 +2220,74 @@ phone still flashes the blue ✕ on launch.
 `.sd-set-remove` 36px circle → `--radius-btn-s`; `.img-lightbox-close` 42px/50% → the M rung
 (44/`--radius-btn-m`, which also clears the tap floor it was 2px under); the update banner's two
 buttons off the scale on all three axes → 44/12/14. Measured after: 36/r10, 44/r12, 44/r12/14px.
+
+
+## v341 — no blur at all, and the ghost that would not leave
+
+### The nav loses its backdrop-filter, permanently
+
+«الانميشن خليه فقط انزلاق بدون ضبابية». v340 lifted the blur for the slide and put it back —
+which meant **the bar changed appearance in the middle of the motion.** The owner removed the
+conflict instead of scheduling around it, and he is right: now nothing changes at all, ever, and
+the compositor never re-rasterises a 24px blur — not during a slide, not during a scroll, not
+behind THE EMBER.
+
+It also finishes a decision this project already made: **v297 deleted every per-card
+backdrop-filter for exactly this cost, and the bar was the one survivor.** Measured before
+removing it: blurred `rgb(15,12,9)` against the solid `rgb(13,10,7)` — three levels apart on a
+near-black ground, which is why the loss is not visible. `--nav-bg` had no readers left and is
+retired; `.app.vlt-sliding` is gone from the CSS and the JS together.
+
+### ⚠️ ONE TIMER FOR N CONCURRENT ELEMENTS IS NOT A DEBOUNCE
+
+A 93-agent adversarial review of v337–v340 raised 29 findings; 5 survived verification, and
+**three separate dimensions independently found the same blocker and each reproduced it live.**
+
+`switchTab` kept ONE timer on the function object and cancelled it to schedule the next slide:
+
+```js
+clearTimeout(switchTab.__t);            // looks like a debounce
+switchTab.__t = setTimeout(cleanup, ms) // but each cleanup closes over ITS OWN from/to/pin
+```
+
+Cancelling it did not cancel the work — it **abandoned** it. Two bottom-nav taps inside the 640ms
+window (a mis-tap and its correction; ordinary use) left the first view pinned as a ghost
+**forever**: `position: fixed`, `pointer-events: none`, and `vlt-slide-out` holding it at 22% and
+.4 opacity by its `both` fill. Returning to that tab showed it **displayed but dead to touch**,
+with the scroller collapsed — and `.view.vlt-ghost` is (0,2,0) and later in the file than
+`.view.active`, so losing `.active` could not even hide it.
+
+The fix is not a second timer. The cleanup is a **closure kept beside** its timer, and the next
+slide RUNS it rather than dropping it — **synchronously, before the new rectangle is read**,
+because otherwise `getBoundingClientRect()` returns the stale pinned rect of a ghost that has not
+been undone. A defensive sweep strips `.vlt-ghost`/`.vlt-in` from every view at the start of a
+slide, so a node can never be both a live ghost and an arriving screen. Measured after: two taps
+150ms apart → **0 stranded**; three taps 80ms apart → **0**; the returned-to view is `static`,
+`pointer-events: auto`, no inline style, scroller full.
+
+### ⚠️ DROPPING `.dragging` RESTARTS THE ENTRANCE
+
+`.dragging` suspends the sheet entrance with `animation: none`. The abort path simply removed the
+class — which is the **restart-an-animation idiom `pulse()` uses on purpose** — so a drag the user
+changed their mind about replayed the whole 400ms entrance from off-screen. `.settling` keeps the
+animation suspended and springs the inline transform back instead, dropped on a timer (never
+`transitionend`: it does not fire in a hidden document, and a sheet stuck in `.settling` could
+never be dragged again). Measured: `replayedEntrance: false`.
+
+### ⚠️ A LEAVING SHEET IS NOT AN OPEN SHEET
+
+v339 deferred the sheet's DOM removal by 320ms for its exit — but nothing else in the app was
+taught that a node in `#modal-root` can now be a **corpse**. Every "is a dialog open?" test read a
+stale answer for a third of a second: `goBack()` closed a corpse instead of popping the view (one
+Back press did nothing), the Escape handler honoured the dead node's `data-dismissible="0"`, and
+the overlay still ate taps full-screen. Now `.is-out` carries `pointer-events: none`, and the
+three tests select `.modal-overlay:not(.is-out)`.
+
+> And `setPointerCapture` throws on a pointer the element does not own. Unguarded it aborted the
+> rest of the handler, leaving `.dragging` on with no transform — a sheet with its animation
+> suspended and nothing moving it. It is in a try/catch now.
+
+**What the review refuted: 24 of 29.** The five that survived are above.
 
 
 ## Superpowers — and the two places this project deliberately departs from it
