@@ -12,7 +12,7 @@
 // build. The literal below is the fallback (file://, or a stripped query) and is
 // still bumped by `npm run release` — see CLAUDE.md "CACHE WORKFLOW".
 const VAULT_BUILD = (() => {
-  const FALLBACK = 'v344';
+  const FALLBACK = 'v345';
   try {
     const src = (document.currentScript && document.currentScript.src) || '';
     const m = src.match(/[?&]v=(\d+)/);
@@ -240,7 +240,16 @@ function applyTheme(theme) {
   // --bg is pure black (the ramp warms the surfaces, never the void); light's
   // is the bone ground. Keep these two in step with styles.css and with the
   // static <meta> in index.html, which covers the frames before this runs.
-  if (meta) meta.setAttribute('content', theme === 'light' ? '#faf5f0' : '#000000');
+  // ⚠️ WHILE THE VAULT DOOR IS UP, THE BAR BELONGS TO THE DOOR. This runs
+  // during init(), before the door may open, and the door is black on every
+  // theme — so a light-theme user was handed DARK status-bar icons painted
+  // over black for the whole launch. Only the two SURFACE signals wait (this
+  // meta and the native bar below); the body class is applied as always, or
+  // the app would be in the wrong theme at the moment the leaves part.
+  // The splash teardown calls applyTheme again, which is idempotent.
+  const splashUp = !!document.getElementById('splash');
+  const ground = theme === 'light' ? '#faf5f0' : '#000000';
+  if (meta) meta.setAttribute('content', splashUp ? '#000000' : ground);
   // The <meta> above only reaches BROWSERS. Inside the APK the Android status
   // and gesture bars are driven by Capacitor's built-in SystemBars plugin,
   // whose DEFAULT style resolves from the OS NIGHT MODE — not from ours.
@@ -260,7 +269,8 @@ function applyTheme(theme) {
   try {
     const sb = window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.SystemBars;
     if (sb && sb.setStyle) {
-      const p = sb.setStyle({ style: theme === 'light' ? 'LIGHT' : 'DARK' });
+      const style = theme === 'light' ? 'LIGHT' : 'DARK';
+      const p = sb.setStyle({ style: splashUp ? 'DARK' : style });
       if (p && p.catch) p.catch(() => {});
     }
   } catch (_) {}
@@ -1952,12 +1962,18 @@ function renderView(view) {
       // closed door, so staggering here would play the arrival to nobody and
       // leave a static screen for the door to reveal. The host is handed to the
       // splash clock, which fires it at the moment the leaves part.
-      window.__vltSplashHost = host;
-      delete host.dataset.entered;
-      // A tab can be tapped in the ~400ms between the door opening and this flag
-      // clearing, which sets __vltSlid on the way in. Consume it here too, or it
-      // survives to the NEXT arrival and silently eats that screen`s entrance.
-      __vltSlid = false;
+      //
+      // UNLESS A SLIDE BROUGHT IT IN. A tab can be reached by keyboard in the
+      // ~400ms between the door opening and this flag clearing; that sets
+      // __vltSlid, and the slide IS the entrance. Handing the host over anyway
+      // would fire a stagger on top of a screen that is still moving, and the
+      // flag would survive to eat the NEXT arrival as well.
+      if (__vltSlid) {
+        __vltSlid = false;
+      } else {
+        window.__vltSplashHost = host;
+        delete host.dataset.entered;
+      }
     } else if (__vltSlid) {
       // A tab slide IS the arrival — rule 5's one true half: the two never run
       // together, or the cards climb while the screen is still moving.

@@ -79,7 +79,7 @@ a faster TTFB — not fewer bytes.
 npm run release          # bump every marker + verify, then commit all files together
 ```
 
-**Current version: v344.** APK: build 22 / v3.1.
+**Current version: v345.** APK: build 22 / v3.1.
 
 `scripts/release.js` rewrites **every** marker and then re-reads them from disk to confirm; it exits non-zero if any disagree, and prints the count per file (derived, never hard-coded — the docs used to say 16 while the real count was 15). The markers are `?v=N` in `index.html` (every script and stylesheet, the `js/vendor/supabase.js` preload, both `icons/icon.svg` links, `manifest.json`), the `__cleaned_vN` sessionStorage key, the `FALLBACK` literal in `app.js`, `version.json` → `web`, the `?v=` in `manifest.json`, `admin.html`, `privacy.html` and `get/index.html`, and the `Current version` line in this file. `scripts/check-contracts.js` (pre-commit) refuses a commit where any of them disagree.
 
@@ -2527,6 +2527,90 @@ you, because in the design file there is nothing behind it.
   exists to make, and a late render is not stranded: `__vltSplash` is cleared when
   the door opens, so the render that eventually arrives finds `__vltArriving` set
   and staggers itself.
+
+## v345 — the rest of the review: the updater was cutting the door in half
+
+The v342 review finished with **15 raised, 11 confirmed after adversarial
+verification, 4 refuted.** v343 and v344 took the first six. These are the rest,
+and the first one was already happening on the owner's phone.
+
+### ⚠️ A BACKGROUND UPDATE MUST NEVER NAVIGATE OUT FROM UNDER THE DOOR
+
+`js/app.js` is deferred script #6 and `js/update.js` is #11, so `__vltReady` is
+**always** set before update.js runs; the boot reload then fires at
+DOMContentLoaded plus one round trip for `version.json`, while the door is on
+screen until at least 2450ms. So **on every release, the first launch got a door
+cut off mid-sequence** — and the `__splash_v1` stamp, written at parse time, then
+suppressed it on the load the user actually keeps. A release day meant one broken
+splash and then none.
+
+I watched it happen live, minutes after v342 shipped: the page loaded v342 from
+cache, started the door, and update.js replaced it with `?u=343`.
+
+> **Moving the stamp to the teardown is the obvious fix and it is the wrong one.**
+> Load 1 would then leave no stamp, so load 2 would play the door from frame 0 —
+> a partial door followed by a whole one, which is exactly the double door the
+> stamp exists to prevent. **The reload waits instead**, with a 6s ceiling so a
+> door that never left cannot strand it. Proven on the running app with a faked
+> newer build: the previous page unloaded at **2515ms with the door already
+> gone**, where before it went at ~300ms.
+
+### ⚠️ THE STATUS BAR WENT LIGHT OVER A BLACK DOOR
+
+`applyTheme()` runs seven lines before the app declares itself ready, and it is
+unconditional — so a **light-theme** user was handed dark status-bar icons painted
+over the black door for the whole launch. Invisible icons, every launch.
+
+Only the two SURFACE signals wait: the `theme-color` meta and Capacitor's
+SystemBars style. **The body theme class never waits** — the app behind the door
+has to already be in the user's theme at the moment the leaves part. The splash
+claims the bar at mount (the pre-paint script may already have set it to the bone
+ground) and `applyTheme` keeps it there while `#splash` is in the DOM; the
+teardown re-runs `applyTheme`, which is idempotent and is the only writer of both
+surfaces. Measured: light + door → `#000000` with `body.theme-light` already on;
+light + no door → `#faf5f0`; dark → `#000000` throughout.
+
+> Contract 21 refused the first attempt, correctly: it pins the shape
+> `theme === 'light' ? '#…' : '#…'` so the two grounds stay greppable and in step
+> with styles.css, the static meta and the pre-paint script. The splash condition
+> folds in on the NEXT line instead of inside that expression.
+
+### The rest
+
+- **The hand-off yields to a slide.** A tab can still be reached by keyboard in
+  the ~400ms between the door opening and `__vltSplash` clearing. That sets
+  `__vltSlid`, and the slide IS the entrance — handing the host over anyway would
+  fire a stagger on top of a screen that is still moving, and the flag would
+  survive to eat the next arrival too.
+- **Three prose blocks still described the `position: fixed` pin as the live
+  mechanism**, including `switchTab`'s own API contract — a mechanism v342
+  deleted. The contract is real but its reason had changed: call it before the
+  caller toggles `.active` because `navigate()` resolves the leaving view with
+  `.view.active`, so after the toggle that lookup returns the ARRIVING view and
+  no slide runs at all. **This project has been burned by stale prose before**
+  (CLAUDE.md's mark documentation was 100 versions out of date), so a comment that
+  describes deleted code is treated as a defect, not as history.
+- **The Archivo warm-up comment now says what is true.** The call at parse time
+  fetches nothing — the font sheet is still `media="print"`, its `@font-face`
+  rules are not in the screen font source, and `fonts.load()` resolves against an
+  empty match list. It is re-armed on the sheet's load and on a timer, but
+  `.vs-word` is rendered (opacity 0, not `display: none`), so the browser asks for
+  Archivo at the first style recalc after promotion anyway. It is a belt, not a
+  shortcut; the only thing that would actually beat the two round trips is
+  self-hosting a five-glyph subset, which the CSP already permits.
+
+### What the verifier REFUTED, and why it is worth keeping
+
+- **"Back during the door quits the app."** The path is real and every cited line
+  is accurate — but Back at the nav root exiting is `goBack()`'s documented
+  contract, Android's convention, and what Android's own SplashScreen API does.
+  v344 swallows it anyway: a press on what looks like a loading screen should not
+  close the app, and the guard costs one line. Recorded here as a **deliberate
+  divergence from the platform default**, not as a bug fix.
+- **"iOS draws the mark at 21% of the LONG edge."** Refuted — the iOS launch
+  images are square (2732×2732), so short and long edge are the same number.
+- **"The 2500ms cap opens onto an empty shell"** and **"the app behind the door is
+  not aria-hidden"** — both already answered in v343's note.
 
 ## APK build 22 (v3.1) — the native half of v337–v341 reaches the phone
 

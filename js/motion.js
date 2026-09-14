@@ -257,17 +257,20 @@ window.VltMotion = (function () {
   }
 
   /* ── TAB SWITCHING ───────────────────────────────────────────────────────
-     CALL THIS BEFORE THE CALLER TOGGLES `.active`. The leaving view's rectangle
-     has to be read while it is still laid out, and pinning it with
-     position:fixed right then is what takes it out of flow — so `.main` is left
-     holding only the arriving view and its scroll is never disturbed.
+     CALL THIS BEFORE THE CALLER TOGGLES `.active`, and that is now the ONLY
+     ordering rule left: navigate() resolves the leaving view with
+     `document.querySelector('.view.active')`, so after the toggle that lookup
+     returns the ARRIVING view, `from === to`, and no slide runs at all.
+     Nothing is measured here and nothing is pinned any more — v342 deleted the
+     ghost, so there is no rectangle to read and no geometry to restore.
 
      `dir` is +1 or -1 and already carries the RTL flip, so one keyframe pair
      serves both directions and both writing systems.
 
-     Every class and inline style is undone by a TIMER, not by animationend:
-     animation events do not fire in a hidden or backgrounded document, and a
-     ghost left pinned would sit over the app forever. */
+     The class and the inline `--dir` are undone by a TIMER, not by
+     animationend: animation events do not fire in a hidden or backgrounded
+     document, and a view left wearing `vlt-in` would replay the slide the next
+     time it is shown by a navigation that is not a tab switch. */
   function switchTab(o) {
     o = o || {};
     const from = o.from, to = o.to, btn = o.btn;

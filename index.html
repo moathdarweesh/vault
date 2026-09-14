@@ -27,18 +27,18 @@
   <!-- Critical inline paint: black background from the very first frame so a
        slow styles.css load never flashes unstyled white content (FOUC). -->
   <style>html,body{margin:0;background:#000;color:#fff}</style>
-  <link rel="manifest" href="manifest.json?v=344">
+  <link rel="manifest" href="manifest.json?v=345">
   <!-- These carry ?v=N like every other asset: without it a browser that has
        already cached the favicon keeps serving the OLD mark forever, so an icon
        redesign reaches nobody. `npm run release` rewrites every ?v= in this
        file, so these stay in step automatically. -->
-  <link rel="icon" type="image/svg+xml" href="icons/icon.svg?v=344">
+  <link rel="icon" type="image/svg+xml" href="icons/icon.svg?v=345">
   <!-- iOS does NOT support SVG for apple-touch-icon: Safari ignores it and puts a
        SCREENSHOT of the page on the Home Screen instead of the mark. This PNG is
        rendered from icons/icon.svg on an opaque black tile (iOS applies its own
        squircle mask and does not expect alpha). rel=icon below stays SVG for
        desktop browsers, which do support it. -->
-  <link rel="apple-touch-icon" sizes="180x180" href="icons/apple-touch-icon-180.png?v=344">
+  <link rel="apple-touch-icon" sizes="180x180" href="icons/apple-touch-icon-180.png?v=345">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <!-- Warm the Supabase connection (DNS + TLS) during page load so the first
@@ -50,21 +50,21 @@
   <!-- Must carry the SAME ?v=N that cloud.js appends when it injects this script,
        or the preload warms a different URL and is wasted. `npm run release` bumps
        both (this one by regex, cloud.js by deriving from its own marker). -->
-  <link rel="preload" href="js/vendor/supabase.js?v=344" as="script">
+  <link rel="preload" href="js/vendor/supabase.js?v=345" as="script">
   <!-- Discover startup files before the first inline body script waits for CSS.
        Download together; defer preserves dependency order and waits for the DOM. -->
-  <script src="js/i18n.js?v=344" defer></script>
-  <script src="js/catalog.js?v=344" defer></script>
-  <script src="js/cloud.js?v=344" defer></script>
-  <script src="js/storage.js?v=344" defer></script>
+  <script src="js/i18n.js?v=345" defer></script>
+  <script src="js/catalog.js?v=345" defer></script>
+  <script src="js/cloud.js?v=345" defer></script>
+  <script src="js/storage.js?v=345" defer></script>
   <!-- Motion primitives. No dependencies of its own; it only has to be here
        before app.js, which calls VltMotion from its render paths. -->
-  <script src="js/motion.js?v=344" defer></script>
-  <script src="js/app.js?v=344" defer></script>
-  <script src="js/health.js?v=344" defer></script>
-  <script src="js/notify.js?v=344" defer></script>
-  <script src="js/foodai.js?v=344" defer></script>
-  <script src="js/update.js?v=344" defer></script>
+  <script src="js/motion.js?v=345" defer></script>
+  <script src="js/app.js?v=345" defer></script>
+  <script src="js/health.js?v=345" defer></script>
+  <script src="js/notify.js?v=345" defer></script>
+  <script src="js/foodai.js?v=345" defer></script>
+  <script src="js/update.js?v=345" defer></script>
   <!-- The brand kit's three faces, and only three:
          IBM Plex Sans Arabic — the body face, for BOTH scripts (it carries a
            full Latin set, so this replaces the old Inter + Tajawal pair and one
@@ -95,7 +95,7 @@
        roughly one launch in four. One reflow beats no brand font. -->
   <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@400;500;600;700&family=Archivo:wght@800&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet" media="print" onload="this.media='all'">
   <noscript><link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@400;500;600;700&family=Archivo:wght@800&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet"></noscript>
-  <link rel="stylesheet" href="styles.css?v=344">
+  <link rel="stylesheet" href="styles.css?v=345">
 </head>
 <body class="theme-dark">
   <script>
@@ -177,17 +177,29 @@
       // Tells app.js to hold its first stagger: the cards must rise as the door
       // parts, not 1.7s earlier behind a closed one.
       window.__vltSplash = 1;
+      // The pre-paint script above may already have set theme-color to the bone
+      // ground for a light-theme user. The door is black on every theme, so the
+      // status bar has to be told that for as long as the door is up; applyTheme
+      // keeps it there and the teardown below hands it back.
+      try {
+        var tc = document.querySelector('meta[name="theme-color"]');
+        if (tc) tc.setAttribute('content', '#000000');
+      } catch (_) {}
       // Start Archivo as early as it can be started. Left alone the face is
       // discovered only when the non-blocking font stylesheet is promoted — two
       // sequential round trips AFTER first paint — and the wordmark is due at
       // 1650ms.
       //
-      // ⚠️ ONE CALL HERE FETCHES NOTHING. This runs at parse time, when the
-      // Google Fonts sheet is still media="print" and its @font-face rules are
-      // not in the document yet: fonts.load() finds no matching face and
-      // resolves without requesting anything. So it is armed again when that
-      // sheet lands, and once more on a short timer for the case where it had
-      // already landed before this script ran.
+      // ⚠️ AND BE HONEST ABOUT WHAT THIS BUYS. The call at parse time fetches
+      // NOTHING: the Google Fonts sheet is still media="print" then, its
+      // @font-face rules are not in the screen font source, and fonts.load()
+      // resolves against an empty match list without requesting anything. It is
+      // re-armed when that sheet lands and once more on a timer — but `.vs-word`
+      // is rendered (opacity 0, not display:none), so the browser asks for
+      // Archivo at the first style recalc after the promotion anyway. This is a
+      // belt, not a shortcut: the only thing that would actually beat the two
+      // round trips is self-hosting a five-glyph subset, which the CSP already
+      // permits. On a cold cache the wordmark can still draw in the fallback.
       function warmFont() {
         try { if (document.fonts && document.fonts.load) document.fonts.load('800 38px Archivo', 'VAULT'); } catch (_) {}
       }
@@ -219,7 +231,13 @@
           } catch (_) {}
           window.__vltSplashHost = null;
         }, 400);                            // the leaves start; the cards rise with them
-        setTimeout(function () { el.remove(); }, 1150);
+        setTimeout(function () {
+          el.remove();
+          // Hand the status bar back. applyTheme is idempotent and is the only
+          // writer of both surfaces, so re-running it is the whole restore —
+          // and it now sees no #splash, so it writes the user's real theme.
+          try { if (window.applyTheme && window.DB) applyTheme(DB.prefs.get().theme); } catch (_) {}
+        }, 1150);
       }
       // The dwell is where a slow launch waits. Never on animationend — it does
       // not fire in a hidden document, and a door that never opens is worse
@@ -307,8 +325,8 @@
           await Promise.all(regs.map((r) => r.unregister()));
           const keys = await caches.keys();
           await Promise.all(keys.map((k) => caches.delete(k)));
-          if (!sessionStorage.getItem('__cleaned_v344')) {
-            sessionStorage.setItem('__cleaned_v344', '1');
+          if (!sessionStorage.getItem('__cleaned_v345')) {
+            sessionStorage.setItem('__cleaned_v345', '1');
             location.reload();
           }
         }

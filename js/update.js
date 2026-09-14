@@ -92,7 +92,24 @@
       // boot: seamless auto-reload, at most once per session per target.
       var gk = VAULT_KEYS.webReloadGuard + latest;
       try { if (sessionStorage.getItem(gk)) return; sessionStorage.setItem(gk, '1'); } catch (_) { return; }
-      reloadTo(latest);
+      // ⚠️ NEVER NAVIGATE OUT FROM UNDER THE VAULT DOOR. This decision is made
+      // about one round trip after DOMContentLoaded, and the door is on screen
+      // until at least 2450ms — so on every release the first launch had its
+      // splash cut off mid-sequence, and the __splash_v1 stamp then suppressed
+      // it on the load that was kept. Waiting costs a background update two
+      // seconds; interrupting costs the user the whole sequence.
+      //
+      // The ceiling is not decoration: it keeps a reload that a broken door
+      // would otherwise strand forever bounded at ~6s.
+      var waited = 0;
+      (function whenDoorIsGone() {
+        if (document.getElementById('splash') && waited < 6000) {
+          waited += 120;
+          setTimeout(whenDoorIsGone, 120);
+          return;
+        }
+        reloadTo(latest);
+      })();
     }).catch(function () {});
   }
   function showWebBanner(latest) {
