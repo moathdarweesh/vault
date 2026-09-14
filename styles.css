@@ -234,7 +234,14 @@
   --dur:       200ms;
   --dur-slow:  300ms;
   --ease:      cubic-bezier(0.2, 0.8, 0.2, 1);
-  --press-scale: 0.97;
+  /* APPLY-motion.md §5 gives the press exactly TWO depths, and the app had TEN.
+     Before this, 19 rules read --press-scale (0.97) while 22 more hard-coded
+     their own value anywhere from 0.9 to 0.99 — so two controls of the same kind
+     sank by different amounts and nothing said why. Now: a FILLED control takes
+     the strong press, everything else takes the soft one. A new depth is a new
+     token with a reason, never a literal. */
+  --press-scale: 0.98;          /* secondary buttons, rows, cards, chips */
+  --press-scale-strong: 0.96;   /* filled controls — the spec's .96 */
 
   /* Theme-safe channels (each theme overrides --accent-rgb; light themes override --overlay) */
   --accent-rgb: 255, 106, 0;
@@ -657,7 +664,7 @@ img { display: block; max-width: 100%; }
 }
 /* 19px is this button's own rung on the ladder — nothing else uses it. */
 .vault-action svg { width: 19px; height: 19px; }
-.vault-action:active { transform: scale(0.94); background: var(--surface-2); }
+.vault-action:active { transform: scale(var(--press-scale)); background: var(--surface-2); }
 
 /* =========================================================================
    BOTTOM NAV
@@ -723,7 +730,7 @@ body.keyboard-open .sheet-overlay { height: var(--vvh, 100%); bottom: auto; }
   letter-spacing: 0.06em;
   text-transform: uppercase;
   position: relative;
-  transition: color 0.15s;
+  transition: color 0.15s, transform 300ms var(--ease-back);
 }
 
 /* 23px is the ladder's bottom-bar rung. */
@@ -751,7 +758,9 @@ body.keyboard-open .sheet-overlay { height: var(--vvh, 100%); bottom: auto; }
   z-index: -1;
 }
 
-.nav-btn:active { transform: scale(0.92); }
+/* No .nav-btn:active rule here: the global press rule later in this file has the
+   same (0,2,0) specificity and wins on source order, so a rule here is dead.
+   The nav presses at --press-scale like everything else. */
 
 /* Center Home button - elevated, prominent */
 .nav-btn.home-center {
@@ -864,7 +873,7 @@ body.theme-light .home-center-icon { box-shadow: 0 8px 24px rgba(255, 106, 0, 0.
   font-weight: 700;
   font-size: var(--fs-btn-m);
   letter-spacing: -0.01em;
-  transition: transform 0.12s ease, background 0.15s ease;
+  transition: transform 300ms var(--ease-back), background 0.15s ease;
   white-space: nowrap;
   height: var(--btn-h-m);
 }
@@ -888,14 +897,14 @@ body.theme-light .home-center-icon { box-shadow: 0 8px 24px rgba(255, 106, 0, 0.
   color: var(--accent-ink);
 }
 .btn-primary:active,
-.btn-accent:active { background: var(--accent-2); transform: scale(0.97); }
+.btn-accent:active { background: var(--accent-2); transform: scale(var(--press-scale-strong)); }
 
 .btn-ghost {
   background: var(--surface-2);
   color: var(--text);
   border: 1px solid var(--border);
 }
-.btn-ghost:active { background: var(--surface-3); transform: scale(0.97); }
+.btn-ghost:active { background: var(--surface-3); transform: scale(var(--press-scale)); }
 
 /* Square icon-only button (e.g. the collapsed search on the Exercises page). */
 .icon-square {
@@ -906,7 +915,7 @@ body.theme-light .home-center-icon { box-shadow: 0 8px 24px rgba(255, 106, 0, 0.
   appearance: none; -webkit-appearance: none; -webkit-tap-highlight-color: transparent;
   transition: transform 0.12s, background 0.15s;
 }
-.icon-square:active { transform: scale(0.94); background: var(--surface-3); }
+.icon-square:active { transform: scale(var(--press-scale)); background: var(--surface-3); }
 
 /* Exercises-page toolbar: My-exercises + New-exercise + search all in one row,
    same height, the search a smaller square so they read as a consistent set. */
@@ -1064,7 +1073,7 @@ body.theme-light input[type="date"], body.theme-light input[type="time"] { color
   font-size: 13px;
   font-weight: 600;
   color: var(--text-mute);
-  transition: background-color 0.15s, border-color 0.15s, color 0.15s, transform 0.12s;
+  transition: background-color 0.15s, border-color 0.15s, color 0.15s, transform 300ms var(--ease-back);
   white-space: nowrap;
 }
 
@@ -1074,7 +1083,7 @@ body.theme-light input[type="date"], body.theme-light input[type="time"] { color
   border-color: var(--accent-text);
 }
 
-.filter-pill:active { transform: scale(0.96); }
+.filter-pill:active { transform: scale(var(--press-scale)); }
 
 /* =========================================================================
    HOME VIEW
@@ -1127,7 +1136,7 @@ body.theme-light input[type="date"], body.theme-light input[type="time"] { color
   justify-content: center;
   padding: 8px 6px;
   position: relative;
-  transition: transform 0.15s;
+  transition: transform 300ms var(--ease-back);
   min-width: 0;
   overflow: hidden;
   appearance: none;
@@ -1139,7 +1148,7 @@ body.theme-light input[type="date"], body.theme-light input[type="time"] { color
   cursor: pointer;
   -webkit-tap-highlight-color: transparent;
 }
-.heat-cell:active { transform: scale(0.95); }
+.heat-cell:active { transform: scale(var(--press-scale)); }
 
 /* =========================================================================
    MUSCLE SESSION HISTORY (tap a heatmap cell)
@@ -1173,7 +1182,7 @@ body.theme-light input[type="date"], body.theme-light input[type="time"] { color
   transition: transform 0.15s;
   -webkit-tap-highlight-color: transparent;
 }
-.ms-card:active { transform: scale(0.985); }
+.ms-card:active { transform: scale(var(--press-scale)); }
 
 .ms-thumb {
   position: relative;
@@ -1358,7 +1367,7 @@ body.theme-light input[type="date"], body.theme-light input[type="time"] { color
      outside that child — the name tag, the added stripe's text — was
      mis-aligned in Arabic. */
   text-align: start;
-  transition: transform 0.15s ease, border-color 0.15s;
+  transition: transform 300ms var(--ease-back), border-color 0.15s;
   isolation: isolate;
 }
 
@@ -2568,7 +2577,7 @@ body[dir="rtl"] .w-unit { margin-left: 0; margin-right: 2px; }
   display: block;
   width: 100%;
   text-align: start;  /* was `left` with no RTL override */
-  transition: transform 0.12s, border-color 0.15s;
+  transition: transform 300ms var(--ease-back), border-color 0.15s;
 }
 
 .compare-card-title {
@@ -3343,7 +3352,7 @@ body[data-view="session-run"] .bottom-nav { display: none; }
   background: var(--surface-2);
   color: var(--text);
 }
-.run-suggest:active { transform: scale(0.985); }
+.run-suggest:active { transform: scale(var(--press-scale)); }
 .run-suggest-label {
   font-size: 11px;
   font-weight: 700;
@@ -3976,7 +3985,7 @@ body[dir="rtl"] .picker-row { text-align: right; }
   color: var(--text-mute);
   font-variant-numeric: tabular-nums;
   position: relative;
-  transition: transform 0.12s, box-shadow 0.15s;
+  transition: transform 300ms var(--ease-back), box-shadow 0.15s;
   min-width: 0;
   padding: 0;
   width: 100%;
@@ -4136,7 +4145,7 @@ body[dir="rtl"] .picker-row { text-align: right; }
   border-color: var(--accent-text);
 }
 
-.supp-toggle:active { transform: scale(0.92); }
+.supp-toggle:active { transform: scale(var(--press-scale)); }
 
 .color-swatches {
   display: flex;
@@ -4544,7 +4553,7 @@ button.bundle-main {
   background: var(--surface-2);
   color: var(--text);
 }
-.ai-capture:active { transform: scale(0.98); }
+.ai-capture:active { transform: scale(var(--press-scale)); }
 .ai-capture-icon { color: var(--accent-text); line-height: 0; }
 .ai-capture-title { font-size: 16px; font-weight: 700; }
 .ai-capture-sub { font-size: 12px; font-weight: 700; color: var(--text-dim); }
@@ -4570,7 +4579,7 @@ button.bundle-main {
   color: var(--text-dim);
   margin-inline-start: 2px;
 }
-.ai-edit-toggle:active { transform: scale(0.92); }
+.ai-edit-toggle:active { transform: scale(var(--press-scale)); }
 .ai-card.is-editing .ai-edit-toggle {
   border-color: var(--accent-soft, var(--border-hi));
   color: var(--accent-text);
@@ -4634,7 +4643,7 @@ button.bundle-main {
   appearance: none; -webkit-appearance: none; -webkit-tap-highlight-color: transparent;
   transition: transform 0.12s;
 }
-.ai-portion-btn:active { transform: scale(0.92); }
+.ai-portion-btn:active { transform: scale(var(--press-scale)); }
 .ai-portion-val { min-width: 40px; text-align: center; font-size: 15px; font-weight: 700; color: var(--text); }
 .ai-macro.cal b { color: var(--cat-arms); }
 .ai-macro.pro b { color: var(--cat-legs); }
@@ -4758,7 +4767,7 @@ button.bundle-main {
   appearance: none; -webkit-appearance: none; font: inherit;
   transition: transform 0.15s; -webkit-tap-highlight-color: transparent;
 }
-.nutri-setup:active { transform: scale(0.99); }
+.nutri-setup:active { transform: scale(var(--press-scale)); }
 .nutri-setup-icon {
   width: 48px; height: 48px; border-radius: 14px; flex-shrink: 0;
   display: flex; align-items: center; justify-content: center;
@@ -4867,7 +4876,7 @@ button.bundle-main {
   transition: transform 0.12s, background 0.15s;
   height: var(--btn-h-s);
 }
-.water-cup:active { transform: scale(0.96); }
+.water-cup:active { transform: scale(var(--press-scale)); }
 .water-cup-minus { flex: 0 0 46px; color: var(--text-dim); display: flex; align-items: center; justify-content: center; }
 
 /* Body-weight card (home) + log sheet */
@@ -4878,7 +4887,7 @@ button.bundle-main {
   color: var(--text); appearance: none; -webkit-appearance: none; font: inherit;
   transition: transform 0.15s; -webkit-tap-highlight-color: transparent;
 }
-.weight-card:active { transform: scale(0.99); }
+.weight-card:active { transform: scale(var(--press-scale)); }
 .weight-card-icon {
   flex: 0 0 auto; width: 38px; height: 38px; border-radius: 12px;
   display: flex; align-items: center; justify-content: center;
@@ -4946,7 +4955,7 @@ button.bundle-main {
   cursor: pointer; appearance: none; -webkit-appearance: none;
   transition: transform 0.15s; -webkit-tap-highlight-color: transparent;
 }
-.food-fab:active { transform: scale(0.94); }
+.food-fab:active { transform: scale(var(--press-scale-strong)); }
 /* The global `svg{width:100%}` would otherwise blow this up — pin it. */
 .food-fab svg { width: 28px; height: 28px; flex-shrink: 0; }
 
@@ -4995,7 +5004,7 @@ button.bundle-main {
   appearance: none; -webkit-appearance: none; font: inherit;
   transition: transform 0.12s, background 0.15s; -webkit-tap-highlight-color: transparent;
 }
-.add-tile:active { transform: scale(0.96); background: var(--surface-3); }
+.add-tile:active { transform: scale(var(--press-scale)); background: var(--surface-3); }
 .add-tile-icon {
   width: 50px; height: 50px; border-radius: 15px; flex-shrink: 0;
   display: flex; align-items: center; justify-content: center;
@@ -5075,7 +5084,7 @@ button.bundle-main {
 /* The global `svg{width:100%}` would blow the mic up to fill the whole circle
    (~97%) — pin it so the glyph sits clearly smaller than the circle. */
 .voice-mic svg { width: 28px; height: 28px; }
-.voice-mic:active { transform: scale(0.94); }
+.voice-mic:active { transform: scale(var(--press-scale)); }
 /* --red, not a raw #ef4444: the token is the one the rest of the app already
    uses for "stop / destructive", and it carries a light-mode calibration the
    literal did not. --accent-ink as the glyph, for the same 2.87:1 reason white
@@ -5260,7 +5269,7 @@ button.bundle-main {
   transition: transform var(--dur-press) var(--ease), background var(--dur) var(--ease);
 }
 .bento-toggle svg { width: 16px; height: 16px; }
-.bento-toggle:active { transform: scale(0.9); }
+.bento-toggle:active { transform: scale(var(--press-scale)); }
 .bento-toggle:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .bento-toggle.added {
   background: var(--accent);
@@ -5439,7 +5448,7 @@ body[dir="rtl"] .bento-card.wide .bento-added-stripe { left: 14px; }
      Arabic text sat left-aligned inside a right-to-left row. In LTR `start`
      resolves to `left`, so nothing changes there. */
   text-align: start;
-  transition: transform 0.12s, border-color 0.15s;
+  transition: transform 300ms var(--ease-back), border-color 0.15s;
   margin-bottom: 8px;
 }
 
@@ -5603,7 +5612,7 @@ body[dir="rtl"] .bento-card.wide .bento-added-stripe { left: 14px; }
   align-items: center;
   justify-content: center;
 }
-.health-home-btn:active { transform: scale(0.92); }
+.health-home-btn:active { transform: scale(var(--press-scale)); }
 .health-home-btn.spinning svg { animation: hc-spin 0.8s linear infinite; }
 @keyframes hc-spin { to { transform: rotate(360deg); } }
 
@@ -5621,7 +5630,7 @@ body[dir="rtl"] .bento-card.wide .bento-added-stripe { left: 14px; }
   font-size: 13px;
   font-weight: 700;
 }
-.health-connect-prompt:active { transform: scale(0.99); }
+.health-connect-prompt:active { transform: scale(var(--press-scale)); }
 
 /* Show/hide toggle on cards inside the settings modal */
 .health-card { position: relative; }
@@ -5944,6 +5953,10 @@ body[dir="rtl"] .bento-card.wide .bento-added-stripe { left: 14px; }
 .session-card:active, .heat-cell:active,
 .calendar-cell:active, .bento-card:active, .compare-card:active,
 .filter-pill:active, .settings-action-row:active {
+  /* §5: FAST down, SPRINGY back. The base rules carry the 300ms --ease-back
+     return; this shortens the way DOWN to --dur-tap, so the two directions
+     differ — which is the whole feel the spec asks for. */
+  transition: transform var(--dur-tap) var(--ease-out);
   transform: scale(var(--press-scale));
 }
 /* Session-day card: feedback on the real tap targets (name → history,
@@ -6291,7 +6304,7 @@ body[data-view="food"] .food-fab { display: inline-flex; }
   text-align: start;
   transition: transform 0.12s ease, border-color 0.15s, background 0.15s;
 }
-.food-lib-chip:active { transform: scale(0.97); }
+.food-lib-chip:active { transform: scale(var(--press-scale)); }
 .food-lib-chip .flc-name {
   font-size: 13px;
   font-weight: 700;
@@ -7346,7 +7359,7 @@ body.theme-light {
 .wk-chip.is-active .wk-disc { background: var(--accent); border-color: var(--accent); }
 .wk-chip.is-active .wk-num { color: var(--accent-ink); }
 .wk-chip.is-active .wk-dow { color: var(--accent-text); }
-.wk-chip:active .wk-disc { transform: scale(.92); }
+.wk-chip:active .wk-disc { transform: scale(var(--press-scale)); }
 /* The dot row keeps its height when empty so the rail never jitters. */
 .wk-dots { display: flex; gap: 4px; height: 5px; align-items: center; }
 .wk-dot { width: 5px; height: 5px; border-radius: 50%; display: block; }
