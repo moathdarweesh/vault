@@ -12,7 +12,7 @@
 // build. The literal below is the fallback (file://, or a stripped query) and is
 // still bumped by `npm run release` — see CLAUDE.md "CACHE WORKFLOW".
 const VAULT_BUILD = (() => {
-  const FALLBACK = 'v343';
+  const FALLBACK = 'v344';
   try {
     const src = (document.currentScript && document.currentScript.src) || '';
     const m = src.match(/[?&]v=(\d+)/);
@@ -1653,6 +1653,12 @@ function navigate(view, context = {}, opts = {}) {
 // false if we're at the root (caller should exit the app). A modal — or the
 // auth gate — is dismissed first; otherwise we pop the nav history.
 function goBack() {
+  // ⚠️ THE VAULT DOOR IS NOT A SCREEN YOU CAN LEAVE. On the APK, Back at the
+  // root calls App.exitApp() — so a press during the 2.4s launch sequence QUIT
+  // THE APP, which is the one thing an impatient tap on a loading screen must
+  // never do. Swallowed while the door is up; the popstate handler re-pushes
+  // the entry, so the history depth is unchanged.
+  if (document.getElementById("splash")) return true;
   // A full-screen image lightbox lives on document.body (outside #modal-root),
   // so dismiss it first — otherwise "back" would navigate underneath it.
   const lb = document.querySelector('.img-lightbox');

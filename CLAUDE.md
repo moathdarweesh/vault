@@ -79,7 +79,7 @@ a faster TTFB — not fewer bytes.
 npm run release          # bump every marker + verify, then commit all files together
 ```
 
-**Current version: v343.** APK: build 22 / v3.1.
+**Current version: v344.** APK: build 22 / v3.1.
 
 `scripts/release.js` rewrites **every** marker and then re-reads them from disk to confirm; it exits non-zero if any disagree, and prints the count per file (derived, never hard-coded — the docs used to say 16 while the real count was 15). The markers are `?v=N` in `index.html` (every script and stylesheet, the `js/vendor/supabase.js` preload, both `icons/icon.svg` links, `manifest.json`), the `__cleaned_vN` sessionStorage key, the `FALLBACK` literal in `app.js`, `version.json` → `web`, the `?v=` in `manifest.json`, `admin.html`, `privacy.html` and `get/index.html`, and the `Current version` line in this file. `scripts/check-contracts.js` (pre-commit) refuses a commit where any of them disagree.
 
@@ -2508,6 +2508,14 @@ you, because in the design file there is nothing behind it.
 - **`performance.now()`, not `Date.now()`.** The wall clock can be corrected
   backwards mid-boot, and that clock decides both when the door MAY open and when
   it MUST.
+
+> ⚠️ **AND BACK QUIT THE APP.** On the APK, Back at the root screen calls
+> `App.exitApp()` — so a press during the 2.4-second launch sequence closed the
+> app outright, which is the one thing an impatient tap on what looks like a
+> loading screen must never do. `goBack()` swallows it while `#splash` is in the
+> DOM, and the popstate handler re-pushes the entry so the history depth is
+> unchanged. Proven on the running app: at root with no door `goBack()` returns
+> false (exit, as before); with the door up it returns true.
 
 **Two findings were deliberately not acted on, and the reasoning is the record:**
 
