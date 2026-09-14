@@ -79,7 +79,7 @@ a faster TTFB — not fewer bytes.
 npm run release          # bump every marker + verify, then commit all files together
 ```
 
-**Current version: v341.** APK: build 21 / v3.0.
+**Current version: v341.** APK: build 22 / v3.1.
 
 `scripts/release.js` rewrites **every** marker and then re-reads them from disk to confirm; it exits non-zero if any disagree, and prints the count per file (derived, never hard-coded — the docs used to say 16 while the real count was 15). The markers are `?v=N` in `index.html` (every script and stylesheet, the `js/vendor/supabase.js` preload, both `icons/icon.svg` links, `manifest.json`), the `__cleaned_vN` sessionStorage key, the `FALLBACK` literal in `app.js`, `version.json` → `web`, the `?v=` in `manifest.json`, `admin.html`, `privacy.html` and `get/index.html`, and the `Current version` line in this file. `scripts/check-contracts.js` (pre-commit) refuses a commit where any of them disagree.
 
@@ -2289,6 +2289,30 @@ three tests select `.modal-overlay:not(.is-out)`.
 
 **What the review refuted: 24 of 29.** The five that survived are above.
 
+
+## APK build 22 (v3.1) — the native half of v337–v341 reaches the phone
+
+Every web change since build 21 already reached installed devices on the next app open (the
+shell loads the live URL). **The fourteen splash images did not**: they are native assets
+baked into the APK, so until this build a phone still flashed the blue Capacitor ✕ on launch
+while the web splash it introduces played a different story one frame later.
+
+`versionCode 21 → 22`, `versionName "3.0" → "3.1"`, `version.json` → `apk.build: 22` /
+`apk.version: "3.1"` (contract 11 refuses a commit where those disagree), same debug
+certificate so it installs over build 21.
+
+**Verified by UNPACKING THE BUILT BINARY, never by checking a filename** — the rule v212 paid
+for three times:
+
+| read from the `.apk` | |
+|---|---|
+| `aapt2 dump badging` | `versionCode='22' versionName='3.1'`, minSdk 26, targetSdk 36 |
+| all **11** `res/*/splash.png` entries | PNG colour-type **2** — my RGB encoder, not the stock asset |
+| `aapt2 dump xmltree AndroidManifest.xml` | `android:allowBackup=false` survived, plus `POST_NOTIFICATIONS`, `RECEIVE_BOOT_COMPLETED`, `USE_EXACT_ALARM` |
+
+`npx cap sync android` warns that `@capacitor/core@8.5.1` is ahead of `@capacitor/android@8.4.1`.
+Benign, and left alone deliberately: no plugin or permission changed in this build, so the safe
+move before an APK is to change nothing else.
 
 ## Superpowers — and the two places this project deliberately departs from it
 
