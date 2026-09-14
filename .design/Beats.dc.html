@@ -1,0 +1,151 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@800&family=IBM+Plex+Sans+Arabic:wght@400;600;700&family=JetBrains+Mono:wght@500&display=swap">
+  <style>
+    body { margin: 0; background: #000000; }
+    a { color: #ff6a00; } a:hover { color: #ff8a30; }
+    .sheet { width: 1000px; padding: 34px 36px 38px; background: #000000; color: #fdfaf7;
+      font-family: 'IBM Plex Sans Arabic', system-ui, sans-serif; direction: rtl; }
+    .kick { font-family: 'JetBrains Mono', monospace; font-size: 11px; letter-spacing: .18em;
+      color: #ff6a00; direction: ltr; text-align: right; margin: 0 0 8px; }
+    h2 { font-size: 21px; margin: 0 0 6px; font-weight: 700; }
+    .sub { font-size: 13.5px; color: #b0a69e; margin: 0 0 26px; max-width: 72ch; line-height: 1.75; }
+    .sub b { color: #fdfaf7; font-weight: 600; }
+    .strip { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 15px; }
+    .cell { display: flex; flex-direction: column; gap: 9px; }
+    .fr { position: relative; aspect-ratio: 1 / 1.3; border: 1px solid #241c16; border-radius: 15px;
+      background: #000000; overflow: hidden; display: grid; place-items: center; }
+    .gl { position: absolute; left: 50%; top: 50%; width: 200%; height: 122%;
+      transform: translate(-50%, -50%);
+      background: radial-gradient(closest-side, rgba(255,138,48,.32) 0%, rgba(255,120,30,.18) 34%,
+        rgba(255,106,0,.06) 62%, rgba(255,106,0,0) 100%); }
+    .bs { display: flex; align-items: center; position: relative; z-index: 2; height: 58px; }
+    .b { width: 6px; border-radius: 3px; background: #6f6259; }
+    .wm { font-family: Archivo, sans-serif; font-weight: 800; letter-spacing: .2em; text-indent: .2em;
+      font-size: 17px; color: #fdfaf7; position: relative; z-index: 2; }
+    .ms { font-family: 'JetBrains Mono', monospace; font-size: 10px; color: #ff6a00;
+      direction: ltr; letter-spacing: .05em; }
+    .lb { font-size: 12.5px; font-weight: 700; margin-top: -4px; }
+    .mn { font-size: 11.5px; color: #9a8f86; line-height: 1.6; }
+    .key { margin-top: 30px; padding-top: 20px; border-top: 1px solid #241c16;
+      display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 22px; }
+    .kc h3 { font-size: 13.5px; margin: 0 0 5px; font-weight: 700; }
+    .kc p { margin: 0; font-size: 12.5px; color: #b0a69e; line-height: 1.7; }
+    .kc b { color: #fdfaf7; font-weight: 600; }
+  </style>
+</helmet>
+
+<div class="sheet">
+  <p class="kick">THE VAULT · SPLASH · BEATS</p>
+  <h2>خمس لحظات — والنموّ هو الرسالة</h2>
+  <p class="sub">
+    خمسة مزاليج متناظرة. لا يُضاف شكلٌ ولا يُستبدل — يمتدّ الأوسط أوّلًا، ثمّ يرتفع
+    جاراه، ثمّ الطرفان. <b>الانتقال من مسطّحةٍ خافتة إلى ممتدّةٍ مضيئة هو التطوّر نفسه</b>،
+    ولا يحتاج سُلَّمًا يشرحه.
+  </p>
+
+  <div class="strip">
+    <div class="cell">
+      <div class="fr">
+        <div class="gl" style="opacity:.10; transform:translate(-50%,-50%) scale(.58)"></div>
+        <div class="bs" style="gap:3px">
+          <span class="b" style="height:10px;opacity:.32"></span>
+          <span class="b" style="height:10px;opacity:.32"></span>
+          <span class="b" style="height:8px;width:8px;border-radius:4px;background:#ff6a00;opacity:.86"></span>
+          <span class="b" style="height:10px;opacity:.32"></span>
+          <span class="b" style="height:10px;opacity:.32"></span>
+        </div>
+      </div>
+      <span class="ms">0ms</span>
+      <span class="lb">مغلقة</span>
+      <span class="mn">متلاصقة، مسطّحة، بلا ضوء.</span>
+    </div>
+
+    <div class="cell">
+      <div class="fr">
+        <div class="gl" style="opacity:.5; transform:translate(-50%,-50%) scale(.84)"></div>
+        <div class="bs" style="gap:3px">
+          <span class="b" style="height:10px;opacity:.34"></span>
+          <span class="b" style="height:10px;opacity:.34"></span>
+          <span class="b" style="height:34px;width:8px;border-radius:4px;background:#ff6a00"></span>
+          <span class="b" style="height:10px;opacity:.34"></span>
+          <span class="b" style="height:10px;opacity:.34"></span>
+        </div>
+      </div>
+      <span class="ms">320ms</span>
+      <span class="lb">المزلاج يُرمى</span>
+      <span class="mn">الأوسط وحده يمتدّ. الخزنة <b>تُفتح</b> ولا تظهر مفتوحة.</span>
+    </div>
+
+    <div class="cell">
+      <div class="fr">
+        <div class="gl" style="opacity:.86"></div>
+        <div class="bs" style="gap:3px">
+          <span class="b" style="height:17px;opacity:.56"></span>
+          <span class="b" style="height:24px;opacity:.76"></span>
+          <span class="b" style="height:34px;width:8px;border-radius:4px;background:#ff6a00"></span>
+          <span class="b" style="height:24px;opacity:.76"></span>
+          <span class="b" style="height:17px;opacity:.56"></span>
+        </div>
+      </div>
+      <span class="ms">600ms</span>
+      <span class="lb">ترتفع من الداخل</span>
+      <span class="mn">الجاران ثمّ الطرفان — انفتاحٌ من المركز للخارج.</span>
+    </div>
+
+    <div class="cell">
+      <div class="fr">
+        <div class="gl" style="opacity:.94"></div>
+        <div class="bs" style="gap:12px">
+          <span class="b" style="height:17px;opacity:.26"></span>
+          <span class="b" style="height:24px;opacity:.32"></span>
+          <span class="b" style="height:34px;width:8px;border-radius:4px;background:#ff6a00;opacity:.38"></span>
+          <span class="b" style="height:24px;opacity:.32"></span>
+          <span class="b" style="height:17px;opacity:.26"></span>
+        </div>
+      </div>
+      <span class="ms">880ms</span>
+      <span class="lb">تنفرج</span>
+      <span class="mn">تتباعد وتخفت — تُخلي مكانها بدل أن تُزاح.</span>
+    </div>
+
+    <div class="cell">
+      <div class="fr">
+        <div class="gl" style="opacity:1"></div>
+        <div class="wm">VAULT</div>
+      </div>
+      <span class="ms">1030ms</span>
+      <span class="lb">الاسم</span>
+      <span class="mn">يحلّ محلّها. ثمّ ينفتح الباب والتطبيق واصلٌ خلفه.</span>
+    </div>
+  </div>
+
+  <div class="key">
+    <div class="kc">
+      <h3>الخزنة</h3>
+      <p>المزلاج الأوسط يُرمى أوّلًا، والباب ينفتح نصفين في النهاية. <b>الفتح فعلٌ لا حالة.</b></p>
+    </div>
+    <div class="kc">
+      <h3>الصحّة</h3>
+      <p>قضبانٌ مستديرة الأطراف على خطٍّ أفقيّ — <b>أقراصُ ثقلٍ على عمود</b>، وهو نفس شكل الأثقال في رأس تطبيقك.</p>
+    </div>
+    <div class="kc">
+      <h3>التطوّر</h3>
+      <p>من مسطّحةٍ خافتة إلى ممتدّةٍ مضيئة. <b>النموّ نفسه</b> — لا سُلَّم يشرحه ولا رمزٌ ثالث بجانبه.</p>
+    </div>
+  </div>
+</div>
+</x-dc>
+
+<script data-dc-script data-props='{ "$preview": { "width": 1000, "height": 700 } }'>
+class Component extends DCLogic {}
+</script>
+</body>
+</html>

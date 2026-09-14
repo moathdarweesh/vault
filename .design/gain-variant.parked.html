@@ -1,0 +1,232 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@800&display=swap">
+  <style>
+    body { margin: 0; background: #000000; }
+    a { color: #ff6a00; } a:hover { color: #ff8a30; }
+
+    /* ── ONE CLOCK ─────────────────────────────────────────────
+       Everything below is ONE looping timeline on --cycle, with every
+       beat written as a percentage of it. The earlier version gave each
+       element its own ms delay with `both` fill and no repeat, so the
+       whole thing played once and then FROZE on the final frame — which
+       reads as a hang, not as an ending.
+
+       The real sequence is the first ~57%. The rest is the held app,
+       then a fade to black from 88%, so the reset that follows happens
+       while nothing is visible and the loop has no visible seam.
+       ────────────────────────────────────────────────────────── */
+    .stage { position: relative; width: 390px; height: 844px; overflow: hidden; background: #000000;
+      animation: cycleFade var(--cycle) linear infinite both; }
+    @keyframes cycleFade {
+      0% { opacity: 0; } 1.6% { opacity: 1; } 88% { opacity: 1; }
+      95% { opacity: 0; } 100% { opacity: 0; }
+    }
+
+    /* the app is already arriving behind the door — never a black gap */
+    .behind { position: absolute; inset: 0; background: #000000; padding: 18px; z-index: 1;
+      animation: appIn var(--cycle) linear infinite both; }
+    @keyframes appIn {
+      0%, 40.5% { opacity: 0; } 48% { opacity: 1; } 95% { opacity: 1; } 100% { opacity: 0; }
+    }
+    .bc { background: #0d0a07; border: 1px solid #241c16; border-radius: 16px; height: 62px;
+      margin-bottom: 11px; opacity: 0;
+      animation-duration: var(--cycle); animation-iteration-count: infinite; animation-fill-mode: both; }
+    .bc.tall { height: 98px; }
+    /* each card has its own entry window inside the one cycle */
+    .bc:nth-child(1) { animation-name: card1; }
+    .bc:nth-child(2) { animation-name: card2; }
+    .bc:nth-child(3) { animation-name: card3; }
+    .bc:nth-child(4) { animation-name: card4; }
+    @keyframes card1 {
+      0%, 41.4% { opacity: 0; transform: translateY(24px); animation-timing-function: cubic-bezier(.33,1,.68,1); }
+      51.4%, 95% { opacity: 1; transform: none; }
+      100% { opacity: 0; transform: translateY(24px); }
+    }
+    @keyframes card2 {
+      0%, 44.8% { opacity: 0; transform: translateY(24px); animation-timing-function: cubic-bezier(.33,1,.68,1); }
+      54.8%, 95% { opacity: 1; transform: none; }
+      100% { opacity: 0; transform: translateY(24px); }
+    }
+    @keyframes card3 {
+      0%, 48.1% { opacity: 0; transform: translateY(24px); animation-timing-function: cubic-bezier(.33,1,.68,1); }
+      58.1%, 95% { opacity: 1; transform: none; }
+      100% { opacity: 0; transform: translateY(24px); }
+    }
+    @keyframes card4 {
+      0%, 51.4% { opacity: 0; transform: translateY(24px); animation-timing-function: cubic-bezier(.33,1,.68,1); }
+      61.4%, 95% { opacity: 1; transform: none; }
+      100% { opacity: 0; transform: translateY(24px); }
+    }
+
+    /* ⚠️ The light lives INSIDE each door leaf. At stage level it sat under
+       `.leaf`, which is OPAQUE BLACK at a higher z-index — so the bloom was
+       completely hidden and only a hairline leaked through the seam. Being
+       inside the leaf is also what it means: the light is BEHIND the door, so
+       it travels with the door and is cut at the same seam as the mark. */
+    .bloom { position: absolute; left: 50%; top: 50%; width: 720px; height: 460px; z-index: 0;
+      pointer-events: none; animation: bloom var(--cycle) infinite both;
+      background: radial-gradient(closest-side,
+        rgba(255,138,48,.46) 0%, rgba(255,124,32,.28) 32%,
+        rgba(255,106,0,.10) 60%, rgba(255,106,0,0) 100%); }
+    @keyframes bloom {
+      0%    { opacity: 0;   transform: translate(-50%,-50%) scale(.66); animation-timing-function: cubic-bezier(.33,1,.68,1); }
+      8%    { opacity: .46; transform: translate(-50%,-50%) scale(.84); }
+      16.7% { opacity: 1;   transform: translate(-50%,-50%) scale(1); }
+      /* the light draws breath with the gain — dips, then surges past where it was */
+      21.4% { opacity: .84; transform: translate(-50%,-50%) scale(.99); }
+      27.5% { opacity: 1;   transform: translate(-50%,-50%) scale(1.07); }
+      40.5% { opacity: 1;   transform: translate(-50%,-50%) scale(1.05); }
+      52%   { opacity: 0;   transform: translate(-50%,-50%) scale(1.05); }
+      100%  { opacity: 0;   transform: translate(-50%,-50%) scale(.66); }
+    }
+
+    /* two door leaves, each carrying the mark, cut at the seam */
+    .leaf { position: absolute; left: 0; width: 100%; overflow: hidden; background: #000000; z-index: 3; }
+    /* Half a pixel of OVERLAP. The two leaves are flush at 50%/50%, which is
+       exact only when the stage height is an even number of device pixels —
+       at any fractional scale or DPR the join renders as a visible hairline
+       across the middle of the light. The overlap is hidden by the leaf above. */
+.leafT { top: 0; height: calc(50% + 0.5px); animation: swingUp var(--cycle) infinite both; }
+    .leafB { top: 50%; height: 50%; animation: swingDn var(--cycle) infinite both; }
+    @keyframes swingUp {
+      0%, 40.5% { transform: translateY(0); animation-timing-function: cubic-bezier(.76,0,.24,1); }
+      57.1%, 95% { transform: translateY(-100%); }
+      100% { transform: translateY(0); }
+    }
+    @keyframes swingDn {
+      0%, 40.5% { transform: translateY(0); animation-timing-function: cubic-bezier(.76,0,.24,1); }
+      57.1%, 95% { transform: translateY(100%); }
+      100% { transform: translateY(0); }
+    }
+    .face { position: absolute; left: 0; width: 100%; height: 200%; display: grid; place-items: center; }
+    .face > .mark { position: relative; z-index: 1; display: grid; place-items: center; }
+    .leafT .face { top: 0; }
+    .leafB .face { top: -100%; }
+
+    /* ── THE BOLTS — symmetric, as in the reference.
+       The growth IS the progression: flat and dim, then extended and lit. */
+    .bolts { display: flex; align-items: center; height: 124px;
+      animation: partOut var(--cycle) infinite both; }
+    @keyframes partOut {
+      0%, 31% { gap: 6px; opacity: 1; transform: scale(1); animation-timing-function: cubic-bezier(.76,0,.24,1); }
+      34%     { gap: 13px; opacity: 1; }
+      39.3%   { gap: 22px; opacity: 0; transform: scale(1.12); }
+      95%     { gap: 22px; opacity: 0; transform: scale(1.12); }
+      100%    { gap: 6px; opacity: 1; transform: scale(1); }
+    }
+
+    .bolt { width: 11px; border-radius: 5px; background: #6f6259; height: 18px; opacity: .36; }
+
+    /* the middle bolt throws first — the lock, before anything else */
+    .mid { background: #ff6a00; width: 14px; border-radius: 7px;
+      animation: throwBolt var(--cycle) infinite both; }
+    @keyframes throwBolt {
+      0%    { height: 12px; opacity: .88; animation-timing-function: cubic-bezier(.33,1,.68,1); }
+      4%    { opacity: 1; }
+      7.6%  { height: 86px; opacity: 1; }
+      /* THE GAIN — the open lock grows ONCE more, all five together. Symmetric,
+         so it never becomes the ascending staircase that was rejected; the
+         progression is in the GROWTH, which is what the app is actually about. */
+      21.4% { height: 86px; animation-timing-function: cubic-bezier(.34,1.56,.64,1); }
+      26.7% { height: 101px; }
+      95%   { height: 101px; opacity: 1; }
+      100%  { height: 12px; opacity: .88; }
+    }
+
+    /* then the pairs rise, inner first then outer — symmetric, outward */
+    .n2, .n4 { animation: riseIn var(--cycle) infinite both; }
+    .n1, .n5 { animation: riseOut var(--cycle) infinite both; }
+    @keyframes riseIn {
+      0%, 6.2% { height: 18px; opacity: .36; animation-timing-function: cubic-bezier(.34,1.56,.64,1); }
+      14.3% { height: 58px; opacity: .78; }
+      21.4% { height: 58px; opacity: .78; animation-timing-function: cubic-bezier(.34,1.56,.64,1); }
+      26.7%, 95% { height: 68px; opacity: .88; }
+      100% { height: 18px; opacity: .36; }
+    }
+    @keyframes riseOut {
+      0%, 8.1% { height: 18px; opacity: .36; animation-timing-function: cubic-bezier(.34,1.56,.64,1); }
+      16.2% { height: 40px; opacity: .58; }
+      21.4% { height: 40px; opacity: .58; animation-timing-function: cubic-bezier(.34,1.56,.64,1); }
+      26.7%, 95% { height: 47px; opacity: .70; }
+      100% { height: 18px; opacity: .36; }
+    }
+
+    /* the bolts hand over — the same thing BECOMES the name */
+    .word { position: absolute; font-family: Archivo, sans-serif; font-weight: 800;
+      letter-spacing: .2em; text-indent: .2em; font-size: 38px; line-height: 1; color: #fdfaf7;
+      white-space: nowrap; animation: nameIn var(--cycle) infinite both; }
+    @keyframes nameIn {
+      /* The name starts only once the bolts have FINISHED leaving (39.3%).
+         They overlapped for 189ms before, and because both sit in the same
+         place at partial opacity it read as a double exposure, not a handover.
+         A handover needs the first thing to be gone. */
+      0%, 39.3% { opacity: 0; transform: scale(.94); animation-timing-function: cubic-bezier(.33,1,.68,1); }
+      49%, 95% { opacity: 1; transform: scale(1); }
+      100% { opacity: 0; transform: scale(.94); }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      .stage, .stage * { animation: none !important; }
+      .bolts { gap: 22px; opacity: 0; }
+      .word { opacity: 1; }
+      .bloom { opacity: 1; }
+    }
+  </style>
+</helmet>
+
+<div class="stage" style="--cycle: {{cycle}};">
+  <div class="behind">
+    <div class="bc tall"></div><div class="bc"></div><div class="bc"></div><div class="bc"></div>
+  </div>
+
+  <div class="leaf leafT"><div class="face">
+    <div class="bloom"></div>
+    <div class="mark">
+      <div class="bolts">
+        <span class="bolt n1"></span><span class="bolt n2"></span>
+        <span class="bolt mid"></span>
+        <span class="bolt n4"></span><span class="bolt n5"></span>
+      </div>
+      <div class="word">VAULT</div>
+    </div>
+  </div></div>
+
+  <div class="leaf leafB"><div class="face">
+    <div class="bloom"></div>
+    <div class="mark">
+      <div class="bolts">
+        <span class="bolt n1"></span><span class="bolt n2"></span>
+        <span class="bolt mid"></span>
+        <span class="bolt n4"></span><span class="bolt n5"></span>
+      </div>
+      <div class="word">VAULT</div>
+    </div>
+  </div></div>
+</div>
+</x-dc>
+
+<script data-dc-script data-props='{
+  "$preview": { "width": 390, "height": 844 },
+  "pace": { "editor": "enum", "options": ["حقيقي", "بطيء ×2", "بطيء ×4"], "default": "حقيقي", "section": "الحركة" }
+}'>
+class Component extends DCLogic {
+  renderVals() {
+    const mult = { 'حقيقي': 1, 'بطيء ×2': 2, 'بطيء ×4': 4 }[this.props.pace ?? 'حقيقي'] ?? 1;
+    // 4200ms. The bolts now STAND OPEN for 620ms before they part — that pause is
+    // the whole point: an open lock you never see is a transition, not a state.
+    // held, then a fade to black so the loop restarts unseen. In the real app
+    // the splash plays ONCE — the loop exists only so this preview can be watched.
+    return { cycle: (4200 * mult) + 'ms' };
+  }
+}
+</script>
+</body>
+</html>
