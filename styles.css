@@ -206,8 +206,31 @@
   --chip-fs:     var(--fs-sub);
   --chip-radius: var(--radius-pill);
 
-  /* Motion */
-  --dur-press: 120ms;
+  /* Motion — APPLY-motion.md §0.
+     THE RULE ABOVE ALL OTHERS: motion EXPLAINS, it does not decorate. Every
+     duration and curve in this file comes from a token; a literal ms value in
+     a transition or animation is a defect.
+
+     Two generations live here on purpose. --dur/--dur-slow/--ease predate the
+     spec and are still read by 31 declarations; --dur-press is EXACTLY the
+     spec's tap duration, so it is now an ALIAS rather than a rival value —
+     one number, two names, and it cannot drift. The rest are new. */
+  --ease-out:   cubic-bezier(.33, 1, .68, 1);      /* easeOutCubic  — entrances */
+  --ease-inout: cubic-bezier(.76, 0, .24, 1);      /* easeInOutQuart — slides and opens */
+  --ease-back:  cubic-bezier(.34, 1.56, .64, 1);   /* easeOutBack   — press return, pulses */
+  --dur-tap:   120ms;
+  --dur-fast:  260ms;
+  --dur-base:  400ms;
+  --dur-slide: 500ms;
+  --dur-open:  700ms;
+  /* The stagger step is a TOKEN and not the spec's literal 140ms, because the
+     global reduced-motion clamp below flattens animation-DURATION and never
+     animation-DELAY. Left as a literal, a reduced-motion user would still wait
+     6 x 140ms = 840ms for a list to finish appearing, each item snapping in at
+     0.01ms — motion removed, but the WAIT kept, which is the worse half. */
+  --stagger:   140ms;
+
+  --dur-press: var(--dur-tap);   /* alias — the same 120ms under its older name */
   --dur:       200ms;
   --dur-slow:  300ms;
   --ease:      cubic-bezier(0.2, 0.8, 0.2, 1);
@@ -425,9 +448,7 @@ body { --accent-text: var(--accent); }
    RTL (Arabic) support
    ========================================================================= */
 
-body[dir="rtl"] .back-btn svg,
-body[dir="rtl"] .exercise-chev svg,
-body[dir="rtl"] .cta-card-chev svg {
+body[dir="rtl"] .back-btn svg {
   transform: scaleX(-1);
 }
 
@@ -1332,7 +1353,7 @@ body.theme-light input[type="date"], body.theme-light input[type="time"] { color
   aspect-ratio: 1 / 1;
   display: block;
   width: 100%;
-  /* `start` for the same reason as .cta-card above. A child override existed
+  /* `start`, never `left`: the row must align to its own direction. A child override existed
      (.bento-card-content) but the CARD itself still forced left, so anything
      outside that child — the name tag, the added stripe's text — was
      mis-aligned in Arabic. */
@@ -3871,6 +3892,7 @@ body[dir="rtl"] .calendar-nav-btn svg { transform: scaleX(-1); }
   align-items: center;
   justify-content: center;
   color: transparent;
+  --icon-accent: transparent;   /* a duotone glyph has TWO masses; `color` hides only one */
 }
 .picker-row.picked .picker-row-check {
   background: var(--accent);
@@ -4458,28 +4480,6 @@ button.bundle-main {
   justify-content: center;
 }
 
-.bundle-pick { display: flex; flex-direction: column; gap: 6px; max-height: 40vh; overflow-y: auto; }
-.bundle-pick-row {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 9px 10px;
-  border: 1px solid var(--border);
-  border-radius: 12px;
-  background: var(--surface-2);
-}
-.bundle-pick-row input[type="checkbox"] { width: 18px; height: 18px; accent-color: var(--accent); }
-.bundle-pick-name {
-  flex: 1;
-  min-width: 0;
-  font-size: 13px;
-  font-weight: 700;
-  color: var(--text);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.bundle-pick-kcal { font-size: 12px; font-weight: 700; color: var(--text-dim); }
 
 .ai-input-row input {
   width: 100%; padding: 12px 14px; border-radius: 12px;
@@ -5639,6 +5639,7 @@ body[dir="rtl"] .bento-card.wide .bento-added-stripe { left: 14px; }
   justify-content: center;
   border: 2px solid var(--border-hi);
   color: transparent;
+  --icon-accent: transparent;   /* same as .picker-row-check — hide BOTH masses */
   background: transparent;
 }
 .health-card-toggle.on {
@@ -5919,7 +5920,7 @@ body[dir="rtl"] .bento-card.wide .bento-added-stripe { left: 14px; }
    the page background. Each of them relies on this block for its surface, so
    none double-declares one. */
 .card, .bento-card, .session-card, .data-row,
-.compare-card, .muscle-heatmap, .cta-card {
+.compare-card, .muscle-heatmap {
   background: var(--card-bg);
   border: var(--card-border);
   border-radius: var(--card-radius);
@@ -5931,7 +5932,7 @@ body[dir="rtl"] .bento-card.wide .bento-added-stripe { left: 14px; }
 /* Unified padding — image-full .bento-card is intentionally excluded.
    `.card` is NOT here: its consumers each set their own padding, and adding it
    would double the inset on every one of them. */
-.compare-card, .muscle-heatmap, .cta-card {
+.compare-card, .muscle-heatmap {
   padding: var(--card-pad);
 }
 .data-row, .session-card {
@@ -5942,7 +5943,7 @@ body[dir="rtl"] .bento-card.wide .bento-added-stripe { left: 14px; }
 .nav-btn:active, .btn:active,
 .session-card:active, .heat-cell:active,
 .calendar-cell:active, .bento-card:active, .compare-card:active,
-.cta-card:active, .filter-pill:active, .settings-action-row:active {
+.filter-pill:active, .settings-action-row:active {
   transform: scale(var(--press-scale));
 }
 /* Session-day card: feedback on the real tap targets (name → history,
@@ -5955,11 +5956,10 @@ body[dir="rtl"] .bento-card.wide .bento-added-stripe { left: 14px; }
 .sd-thumb-zoom:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 
 .bento-card:active,
-.compare-card:active, .cta-card:active, .session-card:active {
+.compare-card:active, .session-card:active {
   border-color: var(--border-hi);
 }
 
-@keyframes shimmer { to { transform: translateX(100%); } }
 
 /* =========================================================================
    HOME v2 (Athletic Premium, v78)
@@ -6321,10 +6321,25 @@ body[data-view="food"] .food-fab { display: inline-flex; }
 
 /* --- Respect reduced-motion preferences (accessibility) --- */
 @media (prefers-reduced-motion: reduce) {
+  /* APPLY-motion.md §0 zeroes the duration tokens. That alone is not enough:
+     the clamp below already flattens every duration, but a token set to 0ms is
+     what makes any code that READS one (a JS timeout waiting for a transition,
+     a calc() built from it) agree with what the user actually sees. */
+  :root {
+    --dur-tap: 0ms; --dur-fast: 0ms; --dur-base: 0ms;
+    --dur-slide: 0ms; --dur-open: 0ms;
+    --dur: 0ms; --dur-slow: 0ms;
+    --stagger: 0ms;   /* the delay the clamp cannot reach — see the note at :root */
+  }
   *, *::before, *::after {
     animation-duration: 0.01ms !important;
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
+    /* A stagger is expressed as a DELAY, and the two lines above never touch it.
+       Without this, content still arrives late for exactly the user who asked
+       for less motion. */
+    animation-delay: 0ms !important;
+    transition-delay: 0ms !important;
   }
 }
 
@@ -7084,8 +7099,7 @@ body[dir="rtl"] .ntfs-switch.on .ntfs-knob { transform: translateX(-18px); }
      because they mean different things: --gold is the streak's colour, --warn
      is the warning that uses it. */
   --warn: #e0b341;
-  --accent-dim: #2a1a0c;     /* the split's quiet half, against a black page */
-  --accent-quiet: #c9a888;   /* its label */
+
   /* Water is the one card that is deliberately NOT accent-coloured — it reads
      as water. It shipped as two raw blues with no light-mode counterpart, so on
      the bone ground the droplet that identifies the card measured ~2.1:1 and
@@ -7107,8 +7121,7 @@ body[dir="rtl"] .ntfs-switch.on .ntfs-knob { transform: translateX(-18px); }
 body.theme-light {
   --gold: #7a5a05;
   --warn: #8a5a00;   /* the handoff's light value, verbatim */
-  --accent-dim: var(--surface-3);
-  --accent-quiet: var(--text-mute);
+
   --water: #0369a1;
   --water-2: #075985;
   --carb: #a21caf;
@@ -8097,7 +8110,7 @@ body.ember-on .ember {
 body { --card-border: 0; }
 
 .card,
-.data-row, .session-card, .cta-card, .compare-card,
+.data-row, .session-card, .compare-card,
 .muscle-heatmap, .rot-slot, .ms-card, .last-set-card, .sleep-detail,
 .nutri-hero, .hero-card, .stat-cell, .tool-pod {
   border: 0;
@@ -8130,7 +8143,7 @@ body { --card-border: 0; }
 .bento-add::after { content: none; }
 
 /* Those rules transitioned border-color, which is now a no-op. */
-.cta-card, .compare-card {
+.compare-card {
   transition: transform var(--dur-press) var(--ease), box-shadow var(--dur) var(--ease);
 }
 
@@ -8257,7 +8270,17 @@ body { --icon-accent: var(--accent-text); }
    leg of the duotone check was painted orange on orange and the tick rendered as
    a bare diagonal slash. Live in Supplements since that toggle shipped; scheduled
    cardio reuses the control, which is how it finally surfaced. */
-.home-center-icon, .hero-cta, .btn-primary, .food-fab, .nutri-setup-icon, .supp-toggle.taken {
+/* Re-derived by MEASUREMENT, not by reading this list: every container that
+   paints a solid --accent fill was rendered with a duotone glyph inside it and
+   its accent leg compared against its own background. Five more were painting
+   orange on orange — the identical v315 failure that made .supp-toggle.taken
+   render as a bare diagonal slash — and one of them, .run-set-done.done, is the
+   tick the user touches on EVERY SET of every workout.
+   The list is the authority: add the selector HERE, never --icon-accent on the
+   component rule, or the next person has two places to check. */
+.home-center-icon, .hero-cta, .btn-primary, .food-fab, .nutri-setup-icon, .supp-toggle.taken,
+.run-set-done.done, .sd-status-pill, .bento-pr, .health-card-toggle.on,
+.picker-row.picked .picker-row-check {
   --icon-accent: currentColor;
 }
 

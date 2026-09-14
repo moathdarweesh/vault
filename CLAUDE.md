@@ -79,7 +79,7 @@ a faster TTFB — not fewer bytes.
 npm run release          # bump every marker + verify, then commit all files together
 ```
 
-**Current version: v336.** APK: build 21 / v3.0.
+**Current version: v337.** APK: build 21 / v3.0.
 
 `scripts/release.js` rewrites **every** marker and then re-reads them from disk to confirm; it exits non-zero if any disagree, and prints the count per file (derived, never hard-coded — the docs used to say 16 while the real count was 15). The markers are `?v=N` in `index.html` (every script and stylesheet, the `js/vendor/supabase.js` preload, both `icons/icon.svg` links, `manifest.json`), the `__cleaned_vN` sessionStorage key, the `FALLBACK` literal in `app.js`, `version.json` → `web`, the `?v=` in `manifest.json`, `admin.html`, `privacy.html` and `get/index.html`, and the `Current version` line in this file. `scripts/check-contracts.js` (pre-commit) refuses a commit where any of them disagree.
 
@@ -2004,6 +2004,77 @@ this file records — the conclusion is unchanged (it can only read in the gutte
 was wrong. A real tab switch was also measured to fire **zero** `focusout` events, which is why
 the new listener needs no `document.hasFocus()` guard; adding one would have been a dead line
 with a false comment attached, which this project has reverted before.
+## v337 — the motion tokens, and five ticks that were painting orange on orange
+
+Two jobs in one release: the foundation of `APPLY-motion.md` (§0 only — the rest waits on an
+owner decision), and the confirmed findings of a 314-agent audit for surviving old-design remnants.
+
+### §0 — the motion tokens, plus the gap the spec left open
+
+`--ease-out/-inout/-back` and `--dur-tap/fast/base/slide/open` are in `:root`. Two decisions:
+
+- **`--dur-press` became an ALIAS (`var(--dur-tap)`), not a rival.** It was already exactly 120ms and
+  31 declarations read it. One number, two names, and it cannot drift.
+- ⚠️ **A STAGGER IS A DELAY, AND THE GLOBAL REDUCED-MOTION CLAMP NEVER TOUCHED DELAYS.** The clamp
+  flattens `animation-duration` and `transition-duration` only. §2's stagger is
+  `animation-delay: calc(var(--i) * 140ms)`, so left as a literal a reduced-motion user would still
+  wait 6 x 140 = 840ms for a list to finish arriving, each item snapping in at 0.01ms — the motion
+  removed and the WAIT kept, which is the worse half. The step is a token (`--stagger`) zeroed with
+  the rest, and the clamp now names `animation-delay` and `transition-delay` explicitly.
+
+**Measured before touching anything:** §4 (the message bar) was ALREADY implemented to the letter —
+`0.14`, `240`, `170`, `0.15`, `90`, `460`, `56` are all live in `.ntf-bar`, from an earlier spec. And
+the spec disagrees with the code in three places: the nav has FIVE tabs not four; the "indicator" is a
+per-button 32x32 `--accent-soft` pill that cannot slide, not a dash; and no splash screen exists.
+
+> ⚠️ **§3 CONTRADICTS §6 OF ITS OWN SPEC.** §3 slides the `.view` for 500ms; `.bottom-nav` carries
+> `backdrop-filter: blur(24px) saturate(180%)` and samples exactly that view. `js/app.js:12376` already
+> states the mechanism in this codebase's own words — a moving backdrop makes the compositor
+> re-rasterise every frame, which is why THE EMBER refuses to run behind a modal overlay — and v297
+> deleted every per-card `backdrop-filter` for the same reason. §6 forbids animated blur. Unresolved.
+
+### The icon colour law, re-derived by MEASUREMENT
+
+v315 found `.supp-toggle.taken` missing from the `--icon-accent: currentColor` list and shipping a tick
+as a bare diagonal slash. That list was never re-derived — it was only patched. Doing it properly
+(render a duotone glyph in each accent-filled container, compare its accent leg to its own background)
+found **five more**:
+
+| | background | accent leg |
+|---|---|---|
+| `.run-set-done.done` | `rgb(255,106,0)` | `rgb(255,106,0)` |
+| `.sd-status-pill` | `rgb(255,106,0)` | `rgb(255,106,0)` |
+| `.bento-pr` | `rgb(255,106,0)` | `rgb(255,106,0)` |
+| `.health-card-toggle.on` | `rgb(255,106,0)` | `rgb(255,106,0)` |
+| `.supp-toggle.taken` (the v315 fix, as control) | `rgb(255,106,0)` | one mass only ✓ |
+
+**`.run-set-done.done` is the tick you touch on every set of every workout**, and it has been half
+invisible since the duotone set landed. The control case is what proves the method: a correct container
+renders ONE fill colour.
+
+> ⚠️ **`color: transparent` HID A GLYPH ONLY WHILE THE SET WAS STROKED.** `.picker-row-check` and
+> `.health-card-toggle` use it for their unchecked state — a v202 idiom. Since v211 a glyph has TWO
+> masses and the second is driven by `--icon-accent`, so an orange mark sat inside a box the user reads
+> as empty. Both now set `--icon-accent: transparent` beside it.
+
+All five went into the identity layer's list, never onto the component rule: **the list is the
+authority, or the next person has two places to check.**
+
+### Dead weight removed
+
+`.bundle-pick` (v312), `.cta-card` in six grouped lists, `.exercise-chev`/`.cta-card-chev` in the RTL
+flip, `@keyframes shimmer`, `--accent-dim`/`--accent-quiet` (the v218 split bar), and the
+`cardio-settled` class still shipping on every settled row with zero rules behind it (v325).
+**styles.css 8340 -> 8313 lines.** `privacy.html` also still shipped a STROKED arrow at
+`stroke-width="2.4"` — literally the old hard-coded nav width v211 removed — now the duotone `back`
+master.
+
+> ⚠️ **`www/` AND `android/.../assets/public/` ARE BUILD ARTIFACTS AND MUST NOT COUNT AS USAGE.** A
+> deadness grep across the whole tree reported `.bundle-pick` as alive with 8 references; every one was
+> in a stale build copy. Scope the check to `js/*.js` plus the four HTML pages, or a dead class looks
+> load-bearing.
+
+
 ## Superpowers — and the two places this project deliberately departs from it
 
 The [superpowers](https://github.com/obra/superpowers) methodology (14 skills) is

@@ -12,7 +12,7 @@
 // build. The literal below is the fallback (file://, or a stripped query) and is
 // still bumped by `npm run release` — see CLAUDE.md "CACHE WORKFLOW".
 const VAULT_BUILD = (() => {
-  const FALLBACK = 'v336';
+  const FALLBACK = 'v337';
   try {
     const src = (document.currentScript && document.currentScript.src) || '';
     const m = src.match(/[?&]v=(\d+)/);
@@ -2232,7 +2232,7 @@ function renderHome(el) {
     const settledHtml = (r) => {
       const tm = resolveCardioType(r.type);
       return `
-      <div class="data-row is-done cardio-settled">
+      <div class="data-row is-done">
         <div class="data-icon ${tm.cls}" aria-hidden="true">${icon(tm.iconName, 20)}</div>
         <div class="data-main">
           <div class="data-title">${escapeHtml(tm.label)}</div>
