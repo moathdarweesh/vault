@@ -79,7 +79,7 @@ a faster TTFB — not fewer bytes.
 npm run release          # bump every marker + verify, then commit all files together
 ```
 
-**Current version: v341.** APK: build 22 / v3.1.
+**Current version: v342.** APK: build 22 / v3.1.
 
 `scripts/release.js` rewrites **every** marker and then re-reads them from disk to confirm; it exits non-zero if any disagree, and prints the count per file (derived, never hard-coded — the docs used to say 16 while the real count was 15). The markers are `?v=N` in `index.html` (every script and stylesheet, the `js/vendor/supabase.js` preload, both `icons/icon.svg` links, `manifest.json`), the `__cleaned_vN` sessionStorage key, the `FALLBACK` literal in `app.js`, `version.json` → `web`, the `?v=` in `manifest.json`, `admin.html`, `privacy.html` and `get/index.html`, and the `Current version` line in this file. `scripts/check-contracts.js` (pre-commit) refuses a commit where any of them disagree.
 
@@ -2289,6 +2289,183 @@ three tests select `.modal-overlay:not(.is-out)`.
 
 **What the review refuted: 24 of 29.** The five that survived are above.
 
+
+## v342 — the door exists now, and the transition stops leaving a trace
+
+### 1. «بيضل فيه أثر من الصفحة الأولى» — and he was reading it exactly right
+
+Measured mid-slide (t=300 of 500) before touching anything:
+
+| | position | z-index | opacity | background |
+|---|---|---|---|---|
+| the view being LEFT | `fixed` | **1** | **0.7** | transparent |
+| the view being OPENED | `static` | **auto (0)** | 1 | **transparent** |
+
+So the screen you were leaving was composited **on top of** the screen you were
+opening, at 70%, over a transparent arrival — two screens superimposed for half a
+second. v340 built the ghost to keep the outgoing view visible while the two
+overlapped, and never asked what it would be drawn *over*.
+
+Stacking the ghost underneath an opaque arrival is the iOS answer and was the
+other candidate. The instruction was «دون أثر الصفحة التي قبل الانتقال», so the
+ghost is **deleted, not re-ordered**: `.view.vlt-ghost`, `@keyframes
+vlt-slide-out`, the `position:fixed` pin, the rectangle read, and every
+`from`-side line in `switchTab`. Only the arriving screen moves, over the app's
+own `--bg-grad`.
+
+> **What the deletion buys is worth more than what it fixes.** With nothing
+> pinned there is no rectangle to read, no inline geometry to restore, and no
+> cleanup that can be abandoned — so **the v341 stranded-ghost class of bug has
+> no surface left to happen on.** Verified: three bottom-nav taps 80ms apart
+> leave zero ghost nodes, zero `position:fixed` views and exactly one displayed
+> view; the arriving view is transparent-backed on purpose, so no flat-vs-radial
+> seam travels with the slide.
+
+### 2. ⚠️ THE SECOND DEFECT, FOUND WHILE MEASURING THE FIRST
+
+After the slide settled, the **arrived** view measured `opacity: 0; transform:
+translateY(8px)` — `fadeUp` at its first frame, 640ms after the slide began.
+
+`.view` carried `animation: fadeUp`, and `.view.vlt-in` overrides that shorthand.
+So when the cleanup removed `.vlt-in`, the computed animation-name changed
+`vlt-slide-in` → `fadeUp`, **and a changed animation-name starts a new
+animation.** Every tab switch was followed, a third of a second after it landed,
+by the same screen fading out to nothing and back over 200ms. It is v341's
+`.dragging` lesson in a second place: **a class removal is not a neutral act.**
+
+`fadeUp` had exactly one consumer in the whole stylesheet — `.view` itself — and
+two later mechanisms had made it redundant: a tab arrival is `vlt-slide-in`, and
+every other arrival is the child stagger `navigate()` arms. It was a third
+entrance running on top of both. Deleted. Safe by construction: `vlt-slide-in`
+already ends at `transform: none`, so losing the declaration reverts the element
+to the state it was already holding. Measured after: opacity 1, transform none,
+**zero animations**, no leftover `style` attribute.
+
+### 3. THE SPLASH — the vault door, from the canvas into the app
+
+«السبلاش مش موجود» — correct, and it had never existed. v340 replaced the
+fourteen **native** launch images (the Android window background and the iOS
+launch asset) and CLAUDE.md said so, but the *web* splash was only ever a design
+file. `grep splash` over the shipped app returned nothing but `brandLockup('splash')`,
+which is a font SIZE.
+
+`.design/Main.dc.html` is a **looping** canvas piece on a 4200ms `--cycle`. A
+one-shot is not that file pasted in. Converted, the authored percentages turn out
+to be a 10ms grid in disguise (39.3% × 4200 = 1650.6; the author meant 1650):
+
+| ms | beat |
+|---|---|
+| 0 → 320 | the middle bolt throws, 12 → 86 units — the lock, before anything else |
+| 260 → 600 | the inner pair rises, 18 → 58 |
+| 340 → 680 | the outer pair rises, 18 → 40 |
+| 0 → 700 | the light blooms behind the door |
+| **680 → 1300** | **the dwell** — the author's own note: an open lock you never see is a transition, not a state |
+| 1300 → 1650 | the bolts part and fade: the hand-over |
+| 1650 → 2060 | **VAULT** fades in where they were |
+| 1700 → 2400 | the two leaves swing apart and the app is there |
+
+**Four families of keyframes exist only so the loop has no seam, and two of them
+are actively dangerous here:**
+
+> ⚠️ **`cycleFade` starts the stage at `opacity: 0` and lights it at 1.6% = 67ms.**
+> Android paints the PNG as the window background and the web splash takes over
+> from 0ms — so a verbatim copy **dips the handover to black and re-lights it**.
+> Dropped: this splash is at full opacity in frame 1.
+> ⚠️ **Every `100%` keyframe resets to frame 0** for the loop. The app's global
+> reduced-motion clamp forces every animation onto its LAST keyframe in 0.01ms,
+> so pasting the resets would hand a reduced-motion user a **closed door with the
+> app sealed behind it, permanently.** Dropped — and the splash is not mounted at
+> all under reduced motion, with a `display:none` media query as the brace.
+
+Also dropped: `.behind`, the design's four placeholder cards. The real UI is
+behind this door.
+
+#### FRAME 0 IS A CONTRACT WITH FOURTEEN SHIPPED PNGs
+
+Those images are already on phones and only a new APK can replace them, so the
+web side is the side that must conform. Verified in the bytes of
+`drawable-port-xxxhdpi/splash.png` and then in the browser:
+
+| | native PNG | the CSS, composited |
+|---|---|---|
+| dim bolt | `rgb(40, 35, 32)` | `#6f6259` × .36 → **`rgb(40, 35, 32)`** |
+| middle bolt | `rgb(224, 93, 0)` | `#ff6a00` × .88 → **`rgb(224, 93, 0)`** |
+| group width | 21% of the short edge | **70.09px** vs the rule's **70.14px** |
+
+> ⚠️ **SCALE IS WHERE A LITERAL PASTE BREAKS.** The encoder sizes the 82-unit
+> group to 21% of the SHORT EDGE; the design is a fixed 82px on a fixed 390px
+> stage. Those agree only at exactly 390pt. On a 360pt Android the web bolts
+> would appear **8.5% larger** the instant the WebView paints, and on a 430pt
+> iPhone **9% smaller**. `--vs-u: 0.2561vmin` is one design unit — 0.21/82 of a
+> vmin — and every dimension in section 8 is a multiple of it.
+
+The colours are literals, not tokens, for the same reason: a theme change must
+never desynchronise the web splash from images a phone cannot update.
+
+#### TWO PHASES, because the app behind the door does not arrive on a clock
+
+Phase A (0 → 1300ms) is self-contained. Phase B — the part that reveals the app —
+is **held by JS until `window.__vltReady`**, which `js/app.js` sets immediately
+after its first render, capped at 2500ms. A slow launch therefore stands with the
+lock open a little longer, which is the one beat this sequence can afford to
+stretch: it is a state, not a transition. Measured:
+
+| | door opens | node removed |
+|---|---|---|
+| app ready before 1300ms (normal) | 1306ms | 2465ms |
+| app renders at 2000ms | 2041ms | 3193ms |
+| app **never** reports ready | 2558ms (the cap) | 3708ms |
+
+Never `animationend` — it does not fire in a hidden document, and a door that
+never opens is worse than one that opens early.
+
+#### Details that are load-bearing
+
+- **The mark is duplicated once per leaf**, and that is the design, not a
+  redundancy: the light sits BEHIND the door, so a single bloom under two opaque
+  black leaves is invisible — Main.dc.html:69-73 records the bug. Both copies are
+  cut at the same seam, and the top leaf overlaps by **0.5px** because a flush
+  50/50 join renders as a hairline at any fractional DPR.
+- **The markup is in `index.html`, not built by a script.** `styles.css` is
+  render-blocking, so the door and the first paint arrive in the same frame and
+  there is never an unpainted shell behind it. The controller is inline and runs
+  at parse time, before all ten deferred scripts — the whole point is that the
+  first painted frame is already the right one.
+- ⚠️ **`vs-bloom-in` is RESTATED in phase B, first in the list and byte-identical.**
+  Declaring only the out-animation would drop phase A's `both` fill and the light
+  would blink back to `opacity: 0` before the fade began. Measured across the
+  phase change: `currentTime` preserved, opacity 1 throughout — the running
+  animation is kept, not restarted.
+- **The stagger belongs to the door.** app.js's boot render happens behind a
+  closed door, so staggering there would play the arrival to nobody and leave a
+  static screen for the door to reveal. `window.__vltSplash` makes renderView
+  hand its host over; the clock fires it 400ms into phase B, as the leaves part —
+  which is exactly what the design draws, and the design was quoting this app's
+  own `--stagger`/`--dur-base`/`--ease-out` tokens all along.
+- **An automatic reload must not replay it.** `js/update.js` reloads the entry
+  html with `?u=` when a newer web build exists, and the service-worker cleanup
+  reloads once too — both within a couple of seconds. A `__splash_v1`
+  sessionStorage stamp (the `__cleaned_vN` precedent: no `vault_` prefix, so
+  outside the VAULT_KEYS registry and outside the release script's rewrite)
+  suppresses a second door inside 10 seconds. A deliberate refresh a minute later
+  is a relaunch and still gets it.
+- **Archivo is started at t=0.** Left alone the wordmark's face is discovered only
+  when the non-blocking font stylesheet is promoted — two sequential round trips
+  AFTER first paint — and the word is due at 1650ms. `document.fonts.load()` in
+  the controller moves that download 1.6 seconds earlier without touching the
+  timeline.
+- **`direction: ltr` is pinned on the wordmark.** `letter-spacing` adds its space
+  after each glyph and `text-indent` compensates from the inline START edge —
+  which is the right-hand side in Arabic, so the two scripts would place the
+  glyphs differently inside an identically centred box. It is the same object in
+  both languages.
+- **The bolts animate `height` and `gap`** — layout properties, during the busiest
+  700ms of a cold launch — so `.vs-mark` is a fixed-size box with
+  `contain: layout size` to keep that work inside it.
+- **The splash is black for everyone**, including light theme. The native launch
+  image is black on every device and cannot be themed; a bone-coloured door would
+  disagree with the frame the phone just painted. The reveal is a wipe, not a
+  flash — the leaves part to show the app rather than cross-fading to it.
 
 ## APK build 22 (v3.1) — the native half of v337–v341 reaches the phone
 

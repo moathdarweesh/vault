@@ -12,7 +12,7 @@
 // build. The literal below is the fallback (file://, or a stripped query) and is
 // still bumped by `npm run release` — see CLAUDE.md "CACHE WORKFLOW".
 const VAULT_BUILD = (() => {
-  const FALLBACK = 'v341';
+  const FALLBACK = 'v342';
   try {
     const src = (document.currentScript && document.currentScript.src) || '';
     const m = src.match(/[?&]v=(\d+)/);
@@ -1941,7 +1941,14 @@ function renderView(view) {
     while (host.children.length === 1 && host.firstElementChild.children.length > 1) {
       host = host.firstElementChild;
     }
-    if (__vltSlid) {
+    if (window.__vltSplash) {
+      // THE SPLASH OWNS THE FIRST ENTRANCE. The boot render happens behind a
+      // closed door, so staggering here would play the arrival to nobody and
+      // leave a static screen for the door to reveal. The host is handed to the
+      // splash clock, which fires it at the moment the leaves part.
+      window.__vltSplashHost = host;
+      delete host.dataset.entered;
+    } else if (__vltSlid) {
       // A tab slide IS the arrival — rule 5's one true half: the two never run
       // together, or the cards climb while the screen is still moving.
       __vltSlid = false;
@@ -12705,6 +12712,11 @@ function afterScripts(fn) {
   applyTheme(prefs.theme || 'dark');
   applyLang(prefs.lang || 'en');
   navigate('home', {}, { fromPop: true }); // root entry — don't grow history
+  // The splash waits for this before it opens the door. It is set AFTER the
+  // first render precisely because that is what it certifies: there is a real
+  // screen behind the door now. The clock opens anyway after its cap, so a
+  // boot that never reaches this line costs a delay, never a lock-out.
+  window.__vltReady = 1;
   setupKeyboardHandling(); // hide the nav + keep the focused field above the keyboard
   setupEmber();            // the void's reaction to the hand (no-op under reduced motion)
   setupBarAutoHide();      // the top bar leaves on the way down, returns at the top

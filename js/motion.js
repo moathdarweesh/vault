@@ -232,7 +232,12 @@ window.VltMotion = (function () {
   }
 
   /* One slide at a time, and its teardown travels WITH it. `__slideDone` is the
-     pending cleanup; flushSlide() runs it now rather than dropping it. */
+     pending cleanup; flushSlide() runs it now rather than dropping it.
+
+     There is much less to tear down than there was: the outgoing view is no
+     longer pinned or animated, so a lost cleanup can strand nothing but a
+     spent class on the view you are looking at. The discipline is kept
+     anyway — the class has to come off, or the slide cannot play again. */
   let __slideTimer = null;
   let __slideDone = null;
   function flushSlide() {
@@ -244,10 +249,11 @@ window.VltMotion = (function () {
      and the defensive sweep can never disagree about what a slide leaves. */
   function clearSlideMarks(el) {
     if (!el) return;
-    el.classList.remove('vlt-ghost', 'vlt-in');
-    for (const k of ['position', 'top', 'left', 'width', 'height', '--dir']) {
-      el.style.removeProperty(k);
-    }
+    el.classList.remove('vlt-in');
+    el.style.removeProperty('--dir');
+    // removeProperty leaves an empty style="" behind. Strip it, so a view that
+    // carries nothing cannot be matched by a [style] selector later.
+    if (!el.getAttribute('style')) el.removeAttribute('style');
   }
 
   /* ── TAB SWITCHING ───────────────────────────────────────────────────────
@@ -274,47 +280,38 @@ window.VltMotion = (function () {
     }
     if (reduced() || !from || from === to) return;
 
-    /* ⚠️ FINISH THE PREVIOUS SLIDE BEFORE STARTING THIS ONE, SYNCHRONOUSLY.
+    /* ⚠️ ONLY THE ARRIVING SCREEN MOVES. THE ONE YOU LEFT IS NOT SHOWN AT ALL.
 
-       The first draft kept ONE timer on the function object and cancelled it
-       here — but each timer closes over ITS OWN from/to/pin, so cancelling did
-       not cancel the work, it ABANDONED it. Two bottom-nav taps inside the
-       cleanup window (a mis-tap and its correction — ordinary use) left the
-       first view pinned as a ghost FOREVER: position:fixed, pointer-events:none
-       and vlt-slide-out holding it at 22% and .4 opacity by its `both` fill.
-       Returning to that tab then showed it displayed but DEAD TO TOUCH, with
-       the scroller empty — .view.vlt-ghost is (0,2,0) and later in the file
-       than .view.active, so losing `.active` could not even hide it.
+       v340 slid the outgoing view out as a GHOST — pinned position:fixed at the
+       rectangle it already held, drifting 22% and fading to .4. Measured live at
+       mid-slide: the ghost sat at z-index 1 with opacity 0.7 while the arriving
+       view was z-index auto and TRANSPARENT, so the screen you were leaving was
+       painted ON TOP of the screen you were opening, and you read both at once.
+       The owner named it exactly: «بيضل فيه أثر من الصفحة الأولى».
 
-       It must run BEFORE the rect is read: otherwise getBoundingClientRect()
-       returns the stale PINNED rectangle of a ghost that has not been undone,
-       and the new ghost inherits a position from two navigations ago. */
+       Stacking the ghost underneath would have been the iOS answer, but the
+       instruction was «دون أثر الصفحة التي قبل الانتقال» — so the ghost is gone,
+       not re-ordered. The outgoing view loses `.active` one line later in
+       navigate() and simply stops being displayed; the arriving view slides in
+       over the app`s own --bg-grad.
+
+       What this deletes is worth as much as what it fixes: with nothing pinned,
+       there is no rectangle to read, no inline geometry to restore, and no
+       cleanup that can be abandoned — the v341 stranded-ghost class of bug has
+       no surface left to happen on. */
     flushSlide();
 
-    // A node must never be both a live ghost and an arriving screen. This is the
-    // brace to that belt: even if a cleanup were lost some other way, no .view
-    // can enter a slide still wearing the last one.
-    for (const v of document.querySelectorAll('.view.vlt-ghost, .view.vlt-in')) {
-      clearSlideMarks(v);
-    }
-
-    // Read the rectangle while it is still in flow, then pin it to exactly that.
-    const r = from.getBoundingClientRect();
-    const pin = { position: 'fixed', top: r.top + 'px', left: r.left + 'px',
-                  width: r.width + 'px', height: r.height + 'px' };
-    for (const k in pin) from.style.setProperty(k === 'position' ? 'position' : k, pin[k]);
-    from.style.setProperty('--dir', String(dir));
-    from.classList.add('vlt-ghost');
+    // A view must never enter a slide still wearing the last one.
+    for (const v of document.querySelectorAll('.view.vlt-in')) clearSlideMarks(v);
 
     to.style.setProperty('--dir', String(dir));
     to.classList.add('vlt-in');
 
     const ms = token('--dur-slide', 500) + 50 + 90;
     // The cleanup is kept as a CLOSURE beside its timer, so the next slide can
-      // run it instead of merely cancelling it.
+    // run it instead of merely cancelling it.
     __slideDone = () => {
       __slideDone = null;
-      clearSlideMarks(from);
       clearSlideMarks(to);
     };
     clearTimeout(__slideTimer);

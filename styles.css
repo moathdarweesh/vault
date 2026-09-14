@@ -601,14 +601,19 @@ img { display: block; max-width: 100%; }
      every portrait phone — so the browser case is byte-identical. */
   padding-left: max(16px, env(safe-area-inset-left, 0px));
   padding-right: max(16px, env(safe-area-inset-right, 0px));
-  animation: fadeUp var(--dur) var(--ease);
+  /* ⚠️ NO VIEW-LEVEL ENTRANCE HERE. It used to be `animation: fadeUp`, and it
+     had to go for a reason that is not obvious: `.view.vlt-in` overrides this
+     shorthand, so REMOVING that class at the end of a tab slide changed the
+     computed animation-name back to fadeUp — and a changed animation-name
+     starts a NEW animation. Measured: 640ms after every tab switch landed, the
+     screen faded out to opacity 0 and back over 200ms. Same restart idiom v341
+     recorded for `.dragging`.
+
+     It was redundant as well as harmful. A tab arrival is vlt-slide-in; every
+     other arrival is the child stagger that navigate() arms. This was a third
+     entrance running on top of both. */
 }
 .view.active { display: block; }
-
-@keyframes fadeUp {
-  from { opacity: 0; transform: translateY(8px); }
-  to { opacity: 1; transform: translateY(0); }
-}
 
 /* =========================================================================
    VAULT TOP BAR (brand header)
@@ -8249,26 +8254,239 @@ body[dir="rtl"] .vlt-bar-fill { transform-origin: right center; }
   to   { transform: none; }
 }
 
-.view.vlt-ghost {
-  /* It has already lost `.active` by the time it ghosts, so it needs its own
-     display — .view{display:none} is (0,1,0) and this is (0,2,0). */
-  display: block;
-  position: fixed;
-  z-index: 1;                 /* under .bottom-nav (z-index 10) — it must not cover the bar */
-  pointer-events: none;       /* it is a departing picture, not a screen any more */
-  overflow: hidden;
-  margin: 0;
-  animation: vlt-slide-out var(--dur-slide) var(--ease-inout) 50ms both;
-}
-@keyframes vlt-slide-out {
-  to { transform: translateX(calc(var(--dir, 1) * -22%)); opacity: .4; }
-}
+/* ⚠️ THERE IS NO OUTGOING ANIMATION, AND THAT IS THE OWNER`S DECISION.
+
+   v340 slid the leaving view out as a pinned ghost. Measured at mid-slide:
+   the ghost was position:fixed at z-index 1 with opacity 0.7, and the
+   arriving view was z-index auto with a TRANSPARENT background — so the
+   screen being left was composited OVER the screen being opened and you
+   read both at once. «بيضل فيه أثر من الصفحة الأولى» is precisely that.
+
+   Putting the ghost underneath an opaque arriving view was the other answer,
+   but it keeps the old screen on display during the move, and the
+   instruction was «دون أثر الصفحة التي قبل الانتقال». So the leaving view is
+   not drawn at all: it loses `.active` and stops being displayed, and the
+   arriving view slides in over the app`s own --bg-grad.
+
+   This is also why .view.vlt-in needs NO background of its own. A flat
+   --bg painted on a sliding view would not line up with the radial
+   --bg-grad behind it, and the seam would travel with the slide. */
 
 
 /* The tab that was just chosen answers the touch itself — 500ms --ease-back,
    which is why it is still going when the screen lands. */
 .nav-btn > svg { transition: transform 500ms var(--ease-back); }
 .nav-btn.vlt-pulse > svg { transform: scale(1.16); }
+
+/* ── 8. THE SPLASH — THE VAULT DOOR ───────────────────────────────────────
+
+   .design/Main.dc.html, converted from a 4200ms LOOP to a one-shot. The
+   authored percentages are a 10ms grid in disguise (39.3% x 4200 = 1650.6ms;
+   the author meant 1650), so the windows below are that grid, not the
+   percentages re-multiplied.
+
+   TWO PHASES, because the app behind the door does not arrive on a fixed
+   clock. Phase A is self-contained — the lock throws, the bolts rise, the
+   light blooms, and then the design`s deliberate 622ms DWELL. Phase B is the
+   part that reveals the app, and JS holds it until the first view has
+   actually rendered (capped). A slow launch therefore stands with the lock
+   open a little longer, which is the one beat this sequence can afford to
+   stretch — it is a STATE, not a transition.
+
+   ⚠️ FRAME 0 IS FROZEN. The resting bolts here must equal the fourteen native
+   launch images pixel for pixel: they are already on users` phones and only a
+   new APK can replace them. Measured out of drawable-port-xxxhdpi/splash.png:
+   rgb(40,35,32) = #6f6259 x .36 and rgb(224,93,0) = #ff6a00 x .88 over black,
+   the group 21% of the short edge. That is why the colours below are literals
+   and the geometry is driven off vmin rather than a fixed 390px stage.
+
+   ⚠️ NO FADE-IN ON THE STAGE. The design opens at opacity 0 and lights at
+   1.6% — correct for a loop, wrong here: Android holds the PNG until the
+   WebView paints, so a fade-up would dip the handover to black for 67ms.
+
+   The mark is duplicated ONCE PER LEAF and cut at the seam. Main.dc.html:69-73
+   records why the bloom cannot live at stage level: the leaves are opaque
+   black at a higher layer, so a single bloom underneath them is invisible. */
+
+.vs {
+  position: fixed;
+  inset: 0;
+  z-index: 4000;              /* above everything: the ladder tops out at 3000 */
+  background: #000000;
+  overflow: hidden;
+  /* ONE DESIGN UNIT. The 82-unit group at 21% of the short edge, exactly as
+     the PNG encoder computes it: 0.21 / 82 = 0.0025610 of a vmin. */
+  --vs-u: 0.2561vmin;
+  --vs-throw: 320ms;          /* the lock */
+  --vs-lit: 170ms;
+  --vs-rise: 340ms;           /* each pair */
+  --vs-glow: 700ms;
+  --vs-part: 350ms;           /* the hand-over */
+  --vs-name: 410ms;
+  --vs-fade: 484ms;
+}
+/* Without scripting nothing would ever take the door down. */
+.vs-noscript { display: none; }
+
+/* Two leaves, each carrying its own copy of the mark, cut at the seam.
+   Half a pixel of OVERLAP on the top leaf: flush 50/50 is exact only when the
+   viewport is an even number of device pixels, and at any other DPR the join
+   renders as a hairline across the middle of the light. */
+.vs-leaf { position: absolute; left: 0; width: 100%; overflow: hidden; background: #000000; }
+.vs-leaf-t { top: 0; height: calc(50% + 0.5px); }
+.vs-leaf-b { top: 50%; height: 50%; }
+.vs-face { position: absolute; left: 0; width: 100%; height: 200%; display: grid; place-items: center; }
+/* ⚠️ THE OVERLAP MUST NOT REACH THE FACE. The top leaf is 50% + 0.5px, so a
+   face at a plain 200% of it is ONE PIXEL taller than the stage — which puts
+   its centred copy of the mark half a pixel BELOW the bottom leaf's copy. The
+   two halves of the bloom then meet out of step, and the join paints as a
+   bright hairline straight across the light. Caught in a SCREENSHOT; every
+   computed-style check passed. Subtracting the overlap here puts both faces
+   on exactly the stage, so both copies land on the same pixel — and the
+   overlap still hides the sub-pixel gap it exists for. */
+.vs-leaf-t .vs-face { top: 0; height: calc(200% - 1px); }
+.vs-leaf-b .vs-face { top: -100%; }
+
+/* A FIXED box, so the parting bolts cannot reflow anything above them. The
+   gap and height animations below are layout properties and they run during
+   the busiest 700ms of a cold launch; `contain` keeps that work inside here. */
+.vs-mark {
+  position: relative;
+  z-index: 1;
+  width: calc(var(--vs-u) * 160);
+  height: calc(var(--vs-u) * 110);
+  display: grid;
+  place-items: center;
+  contain: layout size;
+}
+
+.vs-bolts {
+  display: flex;
+  align-items: center;
+  gap: calc(var(--vs-u) * 6);
+  height: calc(var(--vs-u) * 110);
+}
+.vs-bolt {
+  width: calc(var(--vs-u) * 11);
+  height: calc(var(--vs-u) * 18);
+  border-radius: calc(var(--vs-u) * 5);
+  background: #6f6259;
+  opacity: .36;
+}
+/* the middle bolt is the lock, and it throws before anything else */
+.vs-mid {
+  width: calc(var(--vs-u) * 14);
+  height: calc(var(--vs-u) * 12);
+  border-radius: calc(var(--vs-u) * 7);
+  background: #ff6a00;
+  opacity: .88;
+}
+
+.vs-word {
+  position: absolute;
+  /* A Latin brand mark in a document that may be dir=rtl. letter-spacing adds
+     its space AFTER each glyph and text-indent compensates from the INLINE
+     START edge — which is the right-hand side in Arabic, so the two scripts
+     would place the glyphs differently inside an identically centred box.
+     The wordmark is the same object in both languages; pin its direction. */
+  direction: ltr;
+  font-family: Archivo, sans-serif;
+  font-weight: 800;
+  letter-spacing: .2em;
+  text-indent: .2em;           /* .2em of tracking hangs off the last letter */
+  font-size: calc(var(--vs-u) * 38);
+  line-height: 1;
+  color: #fdfaf7;
+  white-space: nowrap;
+  opacity: 0;
+  transform: scale(.94);
+}
+
+/* The light is BEHIND the door, so it travels with the door and is cut at the
+   same seam as the mark. 720x460 units — wider than the screen on purpose. */
+.vs-bloom {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  z-index: 0;
+  width: calc(var(--vs-u) * 720);
+  height: calc(var(--vs-u) * 460);
+  pointer-events: none;
+  opacity: 0;
+  transform: translate(-50%, -50%) scale(.66);
+  background: radial-gradient(closest-side,
+    rgba(255, 138, 48, .46) 0%, rgba(255, 124, 32, .28) 32%,
+    rgba(255, 106, 0, .10) 60%, rgba(255, 106, 0, 0) 100%);
+}
+
+/* ── PHASE A: the lock throws, the bolts rise, the light comes up ──────── */
+.vs-a .vs-mid {
+  animation: vs-throw var(--vs-throw) var(--ease-out) both,
+             vs-lit var(--vs-lit) linear both;
+}
+.vs-a .vs-n2, .vs-a .vs-n4 { animation: vs-rise-in var(--vs-rise) var(--ease-back) 260ms both; }
+.vs-a .vs-n1, .vs-a .vs-n5 { animation: vs-rise-out var(--vs-rise) var(--ease-back) 340ms both; }
+.vs-a .vs-bloom { animation: vs-bloom-in var(--vs-glow) linear both; }
+
+@keyframes vs-throw {
+  from { height: calc(var(--vs-u) * 12); }
+  to   { height: calc(var(--vs-u) * 86); }
+}
+@keyframes vs-lit { from { opacity: .88; } to { opacity: 1; } }
+@keyframes vs-rise-in {
+  from { height: calc(var(--vs-u) * 18); opacity: .36; }
+  to   { height: calc(var(--vs-u) * 58); opacity: .78; }
+}
+@keyframes vs-rise-out {
+  from { height: calc(var(--vs-u) * 18); opacity: .36; }
+  to   { height: calc(var(--vs-u) * 40); opacity: .58; }
+}
+@keyframes vs-bloom-in {
+  0%   { opacity: 0; transform: translate(-50%, -50%) scale(.66); animation-timing-function: var(--ease-out); }
+  48%  { opacity: .46; transform: translate(-50%, -50%) scale(.84); }
+  100% { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+}
+
+/* ── PHASE B: the bolts hand over to the name, and the door opens ──────── */
+/* ⚠️ vs-bloom-in is RESTATED here, first in the list and byte-identical, so
+   the running animation is kept rather than restarted. Declaring only the
+   out-animation would drop phase A`s `both` fill and the light would blink
+   back to opacity 0 before the fade even began. */
+.vs-b .vs-bloom {
+  animation: vs-bloom-in var(--vs-glow) linear both,
+             vs-bloom-out var(--vs-fade) var(--ease-inout) 400ms both;
+}
+.vs-b .vs-bolts { animation: vs-part var(--vs-part) var(--ease-inout) both; }
+.vs-b .vs-word  { animation: vs-name var(--vs-name) var(--ease-out) 350ms both; }
+.vs-b .vs-leaf-t { animation: vs-swing-up var(--dur-open) var(--ease-inout) 400ms both; }
+.vs-b .vs-leaf-b { animation: vs-swing-dn var(--dur-open) var(--ease-inout) 400ms both; }
+
+@keyframes vs-part {
+  0%   { gap: calc(var(--vs-u) * 6); opacity: 1; transform: scale(1); }
+  37%  { gap: calc(var(--vs-u) * 13); opacity: 1; }
+  100% { gap: calc(var(--vs-u) * 22); opacity: 0; transform: scale(1.12); }
+}
+/* The name starts only once the bolts have FINISHED leaving. They overlapped
+   in an earlier draft and, sitting in the same place at partial opacity, it
+   read as a double exposure rather than a hand-over. */
+@keyframes vs-name {
+  from { opacity: 0; transform: scale(.94); }
+  to   { opacity: 1; transform: scale(1); }
+}
+@keyframes vs-swing-up { to { transform: translateY(-100%); } }
+@keyframes vs-swing-dn { to { transform: translateY(100%); } }
+@keyframes vs-bloom-out {
+  from { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+  to   { opacity: 0; transform: translate(-50%, -50%) scale(1.05); }
+}
+
+/* The JS never mounts it under reduced motion. This is the brace to that belt,
+   for a setting flipped mid-launch — and it must be display:none, not opacity:
+   the global clamp would otherwise land every animation on its last frame at
+   once and flash the whole sequence in 0.01ms. */
+@media (prefers-reduced-motion: reduce) {
+  .vs { display: none !important; }
+}
 
 /* =========================================================================
    ^^^ EVERYTHING ABOVE, THEN THE IDENTITY LAYER BELOW. ^^^
