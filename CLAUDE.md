@@ -79,7 +79,7 @@ a faster TTFB — not fewer bytes.
 npm run release          # bump every marker + verify, then commit all files together
 ```
 
-**Current version: v351.** APK: build 22 / v3.1.
+**Current version: v352.** APK: build 22 / v3.1.
 
 `scripts/release.js` rewrites **every** marker and then re-reads them from disk to confirm; it exits non-zero if any disagree, and prints the count per file (derived, never hard-coded — the docs used to say 16 while the real count was 15). The markers are `?v=N` in `index.html` (every script and stylesheet, the `js/vendor/supabase.js` preload, both `icons/icon.svg` links, `manifest.json`), the `__cleaned_vN` sessionStorage key, the `FALLBACK` literal in `app.js`, `version.json` → `web`, the `?v=` in `manifest.json`, `admin.html`, `privacy.html` and `get/index.html`, and the `Current version` line in this file. `scripts/check-contracts.js` (pre-commit) refuses a commit where any of them disagree.
 
@@ -558,7 +558,7 @@ npm run verify && npm run release && git add <the files> && git commit && git pu
 This authorization is about the QUESTION, not about the standards. Everything that made the
 question worth asking still applies, and none of it is waived:
 
-- **Verified first.** `npm run verify` (32 contracts + 9 suites) must pass, and any change to
+- **Verified first.** `npm run verify` (33 contracts + 9 suites) must pass, and any change to
   shipped code must be measured in the running app. Pushing unverified work is not "shipping
   without asking", it is shipping something unknown — GitHub Pages serves the branch directly
   with no gate, so a bad push reaches every device at the next app open.
@@ -2611,6 +2611,63 @@ light + no door → `#faf5f0`; dark → `#000000` throughout.
   images are square (2732×2732), so short and long edge are the same number.
 - **"The 2500ms cap opens onto an empty shell"** and **"the app behind the door is
   not aria-hidden"** — both already answered in v343's note.
+
+## v352 — nobody could say which libraries were running. Now a contract does.
+
+The security plan named this and it is the cheapest real gap in the app: two
+third-party bundles execute with full privileges in this origin, with access to
+the `localStorage` the session token lives in — and **nothing in this repo
+recorded which version either one was.** No filename version, no `package.json`
+entry, no note in the commit that added them.
+
+> ⚠️ **So "is the library in my app clean?" was not "probably yes" — it was
+> UNANSWERABLE.** You cannot check a bundle against an advisory list without
+> knowing what it is.
+
+Both were identified the only way that proves anything: **download the published
+artifact and compare SHA-256.** Not by reading a version string out of the
+bundle — the bundle is the thing under suspicion.
+
+| | `js/vendor/supabase.js` | `js/vendor/zxing.min.js` |
+|---|---|---|
+| package | `@supabase/supabase-js` | `@zxing/library` |
+| version | **2.108.2** | **0.21.3** |
+| artifact | `dist/umd/supabase.js` | `umd/index.min.js` |
+| bytes | 204,619 | 336,008 |
+| upstream match | **byte-identical** | **byte-identical** |
+
+`@zxing/library` carries no version marker anywhere in its bundle, so it was
+found by **hashing 22 candidate artifacts across 11 published versions until one
+matched**. Byte-identical means something worth stating plainly: neither vendored
+copy carries a local edit, so nothing was quietly patched into them on the way in.
+
+`npm audit` against exactly those two pinned versions: **0 critical · 0 high ·
+0 moderate · 0 low.** Both are behind the current release (2.116.0 / 0.23.0).
+Neither gap is a security one today — and **being behind is only safe while
+someone is checking**, which is why the re-check is now a row in
+`docs/AUTOMATION.md` under "what does not update itself", beside the APK build.
+
+### Contract 33, and it was made to fail before it was trusted
+
+`js/vendor/SOURCES.md` records package, version, artifact, source URL and hash.
+Contract 33 recomputes each hash **from the bytes on disk** — the same shape as
+contract 32 for the APK — and also refuses a new file in `js/vendor/` with no
+block written for it, so a third library cannot arrive unrecorded.
+
+| planted | |
+|---|---|
+| five bytes appended to `zxing.min.js` | **caught** — named the file, the recorded hash and the real one |
+| a new unrecorded `js/vendor/newthing.js` | **caught** — "ships to every device and SOURCES.md does not say what it is" |
+| both reverted | green, and the file byte-identical |
+
+> **A hash that does not match its file is worse than no hash**, because it tells
+> the reader a tampered file is genuine. That is why this is a contract and not a
+> note — the same reasoning v349 recorded for the published APK fingerprint.
+
+**33 contracts now.** This release changes no shipped behaviour: `SOURCES.md` is
+documentation and the contract is a dev-time check. Nothing was added to the
+bundle the user downloads — the "no dependencies, no build step" law is untouched,
+and it is still most of why this app has no supply-chain surface to begin with.
 
 ## v351 — the last two P1s: two windows of one app, and two accounts on one phone
 

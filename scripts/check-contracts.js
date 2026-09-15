@@ -752,5 +752,46 @@ const contract = (name, problems) => {
   contract(`error strings cross the SQL/JS and Worker/JS boundaries intact (${checkedSql} database matches, ${workerCodes.size} Worker codes)`, problems);
 }
 
+// ---------------------------------------------------------------- 33. the vendored libraries are the ones we say they are
+// Two third-party bundles execute with full privileges in this app`s own
+// origin, with access to the localStorage the session token lives in — and
+// until js/vendor/SOURCES.md existed, NOTHING in this repo recorded which
+// version either one was. No filename version, no package.json entry, no note
+// in the commit that added them. "Is the library in my app clean?" was not
+// "probably yes", it was unanswerable.
+//
+// SOURCES.md records the package, the exact version, the upstream URL and the
+// SHA-256 of the published artifact each file was proved byte-identical to.
+// This recomputes those hashes from the bytes on disk, the way contract 32
+// does for the APK — a hash that does not match its file is WORSE than no
+// hash, because it tells the reader a tampered file is genuine. It also
+// refuses a new file in js/vendor/ with no block here, so a third library
+// cannot arrive unrecorded.
+{
+  const problems = [];
+  const dir = path.join(root, 'js/vendor');
+  const docRel = 'js/vendor/SOURCES.md';
+  let recorded = 0;
+  if (!exists(docRel)) {
+    problems.push(`${docRel} is missing — nothing records what the vendored libraries are`);
+  } else {
+    const doc = read(docRel);
+    const rows = new Map();
+    for (const m of doc.matchAll(/^file:\s+(\S+)[^\S\n]*\r?\n\s*sha256:\s+([0-9a-f]{64})\s*$/gm)) rows.set(m[1], m[2]);
+    recorded = rows.size;
+    // every recorded file must exist and still hash to what is written down
+    for (const [rel, want] of rows) {
+      if (!exists(rel)) { problems.push(`${docRel} records ${rel}, which does not exist`); continue; }
+      const got = require('crypto').createHash('sha256').update(fs.readFileSync(path.join(root, rel))).digest('hex');
+      if (got !== want) problems.push(`${rel} has changed: ${docRel} says ${want.slice(0, 16)}… but the file hashes to ${got.slice(0, 16)}… — replace the library AND its block in the same commit`);
+    }
+    // …and every shipped file in the folder must be recorded
+    for (const f of fs.readdirSync(dir).filter((f) => !f.endsWith('.md'))) {
+      if (!rows.has('js/vendor/' + f)) problems.push(`js/vendor/${f} ships to every device and ${docRel} does not say what it is`);
+    }
+  }
+  contract(`the vendored libraries hash to what js/vendor/SOURCES.md says they are (${recorded} recorded)`, problems);
+}
+
 console.log(failures.length ? `\ncheck-contracts: ${failures.length} broken contract(s)` : '\ncheck-contracts: all contracts hold');
 process.exit(failures.length ? 1 : 0);
