@@ -2612,6 +2612,89 @@ light + no door → `#faf5f0`; dark → `#000000` throughout.
 - **"The 2500ms cap opens onto an empty shell"** and **"the app behind the door is
   not aria-hidden"** — both already answered in v343's note.
 
+## THE FINGERPRINT NET — proving a refactor changed nothing
+
+The owner authorised a large maintainability refactor of `js/app.js` (12,910 lines)
+with one condition, in his own words: **«تأكّد تامًّا أنّه لا يتغيّر شيء ولا يعلّق
+التطبيق»**. One measurement settles why that needed a tool and not care:
+
+> **0.29% of `js/app.js` is under direct unit assertion — 38 lines of 12,910.**
+> Five functions of 210. The browser suites TOUCH maybe 15% and pin down 2–3%. And
+> no test in this project looks at design; every serious defect this month was
+> found by measuring the rendered DOM by hand.
+
+This project has twice proved a refactor inert exactly that way — **504**
+computed-style fingerprints in v262, **110** in v314 — and threw the tooling away
+both times. `scripts/fingerprint-net.js` is that technique, kept.
+
+```bash
+node scripts/fingerprint-net.js capture --tag before   # …do the step…
+node scripts/fingerprint-net.js capture --tag after
+node scripts/fingerprint-net.js diff before after
+```
+
+> **THE ONE DECISION THAT MAKES IT WORKABLE: the record is KEYED ON STRUCTURAL
+> POSITION and DIFFED ON FIELDS.** If the key carried the class name, a class
+> rename — the single most likely diff a maintainability refactor produces — would
+> re-key every element and report *N deleted, N added*. That is the
+> 500-diffs-nobody-reads failure, and it is a choice, not a fact.
+
+**Lane A runs `reducedMotion: 'reduce'`, and that is the determinism guarantee,
+not a shortcut.** Under it the splash is never mounted, `setupEmber()` returns
+before it creates its element, and the global clamp zeroes every duration AND
+(since v337) every delay. There is no animation to be mid-way through, so the
+fingerprint is a function of the DOM and the CSS alone.
+
+### It found its own noise, which is the point of running it twice against no change
+
+Three sources, three different mechanisms, all closed before the net was trusted
+with anything:
+
+1. `cls: "loaded machine-photo" → "machine-photo"` — an image-load race.
+2. `@data-log` — a generated id shape the mask did not know (bare base36, not the
+   `id-…` or UUID forms). Ids are RENAMED in first-seen order, never blanked: a
+   flat `<id>` would hide a reordering, which is a real defect class here (v331).
+3. ⚠️ **`renderView` schedules `syncDetailTopTitle` inside a
+   `requestAnimationFrame`**, so whether the detail-top title had faded in was a
+   race. Waiting on rAF is forbidden as a BLIND wait — it never fires in a hidden
+   document — but the net **asserts the timeline advances before it captures
+   anything and aborts if it does not**, and a bounded double-rAF then settles
+   exactly what the app itself defers to one.
+
+### And it can fail, which is the only thing that makes a pass mean anything
+
+| | |
+|---|---|
+| two captures, no change at all | **20/20 cells identical · 2,053 elements · 0 differences** |
+| v314's `--text-mute` → `--text` planted | **caught** — `rgb(176,166,158)` → `rgb(253,250,247)`, 3 elements, named by screen |
+| after `git checkout styles.css` | **0 differences again**, and the file byte-identical to HEAD |
+
+Four failure signals ride along free on every capture: a page error or
+`console.error` during any render; a view that renders **0 children**; a **raw
+i18n key on screen** — contract 5 proves a key EXISTS in both dictionaries and
+cannot prove the rendered screen reached it, which is exactly the gap v332
+records; and an **empty `<svg>`**, because a wrong icon name returns `''` and the
+glyph vanishes with no error.
+
+> ⚠️ **THE FENCE IS THE ENFORCEMENT, NOT A CONVENTION.** `page.route` aborts every
+> request that is not `127.0.0.1`, and the run ASSERTS afterwards that nothing
+> escaped. The owner's real project ref is in the shipped `js/cloud.js`; a stub is
+> a promise, an aborted route is a fact. A net that silently aborted a live write
+> is not evidence that it never intended one.
+
+**What it cannot catch, stated so it is not trusted beyond its reach:** whether
+the design is GOOD — it is a conservation law, and would have certified all 38 of
+v316's defects as identical; anything only a real font shows (fonts are blocked,
+correctly, so the app under test renders in `system-ui`); anything only a real
+device or the live backend shows; a change identical across every cell of the
+matrix; and **anything wrong on BOTH sides — a conservation law conserves defects
+with equal enthusiasm.**
+
+Stage 1 covers the 20 views in ar/dark/375 against the empty state. Modals, the
+second language and theme, the other widths, the motion lane and the DB-diff
+scenarios are stages 2–5, and each is worth building when a refactor step needs
+it — not before.
+
 ## v349 — the console could not log in, and the download could not be checked
 
 The owner asked for a full review — database, code, design, security — plus the

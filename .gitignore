@@ -30,3 +30,7 @@ android/app/release/
 # Generated knowledge-graph output (14MB: graph.json/html + wiki). Regenerate with /graphify.
 graphify-out/
 graphify-out.bak/
+
+# Fingerprint-net capture records — local evidence, never shipped. GitHub Pages
+# serves this branch directly, so a stray capture at the repo root would ship.
+.fpnet/
