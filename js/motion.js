@@ -39,12 +39,46 @@ window.VltMotion = (function () {
      The cap is expressed in CSS as calc(min(var(--i), 5) * 140ms): past the
      sixth child everything lands together. Without a cap a twenty-row list
      makes the reader wait three seconds for a list that is already there. */
-  function stagger(el) {
+  function stagger(el, dir) {
     if (!el || el.dataset.entered) return;
     el.dataset.entered = '1';
     if (reduced()) return;            // nothing to animate; the guard is still set
+
+    /* A TAB SWITCH ARRIVES FROM THE SIDE; EVERY OTHER ARRIVAL RISES.
+
+       `dir` is the tab ORDER (+1 later, -1 earlier) and carries no writing
+       direction of its own, so the RTL flip is applied here — the last place
+       before it becomes a physical translate. --ey drops to a token lift
+       because the motion is sideways now; keeping the full 24px would make
+       each card travel a diagonal nobody asked for.
+
+       This replaced a full-frame slide in v346: a frame can only slide in
+       from off-screen, and with no outgoing view behind it that left the
+       screen empty for half a second. */
+    /* ⚠️ WRITTEN EVERY TIME, NEVER LEFT TO A PREVIOUS ARRIVAL. The host is a
+       PERSISTENT node — the same `.view` element for the life of the app — so
+       setting these only when `dir` is truthy left the last tab switch`s
+       sideways offset on it, and the next directionless arrival at that view
+       replayed a direction it had not moved in. */
+    const d = dir ? (dir < 0 ? -1 : 1) * (document.body.dir === 'rtl' ? -1 : 1) : 0;
+    el.style.setProperty('--ex', d * 26 + 'px');
+    el.style.setProperty('--ey', d ? '6px' : '24px');
+    el.style.setProperty('--step', d ? 'var(--stagger-fast)' : 'var(--stagger)');
+
+    /* PERSISTENT CHROME IS SKIPPED, NOT JUST EXEMPTED. The CSS above refuses to
+       animate `.vault-bar` / `.detail-top`, but they are still CHILDREN — and
+       numbering them would spend index 0 on something that does not move, so
+       the first real card would start a whole step late. That is a new wait,
+       in the change whose entire purpose was to stop the screen looking late. */
     const kids = el.children;
-    for (let i = 0; i < kids.length; i++) kids[i].style.setProperty('--i', i);
+    let n = 0;
+    for (let i = 0; i < kids.length; i++) {
+      if (kids[i].classList.contains('vault-bar') || kids[i].classList.contains('detail-top')) {
+        kids[i].style.removeProperty('--i');
+        continue;
+      }
+      kids[i].style.setProperty('--i', n++);
+    }
     el.classList.add('enter');
 
     /* ⚠️ THE CLEANUP MUST NOT DEPEND ON `animationend`. Measured: the class
@@ -59,10 +93,17 @@ window.VltMotion = (function () {
 
        The window is the real one: the last child starts at min(n-1,5) steps and
        runs for one duration. */
-    const steps = Math.min(Math.max(kids.length - 1, 0), 5);
-    const total = steps * token('--stagger', 140) + token('--dur-base', 400) + 120;
+    // The window is the one the cards actually use: the cap, the step the host
+    // chose, and one duration.
+    const steps = Math.min(Math.max(n - 1, 0), 5);
+    const step = d ? token('--stagger-fast', 60) : token('--stagger', 140);
+    const total = steps * step + token('--dur-base', 400) + 120;
     const done = () => {
       el.classList.remove('enter');
+      el.style.removeProperty('--ex');
+      el.style.removeProperty('--ey');
+      el.style.removeProperty('--step');
+      if (!el.getAttribute('style')) el.removeAttribute('style');
       const now = el.children;
       for (let i = 0; i < now.length; i++) now[i].style.removeProperty('--i');
     };
@@ -231,95 +272,59 @@ window.VltMotion = (function () {
     el.addEventListener('pointercancel', release);
   }
 
-  /* One slide at a time, and its teardown travels WITH it. `__slideDone` is the
-     pending cleanup; flushSlide() runs it now rather than dropping it.
-
-     There is much less to tear down than there was: the outgoing view is no
-     longer pinned or animated, so a lost cleanup can strand nothing but a
-     spent class on the view you are looking at. The discipline is kept
-     anyway — the class has to come off, or the slide cannot play again. */
-  let __slideTimer = null;
-  let __slideDone = null;
-  function flushSlide() {
-    clearTimeout(__slideTimer);
-    __slideTimer = null;
-    if (__slideDone) __slideDone();
-  }
-  /* Everything a slide puts on a node, taken off in one place — so the teardown
-     and the defensive sweep can never disagree about what a slide leaves. */
-  function clearSlideMarks(el) {
-    if (!el) return;
-    el.classList.remove('vlt-in');
-    el.style.removeProperty('--dir');
-    // removeProperty leaves an empty style="" behind. Strip it, so a view that
-    // carries nothing cannot be matched by a [style] selector later.
-    if (!el.getAttribute('style')) el.removeAttribute('style');
-  }
-
   /* ── TAB SWITCHING ───────────────────────────────────────────────────────
-     CALL THIS BEFORE THE CALLER TOGGLES `.active`, and that is now the ONLY
-     ordering rule left: navigate() resolves the leaving view with
-     `document.querySelector('.view.active')`, so after the toggle that lookup
-     returns the ARRIVING view, `from === to`, and no slide runs at all.
-     Nothing is measured here and nothing is pinned any more — v342 deleted the
-     ghost, so there is no rectangle to read and no geometry to restore.
 
-     `dir` is +1 or -1 and already carries the RTL flip, so one keyframe pair
-     serves both directions and both writing systems.
+     THIS ONLY ANSWERS THE TOUCH NOW. The screen change itself is the child
+     stagger that renderView arms, with the tab direction handed to it — see
+     stagger() above and block 1 of the motion CSS.
 
-     The class and the inline `--dir` are undone by a TIMER, not by
-     animationend: animation events do not fire in a hidden or backgrounded
-     document, and a view left wearing `vlt-in` would replay the slide the next
-     time it is shown by a navigation that is not a tab switch. */
+     ⚠️ THE FRAME USED TO SLIDE, AND THAT IS WHAT MADE THE SCREEN GO BLACK.
+     v340 slid the arriving `.view` in from translateX(100%) over an outgoing
+     view pinned behind it; v342 deleted that ghost because it painted ON TOP
+     of the arriving screen and the owner read both at once. What was left was
+     a frame sliding in over nothing: measured on a real home -> food switch,
+     50ms of delay with the new screen entirely off-screen and the old one
+     already display:none, and full coverage only at 550ms. A frame can only
+     arrive from off-screen, so the void is not a bug in the slide — it IS the
+     slide. Moving the cards instead of the frame is the only shape that keeps
+     a sense of direction without ever displacing anything off the screen.
+
+     What that deleted: the pin, the rectangle read, the ghost class, the
+     slide keyframes, the per-slide cleanup closure and its timer. The v341
+     lesson those existed to carry is worth keeping even though its code is
+     gone — ONE TIMER FOR N CONCURRENT ELEMENTS IS NOT A DEBOUNCE: cancelling
+     a shared timer does not cancel the work, it abandons it. Anything that
+     schedules per-element teardown here must keep the cleanup as a closure
+     beside its timer and RUN it rather than drop it. */
+  /* CALL OFF AN ENTRANCE THAT HAS BEEN OVERTAKEN.
+
+     ⚠️ A RE-RENDER INSIDE THE STAGGER WINDOW REPLAYS IT AT DELAY 0. The class
+     lives on the host, which SURVIVES an innerHTML rewrite of its own contents
+     — so the brand-new children match `.enter > *`, have no `--i`, and all
+     animate together from 26px and opacity 0. Every save in this app re-renders
+     the current view, and after v346 that is reachable right after a tab tap.
+     The entrance is moot once the content it was introducing has been replaced.
+
+     Same shape as the animationend lesson above: the cleanup cannot be left to
+     the timer alone, because the thing being cleaned up is gone before it. */
+  function cancelStagger(el) {
+    if (!el || !el.classList.contains('enter')) return;
+    clearTimeout(el.__vltEnter);
+    el.classList.remove('enter');
+    for (const k of ['--ex', '--ey', '--step']) el.style.removeProperty(k);
+    if (!el.getAttribute('style')) el.removeAttribute('style');
+    const kids = el.children;
+    for (let i = 0; i < kids.length; i++) kids[i].style.removeProperty('--i');
+  }
+
   function switchTab(o) {
     o = o || {};
-    const from = o.from, to = o.to, btn = o.btn;
-    if (!to) return;
-    const dir = (o.dir < 0 ? -1 : 1) * (document.body.dir === 'rtl' ? -1 : 1);
-
-    if (btn) {
-      btn.classList.add('vlt-pulse');
-      setTimeout(() => btn.classList.remove('vlt-pulse'), 500);
-    }
-    if (reduced() || !from || from === to) return;
-
-    /* ⚠️ ONLY THE ARRIVING SCREEN MOVES. THE ONE YOU LEFT IS NOT SHOWN AT ALL.
-
-       v340 slid the outgoing view out as a GHOST — pinned position:fixed at the
-       rectangle it already held, drifting 22% and fading to .4. Measured live at
-       mid-slide: the ghost sat at z-index 1 with opacity 0.7 while the arriving
-       view was z-index auto and TRANSPARENT, so the screen you were leaving was
-       painted ON TOP of the screen you were opening, and you read both at once.
-       The owner named it exactly: «بيضل فيه أثر من الصفحة الأولى».
-
-       Stacking the ghost underneath would have been the iOS answer, but the
-       instruction was «دون أثر الصفحة التي قبل الانتقال» — so the ghost is gone,
-       not re-ordered. The outgoing view loses `.active` one line later in
-       navigate() and simply stops being displayed; the arriving view slides in
-       over the app`s own --bg-grad.
-
-       What this deletes is worth as much as what it fixes: with nothing pinned,
-       there is no rectangle to read, no inline geometry to restore, and no
-       cleanup that can be abandoned — the v341 stranded-ghost class of bug has
-       no surface left to happen on. */
-    flushSlide();
-
-    // A view must never enter a slide still wearing the last one.
-    for (const v of document.querySelectorAll('.view.vlt-in')) clearSlideMarks(v);
-
-    to.style.setProperty('--dir', String(dir));
-    to.classList.add('vlt-in');
-
-    const ms = token('--dur-slide', 500) + 50 + 90;
-    // The cleanup is kept as a CLOSURE beside its timer, so the next slide can
-    // run it instead of merely cancelling it.
-    __slideDone = () => {
-      __slideDone = null;
-      clearSlideMarks(to);
-    };
-    clearTimeout(__slideTimer);
-    __slideTimer = setTimeout(() => { if (__slideDone) __slideDone(); }, ms);
+    const btn = o.btn;
+    if (!btn) return;
+    // 500ms --ease-back, so the tab is still answering while the cards land.
+    btn.classList.add('vlt-pulse');
+    clearTimeout(btn.__vltPulse);
+    btn.__vltPulse = setTimeout(() => btn.classList.remove('vlt-pulse'), 500);
   }
-
-  return { stagger, count, bar, pulse, numFlip, dragToDismiss, switchTab, reduced, token };
+  return { stagger, cancelStagger, count, bar, pulse, numFlip, dragToDismiss, switchTab, reduced, token };
 })();

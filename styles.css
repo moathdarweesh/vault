@@ -227,8 +227,13 @@
   --dur-tap:   120ms;
   --dur-fast:  260ms;
   --dur-base:  400ms;
-  --dur-slide: 500ms;
   --dur-open:  700ms;
+  /* A SECOND STEP, for the arrival you make forty times a day. The 140ms
+     below is ceremonial — right for a screen you opened deliberately, too
+     slow for a tab tap, where it put the last card at 1100ms against the
+     550ms the frame slide used to take. First content is at 0ms either way;
+     this is about when the screen stops assembling. */
+  --stagger-fast: 60ms;
   /* The stagger step is a TOKEN and not the spec's literal 140ms, because the
      global reduced-motion clamp below flattens animation-DURATION and never
      animation-DELAY. Left as a literal, a reduced-motion user would still wait
@@ -601,17 +606,18 @@ img { display: block; max-width: 100%; }
      every portrait phone — so the browser case is byte-identical. */
   padding-left: max(16px, env(safe-area-inset-left, 0px));
   padding-right: max(16px, env(safe-area-inset-right, 0px));
-  /* ⚠️ NO VIEW-LEVEL ENTRANCE HERE. It used to be `animation: fadeUp`, and it
-     had to go for a reason that is not obvious: `.view.vlt-in` overrides this
-     shorthand, so REMOVING that class at the end of a tab slide changed the
-     computed animation-name back to fadeUp — and a changed animation-name
-     starts a NEW animation. Measured: 640ms after every tab switch landed, the
-     screen faded out to opacity 0 and back over 200ms. Same restart idiom v341
-     recorded for `.dragging`.
+  /* ⚠️ NO VIEW-LEVEL ENTRANCE HERE. It used to be `animation: fadeUp`, and the
+     lesson that removed it outlives the class that exposed it: while a tab
+     slide existed, `.view.vlt-in` overrode this shorthand, so REMOVING that
+     class at the end of a slide changed the computed animation-name back to
+     fadeUp — and a changed animation-name starts a NEW animation. Measured:
+     640ms after every tab switch landed, the screen faded out to opacity 0
+     and back over 200ms. Same restart idiom v341 recorded for `.dragging`.
 
-     It was redundant as well as harmful. A tab arrival is vlt-slide-in; every
-     other arrival is the child stagger that navigate() arms. This was a third
-     entrance running on top of both. */
+     It was redundant as well as harmful, and still would be: EVERY arrival is
+     the child stagger that navigate() arms (v346 made that true of tab
+     switches too). A view-level fade would be a second entrance on top of it.
+     Do not reintroduce one. */
 }
 .view.active { display: block; }
 
@@ -6365,9 +6371,9 @@ body[data-view="food"] .food-fab { display: inline-flex; }
      a calc() built from it) agree with what the user actually sees. */
   :root {
     --dur-tap: 0ms; --dur-fast: 0ms; --dur-base: 0ms;
-    --dur-slide: 0ms; --dur-open: 0ms;
+    --dur-open: 0ms;
     --dur: 0ms; --dur-slow: 0ms;
-    --stagger: 0ms;   /* the delay the clamp cannot reach — see the note at :root */
+    --stagger: 0ms; --stagger-fast: 0ms;   /* the delay the clamp cannot reach — see the note at :root */
   }
   *, *::before, *::after {
     animation-duration: 0.01ms !important;
@@ -8115,19 +8121,52 @@ body.ember-on .ember {
    duration or a curve as a literal, which is the spec's second rule.
    ========================================================================= */
 
-/* ── 1. STAGGERED ENTRY ────────────────────────────────────────────────────
-   First render of a screen only; js/motion.js owns the `data-entered` guard.
+/* ── 1. STAGGERED ENTRY — AND IT IS THE WHOLE TRANSITION NOW ───────────────
+   One arrival per visit; js/motion.js owns the `data-entered` guard.
    The cap is IN THE CALC: past the sixth child everything lands together, so
    a twenty-row list cannot make the reader wait three seconds for content
    that has already arrived. --stagger is a token because the global
-   reduced-motion clamp flattens durations and never DELAYS. */
+   reduced-motion clamp flattens durations and never DELAYS.
+
+   --ex / --ey are the OFFSET each card starts from, set on the host by
+   stagger() and inherited here. A tab switch sets --ex so the cards come in
+   from the side you moved toward and --ey small, because the motion is
+   sideways; every other arrival keeps the defaults and they simply rise.
+   One keyframe serves both, and the RTL flip is applied in JS where the
+   direction is decided — translate is physical, the decision is logical. */
 .enter > * {
   opacity: 0;
-  transform: translateY(24px);
+  transform: translate(var(--ex, 0px), var(--ey, 24px));
   animation: vlt-enter var(--dur-base) var(--ease-out) both;
-  animation-delay: calc(min(var(--i, 0), 5) * var(--stagger));
+  animation-delay: calc(min(var(--i, 0), 5) * var(--step, var(--stagger)));
 }
 @keyframes vlt-enter { to { opacity: 1; transform: none; } }
+
+/* ⚠️ CHROME IS NOT CONTENT, AND MUST NOT ARRIVE LIKE IT.
+
+   `.vault-bar` is the first child of all five tab views, so `.enter > *` made
+   the brand header itself fade in and travel 26px on EVERY tab tap — the most
+   frequent navigation in the app. The stylesheet already says what this
+   element is, a few hundred lines up: "Chrome, not content: it used to scroll
+   away with the page and re-animate on every tab tap." v346 gave it back the
+   behaviour v316 took away.
+
+   Worse than cosmetic: `vlt-enter` ends on `transform: none`, which OVERRODE
+   `.main.bar-hidden .vault-bar { transform: translateY(-100%) }` for the whole
+   entrance window — so returning to a scrolled tab showed the header for a
+   second and then snapped it away in one frame.
+
+   (0,2,0) beats `.enter > *` at (0,1,0) and LOSES to `.main.bar-hidden
+   .vault-bar` at (0,3,0), so the scroll auto-hide keeps working. No restart
+   trap either: the bar's base animation-name is already `none`, so dropping
+   `.enter` at the end of the timer changes nothing. `.detail-top` is the same
+   shape of persistent chrome on the child screens and gets the same answer. */
+.enter > .vault-bar,
+.enter > .detail-top {
+  animation: none;
+  opacity: 1;
+  transform: none;
+}
 
 /* ── 2. PROGRESS BARS ──────────────────────────────────────────────────────
    scaleX, never width — width lays out and this sits inside scrolling lists.
@@ -8242,41 +8281,38 @@ body[dir="rtl"] .vlt-bar-fill { transform-origin: right center; }
    the middle of the motion. The bar simply has no blur now, so there is
    nothing to schedule and nothing to restore.
 
-   --dir is +1 or -1 and already carries the RTL flip, so ONE keyframe pair
-   serves both directions and both writing systems. translateX is physical;
-   deriving the sign in JS is what keeps the keyframes logical. */
+   ⚠️ AND THEN THE FRAME STOPPED MOVING ALTOGETHER (v346).
 
-.view.vlt-in {
-  animation: vlt-slide-in var(--dur-slide) var(--ease-inout) 50ms both;
-}
-@keyframes vlt-slide-in {
-  from { transform: translateX(calc(var(--dir, 1) * 100%)); }
-  to   { transform: none; }
-}
+   v342 deleted the outgoing ghost, which left the arriving view sliding in
+   over nothing. Measured on a real home -> food switch: one animation,
+   `vlt-slide-in`, 50ms delay + 500ms, from translateX(100%) — so for the
+   first 50ms the new screen was ENTIRELY off-screen with the old one already
+   display:none, and it was only fully in place at 550ms. For that whole
+   window most of the screen was nothing but --bg-grad. The owner read it
+   exactly as it is: «تأخير بسيط بيكون خلفية سودة ثم تظهر الشاشة».
 
-/* ⚠️ THERE IS NO OUTGOING ANIMATION, AND THAT IS THE OWNER`S DECISION.
+   A sliding frame cannot avoid that. Something must be off-screen for the
+   frame to arrive from, and after v342 there is nothing behind it to cover
+   the gap. The two ways out were to put the old screen back underneath —
+   which is the thing he asked to stop seeing — or to stop moving the frame.
 
-   v340 slid the leaving view out as a pinned ghost. Measured at mid-slide:
-   the ghost was position:fixed at z-index 1 with opacity 0.7, and the
-   arriving view was z-index auto with a TRANSPARENT background — so the
-   screen being left was composited OVER the screen being opened and you
-   read both at once. «بيضل فيه أثر من الصفحة الأولى» is precisely that.
-
-   Putting the ghost underneath an opaque arriving view was the other answer,
-   but it keeps the old screen on display during the move, and the
-   instruction was «دون أثر الصفحة التي قبل الانتقال». So the leaving view is
-   not drawn at all: it loses `.active` and stops being displayed, and the
-   arriving view slides in over the app`s own --bg-grad.
-
-   This is also why .view.vlt-in needs NO background of its own. A flat
-   --bg painted on a sliding view would not line up with the radial
-   --bg-grad behind it, and the seam would travel with the slide. */
+   So the frame no longer moves. The screen is in place from the first frame,
+   and the CARDS arrive in sequence from the side you moved toward, which is
+   the same stagger every other arrival already uses (block 1 above). One
+   entrance, one vocabulary, and nothing is ever displaced off the screen. */
 
 
 /* The tab that was just chosen answers the touch itself — 500ms --ease-back,
-   which is why it is still going when the screen lands. */
-.nav-btn > svg { transition: transform 500ms var(--ease-back); }
-.nav-btn.vlt-pulse > svg { transform: scale(1.16); }
+   which is why it is still going when the cards land.
+
+   ⚠️ THE HOME TAB NEEDS THE SECOND SELECTOR AND HAS SINCE v340. Its glyph is
+   wrapped in `.home-center-icon` (index.html's static nav), so `.nav-btn > svg`
+   never matched it — the middle tab, the one under the thumb, was the only one
+   that did not answer the touch. */
+.nav-btn > svg,
+.nav-btn .home-center-icon > svg { transition: transform 500ms var(--ease-back); }
+.nav-btn.vlt-pulse > svg,
+.nav-btn.vlt-pulse .home-center-icon > svg { transform: scale(1.16); }
 
 /* ── 8. THE SPLASH — THE VAULT DOOR ───────────────────────────────────────
 

@@ -79,7 +79,7 @@ a faster TTFB — not fewer bytes.
 npm run release          # bump every marker + verify, then commit all files together
 ```
 
-**Current version: v345.** APK: build 22 / v3.1.
+**Current version: v346.** APK: build 22 / v3.1.
 
 `scripts/release.js` rewrites **every** marker and then re-reads them from disk to confirm; it exits non-zero if any disagree, and prints the count per file (derived, never hard-coded — the docs used to say 16 while the real count was 15). The markers are `?v=N` in `index.html` (every script and stylesheet, the `js/vendor/supabase.js` preload, both `icons/icon.svg` links, `manifest.json`), the `__cleaned_vN` sessionStorage key, the `FALLBACK` literal in `app.js`, `version.json` → `web`, the `?v=` in `manifest.json`, `admin.html`, `privacy.html` and `get/index.html`, and the `Current version` line in this file. `scripts/check-contracts.js` (pre-commit) refuses a commit where any of them disagree.
 
@@ -2611,6 +2611,146 @@ light + no door → `#faf5f0`; dark → `#000000` throughout.
   images are square (2732×2732), so short and long edge are the same number.
 - **"The 2500ms cap opens onto an empty shell"** and **"the app behind the door is
   not aria-hidden"** — both already answered in v343's note.
+
+## v346 — the frame stops moving, the content moves instead
+
+Two owner reports, one cause:
+
+1. «بعد الانزلاق والانتقال لشاشة أخرى خليها تيجي أنيميشن التدرّج» — the staggered
+   card entrance should play on tab switches too, not only on other arrivals.
+2. «فيه تأخير بسيط بيكون خلفية سودة ثم تظهر الشاشة المنتقل إليها».
+
+**Measured on a real home → food switch before touching anything:** the arriving
+view carried exactly one animation — `vlt-slide-in`, **50ms delay + 500ms**, from
+`translateX(100%)`. So for the first 50ms the new screen was **entirely
+off-screen** while the old one was already `display: none`, and it was only fully
+in place at **550ms**. For that whole window most of the screen was nothing but
+`--bg-grad`.
+
+> ⚠️ **THAT VOID IS NOT A BUG IN THE SLIDE — IT IS THE SLIDE.** A frame can only
+> arrive from off-screen, and v342 deleted the outgoing ghost that used to fill
+> the gap. There were exactly two ways out: put the old screen back underneath —
+> which is the thing the owner asked to stop seeing («دون أثر الصفحة التي قبل
+> الانتقال») — or stop moving the frame.
+
+So the frame no longer moves at all. The screen is in place from the first
+frame, and the CARDS arrive in sequence from the side you moved toward. That is
+report 1's stagger and report 2's fix in a single change, and it is the only
+shape that answers both without reintroducing the screen he asked to stop
+seeing.
+
+### How the direction travels
+
+`--ex` / `--ey` are the offset each card starts from, set on the host by
+`stagger(host, dir)` and inherited by `.enter > *`. A tab switch sets
+`--ex: ±26px` with `--ey: 6px` because the motion is sideways; every other
+arrival keeps the defaults (`0`, `24px`) and the cards simply rise. **One
+keyframe serves both.**
+
+`dir` is the tab ORDER (+1 later, −1 earlier) and carries no writing direction of
+its own, so **the RTL flip is applied in `stagger()`** — the last place before it
+becomes a physical translate. Measured in the running app, Arabic:
+
+| | `--ex` | reads as |
+|---|---|---|
+| home → food (a later tab) | **−26px** | comes from the left, which is "later" in RTL |
+| food → workouts (earlier) | **+26px** | mirrored |
+| → settings (not a tab) | unset → `0` | the plain 24px rise |
+
+`viewDisplacedOffScreen: false` on every one of them, and the first card's
+`animation-delay` is `0s` — **nothing is ever off-screen and nothing waits.**
+
+### What this deleted
+
+`.view.vlt-in`, `@keyframes vlt-slide-in`, `flushSlide()`, `clearSlideMarks()`,
+the per-slide cleanup closure and its timer, `__vltSlid`, and the `--dur-slide`
+token (v341 retired `--nav-bg` the same way — a token with no readers goes).
+
+> The v341 lesson those existed to carry outlives their code, and is kept as a
+> comment on `switchTab`: **ONE TIMER FOR N CONCURRENT ELEMENTS IS NOT A
+> DEBOUNCE.** Cancelling a shared timer does not cancel the work, it abandons
+> it. Anything that schedules per-element teardown here must keep the cleanup as
+> a closure beside its timer and RUN it rather than drop it.
+
+`switchTab()` survives with one job — pulsing the tab that was tapped, 500ms
+`--ease-back`, so the tab is still answering while the cards land.
+
+### Rule 5 is retired, not broken
+
+APPLY-motion.md's rule 5 said the stagger and the slide must never run together.
+With the frame no longer moving there is nothing to keep apart: **every arrival
+is the stagger**, and `__vltEnterDir` carries the only thing the render still
+needs to know. It is spent by the render it belongs to and zeroed either way, so
+a render that stands down cannot leave a direction behind for the next one.
+
+### The review, run before any of it shipped — chrome was arriving like content
+
+21 agents over four lenses, every finding adversarially verified: **17 raised, 12
+confirmed, 5 refuted.** They collapse to four causes.
+
+> ⚠️ **`.vault-bar` IS THE FIRST CHILD OF ALL FIVE TAB VIEWS**, so `.enter > *`
+> made the brand header itself fade in and travel 26px on every tab tap — the most
+> frequent navigation in the app. This stylesheet already says what that element
+> is, a few hundred lines up: *"Chrome, not content: it used to scroll away with
+> the page and re-animate on every tab tap."* v346 handed back the behaviour v316
+> took away.
+>
+> And it was worse than cosmetic: `vlt-enter` ends on `transform: none`, which
+> **overrode `.main.bar-hidden .vault-bar { transform: translateY(-100%) }`** for
+> the whole entrance window — so returning to a scrolled tab showed the header for
+> a second and then snapped it away in one frame.
+
+`.enter > .vault-bar, .enter > .detail-top` now refuse the entrance. The
+specificity was checked both ways: (0,2,0) beats `.enter > *` and loses to
+`.main.bar-hidden .vault-bar` at (0,3,0), so the v327 auto-hide still wins. No
+restart trap either — the bar's base `animation-name` is already `none`.
+
+**The CSS exemption alone would have introduced a new wait**, which the review
+caught: `stagger()` numbers every child, so an exempt-but-numbered bar spends
+index 0 and the first real card starts a whole step late. `stagger()` skips
+persistent chrome when numbering, so the first card is still at 0ms. Measured
+after: bar `animation-name: none`, opacity 1, no `--i`; first card `--i: 0`,
+delay `0s`.
+
+### The other three
+
+- **`--ex` / `--ey` were written only when there was a direction.** The host is a
+  PERSISTENT node — the same `.view` for the life of the app — so the last tab
+  switch's sideways offset stayed on it, and the next directionless arrival at
+  that view replayed a direction it had not moved in. They are written every time
+  now. Measured: arriving at Settings after a tab switch reads `0px` / `24px`.
+- **A re-render inside the stagger window replayed the whole entrance at delay 0.**
+  The class lives on the host, which SURVIVES an innerHTML rewrite of its own
+  contents — so brand-new children match `.enter > *`, have no `--i`, and all
+  animate together. Every save in this app re-renders the current view, and after
+  v346 that is reachable right after a tab tap. `VltMotion.cancelStagger(host)` is
+  called by any render that is not an arrival: the entrance was introducing
+  content that no longer exists. Same shape as the `animationend` lesson — the
+  cleanup cannot be left to the timer, because the thing being cleaned up is gone
+  before it fires.
+- ⚠️ **THE HOME TAB HAS NEVER ANSWERED THE TOUCH, SINCE v340.** Its glyph is
+  wrapped in `.home-center-icon`, so `.nav-btn.vlt-pulse > svg` never matched it —
+  the middle tab, the one under the thumb, was the only one that did not pulse.
+  Measured after the fix: both scale to 1.16.
+
+### And one number the owner would have felt
+
+The tab arrival finished at **1100ms** against the 550ms the frame slide took.
+First content is at 0ms either way, so nothing is late — but the screen kept
+assembling for twice as long, in the change whose whole purpose was to stop it
+looking late. `--stagger-fast: 60ms` is a second step for the arrival you make
+forty times a day; the ceremonial 140ms stays for a screen you opened
+deliberately. Last card now lands at **700ms**.
+
+**Refuted, and worth recording:** that 26px would clip full-bleed rows past the
+16px gutter (nothing legible is ever cut — the offset exceeds the gutter only in
+the first ~60ms, at opacity ≤ 0.4); that the six-child cap concentrates ten
+concurrent animations on Home; and that `opts.noSlide` is now dead.
+
+**Known and deliberately left:** the arriving cards are `opacity: 0` but still
+focusable and tappable for up to 700ms. They occupy their final positions, so a
+tap lands on the control the user is aiming at — making them inert would cost
+more than it buys.
 
 ## APK build 22 (v3.1) — the native half of v337–v341 reaches the phone
 

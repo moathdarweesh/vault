@@ -12,7 +12,7 @@
 // build. The literal below is the fallback (file://, or a stripped query) and is
 // still bumped by `npm run release` — see CLAUDE.md "CACHE WORKFLOW".
 const VAULT_BUILD = (() => {
-  const FALLBACK = 'v345';
+  const FALLBACK = 'v346';
   try {
     const src = (document.currentScript && document.currentScript.src) || '';
     const m = src.match(/[?&]v=(\d+)/);
@@ -1526,7 +1526,15 @@ function bindVaultAction(handler, scope) {
 let currentView = 'home';
 // Set for exactly one render when a tab slide is carrying the screen in, so the
 // staggered entry stands down (APPLY-motion.md rule 5).
-let __vltSlid = false;
+// The tab direction of the arrival in flight: +1 for a later tab, -1 for an
+// earlier one, 0 when the arrival is not a move across the bottom nav. Set by
+// navigate(), spent by the render it belongs to and zeroed either way.
+//
+// It replaced __vltSlid (v346), whose only job was to keep the stagger and the
+// frame slide from running together. With the frame no longer moving there is
+// nothing to keep apart: every arrival IS the stagger, and the only thing the
+// render still needs from navigate() is which way you moved.
+let __vltEnterDir = 0;
 // OWNER OVERRIDE of APPLY-motion.md rule 5 ('first render only'): the entry
 // plays EVERY time you arrive at a screen, not once per session.
 //
@@ -1579,16 +1587,16 @@ function navigate(view, context = {}, opts = {}) {
   // scroller and its scrollTop reads 0 from then on.
   const mainEl = $('.main');
   if (!opts.fromPop) { const leaving = navStack[navStack.length - 1]; if (leaving && mainEl) leaving.scrollY = mainEl.scrollTop; }
-  // ── TAB SLIDE — APPLY-motion.md §3, owner-chosen variant (2) ─────────────
-  // Only between the five BOTTOM-NAV tabs. A detail screen is a step INTO the
-  // tab you are already on, not a move across the row, and sliding it would
-  // say something untrue about where you went.
+  // ── THE DIRECTION OF THE ARRIVAL ─────────────────────────────────────────
+  // Only a move between the five BOTTOM-NAV tabs has a direction. A detail
+  // screen is a step INTO the tab you are already on, not a move across the
+  // row, so it arrives with the plain upward stagger — giving it a sideways
+  // one would say something untrue about where you went.
   //
-  // This must run BEFORE the toggle below: the leaving view's rectangle has to
-  // be read while it is still laid out, and pinning it right then is what takes
-  // it out of flow so the scroller never sees two screens at once.
+  // Resolved BEFORE the toggle below, because the leaving view is found with
+  // `.view.active` and after the toggle that lookup returns the ARRIVING view.
   const TABS = ['workouts', 'cardio', 'home', 'food', 'sleep'];
-  let slid = false;
+  let enterDir = 0;
   if (window.VltMotion && !opts.noSlide) {
     const fromEl = document.querySelector('.view.active');
     const toEl = document.querySelector(`.view[data-view="${view}"]`);
@@ -1598,17 +1606,16 @@ function navigate(view, context = {}, opts = {}) {
       // answer: Back to an earlier tab is the same physical move as tapping
       // that earlier tab, so it is already reversed. Multiplying by fromPop as
       // well negated it twice — measured: forward and Back both gave -1.
-      const dir = b > a ? 1 : -1;
-      const btn = document.querySelector(`.nav-btn[data-view="${view}"]`);
-      VltMotion.switchTab({ from: fromEl, to: toEl, dir, btn });
-      slid = true;
+      enterDir = b > a ? 1 : -1;
+      // The tab answers the touch itself; the screen is the stagger below.
+      VltMotion.switchTab({ btn: document.querySelector(`.nav-btn[data-view="${view}"]`) });
     }
   }
   $$('.view').forEach((v) => v.classList.toggle('active', v.dataset.view === view));
-  // Rule 5: the stagger and the slide never run together. Arriving by slide IS
-  // the entrance, so the screen is marked as entered and will not stagger later
-  // either — a screen gets one arrival, not two different ones.
-  if (slid) __vltSlid = true;
+  // Spent by the render this navigation is about to run. Rule 5 said the
+  // stagger and the slide must never run together; with the slide gone the
+  // stagger IS the arrival, and the direction is all it needs from here.
+  __vltEnterDir = enterDir;
   __vltArriving = true;
   // Publish the active view on <body>: .bottom-nav is a SIBLING of <main>, so
   // nothing rooted at .view can select it, and the guided-run screen needs to
@@ -1962,29 +1969,25 @@ function renderView(view) {
       // closed door, so staggering here would play the arrival to nobody and
       // leave a static screen for the door to reveal. The host is handed to the
       // splash clock, which fires it at the moment the leaves part.
-      //
-      // UNLESS A SLIDE BROUGHT IT IN. A tab can be reached by keyboard in the
-      // ~400ms between the door opening and this flag clearing; that sets
-      // __vltSlid, and the slide IS the entrance. Handing the host over anyway
-      // would fire a stagger on top of a screen that is still moving, and the
-      // flag would survive to eat the NEXT arrival as well.
-      if (__vltSlid) {
-        __vltSlid = false;
-      } else {
-        window.__vltSplashHost = host;
-        delete host.dataset.entered;
-      }
-    } else if (__vltSlid) {
-      // A tab slide IS the arrival — rule 5's one true half: the two never run
-      // together, or the cards climb while the screen is still moving.
-      __vltSlid = false;
-    } else if (__vltArriving) {
-      // Clearing the guard is what replays it. stagger() sets it again itself,
-      // so a re-render that is NOT an arrival still finds it set and stands down.
+      window.__vltSplashHost = host;
       delete host.dataset.entered;
-      VltMotion.stagger(host);
+    } else if (__vltArriving) {
+      // EVERY arrival staggers, tab switches included (v346) — that is the whole
+      // transition now. Clearing the guard is what replays it; stagger() sets it
+      // again itself, so a re-render that is NOT an arrival still stands down.
+      delete host.dataset.entered;
+      VltMotion.stagger(host, __vltEnterDir);
+    } else if (VltMotion.cancelStagger) {
+      // NOT an arrival — a save, a sync, a tick re-rendering the screen you are
+      // already on. If an entrance is still in flight it was introducing content
+      // that no longer exists, and the class left on the host would make these
+      // brand-new children all animate at once from delay 0.
+      VltMotion.cancelStagger(host);
     }
     __vltArriving = false;
+    // Spent either way: a render that stood down must not leave a direction
+    // behind for the next one to pick up.
+    __vltEnterDir = 0;
   }
 }
 
