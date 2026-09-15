@@ -244,6 +244,21 @@ window.VAULT_KEYS = Object.freeze({
   // shipped before it, or every sign-in is refused for a missing challenge.
   const withCaptcha = (tok) => (tok ? { captchaToken: tok } : {});
 
+  /* Key-order-insensitive JSON, for comparing what we sent with what Postgres
+     handed back. ARRAY ORDER IS UNTOUCHED — in this blob an array is a list of
+     sets, meals and days, and its order is data. Only OBJECT keys are sorted,
+     which is exactly what jsonb itself does. */
+  function stableJson(v) {
+    if (v === undefined) return 'null';
+    if (Array.isArray(v)) return '[' + v.map(stableJson).join(',') + ']';
+    if (v && typeof v === 'object') {
+      return (
+        '{' + Object.keys(v).sort().map((k) => JSON.stringify(k) + ':' + stableJson(v[k])).join(',') + '}'
+      );
+    }
+    return JSON.stringify(v);
+  }
+
   async function signUp(email, password, tok) {
     const c = sb(); if (!c) return { error: 'not_configured' };
     const { data, error } = await c.auth.signUp({ email: email.trim(), password, options: withCaptcha(tok) });
@@ -262,20 +277,40 @@ window.VAULT_KEYS = Object.freeze({
     try { await c.auth.signOut(); } catch (_) {}
   }
   // Change the signed-in user's password.
-  async function changePassword(newPassword, currentPassword, recovery) {
+  //
+  // ⚠️ A RECOVERY SESSION SKIPS THE RE-AUTH. IT DOES NOT SKIP THE FUNCTION.
+  // This used to read `if (recovery) return null` INSIDE the try block, which
+  // returned from changePassword entirely — updateUser was never reached, the
+  // caller read `.error` off null and threw, and the feature was dead on both
+  // paths for as long as that line existed. The guard is a branch now, and the
+  // only way out of this function is a result object.
+  //
+  // The re-auth itself is deliberate: without it a briefly-unlocked or shared
+  // logged-in device could silently change the password and lock the owner out.
+  // A recovery session is already proof of the mailbox — Supabase issued it from
+  // the emailed link — so asking for a password the user has forgotten is both
+  // impossible and unnecessary there.
+  async function changePassword(newPassword, currentPassword, recovery, tok) {
     const c = sb(); if (!c) return { error: 'not_configured' };
-    // Require re-authentication with the CURRENT password so a briefly-unlocked
-    // or shared logged-in device can't silently change it and lock the owner out.
-    try {
-      const email = await currentEmail();
-      // A RECOVERY session is already proof of the mailbox — Supabase issued it
-      // from the emailed link — so re-authenticating with the old password is
-      // both impossible (the user forgot it) and unnecessary.
-      if (recovery) return null;
-      if (!email || !currentPassword) return { error: 'reauth_failed' };
-      const { error: reauthErr } = await c.auth.signInWithPassword({ email, password: currentPassword });
-      if (reauthErr) return { error: 'reauth_failed' };
-    } catch (_) { return { error: 'reauth_failed' }; }
+    if (!recovery) {
+      try {
+        const email = await currentEmail();
+        if (!email || !currentPassword) return { error: 'reauth_failed' };
+        // ⚠️ THE TOKEN IS NOT OPTIONAL HERE. Turnstile has guarded sign-in since
+        // v305, and this IS a sign-in. Without it Supabase answers captcha_failed.
+        const { error: reauthErr } = await c.auth.signInWithPassword({
+          email, password: currentPassword, options: withCaptcha(tok),
+        });
+        if (reauthErr) {
+          // A captcha refusal must not read as a wrong password — the user would
+          // retype a correct password forever. v305 wrote auth_err_captcha for
+          // exactly this; let the message through so translateAuthError finds it.
+          return /captcha/i.test(reauthErr.message || '')
+            ? { error: reauthErr.message }
+            : { error: 'reauth_failed' };
+        }
+      } catch (_) { return { error: 'reauth_failed' }; }
+    }
     const { error } = await c.auth.updateUser({ password: newPassword });
     if (error) return { error: error.message };
     return { ok: true };
@@ -715,7 +750,12 @@ window.VAULT_KEYS = Object.freeze({
         const { data: updated, error: updErr } = await c.from(TABLE)
           .update({ data: payload, updated_at: iso })
           .eq('user_id', uid).eq('version', known)
-          .select('*');
+          // Only `version` is read off this response (plus the row COUNT, which
+          // representation still gives us). `select(*)` echoed the entire blob
+          // back on every push — the largest single waste left on this path
+          // after v308. Naming the column is safe: migration 22 is applied live
+          // and pullMeta() already names it.
+          .select('version');
         if (!updErr) {
           if (updated && updated.length) {
             if (typeof updated[0].version === 'number') setVersion(uid, updated[0].version);
@@ -730,8 +770,14 @@ window.VAULT_KEYS = Object.freeze({
             // got there first. Nothing was lost and nothing disagrees — adopt
             // the version it produced and report success. Alarming the user
             // here is what made the toast reappear "every little while".
+            // ⚠️ A BYTE COMPARE CANNOT SEE THROUGH jsonb. Postgres canonicalises
+            // object key order at every level, and this app re-imposes its own
+            // order on every load, so JSON.stringify(cur.data) and
+            // JSON.stringify(payload) are DIFFERENT STRINGS FOR THE SAME DATA —
+            // this branch could never be taken, and every silent self-conflict
+            // became the toast the branch exists to prevent.
             let same = false;
-            try { same = JSON.stringify(cur.data) === JSON.stringify(payload); } catch (_) { same = false; }
+            try { same = stableJson(cur.data) === stableJson(payload); } catch (_) { same = false; }
             if (same) {
               if (typeof cur.version === 'number') setVersion(uid, cur.version);
               setStamp(uid, cur.updated_at || iso);
@@ -755,7 +801,10 @@ window.VAULT_KEYS = Object.freeze({
     }
     const row = { user_id: uid, data: payload, updated_at: iso };
     const write = force ? c.from(TABLE).upsert(row, { onConflict: 'user_id' }) : c.from(TABLE).insert(row);
-    const { data: up, error, status } = await write.select('*');
+    // Same as above: only up[0].version is read. The probe at the 0-rows branch
+    // is NOT narrowed — it reads cur.data for the self-conflict compare, and
+    // narrowing it would turn every silent adoption into a conflict toast.
+    const { data: up, error, status } = await write.select('version');
     if (error) {
       // Only a genuine server answer proves nothing was committed. The SDK also
       // hands back {error} for a request that never got a response (status 0,

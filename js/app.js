@@ -12,7 +12,7 @@
 // build. The literal below is the fallback (file://, or a stripped query) and is
 // still bumped by `npm run release` — see CLAUDE.md "CACHE WORKFLOW".
 const VAULT_BUILD = (() => {
-  const FALLBACK = 'v347';
+  const FALLBACK = 'v348';
   try {
     const src = (document.currentScript && document.currentScript.src) || '';
     const m = src.match(/[?&]v=(\d+)/);
@@ -11851,11 +11851,24 @@ function showChangePassword(recovery) {
     ${recovery ? `<div class="confirm-text" style="margin-bottom:12px">${t('change_password_recovery_sub')}</div>` : `<input type="password" id="cpw-current" class="auth-input" placeholder="${t('change_password_current')}" autocomplete="current-password">`}
     <input type="password" id="cpw-new" class="auth-input" placeholder="${t('change_password_new')}" autocomplete="new-password">
     <input type="password" id="cpw-confirm" class="auth-input" placeholder="${t('change_password_confirm')}" autocomplete="new-password">
+    <!-- Only the re-auth path needs a challenge; a recovery session has already
+         proved the mailbox and never calls signInWithPassword. The slot reserves
+         no height — Turnstile is invisible here as it is on the login card. -->
+    ${recovery ? '' : '<div id="cpw-captcha"></div>'}
     <div class="auth-err" id="cpw-err"></div>
     <button class="btn btn-primary btn-block" id="cpw-save">${t('save')}</button>
   `, { variant: 'confirm' });
   const err = (m) => { const e = overlay.querySelector('#cpw-err'); if (e) e.textContent = m || ''; };
   const btn = overlay.querySelector('#cpw-save');
+  // Mounted from here, not from the template: Cloudflare draws into a LIVE node.
+  try {
+    if (!recovery && window.Cloud && Cloud.captcha) {
+      Cloud.captcha.mount(overlay.querySelector('#cpw-captcha'), {
+        theme: normalizeTheme(DB.prefs.get().theme) === 'light' ? 'light' : 'dark',
+        lang: (DB.prefs.get().lang === 'ar') ? 'ar' : 'en',
+      }).catch(() => {});
+    }
+  } catch (_) {}
   btn.addEventListener('click', async () => {
     const curEl = overlay.querySelector('#cpw-current');
     const cur = curEl ? (curEl.value || '') : '';
@@ -11866,9 +11879,13 @@ function showChangePassword(recovery) {
     if (pw !== pw2) { err(t('change_password_mismatch')); return; }
     err(''); btn.disabled = true; btn.textContent = t('auth_signing');
     try {
-      const res = await Cloud.changePassword(pw, cur, recovery);
-      if (res.error === 'reauth_failed') { err(t('change_password_wrong_current')); btn.disabled = false; btn.textContent = t('save'); return; }
-      if (res.error) { err(translateAuthError(res.error)); btn.disabled = false; btn.textContent = t('save'); return; }
+      // A token is single-use and expires in about five minutes, so every failed
+      // attempt resets the widget — without that a mistyped password makes the
+      // NEXT try fail on the challenge instead, which reads as a broken app.
+      const tok = recovery ? null : (Cloud.captcha ? await Cloud.captcha.token() : null);
+      const res = await Cloud.changePassword(pw, cur, recovery, tok);
+      if (res.error === 'reauth_failed') { if (!recovery && Cloud.captcha) Cloud.captcha.reset(); err(t('change_password_wrong_current')); btn.disabled = false; btn.textContent = t('save'); return; }
+      if (res.error) { if (!recovery && Cloud.captcha) Cloud.captcha.reset(); err(translateAuthError(res.error)); btn.disabled = false; btn.textContent = t('save'); return; }
       closeModal();
       showToast(t('change_password_done'));
     } catch (e) {
@@ -11996,7 +12013,12 @@ async function populateAccount(el) {
           <div class="settings-action-sub">${t('delete_account_sub')}</div>
         </div>
       </button>`;
-    $('#change-pw-btn', el)?.addEventListener('click', showChangePassword);
+    // ⚠️ WRAPPED, NEVER PASSED BARE. showChangePassword(recovery) would receive
+    // the click EVENT as `recovery` — truthy — which hid the current-password
+    // field and put the whole feature down the recovery path it does not belong
+    // on. Two handlers 160 lines above already use arrow wrappers; this one did
+    // not, and that single missing `() =>` is what killed it.
+    $('#change-pw-btn', el)?.addEventListener('click', () => showChangePassword());
     $('#delete-account-btn', el)?.addEventListener('click', () => {
       confirmDialog({
         title: t('delete_account'), text: t('delete_account_confirm'),

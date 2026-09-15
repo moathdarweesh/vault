@@ -25,6 +25,20 @@ android {
         }
     }
     buildTypes {
+        /* ⚠️ THE SHIPPED APK WAS DEBUGGABLE. Read back out of build 22 with
+           `aapt2 dump xmltree`: android:debuggable=true sat next to
+           android:allowBackup=false — and it VOIDS it. `adb run-as` and
+           chrome://inspect both work on a debuggable app, so the WebView
+           storage the backup flag was added to protect (v302) was reachable
+           anyway with the phone unlocked and USB debugging on.
+
+           AGP sets this implicitly for the debug type; nothing in this file ever
+           declared it. The debug signingConfig is KEPT on purpose — build 23
+           must install over build 22 without an uninstall, or the device-local
+           photo side store and the notification log go with it. */
+        debug {
+            debuggable false
+        }
         release {
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'

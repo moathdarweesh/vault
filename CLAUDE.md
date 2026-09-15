@@ -79,7 +79,7 @@ a faster TTFB — not fewer bytes.
 npm run release          # bump every marker + verify, then commit all files together
 ```
 
-**Current version: v347.** APK: build 22 / v3.1.
+**Current version: v348.** APK: build 22 / v3.1.
 
 `scripts/release.js` rewrites **every** marker and then re-reads them from disk to confirm; it exits non-zero if any disagree, and prints the count per file (derived, never hard-coded — the docs used to say 16 while the real count was 15). The markers are `?v=N` in `index.html` (every script and stylesheet, the `js/vendor/supabase.js` preload, both `icons/icon.svg` links, `manifest.json`), the `__cleaned_vN` sessionStorage key, the `FALLBACK` literal in `app.js`, `version.json` → `web`, the `?v=` in `manifest.json`, `admin.html`, `privacy.html` and `get/index.html`, and the `Current version` line in this file. `scripts/check-contracts.js` (pre-commit) refuses a commit where any of them disagree.
 
@@ -2611,6 +2611,112 @@ light + no door → `#faf5f0`; dark → `#000000` throughout.
   images are square (2732×2732), so short and long edge are the same number.
 - **"The 2500ms cap opens onto an empty shell"** and **"the app behind the door is
   not aria-hidden"** — both already answered in v343's note.
+
+## v348 — the full audit: what it found, and the four it could fix in code
+
+The owner asked for a review of the database, the code, the design and the
+security, plus web research on the failure modes of AI-built ("vibe coded") apps
+compared against this one. Fourteen agents, five lenses, every headline finding
+adversarially verified: **26 findings, 8 verified in depth, 0 refuted.**
+
+Against the published vibe-coding failure list — hardcoded credentials, no access
+control, silent error handling, happy-path-only code — this app is far above the
+norm: no secret ships to a client, RLS is on every table, and cross-tenant probes
+return nothing. **The one failure mode it did hit is the most common one on that
+list: a guard that fails silently and open.**
+
+### ⚠️ CHANGE PASSWORD WAS DEAD ON BOTH PATHS, AND ONE MISSING `() =>` DID IT
+
+```js
+$('#change-pw-btn', el)?.addEventListener('click', showChangePassword);
+```
+
+The function is passed BARE, so the click **Event** arrives as its `recovery`
+argument and is truthy. That hid the current-password field, skipped its own
+required-field check, and reached `if (recovery) return null` in cloud.js — a
+`return` from the whole function, not a skip of the re-auth. `updateUser` was
+never called, `res.error` on `null` threw, the catch translated `undefined`, and
+the password was never changed. **The real recovery path, from the emailed link,
+hit the same `return null` and was equally dead.** Two handlers 160 lines above
+already use arrow wrappers; this one did not.
+
+Reviving it was not enough on its own. **Turnstile has guarded sign-in since
+v305, and the re-auth IS a sign-in** — so `signInWithPassword` would have been
+refused with `captcha_failed`, which the old code collapsed into `reauth_failed`
+and showed as «كلمة السر الحالية غير صحيحة»: wrong, and unfixable by the user.
+The sheet carries a challenge now (re-auth path only — a recovery session never
+signs in), the token is passed, the widget is reset on every failure because a
+token is single-use, and a captcha refusal is let through so
+`translateAuthError` reaches its `auth_err_captcha` branch.
+
+Measured after: both paths return a result OBJECT, never null; the settings sheet
+shows the current-password field and the challenge slot, the recovery sheet shows
+neither.
+
+### ⚠️ THE SELF-CONFLICT COMPARE COULD NEVER BE TRUE
+
+`same = JSON.stringify(cur.data) === JSON.stringify(payload)` — and
+`vault_data.data` is **jsonb**, which canonicalises object key order (by length,
+then bytewise) at every level. The app re-imposes its own fixed order on every
+load: `defaultNutrition()` declares `sex, age, heightCm, …` and
+`Object.assign(dn.profile, parsed…)` keeps the TARGET's order, so the default
+wins every time. **The bytes coming back never matched the bytes going out**, so
+every silent self-conflict adoption escalated into the user-facing conflict toast
+the branch exists to prevent.
+
+`stableJson()` sorts OBJECT keys only — **array order is data here** (a list of
+sets, meals, days) and is untouched, which is exactly what jsonb itself does.
+Measured on the real shape: the old compare says different, the new one says
+same, and a reordered `sessions` array still compares different.
+
+### Two more, cheap
+
+- **Every push echoed the whole blob back to read one integer.** `.select('*')`
+  on the conditional UPDATE and on the INSERT/upsert, when only `version` is ever
+  read. Narrowed to `.select('version')`. **The 0-rows probe at cloud.js:726 is
+  deliberately NOT narrowed** — it reads `cur.data` for the self-conflict compare
+  above, and narrowing it would turn every silent adoption into a conflict toast.
+- ⚠️ **THE SHIPPED APK IS DEBUGGABLE, AND THAT VOIDS `allowBackup=false`.** Read
+  back out of build 22 with `aapt2 dump xmltree`: `android:debuggable=true` sits
+  next to `android:allowBackup=false`. `adb run-as` and `chrome://inspect` both
+  work on a debuggable app, so the WebView storage the backup flag was added to
+  protect (v302) was reachable anyway. AGP sets it implicitly for the debug type
+  and this file never declared it. `debug { debuggable false }` now does. The
+  debug signingConfig is KEPT on purpose: build 23 must install over build 22
+  without an uninstall, or the device-local photo side store and the notification
+  log go with it. **This one needs a new APK to reach a phone.**
+
+### What the audit found that only the owner can fix
+
+Recorded here so it is not lost, in the order that matters:
+
+1. **The daily AI budget has been failing OPEN for nine days** — and this pass
+   proved it from the LIVE LOGS, not just the catalog: 16 POSTs to
+   `rpc/ai_budget_take` in 24 hours, **16 × 409**, zero 2xx, with 16 matching
+   `violates foreign key constraint "ai_usage_user_fk"` lines in postgres_logs at
+   the same milliseconds. `ai_usage` still holds 2 rows, both `day=2026-09-06`.
+   `backend/pending/29_ai-usage-fk-repair-v25.sql` is the fix and is a live write.
+   > Correction to that file's own header: it argues the FK is safe to drop
+   > because `admin_prune_ai_usage()` clears orphans after 30 days. **pg_cron is
+   > not installed**, so that function has no caller. The decision does not
+   > change — an orphan row is ~1 per user per day and a dead cap is bleeding now
+   > — but the durable repair is to move the global counter into its own table.
+2. **Sign-up is open and auto-confirmed**, so a ban is undone by registering a
+   second email.
+3. **Leaked-password protection is off** in Supabase Auth; the 8-character floor
+   is enforced only in the client.
+4. **`feedback` has no deletion path anywhere** — not in the app, not in the
+   console, not in any RPC.
+5. **The image bucket caps object COUNT but never BYTES** — one account can claim
+   ~102 MB of a 1 GB tier.
+
+### And one that is neither code nor SQL
+
+**CLAUDE.md, docs/BRAND.md and the identity layer still describe THE CUT as the
+in-app mark, 120 versions after v227 replaced it with the AJ lockup.** Three
+documents agree with each other and disagree with the app. This is the same class
+as the stale prose v345 removed, but larger: a future session reading those files
+would "restore" a mark the app has not used for a hundred releases.
 
 ## v347 — a duration is a clock reading, everywhere
 
