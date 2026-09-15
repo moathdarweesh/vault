@@ -420,6 +420,7 @@
         <input id="email" type="email" placeholder="بريدك" autocomplete="username" required>
         <label for="pass">كلمة السر</label>
         <input id="pass" type="password" placeholder="كلمة السر" autocomplete="current-password" required>
+        <div id="login-captcha"></div>
         <button class="btn" id="login-btn" type="submit">تسجيل الدخول</button>
         <div class="msg" id="login-msg"></div>
         <button type="button" class="link" id="forgot-link">نسيت كلمة السر؟</button>
@@ -429,6 +430,7 @@
         <p class="sub">أدخل بريدك ونرسل لك رابط إعادة التعيين.</p>
         <label for="reset-email">البريد الإلكتروني</label>
         <input id="reset-email" type="email" placeholder="بريدك" autocomplete="username" required>
+        <div id="reset-captcha"></div>
         <button class="btn" id="reset-btn" type="submit">إرسال الرابط</button>
         <div class="msg" id="reset-msg"></div>
         <button type="button" class="link" id="reset-back">‹ رجوع لتسجيل الدخول</button>
@@ -469,7 +471,7 @@
   <div id="detail" class="detail"><div class="detail-inner" id="detail-inner"></div></div>
   <div class="toast" id="toast"></div>
 
-  <script src="js/vendor/supabase.js?v=348"></script>
+  <script src="js/vendor/supabase.js?v=349"></script>
   <script>
   (function(){
     'use strict';
@@ -569,17 +571,64 @@
       }catch(e){ msg.className='msg err'; msg.textContent='تعذّر التحقّق: '+(e.message||e); showLogin(); }
     }
 
+    /* ── TURNSTILE ────────────────────────────────────────────────────────
+       This page is STANDALONE — it shares no code with js/cloud.js — so it
+       needs its own copy. Kept deliberately small and shaped like the app`s:
+       lazy script load with a hard timeout, explicit render, single-use token.
+
+       The SITE key is public by design and is the same one the app uses
+       (js/cloud.js:170). The SECRET lives only in the Supabase dashboard.
+
+       ⚠️ A TOKEN IS SINGLE-USE AND EXPIRES IN ABOUT FIVE MINUTES. Without a
+       reset on every failure a mistyped password makes the NEXT attempt fail
+       on the challenge instead, which reads as a broken login. */
+    var CAPTCHA_SITE_KEY='0x4AAAAAAEqRei1h4Kv8R2yP';
+    var tsReady=null, tsIds={};
+    function tsLoad(){
+      if(tsReady) return tsReady;
+      tsReady=new Promise(function(res,rej){
+        if(window.turnstile) return res();
+        var sc=document.createElement('script');
+        sc.src='https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit';
+        sc.async=true; sc.defer=true;
+        var to=setTimeout(function(){rej(new Error('captcha_timeout'));},15000);
+        sc.onload=function(){clearTimeout(to); res();};
+        sc.onerror=function(){clearTimeout(to); rej(new Error('captcha_load'));};
+        document.head.appendChild(sc);
+      });
+      return tsReady;
+    }
+    function tsMount(slotId){
+      var el=$('#'+slotId); if(!el) return Promise.resolve();
+      return tsLoad().then(function(){
+        if(tsIds[slotId]!=null) return;
+        tsIds[slotId]=window.turnstile.render(el,{sitekey:CAPTCHA_SITE_KEY,theme:'dark',language:'ar'});
+      }).catch(function(){});
+    }
+    // Resolves EMPTY rather than hanging when the widget is unavailable — the
+    // server then answers captcha_failed, which is a message the user can act on.
+    function tsToken(slotId){
+      try{
+        if(!window.turnstile||tsIds[slotId]==null) return '';
+        return window.turnstile.getResponse(tsIds[slotId])||'';
+      }catch(_){ return ''; }
+    }
+    function tsReset(slotId){
+      try{ if(window.turnstile&&tsIds[slotId]!=null) window.turnstile.reset(tsIds[slotId]); }catch(_){}
+    }
+    tsMount('login-captcha');
+
     $('#panel-login').addEventListener('submit',async function(e){
       e.preventDefault();
       var btn=$('#login-btn'),msg=$('#login-msg');
       btn.disabled=true; msg.className='msg'; msg.textContent='جارٍ تسجيل الدخول…';
-      var r=await sb.auth.signInWithPassword({email:$('#email').value.trim(),password:$('#pass').value});
+      var r=await sb.auth.signInWithPassword({email:$('#email').value.trim(),password:$('#pass').value,options:{captchaToken:tsToken('login-captcha')}});
       btn.disabled=false;
-      if(r.error){msg.className='msg err'; msg.textContent='فشل الدخول: '+r.error.message; return;}
+      if(r.error){tsReset('login-captcha'); msg.className='msg err'; msg.textContent='فشل الدخول: '+r.error.message; return;}
       msg.className='msg ok'; msg.textContent='تم — جارٍ التحقّق…'; checkAdminAndLoad();
     });
     function showPanel(id){ ['panel-login','panel-reset','panel-newpw'].forEach(function(p){ $('#'+p).classList.toggle('hidden', p!==id); }); }
-    $('#forgot-link').addEventListener('click',function(){ showPanel('panel-reset'); var e=$('#reset-email'); if(e) e.value=$('#email').value.trim(); });
+    $('#forgot-link').addEventListener('click',function(){ showPanel('panel-reset'); var e=$('#reset-email'); if(e) e.value=$('#email').value.trim(); tsMount('reset-captcha'); });
     $('#reset-back').addEventListener('click',function(){ showPanel('panel-login'); });
     $('#panel-reset').addEventListener('submit',async function(e){
       e.preventDefault();
@@ -587,9 +636,9 @@
       if(!email){ msg.className='msg err'; msg.textContent='أدخل بريدك'; return; }
       btn.disabled=true; msg.className='msg'; msg.textContent='جارٍ الإرسال…';
       var redirect=location.href.split('#')[0].split('?')[0];
-      var r=await sb.auth.resetPasswordForEmail(email,{redirectTo:redirect});
+      var r=await sb.auth.resetPasswordForEmail(email,{redirectTo:redirect,captchaToken:tsToken('reset-captcha')});
       btn.disabled=false;
-      if(r.error){ msg.className='msg err'; msg.textContent='تعذّر: '+r.error.message; return; }
+      if(r.error){ tsReset('reset-captcha'); msg.className='msg err'; msg.textContent='تعذّر: '+r.error.message; return; }
       msg.className='msg ok'; msg.textContent='تم ✓ تفقّد بريد '+email+' واضغط رابط إعادة التعيين.';
     });
     $('#panel-newpw').addEventListener('submit',async function(e){

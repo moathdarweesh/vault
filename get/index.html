@@ -8,7 +8,7 @@
   <meta name="theme-color" content="#000000">
   <meta property="og:title" content="VAULT — تطبيق اللياقة">
   <meta property="og:description" content="حمّل تطبيق VAULT لتتبّع تمارينك وتغذيتك ونومك.">
-  <link rel="icon" type="image/svg+xml" href="../icons/icon.svg?v=348">
+  <link rel="icon" type="image/svg+xml" href="../icons/icon.svg?v=349">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <!-- Archivo is not optional here: the wordmark is set in it, and without it
@@ -161,7 +161,23 @@
     var statusEl = document.getElementById('status');
     var verEl = document.getElementById('ver');
 
+    // ⚠️ SAME RULE AS js/update.js:safeDownloadUrl. This page reads the same
+    // version.json field and navigates to it. https only, and only a host we
+    // publish from; anything else falls back to the constant above rather than
+    // being followed. A javascript: URI here would execute — script-src carries
+    // 'unsafe-inline' for the pre-paint scripts and cannot stop it.
+    var APK_HOSTS = ['raw.githubusercontent.com', 'github.com', 'objects.githubusercontent.com'];
+    function safeUrl(url){
+      if (!url || typeof url !== 'string') return '';
+      var u;
+      try { u = new URL(url, location.href); } catch (e) { return ''; }
+      if (u.protocol !== 'https:') return '';
+      if (APK_HOSTS.indexOf(u.hostname) === -1) return '';
+      return u.href;
+    }
+
     function ready(url, version){
+      url = safeUrl(url) || FALLBACK;
       btn.setAttribute('href', url);
       statusEl.innerHTML = '<span>يبدأ التنزيل تلقائيًّا…</span>';
       if (version) verEl.textContent = 'الإصدار ' + version;

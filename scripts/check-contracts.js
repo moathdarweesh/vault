@@ -290,6 +290,36 @@ const contract = (name, problems) => {
   contract('version.json apk.build/apk.version equal build.gradle versionCode/versionName', problems);
 }
 
+// ---------------------------------------------------------------- 11b. the published APK fingerprint is the real one
+/* The APK is signed with the Android DEBUG key — the one that ships with the
+   SDK and sits on every developer machine on earth — so the signature proves
+   nothing about who built it. The published SHA-256 is the only thing a user
+   can actually check the download against.
+
+   ⚠️ A HASH THAT DOES NOT MATCH THE FILE IS WORSE THAN NO HASH: it tells the
+   user a tampered binary is genuine. So it is recomputed from the bytes on
+   every commit, and both places that publish it must agree with them. */
+{
+  const problems = [];
+  const apkPath = 'download/THE-VAULT.apk';
+  if (!exists(apkPath)) {
+    problems.push('download/THE-VAULT.apk is missing');
+  } else {
+    const real = require('crypto').createHash('sha256').update(fs.readFileSync(apkPath)).digest('hex');
+    const declared = (JSON.parse(read('version.json')).apk || {}).sha256 || '';
+    if (!declared) problems.push('version.json apk.sha256 is missing — publish the fingerprint of the binary you ship');
+    else if (declared !== real) problems.push(`version.json apk.sha256 says ${declared.slice(0, 16)}… but the file hashes to ${real.slice(0, 16)}…`);
+    const sidecarPath = apkPath + '.sha256';
+    if (!exists(sidecarPath)) {
+      problems.push('download/THE-VAULT.apk.sha256 is missing');
+    } else {
+      const sidecar = read(sidecarPath).trim().split(/\s+/)[0] || '';
+      if (sidecar !== real) problems.push(`the .sha256 sidecar says ${sidecar.slice(0, 16)}… but the file hashes to ${real.slice(0, 16)}…`);
+    }
+  }
+  contract('the published APK fingerprint equals the bytes of the shipped binary', problems);
+}
+
 // ---------------------------------------------------------------- 12. index.html preconnects to the project cloud.js talks to
 {
   const url = (src['js/cloud.js'].match(/SUPABASE_URL\s*=\s*'([^']+)'/) || [])[1] || '';

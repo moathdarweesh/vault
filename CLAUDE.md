@@ -79,7 +79,7 @@ a faster TTFB — not fewer bytes.
 npm run release          # bump every marker + verify, then commit all files together
 ```
 
-**Current version: v348.** APK: build 22 / v3.1.
+**Current version: v349.** APK: build 22 / v3.1.
 
 `scripts/release.js` rewrites **every** marker and then re-reads them from disk to confirm; it exits non-zero if any disagree, and prints the count per file (derived, never hard-coded — the docs used to say 16 while the real count was 15). The markers are `?v=N` in `index.html` (every script and stylesheet, the `js/vendor/supabase.js` preload, both `icons/icon.svg` links, `manifest.json`), the `__cleaned_vN` sessionStorage key, the `FALLBACK` literal in `app.js`, `version.json` → `web`, the `?v=` in `manifest.json`, `admin.html`, `privacy.html` and `get/index.html`, and the `Current version` line in this file. `scripts/check-contracts.js` (pre-commit) refuses a commit where any of them disagree.
 
@@ -2611,6 +2611,113 @@ light + no door → `#faf5f0`; dark → `#000000` throughout.
   images are square (2732×2732), so short and long edge are the same number.
 - **"The 2500ms cap opens onto an empty shell"** and **"the app behind the door is
   not aria-hidden"** — both already answered in v343's note.
+
+## v349 — the console could not log in, and the download could not be checked
+
+The owner asked for a full review — database, code, design, security — plus the
+published catalogue of vibe-coding failures compared against this app. Fourteen
+agents across five lenses, then three more surveys. **The headline is worth
+stating before the findings: against that catalogue this app is an outlier in
+the right direction.** The five failures that most often kill a vibe-coded app —
+RLS off, a privileged key in the client, no server-side authorization, hardcoded
+secrets, no input validation — are all absent, and absent *by construction*: no
+build step and no npm means the highest-rate supply-chain risk (19.7% of
+AI-recommended packages do not exist) has no surface at all; one blob per user
+means BOLA has no surface; RLS plus definer RPCs means client-side authorization
+has no surface.
+
+> **What did land is almost entirely two shapes the research says survive
+> competence: a guard that fails open and passes review, and a verification that
+> proves the wrong thing.** Both are already in this file's history, and both are
+> in this release.
+
+### ⚠️ THE ADMIN CONSOLE HAS BEEN LOCKED SINCE v305, AND NOBODY TRIED
+
+One probe settled it, against the live project, with a fake email and no token:
+
+```
+POST /auth/v1/token   → {"error_code":"captcha_failed",
+                         "msg":"request disallowed (no captcha_token found)"}
+POST /auth/v1/signup  → the same
+```
+
+The gate refuses **before it looks at the credentials**. `admin.html` sends a
+bare `signInWithPassword` with no `captchaToken` — and a bare
+`resetPasswordForEmail` too — so **every** sign-in and every reset from that page
+has been refused for as long as Turnstile has been on. The app carries the token
+at all three of its doors; this page is standalone, duplicates its own auth, and
+was never taught to.
+
+It has its own small Turnstile owner now, shaped like the app's: lazy script load
+with a hard timeout, explicit render into a live node, and a reset on every
+failure — because a token is single-use and expires in about five minutes, so
+without the reset a mistyped password makes the *next* attempt fail on the
+challenge instead, which reads as a broken login.
+
+> The probe is worth keeping as a technique: **a fake email answers "is this gate
+> on?" without touching a real account or a real password.**
+
+### ⚠️ THE APK IS SIGNED WITH THE ANDROID DEBUG KEY
+
+Read out of the shipped binary, not inferred:
+
+```
+Signer #1 certificate DN: C=US, O=Android, CN=Android Debug
+Signer #1 certificate SHA-256: e9472323a854d50fd75be5c957feb79c51479177e61e8f378528aa4c89c010b4
+```
+
+That key ships with the Android SDK and sits on every developer machine on
+earth. **Anyone can sign a modified build with it, and Android will install it
+over this app as an update** — inheriting its localStorage, its session token,
+its photo side store and its notification log. This is the concrete answer to
+"can someone trojan my app", and the signature proves nothing about who built it.
+
+Replacing the key is the owner's call and has a real cost: a new key forces an
+uninstall, which takes the device-local photo side store and the notification log
+with it. What can be done without touching the key is to **publish what the real
+binary hashes to**, so a tampered copy is detectable at all. Before this release
+`version.json` carried **zero** hash fields and there was no sidecar.
+
+Now: `apk.sha256` in `version.json`, `download/THE-VAULT.apk.sha256` beside the
+binary, and **contract 32** recomputing it from the bytes on every commit.
+
+> **A hash that does not match the file is worse than no hash** — it tells the
+> user a tampered binary is genuine. That is why it is a contract and not a note.
+
+### Two navigation sinks that accepted anything
+
+`apk.url` comes from `version.json` and went straight into a main-frame
+navigation in two places — `openLink()` in `js/update.js` and `ready()` in
+`get/index.html` — with no check of scheme or host. `apk.build` beside it is
+type-checked *and* contract-enforced; the URL was not checked at all.
+
+⚠️ **And `javascript:` would actually have run.** The CSP carries
+`'unsafe-inline'` in `script-src` — deliberately, for the pre-paint scripts and
+Capacitor's bridge — so it cannot stop a `javascript:` URI. The source is
+same-origin (it needs repo write), which makes this defence in depth rather than
+a live hole, and it is the cheapest possible check.
+
+Both now require `https:` and a host from the release allowlist, and a URL that
+fails is **refused**, not silently swapped — `get/index.html` falls back to its
+own constant. Measured against eight hostile or malformed inputs
+(`javascript:`, `data:`, `http:` on a good host, a wrong host, a lookalike host
+`raw.githubusercontent.evil.com`, a protocol-relative `//evil`, empty, null):
+**8 of 8 refused, and the real release URL passes.**
+
+### What the audit found that is still the owner's, in order
+
+1. **The daily AI budget has been failing open for nine days** — proven from the
+   live logs this time: 16 POSTs to `rpc/ai_budget_take` in 24 hours, **16 × 409,
+   zero 2xx**, with matching foreign-key violations in `postgres_logs` at the same
+   milliseconds. `backend/pending/29` is the fix and is a live write.
+2. **Email confirmation** (the owner's choice over closing sign-up) — without it
+   every per-account cap is undone by a second address.
+3. **The 8-character floor server-side, and leaked-password protection on.**
+4. **The signing key decision** above.
+5. **One restore drill.** The runbook says "a backup you have never restored does
+   not exist" and none has ever been run — and images were lost here once already.
+6. **`pg_cron`, or something that calls the prune functions.** Retention is
+   aspirational: the functions exist and nothing invokes them.
 
 ## v348 — the full audit: what it found, and the four it could fix in code
 

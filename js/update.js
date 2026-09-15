@@ -148,7 +148,30 @@
       return isNaN(n) ? null : n;
     }).catch(function () { return null; });
   }
+  /* ⚠️ ONLY https, AND ONLY A HOST WE PUBLISH FROM.
+
+     This value arrives from version.json and goes straight into a main-frame
+     navigation. A `javascript:` URI there would EXECUTE — the CSP cannot stop
+     it, because script-src carries `unsafe-inline` for the pre-paint scripts
+     and the Capacitor bridge. `data:` would hand the user an arbitrary file
+     under the app`s own name. Neither has ever been needed: every release has
+     pointed at raw.githubusercontent.com.
+
+     The allowlist is the hosts this project actually distributes from. A URL
+     that fails is not silently swapped for something else — it is refused, and
+     the caller falls back to its own constant. */
+  var APK_HOSTS = ['raw.githubusercontent.com', 'github.com', 'objects.githubusercontent.com'];
+  function safeDownloadUrl(url) {
+    if (!url || typeof url !== 'string') return '';
+    var u;
+    try { u = new URL(url, location.href); } catch (_) { return ''; }
+    if (u.protocol !== 'https:') return '';
+    if (APK_HOSTS.indexOf(u.hostname) === -1) return '';
+    return u.href;
+  }
+
   function openLink(url) {
+    url = safeDownloadUrl(url);
     if (!url) return;
     // Must trigger a MAIN-FRAME navigation (not window.open, which the Capacitor
     // WebView ignores). Capacitor's shouldOverrideUrlLoading then hands any URL on
