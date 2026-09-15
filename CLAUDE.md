@@ -79,7 +79,7 @@ a faster TTFB — not fewer bytes.
 npm run release          # bump every marker + verify, then commit all files together
 ```
 
-**Current version: v354.** APK: build 22 / v3.1.
+**Current version: v355.** APK: build 22 / v3.1.
 
 `scripts/release.js` rewrites **every** marker and then re-reads them from disk to confirm; it exits non-zero if any disagree, and prints the count per file (derived, never hard-coded — the docs used to say 16 while the real count was 15). The markers are `?v=N` in `index.html` (every script and stylesheet, the `js/vendor/supabase.js` preload, both `icons/icon.svg` links, `manifest.json`), the `__cleaned_vN` sessionStorage key, the `FALLBACK` literal in `app.js`, `version.json` → `web`, the `?v=` in `manifest.json`, `admin.html`, `privacy.html` and `get/index.html`, and the `Current version` line in this file. `scripts/check-contracts.js` (pre-commit) refuses a commit where any of them disagree.
 
@@ -558,7 +558,7 @@ npm run verify && npm run release && git add <the files> && git commit && git pu
 This authorization is about the QUESTION, not about the standards. Everything that made the
 question worth asking still applies, and none of it is waived:
 
-- **Verified first.** `npm run verify` (35 contracts + lint + 9 suites) must pass, and any change to
+- **Verified first.** `npm run verify` (35 contracts + lint + 10 suites) must pass, and any change to
   shipped code must be measured in the running app. Pushing unverified work is not "shipping
   without asking", it is shipping something unknown — GitHub Pages serves the branch directly
   with no gate, so a bad push reaches every device at the next app open.
@@ -2612,6 +2612,78 @@ light + no door → `#faf5f0`; dark → `#000000` throughout.
 - **"The 2500ms cap opens onto an empty shell"** and **"the app behind the door is
   not aria-hidden"** — both already answered in v343's note.
 
+## v355 — the net sees all eight cells now, and one of them runs on every push
+
+Stage 1 of the fingerprint net recorded ONE cell of eight — ar/dark/375 — so a
+refactor step that broke the light theme, the English layout or a wider phone
+would have been certified identical. That is not a theoretical gap; it was
+measured before this shipped, and it is the reason the `js/app.js` split could
+not start yet.
+
+### `matrix` — stage 2
+
+`node scripts/fingerprint-net.js matrix --tag X` records **8 contexts × 20 views**
+— ar/en × dark/light × 375/412 — in one browser, as one record, with **every
+property band on** (41 properties, where stage 1 kept 13 so a human could read
+the first baseline). `diff` treats the whole thing as one capture and refuses to
+compare records taken with different property sets.
+
+| | |
+|---|---|
+| one matrix | **49 seconds** — 160 cells, 16,396 elements, 41 properties each |
+| two matrices, no change | **160/160 cells identical, 0 differences** |
+| slowest synchronous render, anywhere | `exercises` at **34ms** |
+
+### The proof that stage 2 was needed, not merely nice
+
+Two defects planted at once — mute text painted at full ink **only in the light
+theme** (the v314 shape), and the page title at weight 400 **only in English**:
+
+| | verdict |
+|---|---|
+| stage 1, ar/dark/375 | **20/20 cells identical, 0 differences — certified, blind** |
+| stage 2, the matrix | **98/160 identical, 108 differences — caught**, and each group names its cell: `en/dark/375/calendar` for the weight, `ar/light/375/settings` for the colour |
+
+Both files restored byte-for-byte afterwards.
+
+### The hang lane
+
+The owner's condition on the whole refactor is «لا يعلّق التطبيق». `page.evaluate`
+has **no default timeout**, so a render that never returned would have left the
+run looking "in progress" rather than failed. Every render is now raced against
+a hard ceiling on the Node side: past **8 s** the capture aborts naming the view
+— **THE APP HUNG** — because a hung page's main thread cannot be recovered; past
+**1.5 s** the render is a PROBLEM (a visible freeze on a phone) and the run fails.
+The three slowest renders are printed on every capture so the number is seen
+before it is a problem.
+
+> ⚠️ **A NOISE SOURCE STAGE 1 HAD "CLOSED" WAS STILL OPEN, and only eight contexts
+> showed it.** The `loaded machine-photo` flip — recorded above as noise source 1
+> — reappeared in 5 of 160 cells. `img.complete` is true BEFORE the load event has
+> dispatched, and the app's capture-phase `load` listener is what adds the class,
+> so the settle predicate was waiting on the browser's flag and not on the state
+> the app writes. It now requires a loaded image to CARRY `loaded` (a broken one,
+> `naturalWidth` 0 because the fence blocked it, never will). A state, not an
+> event. 160/160 identical afterwards.
+
+### `scripts/test-fingerprint.js` — the CI smoke lane the header promised
+
+The net's own header named this file for two releases and it did not exist —
+stale prose, which this project treats as a defect. It runs the full matrix on
+every push and asserts the four free failure signals plus the hang lane across
+all 160 cells: no page error, no empty view, no raw i18n key, no empty `<svg>`,
+no slow or hung render, and 0 requests escaped the fence. **It does not diff
+against a committed baseline**: fonts are blocked by the fence, so the app under
+test renders in `system-ui`, which differs by machine — a byte baseline would
+fail everywhere but where it was recorded. The invariants hold everywhere; the
+diff stays a local tool. Ten suites now; under `--strict` a missing browser is a
+failure, so the lane cannot silently stop running.
+
+**Still outside the net, stated so it is not trusted beyond its reach:** modals
+and sheets, the motion lane (everything is captured under reduced motion), and
+the seeded-data scenarios — the matrix is the empty state. Each is stage 3–5 and
+each is built when a refactor step needs it.
+
 ## v354 — the backup that went to the clipboard now asks first
 
 Item 6 of the security plan. Inside the APK, `exportBackupFile()` has two routes
@@ -3097,7 +3169,9 @@ device or the live backend shows; a change identical across every cell of the
 matrix; and **anything wrong on BOTH sides — a conservation law conserves defects
 with equal enthusiasm.**
 
-Stage 1 covers the 20 views in ar/dark/375 against the empty state. Modals, the
+Stage 1 covered the 20 views in ar/dark/375 against the empty state; **stage 2 (v355) is
+the `matrix` command — all eight lang × theme × width cells, every band, and a CI
+smoke lane.** Modals, the
 second language and theme, the other widths, the motion lane and the DB-diff
 scenarios are stages 2–5, and each is worth building when a refactor step needs
 it — not before.

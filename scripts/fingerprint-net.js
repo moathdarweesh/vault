@@ -1,10 +1,12 @@
 #!/usr/bin/env node
 // THE FINGERPRINT NET — prove a refactor changed nothing.
 //
-//   node scripts/fingerprint-net.js capture --tag before
+//   node scripts/fingerprint-net.js matrix --tag before     # stage 2: ar/en × dark/light × 375/412, every band
 //   …do the refactor step…
-//   node scripts/fingerprint-net.js capture --tag after
+//   node scripts/fingerprint-net.js matrix --tag after
 //   node scripts/fingerprint-net.js diff before after
+//
+//   (`capture` still records ONE cell — ar/dark/375 by default — for a quick look.)
 //
 // ⚠️ DELIBERATELY NOT NAMED test-*.js. scripts/test-all.js picks suites up by
 // that filename pattern; this is a tool, not a suite, and it must never run as
@@ -176,47 +178,35 @@ function pageCapture(opts) {
 }
 
 // ── capture ──────────────────────────────────────────────────────────────────
-async function capture() {
-  const tag = flag('tag');
-  if (!tag) throw new Error('capture needs --tag <name>');
-  const state = flag('state', 'empty');
-  const lang = flag('lang', 'ar');
-  const theme = flag('theme', 'dark');
-  const width = Number(flag('width', 375));
-
-  let chromium;
-  try { ({ chromium } = require('playwright')); }
-  catch (_) { console.log('fingerprint-net: playwright is not installed here — skipping'); process.exit(0); }
-
-  const srv = start(state === 'empty' ? 'out' : 'in');
-  const origin = await srv.listen();
-  const browser = await chromium.launch({ headless: true, channel: 'chrome' });
+// ── one context = one (state, lang, theme, width) ────────────────────────────
+// Everything a single cell of the matrix needs, and nothing that outlives it.
+// \`capture\` runs one; \`matrix\` runs eight in the same browser.
+async function captureContext(browser, origin, opts) {
+  const { state, lang, theme, width, props } = opts;
   const cells = {};
   const problems = [];
+  const timings = [];
 
+  const ctx = await browser.newContext({
+    viewport: { width, height: 812 },
+    // ⚠️ REDUCED MOTION IS THE DETERMINISM GUARANTEE, not a shortcut. Under it
+    // the splash is never mounted, setupEmber() returns before it creates its
+    // element, and the global clamp zeroes every duration AND (since v337)
+    // every delay. There is no animation to be mid-way through, so the
+    // fingerprint is a function of the DOM and the CSS alone.
+    reducedMotion: 'reduce',
+    colorScheme: theme === 'light' ? 'light' : 'dark',
+    timezoneId: TZ,
+    locale: lang === 'ar' ? 'ar-SA' : 'en-US',
+  });
   try {
-    const ctx = await browser.newContext({
-      viewport: { width, height: 812 },
-      // ⚠️ REDUCED MOTION IS THE DETERMINISM GUARANTEE, not a shortcut. Under it
-      // the splash is never mounted, setupEmber() returns before it creates its
-      // element, and the global clamp zeroes every duration AND (since v337)
-      // every delay. There is no animation to be mid-way through, so the
-      // fingerprint is a function of the DOM and the CSS alone.
-      reducedMotion: 'reduce',
-      colorScheme: theme === 'light' ? 'light' : 'dark',
-      timezoneId: TZ,
-      locale: lang === 'ar' ? 'ar-SA' : 'en-US',
-    });
     const page = await ctx.newPage();
     await page.clock.install({ time: FROZEN });
     const guard = await fence(page);
 
-    const errors = [], warnings = [];
+    const errors = [];
     page.on('pageerror', (e) => errors.push(String(e.message)));
-    page.on('console', (m) => {
-      if (m.type() === 'error') errors.push('console.error: ' + m.text());
-      if (m.type() === 'warning') warnings.push(m.text());
-    });
+    page.on('console', (m) => { if (m.type() === 'error') errors.push('console.error: ' + m.text()); });
 
     // Freeze randomness and PROVE nothing reached for it during a capture —
     // that turns "why did this flake" into an answer.
@@ -260,24 +250,49 @@ async function capture() {
     }, { lang, theme });
 
     for (const v of VIEWS) {
-      const cellId = `${state}/${lang}/${theme}/${width}/${v.view}`;
+      const cellId = state + '/' + lang + '/' + theme + '/' + width + '/' + v.view;
       const before = errors.length;
-      const t = await page.evaluate((view) => {
-        const main = document.querySelector('.main');
-        if (main) main.scrollTop = 0;
-        const t0 = performance.now();
-        navigate(view, {}, { fromPop: true });
-        return performance.now() - t0;
-      }, v.view);
+
+      /* ⚠️ THE HANG LANE. The owner's condition on the whole refactor is «لا يعلّق
+         التطبيق». A render that never returns is exactly that, and page.evaluate
+         has NO default timeout — it would sit forever and the run would look
+         "in progress" rather than failed. So the render is raced against a hard
+         ceiling on the Node side. A hung page cannot be recovered (its main
+         thread is gone), so a hang aborts the capture by name rather than
+         continuing to record a page that no longer answers. */
+      let t;
+      try {
+        t = await Promise.race([
+          page.evaluate((view) => {
+            const main = document.querySelector('.main');
+            if (main) main.scrollTop = 0;
+            const t0 = performance.now();
+            navigate(view, {}, { fromPop: true });
+            return performance.now() - t0;
+          }, v.view),
+          new Promise((_, rej) => setTimeout(() => rej(new Error('HUNG')), HANG_MS)),
+        ]);
+      } catch (e) {
+        if (e.message === 'HUNG') throw new Error(cellId + ': the render did not return within ' + HANG_MS + 'ms — THE APP HUNG');
+        throw e;
+      }
+      timings.push({ cell: cellId, ms: Math.round(t * 10) / 10 });
+      if (t > SLOW_MS) problems.push(cellId + ': the render took ' + Math.round(t) + 'ms synchronously (ceiling ' + SLOW_MS + 'ms) — on a phone this is a visible freeze');
+
       /* SETTLE ON STATE, NEVER ON rAF. Two things are genuinely in flight after a
          synchronous render and neither is behaviour:
-           · images — an onload handler adds `loaded`, so the class is a race;
+           · images — an onload handler adds \`loaded\`, so the class is a race;
            · any animation the reduced-motion clamp left at 0.01ms.
          Both are waited on by PREDICATE with a hard ceiling, so a hung image
          cannot hang the net. */
       await page.waitForFunction(() => {
         const imgs = [...document.querySelectorAll(".view.active img")];
-        if (!imgs.every((i) => i.complete)) return false;
+        // complete is true BEFORE the load event has dispatched, and the app's
+        // capture-phase load listener is what adds 'loaded' — so a loaded image
+        // is one that CARRIES the class, and a broken one (naturalWidth 0, the
+        // fence blocked it) is one that never will. Both are states; neither is
+        // a wait on an event. Found only across eight contexts: 5 cells flipped.
+        if (!imgs.every((i) => i.complete && (i.naturalWidth === 0 || i.classList.contains('loaded')))) return false;
         const el = document.querySelector(".view.active");
         if (el && el.getAnimations && el.getAnimations({ subtree: true }).some((a) => a.playState === "running")) return false;
         return true;
@@ -295,47 +310,126 @@ async function capture() {
         requestAnimationFrame(() => requestAnimationFrame(done));
       }));
       await page.waitForTimeout(30);   // flush microtasks
-      const cell = await page.evaluate(pageCapture, { props: PROPS.STAGE1, rootSel: '.view.active' });
+      const cell = await page.evaluate(pageCapture, { props, rootSel: '.view.active' });
       cell.renderMs = Math.round(t * 10) / 10;
       cell.newErrors = errors.slice(before);
       cells[cellId] = cell;
 
-      if (cell.error) problems.push(`${cellId}: ${cell.error}`);
-      if (cell.newErrors.length) problems.push(`${cellId}: ${cell.newErrors.join(' | ')}`);
-      if (cell.childCount === 0) problems.push(`${cellId}: rendered EMPTY (0 children) — the renderer threw or did nothing`);
-      if (cell.rawKeys.length) problems.push(`${cellId}: raw i18n key(s) on screen: ${cell.rawKeys.join(', ')}`);
-      if (cell.emptySvg) problems.push(`${cellId}: ${cell.emptySvg} empty <svg> — an icon name that is not an ICONS key renders nothing, silently`);
+      if (cell.error) problems.push(cellId + ': ' + cell.error);
+      if (cell.newErrors.length) problems.push(cellId + ': ' + cell.newErrors.join(' | '));
+      if (cell.childCount === 0) problems.push(cellId + ': rendered EMPTY (0 children) — the renderer threw or did nothing');
+      if (cell.rawKeys.length) problems.push(cellId + ': raw i18n key(s) on screen: ' + cell.rawKeys.join(', '));
+      if (cell.emptySvg) problems.push(cellId + ': ' + cell.emptySvg + ' empty <svg> — an icon name that is not an ICONS key renders nothing, silently');
     }
 
     const randomCalls = await page.evaluate(() => window.__fpRandomCalls);
     const reported = await page.evaluate(() => (window.__fpReportError || []).length);
-    if (reported) problems.push(`Cloud.reportError was called ${reported}× during the capture`);
-
+    if (reported) problems.push(lang + '/' + theme + '/' + width + ': Cloud.reportError was called ' + reported + '× during the capture');
     const contained = guard.assertContained();
-    fs.mkdirSync(OUT, { recursive: true });
-    const record = {
+    return { cells, problems, randomCalls, contained, timings };
+  } finally {
+    await ctx.close();
+  }
+}
+
+/* A synchronous render past this is a visible freeze on a phone; past HANG_MS it
+   is the thing the owner forbade. Both are deliberately generous — the net is
+   here to catch a regression, not to benchmark. */
+const SLOW_MS = 1500;
+const HANG_MS = 8000;
+
+function writeRecord(tag, record, label) {
+  fs.mkdirSync(OUT, { recursive: true });
+  fs.writeFileSync(path.join(OUT, tag + '.json'), JSON.stringify(record));
+  const total = Object.values(record.cells).reduce((n, c) => n + (c.n || 0), 0);
+  const cellCount = Object.keys(record.cells).length;
+  console.log('fingerprint-net: ' + tag + ' — ' + label + ', ' + cellCount + ' cells, ' + total + ' elements, ' + record.props.length + ' properties each');
+  console.log('  requests: ' + record.contained.blockedTotal + ' blocked (' + record.contained.blockedLive + ' to live hosts), 0 escaped');
+  console.log('  Math.random during capture: ' + record.randomCalls);
+  const slow = [...record.timings].sort((a, b) => b.ms - a.ms).slice(0, 3);
+  console.log('  slowest renders: ' + slow.map((x) => x.cell.split('/').slice(1).join('/') + ' ' + x.ms + 'ms').join(' · '));
+  if (record.problems.length) {
+    console.log('\n  PROBLEMS (these are failures, not diffs):');
+    for (const p of record.problems) console.log('    ✗ ' + p);
+    process.exitCode = 1;
+  } else {
+    console.log('  no page errors, no empty views, no raw keys, no empty icons, no slow or hung render');
+  }
+}
+
+function propsFor(name) {
+  if (name === 'all') return PROPS.ALL;
+  if (name === 'stage1') return PROPS.STAGE1;
+  throw new Error('--props must be stage1 or all');
+}
+
+async function withBrowser(state, fn) {
+  let chromium;
+  try { ({ chromium } = require('playwright')); }
+  catch (_) { console.log('fingerprint-net: playwright is not installed here — skipping'); process.exit(0); }
+  const srv = start(state === 'empty' ? 'out' : 'in');
+  const origin = await srv.listen();
+  const browser = await chromium.launch({ headless: true, channel: 'chrome' });
+  try { return await fn(browser, origin); }
+  finally { await browser.close(); await srv.close(); }
+}
+
+// ── capture: one cell of the matrix ─────────────────────────────────────────
+async function capture() {
+  const tag = flag('tag');
+  if (!tag) throw new Error('capture needs --tag <name>');
+  const state = flag('state', 'empty');
+  const lang = flag('lang', 'ar');
+  const theme = flag('theme', 'dark');
+  const width = Number(flag('width', 375));
+  const props = propsFor(flag('props', 'stage1'));
+
+  await withBrowser(state, async (browser, origin) => {
+    const r = await captureContext(browser, origin, { state, lang, theme, width, props });
+    writeRecord(tag, {
       tag, state, lang, theme, width,
       at: FROZEN.toISOString(), tz: TZ,
-      views: VIEWS.length, props: PROPS.STAGE1,
-      randomCalls, contained, problems, cells,
-    };
-    fs.writeFileSync(path.join(OUT, tag + '.json'), JSON.stringify(record));
+      views: VIEWS.length, props,
+      randomCalls: r.randomCalls, contained: r.contained, problems: r.problems, timings: r.timings, cells: r.cells,
+    }, VIEWS.length + ' views');
+  });
+}
 
-    const total = Object.values(cells).reduce((n, c) => n + (c.n || 0), 0);
-    console.log(`fingerprint-net: ${tag} — ${VIEWS.length} views, ${total} elements, ${PROPS.STAGE1.length} properties each`);
-    console.log(`  requests: ${contained.blockedTotal} blocked (${contained.blockedLive} to live hosts), 0 escaped`);
-    console.log(`  Math.random during capture: ${randomCalls}`);
-    if (problems.length) {
-      console.log('\n  PROBLEMS (these are failures, not diffs):');
-      for (const p of problems) console.log('    ✗ ' + p);
-      process.exitCode = 1;
-    } else {
-      console.log('  no page errors, no empty views, no raw keys, no empty icons');
+// ── matrix: stage 2 — both languages, both themes, two widths ───────────────
+// Stage 1 saw ONE cell of eight (ar/dark/375), so a step that broke the light
+// theme, the English layout or a wider phone would have passed it. The matrix is
+// the minimum a refactor step has to clear before it ships: 8 contexts × 20
+// views in one browser, one record, and \`diff\` treats the whole thing as one
+// capture. Every property band is on by default here — the reason STAGE1 was a
+// subset (a human reading the first baseline) no longer applies.
+const MATRIX = [];
+for (const lang of ['ar', 'en']) for (const theme of ['dark', 'light']) for (const width of [375, 412]) MATRIX.push({ lang, theme, width });
+
+async function matrix() {
+  const tag = flag('tag');
+  if (!tag) throw new Error('matrix needs --tag <name>');
+  const state = flag('state', 'empty');
+  const props = propsFor(flag('props', 'all'));
+
+  await withBrowser(state, async (browser, origin) => {
+    const record = {
+      tag, state, lang: 'matrix', theme: 'matrix', width: 'matrix',
+      at: FROZEN.toISOString(), tz: TZ,
+      views: VIEWS.length, props,
+      randomCalls: 0, contained: { escaped: 0, blockedLive: 0, blockedTotal: 0 }, problems: [], timings: [], cells: {},
+    };
+    for (const m of MATRIX) {
+      const r = await captureContext(browser, origin, { state, ...m, props });
+      Object.assign(record.cells, r.cells);
+      record.problems.push(...r.problems);
+      record.timings.push(...r.timings);
+      record.randomCalls += r.randomCalls;
+      record.contained.blockedLive += r.contained.blockedLive;
+      record.contained.blockedTotal += r.contained.blockedTotal;
+      process.stdout.write('  ' + m.lang + '/' + m.theme + '/' + m.width + ' ✓\n');
     }
-  } finally {
-    await browser.close();
-    await srv.close();
-  }
+    writeRecord(tag, record, MATRIX.length + ' contexts × ' + VIEWS.length + ' views');
+  });
 }
 
 // ── diff ─────────────────────────────────────────────────────────────────────
@@ -347,6 +441,7 @@ function loadTag(tag) {
 
 function diff() {
   const a = loadTag(args[1]), b = loadTag(args[2]);
+  if (JSON.stringify(a.props) !== JSON.stringify(b.props)) throw new Error('the two captures recorded different property sets — they are not comparable');
   for (const k of ['state', 'lang', 'theme', 'width']) {
     if (a[k] !== b[k]) throw new Error(`the two captures disagree on ${k} (${a[k]} vs ${b[k]}) — they are not comparable`);
   }
@@ -419,9 +514,10 @@ function diff() {
 (async () => {
   try {
     if (cmd === 'capture') await capture();
+    else if (cmd === 'matrix') await matrix();
     else if (cmd === 'diff') diff();
     else {
-      console.log('usage:\n  node scripts/fingerprint-net.js capture --tag <name> [--state empty|full] [--lang ar|en] [--theme dark|light] [--width 375]\n  node scripts/fingerprint-net.js diff <before> <after>');
+      console.log('usage:\n  node scripts/fingerprint-net.js capture --tag <name> [--state empty|full] [--lang ar|en] [--theme dark|light] [--width 375] [--props stage1|all]\n  node scripts/fingerprint-net.js matrix  --tag <name> [--state empty|full] [--props all|stage1]   # 8 contexts × 20 views, one record\n  node scripts/fingerprint-net.js diff <before> <after>');
       process.exitCode = 1;
     }
   } catch (e) {
