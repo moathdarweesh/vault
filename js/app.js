@@ -12,7 +12,7 @@
 // build. The literal below is the fallback (file://, or a stripped query) and is
 // still bumped by `npm run release` — see CLAUDE.md "CACHE WORKFLOW".
 const VAULT_BUILD = (() => {
-  const FALLBACK = 'v349';
+  const FALLBACK = 'v350';
   try {
     const src = (document.currentScript && document.currentScript.src) || '';
     const m = src.match(/[?&]v=(\d+)/);
@@ -1775,9 +1775,30 @@ function isNativeShell() {
   try { return !!(window.Capacitor && Capacitor.isNativePlatform && Capacitor.isNativePlatform()); } catch (_) { return false; }
 }
 async function exportBackupFile() {
-  const json = DB.exportJSON();
   const stamp = todayISO();  // local date — toISOString() would name the file with yesterday's date after ~21:00 in UTC+3
-  const name = `vault-backup-${stamp}.json`;
+
+  /* ⚠️ IN READ-ONLY MODE, `DB.exportJSON()` EXPORTS NOTHING.
+
+     When the stored blob cannot be parsed, loadState() quarantines a copy and
+     runs the app on `defaultState()` IN MEMORY. Every export path serialises
+     STATE — so the one rescue this dialog offers produced a real download of
+     the DEFAULT state: measured on a truncated store, 23,168 bytes holding 0
+     sessions, 0 foods and 73 freshly-id'd seed exercises, `hasUserData()`
+     false, under a toast that said «تصدير البيانات». Success, and nothing in
+     it. Meanwhile the quarantined original still held the history, and was
+     named to the user NOWHERE.
+
+     So the unreadable ORIGINAL is what leaves the device instead. It is by
+     definition unparseable, so it is NOT a restorable backup and must never be
+     labelled as one — importJSON() would refuse it. It is the raw bytes, kept
+     so they can be salvaged. And if nothing was quarantined the export REFUSES:
+     a file whose hasUserData() is false is worse than no file at all. */
+  const readOnly = (typeof DB.loadFailed === 'function') && DB.loadFailed();
+  const raw = readOnly && typeof DB.corruptRaw === 'function' ? DB.corruptRaw() : null;
+  if (readOnly && !raw) { showToast(t('export_nothing_to_save')); return; }
+  const json = raw || DB.exportJSON();
+  const name = raw ? `vault-corrupt-${stamp}.json` : `vault-backup-${stamp}.json`;
+  const okToast = raw ? 'export_corrupt_saved' : 'export_data';
   // INSIDE THE APK an <a download> of a blob: URL does nothing: the Capacitor
   // WebView registers no download handler, and no filesystem/share plugin is
   // installed. This was the ONLY rescue offered by the storage-full dialog and
@@ -1789,12 +1810,12 @@ async function exportBackupFile() {
     try {
       if (navigator.share && navigator.canShare) {
         const file = new File([json], name, { type: 'application/json' });
-        if (navigator.canShare({ files: [file] })) { await navigator.share({ files: [file], title: name }); showToast(t('export_data')); return; }
+        if (navigator.canShare({ files: [file] })) { await navigator.share({ files: [file], title: name }); showToast(t(okToast)); return; }
       }
     } catch (_) { /* fall through to the clipboard */ }
     try {
       await navigator.clipboard.writeText(json);
-      showToast(t('export_copied'));
+      showToast(t(raw ? 'export_corrupt_saved' : 'export_copied'));
       return;
     } catch (_) {}
     showToast(t('export_failed'));
@@ -1809,7 +1830,7 @@ async function exportBackupFile() {
   a.click();
   document.body.removeChild(a);
   URL.revokeObjectURL(url);
-  showToast(t('export_data'));
+  showToast(t(okToast));
 }
 
 // A write to localStorage failed — storage full, or the store is unreadable and

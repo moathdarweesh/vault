@@ -3464,6 +3464,19 @@ DB.reload = reloadState;
 // READ-ONLY on an in-memory default. The 'vault:load-failed' event fires
 // before app.js loads (STATE is built at evaluation time), so init() asks.
 DB.loadFailed = () => STATE_LOAD_FAILED;
+/* THE QUARANTINED ORIGINAL, for the one rescue offered in READ-ONLY mode.
+
+   loadState() copies the unparseable blob to VAULT_KEYS.corrupt and then runs
+   on defaultState() IN MEMORY. Every export path serialises STATE — so the
+   rescue button handed the user a file with none of their data in it and
+   called it a success. These are the real bytes.
+
+   Read through DB, never with a localStorage literal in app.js: contract 8
+   refuses an unregistered key spelling, and view code does not touch storage
+   directly. Returns null when nothing is quarantined — and the caller must
+   then REFUSE, because a file whose hasUserData() is false is worse than no
+   file at all. */
+DB.corruptRaw = () => { try { return localStorage.getItem(VAULT_KEYS.corrupt) || null; } catch (_) { return null; } };
 DB.bootSaveFailed = () => BOOT_SAVE_FAILED;   // a quota failure during this file's evaluation, re-raised by init()
 
 // ==========================================================================

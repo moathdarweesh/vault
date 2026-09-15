@@ -58,7 +58,11 @@ function main() {
     console.error('    index.html is still at ?v=' + headVer + ' (same as HEAD).');
     console.error('');
     console.error('    Devices cache by ?v=N, so this change would never reach them.');
-    console.error('    Fix:  npm run release  &&  git add -A');
+    // ⚠️ `git add -u`, NEVER `git add -A`. This line is printed at the exact
+    // moment a commit was refused, when a reader is most likely to paste it —
+    // and the tree routinely holds the owner's private working documents
+    // untracked. -u stages tracked modifications only and cannot sweep them.
+    console.error('    Fix:  npm run release  &&  git add -u   (never -A: it would sweep untracked files)');
     console.error('    Or:   SKIP_RELEASE_CHECK=1 git commit …   (if this really is not shipped code)');
     console.error('');
     return 1;

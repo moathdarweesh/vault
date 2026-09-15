@@ -79,7 +79,7 @@ a faster TTFB — not fewer bytes.
 npm run release          # bump every marker + verify, then commit all files together
 ```
 
-**Current version: v349.** APK: build 22 / v3.1.
+**Current version: v350.** APK: build 22 / v3.1.
 
 `scripts/release.js` rewrites **every** marker and then re-reads them from disk to confirm; it exits non-zero if any disagree, and prints the count per file (derived, never hard-coded — the docs used to say 16 while the real count was 15). The markers are `?v=N` in `index.html` (every script and stylesheet, the `js/vendor/supabase.js` preload, both `icons/icon.svg` links, `manifest.json`), the `__cleaned_vN` sessionStorage key, the `FALLBACK` literal in `app.js`, `version.json` → `web`, the `?v=` in `manifest.json`, `admin.html`, `privacy.html` and `get/index.html`, and the `Current version` line in this file. `scripts/check-contracts.js` (pre-commit) refuses a commit where any of them disagree.
 
@@ -2611,6 +2611,116 @@ light + no door → `#faf5f0`; dark → `#000000` throughout.
   images are square (2732×2732), so short and long edge are the same number.
 - **"The 2500ms cap opens onto an empty shell"** and **"the app behind the door is
   not aria-hidden"** — both already answered in v343's note.
+
+## v350 — the 22-axis audit: the rescue that rescued nothing, and the tool that printed a dangerous command
+
+The owner supplied his own audit framework — 22 axes, 10 executable stress
+scenarios, and a rules section written specifically against **fake auditing**: no
+finding without evidence, confidence separated from severity, every axis
+classified explicitly including «NOT TESTED», and a standing ban on writing
+"tested" when you only read the code.
+
+Run as written: **22 agents · 1,563 tool calls · 103 findings raised · 47
+confirmed after editing · 9 refuted · every P0/P1 and every CONFIRMED claim
+adversarially re-checked with REFUTED as the default verdict.**
+
+**Two axes came back clean, and they are the two worth naming first.** Axis 08
+(permissions and user isolation) is the strongest positive result in the whole
+audit: RLS on all 14 tables, 49 policies all keyed on `auth.uid()`,
+`anon`/`authenticated` both `rolbypassrls = false`, storage pinned to
+`foldername(name)[1] = auth.uid()`, and all 14 `admin_*` definer RPCs re-checking
+`is_admin()` behind `SET search_path TO ''`. **Three identities were simulated —
+one synthetic and two real non-admin accounts — and each saw exactly its own row
+and zero foreign rows.** Axis 12 (performance) likewise found no defect in the
+tested scope. The stated limit is honest: WRITE isolation was proved by reading
+the `WITH CHECK` expressions and the grant map, never by executing a cross-tenant
+write, because the session was read-only.
+
+### ⚠️ THE ONE RESCUE OFFERED IN READ-ONLY MODE EXPORTED NONE OF THE USER'S DATA
+
+When the stored blob cannot be parsed, `loadState()` quarantines a copy at
+`VAULT_KEYS.corrupt` and runs the app on `defaultState()` **in memory**, refusing
+every write. The dialog the user then sees offers exactly one action: export a
+backup. That button called `DB.exportJSON()`, which serialises `STATE` — and
+`STATE` is the default.
+
+Measured in the running app, on a real store truncated to 80%:
+
+| | the old path | now |
+|---|---|---|
+| bytes | **23,167** | **14,893** |
+| parseable | yes | no — it is the raw original |
+| **`hasUserData()`** | **false** | — |
+| contents | 73 freshly-id'd seed exercises, **0 sessions, 0 foods** | byte-identical to the quarantined copy |
+| file name | `vault-backup-…` | `vault-corrupt-…` |
+| toast | «تصدير البيانات» — **success** | says it is the unreadable ORIGINAL and **not** a restorable backup |
+| nothing quarantined | exports the empty default, reports success | **refuses** |
+
+`grep -n corrupt js/app.js` returned **zero hits**: the quarantined copy was
+never named to the user anywhere, and logout deletes it.
+
+> **This is the shape this project has paid for before: a rescue that runs,
+> reports success, and does nothing.** It is the same family as `reportError`
+> posting into a table that did not exist, and as the feedback cap that could
+> never be true.
+
+Three details are load-bearing. The bytes are read through **`DB.corruptRaw()`**,
+never a `localStorage` literal in app.js — contract 8 refuses an unregistered key
+spelling. The file is **never called a backup**: it is by definition unparseable,
+so `importJSON()` would refuse it, and labelling it as restorable would be a
+second lie on top of the first. And with nothing quarantined the export
+**refuses**, because a file whose `hasUserData()` is false is worse than no file.
+
+### ⚠️ THE PRE-COMMIT HOOK PRINTED THE ONE STAGING COMMAND CLAUDE.md FORBIDS BY NAME
+
+`scripts/check-release.js:61` printed `Fix: npm run release && git add -A` every
+time it refused a commit — the most common refusal in this project —
+and `docs/AUTOMATION.md` repeated it three times as the release runbook. Against
+CLAUDE.md's own «Stage explicitly, never `git add -A`», which names the owner's
+private working files.
+
+Measured in the tree at that moment: **493,863 bytes** of the owner's own
+untracked working documents, sitting exactly where that printed advice would
+sweep them — into a **public** repository, irrevocably.
+
+`git add -u` stages tracked modifications only and **cannot** pick up an untracked
+file. The advice is safe by construction now, rather than by the reader
+remembering a rule written in a different file. Whether any past commit actually
+swept one was not reconstructed from history: this is a latent trigger, not a
+realised loss.
+
+### The fingerprint net earned its keep on its first real use
+
+Both fixes change behaviour only in READ-ONLY mode and in a printed hook message
+— neither of which appears in a normal render. Capturing against the v349
+baseline: **20/20 cells identical, 2,053 elements, 0 differences.** That is the
+net's actual job: not to find the bug, but to prove the fix did not leak into
+anything else.
+
+### Nine claims the verifier REFUTED, kept because a refutation is worth a finding
+
+Among them: that rapid repeat taps on Save duplicate the record in five sheets
+(raised P1); that "go offline and tap Logout" triggers the shared-device leak —
+it does not, because offline with a valid token makes `signOut()` fail and the
+user stays signed in; that the fingerprint net executes 48.1% of `js/app.js`; that
+a dev skip-login button ships to production; and that `www/` and the native asset
+copies are stale published copies. **CLAUDE.md:1670 was also corrected by
+measurement**: the domain boundary for splitting `js/app.js` is not merely
+"designable", it is measurable — 750 of ~1,000 internal edges land in 19 shared
+primitives, and only 8 lateral food/workout/body/settings references exist.
+
+### Still open, highest first
+
+Two P1s remain in code and are the next release: **two documents of one origin
+silently destroying each other's data** (reproduced in real Chromium, two tabs,
+with the loss propagating to the single cloud copy), and **a shared device showing
+the next account the previous user's data and letting it upload into its own cloud
+row** (reproduced in a vm over the real cloud.js, with a second and worse branch
+the first lens missed). Both have precise, narrow fixes and both carry corrections
+to their own original repro steps — recorded in the audit output.
+
+The owner-only list is unchanged and still headed by
+`backend/pending/29_ai-usage-fk-repair-v25.sql`.
 
 ## THE FINGERPRINT NET — proving a refactor changed nothing
 

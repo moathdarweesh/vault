@@ -31,7 +31,7 @@ git config core.hooksPath .githooks
 فالحارس يوقفك:
 ```
 ✖ check-release: this commit ships code but does NOT bump the version.
-    Fix:  npm run release  &&  git add -A
+    Fix:  npm run release  &&  git add -u
 ```
 
 **لتجاوزه** (لو التعديل توثيق فقط ومو كودًا يُنشر):
@@ -113,7 +113,11 @@ npm run release          # يرفع النسخة في كل المواضع ثم �
 npm run release:check    # يفحص فقط، بدون تعديل
 ```
 
-بعده: `git add -A` ثم commit ثم push. GitHub Pages ينشر خلال دقيقة تقريبًا.
+بعده: `git add -u` ثم commit ثم push. GitHub Pages ينشر خلال دقيقة تقريبًا.
+
+> ⚠️ **`git add -u` لا `git add -A`.** الأولى تُدرِج المعدَّل من الملفّات المتتبَّعة
+> فقط ولا تستطيع أن تلتقط ملفًّا غير متتبَّع؛ والثانية تكنس كلّ شيء في الشجرة —
+> ومنها ملفّاتك الخاصّة في `docs/` — إلى مستودعٍ **عامّ**، بلا رجعة.
 
 **لا ترفع الأرقام يدويًا.** السكربت يعيد قراءة الملفات من القرص بعد الكتابة ويفشل لو اختلف موضع واحد.
 
@@ -123,7 +127,7 @@ npm run release:check    # يفحص فقط، بدون تعديل
 ```bash
 git revert <رقم-الcommit-السيئ>
 npm run release          # للأمام دائمًا
-git add -A && git commit && git push
+git add -u && git commit && git push   # -u لا -A: لا تكنس ملفًّا غير متتبَّع
 ```
 
 ⚠️ **لا ترجع بالرقم للخلف.** المحدِّث يقارن الأرقام، والأجهزة **لا تنزل** لنسخة أقدم — بتعلق على السيئة.
