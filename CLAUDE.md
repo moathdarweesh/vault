@@ -79,7 +79,7 @@ a faster TTFB — not fewer bytes.
 npm run release          # bump every marker + verify, then commit all files together
 ```
 
-**Current version: v353.** APK: build 22 / v3.1.
+**Current version: v354.** APK: build 22 / v3.1.
 
 `scripts/release.js` rewrites **every** marker and then re-reads them from disk to confirm; it exits non-zero if any disagree, and prints the count per file (derived, never hard-coded — the docs used to say 16 while the real count was 15). The markers are `?v=N` in `index.html` (every script and stylesheet, the `js/vendor/supabase.js` preload, both `icons/icon.svg` links, `manifest.json`), the `__cleaned_vN` sessionStorage key, the `FALLBACK` literal in `app.js`, `version.json` → `web`, the `?v=` in `manifest.json`, `admin.html`, `privacy.html` and `get/index.html`, and the `Current version` line in this file. `scripts/check-contracts.js` (pre-commit) refuses a commit where any of them disagree.
 
@@ -2611,6 +2611,37 @@ light + no door → `#faf5f0`; dark → `#000000` throughout.
   images are square (2732×2732), so short and long edge are the same number.
 - **"The 2500ms cap opens onto an empty shell"** and **"the app behind the door is
   not aria-hidden"** — both already answered in v343's note.
+
+## v354 — the backup that went to the clipboard now asks first
+
+Item 6 of the security plan. Inside the APK, `exportBackupFile()` has two routes
+off the phone: the system share sheet when the WebView offers one, else **the
+clipboard** — added in v291 because an `<a download>` is inert in a Capacitor
+WebView and the export button had been "a button that visibly did nothing at the
+exact moment a copy off the phone mattered most". That fallback copied the whole
+backup silently, under a success toast.
+
+**The clipboard is not private, and the user is told so before the copy.** On
+Android the foreground app and the KEYBOARD can read it, and a keyboard's own
+clipboard history keeps a copy for as long as it likes. The copy now happens only
+after `confirmDialog` names who can read it and what to do afterwards («ألصقها
+فورًا في مكانٍ آمن، ثم انسخ شيئًا آخر»), and the success toast ends the same way.
+
+> ⚠️ **DELIBERATELY NO TIMED AUTO-CLEAR.** It was the obvious addition and it is
+> wrong twice over: a wipe of our own write would not reach the keyboard's history,
+> which is the copy that actually persists — and it WOULD destroy whatever the
+> user copied next. A mitigation that does not mitigate and costs the user data
+> is the shape this project deletes, not ships.
+
+It stays the last resort rather than being refused: on a build with no share
+sheet it is the only route out at the moment (storage full, corrupt store) one
+matters most, and refusing it would be the v291 dead button again. The real fix —
+a native share/filesystem plugin — is a NEW APK and the owner's call.
+
+Measured in a fenced browser with the native shell faked and no share sheet: the
+dialog appears, **0 copies before OK, 1 copy of 23,458 bytes after it, 0 on
+cancel**, the OK button on the primary (not danger) style, nothing left the
+machine. Three keys in both dictionaries (en/ar 1078).
 
 ## v353 — the linter, and the first thing it found was a rule nobody could see
 

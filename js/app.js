@@ -12,7 +12,7 @@
 // build. The literal below is the fallback (file://, or a stripped query) and is
 // still bumped by `npm run release` — see CLAUDE.md "CACHE WORKFLOW".
 const VAULT_BUILD = (() => {
-  const FALLBACK = 'v353';
+  const FALLBACK = 'v354';
   try {
     const src = (document.currentScript && document.currentScript.src) || '';
     const m = src.match(/[?&]v=(\d+)/);
@@ -1813,12 +1813,28 @@ async function exportBackupFile() {
         if (navigator.canShare({ files: [file] })) { await navigator.share({ files: [file], title: name }); showToast(t(okToast)); return; }
       }
     } catch (_) { /* fall through to the clipboard */ }
-    try {
-      await navigator.clipboard.writeText(json);
-      showToast(t(raw ? 'export_corrupt_saved' : 'export_copied'));
-      return;
-    } catch (_) {}
-    showToast(t('export_failed'));
+    // THE CLIPBOARD IS NOT PRIVATE, AND THE USER IS TOLD SO BEFORE THE COPY.
+    // On Android the foreground app and the KEYBOARD can read it, and a
+    // keyboard's own clipboard history keeps a copy for as long as it likes —
+    // which is also why there is deliberately no timed auto-clear here: it
+    // would not reach that history, and it WOULD destroy whatever the user
+    // copied next. What can be done is consent: the copy happens only after a
+    // dialog that names who can read it and what to do afterwards. It stays the
+    // last resort because on a build with no share sheet it is the only route
+    // off the phone at the exact moment (storage full, corrupt store) one
+    // matters most; refusing it would be the v291 dead button again.
+    confirmDialog({
+      title: t('export_clip_title'),
+      text: t('export_clip_text'),
+      confirmLabel: t('export_clip_ok'),
+      variant: 'primary',
+      onConfirm: async () => {
+        try {
+          await navigator.clipboard.writeText(json);
+          showToast(t(raw ? 'export_corrupt_saved' : 'export_copied'));
+        } catch (_) { showToast(t('export_failed')); }
+      },
+    });
     return;
   }
   const blob = new Blob([json], { type: 'application/json' });
