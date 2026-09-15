@@ -12,7 +12,7 @@
 // build. The literal below is the fallback (file://, or a stripped query) and is
 // still bumped by `npm run release` — see CLAUDE.md "CACHE WORKFLOW".
 const VAULT_BUILD = (() => {
-  const FALLBACK = 'v355';
+  const FALLBACK = 'v357';
   try {
     const src = (document.currentScript && document.currentScript.src) || '';
     const m = src.match(/[?&]v=(\d+)/);
@@ -4852,7 +4852,11 @@ function renderFood(el) {
     if (edit) { openCalculatorModal(rerender); return; }
     const water = e.target.closest('[data-add-water]');
     if (water) {
-      DB.water.add(date, parseInt(water.getAttribute('data-add-water'), 10) || 0);
+      // todayISO() at WRITE time, not the render-time `date` two hundred lines up:
+      // a phone left on this screen across midnight logged the morning's water
+      // against yesterday. The repaint below already did this (see its comment);
+      // the write did not.
+      DB.water.add(todayISO(), parseInt(water.getAttribute('data-add-water'), 10) || 0);
       rerender();
       return;
     }
@@ -4862,7 +4866,7 @@ function renderFood(el) {
     // steppers — keep their own behaviour and never fall through to a navigate.
     // renderFoodLog reads viewContext.foodLog, NOT viewContext.date — passing a
     // bare `date` here would silently land on today whatever day was open.
-    if (e.target.closest('.nutri-hero')) { navigate('foodlog', { foodLog: { date } }); return; }
+    if (e.target.closest('.nutri-hero')) { navigate('foodlog', { foodLog: { date: todayISO() } }); return; }
   });
 
   // The calorie goal is MANDATORY: if none is set, open the calculator straight
@@ -5059,16 +5063,17 @@ function openBarcodeScanner(date, onSave) {
     scanning = false;                 // pause processing while we query
     status.textContent = t('barcode_looking');
     let product = null;
+    let failed = false;   // a DNS failure, offline, a 5xx — none of them is "unknown barcode"
     try {
       const res = await fetch('https://world.openfoodfacts.org/api/v2/product/' +
         encodeURIComponent(code) + '.json?fields=product_name,nutriments');
       const data = await res.json();
       product = data && data.product;
-    } catch (_) {}
+    } catch (_) { failed = true; }
     if (!document.body.contains(overlay)) return true;
     const n = product && product.nutriments;
     const kcal100 = n && (n['energy-kcal_100g'] != null ? +n['energy-kcal_100g'] : null);
-    if (!product || !n || kcal100 == null) { status.textContent = t('barcode_not_found'); return false; }
+    if (!product || !n || kcal100 == null) { status.textContent = t(failed ? 'auth_err_network' : 'barcode_not_found'); return false; }
     stop();                           // got a hit → release the camera
     if (stage) stage.style.display = 'none';
     showResult(product, n);
@@ -6427,6 +6432,11 @@ function openSavedFoodPicker(date, onSave, initialTab) {
     // The ingredients are how the number was reached; the meal you ate is the
     // row, and splitting it into six would make the day's list unreadable.
     listEl.querySelectorAll('[data-log-rec]').forEach((b) => b.addEventListener('click', () => {
+      // The bundle button's own guard: a double-tap is two rows, and this
+      // sheet stays open by design. 800ms blocks the repeat, not a later
+      // deliberate second log of the same recipe.
+      if (b.disabled) return;
+      b.disabled = true; setTimeout(() => { b.disabled = false; }, 800);
       const r = DB.recipes.list().find((x) => x.id === b.dataset.logRec);
       if (!r) return;
       const per = DB.recipes.perServing(r);
@@ -6509,6 +6519,8 @@ function openSavedFoodPicker(date, onSave, initialTab) {
       <span class="picker-row-name">${escapeHtml(f.name)} · <span class="num">${fmtNum(f.calories)}</span> ${t('cal')}</span>
       <span class="picker-row-check">${icon('plus',16)}</span></button>`).join('');
     listEl.querySelectorAll('[data-add-saved]').forEach(button => button.onclick = () => {
+      if (button.disabled) return;
+      button.disabled = true; setTimeout(() => { button.disabled = false; }, 800);   // same guard as the bundle button
       const f = list[Number(button.dataset.addSaved)];
       const result = DB.foodLogs.addMany(date || todayISO(),[{name:f.name,servings:1,calories:f.calories,protein:f.protein,carbs:f.carbs,fat:f.fat || 0,source:'saved'}]);
       if (!result.ok) { convenienceError(result); return; }
@@ -8062,7 +8074,7 @@ async function openPreviousPrograms() {
     const result = await Cloud.listPlanHistory();
     if (!modal.isConnected || owner !== Cloud.getLastUid()) return;
     if (!result.ok) { host.textContent = t('sc_error'); return; }
-    host.innerHTML = result.rows.length ? result.rows.map((row,i) => `<button class="btn btn-ghost" data-history="${i}">${escapeHtml(formatDate(String(row.replaced_at).slice(0,10)))} · ${escapeHtml(String(row.version))}</button>`).join('') : `<p>${t('cx_no_history')}</p>`;
+    host.innerHTML = result.rows.length ? result.rows.map((row,i) => `<button class="btn btn-ghost" data-history="${i}">${escapeHtml(formatDate(dayOfTimestamp(row.replaced_at)))} · ${escapeHtml(String(row.version))}</button>`).join('') : `<p>${t('cx_no_history')}</p>`;
     host.querySelectorAll('[data-history]').forEach(button => button.onclick = async () => {
       button.disabled = true;
       try {
@@ -11000,7 +11012,13 @@ function renderSupplements(el) {
 
   $('#add-supp-btn', el).addEventListener('click', () => openSupplementModal());
 
+  // `todayIso` is the RENDER-time day. A tick after midnight on a screen that was
+  // never backgrounded (so DATE_DERIVED_VIEWS never repainted it) wrote the
+  // morning's doses against yesterday. Home's cardio row already answers this:
+  // when the day has moved, repaint instead of writing the wrong day.
+  const dayMoved = () => { if (todayISO() !== todayIso) { renderView('supplements'); return true; } return false; };
   $('#take-all-btn', el)?.addEventListener('click', () => {
+    if (dayMoved()) return;
     DB.supplements.list().forEach((s) => {
       if (!DB.supplements.isTaken(s.id, todayIso)) {
         DB.supplements.setTaken(s.id, todayIso, true);
@@ -11015,6 +11033,7 @@ function renderSupplements(el) {
   $('#supp-list', el).addEventListener('click', (e) => {
     const toggle = e.target.closest('[data-toggle-supp]');
     if (toggle) {
+      if (dayMoved()) return;
       const id = toggle.dataset.toggleSupp;
       const isTaken = DB.supplements.isTaken(id, todayIso);
       DB.supplements.setTaken(id, todayIso, !isTaken);
@@ -12033,7 +12052,7 @@ async function populateAccount(el) {
         <div class="settings-action-icon">${icon('refresh', 20)}</div>
         <div class="settings-action-main">
           <div class="settings-action-title">${t('sync_snapshot_failed')}</div>
-          <div class="settings-action-sub">${escapeHtml(formatDateShort(String(failedAt).slice(0, 10)))}</div>
+          <div class="settings-action-sub">${escapeHtml(formatDateShort(dayOfTimestamp(failedAt)))}</div>
         </div>
       </div>`;
         }
@@ -12042,7 +12061,7 @@ async function populateAccount(el) {
         <div class="settings-action-icon">${icon('refresh', 20)}</div>
         <div class="settings-action-main">
           <div class="settings-action-title">${t('sync_restore')}</div>
-          <div class="settings-action-sub">${escapeHtml(formatDateShort(String(rec.at).slice(0, 10)))}</div>
+          <div class="settings-action-sub">${escapeHtml(formatDateShort(dayOfTimestamp(rec.at)))}</div>
         </div>
       </button>`;
       })()}
@@ -12094,10 +12113,13 @@ async function populateAccount(el) {
         confirmLabel: t('sync_restore'),
         variant: 'danger',
         onConfirm: async () => {
-          let ok = false;
-          try { ok = await Cloud.restoreRecovery(); } catch (_) { ok = false; }
-          showToast(ok ? t('sync_restored') : t('sync_restore_failed'));
-          if (ok) { refreshAfterSync(); renderView(currentView); }
+          let r = false;
+          try { r = await Cloud.restoreRecovery(); } catch (_) { r = false; }
+          // Two halves, two messages: a restore that stays on this device is half
+          // a rescue, and «restored» would have promised the cloud copy too.
+          const restored = !!(r && r.restored);
+          showToast(!restored ? t('sync_restore_failed') : r.uploaded ? t('sync_restored') : t('sync_restored_local'));
+          if (restored) { refreshAfterSync(); renderView(currentView); }
         },
       });
     });

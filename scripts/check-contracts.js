@@ -19,7 +19,7 @@ const root = path.resolve(__dirname, '..');
 const read = (p) => fs.readFileSync(path.join(root, p), 'utf8');
 const exists = (p) => fs.existsSync(path.join(root, p));
 
-const JS = ['js/i18n.js', 'js/catalog.js', 'js/cloud.js', 'js/storage.js', 'js/motion.js', 'js/app.js', 'js/health.js', 'js/notify.js', 'js/foodai.js', 'js/update.js'];
+const { JS, TOP_LEVEL } = require('./shipped.js');   // one spelling, shared with eslint.config.js
 const src = Object.fromEntries(JS.map((f) => [f, read(f)]));
 const html = read('index.html');
 const admin = read('admin.html');
@@ -802,7 +802,7 @@ const contract = (name, problems) => {
 // this; eslint.config.js derives the shared surface from the same scan.
 {
   const problems = [];
-  const TOP = /^(?:async\s+)?(?:function\s+\*?|class\s+|const\s+|let\s+|var\s+)([A-Za-z_$][\w$]*)/;
+  const TOP = TOP_LEVEL;
   const owner = new Map();
   for (const f of JS) {
     for (const line of src[f].split(/\r?\n/)) {
@@ -848,6 +848,60 @@ const contract = (name, problems) => {
     if (!defined.has(name)) problems.push(`var(${name}) is used in ${[...files].join(', ')} but no stylesheet, page or script ever defines it — the declaration is silently dropped`);
   }
   contract(`every var(--x) in the stylesheet, the pages and the scripts names a defined custom property (${used.size} used, ${defined.size} defined)`, problems);
+}
+
+// ---------------------------------------------------------------- 36. every sheet is inside the fingerprint net, or named as left out
+// The views lane navigates VIEWS; most of what the food domain does lives in
+// SHEETS, and a moved sheet that broke would pass a views-only net. So
+// scripts/fp/modals.js lists every top-level open*() in app.js plus the five
+// dialogs, and anything left out is in its SKIP map WITH A REASON. This is the
+// same shape as contract 32 for views: "the net is green" must not quietly
+// become "the net is green over the sheets someone remembered to list". The
+// reverse is checked too — an entry naming a function that no longer exists
+// is the test-convenience-ui.js failure this project has recorded three times.
+{
+  const problems = [];
+  const { ENTRIES, SKIP } = require('./fp/modals.js');
+  const app = src['js/app.js'];
+  const openers = new Set([...app.matchAll(/^(?:async )?function (open[A-Z]\w*)\(/gm)].map((m) => m[1]));
+  for (const d of ['confirmDialog', 'showUnreadableDialog', 'showConflictDialog', 'showChangePassword', 'showFeedback']) openers.add(d);
+  const covered = new Set(ENTRIES.map((e) => e.name));
+  for (const name of openers) {
+    if (!covered.has(name) && !(name in SKIP)) problems.push(`${name}() is a sheet in js/app.js that scripts/fp/modals.js neither captures nor names in SKIP with a reason`);
+  }
+  for (const name of [...covered, ...Object.keys(SKIP)]) {
+    if (!openers.has(name)) problems.push(`scripts/fp/modals.js names ${name}(), which is not a top-level sheet in js/app.js any more`);
+  }
+  const ids = ENTRIES.map((e) => e.id);
+  const dup = ids.filter((id, i) => ids.indexOf(id) !== i);
+  if (dup.length) problems.push(`duplicate entry id(s) in scripts/fp/modals.js: ${[...new Set(dup)].join(', ')}`);
+  contract(`every sheet in js/app.js is captured by the fingerprint net or named in its SKIP map with a reason (${ENTRIES.length} entries over ${covered.size} sheets, ${Object.keys(SKIP).length} skipped)`, problems);
+}
+
+// ---------------------------------------------------------------- 37. no page slices a calendar day off a timestamp
+// `String(ts).slice(0,10)` reads the UTC day - yesterday for every UTC+ user
+// before 03:00, the sixth appearance of this bug class. The lint rule catches it
+// in js/*.js and does not read the pages; admin.html had FOUR. Every page has a
+// local-day helper now, so a new slice is a regression wherever it appears.
+{
+  const problems = [];
+  const PAGES = ['index.html', 'admin.html', 'privacy.html', 'get/index.html'];
+  let scanned = 0;
+  for (const p of PAGES) {
+    read(p).split(/\r?\n/).forEach((raw, i) => {
+      scanned++;
+      // A WHOLE-LINE COMMENT IS NOT CODE. The first run of this contract flagged
+      // the comment above dayOf() for quoting the very pattern it warns about —
+      // the v333 trap, where a name that appears only inside a REMOVAL comment
+      // reads as live. Stripped the way contract 26 strips, and only when the
+      // slashes OPEN the line, so a https:// URL is never cut in half.
+      const line = raw.replace(/^\s*\/\/.*$/, '');
+      if (/\.slice\(\s*0\s*,\s*10\s*\)|\.substring\(\s*0\s*,\s*10\s*\)|\.split\(\s*['\"]T['\"]\s*\)\s*\[\s*0\s*\]/.test(line)) {
+        problems.push(`${p}:${i + 1} slices a calendar day off a timestamp - use the page's local-day helper (dayOf)`);
+      }
+    });
+  }
+  contract(`no page slices a calendar day off a timestamp (${scanned} lines over ${PAGES.length} pages)`, problems);
 }
 
 console.log(failures.length ? `\ncheck-contracts: ${failures.length} broken contract(s)` : '\ncheck-contracts: all contracts hold');

@@ -49,8 +49,14 @@ const TILES = [
 ];
 
 function readIcons() {
-  const s = fs.readFileSync(path.join(ROOT, 'js', 'app.js'), 'utf8');
-  const i = s.indexOf('const ICONS');
+  // js/catalog.js since v334. This read app.js for twenty-two releases after the
+  // move, where `indexOf('const ICONS')` matched `const ICONS_FOR` - a local in
+  // renderNotifications - then brace-walked an unrelated block and reported every
+  // glyph missing. Nothing noticed: no npm script, no contract and no CI runs it.
+  // Read where it lives, match the whole declaration, and refuse to guess.
+  const s = fs.readFileSync(path.join(ROOT, 'js', 'catalog.js'), 'utf8');
+  const i = s.indexOf('const ICONS = ');
+  if (i < 0) throw new Error('build-notif-icons: `const ICONS = ` not found in js/catalog.js');
   const j = s.indexOf('{', i);
   let d = 0, k;
   for (k = j; k < s.length; k++) {

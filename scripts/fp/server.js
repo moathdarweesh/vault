@@ -35,19 +35,21 @@ const STUBS = {
     window.qaCloud={status:'pending',dirty:false,online:true,stamp:'',confirmedAt:''};
     window.Cloud={getLastUid:()=>null,configured:()=>false,syncState:()=>({...qaCloud}),
       onLocalChange:()=>{},resume:async()=>'synced',flush:async()=>'ok',
+      backupExerciseImage:async()=>null,bootSync:async()=>null,changePassword:async()=>({ok:false,error:'fp-stub'}),checkPlanRestoreVersion:async()=>({ok:false,code:'fp-stub'}),checkUsername:async()=>null,chooseCloud:async()=>null,chooseLocal:async()=>null,clearLocalUserData:()=>{},currentEmail:async()=>'fp@example.invalid',deleteAccount:async()=>({ok:false,error:'fp-stub'}),ensureSdk:async()=>null,getMyFlags:async()=>null,getSession:async()=>null,getUsername:async()=>null,isSettled:()=>true,listPlanHistory:async()=>null,localHasData:()=>false,onPasswordRecovery:()=>{},pullCatalog:async()=>null,pushOnce:async()=>null,readPlanHistory:async()=>({ok:false,code:'fp-stub'}),recoveryFailedAt:()=>'',recoveryInfo:()=>null,removeExerciseImage:async()=>null,resetPassword:async()=>({ok:false,error:'fp-stub'}),resolveOnLogin:async()=>null,restoreExerciseImage:async()=>null,restoreRecovery:async()=>false,setUsername:async()=>null,signIn:async()=>({ok:false,error:'fp-stub'}),signOut:async()=>({ok:false,error:'fp-stub'}),signUp:async()=>({ok:false,error:'fp-stub'}),snapshotLocal:()=>true,submitFeedback:async()=>({ok:true}),touchLastSeen:async()=>null,wasLinked:()=>true,
       reportError:function(){window.__fpReportError=(window.__fpReportError||[]);window.__fpReportError.push([].slice.call(arguments));}};`,
   // the login card itself — configured, but no session
   gate: `
     window.qaCloud={status:'signedout',dirty:false,online:true,stamp:'',confirmedAt:''};
-    window.Cloud={getLastUid:()=>null,configured:()=>true,syncState:()=>({...qaCloud}),
+    window.Cloud={getLastUid:()=>null,configured:()=>true,ensureSdk:async()=>true,syncState:()=>({...qaCloud}),
       onLocalChange:()=>{},resume:async()=>'nosession',flush:async()=>'nosession',
       getSession:async()=>null,
       captcha:{mount:async()=>{},token:async()=>'fp-token',reset:()=>{}},
+      backupExerciseImage:async()=>null,bootSync:async()=>null,changePassword:async()=>({ok:false,error:'fp-stub'}),checkPlanRestoreVersion:async()=>({ok:false,code:'fp-stub'}),checkUsername:async()=>null,chooseCloud:async()=>null,chooseLocal:async()=>null,clearLocalUserData:()=>{},currentEmail:async()=>'fp@example.invalid',deleteAccount:async()=>({ok:false,error:'fp-stub'}),getMyFlags:async()=>null,getUsername:async()=>null,isSettled:()=>true,listPlanHistory:async()=>null,localHasData:()=>false,onPasswordRecovery:()=>{},pullCatalog:async()=>null,pushOnce:async()=>null,readPlanHistory:async()=>({ok:false,code:'fp-stub'}),recoveryFailedAt:()=>'',recoveryInfo:()=>null,removeExerciseImage:async()=>null,resetPassword:async()=>({ok:false,error:'fp-stub'}),resolveOnLogin:async()=>null,restoreExerciseImage:async()=>null,restoreRecovery:async()=>false,setUsername:async()=>null,signIn:async()=>({ok:false,error:'fp-stub'}),signOut:async()=>({ok:false,error:'fp-stub'}),signUp:async()=>({ok:false,error:'fp-stub'}),snapshotLocal:()=>true,submitFeedback:async()=>({ok:true}),touchLastSeen:async()=>null,wasLinked:()=>true,
       reportError:function(){window.__fpReportError=(window.__fpReportError||[]);window.__fpReportError.push([].slice.call(arguments));}};`,
   // signed in, everything already in sync — the state most screens are seen in
   in: `
     window.qaCloud={status:'synced',dirty:false,online:true,stamp:'2026-09-01T00:00:00.000Z',confirmedAt:'2026-09-01T00:00:00.000Z'};
-    window.Cloud={getLastUid:()=>'fp-user',configured:()=>true,syncState:()=>({...qaCloud}),
+    window.Cloud={getLastUid:()=>'fp-user',configured:()=>true,ensureSdk:async()=>true,syncState:()=>({...qaCloud}),
       onLocalChange:()=>{},resume:async()=>'synced',flush:async()=>'ok',push:async()=>'ok',
       getSession:async()=>({user:{id:'fp-user',email:'fp@example.invalid'}}),
       getUsername:async()=>'fpuser',checkUsername:async()=>true,setUsername:async()=>({ok:true}),
@@ -55,6 +57,7 @@ const STUBS = {
       pullCatalog:async()=>({exercises:null,cardio:null,foods:null,presets:null,config:null}),
       listPlanHistory:async()=>[],
       captcha:{mount:async()=>{},token:async()=>'fp-token',reset:()=>{}},
+      backupExerciseImage:async()=>null,bootSync:async()=>null,changePassword:async()=>({ok:false,error:'fp-stub'}),checkPlanRestoreVersion:async()=>({ok:false,code:'fp-stub'}),chooseCloud:async()=>null,chooseLocal:async()=>null,clearLocalUserData:()=>{},currentEmail:async()=>'fp@example.invalid',deleteAccount:async()=>({ok:false,error:'fp-stub'}),isSettled:()=>true,localHasData:()=>false,onPasswordRecovery:()=>{},pushOnce:async()=>null,readPlanHistory:async()=>({ok:false,code:'fp-stub'}),recoveryFailedAt:()=>'',recoveryInfo:()=>null,removeExerciseImage:async()=>null,resetPassword:async()=>({ok:false,error:'fp-stub'}),resolveOnLogin:async()=>null,restoreExerciseImage:async()=>null,restoreRecovery:async()=>false,signIn:async()=>({ok:false,error:'fp-stub'}),signOut:async()=>({ok:false,error:'fp-stub'}),signUp:async()=>({ok:false,error:'fp-stub'}),snapshotLocal:()=>true,submitFeedback:async()=>({ok:true}),wasLinked:()=>true,
       reportError:function(){window.__fpReportError=(window.__fpReportError||[]);window.__fpReportError.push([].slice.call(arguments));}};`,
 };
 

@@ -26,6 +26,7 @@
 const fs = require('node:fs');
 const path = require('node:path');
 const globals = require('globals');
+const { JS: SHIPPED, TOP_LEVEL } = require('./scripts/shipped.js');   // one spelling, shared with scripts/check-contracts.js
 
 // ---------------------------------------------------------------------------
 // The cross-file global surface, DERIVED — never hand-listed.
@@ -41,11 +42,6 @@ const globals = require('globals');
 // that blanks the app.
 // ---------------------------------------------------------------------------
 const ROOT = __dirname;
-const SHIPPED = [
-  'js/i18n.js', 'js/catalog.js', 'js/cloud.js', 'js/storage.js', 'js/motion.js',
-  'js/app.js', 'js/health.js', 'js/notify.js', 'js/foodai.js', 'js/update.js',
-];
-const TOP_LEVEL = /^(?:async\s+)?(?:function\s+\*?|class\s+|const\s+|let\s+|var\s+)([A-Za-z_$][\w$]*)/;
 const shared = {};
 for (const rel of SHIPPED) {
   const file = path.join(ROOT, rel);
@@ -56,8 +52,11 @@ for (const rel of SHIPPED) {
     if (m) shared[m[1]] = 'readonly';
   }
 }
-// Set on window rather than declared, so the scan above cannot see them.
-for (const n of ['VAULT_KEYS', 'Cloud', 'DB', 'VltMotion', 'Health', 'Notify', 'FoodAI', 'VaultUpdate', 'I18N']) shared[n] = 'readonly';
+// Set on window rather than declared at column 0, so the scan above cannot see
+// them. DB and I18N are NOT in this list: both ARE column-0 consts (storage.js,
+// i18n.js) and the scan finds them — saying otherwise sent a reader looking for
+// a window property as their only definition.
+for (const n of ['VAULT_KEYS', 'Cloud', 'VltMotion', 'Health', 'Notify', 'FoodAI', 'VaultUpdate']) shared[n] = 'readonly';
 
 // ---------------------------------------------------------------------------
 // The project's own rules. Every one of these is a defect that shipped.
@@ -113,6 +112,7 @@ const vault = {
     'no-utc-calendar-day': {
       meta: { type: 'problem', schema: [], messages: {
         utc: 'toISOString() is UTC: this returns the PREVIOUS day for every UTC+ user after ~21:00. Use todayISO() / addDaysISO() for a calendar day.',
+        stored: 'Slicing a calendar day off a STORED timestamp reads its UTC day — yesterday for every UTC+ user before 03:00. Use dayOfTimestamp(ts).',
       } },
       create(context) {
         const src = context.sourceCode || context.getSourceCode();
@@ -126,6 +126,20 @@ const vault = {
             if (/\.slice\(\s*0\s*,\s*10\s*\)|\.substring\(\s*0\s*,\s*10\s*\)|\.split\(\s*['"]T['"]\s*\)\s*\[\s*0\s*\]/.test(after)) {
               context.report({ node, messageId: 'utc' });
             }
+          },
+          // THE SIXTH SHAPE, which the visitor above structurally cannot see: the
+          // timestamp is already a STRING (`rec.at`, `row.replaced_at`), and
+          // `.slice(0, 10)` on it reads the UTC day with no toISOString() in sight.
+          // Six display sites had it. Keyed on the NAME of what is sliced.
+          'CallExpression:exit'(node) {
+            const c = node.callee;
+            if (c.type !== 'MemberExpression' || (c.property.name !== 'slice' && c.property.name !== 'substring')) return;
+            const [a, b] = node.arguments;
+            if (!a || !b || a.value !== 0 || b.value !== 10) return;
+            let obj = c.object;
+            if (obj.type === 'CallExpression' && obj.callee.type === 'Identifier' && obj.callee.name === 'String' && obj.arguments[0]) obj = obj.arguments[0];
+            const name = obj.type === 'Identifier' ? obj.name : obj.type === 'MemberExpression' && obj.property.type === 'Identifier' ? obj.property.name : '';
+            if (/^(at|.*_at|.*At|.*(created|updated|replaced|seen).*)$/i.test(name)) context.report({ node, messageId: 'stored' });
           },
         };
       },

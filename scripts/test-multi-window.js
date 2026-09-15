@@ -199,7 +199,45 @@ async function sameAccountIsUntouched(entry) {
     'nothing is treated as foreign when the uid has not changed');
 }
 
+// ── V-03, the failure the first fix ignored: the rescue cannot be written ────
+// snapshotRaw returns false on a quota error. The v351 guard discarded that and
+// swept the device anyway — so on a full phone the previous account's data was
+// DESTROYED by the code whose comment promised to keep it.
+async function foreignBlobSurvivesARescueFailure() {
+  const s = context(), { c, values, keys } = s;
+  const ex = firstExercise(c);
+  const alice = c.DB.sessions.add({ exerciseId: ex, date: DAY, sets: [{ reps: 5, weight: 100 }] });
+  s.session({ user: { id: 'bob' } });
+  s.fail('QuotaExceededError');                       // every setItem throws from here
+  s.query(async () => ({ data: null, error: null }));
+  await c.Cloud.resolveOnLogin();
+  s.fail('');
+  assert.ok((values.get(keys.store) || '').includes(alice.id), 'no rescue → no sweep: the previous account\'s blob is untouched');
+  assert.equal(c.Cloud.getLastUid(), 'alice', 'and the device still says whose it is');
+  assert.equal(values.has(keys.recovery), false, 'nothing half-written in the rescue slot');
+}
+
+// ── restoreRecovery reports the upload half honestly ─────────────────────────
+async function restoreSaysWhichHalf() {
+  const s = context(), { c, values, keys } = s;
+  const ex = firstExercise(c);
+  const mine = c.DB.sessions.add({ exerciseId: ex, date: DAY, sets: [{ reps: 5, weight: 100 }] });
+  values.set(keys.recovery, JSON.stringify({ at: '2026-09-15T00:00:00.000Z', reason: 'test', raw: values.get(keys.store), uid: 'alice' }));
+  c.DB.sessions.remove(mine.id);
+  s.query(async () => { throw new Error('network down'); });
+  const r = await c.Cloud.restoreRecovery();
+  assert.equal(r && r.restored, true, 'restored on the device');
+  assert.equal(r.uploaded, false, 'and it says the upload did not happen');
+  assert.ok(c.DB.sessions.listAll().some((x) => x.id === mine.id), 'the data is back');
+  s.query(async () => ({ data: [{ version: 9 }], error: null }));
+  values.set(keys.recovery, JSON.stringify({ at: '2026-09-15T00:00:00.000Z', reason: 'test', raw: values.get(keys.store), uid: 'alice' }));
+  const r2 = await c.Cloud.restoreRecovery();
+  assert.equal(r2.uploaded, true, 'uploaded when the push lands');
+}
+
 async function run() {
+  await foreignBlobSurvivesARescueFailure();
+  await restoreSaysWhichHalf();
   lossWithoutTheListener();
   noLossWhenDelivered();
   refusesWhatItCannotTrust();
@@ -209,6 +247,6 @@ async function run() {
     await foreignBlobIsNeverAdopted(entry);
     await sameAccountIsUntouched(entry);
   }
-  console.log('PASS multi-window: sibling writes adopted not overwritten, STALE recorded, READ-ONLY and garbage refused, photos kept; a foreign blob is rescued under its own uid and never uploaded (login + boot)');
+  console.log('PASS multi-window: sibling writes adopted not overwritten, STALE recorded, READ-ONLY and garbage refused, photos kept; a foreign blob is rescued under its own uid and never uploaded (login + boot), and never swept when the rescue cannot be written; restore reports its upload half');
 }
 run().catch((error) => { console.error(error); process.exitCode = 1; });

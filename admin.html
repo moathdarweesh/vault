@@ -471,7 +471,7 @@
   <div id="detail" class="detail"><div class="detail-inner" id="detail-inner"></div></div>
   <div class="toast" id="toast"></div>
 
-  <script src="js/vendor/supabase.js?v=355"></script>
+  <script src="js/vendor/supabase.js?v=357"></script>
   <script>
   (function(){
     'use strict';
@@ -981,15 +981,19 @@
             f[1]+' <span class="num">'+counts[f[0]]+'</span></span>';
         }).join('');
 
+      // The LOCAL calendar day of a timestamp. `String(ts).slice(0,10)` reads the
+      // UTC day - yesterday for every UTC+ user before 03:00; four sites had it.
+      function dayOf(ts){ var d=new Date(ts); if(isNaN(d)) return ''; return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); }
       function seen(u){
         var d=u.last_seen||u.last;
         if(!d) return '—';
-        var t=new Date(d); if(isNaN(t)) return String(d).slice(0,10);
+        // `u.last` is a bare day: parsed alone it is UTC midnight, 03:00 local.
+        var t=new Date(String(d).length===10 ? d+'T00:00:00' : d); if(isNaN(t)) return String(d);
         var days=Math.floor((Date.now()-t.getTime())/864e5);
         if(days<=0) return 'اليوم';
         if(days===1) return 'أمس';
         if(days<7) return 'قبل '+days+' أيام';
-        return String(d).slice(0,10);
+        return dayOf(t);
       }
       function roleLabel(u){ return u.role==='admin'?'أدمن':u.role==='coach'?'مدرب':'مستخدم'; }
 
@@ -1249,7 +1253,7 @@
         return '<div class="fb-item'+(f.status==='resolved'?' resolved':'')+'" data-fid="'+esc(f.id)+'">'+
           '<div class="fb-msg">'+esc(f.message)+'</div>'+
           '<div class="fb-meta"><span class="who3">'+(f.username?'@'+esc(f.username):esc(shortId(f.user_id))+'…')+'</span>'+
-          '<span class="num">'+esc(String(f.created_at||'').slice(0,10))+'</span>'+
+          '<span class="num">'+esc(dayOf(f.created_at))+'</span>'+
           (f.context?'<span>· '+esc(f.context)+'</span>':'')+
           (f.status==='resolved'?'<span class="pill st-active" style="margin-inline-start:auto">تمّت المعالجة</span>':'<button class="fb-resolve" data-resolve="'+esc(f.id)+'">وضع كمُعالَج</button>')+
           '</div></div>';
@@ -1275,7 +1279,7 @@
         var sel='<select class="big" data-role-for="'+esc(u.id)+'"'+(u.id===meId?' disabled':'')+' style="margin:0;max-width:150px">'+
           ['user','coach','admin'].map(function(r){return '<option value="'+r+'"'+(u.role===r?' selected':'')+'>'+(r==='user'?'مستخدم':r==='coach'?'مدرب':'أدمن')+'</option>';}).join('')+'</select>';
         return '<tr><td><span class="uname"><span class="av">'+esc(initial(u))+'</span>'+nameHtml(u)+you+'</span></td>'+
-          '<td>'+sel+'</td><td class="num muted">'+(u.last_seen?String(u.last_seen).slice(0,10):'—')+'</td></tr>';
+          '<td>'+sel+'</td><td class="num muted">'+(u.last_seen?dayOf(u.last_seen):'—')+'</td></tr>';
       }).join('');
       box.innerHTML='<div class="table-wrap"><div class="scroll-x"><table class="tbl"><thead><tr><th class="no-sort">المستخدم</th><th class="no-sort">الدور</th><th class="no-sort">آخر ظهور</th></tr></thead><tbody>'+rows+'</tbody></table></div></div>'+
         '<div class="empty-mini" style="margin-top:12px">تعيين دور «أدمن» يمنح صلاحية الوصول لهذه اللوحة. لا يمكنك تغيير دورك بنفسك.</div>';

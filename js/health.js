@@ -57,7 +57,9 @@
     { key: 'calories', icon: 'flame', color: '#fb923c', label: 'health_calories', unit: 'health_kcal', val: (d) => (d.calories != null ? fmt(round(d.calories)) : null) },
     { key: 'distance', icon: 'run', color: '#34d399', label: 'health_distance', unit: 'health_km', val: (d) => round(d.distance, 2) },
     { key: 'vo2max', icon: 'chart', color: '#facc15', label: 'health_vo2', unit: 'health_vo2_unit', val: (d) => round(d.vo2max, 1) },
-    { key: 'exercise', icon: 'dumbbell', color: '#f472b6', label: 'health_exercise', unit: 'health_min', val: (d) => (d.exercise && d.exercise.minutes != null ? d.exercise.minutes : null) },
+    // fmt(round()) like its eight siblings: this was the ONE metric that reached the
+    // card uncoerced, and the blob is untrusted (a backup, a cloud pull).
+    { key: 'exercise', icon: 'dumbbell', color: '#f472b6', label: 'health_exercise', unit: 'health_min', val: (d) => (d.exercise && d.exercise.minutes != null ? fmt(round(d.exercise.minutes)) : null) },
     { key: 'power', icon: 'zap', color: '#fbbf24', label: 'health_power', unit: 'health_watt', val: (d) => round(d.power) },
     { key: 'speed', icon: 'bike', color: '#22d3ee', label: 'health_speed', unit: 'health_kmh', val: (d) => round(d.speed, 1) },
   ];
@@ -69,7 +71,7 @@
     const hidden = (typeof DB !== 'undefined') && DB.health.isHidden(m.key);
     const valHtml = value == null
       ? '<span class="health-card-empty">—</span>'
-      : `${value}${m.unit ? `<span class="health-card-unit">${unitText(m.unit)}</span>` : ''}`;
+      : `${esc(value)}${m.unit ? `<span class="health-card-unit">${unitText(m.unit)}</span>` : ''}`;   // escaped as well as coerced: the rule, not just the fix
     const toggle = withToggle
       ? `<span class="health-card-toggle ${hidden ? '' : 'on'}">${ic(hidden ? 'plus' : 'check', 13)}</span>`
       : '';

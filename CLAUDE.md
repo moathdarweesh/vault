@@ -79,7 +79,7 @@ a faster TTFB — not fewer bytes.
 npm run release          # bump every marker + verify, then commit all files together
 ```
 
-**Current version: v355.** APK: build 22 / v3.1.
+**Current version: v357.** APK: build 22 / v3.1.
 
 `scripts/release.js` rewrites **every** marker and then re-reads them from disk to confirm; it exits non-zero if any disagree, and prints the count per file (derived, never hard-coded — the docs used to say 16 while the real count was 15). The markers are `?v=N` in `index.html` (every script and stylesheet, the `js/vendor/supabase.js` preload, both `icons/icon.svg` links, `manifest.json`), the `__cleaned_vN` sessionStorage key, the `FALLBACK` literal in `app.js`, `version.json` → `web`, the `?v=` in `manifest.json`, `admin.html`, `privacy.html` and `get/index.html`, and the `Current version` line in this file. `scripts/check-contracts.js` (pre-commit) refuses a commit where any of them disagree.
 
@@ -558,7 +558,7 @@ npm run verify && npm run release && git add <the files> && git commit && git pu
 This authorization is about the QUESTION, not about the standards. Everything that made the
 question worth asking still applies, and none of it is waived:
 
-- **Verified first.** `npm run verify` (35 contracts + lint + 10 suites) must pass, and any change to
+- **Verified first.** `npm run verify` (37 contracts + lint + 11 suites) must pass, and any change to
   shipped code must be measured in the running app. Pushing unverified work is not "shipping
   without asking", it is shipping something unknown — GitHub Pages serves the branch directly
   with no gate, so a bad push reaches every device at the next app open.
@@ -2612,6 +2612,258 @@ light + no door → `#faf5f0`; dark → `#000000` throughout.
 - **"The 2500ms cap opens onto an empty shell"** and **"the app behind the door is
   not aria-hidden"** — both already answered in v343's note.
 
+## v357 — the day a write lands on, and the tidy-up the review asked for
+
+The second half of the same adversarial review. v356 took the guards; this takes
+the dates, the double-taps, and the structure the owner asked for in his own
+words — «الكود مرتب بشكل مخيف كأنّ محترفًا كتبه، عشان الصيانة بعدين».
+
+### ⚠️ THE UTC-DAY BUG CLASS, SIXTH APPEARANCE — IN THE LINT RULE'S BLIND SPOT
+
+v353 shipped `vault/no-utc-calendar-day` for exactly this class. It keys on a
+`toISOString()` call — and **six sites had no `toISOString()` in them at all**:
+the timestamp was already a stored string and the code did `String(rec.at)
+.slice(0, 10)`, which reads its **UTC** day. For every UTC+ user before 03:00
+that is yesterday.
+
+The rule learned the second shape — a `.slice(0, 10)` on anything named `at`,
+`*_at`, `*At`, `created*`, `updated*`, `replaced*`, `*seen*` — and it was widened
+**before** the sites were fixed, so it could be shown naming them: three errors
+on the unfixed tree, exactly the three in `js/*.js`. The other three live in
+`admin.html`, which ESLint does not read — so they get **contract 37**, which
+scans the four pages for the same shapes.
+
+> ⚠️ **AND CONTRACT 37 FLAGGED ITS OWN COMMENT ON ITS FIRST RUN** — the comment
+> above `dayOf()` quotes the pattern it warns about. That is the v333 trap (a name
+> that appears only inside a REMOVAL comment reads as live), arriving from the
+> other direction. It strips whole-line comments now, the way contract 26 already
+> does, and only when the slashes OPEN the line so a `https://` URL is never cut.
+
+`dayOfTimestamp(ts)` in storage.js and `dayOf(ts)` in admin.html are the local
+answer. Seven planted cases: the defect fires in both files, and the three
+correct forms — `dayOfTimestamp(x)`, an ordinary `list.slice(0, 10)`, a comment
+about the pattern — all stay silent.
+
+### Two writes landed on the day the SCREEN was drawn, not the day they happened
+
+- **Water on the Food dashboard.** `renderFood` resolves `const date = todayISO()`
+  and the tap 60 lines below wrote `DB.water.add(date, …)`. The comment two lines
+  above the repaint already says «todayISO() HERE, not the render-time `date`» —
+  applied to the repaint, never to the write.
+- **Every supplement tick.** Same shape, and here the app already had the better
+  answer: Home's cardio row **repaints when the day has moved** rather than
+  writing the wrong one. Supplements now does the same (`dayMoved()`), which is
+  stronger than swapping in `todayISO()` — the row would otherwise paint "taken"
+  consistently with a day the user is no longer in.
+
+Both are the phone-left-open-past-midnight case, which `DATE_DERIVED_VIEWS` only
+repairs on a `visibilitychange` that never comes.
+
+### Three more from the same pass
+
+- **The food picker's two "add" buttons had no repeat-tap guard.** The verifier
+  refuted the original P1 («rapid taps duplicate the record in five sheets») and
+  was right — every sheet save is synchronous and ends in `closeModal()`, and
+  `.is-out` carries `pointer-events: none`. But these two sheets **stay open by
+  design**, and their sibling meal button already disables for 800 ms. They do now.
+- **A barcode network failure said «this barcode is not in the database».** A DNS
+  failure, an offline phone, a CSP refusal and a genuinely unknown barcode were
+  one message. `auth_err_network` already exists in both dictionaries.
+- **`exportJSON()` lost EVERY photo when one was unreadable.** One `try` around
+  the whole re-attach loop; one bad side-store key aborted it and the backup was
+  handed over incomplete under a success toast. One try per photo now, and it
+  says how many it could not read.
+
+### ⚠️ `scripts/build-notif-icons.js` HAD BEEN BROKEN FOR TWENTY-TWO RELEASES
+
+It reads `ICONS` out of a file by `indexOf('const ICONS')`. v334 moved `ICONS` to
+`js/catalog.js` — and the substring still matched, because `js/app.js` contains
+`const ICONS_FOR` (a local inside `renderNotifications`). It brace-walked an
+unrelated block, reported all six glyphs missing and exited 1. **No npm script, no
+contract and no CI runs it, which is why nobody noticed.** It reads
+`js/catalog.js` now, matches `const ICONS = `, and throws by name rather than
+guessing. Verified by running it: six PNGs, byte-identical to the committed ones.
+
+> This is the survey's own thesis, already realised in the repo: it is precisely
+> what a hard-coded file path does to a tool when the code moves underneath it,
+> and it is the argument for the split's change-list being complete.
+
+### The structure pass
+
+| | |
+|---|---|
+| `cellProblems()` **crashed the whole run** with a `TypeError` on the `{error}` cell `pageCapture` returns for a missing root | returns and names the cell — proved by pointing a sheet at an overlay that never mounts: `✗ modal/ar/dark/375/notif-perm: no root for …`, no TypeError |
+| `diff` accepted a views record and a sheets record as comparable | `lane` and `contexts` are in the record and in the comparability list |
+| the ten-file list and the top-level regex were spelled **twice** (check-contracts + eslint), each under a comment saying a second spelling would drift | `scripts/shipped.js`, required by both |
+| `scripts/fp/views.js` promised `ctx` "resolved at capture time from the seeded fixture" — **nothing read it** | the six detail views are named as fallback captures, with what each shows; the seeded VIEWS lane is stage 4 |
+| `DB.loadFailed`'s comment sat **54 lines** above its declaration, glued to the top of the adopt block | back beside its code |
+| `guardForeignBlob`'s "returns true so the caller can re-read" — no caller does | the comment says so |
+| the net's header and usage line never learned the `modals` lane or `--contexts` existed; the focus comment cited timers the grep it prescribes does not yield | corrected against the code beside them |
+
+> ⚠️ **THE `ctx` ONE IS THE ONE THAT MATTERED.** Six of twenty views were being
+> captured in their NOT-FOUND state — `exercise-detail` is four elements against
+> home's 121 — and certified identical on every refactor step. `views.js`'s own
+> header names that outcome: «the net is green then becomes true and meaningless».
+> The file is honest about it now instead of promising otherwise.
+
+### Measured
+
+Both lanes, twice each, on the finished tree: views **40/40 identical, 4,099
+elements**; sheets **106/106 identical, 8,842 elements**; 0 differences. Against
+the pre-v356 baselines the same, so nothing in v356 or v357 moved a pixel. 37
+contracts, lint, and eleven suites pass.
+
+> The review that produced v356 and v357 ran as eight agents over four lenses;
+> three verifiers were cut short by a model usage limit, so **the correctness,
+> structure and test-quality lenses are reviewed but not adversarially verified**.
+> Every finding acted on above was re-derived here against the files before it was
+> touched. The unverified remainder is listed in the next section.
+
+### Still open from the same review
+
+The `scripts/fp/server.js` stub surface is three pasted 1,100-character lines and
+has already drifted (all three stub `pushOnce`, which is internal and not on
+`window.Cloud`); the two lanes repeat the same 25-line per-cell tail and
+`pageCapture` belongs in `scripts/fp/`; contract 36 hand-lists the five dialogs a
+second time and never checks `host` against the view list; four auth/gate dialogs
+are in neither the net nor its SKIP map. Then the dead-code phase (~9.5 KB, 15
+i18n keys, four `VltMotion` helpers nothing calls) and the split, whose first file
+is measured to be `js/food.js`.
+
+## v356 — the review of the review: two guards that failed open, one of them mine
+
+> v356 and v357 were written as two bodies of work and SHIP IN ONE PUSH — the
+> markers passed through v356 and rest at v357, so no device ever loads a build
+> labelled v356. They are kept apart here because they answer different halves of
+> the same review: this one the guards, the next one the dates and the structure.
+
+An adversarial pass over everything shipped since v350 (four lenses, every finding
+re-derived by a skeptic) plus the six-lens survey that preceded it. The headline is
+the shape this project keeps naming: **a guard that fails open and passes review.**
+Three of them, and the third was written eight releases ago by me.
+
+### ⚠️ THE EMPTY-BLOB BACKUP GUARD FAILED OPEN
+
+`pushOnce` refuses to overwrite a cloud row that holds real data with a local
+blob that holds none — the guard against «Reset all data» destroying the only
+backup. It read the row with `try { remote = await pull(); } catch (_) { remote =
+undefined; }` and then tested `if (remote && …)`. **A read that threw passed the
+guard.** Measured by the verifier on the real `cloud.js`: with the read answering
+500, the UPDATE went out carrying `sessions=0` over a row holding `sessions=20`.
+Reachable by ordinary means — Reset-all, then one flaky read inside the 1.2 s
+debounce. Migration 20 keeps ten prior versions server-side, so the owner could
+recover it in SQL; the user could not.
+
+It refuses now: a read that fails, or no client/session, returns `'error'` — the
+documented outcome `runPush()` already turns into a retry — and no write is
+offered. The dirty flag stays; the next foreground tries again.
+
+> The cloud suite's first case had to change with it, and the reason is worth a
+> line: its fixture was data-less, so after the fix the guard's own read failed
+> BEFORE the CAS the case exists to test, and «failed CAS never overwrites» would
+> have gone green without ever attempting the CAS. The fixture logs a session
+> first now, and the case asserts the UPDATE was actually attempted.
+
+### ⚠️ `guardForeignBlob` (v351) DISCARDED THE RESCUE'S OWN FAILURE
+
+`snapshotRaw` returns `false` when it cannot write (quota, private mode) and
+records `RECOVERY_FAILED_KEY`. The v351 guard discarded both and swept the device
+anyway — the comment said «the blob is KEPT», the code could destroy it. On a
+full phone, the previous account's data was deleted by the code that existed to
+preserve it.
+
+**No rescue, no sweep.** The snapshot's boolean is the gate; on `false` the device
+is left exactly as it was, `localHasData()` stays true, the caller takes the
+conflict path it always took (which asks rather than acts), and the failure is
+reported. The write-back after the sweep is covered too: it cannot fail for quota
+(the sweep freed strictly more than it rewrites) but if it fails at all the blob
+goes back where it was. `test-multi-window.js` reproduces the quota case: every
+`setItem` throwing, the previous account's blob untouched, `lastUid` unchanged.
+
+### ⚠️ ONE HEALTH METRIC REACHED HOME'S innerHTML UNESCAPED
+
+`js/health.js` coerces eight of its nine metrics through `fmt()`/`round()`;
+`exercise.minutes` was interpolated raw into the card, and the card into Home's
+`innerHTML`. `health` was in neither validator's list, so a poisoned backup
+imported cleanly, and the CSP carries `'unsafe-inline'` on purpose — executed in
+a vm over the shipped file with the REAL `fmtNum`: `<img src=x onerror=…>` came
+out of `homeSectionHtml()` verbatim. Coerced like its siblings, escaped as well
+(the rule, not just the fix), and `health` is validated as an object when present.
+
+> A harness that stubs `fmtNum` as `String(n)` produces a FALSE second finding
+> (`heartRate.latest` appears to be a sink). The verifier hit exactly that and
+> corrected it; `scripts/test-untrusted-render.js` uses the real formatter.
+
+### `exerciseImageUrl` had no character guard — and escaping could not have helped
+
+The slug lands inside `style="background-image:url('…')"` at three sites. **The
+HTML parser decodes `&#39;` back to a quote BEFORE the CSS parser reads the
+attribute**, so `escapeHtml()` is no defence there — measured in real Chromium:
+`a'); position:fixed; inset:0; …` injected a full-screen overlay. A slug is an
+identifier and is now validated as one (`/^[A-Za-z0-9_.-]+$/`); all 73 seed slugs
+were checked against the pattern before it shipped, so it cannot blank a real
+photo. Ten payloads refused in the new suite.
+
+### `restoreRecovery()` said «restored» after a failed upload
+
+Its own header promised «true only if BOTH the local restore and the upload
+succeeded»; it returned `true` unconditionally. It returns `{restored, uploaded}`
+now and the toast says which half happened (`sync_restored_local`, both
+dictionaries): a restore that stays on one device is half a rescue.
+
+### Proved, in this order
+
+Every new assertion was run against the UNFIXED tree first and went red: the
+poisoned metric reached innerHTML, the guard offered no refusal, the sweep ran.
+Then the fix, then green. `scripts/test-untrusted-render.js` is the eleventh
+suite.
+
+### The fingerprint net, stage 3 — the sheets, and a settle that was still racing
+
+`node scripts/fingerprint-net.js modals --tag X` opens **every `open*()` sheet and
+the five dialogs** — 53 entries in `scripts/fp/modals.js` over a seeded fixture
+(`scripts/fp/fixture.js`, one of everything through the real `DB.*` API) — captures
+them at their root, and asserts each one CLOSES (a corpse in `#modal-root` is a
+defect the v341 review found live). Two contexts by default (ar/dark/375 +
+en/light/412, ~1.5 min), all eight on request. **Contract 36** compares the list
+against the `open*` declarations in `app.js`: a new sheet joins the net, is named
+in `SKIP` with a reason, or the commit fails — the six own-overlay sheets and the
+camera/microphone/dormant ones are listed with theirs.
+
+| planted, both sheet-only | the views matrix | the sheets lane |
+|---|---|---|
+| `.rec-sum-t` at full ink + `.modal-title` at weight 400 | 5 differences | **157 differences, 18/106 identical, each named by sheet** |
+
+> ⚠️ **THREE NOISE SOURCES THE VIEWS LANE HAD NEVER SHOWN.** Sheets focus their
+> first field from a `setTimeout` (30/60/150 ms), own-overlay sheets reach rest by
+> adding `.open` inside a rAF, and `syncDetailTopTitle` toggles a class whose
+> opacity then TRANSITIONS — a predicate evaluated before the app's own frame saw
+> no animation, and a capture after it read the transition mid-flight
+> (`.detail-top-title` flipped in 4 of 40 cells of an unchanged tree). `settle()`
+> now runs the app's rAF FIRST, then a predicate in which a PENDING animation
+> counts as in flight, then waits for focus to hold still. Measured after: views
+> **40/40**, sheets **106/106**, 0 differences each, twice.
+
+Also caught on the way: the harness stubs lacked 36 `Cloud` members the app
+reaches (`ensureSdk` first), so eight sheets threw and read as "empty"; the stub
+surface is derived from the scripts now. And the fixture had no calorie goal, so
+`renderFood` kept opening the calculator over whatever the lane had opened —
+eleven sheets "did not close" for that reason alone.
+
+**Still outside the net:** the motion lane (everything runs under reduced motion),
+the seeded-data VIEWS (the matrix is the empty state; only the sheets see the
+fixture), camera and microphone.
+
+### Still open from the same review, next
+
+The date-write pair (water on the Food dashboard and every supplement tick write
+to the RENDER-time day; six display sites slice a UTC timestamp); the food
+picker's two unguarded add buttons; `scripts/build-notif-icons.js`, already broken
+by the catalog split exactly the way the food split would break it; the dead-code
+phase (~9.5 KB, 15 i18n keys, four motion helpers nothing calls); and the split
+itself, whose first file is now measured to be `js/food.js` — the only domain with
+zero lateral edges in either direction.
+
 ## v355 — the net sees all eight cells now, and one of them runs on every push
 
 Stage 1 of the fingerprint net recorded ONE cell of eight — ar/dark/375 — so a
@@ -3169,9 +3421,12 @@ device or the live backend shows; a change identical across every cell of the
 matrix; and **anything wrong on BOTH sides — a conservation law conserves defects
 with equal enthusiasm.**
 
-Stage 1 covered the 20 views in ar/dark/375 against the empty state; **stage 2 (v355) is
-the `matrix` command — all eight lang × theme × width cells, every band, and a CI
-smoke lane.** Modals, the
+**Stage 1** covered the 20 views in ar/dark/375 against the empty state. **Stage 2**
+(v355) is `matrix` — all eight lang × theme × width cells, every band, and a CI
+smoke lane. **Stage 3** (v356) is `modals` — every sheet and dialog over a seeded
+fixture, with contract 36 keeping the list honest. **Still open: stage 4**, the
+seeded-data VIEWS lane (six detail views are captured in their fallback state
+today — `scripts/fp/views.js` names which), and **stage 5**, the motion lane. The
 second language and theme, the other widths, the motion lane and the DB-diff
 scenarios are stages 2–5, and each is worth building when a refactor step needs
 it — not before.

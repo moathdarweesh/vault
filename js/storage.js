@@ -75,7 +75,12 @@ const EXERCISE_IMAGE_LOCAL = 'assets/ex';
 const EXERCISE_IMAGE_REMOTE = 'https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises';
 
 function exerciseImageUrl(imageSlug) {
-  if (!imageSlug) return '';
+  // A slug is an identifier, and it is validated as one. It lands inside
+  // style="background-image:url('…')" at three sites, where escapeHtml() is
+  // no defence: the HTML parser decodes &#39; back to a quote BEFORE the CSS
+  // parser reads the attribute (measured: `a'); position:fixed; …` injected a
+  // full-screen overlay). The blob is untrusted — a backup, a cloud pull.
+  if (!imageSlug || !/^[A-Za-z0-9_.-]+$/.test(String(imageSlug))) return '';
   if (BUNDLED_EX_SLUGS.has(imageSlug)) return `${EXERCISE_IMAGE_LOCAL}/${imageSlug}.jpg`;
   return `${EXERCISE_IMAGE_REMOTE}/${imageSlug}/0.jpg`;
 }
@@ -1711,7 +1716,12 @@ const DB = {
     // Photos are re-attached inline: a backup file must be complete on its own,
     // and importJSON()/loadState() move them back out on the way in.
     const out = JSON.parse(JSON.stringify(STATE));
-    try { (out.exercises || []).forEach((e) => { const img = imgGet(e.id); if (img) e.customImage = img; }); } catch (_) {}
+    // One try PER PHOTO: a single unreadable side-store key used to abort the whole
+    // loop and hand over a backup missing every photo after it, under a success
+    // toast. A photo that cannot be read costs that photo, and says so.
+    let lost = 0;
+    (out.exercises || []).forEach((e) => { try { const img = imgGet(e.id); if (img) e.customImage = img; } catch (_) { lost++; } });
+    if (lost) { try { console.warn('[VAULT] export: ' + lost + ' photo(s) could not be read and are not in the backup'); } catch (_) {} }
     return JSON.stringify(out, null, 2);
   },
   // 'Does this install hold user data?' — ONE list, here, next to the blob it
@@ -1776,7 +1786,7 @@ const DB = {
     for (const k of ['sessions', 'cardio', 'cardioTypes', 'cardioPlan', 'sleep', 'foods', 'supplements', 'mealBundles', 'recipes', 'bodyweight', 'shoppingLists']) {
       if (k in data && data[k] != null && !Array.isArray(data[k])) return false;
     }
-    for (const k of ['prefs', 'foodLogs', 'supplementLogs', 'water', 'notif', 'plan', 'nutrition', 'reminders']) {
+    for (const k of ['prefs', 'foodLogs', 'supplementLogs', 'water', 'notif', 'plan', 'nutrition', 'reminders', 'health']) {
       if (k in data && data[k] != null && (typeof data[k] !== 'object' || Array.isArray(data[k]))) return false;
     }
     // `name` on the list and `quantity`/`unit` on an item are LEGACY: a device on
@@ -3472,9 +3482,6 @@ const DB = {
 
 // Re-read STATE from localStorage (after cloud sync swaps in pulled data).
 DB.reload = reloadState;
-// True when the stored blob could not be parsed at boot and the app is running
-// READ-ONLY on an in-memory default. The 'vault:load-failed' event fires
-// before app.js loads (STATE is built at evaluation time), so init() asks.
 // ANOTHER DOCUMENT OF THIS ORIGIN WROTE THE STORE. ADOPT IT, DO NOT PRUNE.
 //
 // changeSlice refuses a write over bytes it did not write, but writeStore - a
@@ -3526,6 +3533,9 @@ try {
   });
 } catch (_) {}
 
+// True when the stored blob could not be parsed at boot and the app is running
+// READ-ONLY on an in-memory default. The 'vault:load-failed' event fires
+// before app.js loads (STATE is built at evaluation time), so init() asks.
 DB.loadFailed = () => STATE_LOAD_FAILED;
 /* THE QUARANTINED ORIGINAL, for the one rescue offered in READ-ONLY mode.
 
@@ -3562,6 +3572,16 @@ function todayISO() {
   d.setMinutes(d.getMinutes() - d.getTimezoneOffset());
   // eslint-disable-next-line vault/no-utc-calendar-day -- THIS is the sanctioned one: the clock was shifted to local first, so the UTC slice IS the local day
   return d.toISOString().slice(0, 10);
+}
+
+// The calendar day a STORED TIMESTAMP fell on, in LOCAL time. Never
+// `iso.slice(0, 10)`: that reads the UTC day, which is YESTERDAY for every UTC+
+// user before 03:00 — the sixth appearance of this bug class, at six display
+// sites, none of which contained a toISOString() for the lint rule to see.
+function dayOfTimestamp(ts) {
+  const d = new Date(ts);
+  if (isNaN(d)) return '';
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
 
 // Add (or subtract) whole days to a 'YYYY-MM-DD' string and return the result in

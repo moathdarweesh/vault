@@ -1,7 +1,8 @@
 #!/usr/bin/env node
 // THE FINGERPRINT NET — prove a refactor changed nothing.
 //
-//   node scripts/fingerprint-net.js matrix --tag before     # stage 2: ar/en × dark/light × 375/412, every band
+//   node scripts/fingerprint-net.js matrix --tag before     # stage 2: the 20 views, ar/en × dark/light × 375/412
+//   node scripts/fingerprint-net.js modals --tag before     # stage 3: every sheet and dialog, over a seeded fixture
 //   …do the refactor step…
 //   node scripts/fingerprint-net.js matrix --tag after
 //   node scripts/fingerprint-net.js diff before after
@@ -31,6 +32,8 @@ const path = require('node:path');
 const { start, fence, ROOT } = require('./fp/server.js');
 const VIEWS = require('./fp/views.js');
 const PROPS = require('./fp/props.js');
+const MODALS = require('./fp/modals.js');
+const { seedFixture } = require('./fp/fixture.js');
 
 const OUT = path.join(ROOT, '.fpnet');
 
@@ -178,15 +181,9 @@ function pageCapture(opts) {
 }
 
 // ── capture ──────────────────────────────────────────────────────────────────
-// ── one context = one (state, lang, theme, width) ────────────────────────────
-// Everything a single cell of the matrix needs, and nothing that outlives it.
-// \`capture\` runs one; \`matrix\` runs eight in the same browser.
-async function captureContext(browser, origin, opts) {
-  const { state, lang, theme, width, props } = opts;
-  const cells = {};
-  const problems = [];
-  const timings = [];
-
+// ── the shared pieces ────────────────────────────────────────────────────────
+// One browser context = one (lang, theme, width). Views and sheets share it.
+async function openContext(browser, origin, { lang, theme, width }) {
   const ctx = await browser.newContext({
     viewport: { width, height: 812 },
     // ⚠️ REDUCED MOTION IS THE DETERMINISM GUARANTEE, not a shortcut. Under it
@@ -199,129 +196,196 @@ async function captureContext(browser, origin, opts) {
     timezoneId: TZ,
     locale: lang === 'ar' ? 'ar-SA' : 'en-US',
   });
+  const page = await ctx.newPage();
+  await page.clock.install({ time: FROZEN });
+  const guard = await fence(page);
+
+  const errors = [];
+  page.on('pageerror', (e) => errors.push(String(e.message)));
+  page.on('console', (m) => { if (m.type() === 'error') errors.push('console.error: ' + m.text()); });
+
+  // Freeze randomness and PROVE nothing reached for it during a capture —
+  // that turns "why did this flake" into an answer.
+  await page.addInitScript(() => {
+    let seed = 42;
+    window.__fpRandomCalls = 0;
+    Math.random = function () {
+      window.__fpRandomCalls++;
+      seed = (seed * 1103515245 + 12345) & 0x7fffffff;
+      return seed / 0x7fffffff;
+    };
+  });
+
+  await page.goto(origin + '/');
+  await page.waitForFunction(() => typeof navigate === 'function' && window.__vltReady, null, { timeout: 15000 });
+
+  // ⚠️ ASSERT THE PRECONDITION; NEVER ASSUME IT. rAF, animationend and
+  // transitionend do not fire in a hidden or throttled document, and
+  // document.timeline freezes — so a net that waited on one would record the
+  // bug as the baseline. It does not degrade to a weaker check; it aborts.
+  await page.bringToFront();
+  const live = await page.evaluate(async () => {
+    const t0 = document.timeline.currentTime;
+    await new Promise((r) => setTimeout(r, 200));
+    return {
+      visible: document.visibilityState === 'visible',
+      timelineAdvanced: document.timeline.currentTime - t0 > 100,
+    };
+  });
+  if (!live.visible || !live.timelineAdvanced) {
+    throw new Error('fp: this document is hidden or throttled — every timing assertion below would be vacuous');
+  }
+
+  await page.evaluate(({ lang, theme }) => {
+    document.getElementById('splash')?.remove();
+    try { closeModal(); } catch (_) {}
+    try { hideAuthGate(); } catch (_) {}
+    document.getElementById('onboard-gate')?.remove();
+    DB.prefs.setOnboarded(); DB.prefs.setLang(lang); DB.prefs.setTheme(theme);
+    applyLang(lang); applyTheme(theme);
+  }, { lang, theme });
+
+  return { ctx, page, errors, guard };
+}
+
+/* ⚠️ THE HANG LANE. The owner's condition on the whole refactor is «لا يعلّق
+   التطبيق». A render that never returns is exactly that, and page.evaluate has
+   NO default timeout — it would sit forever and the run would look "in
+   progress" rather than failed. So every render is raced against a hard
+   ceiling on the Node side. A hung page cannot be recovered (its main thread
+   is gone), so a hang aborts the capture by name rather than continuing to
+   record a page that no longer answers. */
+async function timedRender(page, cellId, fn, arg) {
   try {
-    const page = await ctx.newPage();
-    await page.clock.install({ time: FROZEN });
-    const guard = await fence(page);
+    return await Promise.race([
+      page.evaluate(fn, arg),
+      new Promise((_, rej) => setTimeout(() => rej(new Error('HUNG')), HANG_MS)),
+    ]);
+  } catch (e) {
+    if (e.message === 'HUNG') throw new Error(cellId + ': the render did not return within ' + HANG_MS + 'ms — THE APP HUNG');
+    throw e;
+  }
+}
 
-    const errors = [];
-    page.on('pageerror', (e) => errors.push(String(e.message)));
-    page.on('console', (m) => { if (m.type() === 'error') errors.push('console.error: ' + m.text()); });
-
-    // Freeze randomness and PROVE nothing reached for it during a capture —
-    // that turns "why did this flake" into an answer.
-    await page.addInitScript(() => {
-      let seed = 42;
-      window.__fpRandomCalls = 0;
-      Math.random = function () {
-        window.__fpRandomCalls++;
-        seed = (seed * 1103515245 + 12345) & 0x7fffffff;
-        return seed / 0x7fffffff;
+/* SETTLE ON STATE, NEVER ON rAF. Two things are genuinely in flight after a
+   synchronous render and neither is behaviour:
+     · images — an onload handler adds `loaded`, so the class is a race;
+     · any animation the reduced-motion clamp left at 0.01ms.
+   Both are waited on by PREDICATE with a hard ceiling, so a hung image cannot
+   hang the net. `complete` is true BEFORE the load event has dispatched, and
+   the app's capture-phase load listener is what adds 'loaded' — so a loaded
+   image is one that CARRIES the class, and a broken one (naturalWidth 0, the
+   fence blocked it) is one that never will. Found only across eight contexts:
+   5 of 160 cells flipped on it. */
+async function settle(page, rootSel, opts) {
+  /* ⚠️ THE APP'S OWN rAF FIRST, THE STATE PREDICATE SECOND. renderView schedules
+     syncDetailTopTitle inside a requestAnimationFrame, and THAT toggles a class
+     whose opacity then TRANSITIONS — so a predicate evaluated before the frame
+     sees no animation at all, and a capture taken after it sees the transition
+     mid-flight. Measured: .detail-top-title flipped 0<->1 in 4 of 40 cells
+     between two captures of an unchanged tree. Waiting on rAF is forbidden as a
+     BLIND wait (it never fires in a hidden document); openContext has already
+     proved the timeline advances, and the timeout races it anyway. */
+  await page.evaluate(() => new Promise((res) => {
+    const done = () => res();
+    setTimeout(done, 250);
+    requestAnimationFrame(() => requestAnimationFrame(done));
+  }));
+  /* SETTLE ON STATE, NEVER ON rAF. Everything genuinely in flight after a render
+     is waited on by PREDICATE with a hard ceiling, so a hung image or a stuck
+     transition cannot hang the net:
+       · images —  is true BEFORE the load event has dispatched, and the
+         app's capture-phase load listener is what adds 'loaded'; a loaded image
+         CARRIES the class, a broken one (naturalWidth 0, the fence blocked it)
+         never will;
+       · animations and transitions — PENDING counts as in flight, not only
+         running: a 0.01ms transition under the reduced-motion clamp still needs a
+         frame to start, and a capture before that frame reads its FROM value;
+       · an own-overlay sheet (.sheet-overlay, .img-lightbox) reaches its resting
+         state by adding .open inside a rAF, and the fake clock fakes rAF too —
+         'open' is a state to wait for, never a frame to count;
+       · autofocus — Chrome focuses a freshly inserted [autofocus] on a later
+         rendering update; a capture that lands first records it unfocused. */
+  await page.waitForFunction((sel) => {
+    const rootEl = document.querySelector(sel);
+    if (rootEl && rootEl.matches('.sheet-overlay, .img-lightbox') && !rootEl.classList.contains('open')) return false;
+    const af = rootEl && rootEl.querySelector('[autofocus]');
+    if (af && document.activeElement !== af) return false;
+    const imgs = [...document.querySelectorAll(sel + ' img')];
+    if (!imgs.every((i) => i.complete && (i.naturalWidth === 0 || i.classList.contains('loaded')))) return false;
+    if (rootEl && rootEl.getAnimations && rootEl.getAnimations({ subtree: true }).some((a) => a.playState === 'running' || a.playState === 'pending')) return false;
+    return true;
+  }, rootSel, { timeout: 2000 }).catch(() => {});
+  await page.waitForTimeout(30);   // flush microtasks
+  /* FOCUS SETTLES WHEN IT STOPS MOVING. A sheet's first field is focused from a
+     setTimeout — `grep 'focus(), ' js/app.js` yields 30, 40 and 60 ms, and a
+     block-bodied one may differ, so check before lowering the floor — and the
+     fake clock schedules those against the capture: the ring on a textarea
+     flipped between two runs of an unchanged app. There is no event to wait
+     for, so the lane waits for the STATE to hold still: a 400ms floor past the
+     longest, then up to 20 samples 60ms apart, bounded at 1.6s. Sheets only. */
+  if (opts && opts.focus) {
+    await page.waitForTimeout(400);
+    await page.evaluate(() => new Promise((res) => {
+      let last = document.activeElement, same = 0, n = 0;
+      const tick = () => {
+        const cur = document.activeElement;
+        same = cur === last ? same + 1 : 0; last = cur; n++;
+        if (same >= 5 || n >= 20) return res();
+        setTimeout(tick, 60);
       };
-    });
+      setTimeout(tick, 60);
+    }));
+  }
+}
 
-    await page.goto(origin + '/');
-    await page.waitForFunction(() => typeof navigate === 'function' && window.__vltReady, null, { timeout: 15000 });
+/* The four free failure signals, verbatim for every cell of every lane. */
+function cellProblems(cellId, cell) {
+  // ⚠️ RETURN, do not fall through. pageCapture's early return for a missing
+  // root carries ONLY { error } — no rawKeys, no childCount — so reading them
+  // below threw a TypeError that aborted the whole run and pointed at this
+  // file, instead of naming the cell whose overlay never mounted. The one
+  // failure the lanes exist to report was the one that crashed them.
+  if (cell.error) return [cellId + ': ' + cell.error];
+  const problems = [];
+  if (cell.newErrors.length) problems.push(cellId + ': ' + cell.newErrors.join(' | '));
+  if (cell.childCount === 0) problems.push(cellId + ': rendered EMPTY (0 children) — the renderer threw or did nothing');
+  if (cell.rawKeys.length) problems.push(cellId + ': raw i18n key(s) on screen: ' + cell.rawKeys.join(', '));
+  if (cell.emptySvg) problems.push(cellId + ': ' + cell.emptySvg + ' empty <svg> — an icon name that is not an ICONS key renders nothing, silently');
+  return problems;
+}
 
-    // ⚠️ ASSERT THE PRECONDITION; NEVER ASSUME IT. rAF, animationend and
-    // transitionend do not fire in a hidden or throttled document, and
-    // document.timeline freezes — so a net that waited on one would record the
-    // bug as the baseline. It does not degrade to a weaker check; it aborts.
-    await page.bringToFront();
-    const live = await page.evaluate(async () => {
-      const t0 = document.timeline.currentTime;
-      await new Promise((r) => setTimeout(r, 200));
-      return {
-        visible: document.visibilityState === 'visible',
-        timelineAdvanced: document.timeline.currentTime - t0 > 100,
-      };
-    });
-    if (!live.visible || !live.timelineAdvanced) {
-      throw new Error('fp: this document is hidden or throttled — every timing assertion below would be vacuous');
-    }
+/* A synchronous render past this is a visible freeze on a phone; past HANG_MS it
+   is the thing the owner forbade. Both are deliberately generous — the net is
+   here to catch a regression, not to benchmark. */
+const SLOW_MS = 1500;
+const HANG_MS = 8000;
 
-    await page.evaluate(({ lang, theme }) => {
-      document.getElementById('splash')?.remove();
-      try { closeModal(); } catch (_) {}
-      try { hideAuthGate(); } catch (_) {}
-      document.getElementById('onboard-gate')?.remove();
-      DB.prefs.setOnboarded(); DB.prefs.setLang(lang); DB.prefs.setTheme(theme);
-      applyLang(lang); applyTheme(theme);
-    }, { lang, theme });
-
+// ── the views lane ───────────────────────────────────────────────────────────
+async function captureContext(browser, origin, opts) {
+  const { state, lang, theme, width, props } = opts;
+  const cells = {}, problems = [], timings = [];
+  const { ctx, page, errors, guard } = await openContext(browser, origin, { lang, theme, width });
+  try {
     for (const v of VIEWS) {
       const cellId = state + '/' + lang + '/' + theme + '/' + width + '/' + v.view;
       const before = errors.length;
-
-      /* ⚠️ THE HANG LANE. The owner's condition on the whole refactor is «لا يعلّق
-         التطبيق». A render that never returns is exactly that, and page.evaluate
-         has NO default timeout — it would sit forever and the run would look
-         "in progress" rather than failed. So the render is raced against a hard
-         ceiling on the Node side. A hung page cannot be recovered (its main
-         thread is gone), so a hang aborts the capture by name rather than
-         continuing to record a page that no longer answers. */
-      let t;
-      try {
-        t = await Promise.race([
-          page.evaluate((view) => {
-            const main = document.querySelector('.main');
-            if (main) main.scrollTop = 0;
-            const t0 = performance.now();
-            navigate(view, {}, { fromPop: true });
-            return performance.now() - t0;
-          }, v.view),
-          new Promise((_, rej) => setTimeout(() => rej(new Error('HUNG')), HANG_MS)),
-        ]);
-      } catch (e) {
-        if (e.message === 'HUNG') throw new Error(cellId + ': the render did not return within ' + HANG_MS + 'ms — THE APP HUNG');
-        throw e;
-      }
+      const t = await timedRender(page, cellId, (view) => {
+        const main = document.querySelector('.main');
+        if (main) main.scrollTop = 0;
+        const t0 = performance.now();
+        navigate(view, {}, { fromPop: true });
+        return performance.now() - t0;
+      }, v.view);
       timings.push({ cell: cellId, ms: Math.round(t * 10) / 10 });
       if (t > SLOW_MS) problems.push(cellId + ': the render took ' + Math.round(t) + 'ms synchronously (ceiling ' + SLOW_MS + 'ms) — on a phone this is a visible freeze');
-
-      /* SETTLE ON STATE, NEVER ON rAF. Two things are genuinely in flight after a
-         synchronous render and neither is behaviour:
-           · images — an onload handler adds \`loaded\`, so the class is a race;
-           · any animation the reduced-motion clamp left at 0.01ms.
-         Both are waited on by PREDICATE with a hard ceiling, so a hung image
-         cannot hang the net. */
-      await page.waitForFunction(() => {
-        const imgs = [...document.querySelectorAll(".view.active img")];
-        // complete is true BEFORE the load event has dispatched, and the app's
-        // capture-phase load listener is what adds 'loaded' — so a loaded image
-        // is one that CARRIES the class, and a broken one (naturalWidth 0, the
-        // fence blocked it) is one that never will. Both are states; neither is
-        // a wait on an event. Found only across eight contexts: 5 cells flipped.
-        if (!imgs.every((i) => i.complete && (i.naturalWidth === 0 || i.classList.contains('loaded')))) return false;
-        const el = document.querySelector(".view.active");
-        if (el && el.getAnimations && el.getAnimations({ subtree: true }).some((a) => a.playState === "running")) return false;
-        return true;
-      }, null, { timeout: 2000 }).catch(() => {});
-      /* ⚠️ AND ONE BOUNDED rAF, BECAUSE THE APP ITSELF DEFERS TO ONE.
-         renderView schedules syncDetailTopTitle in a requestAnimationFrame, so
-         whether the detail-top title had faded in was a RACE — it was the last
-         noise source left, and it flipped opacity 1<->0 between two captures of
-         an unchanged app. Waiting on rAF is forbidden as a BLIND wait (it never
-         fires in a hidden document); here the precondition check above has
-         already proved the timeline advances, and the race guards it anyway. */
-      await page.evaluate(() => new Promise((res) => {
-        const done = () => res();
-        setTimeout(done, 250);
-        requestAnimationFrame(() => requestAnimationFrame(done));
-      }));
-      await page.waitForTimeout(30);   // flush microtasks
+      await settle(page, '.view.active');
       const cell = await page.evaluate(pageCapture, { props, rootSel: '.view.active' });
       cell.renderMs = Math.round(t * 10) / 10;
       cell.newErrors = errors.slice(before);
       cells[cellId] = cell;
-
-      if (cell.error) problems.push(cellId + ': ' + cell.error);
-      if (cell.newErrors.length) problems.push(cellId + ': ' + cell.newErrors.join(' | '));
-      if (cell.childCount === 0) problems.push(cellId + ': rendered EMPTY (0 children) — the renderer threw or did nothing');
-      if (cell.rawKeys.length) problems.push(cellId + ': raw i18n key(s) on screen: ' + cell.rawKeys.join(', '));
-      if (cell.emptySvg) problems.push(cellId + ': ' + cell.emptySvg + ' empty <svg> — an icon name that is not an ICONS key renders nothing, silently');
+      problems.push(...cellProblems(cellId, cell));
     }
-
     const randomCalls = await page.evaluate(() => window.__fpRandomCalls);
     const reported = await page.evaluate(() => (window.__fpReportError || []).length);
     if (reported) problems.push(lang + '/' + theme + '/' + width + ': Cloud.reportError was called ' + reported + '× during the capture');
@@ -332,11 +396,85 @@ async function captureContext(browser, origin, opts) {
   }
 }
 
-/* A synchronous render past this is a visible freeze on a phone; past HANG_MS it
-   is the thing the owner forbade. Both are deliberately generous — the net is
-   here to catch a regression, not to benchmark. */
-const SLOW_MS = 1500;
-const HANG_MS = 8000;
+// ── the sheets lane (stage 3) ────────────────────────────────────────────────
+// Every entry in scripts/fp/modals.js, opened over the seeded fixture, captured
+// at #modal-root, then closed — and the close is asserted, because a sheet that
+// will not leave is a defect the v341 review found live (.is-out corpses).
+async function captureModals(browser, origin, opts) {
+  const { lang, theme, width, props } = opts;
+  const cells = {}, problems = [], timings = [];
+  const { ctx, page, errors, guard } = await openContext(browser, origin, { lang, theme, width });
+  try {
+    const fx = await page.evaluate(seedFixture);
+    for (const f of fx.failed) problems.push('fixture: ' + f + ' — the fixture must match the DB.* signature, or the sheet is captured over nothing');
+
+    for (const m of MODALS.ENTRIES) {
+      const cellId = 'modal/' + lang + '/' + theme + '/' + width + '/' + m.id;
+      const before = errors.length;
+      // a clean slate: no sheet from the previous entry, the host view up
+      await page.evaluate((host) => { try { closeModal(); } catch (_) {} const r = document.getElementById('modal-root'); if (r) r.innerHTML = ''; navigate(host, {}, { fromPop: true }); }, m.host || 'home');
+      await settle(page, '.view.active');
+      const t = await timedRender(page, cellId, async ({ name, args, fixture, confirm }) => {
+        const noop = () => {};
+        const resolve = (a) => {
+          if (a && typeof a === 'object' && 'v' in a) return a.v;
+          if (a === '$noop') return noop;
+          if (a === '$tmpl') return WORKOUT_TEMPLATES[0];
+          if (a === '$lightbox') return 'data:image/svg+xml;utf8,' + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="8" height="8"><rect width="8" height="8" fill="#ff6a00"/></svg>');
+          if (typeof a === 'string' && a[0] === '$') return fixture[a.slice(1)];
+          return a;
+        };
+        let argv = args.map(resolve);
+        if (confirm) argv = [{ ...argv[0], onConfirm: noop }];
+        const t0 = performance.now();
+        const r = window[name].apply(null, argv);
+        if (r && typeof r.then === 'function') await r;
+        return performance.now() - t0;
+      }, { name: m.name, args: m.args, fixture: fx, confirm: !!m.confirm });
+      timings.push({ cell: cellId, ms: Math.round(t * 10) / 10 });
+      if (t > SLOW_MS) problems.push(cellId + ': opening took ' + Math.round(t) + 'ms (ceiling ' + SLOW_MS + 'ms)');
+      const rootSel = m.root || '#modal-root';
+      const overlaySel = m.root ? m.root : '#modal-root .modal-overlay';
+      await page.waitForFunction((sel) => !!document.querySelector(sel), overlaySel, { timeout: 2000 }).catch(() => {});
+      await settle(page, rootSel, { focus: true });
+      const cell = await page.evaluate(pageCapture, { props, rootSel });
+      cell.renderMs = Math.round(t * 10) / 10;
+      cell.newErrors = errors.slice(before);
+      cells[cellId] = cell;
+      problems.push(...cellProblems(cellId, cell));
+      // and it must CLOSE: the exit is a 320ms timer, so a sheet still there
+      // after 2s is a corpse — and the report says WHAT is still there, because
+      // "the same node with is-out" (a timer that never fired) and "a new sheet"
+      // (something re-opened) are different defects.
+      if (m.closeBy === 'remove') {
+        await page.evaluate((sel) => { document.querySelectorAll(sel).forEach((el) => el.remove()); }, rootSel);
+      } else {
+        const left = await page.evaluate(() => {
+          const before = document.querySelector('#modal-root .modal-overlay');
+          try { closeModal(); } catch (e) { return { threw: String(e && e.message || e) }; }
+          return { before: !!before };
+        });
+        if (left.threw) problems.push(cellId + ': closeModal() threw: ' + left.threw);
+        const closed = await page.waitForFunction(() => !document.querySelector('#modal-root .modal-overlay'), null, { timeout: 2000 }).then(() => true).catch(() => false);
+        if (!closed) {
+          const what = await page.evaluate(() => {
+            const o = document.querySelector('#modal-root .modal-overlay');
+            const title = o && (o.querySelector('.modal-title, .confirm-title, h2, h3') || {}).textContent;
+            return { cls: o && o.className, title: (title || '').trim().slice(0, 50), pending: !!window.__modalExit };
+          });
+          problems.push(cellId + ': the sheet did not close — after 2s #modal-root still holds <' + what.cls + '> «' + what.title + '» (exit timer pending: ' + what.pending + ')');
+        }
+      }
+    }
+    const randomCalls = await page.evaluate(() => window.__fpRandomCalls);
+    const reported = await page.evaluate(() => (window.__fpReportError || []).length);
+    if (reported) problems.push('modal/' + lang + '/' + theme + '/' + width + ': Cloud.reportError was called ' + reported + '× during the capture');
+    const contained = guard.assertContained();
+    return { cells, problems, randomCalls, contained, timings, seeded: fx.seeded.length };
+  } finally {
+    await ctx.close();
+  }
+}
 
 function writeRecord(tag, record, label) {
   fs.mkdirSync(OUT, { recursive: true });
@@ -353,7 +491,7 @@ function writeRecord(tag, record, label) {
     for (const p of record.problems) console.log('    ✗ ' + p);
     process.exitCode = 1;
   } else {
-    console.log('  no page errors, no empty views, no raw keys, no empty icons, no slow or hung render');
+    console.log('  no page errors, no empty cells, no raw keys, no empty icons, no slow or hung render');
   }
 }
 
@@ -374,52 +512,29 @@ async function withBrowser(state, fn) {
   finally { await browser.close(); await srv.close(); }
 }
 
-// ── capture: one cell of the matrix ─────────────────────────────────────────
-async function capture() {
-  const tag = flag('tag');
-  if (!tag) throw new Error('capture needs --tag <name>');
-  const state = flag('state', 'empty');
-  const lang = flag('lang', 'ar');
-  const theme = flag('theme', 'dark');
-  const width = Number(flag('width', 375));
-  const props = propsFor(flag('props', 'stage1'));
-
-  await withBrowser(state, async (browser, origin) => {
-    const r = await captureContext(browser, origin, { state, lang, theme, width, props });
-    writeRecord(tag, {
-      tag, state, lang, theme, width,
-      at: FROZEN.toISOString(), tz: TZ,
-      views: VIEWS.length, props,
-      randomCalls: r.randomCalls, contained: r.contained, problems: r.problems, timings: r.timings, cells: r.cells,
-    }, VIEWS.length + ' views');
-  });
-}
-
-// ── matrix: stage 2 — both languages, both themes, two widths ───────────────
-// Stage 1 saw ONE cell of eight (ar/dark/375), so a step that broke the light
-// theme, the English layout or a wider phone would have passed it. The matrix is
-// the minimum a refactor step has to clear before it ships: 8 contexts × 20
-// views in one browser, one record, and \`diff\` treats the whole thing as one
-// capture. Every property band is on by default here — the reason STAGE1 was a
-// subset (a human reading the first baseline) no longer applies.
+/* Stage 1 saw ONE cell of eight (ar/dark/375), so a step that broke the light
+   theme, the English layout or a wider phone would have passed it. Both lanes
+   run over this matrix: 8 contexts, one record, and `diff` treats the whole
+   thing as one capture. */
 const MATRIX = [];
 for (const lang of ['ar', 'en']) for (const theme of ['dark', 'light']) for (const width of [375, 412]) MATRIX.push({ lang, theme, width });
 
-async function matrix() {
-  const tag = flag('tag');
-  if (!tag) throw new Error('matrix needs --tag <name>');
-  const state = flag('state', 'empty');
-  const props = propsFor(flag('props', 'all'));
-
+const CONTEXTS = {
+  one: [{ lang: 'ar', theme: 'dark', width: 375 }],
+  extremes: [{ lang: 'ar', theme: 'dark', width: 375 }, { lang: 'en', theme: 'light', width: 412 }],
+  all: null,   // the full MATRIX
+};
+async function runMatrix(tag, state, props, laneFn, label, contexts, lane) {
   await withBrowser(state, async (browser, origin) => {
     const record = {
-      tag, state, lang: 'matrix', theme: 'matrix', width: 'matrix',
+      tag, state, lane, contexts: contexts === null ? 'all' : contexts.length === 1 ? 'one' : 'extremes',
+      lang: 'matrix', theme: 'matrix', width: 'matrix',
       at: FROZEN.toISOString(), tz: TZ,
       views: VIEWS.length, props,
       randomCalls: 0, contained: { escaped: 0, blockedLive: 0, blockedTotal: 0 }, problems: [], timings: [], cells: {},
     };
-    for (const m of MATRIX) {
-      const r = await captureContext(browser, origin, { state, ...m, props });
+    for (const m of (contexts || MATRIX)) {
+      const r = await laneFn(browser, origin, { state, ...m, props });
       Object.assign(record.cells, r.cells);
       record.problems.push(...r.problems);
       record.timings.push(...r.timings);
@@ -428,8 +543,46 @@ async function matrix() {
       record.contained.blockedTotal += r.contained.blockedTotal;
       process.stdout.write('  ' + m.lang + '/' + m.theme + '/' + m.width + ' ✓\n');
     }
-    writeRecord(tag, record, MATRIX.length + ' contexts × ' + VIEWS.length + ' views');
+    writeRecord(tag, record, label);
   });
+}
+
+// ── capture: one cell of the views matrix, for a quick look ─────────────────
+async function capture() {
+  const tag = flag('tag');
+  if (!tag) throw new Error('capture needs --tag <name>');
+  const state = flag('state', 'empty');
+  const lang = flag('lang', 'ar');
+  const theme = flag('theme', 'dark');
+  const width = Number(flag('width', 375));
+  const props = propsFor(flag('props', 'stage1'));
+  await withBrowser(state, async (browser, origin) => {
+    const r = await captureContext(browser, origin, { state, lang, theme, width, props });
+    writeRecord(tag, {
+      tag, state, lane: 'views', contexts: 'one', lang, theme, width,
+      at: FROZEN.toISOString(), tz: TZ,
+      views: VIEWS.length, props,
+      randomCalls: r.randomCalls, contained: r.contained, problems: r.problems, timings: r.timings, cells: r.cells,
+    }, VIEWS.length + ' views');
+  });
+}
+
+// ── matrix: stage 2 — the views, eight contexts, every band ─────────────────
+async function matrix() {
+  const tag = flag('tag');
+  if (!tag) throw new Error('matrix needs --tag <name>');
+  const ctxs = CONTEXTS[flag('contexts', 'all')]; if (ctxs === undefined) throw new Error('--contexts must be one, extremes or all');
+  await runMatrix(tag, flag('state', 'empty'), propsFor(flag('props', 'all')), captureContext, (ctxs || MATRIX).length + ' contexts × ' + VIEWS.length + ' views', ctxs, 'views');
+}
+
+// ── modals: stage 3 — the sheets and dialogs, eight contexts, every band ────
+// Always over the signed-in stub ('full'): showChangePassword mounts the
+// captcha through Cloud.captcha, which only the 'in' stub carries.
+async function modals() {
+  const tag = flag('tag');
+  if (!tag) throw new Error('modals needs --tag <name>');
+  const ctxs = CONTEXTS[flag('contexts', 'extremes')]; if (ctxs === undefined) throw new Error('--contexts must be one, extremes or all');
+  await runMatrix(tag, 'full', propsFor(flag('props', 'all')), captureModals, (ctxs || MATRIX).length + ' contexts × ' + MODALS.ENTRIES.length + ' sheets', ctxs, 'sheets');
 }
 
 // ── diff ─────────────────────────────────────────────────────────────────────
@@ -442,7 +595,10 @@ function loadTag(tag) {
 function diff() {
   const a = loadTag(args[1]), b = loadTag(args[2]);
   if (JSON.stringify(a.props) !== JSON.stringify(b.props)) throw new Error('the two captures recorded different property sets — they are not comparable');
-  for (const k of ['state', 'lang', 'theme', 'width']) {
+  // `lane` and `contexts` are in this list because a views record and a sheets
+  // record were silently comparable: a mistyped tag printed '160 removed, 106
+  // added' instead of saying they are from different lanes.
+  for (const k of ['lane', 'contexts', 'state', 'lang', 'theme', 'width']) {
     if (a[k] !== b[k]) throw new Error(`the two captures disagree on ${k} (${a[k]} vs ${b[k]}) — they are not comparable`);
   }
 
@@ -515,9 +671,10 @@ function diff() {
   try {
     if (cmd === 'capture') await capture();
     else if (cmd === 'matrix') await matrix();
+    else if (cmd === 'modals') await modals();
     else if (cmd === 'diff') diff();
     else {
-      console.log('usage:\n  node scripts/fingerprint-net.js capture --tag <name> [--state empty|full] [--lang ar|en] [--theme dark|light] [--width 375] [--props stage1|all]\n  node scripts/fingerprint-net.js matrix  --tag <name> [--state empty|full] [--props all|stage1]   # 8 contexts × 20 views, one record\n  node scripts/fingerprint-net.js diff <before> <after>');
+      console.log('usage:\n  node scripts/fingerprint-net.js capture --tag <name> [--state empty|full] [--lang ar|en] [--theme dark|light] [--width 375] [--props stage1|all]\n  node scripts/fingerprint-net.js matrix  --tag <name> [--state empty|full] [--props all|stage1] [--contexts all|extremes|one]   # the 20 views\n  node scripts/fingerprint-net.js modals  --tag <name> [--props all|stage1] [--contexts extremes|one|all]   # every sheet in fp/modals.js; extremes = ar/dark/375 + en/light/412\n  node scripts/fingerprint-net.js diff <before> <after>');
       process.exitCode = 1;
     }
   } catch (e) {

@@ -170,18 +170,40 @@ window.VAULT_KEYS = Object.freeze({
   // disclosure by another route. A second copy of that list is how the last one
   // drifted.
   //
-  // Returns true when it acted, so a caller can re-read a now-empty device.
+  // Returns true when it acted and false when it did not — including the case
+  // where the rescue could not be written and the device is deliberately left
+  // untouched. Both callers ignore it and go on to localHasData(), which is the
+  // same answer read from the store itself.
   function guardForeignBlob(uid) {
     const prev = getLastUid();
     if (!prev || prev === uid) return false;
     if (!localHasData()) { setLastUid(uid); return false; }   // nothing to protect
+    // ⚠️ THE RESCUE IS THE WHOLE POINT, SO ITS FAILURE IS THE GATE. snapshotRaw
+    // returns false when it could not write (quota, private mode) and records
+    // RECOVERY_FAILED_KEY; the first version of this guard discarded both and
+    // swept the device anyway — "the blob is KEPT" in the comment, destroyed in
+    // the code. Now: no rescue, no sweep. The previous account's data stays on
+    // the device exactly as it was, localHasData() stays true, and the caller
+    // takes the conflict path it always took — which asks rather than acts.
     let rescue = null;
-    try {
-      snapshotLocal('foreign-account', prev);
-      rescue = localStorage.getItem(RECOVERY_KEY);
-    } catch (_) {}
+    try { if (snapshotLocal('foreign-account', prev)) rescue = localStorage.getItem(RECOVERY_KEY); } catch (_) {}
+    if (!rescue) {
+      try { reportError('manual', 'foreign-account rescue could not be written; device not swept', 'cloud.js', 0); } catch (_) {}
+      return false;
+    }
     clearLocalUserData();
-    try { if (rescue) localStorage.setItem(RECOVERY_KEY, rescue); } catch (_) {}
+    // The sweep freed strictly more than these bytes and removed the rescue
+    // with everything else, so writing it back cannot fail for quota; if it
+    // fails at all, the blob goes back where it was and nothing is lost.
+    let kept = false;
+    try { localStorage.setItem(RECOVERY_KEY, rescue); kept = true; } catch (_) {}
+    if (!kept) {
+      try { localStorage.setItem(VAULT_KEYS.store, JSON.parse(rescue).raw); } catch (_) {}
+      try { localStorage.setItem(RECOVERY_FAILED_KEY, new Date().toISOString()); } catch (_) {}
+      try { reportError('manual', 'foreign-account rescue lost after the sweep; blob restored', 'cloud.js', 0); } catch (_) {}
+      try { if (typeof DB !== 'undefined' && DB.reload) DB.reload(); } catch (_) {}
+      return false;
+    }
     // A deliberate whole-blob replacement, which is exactly what reload() is for.
     try { if (typeof DB !== 'undefined' && DB.reload) DB.reload(); } catch (_) {}
     setLastUid(uid);
@@ -563,9 +585,10 @@ window.VAULT_KEYS = Object.freeze({
       return { at: rec.at || '', reason: rec.reason || '', bytes: rec.raw.length };
     } catch (_) { return null; }
   }
-  // Put the snapshot back and push it. Returns true only if BOTH the local
-  // restore and the upload succeeded — a restore that stays on one device is
-  // half a rescue, and the next pull would undo it.
+  // Put the snapshot back and push it. Returns false when nothing was restored,
+  // else { restored: true, uploaded } — the upload half reported honestly, since
+  // a restore that stays on one device is half a rescue and the next pull
+  // would undo it.
   async function restoreRecovery() {
     let rec;
     try { rec = JSON.parse(localStorage.getItem(RECOVERY_KEY) || 'null'); } catch (_) { return false; }
@@ -576,8 +599,11 @@ window.VAULT_KEYS = Object.freeze({
     snapshotLocal('pre-restore', rec.uid || undefined);   // the rescue being restored belongs to this account (guarded above)
     if (!importRaw(rec.raw)) return false;
     const s = await getSession();
-    if (s) { setDirty(s.user.id, true); try { await push({ force: true }); } catch (_) {} }
-    return true;
+    let r = 'nosession';
+    if (s) { setDirty(s.user.id, true); try { r = await push({ force: true }); } catch (_) { r = 'error'; } }
+    // The two halves are reported separately: a restore that stays on one
+    // device is half a rescue, and the caller says so instead of «restored».
+    return { restored: true, uploaded: r === 'ok' };
   }
 
   // Compare two ISO timestamps by real time, NOT string order — Supabase returns
@@ -721,8 +747,17 @@ window.VAULT_KEYS = Object.freeze({
     // and it auto-allows again the moment the local store has real data. The dirty
     // flag is left set so a later data-ful change can still sync.
     if (!force && !blobHasUserData(blob)) {
+      // ⚠️ A GUARD THAT CANNOT READ MUST REFUSE, NOT PASS. This used to catch
+      // the read failure and fall through with `remote = undefined`, which the
+      // test below treated as "the cloud is empty" — so one flaky read during
+      // a Reset-all let a data-less blob overwrite the only backup. Measured:
+      // sessions=0 written over a row holding sessions=20. A throw here makes
+      // push() reject like any other network failure: the dirty flag stays
+      // set, the save centre shows 'error', and the next foreground retries —
+      // 'error' is the documented outcome runPush() already turns into a retry.
       let remote;
-      try { remote = await pull(); } catch (_) { remote = undefined; }
+      try { remote = await pull(); } catch (e) { console.warn('[VAULT] backup guard: could not read the cloud copy, not pushing', e && e.message); return 'error'; }
+      if (remote === undefined) { console.warn('[VAULT] backup guard: no client or session, not pushing'); return 'error'; }
       if (remote && blobHasUserData(remote.data)) {
         try { if (typeof window !== 'undefined') window.dispatchEvent(new CustomEvent('vault:push-blocked')); } catch (_) {}
         return 'blocked';
