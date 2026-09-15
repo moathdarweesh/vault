@@ -219,21 +219,34 @@ async function openContext(browser, origin, { lang, theme, width }) {
   await page.goto(origin + '/');
   await page.waitForFunction(() => typeof navigate === 'function' && window.__vltReady, null, { timeout: 15000 });
 
-  // ⚠️ ASSERT THE PRECONDITION; NEVER ASSUME IT. rAF, animationend and
-  // transitionend do not fire in a hidden or throttled document, and
-  // document.timeline freezes — so a net that waited on one would record the
-  // bug as the baseline. It does not degrade to a weaker check; it aborts.
-  await page.bringToFront();
-  const live = await page.evaluate(async () => {
-    const t0 = document.timeline.currentTime;
-    await new Promise((r) => setTimeout(r, 200));
-    return {
-      visible: document.visibilityState === 'visible',
-      timelineAdvanced: document.timeline.currentTime - t0 > 100,
-    };
-  });
-  if (!live.visible || !live.timelineAdvanced) {
-    throw new Error('fp: this document is hidden or throttled — every timing assertion below would be vacuous');
+  /* ⚠️ ASSERT THE PRECONDITION; NEVER ASSUME IT. rAF, animationend and
+     transitionend do not fire in a hidden or throttled document, and
+     document.timeline freezes — so a net that waited on one would record the
+     bug as the baseline. It does not degrade to a weaker check; it aborts.
+
+     ⚠️ AND IT PROBES rAF DIRECTLY, NOT THE FRAME RATE. The first version asked
+     whether document.timeline advanced more than 100ms over a 200ms wait. That
+     is a frame-RATE question, and it has almost no margin: measured on an idle
+     page the delta is 183–200ms, so a compositor stall of just over 100ms — an
+     ordinary thing on a loaded CI runner — reads as "throttled" and aborts a
+     healthy eight-context run. It failed CI exactly that way on the third
+     context, with the first two green. What settle() actually depends on is
+     that a rAF callback FIRES; that is what is asked now, raced on the NODE
+     side (an in-page timer would be the faked clock racing itself), and
+     retried a bounded number of times because a stall is transient and a
+     hidden document is not. */
+  for (let attempt = 1; ; attempt++) {
+    await page.bringToFront();
+    const visible = await page.evaluate(() => document.visibilityState);
+    const rafFired = visible === 'visible' && await Promise.race([
+      page.evaluate(() => new Promise((res) => requestAnimationFrame(() => res(true)))),
+      new Promise((res) => setTimeout(() => res(false), 2000)),
+    ]);
+    if (rafFired) break;
+    if (attempt >= 3) {
+      throw new Error('fp: this document is hidden or throttled after ' + attempt + ' attempts (visibility=' + visible + ') — every timing assertion below would be vacuous');
+    }
+    await page.waitForTimeout(500);
   }
 
   await page.evaluate(({ lang, theme }) => {
