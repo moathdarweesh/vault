@@ -46,7 +46,15 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
+      # FULL history, not the default shallow clone. test-convenience.js replays
+      # js/storage.js from a PINNED commit (7e6ac93, v309) for its legacy round-trip,
+      # and on a depth-1 checkout that commit does not exist — the ONE reason every
+      # run of this workflow was red from the day it was created (fifteen runs), and
+      # nobody could read why until the steps annotated their own failure. The
+      # whole history is 25 MB; that is the price of testing against the past.
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       # Pinned, not "latest": the local runs these suites are verified against
       # are Node 24, and a runtime that moves on someone else's schedule is not

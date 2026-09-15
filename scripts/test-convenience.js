@@ -114,7 +114,11 @@ assert.equal(db._idsSafe({...JSON.parse(snapshot),shoppingLists:[{id:'bad"',item
 
 // Pin v309: HEAD moves after release and would silently test the new client against itself.
 const compatibilityBaseline = '7e6ac93bbb9eb4cdce993645962113a8f44d3c8a';
-const oldStorage = execFileSync('git',['show',`${compatibilityBaseline}:js/storage.js`],{encoding:'utf8'});
+// A shallow clone (CI's default) has no such commit and `git show` dies with a
+// message that names the path, not the cause. Say the cause.
+let oldStorage;
+try { oldStorage = execFileSync('git',['show',`${compatibilityBaseline}:js/storage.js`],{encoding:'utf8',stdio:['ignore','pipe','pipe']}); }
+catch (e) { throw new Error(`this suite replays js/storage.js from commit ${compatibilityBaseline.slice(0,7)} (v309) and that commit is not in this clone — a shallow checkout; CI needs fetch-depth: 0. git said: ${String(e.stderr||e.message).trim()}`); }
 const old = context(); old.values.set(old.keys.store,snapshot);
 const legacy = { ...old.c, window:null }; legacy.window=legacy;
 vm.createContext(legacy); vm.runInContext(oldStorage,legacy); vm.runInContext('DB.prefs.setTheme("light")',legacy);
