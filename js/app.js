@@ -12,7 +12,7 @@
 // build. The literal below is the fallback (file://, or a stripped query) and is
 // still bumped by `npm run release` — see CLAUDE.md "CACHE WORKFLOW".
 const VAULT_BUILD = (() => {
-  const FALLBACK = 'v350';
+  const FALLBACK = 'v351';
   try {
     const src = (document.currentScript && document.currentScript.src) || '';
     const m = src.match(/[?&]v=(\d+)/);
@@ -7544,7 +7544,11 @@ function saveCenterModel(local, cloud) {
     status: failed ? 'failed' : status,
     deviceKey: failed ? 'sc_failed' : 'sc_saved',
     cloudKey: failed ? 'sc_older' : (keys[status] || 'sc_error'),
-    detailKey: failed ? (local.code === 'QUOTA' ? 'sc_quota' : local.code === 'READ_ONLY' ? 'sc_readonly' : 'sc_write_failed') : null,
+    // STALE is not a storage failure and must not read as one: the write was
+    // refused because ANOTHER WINDOW of the app moved the data underneath it.
+    // 'sc_write_failed' says the storage is unavailable, which is false here and
+    // sends the user looking for the wrong problem.
+    detailKey: failed ? (local.code === 'QUOTA' ? 'sc_quota' : local.code === 'READ_ONLY' ? 'sc_readonly' : local.code === 'STALE' ? 'sc_stale' : 'sc_write_failed') : null,
     action: failed ? 'export' : status === 'signin' || status === 'unlinked' ? 'login' :
       status === 'conflict' || status === 'blocked' ? 'review' : 'retry',
     disabled: !failed && (status === 'syncing' || cloud.online === false),
@@ -7584,6 +7588,20 @@ function scheduleSaveCenterUpdate() {
   Promise.resolve().then(() => { saveCenterUpdatePending = false; updateSaveCenter(); });
 }
 window.addEventListener('vault:save-state', scheduleSaveCenterUpdate);
+// ANOTHER WINDOW WROTE THE STORE AND storage.js ADOPTED IT - repaint, carefully.
+//
+// NOT over an open sheet, and NOT inside the guided run. A re-render there
+// destroys half-typed set fields, which is the same class of loss this whole fix
+// exists to prevent: answering a silent data loss with a smaller one is not a
+// fix. Those two screens keep what is on them; the next ordinary navigation
+// renders the adopted state.
+window.addEventListener('vault:store-adopted', () => {
+  try {
+    if (document.querySelector('#modal-root .modal-overlay:not(.is-out)')) return;
+    if (currentView === 'session-run') return;
+    renderView(currentView);
+  } catch (_) {}
+});
 window.addEventListener('vault:save-failed', scheduleSaveCenterUpdate);
 window.addEventListener('vault:sync-state', scheduleSaveCenterUpdate);
 window.addEventListener('online', scheduleSaveCenterUpdate);

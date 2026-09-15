@@ -148,6 +148,46 @@ window.VAULT_KEYS = Object.freeze({
     try { return blobHasUserData(JSON.parse(exportRaw() || '{}')); } catch (_) { return false; }
   }
 
+  // IS THE DATA ON THIS DEVICE EVEN THIS ACCOUNT'S?
+  //
+  // Every sync path asked "does the device have data?" and none asked "whose?".
+  // On a shared device whose previous logout could not upload, the next account
+  // was shown the previous one's full history AND could upload it into its own
+  // cloud row - a cross-account disclosure and a cross-account WRITE, with no
+  // warning at any point.
+  //
+  // The blob is KEPT, not discarded: it is snapshotted under the OLD owner's uid
+  // and the rescue is written back after the sweep, so it stays recoverable by
+  // the person it belongs to and is refused to everyone else (recoveryInfo() and
+  // restoreRecovery() already check that stamp). Only then is the device cleared,
+  // which makes localHasData() false and sends both callers down the plain pull
+  // path.
+  //
+  // clearLocalUserData() is reused rather than re-spelled: this IS the state it
+  // describes - the device no longer belongs to the account whose residue is on
+  // it - and its prefix sweep already covers the photo side store, the reminder
+  // log, the AI cache and the pre-paint mirror, each of which is the same
+  // disclosure by another route. A second copy of that list is how the last one
+  // drifted.
+  //
+  // Returns true when it acted, so a caller can re-read a now-empty device.
+  function guardForeignBlob(uid) {
+    const prev = getLastUid();
+    if (!prev || prev === uid) return false;
+    if (!localHasData()) { setLastUid(uid); return false; }   // nothing to protect
+    let rescue = null;
+    try {
+      snapshotLocal('foreign-account', prev);
+      rescue = localStorage.getItem(RECOVERY_KEY);
+    } catch (_) {}
+    clearLocalUserData();
+    try { if (rescue) localStorage.setItem(RECOVERY_KEY, rescue); } catch (_) {}
+    // A deliberate whole-blob replacement, which is exactly what reload() is for.
+    try { if (typeof DB !== 'undefined' && DB.reload) DB.reload(); } catch (_) {}
+    setLastUid(uid);
+    return true;
+  }
+
   // ---- auth ----------------------------------------------------------------
   async function getSession() {
     const c = sb(); if (!c) return null;
@@ -948,6 +988,8 @@ window.VAULT_KEYS = Object.freeze({
   async function resolveOnLoginCore() {
     const s = await getSession(); if (!s) return 'offline';
     const uid = s.user.id;
+    // BEFORE localHasData() is consulted anywhere below.
+    guardForeignBlob(uid);
     let remote;
     try { remote = await pull(); } catch (_) { return 'offline'; }
     if (remote === undefined) return 'offline';
@@ -1062,6 +1104,9 @@ window.VAULT_KEYS = Object.freeze({
     const s = await getSession();
     if (!s) { recordSyncOutcome(activityFor(getLastUid()), 'nosession'); return 'offline'; }
     const uid = s.user.id;
+    // The boot path reaches the same pushed() branch, so it needs the same guard,
+    // and it must run before the fast path's own localHasData() below.
+    guardForeignBlob(uid);
 
     // FAST PATH — the overwhelmingly common one. A foreground where neither
     // side has moved used to cost a full blob DOWN and a full blob UP; it now

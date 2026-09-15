@@ -1027,8 +1027,19 @@ const undoEntries = [];
 const copyData = value => value == null ? value : JSON.parse(JSON.stringify(value));
 const operationOwner = () => typeof Cloud !== 'undefined' && Cloud.getLastUid ? Cloud.getLastUid() : '';
 function changeSlice(read, write, next, label, remember = true) {
-  try { if (localStorage.getItem(STORAGE_KEY) !== lastStoreBytes) return { ok: false, code: 'STALE' }; }
-  catch (_) { return { ok: false, code: 'WRITE_FAILED' }; }
+  // A REFUSAL NOBODY RECORDED IS A REFUSAL NOBODY CAN EXPLAIN. This returned
+  // STALE to its caller and left `lastSaveResult` untouched, so DB.saveState()
+  // still read {ok:true} and the save centre said "the latest change was not
+  // saved" instead of "another window changed this". The result object is this
+  // layer's one public answer about the last write; a write that was refused
+  // has to be in it.
+  try {
+    if (localStorage.getItem(STORAGE_KEY) !== lastStoreBytes) {
+      lastSaveResult = { ok: false, code: 'STALE', savedAt: lastSaveResult.savedAt };
+      try { window.dispatchEvent(new CustomEvent('vault:save-state')); } catch (_) {}
+      return { ok: false, code: 'STALE' };
+    }
+  } catch (_) { return { ok: false, code: 'WRITE_FAILED' }; }
   const before = copyData(read());
   if (JSON.stringify(before) === JSON.stringify(next)) return { ok: true, changed: false };
   write(copyData(next));
@@ -3463,6 +3474,57 @@ DB.reload = reloadState;
 // True when the stored blob could not be parsed at boot and the app is running
 // READ-ONLY on an in-memory default. The 'vault:load-failed' event fires
 // before app.js loads (STATE is built at evaluation time), so init() asks.
+// ANOTHER DOCUMENT OF THIS ORIGIN WROTE THE STORE. ADOPT IT, DO NOT PRUNE.
+//
+// changeSlice refuses a write over bytes it did not write, but writeStore - a
+// plain save() - has no such guard, so the next ordinary save in this document
+// rewrote the whole blob from stale memory and the sibling's work was gone.
+// The `storage` event fires only in the OTHER documents of an origin, which is
+// exactly the population that would otherwise do that.
+//
+// This is deliberately NOT reloadState(). That one is for a DELIBERATE whole-blob
+// replacement - a cloud pull, a restore, a reset - and it does two things that
+// would be wrong here:
+//   - it clears STATE_LOAD_FAILED unconditionally, and READ-ONLY may only be
+//     lifted by a deliberate replacement;
+//   - it ends in imgPrune(), which deletes every vault_img_* key absent from the
+//     newly loaded STATE - and photos are DEVICE-LOCAL, so adopting a sibling
+//     write would take this document's photos with it.
+//
+// So: refresh STATE and the staleness marker, drop the undo stack (its `before`
+// snapshots are against a state that no longer exists), and say so. While
+// READ-ONLY it does nothing at all - the stored blob here is unparseable, and
+// adopting is not the deliberate act that clears that.
+function adoptForeignWrite() {
+  if (STATE_LOAD_FAILED) return false;
+  let raw = null;
+  try { raw = localStorage.getItem(STORAGE_KEY); } catch (_) { return false; }
+  if (raw === lastStoreBytes) return false;            // our own write, already current
+  let parsed = null;
+  try { parsed = JSON.parse(raw); } catch (_) { return false; }
+  if (!DB._validateBlob(parsed)) return false;         // never adopt garbage or a clear
+  undoEntries.length = 0;
+  STATE = withImageAccessors(loadState());
+  // Re-read rather than trusting `raw`: loadState() persists its migrations, so
+  // the bytes on disk may already differ from the ones that arrived.
+  try { lastStoreBytes = localStorage.getItem(STORAGE_KEY); } catch (_) {}
+  lastSaveResult = { ok: true, code: null, savedAt: lastSaveResult.savedAt };
+  try {
+    window.dispatchEvent(new CustomEvent('vault:save-state'));
+    window.dispatchEvent(new CustomEvent('vault:store-adopted'));
+  } catch (_) {}
+  return true;
+}
+DB.adoptForeignWrite = adoptForeignWrite;
+// Installed here, beside the state it refreshes, because storage.js is the
+// single owner of STATE.
+try {
+  window.addEventListener('storage', (e) => {
+    if (!e || e.key !== STORAGE_KEY) return;
+    adoptForeignWrite();
+  });
+} catch (_) {}
+
 DB.loadFailed = () => STATE_LOAD_FAILED;
 /* THE QUARANTINED ORIGINAL, for the one rescue offered in READ-ONLY mode.
 

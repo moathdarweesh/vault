@@ -7,14 +7,17 @@ const path = require('node:path');
 const read = name => fs.readFileSync(path.join(__dirname, '..', name), 'utf8');
 
 function context() {
-  const values = new Map(), events = [], timers = new Map();
+  const values = new Map(), events = [], timers = new Map(), listeners = new Map();
   let fail = '', timer = 0, session = { user: { id: 'alice' } };
   let query = async () => ({ data: [{ version: 2 }], error: null });
   const client = { auth: { getSession: async () => ({ data: { session } }) },
     from(table) {
       const request = { table, kind: 'read', fields: '', filters: [] };
-      const chain = { insert() { request.kind = 'insert'; return this; }, update() { request.kind = 'update'; return this; },
-        upsert() { request.kind = 'upsert'; return this; },
+      // The PAYLOAD is kept, not just the verb: "this account's data was never
+      // uploaded" is a fact only if the bytes offered to the wire can be read.
+      const chain = { insert(rows) { request.kind = 'insert'; request.rows = rows; return this; },
+        update(rows) { request.kind = 'update'; request.rows = rows; return this; },
+        upsert(rows) { request.kind = 'upsert'; request.rows = rows; return this; },
         select(fields) { request.fields = fields; return this; }, eq(key,value) { request.filters.push([key,value]); return this; },
         order() { return this; }, limit(count) { request.limit=count; return this; },
         maybeSingle() { return query(request); }, then(ok, no) { return query(request).then(ok, no); } };
@@ -23,12 +26,31 @@ function context() {
   const c = { console: { log() {}, warn() {}, error() {} }, navigator: { languages: ['en'], onLine: true },
     crypto: require('node:crypto').webcrypto,
     CustomEvent: class { constructor(type, options) { this.type = type; this.detail = options?.detail; } },
-    dispatchEvent(e) { events.push(e.type); },
+    // A real window DELIVERS the events it is handed. storage.js registers a
+    // `storage` listener at load, and a recorder that never calls it would have
+    // proved only that the registration did not throw.
+    addEventListener(type, fn) { (listeners.get(type) || listeners.set(type, []).get(type)).push(fn); },
+    removeEventListener(type, fn) { const a = listeners.get(type) || []; const i = a.indexOf(fn); if (i >= 0) a.splice(i, 1); },
+    dispatchEvent(e) { events.push(e.type); (listeners.get(e.type) || []).slice().forEach(fn => fn(e)); },
     setTimeout(fn) { timers.set(++timer, fn); return timer; }, clearTimeout(id) { timers.delete(id); },
     document: { currentScript: null }, supabase: { createClient: () => client },
-    localStorage: { get length() { return values.size; }, key: i => [...values.keys()][i],
+    // A REAL Storage IS AN EXOTIC OBJECT: Object.keys(localStorage) yields the
+    // STORED keys, and BOTH prefix sweeps in this app use exactly that —
+    // imgPrune() in storage.js and clearLocalUserData() in cloud.js. A plain
+    // object yields its METHOD names instead, so every sweep in this harness was
+    // a silent no-op and a mutation that added one could not be caught. The proxy
+    // is what makes "the photos were kept" and "the residue was swept" facts.
+    localStorage: new Proxy({ get length() { return values.size; }, key: i => [...values.keys()][i],
       getItem: k => values.get(k) ?? null, removeItem: k => values.delete(k),
-      setItem(k, v) { if (fail) { const e = new Error('storage failed'); e.name = fail; throw e; } values.set(k, String(v)); } },
+      clear() { values.clear(); },
+      setItem(k, v) { if (fail) { const e = new Error('storage failed'); e.name = fail; throw e; } values.set(k, String(v)); } }, {
+      ownKeys: () => [...values.keys()],
+      getOwnPropertyDescriptor: (t, k) => (values.has(k)
+        ? { value: values.get(k), enumerable: true, configurable: true, writable: true }
+        : Reflect.getOwnPropertyDescriptor(t, k)),
+      has: (t, k) => k in t || values.has(k),
+      get: (t, k) => (k in t ? Reflect.get(t, k) : values.get(k)),
+    }),
   };
   c.window = c; vm.createContext(c);
   vm.runInContext(read('js/cloud.js'), c);

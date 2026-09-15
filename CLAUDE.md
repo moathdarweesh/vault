@@ -79,7 +79,7 @@ a faster TTFB — not fewer bytes.
 npm run release          # bump every marker + verify, then commit all files together
 ```
 
-**Current version: v350.** APK: build 22 / v3.1.
+**Current version: v351.** APK: build 22 / v3.1.
 
 `scripts/release.js` rewrites **every** marker and then re-reads them from disk to confirm; it exits non-zero if any disagree, and prints the count per file (derived, never hard-coded — the docs used to say 16 while the real count was 15). The markers are `?v=N` in `index.html` (every script and stylesheet, the `js/vendor/supabase.js` preload, both `icons/icon.svg` links, `manifest.json`), the `__cleaned_vN` sessionStorage key, the `FALLBACK` literal in `app.js`, `version.json` → `web`, the `?v=` in `manifest.json`, `admin.html`, `privacy.html` and `get/index.html`, and the `Current version` line in this file. `scripts/check-contracts.js` (pre-commit) refuses a commit where any of them disagree.
 
@@ -558,7 +558,7 @@ npm run verify && npm run release && git add <the files> && git commit && git pu
 This authorization is about the QUESTION, not about the standards. Everything that made the
 question worth asking still applies, and none of it is waived:
 
-- **Verified first.** `npm run verify` (31 contracts + 8 suites) must pass, and any change to
+- **Verified first.** `npm run verify` (32 contracts + 9 suites) must pass, and any change to
   shipped code must be measured in the running app. Pushing unverified work is not "shipping
   without asking", it is shipping something unknown — GitHub Pages serves the branch directly
   with no gate, so a bad push reaches every device at the next app open.
@@ -2612,6 +2612,129 @@ light + no door → `#faf5f0`; dark → `#000000` throughout.
 - **"The 2500ms cap opens onto an empty shell"** and **"the app behind the door is
   not aria-hidden"** — both already answered in v343's note.
 
+## v351 — the last two P1s: two windows of one app, and two accounts on one phone
+
+The 22-axis audit left exactly two confirmed P1s in code. Both are closed here,
+both had their own repro steps corrected on the way, and both are now under a
+suite that has been proved able to fail.
+
+### ⚠️ TWO WINDOWS OF THIS APP SILENTLY DESTROYED EACH OTHER'S DATA
+
+`changeSlice` refuses to write over bytes it did not write. **`writeStore` — a
+plain `save()` — has no such guard**, so tab A's next ordinary save rewrote the
+whole blob from a STATE that had never seen tab B's work. `Cloud.onLocalChange`
+then flagged that loss for upload, and the conditional UPDATE was **accepted** —
+so the session was absent from the only backup too.
+
+Measured in two real Chromium tabs of one context, fenced:
+
+| | before | now |
+|---|---|---|
+| B logs a session, then A saves a pref | **B's session is gone** | B's session survives, A's pref lands |
+| a refused transaction | `DB.saveState()` still read `{ok:true}` | `{ok:false, code:'STALE'}` |
+| what the save centre said | «التخزين غير متاح» — a storage failure | «نافذةٌ أخرى من التطبيق غيّرت هذه البيانات» |
+| A's undo stack after B's write | kept, against a state that no longer exists | cleared |
+
+Exposure is narrower than it looks and is stated rather than guessed: **the APK
+is a Capacitor WebView with its own storage partition, so APK-beside-Chrome is
+NOT this.** What is exposed is two browser tabs, a Chrome-installed PWA beside a
+Chrome tab, and the password-reset link opening a second tab.
+
+> ⚠️ **`DB.adoptForeignWrite()` IS DELIBERATELY NOT `reloadState()`, AND THE TWO
+> DIFFERENCES ARE BOTH LOAD-BEARING.** `reloadState()` is for a DELIBERATE
+> whole-blob replacement — a cloud pull, a restore, a reset. It clears
+> `STATE_LOAD_FAILED` unconditionally, and READ-ONLY may only be lifted by a
+> deliberate act; and it ends in `imgPrune()`, which deletes every `vault_img_*`
+> key absent from the newly loaded STATE — **and photos are device-local**, so
+> adopting a sibling's write would have taken this window's photos with it.
+
+The listener is installed in `js/storage.js`, beside the state it refreshes,
+because storage.js is the single owner of `STATE`. It refuses anything it cannot
+trust: a blob that will not parse (a half-written or quota-truncated write), one
+that fails `DB._validateBlob`, a removal of the key (another window logging out —
+treating that as a blob would wipe this one), and any key that is not the store.
+
+**The repaint is the other half, and it has one rule.** `app.js` listens for
+`vault:store-adopted` and re-renders — but **never over an open sheet and never
+inside the guided run**, where a re-render destroys half-typed set fields.
+Answering a silent data loss with a smaller one is not a fix. Measured with the
+search sheet open and text half-typed in it: **1 adoption, 0 view repaints, the
+sheet still open, the typed text intact** — and the data adopted all the same.
+
+### ⚠️ A SHARED PHONE SHOWED THE NEXT ACCOUNT THE PREVIOUS USER'S DATA
+
+Every sync path asked "does the device have data?" and **none asked "whose?"**.
+`localHasData()` is anonymous, and `getLastUid()` was never compared with the new
+session's uid on either path. So alice's blob was offered to bob as a conflict
+whose «keep this device» **upserts alice's sessions into bob's cloud row** — and
+the other branch snapshots it into the single rescue slot stamped *bob*, so bob
+was then OFFERED a Restore of it.
+
+> ⚠️ **REPRO CORRECTION, recorded because the obvious story is wrong.** "Go
+> offline and tap Logout" does NOT produce this state: offline with a valid token
+> makes `signOut()` fail with `AuthRetryableFetchError` and the user stays signed
+> in. The real triggers are **(a) ONLINE, where `signOut()` SUCCEEDS and it is the
+> PUSH that failed** — another device advanced the row, a 5xx, a banned account —
+> which is exactly the case where app.js deliberately skips `clearLocalUserData()`
+> to preserve the unpushed blob; and **(b) offline with an already-expired access
+> token.**
+
+`guardForeignBlob(uid)` runs at the top of BOTH `resolveOnLoginCore` and
+`bootSyncCoreUnguarded` — they reach the same `pushed()` branch — and before the
+boot path's own fast-path `localHasData()`. The blob is **kept, not discarded**:
+snapshotted under the OLD owner's uid, so it stays recoverable by the person it
+belongs to and is refused to everyone else by the uid stamp `recoveryInfo()` and
+`restoreRecovery()` already check.
+
+**`clearLocalUserData()` is reused rather than re-spelled.** This IS the state it
+describes — the device no longer belongs to the account whose residue is on it —
+and its prefix sweep already covers the photo side store, the reminder log, the
+AI cache and the pre-paint mirror, each of which is the same disclosure by another
+route («user B on a shared phone used to read user A's log» is a bill this project
+has already paid). A second copy of that key list is how the last one drifted. The
+rescue is read back and written again after the sweep, because that sweep removes
+it too.
+
+> **The honest limit:** `snapshotRaw` re-attaches an un-backed-up photo only for a
+> **custom** exercise, so a photo on a seed exercise with no bucket copy is not in
+> the rescue. That is pre-existing — every rescue this app takes has the same
+> shape — and `imgPrune()` would have deleted those keys at the next boot anyway.
+> It is named here so nobody reads "the blob is kept" as "everything is kept".
+
+### A ninth suite, and it was made to fail before it was trusted
+
+`scripts/test-multi-window.js` runs the real `storage.js` and `cloud.js` in an
+isolated vm. Both defects are invisible to a single-document test, which is every
+other suite in this project. **Ten mutations were written back into the shipped
+files — both defects restored verbatim, plus eight plausible neighbours — and
+the suite was run against each: 10 of 10 caught**, with all three files restored
+byte-for-byte afterwards. A suite that survives its own bug being reintroduced is
+decoration.
+
+> ⚠️ **AND THE ELEVENTH MUTATION FOUND A HOLE IN THE HARNESS ITSELF.** "Adoption
+> prunes the photo side store" was NOT caught — because `imgPrune()` sweeps with
+> `Object.keys(localStorage)`, and the harness's fake storage was a plain object,
+> which yields its METHOD names. **So every prefix sweep in every suite in this
+> project had been a silent no-op** — `imgPrune()` and `clearLocalUserData()`
+> both. A real `Storage` is an exotic object; the fake is a Proxy now, and with it
+> the mutation is caught and "the previous account's photos and reminder log are
+> off the device" is a measured fact rather than an inference.
+
+The harness also keeps the PAYLOAD offered to the wire, not just the verb, so
+"alice's data never reached bob's row" is checked against the bytes.
+
+### The fingerprint net, again
+
+Both fixes are invisible to every ordinary render: **19/20 cells identical, 2,053
+elements, and the only three differences are the build label in the footer**
+(`VAULT · v349` → `VAULT · v350`, the marker the v350 capture was taken before).
+
+### Still open
+
+No P1 remains in code. The owner-only list is unchanged and still headed by
+`backend/pending/29_ai-usage-fk-repair-v25.sql`; the 43 P2/P3 findings from the
+22-axis audit and the clean-then-split refactor of `js/app.js` are next.
+
 ## v350 — the 22-axis audit: the rescue that rescued nothing, and the tool that printed a dangerous command
 
 The owner supplied his own audit framework — 22 axes, 10 executable stress
@@ -2711,13 +2834,13 @@ primitives, and only 8 lateral food/workout/body/settings references exist.
 
 ### Still open, highest first
 
-Two P1s remain in code and are the next release: **two documents of one origin
+Two P1s remained in code and were the next release: **two documents of one origin
 silently destroying each other's data** (reproduced in real Chromium, two tabs,
 with the loss propagating to the single cloud copy), and **a shared device showing
 the next account the previous user's data and letting it upload into its own cloud
 row** (reproduced in a vm over the real cloud.js, with a second and worse branch
-the first lens missed). Both have precise, narrow fixes and both carry corrections
-to their own original repro steps — recorded in the audit output.
+the first lens missed). Both carried corrections to their own original repro steps.
+**Both are closed in v351** — see its note above.
 
 The owner-only list is unchanged and still headed by
 `backend/pending/29_ai-usage-fk-repair-v25.sql`.
