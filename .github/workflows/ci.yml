@@ -77,22 +77,26 @@ jobs:
       # Version markers, script order, i18n, the client-to-backend agreements.
       # This is the same check the pre-commit hook runs, now where it cannot be
       # skipped.
+      # Every step below goes through scripts/ci-step.sh: on failure its output is
+      # re-emitted as a check-run ANNOTATION, which is public — the run LOG is
+      # admin-only (403 to everyone else). This workflow was red on all fifteen of
+      # its runs before anyone could read WHY; the annotation is the fix for that.
       - name: Contracts
-        run: npm run check
+        run: bash scripts/ci-step.sh "contracts" npm run check
 
       # Same rule as Playwright: --no-save, never in package.json, never shipped
       # (installed in the step above, in the SAME command). --strict makes an
       # ABSENT linter a failure — an absence here means that install step lied,
       # and a linter that is not running looks exactly like one that found nothing.
       - name: Lint
-        run: node scripts/lint.js --strict
+        run: bash scripts/ci-step.sh "lint" node scripts/lint.js --strict
 
       # --strict: a suite that did not RUN is a failure here. Locally a missing
       # browser is a tolerable skip; in CI it means the install step lied.
       - name: Test suites
-        run: node scripts/test-all.js --strict
+        run: bash scripts/ci-step.sh "suites" node scripts/test-all.js --strict
 
       # The release markers must agree with each other. `--check` does not
       # bump anything; it only reports disagreement.
       - name: Release markers agree
-        run: npm run release:check
+        run: bash scripts/ci-step.sh "release markers" npm run release:check
