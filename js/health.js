@@ -28,9 +28,13 @@
     const sleep = Array.isArray(data.sleep) ? data.sleep : [];
     if (!sleep.length) return null;
     const last = sleep.reduce((a, b) => (new Date(a.end) > new Date(b.end) ? a : b));
-    const h = Math.floor(last.minutes / 60);
-    const m = last.minutes % 60;
-    return `${h}<span class="health-card-unit">${tr('unit_hr')}</span> ${m}<span class="health-card-unit">${tr('unit_min')}</span>`;
+    // ONE FORMATTER, NOT TWO. This card had its own copy of the hour/minute
+    // arithmetic, so the owner's H:MM rule would have had to be applied twice
+    // and could drift. storage.js is script #4 and this is #7, so the global is
+    // always there; the guard is only for a file:// or test context.
+    return typeof formatDuration === 'function'
+      ? formatDuration(last.minutes)
+      : Math.floor(last.minutes / 60) + ':' + String(Math.round(last.minutes) % 60).padStart(2, '0');
   }
 
   // 'الآن' / 'قبل ٣ د' / 'قبل ٢ س' / 'قبل ٣ ي' — for last-sync lines and reading ages.

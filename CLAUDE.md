@@ -79,7 +79,7 @@ a faster TTFB — not fewer bytes.
 npm run release          # bump every marker + verify, then commit all files together
 ```
 
-**Current version: v346.** APK: build 22 / v3.1.
+**Current version: v347.** APK: build 22 / v3.1.
 
 `scripts/release.js` rewrites **every** marker and then re-reads them from disk to confirm; it exits non-zero if any disagree, and prints the count per file (derived, never hard-coded — the docs used to say 16 while the real count was 15). The markers are `?v=N` in `index.html` (every script and stylesheet, the `js/vendor/supabase.js` preload, both `icons/icon.svg` links, `manifest.json`), the `__cleaned_vN` sessionStorage key, the `FALLBACK` literal in `app.js`, `version.json` → `web`, the `?v=` in `manifest.json`, `admin.html`, `privacy.html` and `get/index.html`, and the `Current version` line in this file. `scripts/check-contracts.js` (pre-commit) refuses a commit where any of them disagree.
 
@@ -2611,6 +2611,60 @@ light + no door → `#faf5f0`; dark → `#000000` throughout.
   images are square (2732×2732), so short and long edge are the same number.
 - **"The 2500ms cap opens onto an empty shell"** and **"the app behind the door is
   not aria-hidden"** — both already answered in v343's note.
+
+## v347 — a duration is a clock reading, everywhere
+
+The owner's rule, verbatim, and it is absolute:
+
+> «الوقت خليه يكون بالتطبيق كذا **4:59** — مش يكون 4 س 55 د، لا تخلي ولا شي زي كذا أبدًا»
+
+Swept the whole app for compound hour+minute renderings. There were exactly
+**two producers**, and the second one was a duplicate of the first:
+
+- **`formatDuration()` (js/storage.js)** — every sleep figure in the app: the Home
+  stat cell, the sleep hero, deep sleep, the stage legend, the day ledger, both
+  weekly averages, the week-over-week delta, and the live preview inside the log
+  sheet. Eleven call sites, one function.
+- **`sleepValue()` (js/health.js)** — the Health Connect card had its OWN copy of
+  the hour/minute arithmetic, so the rule would have had to be applied twice and
+  could drift. It calls `formatDuration` now. One formatter, not two.
+
+`durUnits()` went with it — the س/د и h/m abbreviations existed only to be
+concatenated by the old shape. **A clock reading needs no translating**, so the
+figure is now byte-identical in both languages. `unit_hr` was retired from both
+dictionaries after checking it had no other reader: no dynamic `t('unit_' + x)`
+family exists and no `METRICS` entry carries it. `unit_min` stays — cardio still
+logs minutes.
+
+### Two decisions inside it
+
+- **ALWAYS `H:MM`, including under an hour.** 45 minutes is `0:45`, not `45د`.
+  The sleep card must not change shape between a short night and a long one — a
+  column of figures that switches format is what the reading eye actually trips
+  over.
+- **Rounded inside the formatter**, because the weekly averages arrive
+  fractional: 431.5 minutes used to render as `7س 11.5د`. It is `7:12`.
+
+### Measured, not assumed
+
+| minutes | 0 | 5 | 45 | 59 | 60 | 65 | **299** | 431.5 | 1439 |
+|---|---|---|---|---|---|---|---|---|---|
+| renders | 0:00 | 0:05 | 0:45 | 0:59 | 1:00 | 1:05 | **4:59** | 7:12 | 23:59 |
+
+Identical in Arabic and English, and no abbreviation survives anywhere in the
+output.
+
+> **RTL needs no wrapper, and this was measured rather than reasoned.** Digits are
+> European Numbers and the colon is a Common Separator, so the bidi algorithm
+> keeps `4:59` as ONE left-to-right run inside an Arabic line. Rendered inside
+> «نمت 4:59 الليلة» on the live page: x = 303 / 322 / 332 for 4, 5, 9 — left to
+> right, in an `rtl` document. The `dir="ltr"` on a few older call sites is
+> harmless and was left alone.
+
+**Deliberately not changed: cardio still logs «٣٠ د».** That is a single-unit
+quantity like calories or millilitres, not the hours-and-minutes form the rule
+names — and `0:30` for a thirty-minute walk reads worse, not better. One line
+here if that is wanted too.
 
 ## v346 — the frame stops moving, the content moves instead
 

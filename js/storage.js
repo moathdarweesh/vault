@@ -3557,20 +3557,28 @@ function inRangeISO(iso, start, end) {
   return d >= start && d < end;
 }
 
-// Localised hour/minute abbreviations. Arabic: س = ساعة, د = دقيقة. English: h/m.
-// (Slicing a translated word like "الدقائق" to 3 chars produced garbage "الد",
-//  so durations use these fixed abbreviations instead.)
-function durUnits() {
-  const ar = !!(STATE && STATE.prefs && STATE.prefs.lang === 'ar');
-  return ar ? { h: 'س', m: 'د' } : { h: 'h', m: 'm' };
-}
+/* ⚠️ A DURATION IS A CLOCK READING. NEVER "4 س 55 د".
+
+   The owner's rule, and it is absolute: «الوقت خليه يكون بالتطبيق كذا 4:59 —
+   مش يكون 4 س 55 د، لا تخلي ولا شي زي كذا أبدًا». One shape, every duration,
+   both languages — a clock reading needs no translating, which also retires
+   the س/د abbreviations that used to live here.
+
+   ALWAYS H:MM, including under an hour: 45 minutes is 0:45, not 45د. The
+   sleep card must not change shape between a short night and a long one —
+   a column of figures that switches format is the thing the reading eye
+   actually trips over.
+
+   Rounded HERE because the averages arrive fractional: 431.5 minutes used to
+   render as "7س 11.5د". The padStart is what keeps 7:05 from reading 7:5.
+
+   RTL is safe without a wrapper: digits are European Numbers and the colon is
+   a Common Separator, so the bidi algorithm keeps "4:59" as ONE left-to-right
+   run inside an Arabic line. The dir="ltr" on some call sites is older and
+   harmless. */
 function formatDuration(minutes) {
-  const h = Math.floor(minutes / 60);
-  const m = minutes % 60;
-  const u = durUnits();
-  if (h === 0) return m + u.m;
-  if (m === 0) return h + u.h;
-  return h + u.h + ' ' + m + u.m;
+  const total = Math.max(0, Math.round(Number(minutes) || 0));
+  return Math.floor(total / 60) + ':' + String(total % 60).padStart(2, '0');
 }
 
 function formatTime12(hhmm) {
