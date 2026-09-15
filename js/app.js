@@ -12,7 +12,7 @@
 // build. The literal below is the fallback (file://, or a stripped query) and is
 // still bumped by `npm run release` — see CLAUDE.md "CACHE WORKFLOW".
 const VAULT_BUILD = (() => {
-  const FALLBACK = 'v352';
+  const FALLBACK = 'v353';
   try {
     const src = (document.currentScript && document.currentScript.src) || '';
     const m = src.match(/[?&]v=(\d+)/);
@@ -7245,7 +7245,6 @@ function openSleepModal(sleepId = null, presetDate = null) {
 function progressSectionHtml() {
   const all = DB.bodyweight.list();          // oldest → newest
   const pts = all.slice(-10);                // the spec's ten
-  const streak = computeStreak();
 
   let weightHtml = '';
   if (pts.length >= 2) {
@@ -10737,7 +10736,7 @@ function renderCalendar(el) {
   viewContext.calendar = ctx;
 
   const monthDate = new Date(ctx.year, ctx.month, 1);
-  const firstDow = monthDate.getDay();
+
   const monthLabel = monthDate.toLocaleDateString(
     (DB.prefs.get().lang || 'en') === 'ar' ? 'ar-u-nu-latn' : 'en-US',
     { month: 'long', year: 'numeric' }
@@ -12413,7 +12412,7 @@ function showAnnouncementBanner(config) {
   const DISMISS_KEY = VAULT_KEYS.announcement;
   const sig = String(config.updated_at || text);
   let dismissed = '';
-  try { dismissed = localStorage.getItem(DISMISS_KEY) || ''; } catch (_) {}
+  try { dismissed = localStorage.getItem(DISMISS_KEY) || ''; } catch (_) {}   // eslint-disable-line vault/no-direct-storage-in-views -- a per-DEVICE flag from the registry, not blob state
   if (dismissed === sig) return;
 
   const el = document.createElement('div');
@@ -12452,7 +12451,7 @@ function showAnnouncementBanner(config) {
   } catch (_) {}
 
   el.querySelector('#announcement-dismiss').addEventListener('click', () => {
-    try { localStorage.setItem(DISMISS_KEY, sig); } catch (_) {}
+    try { localStorage.setItem(DISMISS_KEY, sig); } catch (_) {}   // eslint-disable-line vault/no-direct-storage-in-views -- per-device flag, see above
     if (repositionObserver) { try { repositionObserver.disconnect(); } catch (_) {} }
     el.classList.remove('show');
     setTimeout(() => { if (el.parentNode) el.parentNode.removeChild(el); }, 300);
@@ -12467,8 +12466,8 @@ function showAnnouncementBanner(config) {
 function seedDefaultUnitIfNew(config) {
   if (!config || (config.default_unit !== 'kg' && config.default_unit !== 'lb')) return;
   const FLAG = VAULT_KEYS.unitSeeded;
-  try { if (localStorage.getItem(FLAG)) return; } catch (_) { return; }
-  try { localStorage.setItem(FLAG, '1'); } catch (_) { return; } // one-time, regardless of the outcome below
+  try { if (localStorage.getItem(FLAG)) return; } catch (_) { return; }   // eslint-disable-line vault/no-direct-storage-in-views -- a once-per-install flag, deliberately outside the blob
+  try { localStorage.setItem(FLAG, '1'); } catch (_) { return; }   // eslint-disable-line vault/no-direct-storage-in-views -- one-time, regardless of the outcome below
   try {
     const all = DB.getAll();
     const hasUserData = DB.hasUserData();   // the one list, in storage.js

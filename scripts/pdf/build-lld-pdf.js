@@ -172,10 +172,10 @@ async function render(html, outPath) {
 (async () => {
   const tmp = path.join(HERE, 'pass1.pdf');
   console.log('pass 1 — laying out to discover page numbers…');
-  const stats = await render(buildHtml(null), tmp);
+  await render(buildHtml(null), tmp);
 
   // Locate each heading by searching the rendered text page by page.
-  const { PDFExtract } = (() => { try { return require('pdf-parse'); } catch { return {}; } })();
+
   const pageOf = {};
   {
     const { execFileSync } = require('child_process');

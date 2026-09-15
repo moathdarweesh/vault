@@ -166,7 +166,6 @@ const I18N = {
     new_cardio_type_sub: 'Create your own cardio activity.',
     cardio_type_name_ph: 'e.g. Stairs, Rowing',
     icon: 'Icon',
-    enter_name: 'Enter a name',
 
     // Food
     // Nutrition dashboard
@@ -1146,7 +1145,6 @@ const I18N = {
     new_cardio_type_sub: 'أضف نشاط كارديو خاص فيك.',
     cardio_type_name_ph: 'مثلاً: درج، تجديف',
     icon: 'الأيقونة',
-    enter_name: 'أدخل اسماً',
 
     // لوحة التغذية
     nutri_setup_title: 'حدّد هدفك اليومي',

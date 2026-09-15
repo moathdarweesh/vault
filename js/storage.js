@@ -1053,6 +1053,7 @@ function changeSlice(read, write, next, label, remember = true) {
   return { ok: true, changed: true, undoToken: remember ? token : null };
 }
 function validDay(day) {
+  // eslint-disable-next-line vault/no-utc-calendar-day -- a VALIDITY round-trip: parse and format are both UTC here, so a real date comes back unchanged and 2026-02-30 does not
   return /^\d{4}-\d{2}-\d{2}$/.test(day) && !isNaN(Date.parse(day)) && new Date(day).toISOString().slice(0, 10) === day;
 }
 function cleanMealItems(items) {
@@ -3559,6 +3560,7 @@ function computeSleepMinutes(sleepTime, wakeTime) {
 function todayISO() {
   const d = new Date();
   d.setMinutes(d.getMinutes() - d.getTimezoneOffset());
+  // eslint-disable-next-line vault/no-utc-calendar-day -- THIS is the sanctioned one: the clock was shifted to local first, so the UTC slice IS the local day
   return d.toISOString().slice(0, 10);
 }
 

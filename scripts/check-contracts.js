@@ -331,7 +331,6 @@ const contract = (name, problems) => {
 
 // ---------------------------------------------------------------- 13. the two exercise-name maps cover every seed exercise, and each other
 {
-  const app = src['js/app.js'];
   const cat = src['js/catalog.js'];
   const mapKeys = (name) => {
     const i = cat.indexOf('const ' + name + ' = {'); if (i < 0) return null;
@@ -791,6 +790,64 @@ const contract = (name, problems) => {
     }
   }
   contract(`the vendored libraries hash to what js/vendor/SOURCES.md says they are (${recorded} recorded)`, problems);
+}
+
+// ---------------------------------------------------------------- 34. no top-level name is declared in two shipped scripts
+// The ten shipped files are CLASSIC scripts sharing one global lexical scope.
+// A top-level `const`/`let`/`class` declared in two of them is a SyntaxError
+// ("Identifier has already been declared") that stops the SECOND file from
+// executing at all — a blank app, with the error only in a console nobody on
+// a phone will open. A duplicate `function`/`var` is quieter and worse: the
+// later one silently replaces the earlier. ESLint is per-file and cannot see
+// this; eslint.config.js derives the shared surface from the same scan.
+{
+  const problems = [];
+  const TOP = /^(?:async\s+)?(?:function\s+\*?|class\s+|const\s+|let\s+|var\s+)([A-Za-z_$][\w$]*)/;
+  const owner = new Map();
+  for (const f of JS) {
+    for (const line of src[f].split(/\r?\n/)) {
+      if (line[0] === ' ' || line[0] === '\t') continue;
+      const m = TOP.exec(line);
+      if (!m) continue;
+      const prev = owner.get(m[1]);
+      if (prev && prev !== f) problems.push(`\`${m[1]}\` is declared at top level in both ${prev} and ${f} — a SyntaxError that blanks the app for a const/let/class, a silent override for a function/var`);
+      else owner.set(m[1], f);
+    }
+  }
+  contract(`no top-level identifier is declared in two shipped scripts (${owner.size} names across ${JS.length} files)`, problems);
+}
+
+// ---------------------------------------------------------------- 35. every var(--x) names a custom property that is defined
+// A CSS variable that does not exist FAILS SILENTLY: the declaration is
+// dropped and the element inherits. v314 shipped `--text-muted` (the token is
+// `--text-mute`) in two rules, so every field caption in four sheets painted at
+// full `--text` and the screens read as "crowded" — invisible to every test,
+// found by reading the stylesheet. Definitions are collected from everywhere a
+// property can be set (the stylesheet, the inline <style> of each page, JS
+// template strings, and setProperty calls); every use must name one of them.
+{
+  const problems = [];
+  const PAGES = ['index.html', 'admin.html', 'privacy.html', 'get/index.html'];
+  const cssSources = ['styles.css', ...PAGES];
+  const defined = new Set();
+  const defRe = /(--[a-z][a-z0-9-]*)\s*:/g;
+  for (const f of [...cssSources, ...JS]) {
+    const text = f === 'styles.css' ? read(f) : src[f] || read(f);
+    for (const m of text.matchAll(defRe)) defined.add(m[1]);
+    for (const m of text.matchAll(/setProperty\(\s*['"](--[a-z][a-z0-9-]*)['"]/g)) defined.add(m[1]);
+  }
+  const used = new Map();
+  for (const f of [...cssSources, ...JS]) {
+    const text = f === 'styles.css' ? read(f) : src[f] || read(f);
+    for (const m of text.matchAll(/var\(\s*(--[a-z][a-z0-9-]*)/g)) {
+      if (!used.has(m[1])) used.set(m[1], new Set());
+      used.get(m[1]).add(f);
+    }
+  }
+  for (const [name, files] of used) {
+    if (!defined.has(name)) problems.push(`var(${name}) is used in ${[...files].join(', ')} but no stylesheet, page or script ever defines it — the declaration is silently dropped`);
+  }
+  contract(`every var(--x) in the stylesheet, the pages and the scripts names a defined custom property (${used.size} used, ${defined.size} defined)`, problems);
 }
 
 console.log(failures.length ? `\ncheck-contracts: ${failures.length} broken contract(s)` : '\ncheck-contracts: all contracts hold');

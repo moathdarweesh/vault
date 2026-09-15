@@ -18,7 +18,9 @@
     "graph": "node scripts/graph-build.js",
     "test": "node scripts/test-all.js",
     "test:strict": "node scripts/test-all.js --strict",
-    "verify": "npm run check && npm test"
+    "lint": "node scripts/lint.js",
+    "lint:strict": "node scripts/lint.js --strict",
+    "verify": "npm run check && npm run lint && npm test"
   },
   "dependencies": {
     "@capacitor/android": "^8.4.1",

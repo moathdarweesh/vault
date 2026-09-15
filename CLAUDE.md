@@ -79,7 +79,7 @@ a faster TTFB — not fewer bytes.
 npm run release          # bump every marker + verify, then commit all files together
 ```
 
-**Current version: v352.** APK: build 22 / v3.1.
+**Current version: v353.** APK: build 22 / v3.1.
 
 `scripts/release.js` rewrites **every** marker and then re-reads them from disk to confirm; it exits non-zero if any disagree, and prints the count per file (derived, never hard-coded — the docs used to say 16 while the real count was 15). The markers are `?v=N` in `index.html` (every script and stylesheet, the `js/vendor/supabase.js` preload, both `icons/icon.svg` links, `manifest.json`), the `__cleaned_vN` sessionStorage key, the `FALLBACK` literal in `app.js`, `version.json` → `web`, the `?v=` in `manifest.json`, `admin.html`, `privacy.html` and `get/index.html`, and the `Current version` line in this file. `scripts/check-contracts.js` (pre-commit) refuses a commit where any of them disagree.
 
@@ -558,7 +558,7 @@ npm run verify && npm run release && git add <the files> && git commit && git pu
 This authorization is about the QUESTION, not about the standards. Everything that made the
 question worth asking still applies, and none of it is waived:
 
-- **Verified first.** `npm run verify` (33 contracts + 9 suites) must pass, and any change to
+- **Verified first.** `npm run verify` (35 contracts + lint + 9 suites) must pass, and any change to
   shipped code must be measured in the running app. Pushing unverified work is not "shipping
   without asking", it is shipping something unknown — GitHub Pages serves the branch directly
   with no gate, so a bad push reaches every device at the next app open.
@@ -2611,6 +2611,92 @@ light + no door → `#faf5f0`; dark → `#000000` throughout.
   images are square (2732×2732), so short and long edge are the same number.
 - **"The 2500ms cap opens onto an empty shell"** and **"the app behind the door is
   not aria-hidden"** — both already answered in v343's note.
+
+## v353 — the linter, and the first thing it found was a rule nobody could see
+
+The agreed refactor is "clean first, then split by domain", under the owner's
+condition that nothing changes. The clean half starts with a tool, because this
+project has NO BUILD STEP: nothing type-checks, nothing compiles, and a misspelled
+identifier in a vanilla-JS file is a ReferenceError that reaches a phone.
+
+**ESLint 9, as a dev tool that never ships** — exactly the decision already made
+for Playwright: `npm i --no-save`, never in `package.json`, never in a lockfile,
+never in the bundle a user downloads. `scripts/lint.js` reports a loud SKIP when
+it is absent locally and a FAILURE under `--strict`, which CI passes — because a
+linter that is not running looks exactly like a linter that found nothing, and
+that is the shape this project has paid for three times.
+
+### Five rules, each one a defect that actually shipped
+
+`eslint.config.js` encodes the project's own laws, not a style guide:
+
+| rule | the defect it exists for |
+|---|---|
+| `no-bare-handler-with-params` | v348 — `addEventListener('click', showChangePassword)` handed the Event to `recovery`; change-password dead on both paths |
+| `no-utc-calendar-day` | `toISOString().slice(0,10)` — the bug class this codebase has hit **five** times |
+| `no-date-string-parse` | `new Date('2026-08-04')` parses as UTC — the previous day for every UTC+ user |
+| `no-direct-storage-in-views` | CLAUDE.md's non-negotiable: view code goes through `DB.*` |
+| `no-active-view-query` | v324 — a render that asked for `.view.active` while rendering a different view |
+
+Plus `no-undef` with the cross-file global surface **derived from the ten files at
+lint time**, never hand-listed — a hand-written list would be a second spelling of
+the source and would drift on the first addition.
+
+> ⚠️ **THE FIRST RUN REFINED TWO OF THEM, and that is recorded on the rules.** The
+> bare-handler rule flagged seven handlers whose first parameter IS the event
+> (`end(e)`, `release(e)`, `down(e)`) — the ordinary, correct case. The defect is
+> a first parameter that is NOT the event, which the Event then satisfies as
+> truthy. And the active-view rule needed an allow-list of shell functions BY NAME
+> (`navigate`, `bindVaultAction`, `syncDetailTopTitle`…), each read and confirmed
+> to run outside any render. A new `.view.active` anywhere else is an error until
+> it is read and added — that is the rule working, not an exception to it.
+
+### What the first run found
+
+- **`enter_name` was declared TWICE in both dictionaries.** Identical strings, so
+  no user saw a wrong word — but in an object literal the last key silently wins,
+  so the first line was dead and an edit to it would have changed nothing.
+  Contract 5 proves a key EXISTS in both dictionaries and cannot see a duplicate.
+- **`js/foodai.js` carried a 13-line copy of the Worker's system prompt** that
+  nothing referenced — since v291 the Worker owns the prompt and ignores any
+  client copy. A second spelling that could only drift.
+- Two dead locals in `app.js`, four in the tooling, one dead `require`.
+
+### Two contracts a per-file linter cannot express
+
+**34 — no top-level name declared in two shipped scripts.** The ten files are
+classic scripts sharing one global lexical scope; a `const` declared in two of
+them is a SyntaxError that stops the SECOND file from executing at all — a blank
+app, with the error in a console nobody on a phone will open. 339 names checked.
+
+**35 — every `var(--x)` names a defined custom property.** A CSS variable that
+does not exist FAILS SILENTLY: the declaration is dropped and the element
+inherits. v314 shipped `--text-muted` for `--text-mute` and four sheets lost
+their hierarchy. **This contract caught one on its first run:** `.rot-section-title`
+read `var(--fs-eyebrow, 11px)` — a token that has never existed anywhere, so the
+rule had been rendering on its fallback alone. It is `var(--fs-caption)` now, the
+real 11px token, and the fingerprint net confirms the computed value did not move.
+
+### Proved able to fail, then proved inert
+
+Eleven mutations planted into the shipped files — each rule's exact defect, two
+negative controls that must NOT fire, a misspelled identifier, a duplicate key,
+`DB` declared in a second file, and `--fs-eyebrow` restored: **11 of 11 caught**,
+all four files restored byte-for-byte. Fingerprint net v351 → v353: **19/20 cells
+identical, 2,053 elements, the only three differences the build label.**
+
+> ⚠️ **ONE `--no-save` INSTALL FOR EVERYTHING OUTSIDE THE MANIFEST.** An --no-save
+> install PRUNES every package the manifest does not list — so a second one for
+> eslint silently removed playwright, and the two browser suites read as "needs an
+> external runtime". And an unpinned install resolved ESLint **10**, which no
+> longer carries `globals` transitively; the config had leaned on a dependency
+> nobody had declared. Both are fixed at the source: `npm i --no-save playwright
+> eslint@9 globals`, one command, in CI and in the runbook. A tool that moves on
+> someone else's schedule is not a control — the same reason Node is pinned.
+
+**35 contracts + lint + 9 suites.** No shipped behaviour changes beyond the dead
+code removed and the one token corrected; `package.json` gains three script lines
+and no dependency.
 
 ## v352 — nobody could say which libraries were running. Now a contract does.
 

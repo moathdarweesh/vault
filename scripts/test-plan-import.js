@@ -98,11 +98,11 @@ console.log('PASS storage: append, replace, no logged sets, reload, edit, duplic
 
 // Run the real Worker handler with deterministic Supabase and Gemini responses.
 async function workerTests() {
-  let modelRequests = [], budgetCalls = 0, authCalls = 0, modelResult = { days: [{ name: 'Push', exercises: [{ name: 'Bench Press', sets: 3, reps: '8-12', notes: '' }] }] };
+  let modelRequests = [], budgetCalls = 0, modelResult = { days: [{ name: 'Push', exercises: [{ name: 'Bench Press', sets: 3, reps: '8-12', notes: '' }] }] };
   let denyBudget = false, denyAuth = false;
   const w = { Request, Response, Headers, console, setTimeout, clearTimeout, AbortController,
     fetch: async (url, opts) => {
-      if (url.includes('/auth/v1/user')) { authCalls++; return Response.json({ id: 'test-user' }, { status: denyAuth ? 401 : 200 }); }
+      if (url.includes('/auth/v1/user')) { return Response.json({ id: 'test-user' }, { status: denyAuth ? 401 : 200 }); }
       if (url.includes('/rpc/ai_budget_take')) { budgetCalls++; return Response.json({ allowed: !denyBudget }); }
       modelRequests.push(JSON.parse(opts.body));
       return Response.json({ candidates: [{ content: { parts: [{ text: JSON.stringify(modelResult) }] } }] });

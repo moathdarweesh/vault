@@ -2950,7 +2950,7 @@ body.rest-active .toast { bottom: calc(var(--safe-b) + var(--rest-h, 72px) + 28p
 .stat-cell .compare-delta { margin-top: 6px; font-size: 11px; }
 
 .rot-section-title {
-  font-size: var(--fs-eyebrow, 11px);
+  font-size: var(--fs-caption);   /* was --fs-eyebrow with an 11px fallback — a token that never existed, so the rule rendered on its fallback alone; contract 35 */
   font-weight: 700;
   letter-spacing: 0.08em;
   text-transform: uppercase;

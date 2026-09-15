@@ -26,7 +26,6 @@
 
 const fs = require('node:fs');
 const path = require('node:path');
-const assert = require('node:assert/strict');
 const { start, fence, ROOT } = require('./fp/server.js');
 const VIEWS = require('./fp/views.js');
 const PROPS = require('./fp/props.js');

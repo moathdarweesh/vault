@@ -60,9 +60,18 @@ jobs:
         run: npm ci
 
       # Its own step so a failure here is never mistaken for a failing test.
-      - name: Install Playwright + Chromium
+      # ⚠️ ONE `npm i --no-save` FOR EVERYTHING OUTSIDE package.json. An --no-save
+      # install PRUNES every package the manifest does not list — so a second one
+      # for eslint silently removed playwright, the browser suites read as
+      # "needs an external runtime", and --strict would have failed the run for
+      # a reason that looked like a missing browser. Measured locally first.
+      # eslint@9 is PINNED and `globals` is named: an unpinned install resolved
+      # ESLint 10, which no longer carries `globals` transitively, and the config
+      # failed on a dependency nobody had declared. A tool that moves on someone
+      # else's schedule is not a control — the same reason Node is pinned above.
+      - name: Install Playwright + Chromium + ESLint
         run: |
-          npm i --no-save playwright
+          npm i --no-save playwright eslint@9 globals
           npx playwright install --with-deps chromium
 
       # Version markers, script order, i18n, the client-to-backend agreements.
@@ -70,6 +79,13 @@ jobs:
       # skipped.
       - name: Contracts
         run: npm run check
+
+      # Same rule as Playwright: --no-save, never in package.json, never shipped
+      # (installed in the step above, in the SAME command). --strict makes an
+      # ABSENT linter a failure — an absence here means that install step lied,
+      # and a linter that is not running looks exactly like one that found nothing.
+      - name: Lint
+        run: node scripts/lint.js --strict
 
       # --strict: a suite that did not RUN is a failure here. Locally a missing
       # browser is a tolerable skip; in CI it means the install step lied.

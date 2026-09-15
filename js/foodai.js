@@ -70,20 +70,9 @@
     } catch (_) {}
   }
 
-  // Prompt-driven JSON (no strict schema — gemini-2.5-flash mis-handles the
-  // nested array schema). Mirrors backend/worker/gemini-worker.js.
-  const SYSTEM = [
-    'You convert a user food message into JSON for a calorie tracker. Output JSON only — no markdown.',
-    'List every food or drink mentioned in the message, one object per item — treat each as something the user ate.',
-    'NEVER add a food that is not in the message. NEVER skip a food that is in the message. One food = one item.',
-    'If an IMAGE is given, identify every food/drink you can see and estimate the calories+macros for the portion shown — one item per distinct food.',
-    'name = a short label in the user language; calories in kcal; protein, carbs, fat in grams —',
-    'for the stated portion, or one typical serving if not stated.',
-    'If there is no food at all (in the message or the image), output {"items":[]}.',
-    'Example: "تفاحة" -> {"items":[{"name":"تفاحة","calories":95,"protein":0,"carbs":25,"fat":0}]}',
-    'Example: "فطور بيض وخبز وغدا برجر" -> {"items":[{"name":"بيض","calories":150,"protein":13,"carbs":1,"fat":11},{"name":"خبز","calories":80,"protein":3,"carbs":15,"fat":1},{"name":"برجر","calories":400,"protein":20,"carbs":40,"fat":18}]}',
-    'Example: "مرحبا كيفك" -> {"items":[]}',
-  ].join(' ');
+  // The system prompt lives in backend/worker/gemini-worker.js and ONLY there
+  // (since v291 the Worker ignores any client copy). A mirror of it used to sit
+  // here, unreferenced — a second spelling that could only drift.
 
   // Attach the signed-in user's Supabase access token so the Worker can require an
   // authenticated caller (blocks anonymous quota/cost abuse). Best-effort: logged
