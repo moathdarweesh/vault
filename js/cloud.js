@@ -1625,7 +1625,7 @@ window.VAULT_KEYS = Object.freeze({
     // out of data that is already on their device).
     getLastUid,
     wasLinked: () => { const u = getLastUid(); return !!u && isLinked(u); },
-    getClient: sb, // RLS-scoped client, exposed for auxiliary readers
+
     getUsername, checkUsername, setUsername,
     captcha: { mount: mountCaptcha, unmount: unmountCaptcha, token: captchaToken, reset: resetCaptcha, siteKey: CAPTCHA_SITE_KEY },
     touchLastSeen, getMyFlags, submitFeedback, reportError,

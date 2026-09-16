@@ -20,6 +20,7 @@ const read = (p) => fs.readFileSync(path.join(root, p), 'utf8');
 const exists = (p) => fs.existsSync(path.join(root, p));
 
 const { JS, TOP_LEVEL } = require('./shipped.js');   // one spelling, shared with eslint.config.js
+const PAGE_FILES = ['index.html', 'admin.html', 'privacy.html', 'get/index.html'];
 const src = Object.fromEntries(JS.map((f) => [f, read(f)]));
 const html = read('index.html');
 const admin = read('admin.html');
@@ -902,6 +903,42 @@ const contract = (name, problems) => {
     });
   }
   contract(`no page slices a calendar day off a timestamp (${scanned} lines over ${PAGES.length} pages)`, problems);
+}
+
+// ---------------------------------------------------------------- 38. every dictionary key is reachable — contract 5 inverted
+// Contract 5 proves every t() call has a key. This proves every key has a
+// caller, and nothing did: fifteen keys had outlived their screens, one of them
+// («no_cardio») for so long that a survey missed it because a LONGER live key
+// (`ledger_no_cardio`) contained its name.
+//
+// THREE TRAPS, each one measured while this was written:
+//   · a SUBSTRING test is green by construction — `no_cardio` passes it on the
+//     strength of `ledger_no_cardio`. A reference is a WHOLE QUOTED LITERAL.
+//   · the quote style is not uniform: `cx_tools` was the one double-quoted
+//     entry in the file, and a single-quote pattern silently left it behind.
+//   · the dynamic families are not all spelled t('x' + y) — js/foodai.js uses
+//     tr('ai_nut_' + k), and a scanner that matches only `t(` reports two live
+//     keys as dead and fails CLOSED on a good commit.
+//
+// UNREFERENCED is deliberately allowed when it is a DECISION: add the key to
+// KEPT below with the reason, the way fp/modals.js names its SKIPs. An empty
+// KEPT is the healthy state and is where this ships.
+{
+  const problems = [];
+  const KEPT = {
+    // key: why it stays although nothing references it
+  };
+  const dict = src['js/i18n.js'];
+  // every `name:` that opens a quoted value, wherever it sits on the line
+  const keys = new Set([...dict.matchAll(/(?:^|[{,]\s*)\s*([a-z][a-z0-9_]*)\s*:\s*['"`]/gm)].map((m) => m[1]));
+  const corpus = [...JS.filter((f) => f !== 'js/i18n.js').map((f) => src[f]), ...PAGE_FILES.map((p) => read(p))].join('\n');
+  // the prefix families, rediscovered from the corpus rather than hard-coded
+  const fams = [...new Set([...corpus.matchAll(/\b(?:t|tr|F)\(\s*'([A-Za-z0-9_]*)'\s*\+/g)].map((m) => m[1]).filter(Boolean))];  for (const k of keys) {
+    if (fams.some((p) => k.startsWith(p))) continue;
+    if (new RegExp('([\'"`])' + k + '\\1|data-t="' + k + '"').test(corpus)) continue;
+    if (k in KEPT) continue;    problems.push(`js/i18n.js defines \`${k}\` and nothing references it — delete it from BOTH dictionaries, or add it to this contract's KEPT map with the reason`);
+  }
+  contract(`every dictionary key is reachable (${keys.size} keys, ${fams.length} prefix families, ${Object.keys(KEPT).length} kept by decision)`, problems);
 }
 
 console.log(failures.length ? `\ncheck-contracts: ${failures.length} broken contract(s)` : '\ncheck-contracts: all contracts hold');

@@ -79,7 +79,7 @@ a faster TTFB — not fewer bytes.
 npm run release          # bump every marker + verify, then commit all files together
 ```
 
-**Current version: v357.** APK: build 22 / v3.1.
+**Current version: v358.** APK: build 22 / v3.1.
 
 `scripts/release.js` rewrites **every** marker and then re-reads them from disk to confirm; it exits non-zero if any disagree, and prints the count per file (derived, never hard-coded — the docs used to say 16 while the real count was 15). The markers are `?v=N` in `index.html` (every script and stylesheet, the `js/vendor/supabase.js` preload, both `icons/icon.svg` links, `manifest.json`), the `__cleaned_vN` sessionStorage key, the `FALLBACK` literal in `app.js`, `version.json` → `web`, the `?v=` in `manifest.json`, `admin.html`, `privacy.html` and `get/index.html`, and the `Current version` line in this file. `scripts/check-contracts.js` (pre-commit) refuses a commit where any of them disagree.
 
@@ -558,7 +558,7 @@ npm run verify && npm run release && git add <the files> && git commit && git pu
 This authorization is about the QUESTION, not about the standards. Everything that made the
 question worth asking still applies, and none of it is waived:
 
-- **Verified first.** `npm run verify` (37 contracts + lint + 11 suites) must pass, and any change to
+- **Verified first.** `npm run verify` (38 contracts + lint + 11 suites) must pass, and any change to
   shipped code must be measured in the running app. Pushing unverified work is not "shipping
   without asking", it is shipping something unknown — GitHub Pages serves the branch directly
   with no gate, so a bad push reaches every device at the next app open.
@@ -2611,6 +2611,77 @@ light + no door → `#faf5f0`; dark → `#000000` throughout.
   images are square (2732×2732), so short and long edge are the same number.
 - **"The 2500ms cap opens onto an empty shell"** and **"the app behind the door is
   not aria-hidden"** — both already answered in v343's note.
+
+## v358 — the dead-code phase, and the inverse of contract 5
+
+The "clean" half of clean-then-split. **176 lines removed and 0 pixels moved** —
+both fingerprint lanes, before and after: views 40/40 identical, sheets 106/106,
+zero differences each.
+
+### What was actually dead
+
+| | |
+|---|---|
+| `VltMotion.count`, `.bar`, `.pulse`, `.numFlip` | exported by `js/motion.js` and called by **nothing** — zero `VltMotion.x` across the ten scripts and four pages |
+| `styles.css` §2, §5, §6 + four `@keyframes` | the CSS only those four could apply. `.vlt-bar-fill` was never written by ANY file, so it was unreachable even from `bar()` |
+| 15 i18n keys × 2 dictionaries | mostly the leftovers of the meal-bundle sheet whose CSS v337 already removed |
+| 5 `DB.*` members, `window.CARDIO_TYPES`, `Cloud.getClient` | no call site anywhere in the shipped client |
+| `.btn-accent`, `.vs-noscript`, 4 unread custom properties, 4 dead `admin.html` rules | — |
+
+### ⚠️ THREE WAYS A DEAD-CODE SCAN LIES, ALL THREE MEASURED HERE
+
+1. **A substring test is green by construction.** `no_cardio` survived an earlier
+   survey because `ledger_no_cardio` contains its name. A reference is a WHOLE
+   QUOTED LITERAL or it is not a reference.
+2. **The quote style is not uniform.** My first deletion pass removed 28 of 30
+   entries and stopped, because `cx_tools` is the one **double-quoted** entry in
+   `js/i18n.js` and the pattern only knew `'`.
+3. **The key regex only saw the first key on a line.** `^\s{4}(\w+):` found 883
+   names where contract 5 counts 1,079 entries — this dictionary puts two on a
+   line in places. The gap was the tell; without it `cardio_sched_empty` would
+   have been missed the way `no_cardio` was.
+
+> Each of those is the same shape from a different angle: **a detector whose
+> "found a reference" test can be satisfied by something that is not one.** They
+> are recorded because the next scan will meet them again.
+
+### Contract 38 — contract 5, inverted
+
+Contract 5 proves every `t()` call has a key. **Nothing proved every key has a
+caller**, which is why fifteen outlived their screens. Contract 38 does, and it
+was built against all three traps: a whole quoted literal in either quote style,
+`data-t="…"` on the pages, and the prefix families rediscovered from the corpus
+(`t|tr|F('x' + y)` — `js/foodai.js` uses `tr(`, and a `t(`-only scanner reports
+two live keys as dead and blocks a good commit).
+
+Six planted cases: a dead key **fires**; reached by `t()`, double-quoted,
+reached by a `tr()` family, and reached only from a page by `data-t` all stay
+**silent**; and a key rescued only by a longer key containing it **fires**.
+Unreferenced is still allowed when it is a decision — the `KEPT` map takes the
+key and the reason, the way `fp/modals.js` names its SKIPs. It ships empty.
+
+### What was NOT removed, and why
+
+- **`DB.cardioTypes.remove` and `DB.foods.remove`** are unreached and stay: each
+  is the only delete path for a row the USER created. Removing the only way to
+  undo a creation is not dead-code removal.
+- **`--green-2`, `--green-ink`, `--chip-h`, `--chip-pad-x`, `--chip-fs`** are
+  unread and stay: an empty rung in a designed scale is not the same thing as
+  dead weight, and which one they are is the owner's call, not a measurement.
+  (`--chip-radius` IS read, at `styles.css:1310`, through the **fallback** form
+  `var(--chip-radius, 999px)` — which is why no inverse contract was added for
+  custom properties: a regex that requires `var(--x)` would declare it dead.)
+
+### ⚠️ AND ONE THING THE SCAN COULD NOT HAVE SEEN
+
+`DB.mealBundles.add` is dead in the app — and `scripts/test-convenience.js`
+called it. The scan was scoped to the shipped client, which is the right scope
+for "does the app use it" and the wrong one for "will this break the build". **It
+was the suite run that caught it**, which is the system working as designed.
+
+The fix was not to keep the method: `add(data)` was a thin wrapper around
+`update(null, data)`, which is what the app calls — so a suite using `add` was
+testing a path that could not regress for a user. The suite uses the live one now.
 
 ## v357 — the day a write lands on, and the tidy-up the review asked for
 

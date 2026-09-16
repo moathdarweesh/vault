@@ -1141,7 +1141,6 @@ const DB = {
     setTheme(theme) { STATE.prefs.theme = canonicalTheme(theme); save(); mirrorUi(); },
     mirrorUi(extra) { mirrorUi(extra); },
     setUnit(unit) { STATE.prefs.unit = unit === 'lb' ? 'lb' : 'kg'; save(); },
-    setTranslateExercises(on) { STATE.prefs.translateExercises = !!on; save(); },
     // The three-way name mode; the boolean is kept in step for anything older.
     setExNames(mode) { const m = (mode === 'en' || mode === 'ar') ? mode : 'translit'; STATE.prefs.exNames = m; STATE.prefs.translateExercises = m !== 'en'; save(); },
     // Default rest between sets. Set from the idle rest bar's ±15; the live ±15
@@ -1535,7 +1534,6 @@ const DB = {
 
   // ----- Daily food log (date-keyed) -----
   foodLogs: {
-    dates() { return Object.keys(STATE.foodLogs).sort().reverse(); },
     addMany(date, entries, operationId = uid()) {
       const clean = cleanMealItems(entries);
       if (!validDay(date) || !clean || !entityIdSafe(operationId)) return { ok: false, code: 'VALIDATION' };
@@ -1613,10 +1611,6 @@ const DB = {
   bodyweight: {
     list() {
       return (STATE.bodyweight || []).slice().sort((a, b) => isoAsc(a.date, b.date));
-    },
-    latest() {
-      const l = this.list();
-      return l.length ? l[l.length - 1] : null;
     },
     // Upsert today's (or any date's) weight. Same date overwrites — one point/day.
     log(date, kg) {
@@ -3037,9 +3031,6 @@ const DB = {
   // Built-in types live in CARDIO_TYPES (treadmill / walking / running / cycling).
   // Users can add their own via this API; everything is merged in `allTypes()`.
   cardioTypes: {
-    list() {
-      return [...STATE.cardioTypes];
-    },
     allTypes() {
       // Built-ins first, then user-defined
       return [...CARDIO_TYPES, ...STATE.cardioTypes];
@@ -3250,7 +3241,6 @@ const DB = {
   // ----- Meal bundles ("my usual breakfast" in one tap) -----
   mealBundles: {
     list() { return copyData(STATE.mealBundles || []).sort((a,b) => Number(!!b.favorite)-Number(!!a.favorite)); },
-    add(data) { const result = this.update(null, data); return result.ok ? result.entity : null; },
     update(id, data) {
       const list = STATE.mealBundles || [], old = list.find(b => b.id === id);
       if (id && !old) return { ok: false, code: 'STALE' };
@@ -3689,7 +3679,6 @@ function formatTime12(hhmm) {
 // Expose helpers on window for app.js
 window.DB = DB;
 window.EXERCISE_CATEGORIES = EXERCISE_CATEGORIES;
-window.CARDIO_TYPES = CARDIO_TYPES;
 window.CARDIO_ICON_OPTIONS = CARDIO_ICON_OPTIONS;
 window.todayISO = todayISO;
 window.addDaysISO = addDaysISO;

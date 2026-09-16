@@ -115,83 +115,18 @@ window.VltMotion = (function () {
      requestAnimationFrame, never setInterval: a timer drifts and keeps firing
      in a background tab, and this number is on screen for under a second.
 
-     easeInOutQuart matches --ease-inout, so a counter and the bar beside it
-     arrive together instead of one overtaking the other. */
-  function count(node, from, to, opts) {
-    opts = opts || {};
-    if (!node) return;
-    const fmt = opts.fmt || ((n) => String(Math.round(n)));
-    const dur = reduced() ? 0 : (opts.dur || 900);
-    if (!dur) { node.textContent = fmt(to); return; }
+  /* ── 2, 5 and 6 of APPLY-motion.md WERE BUILT AND NEVER CALLED ───────────
+     count() (number count-up), bar() (a progress fill), pulse() (the
+     achievement ring) and numFlip() were exported here and reached by nothing
+     — measured: zero `VltMotion.count|bar|pulse|numFlip` anywhere in the ten
+     scripts or the four pages, and .vlt-bar-fill was never applied by ANY file,
+     so it was unreachable even from bar(). Their CSS went with them (styles.css
+     sections 2, 5 and 6, and four @keyframes). The section numbers that survive
+     are left as they were rather than renumbered, so this note explains the gap.
 
-    // A second call on the same node must not race the first.
-    if (node.__vltCount) cancelAnimationFrame(node.__vltCount);
-    const t0 = performance.now();
-    const tick = (t) => {
-      let p = Math.min(1, (t - t0) / dur);
-      p = p < 0.5 ? 8 * p * p * p * p : 1 - Math.pow(-2 * p + 2, 4) / 2;
-      node.textContent = fmt(from + (to - from) * p);
-      if (p < 1) node.__vltCount = requestAnimationFrame(tick);
-      else node.__vltCount = null;
-    };
-    node.__vltCount = requestAnimationFrame(tick);
-  }
-
-  /* A progress bar is scaleX only — never width, which lays out. `--p` is a
-     0..1 ratio and the CSS owns the duration and the origin (right, in RTL). */
-  function bar(node, p) {
-    if (!node) return;
-    node.style.setProperty('--p', String(Math.max(0, Math.min(1, Number(p) || 0))));
-  }
-
-  /* ── ACHIEVEMENT PULSE ────────────────────────────────────────────────────
-     The glyph pops and a ring leaves. `wrap` must be position:relative — the
-     ring is absolutely placed inside it. The ring removes itself; it is the one
-     element here that is created at runtime, so leaving it behind would
-     accumulate one node per workout saved. */
-  function pulse(wrap) {
-    if (!wrap || reduced()) return;
-    // getElementsByTagName, not querySelector('svg'): contract 15's scanner reads
-    // a BARE word inside querySelector as an id, because this app's own $()
-    // helper accepts $('modal-root') meaning #modal-root. The ambiguity is real
-    // and it is mine, not the checker's — so say TAG and mean tag.
-    const svg = wrap.getElementsByTagName('svg')[0];
-    if (svg) {
-      svg.classList.remove('zap-pop');
-      void svg.offsetWidth;                     // restart the animation
-      svg.classList.add('zap-pop');
-    }
-    const ring = document.createElement('div');
-    ring.className = 'pulse-ring';
-    wrap.appendChild(ring);
-    ring.addEventListener('animationend', () => ring.remove(), { once: true });
-    // Belt to that brace: if the animation never fires (display:none, a paused
-    // document), the ring would live forever.
-    setTimeout(() => ring.remove(), 1200);
-  }
-
-  /* ── NUMBER FLIP ──────────────────────────────────────────────────────────
-     The old digit leaves upward and the new arrives from below. ONLY for a
-     number the user just changed — never for one a background sync moved,
-     which must simply be true (rule 10). */
-  function numFlip(node, txt) {
-    if (!node) return;
-    txt = String(txt);
-    if (reduced() || node.textContent === txt) { node.textContent = txt; return; }
-    const old = node.textContent;
-    node.classList.add('numflip');
-    // textContent on both spans: this is user data and must never be parsed.
-    const a = document.createElement('span'); a.className = 'old'; a.textContent = old;
-    const b = document.createElement('span'); b.className = 'new'; b.textContent = txt;
-    node.textContent = '';
-    node.append(a, b);
-    const settle = () => {
-      node.classList.remove('numflip');
-      node.textContent = txt;
-    };
-    b.addEventListener('animationend', settle, { once: true });
-    setTimeout(settle, token('--dur-base', 400) + 260);
-  }
+     They are recoverable from git if the spec is ever finished; what is not
+     recoverable is the hour someone spends deciding whether an uncalled export
+     is load-bearing. */
 
   /* ── SHEETS ───────────────────────────────────────────────────────────────
      Drag-to-dismiss on the app's real sheet (.modal inside .modal-overlay).
@@ -326,5 +261,5 @@ window.VltMotion = (function () {
     clearTimeout(btn.__vltPulse);
     btn.__vltPulse = setTimeout(() => btn.classList.remove('vlt-pulse'), 500);
   }
-  return { stagger, cancelStagger, count, bar, pulse, numFlip, dragToDismiss, switchTab, reduced, token };
+  return { stagger, cancelStagger, dragToDismiss, switchTab, reduced, token };
 })();

@@ -8,7 +8,10 @@ const run = code => vm.runInContext(code,c);
 const json = value => JSON.stringify(value);
 const date = '2026-09-10';
 const food = {name:'شوفان',servings:2,calories:100,protein:5,carbs:12,fat:3};
-const meal = db.mealBundles.add({name:'فُطوري',items:[food,{...food,name:'حليب',servings:1}]});
+// update(null, …), which is what the APP calls — mealBundles.add() was a thin
+// wrapper around exactly this and no shipped code ever reached it, so a suite
+// that used it was testing a path that could not regress for a user.
+const meal = db.mealBundles.update(null,{name:'فُطوري',items:[food,{...food,name:'حليب',servings:1}]}).entity;
 assert.ok(meal.id);
 db.undo.clear();
 let calls = 0; c.Cloud.onLocalChange = () => {calls++;};

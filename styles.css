@@ -78,7 +78,6 @@
      bg / surface-1 / -2 / -3, and 5.49:1 on an --accent-soft tile. */
   --accent:      #ff6a00;
   --accent-2:    #e05c00;
-  --accent-3:    #b84a00;
   --accent-soft: rgba(255, 106, 0, 0.13);
   --accent-line: rgba(255, 106, 0, 0.30);
   --accent-ink:  #1a0800;
@@ -173,7 +172,7 @@
   --fs-hero:    40px;
   --fs-display: 32px;
   --fs-title:   24px;
-  --fs-h2:      19px;
+
   --fs-body:    15px;
   --fs-sub:     13px;
   --fs-caption: 11px;
@@ -182,7 +181,7 @@
      them — which is most of why --fs-* adoption sat at 9%. --fs-page is the 26px
      .page-title introduced in v200. All three are declared at the values already
      in use, so this is a naming fix with zero visual change. */
-  --fs-page:    26px;
+
   --fs-label:   14px;
   --fs-meta:    12px;
   --fw-display: 700;   /* WEIGHT CAP (v293): the loaded faces top out at 700 (IBM Plex Sans Arabic, JetBrains Mono); every 800/900 was synthetic bold — the browser smearing 700 — so 700 is what those elements were really wearing, drawn properly. Archivo (brand lockup only) is the one 800. */
@@ -198,7 +197,7 @@
   --sp-4: 16px;
   --sp-5: 20px;
   --sp-6: 24px;
-  --sp-8: 32px;
+
 
   /* Unified card (surface-dependent aliases live on body — see below) */
   --card-radius: var(--radius);
@@ -325,7 +324,6 @@ body.theme-light {
      hue: 4.91:1 on --surface-3, 4.85:1 on accent-soft. */
   --accent-text: #a34400;
   --accent-2:    #e05c00;
-  --accent-3:    #b84a00;
   --accent-soft: rgba(255, 106, 0, 0.12);
   --accent-line: rgba(255, 106, 0, 0.30);
   --accent-ink:  #1a0800;
@@ -915,14 +913,13 @@ body.theme-light .home-center-icon { box-shadow: 0 8px 24px rgba(255, 106, 0, 0.
    .btn-accent (the accent one) was used exactly zero times in the app — so the
    identity never appeared on the 46 buttons that matter most, and green was
    doing double duty as both "primary" and "success". Green now means success
-   and confirmation only. .btn-accent is kept as an alias so nothing breaks. */
-.btn-primary,
-.btn-accent {
+   and confirmation only. The .btn-accent alias is gone with this note: an alias
+   with no referent cannot break anything by leaving. */
+.btn-primary {
   background: var(--accent);
   color: var(--accent-ink);
 }
-.btn-primary:active,
-.btn-accent:active { background: var(--accent-2); transform: scale(var(--press-scale-strong)); }
+.btn-primary:active { background: var(--accent-2); transform: scale(var(--press-scale-strong)); }
 
 .btn-ghost {
   background: var(--surface-2);
@@ -8168,18 +8165,10 @@ body.ember-on .ember {
   transform: none;
 }
 
-/* ── 2. PROGRESS BARS ──────────────────────────────────────────────────────
-   scaleX, never width — width lays out and this sits inside scrolling lists.
-   transform-origin is LOGICAL so the bar grows from the reading edge in both
-   directions; the spec hard-codes `right` for RTL, which would fill backwards
-   in English. */
-.vlt-bar-fill {
-  transform: scaleX(var(--p, 0));
-  transform-origin: left center;
-  transition: transform 900ms var(--ease-inout);
-  will-change: transform;
-}
-body[dir="rtl"] .vlt-bar-fill { transform-origin: right center; }
+/* Sections 2, 5 and 6 of APPLY-motion.md were removed together with the four
+   VltMotion helpers that were their only writers (see the note in
+   js/motion.js). The surviving numbers are unchanged so the spec still reads
+   against them. */
 
 /* ── 3. TOGGLES ────────────────────────────────────────────────────────────
    The app has FOUR toggle shapes and only .ntfs-switch has a sliding knob;
@@ -8230,34 +8219,6 @@ body[dir="rtl"] .vlt-bar-fill { transform-origin: right center; }
   animation: none;
   transition: transform var(--dur-fast) var(--ease-back);
 }
-
-/* ── 5. ACHIEVEMENT PULSE ──────────────────────────────────────────────────
-   The elastic curve is the ONE literal in this block, and deliberately: it is
-   an overshoot past 1.6 that no --ease-* token expresses, and inventing a
-   token used in one place would be worse than naming it here. */
-.zap-pop { animation: vlt-zap 750ms cubic-bezier(.22, 1.6, .36, 1) both; }
-@keyframes vlt-zap { from { transform: scale(.4); opacity: 0; } to { transform: none; opacity: 1; } }
-
-.pulse-ring {
-  position: absolute;
-  inset: 0;
-  border-radius: var(--radius-btn-m);   /* NOT 50% — device 4 of the identity layer forbids circles */
-  border: 2px solid var(--accent);
-  opacity: .7;
-  pointer-events: none;
-  animation: vlt-ring var(--dur-open) var(--ease-out) both;
-}
-@keyframes vlt-ring { to { transform: scale(1.6); opacity: 0; } }
-
-/* ── 6. NUMBER FLIP ────────────────────────────────────────────────────────
-   Only for a number the USER just changed. A figure moved by a background
-   sync must simply be true (rule 10) — animating it would claim the user did
-   something they did not. */
-.numflip { position: relative; overflow: hidden; display: inline-block; }
-.numflip .old { display: inline-block; animation: vlt-num-out var(--dur-base) var(--ease-inout) both; }
-.numflip .new { position: absolute; inset: 0; animation: vlt-num-in var(--dur-base) var(--ease-inout) both; }
-@keyframes vlt-num-out { to   { transform: translateY(-100%); opacity: 0; } }
-@keyframes vlt-num-in  { from { transform: translateY(100%);  opacity: 0; } }
 
 /* ── 7. TAB SWITCHING — APPLY-motion.md §3, owner-chosen variant (2) ───────
 
@@ -8374,8 +8335,6 @@ body[dir="rtl"] .vlt-bar-fill { transform-origin: right center; }
   --vs-name: 410ms;
   --vs-fade: 484ms;
 }
-/* Without scripting nothing would ever take the door down. */
-.vs-noscript { display: none; }
 
 /* Two leaves, each carrying its own copy of the mark, cut at the seam.
    Half a pixel of OVERLAP on the top leaf: flush 50/50 is exact only when the
