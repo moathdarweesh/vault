@@ -26,6 +26,15 @@ const MIME = {
   '.webmanifest': 'application/manifest+json',
 };
 
+/* ⚠️ RETURN SHAPES MUST MATCH js/cloud.js, NOT JUST NAMES. getUsername used to
+   return the STRING 'fpuser' where the real one returns { username, offline } —
+   so ensureUsername() read info.username as undefined and mounted the username
+   gate (class auth-gate, z-index 1000) over every 'in' capture. Nothing noticed
+   for two weeks because the net reads computed styles and never hit-tests; the
+   first elementFromPoint (scripts/ux-audit.js) answered 'auth-gate' for every
+   button on the page. A stub is a promise about a surface the harness cannot
+   load — keep the shape, not only the name.
+
 /* The three states the app can boot into. `configured:false` is the one the
    existing suite uses — the auth gate never mounts. The other two exist because
    a screen nobody renders is a screen nobody protects. */
@@ -52,7 +61,7 @@ const STUBS = {
     window.Cloud={getLastUid:()=>'fp-user',configured:()=>true,ensureSdk:async()=>true,syncState:()=>({...qaCloud}),
       onLocalChange:()=>{},resume:async()=>'synced',flush:async()=>'ok',push:async()=>'ok',
       getSession:async()=>({user:{id:'fp-user',email:'fp@example.invalid'}}),
-      getUsername:async()=>'fpuser',checkUsername:async()=>true,setUsername:async()=>({ok:true}),
+      getUsername:async()=>({username:'fpuser',offline:false}),checkUsername:async()=>({available:true,offline:false}),setUsername:async()=>({ok:true}),
       getMyFlags:async()=>({role:'user',status:'active'}),touchLastSeen:async()=>{},
       pullCatalog:async()=>({exercises:null,cardio:null,foods:null,presets:null,config:null}),
       listPlanHistory:async()=>[],

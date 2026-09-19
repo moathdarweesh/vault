@@ -183,7 +183,7 @@ function pageCapture(opts) {
 // ── capture ──────────────────────────────────────────────────────────────────
 // ── the shared pieces ────────────────────────────────────────────────────────
 // One browser context = one (lang, theme, width). Views and sheets share it.
-async function openContext(browser, origin, { lang, theme, width }) {
+async function openContext(browser, origin, { lang, theme, width, fenceFn = fence }) {
   const ctx = await browser.newContext({
     viewport: { width, height: 812 },
     // ⚠️ REDUCED MOTION IS THE DETERMINISM GUARANTEE, not a shortcut. Under it
@@ -198,7 +198,9 @@ async function openContext(browser, origin, { lang, theme, width }) {
   });
   const page = await ctx.newPage();
   await page.clock.install({ time: FROZEN });
-  const guard = await fence(page);
+  // fenceFn: the net's own fence by default; scripts/ux-audit.js passes one that
+  // admits the two read-only font hosts, because it measures whether text FITS.
+  const guard = await fenceFn(page);
 
   const errors = [];
   page.on('pageerror', (e) => errors.push(String(e.message)));
@@ -715,7 +717,7 @@ function diffOne(a, b, lane) {
 // Guarded so the file can be REQUIRED for its record-path helpers without
 // running a capture. scripts/test-fingerprint.js needs to know where a record
 // lands, and a second spelling of that filename is exactly what broke it.
-module.exports = { OUT, recordFile, lanesOf };
+module.exports = { OUT, recordFile, lanesOf, openContext, settle, timedRender, withBrowser, FROZEN, TZ, MATRIX };
 
 if (require.main === module) (async () => {
   try {

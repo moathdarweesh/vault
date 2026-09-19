@@ -2615,6 +2615,70 @@ light + no door → `#faf5f0`; dark → `#000000` throughout.
 - **"The 2500ms cap opens onto an empty shell"** and **"the app behind the door is
   not aria-hidden"** — both already answered in v343's note.
 
+## Measuring the design (2026-09-20) — `scripts/ux-audit.js` and `scripts/ux-flows.js`
+
+«ابدأ بجولة القياس للعشرين شاشة». No test in this project looks at design, and
+every defect the design passes fixed was found by measuring the rendered DOM by
+hand. These two tools are that measurement, kept — the same decision the
+fingerprint net was.
+
+```bash
+node scripts/ux-audit.js --tag pass1              # 20 views × ar/dark/375 + en/light/412, seeded, screenshots
+node scripts/ux-flows.js                          # taps from Home to the four daily writes, real clicks, DB-proved
+```
+
+Both are TOOLS (not `test-*.js`), write to `.uxaudit/` (gitignored), and reuse the
+net's harness — `openContext`, `settle`, `timedRender`, `withBrowser` are exported
+from `fingerprint-net.js` now rather than copied, and `openContext` takes a
+`fenceFn` so the audit can admit the two read-only font hosts (text-fit is wrong
+in `system-ui`). Everything else is still aborted and asserted.
+
+**What the audit records that the net deliberately does not:** every rect; the
+**effective hit box** of every control by real hit-testing outward from its centre
+(a `::after` halo counts, a neighbour stealing an edge counts against, 53 means
+"≥53"); contrast against the COMPOSITED background; clipped content; the fold
+line; overlapping controls; circles; the heading ladder and the type sizes in
+use; a fold and a full-height screenshot per cell. The views are rendered WITH
+data (the fixture plus three weeks of history), which the matrix never does.
+
+### ⚠️ THE HARNESS STUB HAD A GATE OVER EVERY SIGNED-IN CAPTURE FOR TWO WEEKS
+
+The first hit-test answered `<div .auth-gate>` for every button on the page.
+`fp/server.js`'s `'in'` stub returned `getUsername: 'fpuser'` — a STRING — where
+the real `Cloud.getUsername()` returns `{ username, offline }`, so
+`ensureUsername()` read `info.username` as undefined and mounted the username
+gate (z-index 1000, inset 0) over the app. **The net never noticed because it
+reads computed styles and never hit-tests**; the sheets lane is captured at
+`#modal-root`, which sits above it. Fixed at the stub, and `diff` says the
+sheets lane is 106/106 identical before and after. A stub is a promise about a
+surface the harness cannot load — keep the SHAPE, not only the name (the same
+lesson as `test-widget-snapshot.js`, one release apart).
+
+### Nine ways the first run lied, each closed before a reader saw a number
+
+| the tool said | the truth | the fix |
+|---|---|---|
+| 36 spills on the exercise browser | items inside a horizontal rail, and SVG children | `inRail`, and SVG children excluded from spill/clip |
+| 39 sub-44 controls on Food, 19 overlaps | `cursor: pointer` inherited into the calorie ring's digits | a control IS one (`button`/`a`/role/tabindex/onclick); a cursor is not evidence |
+| `text<11px` on five screens | `.sr-only` (1×1) | visible means > 1px |
+| every button `hits44: 0` | the username gate above | the stub fix, plus a **self-check**: the element at the root's centre must be inside the root, or the cell is reported COVERED by name |
+| seven screens COVERED by `.ntf-title` | the reminder bar, real, on a 5 s timer the frozen clock never fires | record it once as `notifBar`, then `clock.runFor(5600)` so the APP dismisses it |
+| 32 sub-44 cells on the calendar, a 44×44 cell scoring 0 | corners at ±21 on a 42px halo (`inset:-4px` is from the padding box; a 1px border eats 2px) and `.empty` cells that are `pointer-events:none` | measure the effective extent per direction; `unhittable` is its own flag |
+| 16 `unhittable` on Notifications | `elementFromPoint` returns null OUTSIDE the viewport | scroll the control into view, read its live rect, scan, restore |
+| 6 more `unhittable` | controls under the NAV (y 748–812) are on screen and occluded; rail items off-screen sideways | "in view" means above the nav line, both axes |
+| 146 contrast failures on the light exercise browser | white text over a photo painted by a positioned SIBLING the ancestor walk cannot see | any painted surface containing the text that is not its ancestor → `overImage`, contrast unknown, never a number |
+
+The flows probe had one of its own: it read a sheet's button **mid-entrance**
+(y=1095 = its resting 678 plus one sheet-height) and logged "under the nav" about
+a control that was still arriving. `settle()` before every box read now.
+
+**Measured (ar/dark/375, seeded):** water +250 is **2 taps**; the morning weight
+**3 taps + one field**; a set **2 taps + two fields** — and the day card commits
+the rows pre-filled from last time as performed sets ("confirmed without a
+throwaway edit" is the recorded intent; whether an untouched row should count
+is the owner's call); a saved food **4 taps**. The day card's Save measures
+**69×40** — under the 44 floor.
+
 ## v366 — APK build 23: the widget reaches the phone, and a leak found on the way
 
 v365 shipped the web half and said the APK was owed whether or not a widget ever
