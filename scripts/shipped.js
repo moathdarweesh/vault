@@ -1,4 +1,4 @@
-// THE TWELVE SHIPPED SCRIPTS, IN DEPENDENCY ORDER — spelled once.
+// THE THIRTEEN SHIPPED SCRIPTS, IN DEPENDENCY ORDER — spelled once.
 //
 // They are classic <script defer> files sharing one global lexical scope, so
 // the ORDER is the dependency graph and contract 1 proves it against
@@ -12,7 +12,7 @@
 
 const JS = [
   'js/i18n.js', 'js/catalog.js', 'js/cloud.js', 'js/storage.js', 'js/motion.js',
-  'js/ui.js', 'js/food.js', 'js/app.js', 'js/health.js', 'js/notify.js',
+  'js/ui.js', 'js/body.js', 'js/food.js', 'js/app.js', 'js/health.js', 'js/notify.js',
   'js/foodai.js', 'js/update.js',
 ];
 
@@ -23,7 +23,7 @@ const JS = [
 // here silently joins the view layer and gets rules written for views applied
 // to it, with nothing to say so. A positive list fails the other way, which is
 // the way that is loud: contract 39 refuses a name in VIEWS that is not in JS.
-const VIEWS = ['js/ui.js', 'js/food.js', 'js/app.js'];
+const VIEWS = ['js/ui.js', 'js/body.js', 'js/food.js', 'js/app.js'];
 
 // The scripts that load BEFORE the four late modules. Contract 26 asks whether
 // any of them reaches a module that has not run yet, so the set is derived from

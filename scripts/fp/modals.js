@@ -1,6 +1,6 @@
 // The sheets and dialogs — every top-level `open*` in the view scripts
-// (js/ui.js, js/food.js, js/app.js) plus the five dialogs, and the arguments
-// each one needs to open over the seeded fixture.
+// (js/ui.js, js/body.js, js/food.js, js/app.js) plus the five dialogs, and the
+// arguments each one needs to open over the seeded fixture.
 //
 // ⚠️ A SHEET THAT IS NOT IN THIS LIST IS OUTSIDE THE NET. The matrix (stage 2)
 // navigates VIEWS; most of what the food domain does lives in sheets, and a

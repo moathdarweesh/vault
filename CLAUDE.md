@@ -8,10 +8,11 @@ A fitness / workout-tracking **PWA**. Vanilla JS, **no build step**, bilingual *
 
 ## Stack & key files
 - `index.html` — markup, script wiring, and the cache-version markers.
-- `js/i18n.js` — the two EN/AR dictionaries and nothing else. **Loads FIRST of the twelve scripts**: `const I18N` is shared through the global lexical scope, which only works if it has already executed when app.js's `t()` runs.
+- `js/i18n.js` — the two EN/AR dictionaries and nothing else. **Loads FIRST of the thirteen scripts**: `const I18N` is shared through the global lexical scope, which only works if it has already executed when app.js's `t()` runs.
 - `js/catalog.js` — the app's static data and nothing else: `ICONS` (+ its two back-compat aliases), `WORKOUT_TEMPLATES`, `EXERCISE_MUSCLES`, both exercise-name maps and `FOOD_PRESETS`. Loads second, before app.js, for the same lexical-scope reason. **Contracts 13, 22 and 23 read THIS file now, not app.js.**
-- `js/app.js` (**~502KB**) — the shell, the router `navigate(view, ctx, opts)`, and every domain except food. Use `Grep` to find a function; don't assume from names.
+- `js/app.js` (**~464KB**) — the shell, the router `navigate(view, ctx, opts)`, and the domains that have not left yet (workout, planner, notifications, supplements, settings, auth). Use `Grep` to find a function; don't assume from names.
 - `js/ui.js` (**~31KB**, v360) — the presentation vocabulary: format (numbers, weights, days, names), `escapeHtml`, `$`/`$$`, the shared surfaces (`showToast`, `openModal`, `closeModal`, `confirmDialog`, `openImageLightbox`, `emptyState`), `t()`/`icon()`, and `applyTheme`/`applyLang`. **The floor of the call graph** — contract 39 refuses any member that reaches past `DB.prefs`, or reaches Cloud, a module or the router. Loads after motion.js and before food.js.
+- `js/body.js` (**~39KB**, v362) — the body domain: sleep, body weight and cardio. Three day-entry screens sharing one `dayLedgerHtml` renderer, which is why they are one file. One inbound edge from `renderProgram` (scheduled cardio, v315) and none outward.
 - `js/food.js` (**~130KB**, v359) — the food domain: the Food and food-log views, the calculator, the recipe ledger, the saved-food picker, the meal bundles, the shopping list, the barcode scanner and the voice/photo capture. **Loads BEFORE app.js** — `bootCatalog()` calls into it inside a bare catch, so loading it later would swallow a ReferenceError and silently never merge the server food catalog.
 - `js/storage.js` — the `DB.*` localStorage API (all persistence). `MACHINE_SEED`, name-match migrations.
 - `js/cloud.js` — Supabase email/password auth + whole-blob sync to a per-user `vault_data` row (RLS-protected). Uses the **publishable** key only (never service-role). Loads before app.js. Also: `getUsername/checkUsername/setUsername` (the mandatory-handle feature) and `getClient` (RLS-scoped client for auxiliary readers).
@@ -81,7 +82,7 @@ a faster TTFB — not fewer bytes.
 npm run release          # bump every marker + verify, then commit all files together
 ```
 
-**Current version: v361.** APK: build 22 / v3.1.
+**Current version: v362.** APK: build 22 / v3.1.
 
 `scripts/release.js` rewrites **every** marker and then re-reads them from disk to confirm; it exits non-zero if any disagree, and prints the count per file (derived, never hard-coded — the docs used to say 16 while the real count was 15). The markers are `?v=N` in `index.html` (every script and stylesheet, the `js/vendor/supabase.js` preload, both `icons/icon.svg` links, `manifest.json`), the `__cleaned_vN` sessionStorage key, the `FALLBACK` literal in `app.js`, `version.json` → `web`, the `?v=` in `manifest.json`, `admin.html`, `privacy.html` and `get/index.html`, and the `Current version` line in this file. `scripts/check-contracts.js` (pre-commit) refuses a commit where any of them disagree.
 
@@ -2613,6 +2614,120 @@ light + no door → `#faf5f0`; dark → `#000000` throughout.
   images are square (2732×2732), so short and long edge are the same number.
 - **"The 2500ms cap opens onto an empty shell"** and **"the app behind the door is
   not aria-hidden"** — both already answered in v343's note.
+
+## v362 — js/body.js, and a boundary that turns a shared helper into a private one
+
+The third file out of `js/app.js`: **sleep, body weight and cardio**. app.js
+**10,004 → 9,183 lines (502 → 464 KB)**. Views **40/40 identical**, sheets
+**106/106**, zero differences each.
+
+### Why the three go together, and it is not "they felt related"
+
+`dayLedgerHtml` — the one-row-per-day renderer — has **exactly two callers**,
+`renderSleep` and `renderCardio`. Split sleep from cardio and it has to stay
+behind in app.js as a shared helper forever; kept together it is **internal to
+this file**. That is the deciding measurement:
+
+> **A boundary is better when it turns a shared helper into a private one, and
+> worse when it does the reverse.** Sleep+weight alone was 389 lines and left
+> `dayLedgerHtml` in app.js. Sleep+weight+cardio is 799 lines and takes it.
+
+All three are also the same SHAPE — a day entry, one row per calendar day —
+against a workout, which is a structured session of sets.
+
+### ⚠️ ONE LATERAL EDGE IN, AND IT IS THE FEATURE, NOT DEBT
+
+`renderProgram` calls `resolveCardioType()` and `openCardioScheduleModal()`. The
+Program screen is **where cardio is scheduled** (v315), and `resolveCardioType`
+was lifted to module scope in that release precisely because Program and Home
+both render a cardio row. Inventing an indirection to hide that edge would buy
+nothing. Outward the file reaches only shell, router and shared primitives —
+zero lateral edges out.
+
+### Compare did NOT come, and the criterion is v359's own
+
+It was the obvious thing to bundle in. Measured instead, by DB namespaces — the
+test that kept `renderHome` with the router:
+
+| | namespaces |
+|---|---|
+| `renderHome` / `renderDay` | **10 / 11** — genuinely cross-domain |
+| `renderCompare` | **0** — a dispatcher |
+| its three panels | 2 / 1 / 1 — one domain each |
+
+So Compare is not a composition like Home; it is three single-domain panels
+behind a mode toggle. But `renderCompareWorkouts` reads `exercises`+`sessions` —
+the WORKOUT domain — so filing the view under "body" would put a workout panel
+in it, and **splitting one view across three files would be worse than leaving
+it whole**. It stays with the router. `MODE_LIST`/`modeToggleHtml` stayed too:
+that is the THEME toggle, settings chrome, and it sits beside the save centre.
+
+### ⚠️ MY OWN SPLICE CUT THREE LINES OF LIVE CODE, AND THE ASSERTIONS DID NOT SEE IT
+
+The extraction removes three runs and two orphaned banners. The runs went
+bottom-up correctly; the orphans went in a **second pass whose `.reverse()` left
+them ASCENDING**, so removing the earlier one shifted the later one and it cut
+three lines of real code instead of the banner it named.
+
+> **Every assertion I had written passed.** They ran against the ORIGINAL line
+> numbers, before any splicing — which is exactly the window an index-shift bug
+> lives in. It surfaced only because a `grep` afterwards found the banner still
+> there. **Assert at the point of the cut, or do not assert:** the removal list
+> is one list now, sorted strictly descending, checked for overlap, and every
+> splice reads back what it is about to take before taking it.
+
+### Three comment banners describing code that is not there
+
+Found by scanning every view script for a banner block followed only by another
+banner. **Two were left by v359** — `// Calorie / macro calculator` and
+`// FOOD LOG VIEW`, whose functions moved to js/food.js — and the third
+**predates v358**: the saved-food picker's banner has been sitting 560 lines
+above its own function, immediately over the recipe calculator's banner (checked
+against `018563f`, so the split did not cause it — it made it visible). All
+three healed; the picker's is back over `openSavedFoodPicker`.
+
+### The v360 structure work paid for itself immediately
+
+**39 contracts and lint passed on the first run.** Contracts 26 and 36 and the
+ESLint `DB.*` law all read `VIEWS` from `scripts/shipped.js` now, so wiring a
+third view script was two list entries and a script tag — against v359, where
+four hand-written file lists had to be found and corrected one at a time.
+
+### Proved, and the one that failed was my test
+
+**9 defects planted in js/body.js, 9 caught**: contract 36 (a sheet outside the
+net), 34 (the same name in two scripts), 26 (an unguarded module call), 1 (the
+file dropped from the list), 39 (VIEWS naming an unshipped file), and four
+ESLint rules — `no-undef`, the `DB.*` law, the UTC-day rule and the active-view
+rule. One case first read MISSED, and the mutation was wrong, not the contract:
+it inserted a decoy list without removing anything, so contract 39 was correctly
+silent. Rewritten to actually name an unshipped file, it fires by name.
+
+### The cost is now below what this harness can resolve
+
+Alternated before/after/before/after, as v360's lesson requires:
+
+| | BEFORE (12) | AFTER (13) | BEFORE (12) | AFTER (13) |
+|---|---|---|---|---|
+| local | 47.1 ms | 46.6 ms | 48.5 ms | 45.7 ms |
+| 200 ms RTT | 862.2 ms | 863.9 ms | 875.2 ms | 875.1 ms |
+
+**Two of the four deltas are negative, and two identical BEFORE runs differ by
+1.4 ms.** So the thirteenth script costs something on the order of v360's
+measured +1.3 ms and this harness cannot resolve it at n=8 — which is the
+honest statement, not "it got faster". Do not read a negative delta here as a
+speed-up.
+
+### Next
+
+What is left in app.js is the shell plus three domains. **Notifications** is the
+largest single block (836 lines, one run, no top-level statements) and carries
+the last lateral debt worth inverting: four sites — `openSessionModal`,
+`renderSessionDay`, `renderSessionRun`, `openSupplementModal` — call
+`armNotifications()` directly. That is one concern, a domain arming the reminder
+system, and it inverts into a `vault:*` event for free, with contract 7 already
+enforcing that every such event is both dispatched and listened for. **Planner**
+(815 lines) and **supplements** (430) follow, and workout last.
 
 ## v360 — the floor: js/ui.js, and the measurement that reversed its own headline
 

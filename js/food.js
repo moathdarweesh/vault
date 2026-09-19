@@ -750,11 +750,6 @@ function openManualFoodEntry(date, onSave) {
 }
 
 // ===========================================================================
-// Saved-food picker — the old "reference library" as an add-method. Search
-// your saved foods + presets, tap to log to today. Long-press-free: tap = add.
-// ===========================================================================
-
-// ===========================================================================
 // RECIPE CALCULATOR — write the ingredients once, get the numbers.
 // ===========================================================================
 // Distinct from a meal bundle, and the difference is the whole point: a bundle
@@ -1310,6 +1305,10 @@ function openRecipeEditor(date, existing, onDone) {
   // figures the user came to read.
   if (!existing) setTimeout(function () { var el = overlay.querySelector('#rec-name'); if (el) el.focus(); }, 60);
 }
+// ===========================================================================
+// Saved-food picker — the old "reference library" as an add-method. Search
+// your saved foods + presets, tap to log to today. Long-press-free: tap = add.
+// ===========================================================================
 function openSavedFoodPicker(date, onSave, initialTab) {
   let query = '';
   let tab = (initialTab === 'recipes' || initialTab === 'bundles') ? initialTab : 'foods';
