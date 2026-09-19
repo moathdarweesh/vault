@@ -8,9 +8,10 @@ A fitness / workout-tracking **PWA**. Vanilla JS, **no build step**, bilingual *
 
 ## Stack & key files
 - `index.html` — markup, script wiring, and the cache-version markers.
-- `js/i18n.js` — the two EN/AR dictionaries (1,931 lines) and nothing else. **Loads FIRST of the ten scripts**: `const I18N` is shared through the global lexical scope, which only works if it has already executed when app.js's `t()` runs.
+- `js/i18n.js` — the two EN/AR dictionaries and nothing else. **Loads FIRST of the eleven scripts**: `const I18N` is shared through the global lexical scope, which only works if it has already executed when app.js's `t()` runs.
 - `js/catalog.js` — the app's static data and nothing else: `ICONS` (+ its two back-compat aliases), `WORKOUT_TEMPLATES`, `EXERCISE_MUSCLES`, both exercise-name maps and `FOOD_PRESETS`. Loads second, before app.js, for the same lexical-scope reason. **Contracts 13, 22 and 23 read THIS file now, not app.js.**
-- `js/app.js` (**~700KB**) — ALL views/rendering and the router `navigate(view, ctx, opts)`. Use `Grep` to find a function; don't assume from names.
+- `js/app.js` (**~531KB**) — the shell, the router `navigate(view, ctx, opts)`, the shared primitives and every domain except food. Use `Grep` to find a function; don't assume from names.
+- `js/food.js` (**~130KB**, v359) — the food domain: the Food and food-log views, the calculator, the recipe ledger, the saved-food picker, the meal bundles, the shopping list, the barcode scanner and the voice/photo capture. **Loads BEFORE app.js** — `bootCatalog()` calls into it inside a bare catch, so loading it later would swallow a ReferenceError and silently never merge the server food catalog.
 - `js/storage.js` — the `DB.*` localStorage API (all persistence). `MACHINE_SEED`, name-match migrations.
 - `js/cloud.js` — Supabase email/password auth + whole-blob sync to a per-user `vault_data` row (RLS-protected). Uses the **publishable** key only (never service-role). Loads before app.js. Also: `getUsername/checkUsername/setUsername` (the mandatory-handle feature) and `getClient` (RLS-scoped client for auxiliary readers).
 - ~~`js/tables.js`~~ — **the mirror was REMOVED in v278** (owner decision, migration `18_drop-mirror-v14.sql`): the 13 normalized projection tables are dropped, the admin panel reads `vault_data` blobs directly under a `vault_data_admin_read` (is_admin) SELECT policy, and `admin_user_stats`/`admin_activity`/`delete_own_account` were rewritten over the blobs IN THE SAME TRANSACTION as the drops — plpgsql binds table names at call time, so dropping first would have broken every account deletion. The mirror's projection was silently empty for workout_sessions (name-remap failures), which is half of why it went.
@@ -79,7 +80,7 @@ a faster TTFB — not fewer bytes.
 npm run release          # bump every marker + verify, then commit all files together
 ```
 
-**Current version: v358.** APK: build 22 / v3.1.
+**Current version: v359.** APK: build 22 / v3.1.
 
 `scripts/release.js` rewrites **every** marker and then re-reads them from disk to confirm; it exits non-zero if any disagree, and prints the count per file (derived, never hard-coded — the docs used to say 16 while the real count was 15). The markers are `?v=N` in `index.html` (every script and stylesheet, the `js/vendor/supabase.js` preload, both `icons/icon.svg` links, `manifest.json`), the `__cleaned_vN` sessionStorage key, the `FALLBACK` literal in `app.js`, `version.json` → `web`, the `?v=` in `manifest.json`, `admin.html`, `privacy.html` and `get/index.html`, and the `Current version` line in this file. `scripts/check-contracts.js` (pre-commit) refuses a commit where any of them disagree.
 
@@ -2611,6 +2612,98 @@ light + no door → `#faf5f0`; dark → `#000000` throughout.
   images are square (2732×2732), so short and long edge are the same number.
 - **"The 2500ms cap opens onto an empty shell"** and **"the app behind the door is
   not aria-hidden"** — both already answered in v343's note.
+
+## v359 — the split begins: js/food.js, and the two checks it would have silenced
+
+The first domain leaves `js/app.js`. **12,974 → 10,597 lines (644 → 531 KB)**, and
+both fingerprint lanes say nothing moved: views **40/40 identical**, sheets
+**106/106**, zero differences each.
+
+### Food went first because it was measured to, not chosen
+
+Re-derived on this tree rather than taken from the survey: **28 declarations, 4
+runs, 2,377 lines, and ZERO top-level statements inside any run** — which is what
+makes a pure cut-and-paste safe. Of the four domains it is the only one with **no
+lateral edge in either direction**:
+
+| | inbound | outbound |
+|---|---|---|
+| **food** | **8 sites, every one shell/router** (renderView ×2, the unified search ×4, bootCatalog, showOnboarding) | 23 names — all shared primitives, router or chrome |
+| workout | 28 | owes lateral debt in three directions |
+
+> ⚠️ **AND IT LOADS BEFORE app.js — THE ONE ORDER THAT IS NOT ARBITRARY.**
+> `bootCatalog()` calls `setServerFoodCatalog()` inside a bare `catch (_) {}`, and
+> `Cloud.configured()` is synchronous — so with food.js AFTER app.js the
+> continuation after `await Cloud.pullCatalog()` can drain in the microtask
+> checkpoint at the end of app.js's own execution, the ReferenceError is
+> swallowed, and the server food catalog silently never merges. Forever, with
+> nothing to see. Contract 1 pins the order and fails loudly on it.
+
+The other direction is safe for a measured reason: all three of food.js's
+top-level bindings initialise to **literals** (`FOOD_CAT_ORDER`,
+`SERVER_FOOD_PRESETS`, `_zxingPromise`), and there is not one top-level statement
+in the file. Every name it borrows — `t`, `escapeHtml`, `icon`, `$`, `openModal`,
+`DB`, `Cloud`, `FoodAI` — is read at CALL time.
+
+### ⚠️ TWO CHECKS WOULD HAVE GONE SILENT, AND NEITHER WOULD HAVE SAID SO
+
+**Contract 24** read `src['js/app.js'].match(/len \+ line\.length \+ 1 > (\d+)/)`,
+and its **only** match in the repository is inside `openRecipeEditor` — food. After
+the move: `undefined` → `Number(undefined)` is `NaN` → `if (batch && …)` is falsy
+→ **prints ✓ while checking nothing.** It searches the concatenation now AND
+asserts it found the cap, so it can never go quiet by losing its file again.
+
+**Contract 26** scanned only `js/app.js` for unguarded module calls. **Ten
+`FoodAI.` sites moved.** It loops the view scripts now.
+
+Two more were loud rather than silent, which is the good failure: **contract 1**
+refuses an eleventh script tag that is not in the list, and **contract 36** would
+have reported all twelve moved openers as "not a top-level sheet any more" — a
+true alarm with the wrong diagnosis. It reads both files.
+
+And **ESLint's `vault/no-direct-storage-in-views`** was scoped to `files:
+['js/app.js']`, so the `DB.*` law would have stopped covering 2,400 lines of view
+code the moment they moved.
+
+### Proved, not assumed
+
+Six defects planted **in js/food.js**, each caught by the check that is supposed
+to see it: the batch cap raised past the Worker cap; the cap deleted (contract 24
+says **"has gone silent"** by name); an unguarded `FoodAI.` call; a misspelled
+identifier (`no-undef`); `localStorage` from view code; a sliced stored timestamp.
+**6 of 6**, and `js/food.js` restored byte-for-byte.
+
+### The cost, stated plainly
+
+**One extra request and zero bytes saved.** This is a maintainability change, not
+a performance one — and this project measured itself LATENCY-bound in v253
+(median TTFB 215 ms against 3 ms of body download), so the honest upper bound is
+215 ms of TTFB budget, less in wall-clock because h2 overlaps them. Food **cannot**
+be lazy-loaded: `renderView` is synchronous, `food` is a bottom-nav tab, and
+`bootCatalog` touches it on every boot.
+
+### What did NOT move, and why
+
+`openUnifiedSearch`, `openSearchDay` and `openRecentChanges` sit inside the food
+line span and are **global search and undo** — shell, not food. The convenience
+primitives (`convenienceError`, `offerUndo`, `convenienceModal`, `cxHeader`) stay
+in app.js because body/health and workout use them too. `renderHome` and
+`renderDay` each read eight `DB` namespaces across four domains and belong with
+whatever keeps the router — any scheme that files them under a domain is wrong.
+
+`openCoach` moved with the food domain rather than being deleted: it is dead
+code, but it is dead **by a recorded owner decision** (v219, with a TO RESTORE
+comment beside it and its own SKIP entry in `fp/modals.js`). Reopening that is
+the owner's call, not a side effect of a refactor.
+
+### Next
+
+`js/ui.js` (the 22 shared primitives) is second, not first — extracting it first
+would put 3,000 call sites across a new boundary before the contract and lint
+machinery had been proved on a smaller one. It has been, now. Then body/health
+and settings, and **workout last**: it has 28 inbound edges and the only lateral
+debt left, seven sites of which are one concern — a domain arming the reminder
+system — that inverts into a `vault:*` event for free.
 
 ## v358 — the dead-code phase, and the inverse of contract 5
 

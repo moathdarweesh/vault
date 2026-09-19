@@ -35,7 +35,7 @@ const contract = (name, problems) => {
 {
   const order = [...html.matchAll(/<script src="(js\/[\w./-]+?)(?:\?v=\d+)?"/g)].map((m) => m[1]).filter((s) => !s.startsWith('js/vendor/'));
   const want = JS;
-  contract('index.html loads the ten scripts in dependency order (i18n → catalog → cloud → storage → motion → app → health → notify → foodai → update)',
+  contract('index.html loads the eleven scripts in dependency order (i18n → catalog → cloud → storage → motion → food → app → health → notify → foodai → update)',
     order.join(',') === want.join(',') ? [] : ['found: ' + order.join(' → ')]);
   const tags = [...html.matchAll(/<script\b[^>]*\bsrc="js\/[^">]+"[^>]*>/g)].map(m => m[0]);
   contract('startup scripts download in parallel and execute in order',
@@ -557,7 +557,14 @@ const contract = (name, problems) => {
     if (!/prompt:\s*String\(text/.test(proxy)) problems.push('foodai.js analyzeViaProxy sends the photo instruction as `text` (capped at ' + textCap + ') instead of `prompt`');
     if (ipLen > promptCap) problems.push(`imagePrompt() with a ${noteMax}-char note is ${ipLen} chars — the Worker keeps ${promptCap} of \`prompt\`; the note (the ground truth) is what gets cut`);
     if (vpLen > promptCap) problems.push(`VOICE_PROMPT is ${vpLen} chars — the Worker keeps ${promptCap} of \`prompt\``);
-    const batch = Number((src['js/app.js'].match(/len \+ line\.length \+ 1 > (\d+)/) || [])[1]);
+    // ⚠️ THE CONCATENATION, NOT js/app.js. The recipe batch cap lives inside
+    // openRecipeEditor, which moved to js/food.js — and a file-scoped match
+    // would have returned undefined, `Number(undefined)` is NaN, `if (batch &&
+    // …)` is falsy, and this contract would have printed ✓ while checking
+    // nothing. It asserts it FOUND the cap now, so it can never go quiet by
+    // losing its file again.
+    const batch = Number((JS.map((f) => src[f]).join('\n').match(/len \+ line\.length \+ 1 > (\d+)/) || [])[1]);
+    if (!batch) problems.push('no recipe batch cap found in any shipped script — this check has gone silent');
     if (batch && batch > textCap) problems.push(`the recipe auto-fill batches up to ${batch} chars of \`text\`; the Worker keeps ${textCap}`);
     // every port a dev server can listen on is an origin the Worker admits
     const ports = new Set();
@@ -589,7 +596,11 @@ const contract = (name, problems) => {
 // ---------------------------------------------------------------- 26. app.js checks a later module before using it, and never on a boot timer
 {
   const problems = [];
-  const lines = src['js/app.js'].split(/\r?\n/);
+  // Every VIEW script, not just app.js: ten of the FoodAI. guard sites moved to
+  // js/food.js with openRecipeEditor and the AI paths, and a file-scoped scan
+  // would have stopped checking them without saying so.
+  const VIEWS = JS.filter((f) => !['js/health.js', 'js/notify.js', 'js/foodai.js', 'js/update.js', 'js/i18n.js', 'js/catalog.js'].includes(f));
+  const lines = VIEWS.map((f) => src[f].split(/\r?\n/)).flat();
   const mods = ['Notify', 'Health', 'FoodAI', 'VaultUpdate'];
   for (const mod of mods) {
     const guard = new RegExp('window\\.' + mod + '\\b|typeof ' + mod + '\\b');
@@ -863,7 +874,10 @@ const contract = (name, problems) => {
 {
   const problems = [];
   const { ENTRIES, SKIP } = require('./fp/modals.js');
-  const app = src['js/app.js'];
+  // app.js AND food.js: twelve openers moved with the food domain, and a
+  // scan of app.js alone would report every one of them as "not a top-level
+  // sheet any more" — a loud failure, but the wrong diagnosis.
+  const app = src['js/app.js'] + '\n' + src['js/food.js'];
   const openers = new Set([...app.matchAll(/^(?:async )?function (open[A-Z]\w*)\(/gm)].map((m) => m[1]));
   for (const d of ['confirmDialog', 'showUnreadableDialog', 'showConflictDialog', 'showChangePassword', 'showFeedback']) openers.add(d);
   const covered = new Set(ENTRIES.map((e) => e.name));

@@ -1,4 +1,4 @@
-// THE TEN SHIPPED SCRIPTS, IN DEPENDENCY ORDER — spelled once.
+// THE ELEVEN SHIPPED SCRIPTS, IN DEPENDENCY ORDER — spelled once.
 //
 // They are classic <script defer> files sharing one global lexical scope, so
 // the ORDER is the dependency graph and contract 1 proves it against
@@ -12,7 +12,7 @@
 
 const JS = [
   'js/i18n.js', 'js/catalog.js', 'js/cloud.js', 'js/storage.js', 'js/motion.js',
-  'js/app.js', 'js/health.js', 'js/notify.js', 'js/foodai.js', 'js/update.js',
+  'js/food.js', 'js/app.js', 'js/health.js', 'js/notify.js', 'js/foodai.js', 'js/update.js',
 ];
 
 // A declaration at column 0 — the shared lexical scope. Used to derive the

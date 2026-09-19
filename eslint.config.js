@@ -273,9 +273,11 @@ module.exports = [
     rules: { ...CORRECTNESS, ...PROJECT_RULES },
   },
 
-  // js/app.js is the view layer, and the DB.* law is written for exactly it.
+  // The VIEW layer, and the DB.* law is written for exactly it. js/food.js is
+  // 2,400 lines of it; scoped to app.js alone the rule would have stopped
+  // covering them the moment they moved.
   {
-    files: ['js/app.js'],
+    files: ['js/app.js', 'js/food.js'],
     plugins: { vault },
     rules: { 'vault/no-direct-storage-in-views': 'error' },
   },

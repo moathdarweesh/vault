@@ -1,10 +1,11 @@
-// The sheets and dialogs — every top-level `open*` in js/app.js plus the five
-// dialogs — and the arguments each one needs to open over the seeded fixture.
+// The sheets and dialogs — every top-level `open*` in js/app.js AND js/food.js
+// (twelve of them moved there with the food domain) plus the five dialogs, and
+// the arguments each one needs to open over the seeded fixture.
 //
 // ⚠️ A SHEET THAT IS NOT IN THIS LIST IS OUTSIDE THE NET. The matrix (stage 2)
 // navigates VIEWS; most of what the food domain does lives in sheets, and a
 // moved sheet that broke would have passed it. Contract 36 compares this file
-// against the `function open*(` declarations in app.js: a new opener either
+// against the `function open*(` declarations in both files: a new opener either
 // joins the net here or is named in SKIP with a reason, or the commit fails.
 //
 // Arguments are TOKENS resolved inside the page at capture time:

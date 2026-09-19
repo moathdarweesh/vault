@@ -38,5 +38,5 @@ try {
 }
 
 const r = spawnSync(process.execPath, [bin, '.', '--max-warnings=0'], { cwd: ROOT, stdio: 'inherit' });
-if (r.status === 0) console.log('PASS  lint: the ten shipped scripts, the tooling and the Worker are clean under eslint.config.js');
+if (r.status === 0) console.log('PASS  lint: the ' + require('./shipped.js').JS.length + ' shipped scripts, the tooling and the Worker are clean under eslint.config.js');
 process.exit(r.status === null ? 1 : r.status);
