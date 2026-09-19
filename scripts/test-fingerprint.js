@@ -25,15 +25,29 @@ const ROOT = path.resolve(__dirname, '..');
 const TAG = 'ci-smoke';
 const VIEWS = require('./fp/views.js');
 
+// ⚠️ THE SLATE IS CLEARED FIRST, AND THAT IS THE ASSERTION, NOT HOUSEKEEPING.
+// Before v360 this suite built the record path itself as `<tag>.json`. When the
+// tool moved the record to `<tag>.<lane>.json`, the old file was STILL ON DISK
+// locally from an earlier commit — so every assertion below passed against a
+// record this run had not written, and `npm test` was green while the suite
+// measured nothing. CI, with an empty .fpnet, failed honestly.
+//
+// Two fixes, and the second is the one that matters: the path comes from the
+// tool (one spelling), and nothing is left behind that could answer for a run
+// that did not happen.
+const FP = require('./fingerprint-net.js');
+const file = path.join(FP.OUT, FP.recordFile(TAG, 'views'));
+for (const f of [file, path.join(FP.OUT, TAG + '.json')]) { try { fs.rmSync(f); } catch (_) {} }
+
 const r = spawnSync(process.execPath, [path.join(__dirname, 'fingerprint-net.js'), 'matrix', '--tag', TAG, '--props', 'stage1'], {
   cwd: ROOT, encoding: 'utf8', timeout: 12 * 60 * 1000,
 });
 const out = (r.stdout || '') + (r.stderr || '');
 if (r.error) throw r.error;
 
-const file = path.join(ROOT, '.fpnet', TAG + '.json');
-assert.ok(fs.existsSync(file), 'the matrix wrote no record:\n' + out);
+assert.ok(fs.existsSync(file), 'the matrix wrote no record at ' + file + ':\n' + out);
 const rec = JSON.parse(fs.readFileSync(file, 'utf8'));
+assert.equal(rec.lane, 'views', 'the record is not the views lane: ' + rec.lane);
 
 // Every cell of the matrix, no view missing: 8 contexts × the view list.
 const cells = Object.keys(rec.cells);

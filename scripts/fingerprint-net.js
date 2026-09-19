@@ -712,7 +712,12 @@ function diffOne(a, b, lane) {
 }
 
 // ── go ───────────────────────────────────────────────────────────────────────
-(async () => {
+// Guarded so the file can be REQUIRED for its record-path helpers without
+// running a capture. scripts/test-fingerprint.js needs to know where a record
+// lands, and a second spelling of that filename is exactly what broke it.
+module.exports = { OUT, recordFile, lanesOf };
+
+if (require.main === module) (async () => {
   try {
     if (cmd === 'capture') await capture();
     else if (cmd === 'matrix') await matrix();

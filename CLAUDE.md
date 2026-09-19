@@ -81,7 +81,7 @@ a faster TTFB — not fewer bytes.
 npm run release          # bump every marker + verify, then commit all files together
 ```
 
-**Current version: v360.** APK: build 22 / v3.1.
+**Current version: v361.** APK: build 22 / v3.1.
 
 `scripts/release.js` rewrites **every** marker and then re-reads them from disk to confirm; it exits non-zero if any disagree, and prints the count per file (derived, never hard-coded — the docs used to say 16 while the real count was 15). The markers are `?v=N` in `index.html` (every script and stylesheet, the `js/vendor/supabase.js` preload, both `icons/icon.svg` links, `manifest.json`), the `__cleaned_vN` sessionStorage key, the `FALLBACK` literal in `app.js`, `version.json` → `web`, the `?v=` in `manifest.json`, `admin.html`, `privacy.html` and `get/index.html`, and the `Current version` line in this file. `scripts/check-contracts.js` (pre-commit) refuses a commit where any of them disagree.
 
@@ -2739,6 +2739,33 @@ cluster but **exactly one caller opens it, inside one domain** — a surface wit
 one caller is not shared, and moving it here would mean moving it twice.
 `isNativeShell()` has one caller and sits under `exportBackupFile`'s own doc
 comment; taking it would have split a comment from the function it documents.
+
+### ⚠️ AND CI CAUGHT WHAT THE LOCAL RUN COULD NOT (v361)
+
+v360 was pushed with every gate green and **CI went red**. The filename was the
+smaller half of it. `scripts/test-fingerprint.js` built the record path itself as
+`<tag>.json`; the lane change moved it to `<tag>.views.json` — and **locally the
+old file was still on disk from an earlier commit**, so all four assertions
+passed against a record the run they had just performed did not write. On CI,
+with an empty `.fpnet`, it failed honestly.
+
+> **The stale read is the defect; the rename merely exposed it.** That suite could
+> have passed with the tool writing NOTHING, and had no way to say so. It deletes
+> the record first now — so "the file exists" genuinely means "this run wrote it"
+> — and it takes the path from the tool itself (`fingerprint-net.js` exports
+> `OUT` and `recordFile` behind a `require.main` guard) rather than spelling it a
+> second time, which is what broke it.
+
+Proved three ways: green against an EMPTY `.fpnet` (the CI case); a planted stale
+2-cell record at both the old and the new filename **ignored**, the suite still
+reading 160 fresh cells; and with the tool mutated to write nothing the assertion
+**fires by name** — `the matrix wrote no record at …ci-smoke.views.json`. The
+tool was restored byte-for-byte.
+
+> And the wider lesson, which this project has paid for before: **a local `npm
+> test` runs against a working directory that CI does not have.** `.fpnet/` holds
+> 40-odd records from earlier commits. Any suite that reads an artifact it did not
+> just create is reading history, and history passes.
 
 ### Next
 
