@@ -1,0 +1,196 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  THE VAULT — the home-screen widget's one layout.
+
+  Every colour here is a literal, and that is deliberate: a widget is drawn by
+  the LAUNCHER's process, which has no access to this app's theme, and the
+  app's own light/dark choice is a preference inside the app rather than the
+  system setting. So the widget commits to the app's dark surface in both —
+  which is also what the fourteen shipped splash images do, for the same reason.
+
+  Sizes are dp and none is below 11sp: the app's floor since v200 applies here
+  too, and a widget is read further from the eye than a screen is.
+
+  ⚠️ No `style` attributes and no custom views. RemoteViews inflates this in
+  another process and supports a fixed set of view types; anything else throws
+  at inflate time, on the home screen, where there is no console to read.
+-->
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/widget_root"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@drawable/widget_bg"
+    android:padding="14dp">
+
+    <!-- Before the app has ever written a snapshot. Not an error: a new install
+         has nothing to say yet, and inventing a number would be worse. -->
+    <TextView
+        android:id="@+id/widget_empty"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:gravity="center"
+        android:textSize="13sp"
+        android:textColor="#b0a69e"
+        android:text="VAULT"
+        android:visibility="gone" />
+
+    <LinearLayout
+        android:id="@+id/widget_body"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:orientation="vertical">
+
+        <TextView
+            android:id="@+id/widget_eyebrow"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:textSize="11sp"
+            android:textColor="#9a8f86"
+            android:maxLines="1"
+            android:text="Today" />
+
+        <TextView
+            android:id="@+id/widget_title"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="2dp"
+            android:textSize="19sp"
+            android:textStyle="bold"
+            android:textColor="#fdfaf7"
+            android:maxLines="1"
+            android:ellipsize="end"
+            android:text="—" />
+
+        <TextView
+            android:id="@+id/widget_meta"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="1dp"
+            android:textSize="12sp"
+            android:textColor="#b0a69e"
+            android:maxLines="1"
+            android:ellipsize="end"
+            android:text="" />
+
+        <!-- The three meters. weightSum is not set: each row takes an equal
+             share of whatever height the launcher gave the widget, so the same
+             layout serves a 2x2 and a 4x2 cell without a second file. -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="0dp"
+            android:layout_weight="1"
+            android:layout_marginTop="10dp"
+            android:orientation="vertical"
+            android:gravity="bottom">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal">
+                <TextView
+                    android:id="@+id/widget_m1_label"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:textSize="11sp"
+                    android:textColor="#b0a69e"
+                    android:maxLines="1"
+                    android:text="kcal" />
+                <TextView
+                    android:id="@+id/widget_m1_value"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:textSize="11sp"
+                    android:textColor="#fdfaf7"
+                    android:maxLines="1"
+                    android:text="—" />
+            </LinearLayout>
+            <ProgressBar
+                android:id="@+id/widget_m1_bar"
+                style="?android:attr/progressBarStyleHorizontal"
+                android:layout_width="match_parent"
+                android:layout_height="6dp"
+                android:layout_marginTop="3dp"
+                android:progressDrawable="@drawable/widget_meter"
+                android:max="100"
+                android:progress="0" />
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:orientation="horizontal">
+                <TextView
+                    android:id="@+id/widget_m2_label"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:textSize="11sp"
+                    android:textColor="#b0a69e"
+                    android:maxLines="1"
+                    android:text="protein" />
+                <TextView
+                    android:id="@+id/widget_m2_value"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:textSize="11sp"
+                    android:textColor="#fdfaf7"
+                    android:maxLines="1"
+                    android:text="—" />
+            </LinearLayout>
+            <ProgressBar
+                android:id="@+id/widget_m2_bar"
+                style="?android:attr/progressBarStyleHorizontal"
+                android:layout_width="match_parent"
+                android:layout_height="6dp"
+                android:layout_marginTop="3dp"
+                android:progressDrawable="@drawable/widget_meter"
+                android:max="100"
+                android:progress="0" />
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:orientation="horizontal">
+                <TextView
+                    android:id="@+id/widget_m3_label"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:textSize="11sp"
+                    android:textColor="#b0a69e"
+                    android:maxLines="1"
+                    android:text="water" />
+                <TextView
+                    android:id="@+id/widget_m3_value"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:textSize="11sp"
+                    android:textColor="#fdfaf7"
+                    android:maxLines="1"
+                    android:text="—" />
+            </LinearLayout>
+            <ProgressBar
+                android:id="@+id/widget_m3_bar"
+                style="?android:attr/progressBarStyleHorizontal"
+                android:layout_width="match_parent"
+                android:layout_height="6dp"
+                android:layout_marginTop="3dp"
+                android:progressDrawable="@drawable/widget_meter"
+                android:max="100"
+                android:progress="0" />
+        </LinearLayout>
+
+        <TextView
+            android:id="@+id/widget_age"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="6dp"
+            android:textSize="11sp"
+            android:textColor="#9a8f86"
+            android:maxLines="1"
+            android:text=""
+            android:visibility="gone" />
+    </LinearLayout>
+</FrameLayout>

@@ -1,12 +1,12 @@
 {
   "_comment": "Update manifest. `web` is the latest web build — it MUST equal the ?v=N in index.html on every release (scripts/release.js writes both); js/update.js reads it fresh (no-store) and reloads the entry html so web/CSS/JS updates reach all devices without a reinstall. `apk` only triggers the in-app download banner when apk.build here is GREATER than the versionCode installed on the device. To release a NEW APK: bump android/app/build.gradle versionCode + versionName, `npm run sync`, build, commit the APK to download/THE-VAULT.apk, then set apk.build/apk.version here to the same numbers (scripts/check-contracts.js refuses a mismatch) and push.",
-  "web": 365,
+  "web": 366,
   "apk": {
-    "build": 22,
-    "version": "3.1",
+    "build": 23,
+    "version": "3.2",
     "url": "https://raw.githubusercontent.com/moathdarweesh/vault/main/download/THE-VAULT.apk",
-    "notes_ar": "هويّة الإطلاق: شعار كاباسيتور الأزرق اختفى من شاشة البدء — صارت الخزنة مغلقةً على سواد، وهي أوّل إطارٍ من حركة الفتح داخل التطبيق. ومعها حركةٌ جديدة في كلّ مكان: الشاشات تنزلق، والبطاقات تدخل بالتدرّج، والشيتات تصعد وتُسحَب للإغلاق.",
-    "notes_en": "Launch identity: the blue Capacitor logo is gone from the splash — it is the closed vault on black now, which is frame one of the opening sequence inside the app. Plus motion throughout: screens slide, cards stagger in, and sheets rise and can be dragged away.",
-    "sha256": "907a604b9e51d37d65c4d5ad96e50813db542e50c2b10dfbe3469873467e833f"
+    "notes_ar": "ودجت على الشاشة الرئيسيّة: تمرين اليوم وعدد حركاته، والسعرات والبروتين والماء بأشرطةٍ مقابل أهدافك — تُقرأ دون فتح التطبيق، وتُحدَّث مع كلّ حفظ. وتغييرٌ أمنيّ لا يُرى: كانت الحزم السابقة قابلةً للتنقيح، فكان تخزين المتصفّح داخلها مقروءًا عبر USB رغم تعطيل النسخ الاحتياطيّ؛ أُغلق هذا.",
+    "notes_en": "A home-screen widget: today's workout and its exercise count, plus calories, protein and water as bars against your goals — readable without opening the app, refreshed on every save. And one invisible security change: previous builds were debuggable, which made the WebView storage readable over USB despite backups being off. That is closed.",
+    "sha256": "31865ff5c4f922e7597ba3bca3dd6a026dbeefb90d580bac0286ef7bd80fbc84"
   }
 }

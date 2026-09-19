@@ -3539,6 +3539,23 @@ const DB = {
           delta30: older && older.kg != null ? Math.round((kg - Number(older.kg)) * 10) / 10 : null,
         },
         sleep: night && night.durationMinutes ? { minutes: round(night.durationMinutes) } : null,
+        // ⚠️ THE WIDGET DRAWS THESE WORDS, AND IT HAS NONE OF ITS OWN.
+        // Android would give it strings.xml keyed on the SYSTEM locale — but
+        // this app's language is a preference set INSIDE the app, so a widget
+        // reading its own resources would sit in English beside an Arabic app
+        // with no way to correct it. Eight short words cost ~140 bytes and buy
+        // two things: the widget always matches the app, and a copy change
+        // reaches it on an ordinary web push with no new APK.
+        // GUARDED LIKE computeStreak ABOVE, AND FOR THE SAME REASON: t() lives
+        // in js/ui.js, a later script. The fallback is {} and deliberately NOT
+        // (k) => k: a raw key drawn on the home screen is the exact defect the
+        // fingerprint net exists to catch, and VaultWidgetProvider.kt carries
+        // its own English word for every key it is not handed.
+        labels: typeof t !== 'function' ? {} : {
+          today: t('today'), rest: t('rest_day'), exercises: t('exercises'),
+          kcal: t('calories'), protein: t('protein_g'), water: t('water'),
+          since: t('widget_since'), hoursShort: t('widget_hours_short'),
+        },
       };
     },
 
@@ -3547,7 +3564,7 @@ const DB = {
       const P = this._plugin();
       if (!P) return false;
       try {
-        P.set({ key: VAULT_KEYS.widget, value: JSON.stringify(this.snapshot()) });
+        P.set({ value: JSON.stringify(this.snapshot()) });
         return true;
       } catch (_) { return false; }
     },
@@ -3561,12 +3578,25 @@ const DB = {
     clear() {
       const P = this._plugin();
       if (!P) return false;
-      try { P.remove({ key: VAULT_KEYS.widget }); return true; } catch (_) { return false; }
+      try { P.clear(); return true; } catch (_) { return false; }
     },
 
+    // ⚠️ OUR OWN PLUGIN, NOT @capacitor/preferences — AND SO NEITHER CALL
+    // ABOVE PASSES A `key`. That is not an omission: the plugin OWNS the
+    // storage name, which is the whole reason it exists, so naming one here
+    // would invite a caller to point it somewhere the widget does not read.
+    // The name stays reserved in VAULT_KEYS so nothing claims it for a
+    // localStorage key. Contract 40 keeps both halves in step.
+    //
+    // ⚠️ OUR OWN PLUGIN, NOT @capacitor/preferences. That one would store the
+    // snapshot too, but it owns the SharedPreferences file NAME — and the
+    // widget reads that exact file, so a rename upstream would stop the widget
+    // updating with nothing to see. WidgetBridgePlugin.kt is thirty lines and
+    // owns the name, and it adds no npm dependency to a project whose first
+    // law is that it has none.
     _plugin() {
       try {
-        return (window.Capacitor && Capacitor.Plugins && Capacitor.Plugins.Preferences) || null;
+        return (window.Capacitor && Capacitor.Plugins && Capacitor.Plugins.WidgetBridge) || null;
       } catch (_) { return null; }
     },
   },

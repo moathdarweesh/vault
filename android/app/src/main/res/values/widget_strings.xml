@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  The ONLY string the widget owns. Everything it draws comes from the snapshot,
+  because the app's language is a preference inside the app and not the system
+  locale — see VaultWidgetProvider's header. This one is the label the launcher
+  shows in its own widget picker, which is chrome the app never renders and so
+  cannot supply.
+-->
+<resources>
+    <string name="widget_today_label" translatable="false">VAULT</string>
+</resources>

@@ -11,6 +11,7 @@ public class MainActivity extends BridgeActivity {
     public void onCreate(Bundle savedInstanceState) {
         // Must register before super.onCreate so the bridge knows the plugin.
         registerPlugin(HealthConnectPlugin.class);
+        registerPlugin(WidgetBridgePlugin.class);
         super.onCreate(savedInstanceState);
         applyLegacyBarColors();
     }

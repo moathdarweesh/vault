@@ -61,6 +61,30 @@
                 android:name="android.support.FILE_PROVIDER_PATHS"
                 android:resource="@xml/file_paths"></meta-data>
         </provider>
+
+        <!--
+          The home-screen widget.
+
+          exported="true" is REQUIRED and is not a loosening: the launcher is
+          a different app and must be able to bind this receiver, which is what
+          a widget IS. It carries no data — it reads a SharedPreferences file
+          private to this package, and nothing outside can ask it for one.
+
+          ⚠️ ADDING A SECOND WIDGET MEANS A SECOND RECEIVER HERE, WHICH MEANS A
+          NEW APK AND A MANUAL INSTALL FOR EVERY USER. That is why this build
+          ships one resizable provider rather than three fixed ones.
+        -->
+        <receiver
+            android:name=".VaultWidgetProvider"
+            android:label="@string/widget_today_label"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/widget_today_info" />
+        </receiver>
     </application>
 
     <!-- Permissions -->

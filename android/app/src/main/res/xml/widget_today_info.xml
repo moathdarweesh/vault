@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  updatePeriodMillis is 0 ON PURPOSE, and that is the whole update model.
+
+  Android's own period has a 30-minute FLOOR and wakes the device to honour it,
+  so it would repaint on a schedule that has nothing to do with when the data
+  changed — burning battery on the many ticks where nothing moved, and still
+  being up to half an hour stale on the one that matters. The app pushes
+  instead: every save calls DB.widget.push(), which writes the snapshot and asks
+  the provider to repaint. The widget is therefore as fresh as the last time the
+  app ran, and costs nothing while it is closed.
+
+  minWidth/minHeight are the 2x2 cell; resizeMode lets it grow to 4x2, which the
+  one layout already handles by weight.
+-->
+<appwidget-provider xmlns:android="http://schemas.android.com/apk/res/android"
+    android:minWidth="140dp"
+    android:minHeight="140dp"
+    android:targetCellWidth="2"
+    android:targetCellHeight="2"
+    android:updatePeriodMillis="0"
+    android:initialLayout="@layout/widget_today"
+    android:previewLayout="@layout/widget_today"
+    android:resizeMode="horizontal|vertical"
+    android:widgetCategory="home_screen" />

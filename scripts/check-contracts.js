@@ -381,7 +381,7 @@ const contract = (name, problems) => {
 // ---------------------------------------------------------------- 15. js/health.js calls only methods HealthConnectPlugin.kt declares
 {
   const kt = exists('android/app/src/main/java/com/moath/thevault/HealthConnectPlugin.kt') ? read('android/app/src/main/java/com/moath/thevault/HealthConnectPlugin.kt') : '';
-  const methods = new Set([...kt.matchAll(/@PluginMethod\s*\r?\n\s*fun\s+(\w+)\s*\(/g)].map((m) => m[1]));
+  const methods = new Set([...kt.matchAll(/^[^\S\r\n]*@PluginMethod\s*\r?\n\s*fun\s+(\w+)\s*\(/gm)].map((m) => m[1]));
   const calls = new Set([...src['js/health.js'].matchAll(/plugin\(\)\.(\w+)\(/g)].map((m) => m[1]));
   const problems = kt ? [...calls].filter((c) => !methods.has(c)).map((c) => `js/health.js calls plugin().${c}() but the Kotlin plugin has no @PluginMethod ${c}`) : [];
   contract(`js/health.js calls only @PluginMethods the native plugin declares (${calls.size} calls)`, problems);
@@ -1028,6 +1028,45 @@ const contract = (name, problems) => {
   }
   for (const f of VIEWS) if (!JS.includes(f)) problems.push(`scripts/shipped.js lists ${f} in VIEWS, but it is not one of the ${JS.length} shipped scripts`);
   contract(`js/ui.js reaches no DB but DB.prefs, no Cloud, no module and no router, and every one of its ${declared.length} names has a caller above it`, problems);
+}
+
+// ---------------------------------------------------------------- 40. DB.widget talks to a plugin that exists, by a name it answers to
+{
+  // The web half and the native half of the widget are two files with no
+  // compiler between them, and BOTH halves of the agreement fail SILENTLY.
+  //
+  //   the NAME    — `Capacitor.Plugins.WidgetBridge` vs @CapacitorPlugin(name)
+  //                 A rename on either side makes _plugin() return null, and
+  //                 push() is DOCUMENTED to return false when there is no
+  //                 plugin. So the widget simply stops updating, for ever,
+  //                 and nothing reports it because that IS the no-APK path.
+  //
+  //   the METHODS — P.set / P.clear vs @PluginMethod
+  //                 A Capacitor call rejects ASYNCHRONOUSLY, so the
+  //                 synchronous try/catch around it cannot see the failure:
+  //                 clear() returns true having cleared nothing. That is the
+  //                 shared-phone leak DB.widget.clear() exists to prevent,
+  //                 on the least private surface the device has.
+  const KT = 'android/app/src/main/java/com/moath/thevault/WidgetBridgePlugin.kt';
+  const kt = exists(KT) ? read(KT) : '';
+  const js = src['js/storage.js'];
+  const calls = new Set([...js.matchAll(/\bP\.(\w+)\s*\(/g)].map((m) => m[1]));
+  const problems = [];
+  let methods = new Set();
+  if (kt) {
+    const named = kt.match(/@CapacitorPlugin\s*\(\s*name\s*=\s*"(\w+)"/);
+    const reached = js.match(/Capacitor\.Plugins\.(\w+)\)?\s*\|\|\s*null/);
+    if (!named) problems.push(`${KT} carries no @CapacitorPlugin(name = "...")`);
+    if (!reached) problems.push('js/storage.js no longer reaches the widget plugin through Capacitor.Plugins.<name>');
+    if (named && reached && named[1] !== reached[1]) {
+      problems.push(`js/storage.js asks for Capacitor.Plugins.${reached[1]} but the Kotlin registers "${named[1]}" - the widget would silently never update`);
+    }
+    methods = new Set([...kt.matchAll(/^[^\S\r\n]*@PluginMethod\s*\r?\n\s*fun\s+(\w+)\s*\(/gm)].map((m) => m[1]));
+    for (const c of calls) {
+      if (!methods.has(c)) problems.push(`js/storage.js calls P.${c}() but ${KT} has no @PluginMethod ${c} - the call rejects asynchronously and the sync try/catch reports success`);
+    }
+  }
+  contract(`DB.widget reaches the native plugin by the name it registers, and calls only @PluginMethods it declares (${calls.size} calls, ${methods.size} declared)`, problems);
 }
 
 console.log(failures.length ? `\ncheck-contracts: ${failures.length} broken contract(s)` : '\ncheck-contracts: all contracts hold');

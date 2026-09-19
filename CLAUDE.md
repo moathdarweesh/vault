@@ -82,7 +82,7 @@ a faster TTFB — not fewer bytes.
 npm run release          # bump every marker + verify, then commit all files together
 ```
 
-**Current version: v365.** APK: build 22 / v3.1.
+**Current version: v366.** APK: build 23 / v3.2.
 
 `scripts/release.js` rewrites **every** marker and then re-reads them from disk to confirm; it exits non-zero if any disagree, and prints the count per file (derived, never hard-coded — the docs used to say 16 while the real count was 15). The markers are `?v=N` in `index.html` (every script and stylesheet, the `js/vendor/supabase.js` preload, both `icons/icon.svg` links, `manifest.json`), the `__cleaned_vN` sessionStorage key, the `FALLBACK` literal in `app.js`, `version.json` → `web`, the `?v=` in `manifest.json`, `admin.html`, `privacy.html` and `get/index.html`, and the `Current version` line in this file. `scripts/check-contracts.js` (pre-commit) refuses a commit where any of them disagree.
 
@@ -647,7 +647,7 @@ Full findings + verification in `docs/CODEBASE_REVIEW.md`. The load-bearing rule
   - **`Notify.foreground()`** = reconcile → sync → catchUp, chained. Boot, `visibilitychange` and `refreshAfterSync` call it; `refreshAfterSync` calls it with `{ catchUp: false }` (a second catch-up inside the boot's round trip burned the first missed-reminder bar) and also re-arms the in-app timers. Never call `Notify.sync()` from a foreground path directly — the manifest reconcile reads is the one sync rewrites.
   - **`bootSyncCore` asks the first-link question too, but only where it guards a PULL** (`remoteNewer && !localEmpty && !isLinked → conflict`, placed below the own-push adoption and the version compare) — a device whose conflict dialog died with the process used to pull over its data silently on the next launch; putting the guard any higher re-manufactured a self-conflict for a device whose first push lost its reply. **A push that lands marks the device linked.** One sync runs at a time (`syncInFlight`, shared by `bootSync` and `resume`), and `showConflictDialog` is a no-op while a conflict dialog is open.
   - `DB.exercises.remove` prunes the id from every plan slot. `sets[].done:false` is a RESUME flag only: an un-ticked, typed set still counts in stats and PRs (the pre-v296 behaviour, kept on purpose).
-  - **Release markers** now include `manifest.json`, `admin.html`, `privacy.html`, `get/index.html` (their `?v=`) and this file's `Current version` line; `check-release` treats `js/vendor/`, `icons/`, `manifest.json` and `get/index.html` as shipped. `capacitor.config.json` declares `android.minWebViewVersion: 80` (`?.` is everywhere; `color-mix()` needs 111 and degrades visually below it). `backend/migrations/22_vault-data-version.sql` is the `version` column the push compare depends on (applied live long ago; it lived in `unverified/`). The `android/app/src/main/assets` copy of the Capacitor config currently differs from the root one — `npm run sync` before the next APK build.
+  - **Release markers** now include `manifest.json`, `admin.html`, `privacy.html`, `get/index.html` (their `?v=`) and this file's `Current version` line; `check-release` treats `js/vendor/`, `icons/`, `manifest.json` and `get/index.html` as shipped. `capacitor.config.json` declares `android.minWebViewVersion: 80` (`?.` is everywhere; `color-mix()` needs 111 and degrades visually below it). `backend/migrations/22_vault-data-version.sql` is the `version` column the push compare depends on (applied live long ago; it lived in `unverified/`). The `android/app/src/main/assets` copy of the Capacitor config is SEMANTICALLY IDENTICAL to the root one — this line claimed it "differs" for 68 releases, and the only difference is `cap sync`'s indentation. Run `npm run sync` before an APK build regardless, so the copy can never go stale.
 - **v299 (2026-09-05) — three features + the Health Connect pass (APK 20).**
   - **Recipe rows fill their own figures** (`openRecipeEditor`): a name + a quantity schedules a fill after 900 ms — first `localLookup` (a `DB.foods` entry whose `serving` parses to grams, scaled; `parseGrams` reads Arabic-Indic digits and غ/جم/g/كغ/ml), else ONE batched `FoodAI.analyze()` for every pending row (lines `qty name`, ≤380 chars a batch, mapped by index when counts match else by name). A hand-typed figure sets `_manual` and is never overwritten; `_auto`/`_manual` are stripped on save. The Worker quota is per day: never one call per row.
   - **Sleep and cardio are a DAY LEDGER** (`dayLedgerHtml`): one row per calendar day, newest first, 7 days + "earlier days"; an empty day is a dashed `.ledger-add` carrying `data-ledger-sleep|cardio="<iso>"` that opens the log modal with `presetDate`. `ledgerDayIso` builds LOCAL dates — the same strings `todayISO()` and the Health Connect import write (date = the morning you woke).
@@ -2614,6 +2614,124 @@ light + no door → `#faf5f0`; dark → `#000000` throughout.
   images are square (2732×2732), so short and long edge are the same number.
 - **"The 2500ms cap opens onto an empty shell"** and **"the app behind the door is
   not aria-hidden"** — both already answered in v343's note.
+
+## v366 — APK build 23: the widget reaches the phone, and a leak found on the way
+
+v365 shipped the web half and said the APK was owed whether or not a widget ever
+shipped, because **every installed copy is debuggable and that voids
+`allowBackup="false"`** — the `debuggable false` fix had sat in `build.gradle`
+since v348 with `versionCode` never moving. Seventeen releases. This build
+carries it, the native bridge and the widget together.
+
+### ⚠️ DB.widget.clear() CALLED A METHOD THE PLUGIN DOES NOT HAVE
+
+`clearLocalUserData()` calls `DB.widget.clear()` on logout. It called
+**`P.remove(…)`**, and `WidgetBridgePlugin.kt` declares `set`, `clear`,
+`status`. No `remove`.
+
+> **A Capacitor call rejects ASYNCHRONOUSLY, so the synchronous `try/catch`
+> around it cannot see the failure: `clear()` returned `true` having cleared
+> nothing.** The next account on a shared phone would find the previous user's
+> weight, calories and workout name ON THE HOME SCREEN — the v351 leak, on the
+> least private surface the device has, which is the exact outcome `clear()`'s
+> own doc comment says it exists to prevent.
+
+The cause is a half-finished swap: the code was written against
+`@capacitor/preferences` (`Preferences.remove({key})`), the plugin was replaced
+with our own, and `_plugin()` was updated — the call NAMES and their `key`
+arguments were not. `P.set({ value })` and `P.clear()` now; the plugin owns the
+storage name, which is why neither passes a key.
+
+**And the suite that should have caught it was blind twice.** Its stub was
+`Plugins.Preferences` with `remove({key})` — mirroring a package this app does
+not use — so `clear()` "passed" against a plugin that does not exist. And the
+`labels` block added for the snapshot called `t()` bare while `computeStreak`
+two lines above it is guarded on `typeof` for the same reason (both live in
+later scripts), so the suite was failing outright with `ReferenceError: t is not
+defined` by the time the native half landed.
+
+> **A STUB IS A PROMISE ABOUT A SURFACE THE HARNESS CANNOT LOAD, AND A PROMISE
+> HAS TO BE KEPT.** The stub is now read against `WidgetBridgePlugin.kt` on
+> every run — both the name it registers under and its `@PluginMethod` set — the
+> same move v356 made when it derived the Cloud stub surface from the scripts.
+
+### Contract 40, and the anchor it needed
+
+Two agreements with no compiler between them, both failing silently:
+
+| | what a mismatch does |
+|---|---|
+| `Capacitor.Plugins.X` ↔ `@CapacitorPlugin(name = "X")` | `_plugin()` returns null, and `push()` is DOCUMENTED to return false then — so the widget never updates, for ever, and nothing reports it because that IS the no-APK path |
+| `P.m(` ↔ `@PluginMethod fun m` | the async rejection above |
+
+**Proved able to fail, 6 of 6**, every file restored byte-for-byte: the shipped
+defect verbatim, the plugin renamed from either side, `clear` renamed to `wipe`,
+the annotation commented out, and a negative control (`P.status`, a legal
+method, stays silent).
+
+> ⚠️ **The commented-out case is the one that taught something.** It did NOT
+> fire at first, because the method regex is unanchored and so counts
+> `// @PluginMethod` as an export. Anchored to line start in **contracts 15 and
+> 40** — 15 had carried the same hole for the Health plugin since v298.
+
+### Read out of the binary, never the source
+
+The rule this project paid for three times with the launcher icon. AAPT2 path
+shortening renames every resource file (`res/RC.xml`, `res/EY.xml`), so a
+filename grep finds nothing and proves nothing — the resource IDs are resolved
+through the table instead:
+
+| | |
+|---|---|
+| `versionCode='23' versionName='3.2'` | ✓ |
+| `android:debuggable` | **absent entirely** — build 22 carried `=true` |
+| `android:allowBackup=false` | survived ✓ |
+| `<receiver .VaultWidgetProvider exported=true>` + `APPWIDGET_UPDATE` + meta-data → `@0x7f100002` → `xml/widget_today_info` | ✓ |
+| that provider info | 140×140dp, `updatePeriodMillis=0`, `resizeMode=3`, 2×2 cells |
+| the layout `@0x7f0b002d` | all **16** ids resolve BY NAME; only FrameLayout / LinearLayout / TextView / ProgressBar, so RemoteViews can inflate every one |
+| `MainActivity.onCreate`, disassembled from `classes2.dex` | `const-class HealthConnectPlugin → registerPlugin`, then `const-class WidgetBridgePlugin → registerPlugin` |
+
+**5.29 MB against build 22's 6.74**, and the drop is explained rather than
+assumed: `debuggable false` turns nine un-merged dex files into two
+(16.9 MB → 14.4 MB uncompressed). The web bundle's 32 `assets/public/` entries
+and `assets/capacitor.config.json` are all present, and `js/ui.js`, `js/body.js`
+and `js/food.js` appear for the first time — the v359–v362 split reaching the
+shell.
+
+### The widget itself
+
+- **RemoteViews, deliberately not Glance.** Glance needs Jetpack Compose, and
+  this project's first law is no dependencies and no build step. The cost is
+  real and paid here: no arbitrary drawing, a fixed set of view types, every
+  value set by id.
+- **Every word it draws travels in the snapshot**, not in `strings.xml`.
+  Android keys resources off the SYSTEM locale, but this app's language is a
+  preference set inside the app — a widget reading its own resources would sit
+  in English beside an Arabic app with no way to correct it. Eight words cost
+  ~140 bytes and mean a copy change reaches the widget on an ordinary web push,
+  with no new APK.
+- **An age, not a clock**, and only past 120 minutes. A widget is a state AS OF
+  a moment; saying when it was taken is the difference between stale and wrong.
+- **`updatePeriodMillis=0`** — Android never polls it. `WidgetBridgePlugin.set()`
+  repaints every placed widget itself, because otherwise logging a set would
+  leave the home screen stating the old number for up to half an hour.
+- ⚠️ **Every widget is a manifest receiver, so every widget revision costs a new
+  APK and a manual install for ~10 people.** That is why this build ships the
+  one resizable provider that reads a single snapshot, and not the quick-log
+  widget — working buttons are the only part with real unknowns, and an install
+  is not spent on an unknown.
+- ⚠️ **`--` MAY NOT APPEAR IN AN XML COMMENT**, and I wrote `--surface-1` in
+  `widget_bg.xml` and `--surface-3` in `widget_meter.xml`. The resource compiler
+  refuses the file outright. CLAUDE.md records this trap for `icon.svg`; it
+  applies to every XML resource, and it cost a build.
+
+### Measured
+
+40 contracts · lint · **13 suites, 0 failed, 0 skipped**. The fingerprint net
+against a v365 baseline captured on a stashed tree: **160/160 views and 106/106
+sheets, 0 differences** — the web change lives entirely inside `DB.widget` and
+draws nothing, so the net's second job applies: proving the fix did not leak
+into anything else.
 
 ## v365 — the widget snapshot: the half that can be proved before the APK exists
 

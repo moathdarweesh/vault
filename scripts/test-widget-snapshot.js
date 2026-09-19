@@ -5,7 +5,7 @@
 // below runs the real js/storage.js in a vm over the shared harness — no copy of
 // the function, so it cannot drift from what ships.
 //
-// Three things are worth more than the shape assertions:
+// Four things are worth more than the shape assertions:
 //
 //   · THE DAY. A widget sits on the home screen for hours untouched, so a day
 //     resolved anywhere but at write time is not a flicker, it is the whole
@@ -15,6 +15,13 @@
 //     has. A photo or a token reaching it would be a leak with no way back.
 //   · THAT IT IS INERT. With no plugin present nothing must be written and
 //     nothing must throw — that is what lets the web half ship alone.
+//   · THAT THE STUB IS THE PLUGIN. The first version of this file stubbed
+//     `Plugins.Preferences` with `remove({key})` — the shape of a package this
+//     app does not use — while the shipped clear() called a method the real
+//     plugin never had. Every assertion passed against a plugin that did not
+//     exist, and the shared-phone leak clear() exists to prevent would have
+//     shipped green. The stub is now checked against WidgetBridgePlugin.kt on
+//     every run; contract 40 does the same for the call sites.
 'use strict';
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
@@ -113,15 +120,37 @@ assert.equal(snap.cardio.done, false);
 
 // ── and it lands once a plugin is there ────────────────────────────────────
 {
+  // ⚠️ THE STUB IS READ AGAINST THE KOTLIN, EVERY RUN. A stub is a promise
+  // about a surface this harness cannot load; the only way to keep the promise
+  // honest is to compare it with the file that defines the surface. Both
+  // halves: the NAME the plugin registers under (a mismatch makes _plugin()
+  // return null, and push() is documented to return false then — so the widget
+  // would simply never update, with nothing to see), and the METHOD set (a
+  // Capacitor call to a missing method rejects asynchronously, past the
+  // synchronous try/catch, so clear() reports success having cleared nothing).
+  const KT = path.join(ROOT, 'android/app/src/main/java/com/moath/thevault/WidgetBridgePlugin.kt');
+  const kt = fs.readFileSync(KT, 'utf8');
+  const name = (kt.match(/@CapacitorPlugin\s*\(\s*name\s*=\s*"(\w+)"/) || [])[1];
+  assert.ok(name, 'WidgetBridgePlugin.kt declares no @CapacitorPlugin(name = "...")');
+  // Anchored to line start: a commented-out annotation is not an export.
+  const declared = [...kt.matchAll(/^[^\S\r\n]*@PluginMethod\s*\r?\n\s*fun\s+(\w+)\s*\(/gm)].map((m) => m[1]).sort();
+
+  // The plugin OWNS the storage name — no key travels with a call, which is
+  // why set() takes only {value}. 'snapshot' below mirrors the Kotlin's KEY
+  // constant purely so the store is inspectable; nothing in JS names it.
   const store = new Map();
-  c.Capacitor = { Plugins: { Preferences: {
-    set({ key, value }) { store.set(key, value); },
-    remove({ key }) { store.delete(key); },
-  } } };
+  const stub = {
+    set({ value }) { store.set('snapshot', value); },
+    clear() { store.delete('snapshot'); },
+    status() { return { available: true, placed: 0, hasSnapshot: store.has('snapshot') }; },
+  };
+  assert.equal(JSON.stringify(Object.keys(stub).sort()), JSON.stringify(declared),
+    'the stub does not mirror WidgetBridgePlugin.kt — stub [' + Object.keys(stub).sort() + '] vs @PluginMethod [' + declared + ']');
+  c.Capacitor = { Plugins: { [name]: stub } };
 
   assert.equal(DB.widget.push(), true, 'push() failed with a plugin present');
-  assert.equal(store.size, 1);
-  const written = JSON.parse(store.get(keys.widget));
+  assert.equal(store.size, 1, 'push() reached the plugin under a name it does not register — check _plugin() against @CapacitorPlugin(name)');
+  const written = JSON.parse(store.get('snapshot'));
   assert.equal(written.day, today, 'the written snapshot is not for today');
   assert.equal(written.kcal.eaten, 1660);
 
@@ -129,8 +158,9 @@ assert.equal(snap.cardio.done, false);
   assert.equal(store.size, 0, 'clear() left the snapshot in native storage — the next account on a shared phone would read it');
 
   // a plugin that throws must not take a save down with it
-  c.Capacitor.Plugins.Preferences.set = () => { throw new Error('native boom'); };
+  stub.set = () => { throw new Error('native boom'); };
   assert.equal(DB.widget.push(), false, 'a throwing plugin was not contained');
+  delete c.Capacitor;
 }
 
 // ── an empty install answers with nulls, never a throw ─────────────────────
@@ -154,6 +184,21 @@ assert.equal(snap.cardio.done, false);
   assert.equal(DB.widget.snapshot().streak, 12, 'snapshot() does not read computeStreak at call time');
 }
 
+// ── t() lives in js/ui.js and may not have run yet — the words are guarded ──
+{
+  assert.equal(typeof c.t, 'undefined', 'this harness loads ui.js — the guard below proves nothing');
+  // {} and never raw keys: the Kotlin has an English fallback for every word
+  // it is not handed; a raw key drawn on the home screen has none.
+  same(DB.widget.snapshot().labels, {}, 'snapshot() threw or sent raw keys when t() was absent');
+  c.t = (k) => 'L:' + k;
+  same(DB.widget.snapshot().labels, {
+    today: 'L:today', rest: 'L:rest_day', exercises: 'L:exercises',
+    kcal: 'L:calories', protein: 'L:protein_g', water: 'L:water',
+    since: 'L:widget_since', hoursShort: 'L:widget_hours_short',
+  }, 'the eight widget words are not each wired to their own key');
+  delete c.t;
+}
+
 console.log('PASS widget snapshot: day resolved at write time, ' + JSON.stringify(snap).length
-  + ' bytes with no photo/token/array, inert with no plugin, lands and clears with one, '
-  + 'and an empty install answers with nulls');
+  + ' bytes with no photo/token/array, inert with no plugin, lands and clears through a stub '
+  + 'that mirrors WidgetBridgePlugin.kt, words guarded on t(), and an empty install answers with nulls');
