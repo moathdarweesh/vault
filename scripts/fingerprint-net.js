@@ -491,7 +491,13 @@ async function captureModals(browser, origin, opts) {
 
 function writeRecord(tag, record, label) {
   fs.mkdirSync(OUT, { recursive: true });
-  fs.writeFileSync(path.join(OUT, tag + '.json'), JSON.stringify(record));
+  // ⚠️ THE LANE IS PART OF THE FILENAME, and that is not cosmetic. Both lanes
+  // used to write <tag>.json, so capturing views and then sheets under one tag
+  // left only the sheets — and the views evidence was gone with nothing said.
+  // The diff guard below already refuses to compare a views record against a
+  // sheets one; it simply never got the chance, because the second capture had
+  // already eaten the first.
+  fs.writeFileSync(path.join(OUT, recordFile(tag, record.lane)), JSON.stringify(record));
   const total = Object.values(record.cells).reduce((n, c) => n + (c.n || 0), 0);
   const cellCount = Object.keys(record.cells).length;
   console.log('fingerprint-net: ' + tag + ' — ' + label + ', ' + cellCount + ' cells, ' + total + ' elements, ' + record.props.length + ' properties each');
@@ -599,14 +605,40 @@ async function modals() {
 }
 
 // ── diff ─────────────────────────────────────────────────────────────────────
-function loadTag(tag) {
-  const f = path.join(OUT, tag + '.json');
-  if (!fs.existsSync(f)) throw new Error(`no capture tagged "${tag}" — run: node scripts/fingerprint-net.js capture --tag ${tag}`);
-  return JSON.parse(fs.readFileSync(f, 'utf8'));
+const recordFile = (tag, lane) => tag + '.' + lane + '.json';
+
+/* Which lanes were captured under this tag. A bare <tag> means "every lane
+   under it", so `diff before after` compares views WITH sheets instead of
+   whichever one the caller happened to run second. A record written before
+   v360 is still readable as <tag>.json and is reported under its own lane. */
+function lanesOf(tag) {
+  const out = new Map();
+  const legacy = path.join(OUT, tag + '.json');
+  if (fs.existsSync(legacy)) { const r = JSON.parse(fs.readFileSync(legacy, 'utf8')); out.set(r.lane || 'views', r); }
+  for (const f of fs.existsSync(OUT) ? fs.readdirSync(OUT) : []) {
+    const m = new RegExp('^' + tag.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '\\.(\\w+)\\.json$').exec(f);
+    if (m) out.set(m[1], JSON.parse(fs.readFileSync(path.join(OUT, f), 'utf8')));
+  }
+  if (!out.size) throw new Error(`no capture tagged "${tag}" — run: node scripts/fingerprint-net.js matrix --tag ${tag}`);
+  return out;
 }
 
+/* Compare every lane captured under both tags. A lane present on one side and
+   not the other is a FAILURE, not a smaller report: "40/40 identical" over the
+   sheets alone, printed for a change that moved a view, is the kind of green
+   that is worse than a red. */
 function diff() {
-  const a = loadTag(args[1]), b = loadTag(args[2]);
+  const A = lanesOf(args[1]), B = lanesOf(args[2]);
+  const lanes = [...new Set([...A.keys(), ...B.keys()])].sort();
+  const missing = lanes.filter((l) => !A.has(l) || !B.has(l));
+  if (missing.length) throw new Error(`lane(s) ${missing.join(', ')} were captured under only one of the two tags — capture both sides of every lane, or the comparison is silently partial`);
+  let failed = 0;
+  for (const lane of lanes) if (diffOne(A.get(lane), B.get(lane), lane)) failed++;
+  if (lanes.length > 1) console.log(`\nfingerprint-net: ${lanes.length} lanes compared (${lanes.join(', ')})` + (failed ? ` — ${failed} with differences` : ' — nothing changed in any of them'));
+  if (failed) process.exitCode = 1;
+}
+
+function diffOne(a, b, lane) {
   if (JSON.stringify(a.props) !== JSON.stringify(b.props)) throw new Error('the two captures recorded different property sets — they are not comparable');
   // `lane` and `contexts` are in this list because a views record and a sheets
   // record were silently comparable: a mistyped tag printed '160 removed, 106
@@ -647,12 +679,12 @@ function diff() {
     if (!cellDiffs) identicalCells++;
   }
 
-  console.log(`fingerprint-net: ${args[1]} → ${args[2]}`);
+  console.log(`fingerprint-net: ${args[1]} → ${args[2]}  [${lane}]`);
   console.log(`  ${identicalCells}/${cellIds.length} cells identical · ${comparedEls} elements compared · ${diffs.length} differences`);
 
   if (!diffs.length) {
-    console.log('\n  NOTHING CHANGED. The claim holds.');
-    return;
+    console.log('  NOTHING CHANGED. The claim holds.');
+    return false;
   }
 
   // Collapse: a class rename is ONE line covering N elements, not N lines.
@@ -676,7 +708,7 @@ function diff() {
   }
   if (sorted.length > 40) console.log(`\n    …and ${sorted.length - 40} more groups`);
   console.log('\n  Every line above is a change this step did not declare.');
-  process.exitCode = 1;
+  return true;
 }
 
 // ── go ───────────────────────────────────────────────────────────────────────

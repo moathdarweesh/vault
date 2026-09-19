@@ -19,7 +19,7 @@ const root = path.resolve(__dirname, '..');
 const read = (p) => fs.readFileSync(path.join(root, p), 'utf8');
 const exists = (p) => fs.existsSync(path.join(root, p));
 
-const { JS, TOP_LEVEL } = require('./shipped.js');   // one spelling, shared with eslint.config.js
+const { JS, VIEWS, EARLY, TOP_LEVEL } = require('./shipped.js');
 const PAGE_FILES = ['index.html', 'admin.html', 'privacy.html', 'get/index.html'];
 const src = Object.fromEntries(JS.map((f) => [f, read(f)]));
 const html = read('index.html');
@@ -35,7 +35,10 @@ const contract = (name, problems) => {
 {
   const order = [...html.matchAll(/<script src="(js\/[\w./-]+?)(?:\?v=\d+)?"/g)].map((m) => m[1]).filter((s) => !s.startsWith('js/vendor/'));
   const want = JS;
-  contract('index.html loads the eleven scripts in dependency order (i18n → catalog → cloud → storage → motion → food → app → health → notify → foodai → update)',
+  // The title is DERIVED. It used to spell the order out by hand next to a
+  // check that reads it from JS — two spellings of one fact, and the hand one
+  // is the one that goes stale silently while the check stays green.
+  contract('index.html loads the ' + JS.length + ' scripts in dependency order (' + JS.map((f) => f.slice(3, -3)).join(' → ') + ')',
     order.join(',') === want.join(',') ? [] : ['found: ' + order.join(' → ')]);
   const tags = [...html.matchAll(/<script\b[^>]*\bsrc="js\/[^">]+"[^>]*>/g)].map(m => m[0]);
   contract('startup scripts download in parallel and execute in order',
@@ -477,7 +480,7 @@ const contract = (name, problems) => {
   else {
     const meta = (html.match(/<meta name="theme-color" content="(#[0-9a-f]{6})"/i) || [])[1];
     if (meta !== dark) problems.push(`index.html static theme-color ${meta} ≠ styles.css dark --bg ${dark}`);
-    for (const [name, text] of [['index.html pre-paint', html], ['app.js applyTheme', src['js/app.js']]]) {
+    for (const [name, text] of [['index.html pre-paint', html], ['js/ui.js applyTheme', src['js/ui.js']]]) {
       const m = text.match(/theme === 'light' \? '(#[0-9a-f]{6})' : '(#[0-9a-f]{6})'/i);
       if (!m) problems.push(`${name}: no "theme === 'light' ? '#…' : '#…'" literal`);
       else { if (m[1] !== light) problems.push(`${name}: light ${m[1]} ≠ styles.css ${light}`); if (m[2] !== dark) problems.push(`${name}: dark ${m[2]} ≠ styles.css ${dark}`); }
@@ -493,12 +496,17 @@ const contract = (name, problems) => {
   const readFields = new Set([...pre.matchAll(/\bui\.(\w+)/g)].map((m) => m[1]));
   const mirror = src['js/storage.js'].slice(src['js/storage.js'].indexOf('function mirrorUi('));
   const written = new Set([...mirror.slice(0, mirror.indexOf('\n}')).matchAll(/\b(\w+):\s*p\.\w+/g)].map((m) => m[1]));
-  for (const m of src['js/app.js'].matchAll(/mirrorUi\(\{\s*(\w+)/g)) written.add(m[1]);
+  // ⚠️ THE VIEW SCRIPTS, NOT app.js. applyTheme() and applyLang() — the only two
+  // callers of mirrorUi() — moved to js/ui.js in v360, and this contract caught
+  // it LOUDLY, which is the whole difference between contract 21 and the silent
+  // failure contract 24 was one release away from. It reads VIEWS now.
+  const viewSrc = VIEWS.map((f) => src[f]).join('\n');
+  for (const m of viewSrc.matchAll(/mirrorUi\(\{\s*(\w+)/g)) written.add(m[1]);
   for (const f of readFields) if (!written.has(f)) problems.push(`index.html's pre-paint reads ui.${f}, which mirrorUi() never writes`);
   if (!/'theme-' \+ ui\.theme/.test(pre)) problems.push("index.html's pre-paint no longer builds 'theme-' + ui.theme");
-  if (!/'theme-' \+ theme/.test(src['js/app.js'])) problems.push("app.js applyTheme no longer builds 'theme-' + theme");
+  if (!/'theme-' \+ theme/.test(viewSrc)) problems.push("applyTheme() no longer builds 'theme-' + theme");
   for (const t of ['dark', 'light']) if (!new RegExp('body\\.theme-' + t + '\\b').test(read('styles.css'))) problems.push(`styles.css has no body.theme-${t} block`);
-  contract(`the pre-paint mirror's fields (${[...readFields].join(', ')}) are written by mirrorUi(), and the theme-<name> class is spelled the same in index.html, app.js and styles.css`, problems);
+  contract(`the pre-paint mirror's fields (${[...readFields].join(', ')}) are written by mirrorUi(), and the theme-<name> class is spelled the same in index.html, js/ui.js and styles.css`, problems);
 }
 
 // ---------------------------------------------------------------- 22. the seven glyphs copied outside ICONS are byte-for-byte the masters
@@ -596,19 +604,20 @@ const contract = (name, problems) => {
 // ---------------------------------------------------------------- 26. app.js checks a later module before using it, and never on a boot timer
 {
   const problems = [];
-  // Every VIEW script, not just app.js: ten of the FoodAI. guard sites moved to
-  // js/food.js with openRecipeEditor and the AI paths, and a file-scoped scan
-  // would have stopped checking them without saying so.
-  const VIEWS = JS.filter((f) => !['js/health.js', 'js/notify.js', 'js/foodai.js', 'js/update.js', 'js/i18n.js', 'js/catalog.js'].includes(f));
-  const lines = VIEWS.map((f) => src[f].split(/\r?\n/)).flat();
+  // ⚠️ EVERY SCRIPT THAT LOADS BEFORE THE MODULES, and each line keeps its own
+  // FILE. v359 widened this scan from app.js to a concatenation but left the
+  // message saying `app.js:${i + 1}` — so a real unguarded call in js/food.js
+  // would have been reported at a line number in a file that does not have it.
+  // The check was right and the report was a wild goose chase.
+  const lines = EARLY.flatMap((f) => src[f].split(/\r?\n/).map((text, i) => [f, i + 1, text]));
   const mods = ['Notify', 'Health', 'FoodAI', 'VaultUpdate'];
   for (const mod of mods) {
     const guard = new RegExp('window\\.' + mod + '\\b|typeof ' + mod + '\\b');
-    lines.forEach((line, i) => {
-      const code = line.replace(/\/\/.*$/, '');
+    lines.forEach(([file, no, text], i) => {
+      const code = text.replace(/\/\/.*$/, '');
       if (!new RegExp('\\b' + mod + '\\.').test(code) || guard.test(code)) return;
-      const back = lines.slice(Math.max(0, i - 20), i).join('\n');
-      if (!guard.test(back)) problems.push(`app.js:${i + 1}: uses ${mod}. with no window.${mod} / typeof ${mod} check on the line or within the 20 lines above`);
+      const back = lines.slice(Math.max(0, i - 20), i).filter(([f]) => f === file).map(([, , x]) => x).join('\n');
+      if (!guard.test(back)) problems.push(`${file}:${no}: uses ${mod}. with no window.${mod} / typeof ${mod} check on the line or within the 20 lines above`);
     });
   }
   // the init IIFE: no timer armed at evaluation time may be the thing that waits for a later script
@@ -805,7 +814,7 @@ const contract = (name, problems) => {
 }
 
 // ---------------------------------------------------------------- 34. no top-level name is declared in two shipped scripts
-// The ten shipped files are CLASSIC scripts sharing one global lexical scope.
+// The shipped files are CLASSIC scripts sharing one global lexical scope.
 // A top-level `const`/`let`/`class` declared in two of them is a SyntaxError
 // ("Identifier has already been declared") that stops the SECOND file from
 // executing at all — a blank app, with the error only in a console nobody on
@@ -874,18 +883,20 @@ const contract = (name, problems) => {
 {
   const problems = [];
   const { ENTRIES, SKIP } = require('./fp/modals.js');
-  // app.js AND food.js: twelve openers moved with the food domain, and a
-  // scan of app.js alone would report every one of them as "not a top-level
-  // sheet any more" — a loud failure, but the wrong diagnosis.
-  const app = src['js/app.js'] + '\n' + src['js/food.js'];
+  // EVERY view script, derived — not app.js, and not the hand-written pair that
+  // v359 left here. openModal() and openImageLightbox() both moved to js/ui.js,
+  // and a scan that still named two files would have called them "not a
+  // top-level sheet any more": a loud failure with the wrong diagnosis, for the
+  // second release running. It is read from VIEWS now and cannot happen again.
+  const app = VIEWS.map((f) => src[f]).join('\n');
   const openers = new Set([...app.matchAll(/^(?:async )?function (open[A-Z]\w*)\(/gm)].map((m) => m[1]));
   for (const d of ['confirmDialog', 'showUnreadableDialog', 'showConflictDialog', 'showChangePassword', 'showFeedback']) openers.add(d);
   const covered = new Set(ENTRIES.map((e) => e.name));
   for (const name of openers) {
-    if (!covered.has(name) && !(name in SKIP)) problems.push(`${name}() is a sheet in js/app.js that scripts/fp/modals.js neither captures nor names in SKIP with a reason`);
+    if (!covered.has(name) && !(name in SKIP)) problems.push(`${name}() is a sheet in the view scripts that scripts/fp/modals.js neither captures nor names in SKIP with a reason`);
   }
   for (const name of [...covered, ...Object.keys(SKIP)]) {
-    if (!openers.has(name)) problems.push(`scripts/fp/modals.js names ${name}(), which is not a top-level sheet in js/app.js any more`);
+    if (!openers.has(name)) problems.push(`scripts/fp/modals.js names ${name}(), which is not a top-level sheet in any view script any more`);
   }
   const ids = ENTRIES.map((e) => e.id);
   const dup = ids.filter((id, i) => ids.indexOf(id) !== i);
@@ -953,6 +964,70 @@ const contract = (name, problems) => {
     if (k in KEPT) continue;    problems.push(`js/i18n.js defines \`${k}\` and nothing references it — delete it from BOTH dictionaries, or add it to this contract's KEPT map with the reason`);
   }
   contract(`every dictionary key is reachable (${keys.size} keys, ${fams.length} prefix families, ${Object.keys(KEPT).length} kept by decision)`, problems);
+}
+
+
+// ---------------------------------------------------------------- 39. js/ui.js is the floor, and stays the floor
+// A file called "the shared primitives" is a WISH until something refuses the
+// first primitive that reaches upward. The moment one does — a formatter that
+// reads a workout, a sheet that calls navigate() — js/ui.js stops being the
+// bottom of the graph and becomes a second app.js with a smaller name, and the
+// whole reason for the split is gone. Nothing announces that; it just happens,
+// one convenient line at a time.
+//
+// ⚠️ DB.prefs IS ALLOWED AND THE REST OF DB IS NOT, and that line is measured,
+// not chosen. t() — the most-called name in the app — reads
+// DB.prefs.get().lang, and every weight formatter reads DB.prefs.get().unit;
+// unit and language ARE presentation. User DATA is what must never be reachable
+// from here. "No DB at all" would have been the tidier sentence and a false
+// one, and a rule known to be false is a rule people route around.
+//
+// The second half is the inverse: VIEWS must name real, shipped scripts. It is
+// a positive list now (scripts/shipped.js), and a positive list can name a file
+// that no longer ships — which would silently shrink every check derived from
+// it, contracts 26 and 36 and the ESLint DB.* law included.
+{
+  const problems = [];
+  const FORBIDDEN = [
+    [/\bDB\s*\.\s*(?!prefs\b)(\w+)/, (m) => `reads DB.${m[1]} — js/ui.js may touch DB.prefs and nothing else of DB`],
+    [/\bCloud\s*\./, () => 'reaches Cloud — the network is not a presentation concern'],
+    [/\b(Health|Notify|FoodAI|VaultUpdate)\s*\./, (m) => `reaches ${m[1]}. — a module that loads AFTER it`],
+    [/\bnavigate\s*\(/, () => 'calls navigate() — routing is the shell\'s job, not the vocabulary\'s'],
+    [/\brenderView\s*\(/, () => 'calls renderView() — deciding to repaint is the shell\'s job'],
+    [/\blocalStorage\b/, () => 'touches localStorage directly — every store goes through DB'],
+  ];
+  const lines = src['js/ui.js'].split(/\r?\n/);
+  lines.forEach((line, i) => {
+    const code = line.replace(/\/\/.*$/, '');
+    for (const [re, say] of FORBIDDEN) {
+      const m = re.exec(code);
+      if (m) problems.push(`js/ui.js:${i + 1}: ${say(m)}`);
+    }
+  });
+  // …and no primitive may be dead. The corpus is EVERY shipped script WITH
+  // js/ui.js's own body in it, minus the declaration lines themselves — the
+  // first spelling of this asked only whether the scripts ABOVE used each name,
+  // and called THEMES, THEME_ALIAS, toastTimeout and formatDelta dead when all
+  // four are used by their neighbours inside this very file. A liveness check
+  // that reads the wrong corpus does not under-report; it accuses.
+  const uiLines = src['js/ui.js'].split(/\r?\n/);
+  const declared = [];
+  const body = [];
+  uiLines.forEach((line) => {
+    const m = TOP_LEVEL.exec(line);
+    if (m) { declared.push(m[1]); body.push(line.slice(line.indexOf(m[1]) + m[1].length)); } else body.push(line);
+  });
+  const above = JS.filter((f) => f !== 'js/ui.js').map((f) => src[f]).concat(body.join('\n')).join('\n');
+  for (const n of declared) {
+    if (n.startsWith('__')) continue;   // openModal's own state, private by name
+    // An IDENTIFIER boundary, not \b: `$` and `$$` are not word characters, so
+    // \b never matches beside them and the two most-used primitives in the file
+    // would have been reported dead.
+    const used = new RegExp('(?:^|[^\\w$])' + n.replace(/\$/g, '\\$') + '(?![\\w$])');
+    if (!used.test(above)) problems.push(`js/ui.js declares \`${n}\` and no view script uses it — a primitive with no caller is dead code in the one file that must stay small`);
+  }
+  for (const f of VIEWS) if (!JS.includes(f)) problems.push(`scripts/shipped.js lists ${f} in VIEWS, but it is not one of the ${JS.length} shipped scripts`);
+  contract(`js/ui.js reaches no DB but DB.prefs, no Cloud, no module and no router, and every one of its ${declared.length} names has a caller above it`, problems);
 }
 
 console.log(failures.length ? `\ncheck-contracts: ${failures.length} broken contract(s)` : '\ncheck-contracts: all contracts hold');

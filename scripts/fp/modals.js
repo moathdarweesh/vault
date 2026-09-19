@@ -1,12 +1,13 @@
-// The sheets and dialogs — every top-level `open*` in js/app.js AND js/food.js
-// (twelve of them moved there with the food domain) plus the five dialogs, and
-// the arguments each one needs to open over the seeded fixture.
+// The sheets and dialogs — every top-level `open*` in the view scripts
+// (js/ui.js, js/food.js, js/app.js) plus the five dialogs, and the arguments
+// each one needs to open over the seeded fixture.
 //
 // ⚠️ A SHEET THAT IS NOT IN THIS LIST IS OUTSIDE THE NET. The matrix (stage 2)
 // navigates VIEWS; most of what the food domain does lives in sheets, and a
 // moved sheet that broke would have passed it. Contract 36 compares this file
-// against the `function open*(` declarations in both files: a new opener either
-// joins the net here or is named in SKIP with a reason, or the commit fails.
+// against the `function open*(` declarations in every view script: a new opener
+// either joins the net here or is named in SKIP with a reason, or the commit
+// fails.
 //
 // Arguments are TOKENS resolved inside the page at capture time:
 //   '$today' '$exerciseId' … — a field of the seeded fixture (scripts/fp/fixture.js)
@@ -80,7 +81,7 @@ const ENTRIES = [
 /* Named, with the reason, so contract 36 can tell "left out on purpose" from
    "forgotten". Each one is a real gap in the net, stated rather than hidden. */
 const SKIP = {
-  openModal: 'the primitive every entry above goes through, not a sheet of its own',
+  openModal: 'the primitive every entry above goes through, not a sheet of its own (js/ui.js)',
   openBarcodeScanner: 'needs a camera (getUserMedia) — a device-only surface; the fence would block the stream anyway',
   openVoiceCapture: 'needs a microphone — device-only',
   openCoach: 'DORMANT by owner decision (v219): nothing calls it, so nothing can regress by moving it',

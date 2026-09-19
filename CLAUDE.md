@@ -8,9 +8,10 @@ A fitness / workout-tracking **PWA**. Vanilla JS, **no build step**, bilingual *
 
 ## Stack & key files
 - `index.html` — markup, script wiring, and the cache-version markers.
-- `js/i18n.js` — the two EN/AR dictionaries and nothing else. **Loads FIRST of the eleven scripts**: `const I18N` is shared through the global lexical scope, which only works if it has already executed when app.js's `t()` runs.
+- `js/i18n.js` — the two EN/AR dictionaries and nothing else. **Loads FIRST of the twelve scripts**: `const I18N` is shared through the global lexical scope, which only works if it has already executed when app.js's `t()` runs.
 - `js/catalog.js` — the app's static data and nothing else: `ICONS` (+ its two back-compat aliases), `WORKOUT_TEMPLATES`, `EXERCISE_MUSCLES`, both exercise-name maps and `FOOD_PRESETS`. Loads second, before app.js, for the same lexical-scope reason. **Contracts 13, 22 and 23 read THIS file now, not app.js.**
-- `js/app.js` (**~531KB**) — the shell, the router `navigate(view, ctx, opts)`, the shared primitives and every domain except food. Use `Grep` to find a function; don't assume from names.
+- `js/app.js` (**~502KB**) — the shell, the router `navigate(view, ctx, opts)`, and every domain except food. Use `Grep` to find a function; don't assume from names.
+- `js/ui.js` (**~31KB**, v360) — the presentation vocabulary: format (numbers, weights, days, names), `escapeHtml`, `$`/`$$`, the shared surfaces (`showToast`, `openModal`, `closeModal`, `confirmDialog`, `openImageLightbox`, `emptyState`), `t()`/`icon()`, and `applyTheme`/`applyLang`. **The floor of the call graph** — contract 39 refuses any member that reaches past `DB.prefs`, or reaches Cloud, a module or the router. Loads after motion.js and before food.js.
 - `js/food.js` (**~130KB**, v359) — the food domain: the Food and food-log views, the calculator, the recipe ledger, the saved-food picker, the meal bundles, the shopping list, the barcode scanner and the voice/photo capture. **Loads BEFORE app.js** — `bootCatalog()` calls into it inside a bare catch, so loading it later would swallow a ReferenceError and silently never merge the server food catalog.
 - `js/storage.js` — the `DB.*` localStorage API (all persistence). `MACHINE_SEED`, name-match migrations.
 - `js/cloud.js` — Supabase email/password auth + whole-blob sync to a per-user `vault_data` row (RLS-protected). Uses the **publishable** key only (never service-role). Loads before app.js. Also: `getUsername/checkUsername/setUsername` (the mandatory-handle feature) and `getClient` (RLS-scoped client for auxiliary readers).
@@ -80,7 +81,7 @@ a faster TTFB — not fewer bytes.
 npm run release          # bump every marker + verify, then commit all files together
 ```
 
-**Current version: v359.** APK: build 22 / v3.1.
+**Current version: v360.** APK: build 22 / v3.1.
 
 `scripts/release.js` rewrites **every** marker and then re-reads them from disk to confirm; it exits non-zero if any disagree, and prints the count per file (derived, never hard-coded — the docs used to say 16 while the real count was 15). The markers are `?v=N` in `index.html` (every script and stylesheet, the `js/vendor/supabase.js` preload, both `icons/icon.svg` links, `manifest.json`), the `__cleaned_vN` sessionStorage key, the `FALLBACK` literal in `app.js`, `version.json` → `web`, the `?v=` in `manifest.json`, `admin.html`, `privacy.html` and `get/index.html`, and the `Current version` line in this file. `scripts/check-contracts.js` (pre-commit) refuses a commit where any of them disagree.
 
@@ -559,7 +560,7 @@ npm run verify && npm run release && git add <the files> && git commit && git pu
 This authorization is about the QUESTION, not about the standards. Everything that made the
 question worth asking still applies, and none of it is waived:
 
-- **Verified first.** `npm run verify` (38 contracts + lint + 11 suites) must pass, and any change to
+- **Verified first.** `npm run verify` (39 contracts + lint + 11 suites) must pass, and any change to
   shipped code must be measured in the running app. Pushing unverified work is not "shipping
   without asking", it is shipping something unknown — GitHub Pages serves the branch directly
   with no gate, so a bad push reaches every device at the next app open.
@@ -2612,6 +2613,139 @@ light + no door → `#faf5f0`; dark → `#000000` throughout.
   images are square (2732×2732), so short and long edge are the same number.
 - **"The 2500ms cap opens onto an empty shell"** and **"the app behind the door is
   not aria-hidden"** — both already answered in v343's note.
+
+## v360 — the floor: js/ui.js, and the measurement that reversed its own headline
+
+The second file out of `js/app.js`, and the opposite kind of cut from the first.
+`js/food.js` was a DOMAIN, chosen for having no lateral edges. This is the
+**FLOOR**: the bottom of the call graph, the words every view is written in.
+**10,597 → 10,004 lines (531 → 502 KB)**, and both fingerprint lanes say nothing
+moved — views **40/40 identical**, sheets **106/106**, zero differences each.
+
+### The set is a CLOSURE, computed, not a list somebody liked
+
+Seeded with the obvious primitives and closed over what they mention: **41
+declarations, 6 runs, 485 lines, ZERO top-level statements**, and the closure
+dragged in exactly three names — `openModal`'s own state bindings. Its ten
+top-level bindings all initialise to literals, so loading before app.js is safe
+in both directions for the same reason js/food.js is: every borrowed name —
+`I18N`, `ICONS`, `DB`, `startOfWeek` — is read at CALL time.
+
+### ⚠️ DB.prefs IS ALLOWED AND THE REST OF DB IS NOT — measured, not chosen
+
+The tidy rule to write was "a primitive touches no DB at all". It is false, and
+the check said so before it shipped: **`t()` — the most-called name in the app,
+101 callers — reads `DB.prefs.get().lang`**, and all five weight formatters read
+`DB.prefs.get().unit`. Unit and language ARE presentation; user DATA is what must
+never be reachable from here. **A rule known to be false is a rule people route
+around**, so the rule says what is true and **contract 39** enforces exactly that
+line: `DB.prefs` yes, any other `DB.x` no, no Cloud, no module, no `navigate()`,
+no `renderView()`, no `localStorage` — plus no dead primitive, and no name in
+VIEWS that is not a shipped script.
+
+### ⚠️ FOUR MORE CONTRACTS READ A MOVED FUNCTION OUT OF app.js — ALL FOUR LOUD
+
+v359 caught two that would have gone SILENT. This release found four more of the
+same family, and every one of them **failed the commit** instead:
+
+| | read | broke on |
+|---|---|---|
+| contract 21 | `src['js/app.js']` for `mirrorUi({…})` | `applyLang` moved |
+| contract 21 | …and for `'theme-' + theme` | `applyTheme` moved |
+| theme-color | `applyTheme`'s two `#…` literals | `applyTheme` moved |
+| contract 36 | app.js + food.js, hand-listed | `openModal`/`openImageLightbox` moved |
+
+The difference between loud and silent is the whole lesson of the two releases:
+**a check that MATCHES a pattern fails loudly when its subject moves; a check
+that matches and then tests the result goes quiet.** Contract 24 was the second
+kind. All four now read `VIEWS` from `scripts/shipped.js`, so this is the last
+release in which a moved function can break a hand-written file list.
+
+### VIEWS and EARLY are spelled POSITIVELY, and that is a bug class too
+
+Contract 26 derived its scan by SUBTRACTION — `JS` minus a hand-listed six —
+which has the failure mode backwards: **a script added to JS and forgotten there
+silently JOINS the view layer** and gets view rules applied to it, with nothing
+to say so. `scripts/shipped.js` now spells `VIEWS` (the three that render) and
+derives `EARLY` (everything loading before the four late modules) from the ORDER
+rather than from a list. Contract 39 refuses a VIEWS entry that is not shipped.
+
+> And v359 left contract 26 reporting `` `app.js:${i + 1}` `` over a CONCATENATION of
+> five files — so a real unguarded call in js/food.js would have been reported at
+> a line number in a file that does not have it. The check was right and the
+> report was a wild goose chase. Each line keeps its own file now.
+
+### A sentence that had been severed across 850 lines
+
+`let toastTimeout = null;` sat at line 388 carrying two lines of `hideToast`'s
+doc comment ending mid-clause — **"…Safe to"** — while the third line,
+**"call anytime (navigation, view change…)"**, sat at 1241 above the function it
+documents. An earlier edit had cut a comment in half and moved the halves 850
+lines apart. Both ends came out in the same extraction; deleting one blank line
+rejoined them.
+
+### ⚠️ MY FIRST BOOT MEASUREMENT WAS WRONG BY A FACTOR OF FIFTEEN, IN MY FAVOUR
+
+v359 shipped with an upper BOUND (215 ms of TTFB budget) instead of a number, so
+this release measured it. Done the obvious way — baseline first, then the change
+— DOMContentLoaded went **71.9 ms → 47.3 ms**: adding a twelfth script had
+apparently made boot **34% FASTER**, with the two distributions not even
+overlapping. A flattering result with a clean separation is exactly when to
+distrust it. Alternated before/after/before/after in one window:
+
+| | BEFORE (11) | AFTER (12) | BEFORE (11) | AFTER (12) |
+|---|---|---|---|---|
+| local | 45.6 ms | 46.7 ms | 44.8 ms | 46.3 ms |
+| 200 ms RTT | 867.1 ms | 863.7 ms | 859.2 ms | 861.0 ms |
+
+The whole 24 ms was **the cold first browser launch of the session**. The honest
+cost of a twelfth `<script defer>` is **about +1.3 ms of parse/execute and
+nothing measurable at 200 ms RTT** — because deferred scripts are discovered in
+one HTML parse and fetched in parallel. That also retires v359's 215 ms bound:
+it was honest and it was ~165× too loose.
+
+`scripts/measure-boot.js` keeps the method, in two lanes (`local` isolates parse
+and execute; `rtt200` uses this project's own measured TTFB), and it reports
+`first sample vs median` so a cold run announces itself instead of flattering.
+**One un-alternated run measures the machine, not the change.**
+
+### ⚠️ AND THE FINGERPRINT NET'S TWO LANES SHARED ONE TAG NAMESPACE
+
+`matrix --tag X` then `modals --tag X` both wrote `.fpnet/X.json`, so the second
+**silently ate the first** and the views evidence was gone. v357 added a guard
+refusing to compare a views record with a sheets record — it simply never got the
+chance, because the overwrite had already happened. **The check was right and
+could not run**, which is this project's most expensive recurring shape.
+
+The lane is part of the filename now (`X.views.json`, `X.sheets.json`), a bare
+tag means EVERY lane under it, and a lane captured on only one side is a FAILURE
+rather than a smaller report — proved by feeding it a one-lane tag and watching
+it refuse with exit 1. `diff uiB uiA` now reports both lanes in one command.
+
+### Proved, not assumed
+
+**16 defects planted, 16 caught**, all three files restored byte-for-byte: each
+of contract 39's six refusals plus its dead-primitive and VIEWS arms; DB.prefs
+staying allowed (a negative control — the rule is a line, not a ban); both halves
+of contract 21; the theme-color literal; a new sheet in ui.js the net does not
+know; the same name in two scripts; a reordered script list; and two ESLint rules.
+
+### What did NOT move, and why
+
+`setUiLanguage()` re-renders, so it stayed: applying a language is vocabulary,
+deciding to repaint is the router's job. `vaultBar()` reaches the unified search
+and the undo ledger. The in-app notification bar closes cleanly as a nine-name
+cluster but **exactly one caller opens it, inside one domain** — a surface with
+one caller is not shared, and moving it here would mean moving it twice.
+`isNativeShell()` has one caller and sits under `exportBackupFile`'s own doc
+comment; taking it would have split a comment from the function it documents.
+
+### Next
+
+The floor is down and proved. Body/health and settings next, then **workout
+last**: 28 inbound edges and the only lateral debt left, seven sites of which are
+one concern — a domain arming the reminder system — that inverts into a `vault:*`
+event for free.
 
 ## v359 — the split begins: js/food.js, and the two checks it would have silenced
 

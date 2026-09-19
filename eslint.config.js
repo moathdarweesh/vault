@@ -26,12 +26,12 @@
 const fs = require('node:fs');
 const path = require('node:path');
 const globals = require('globals');
-const { JS: SHIPPED, TOP_LEVEL } = require('./scripts/shipped.js');   // one spelling, shared with scripts/check-contracts.js
+const { JS: SHIPPED, VIEWS, TOP_LEVEL } = require('./scripts/shipped.js');   // one spelling, shared with scripts/check-contracts.js
 
 // ---------------------------------------------------------------------------
 // The cross-file global surface, DERIVED — never hand-listed.
 //
-// The ten shipped scripts are classic <script defer> files. A top-level `const`
+// The shipped scripts are classic <script defer> files. A top-level `const`
 // in one is NOT on `window`, but it IS in the global lexical scope, so every
 // later script can read it (that is exactly how app.js reaches I18N and ICONS).
 // A hand-written list of those names would be a second spelling of the source
@@ -261,7 +261,7 @@ const CORRECTNESS = {
 module.exports = [
   { ignores: ['node_modules/**', 'www/**', 'android/**', 'ios/**', 'graphify-out/**', 'graphify-out.bak/**', 'js/vendor/**', 'download/**', 'docs/**', '.fpnet/**'] },
 
-  // ── the ten shipped scripts ───────────────────────────────────────────────
+  // ── the shipped scripts ───────────────────────────────────────────────
   {
     files: ['js/*.js'],
     languageOptions: {
@@ -273,11 +273,12 @@ module.exports = [
     rules: { ...CORRECTNESS, ...PROJECT_RULES },
   },
 
-  // The VIEW layer, and the DB.* law is written for exactly it. js/food.js is
-  // 2,400 lines of it; scoped to app.js alone the rule would have stopped
-  // covering them the moment they moved.
+  // The VIEW layer, and the DB.* law is written for exactly it. Taken from
+  // shipped.js rather than listed: this is the third release in which a file
+  // left app.js, and each time a hand-written pair here would have quietly
+  // stopped covering the lines that moved.
   {
-    files: ['js/app.js', 'js/food.js'],
+    files: VIEWS,
     plugins: { vault },
     rules: { 'vault/no-direct-storage-in-views': 'error' },
   },
