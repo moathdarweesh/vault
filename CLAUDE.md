@@ -82,7 +82,7 @@ a faster TTFB — not fewer bytes.
 npm run release          # bump every marker + verify, then commit all files together
 ```
 
-**Current version: v363.** APK: build 22 / v3.1.
+**Current version: v364.** APK: build 22 / v3.1.
 
 `scripts/release.js` rewrites **every** marker and then re-reads them from disk to confirm; it exits non-zero if any disagree, and prints the count per file (derived, never hard-coded — the docs used to say 16 while the real count was 15). The markers are `?v=N` in `index.html` (every script and stylesheet, the `js/vendor/supabase.js` preload, both `icons/icon.svg` links, `manifest.json`), the `__cleaned_vN` sessionStorage key, the `FALLBACK` literal in `app.js`, `version.json` → `web`, the `?v=` in `manifest.json`, `admin.html`, `privacy.html` and `get/index.html`, and the `Current version` line in this file. `scripts/check-contracts.js` (pre-commit) refuses a commit where any of them disagree.
 
@@ -2614,6 +2614,93 @@ light + no door → `#faf5f0`; dark → `#000000` throughout.
   images are square (2732×2732), so short and long edge are the same number.
 - **"The 2500ms cap opens onto an empty shell"** and **"the app behind the door is
   not aria-hidden"** — both already answered in v343's note.
+
+## v364 — «وين المنطق؟»: the ledger, and twelve headings at one weight
+
+Two owner reports on the running app, both correct.
+
+### 1. «هل معقول يظهر فيه كل الايام زي كذا وين المنطق؟»
+
+With no cardio logged, the screen was **seven identical dashed rows** — the
+same sentence «لا كارديو» seven times, each with its own date, under a heading
+reading «كل الجلسات» and over three stat boxes already reading 0, 0, 0.
+
+> **The v299 design is right and so is the complaint — they are about different
+> situations. An empty day is information only AS A GAP.** Between days that
+> have something, "nothing on the 17th" is a fact worth a row and a + to fill
+> it. With nothing in the window at all it is not a ledger, it is the word "no"
+> repeated `days` times.
+
+So an empty WINDOW collapses to one empty state; an empty DAY inside a window
+that has entries is untouched. Measured in the running app: **7 rows → 1 box**
+with no data (view height 544px), and **7 rows with 5 gaps** once two sessions
+three days apart exist. `dayLedgerHtml` is shared, so sleep got the same rule
+from the same line — which is the boundary v362 chose it for.
+
+### 2. «زبط الاعدادات وخلي الها معنى والشكل خليه افضل»
+
+Settings opened with **two unexplained full-width buttons** — «برامج سابقة» and
+«آخر التعديلات», both niche history tools, in the loudest position on the page
+with no heading over them — and then **twelve `.section-title` dividers at one
+weight in no order**: language, exercise names, theme and unit are four
+headings for one thing, while the cloud copy, the account and the export sat
+apart from each other.
+
+> ⚠️ **THE MISSING LEVEL IS ABOVE .section-title, NOT BELOW IT.** That class is
+> 11px, uppercase, 0.18em tracking, with a rule line after it — it is already a
+> LABEL. The instinct was to demote the twelve and add a smaller label under a
+> new heading; that would have produced a page of 9px text. The fix adds ONE
+> level above and changes nothing inside: **25 ids/data-attributes and 41
+> strings, the same sets**, asserted by the patch itself.
+
+Five groups: حسابك والمزامنة · المظهر واللغة · التذكيرات والصحة · النسخ والسجلّ ·
+التطبيق. The two orphan buttons moved under «السجلّ» inside the backups group,
+where they are what they are — your data's history.
+
+### ⚠️ AND CONTRACT 38 CAUGHT MY OWN PATCH DESTROYING MARKUP
+
+The restructure locates each block and re-emits it. The first spelling found a
+block's close with `at('</div>', …)` — any line CONTAINING one — which matched
+`<div class="settings-action-icon">${icon('refresh', 20)}</div>` and truncated
+two blocks.
+
+> **The patch's own check passed**, because it compared the set of ids and
+> data-attributes and every line it dropped carried neither. **Contract 38 — the
+> v358 inverse, every dictionary key must be reachable — is what caught it**, by
+> noticing `reset_data`, `reset_data_sub` and `privacy_policy_sub` had stopped
+> being referenced by anything. A hook-set check proves the handlers still have
+> elements; it does not prove the markup is intact. The patch asserts the STRING
+> set too now, and closes only on a line that IS `    </div>`.
+
+### The save centre: one column, because the label was the value
+
+The rows asked for a label and a value, and the values are complete
+self-describing sentences — so the label repeated them and the repetition was
+what squeezed the sentence into a column too narrow for it:
+
+| label | value |
+|---|---|
+| على هذا الجهاز | **محفوظ على هذا الجهاز** — the same phrase twice |
+| النسخة السحابية | **المزامنة السحابية غير مرتبطة بهذا الجهاز** — «السحابية» twice, wrapped to two lines |
+
+The nine state strings are NOT touched — they were written in v310 and each
+carries real information («your saved device copy is available» during an
+outage is reassurance, not decoration). What went is the column that repeated
+them, and with it `sc_device`/`sc_cloud` from both dictionaries. Measured after:
+**44px and 43px, one line each**, in Arabic and in English. And `sc_title`
+narrowed from «الحفظ والمزامنة» to «حالة الحفظ», because the group heading now
+carries «المزامنة» and the eye tripped on the echo.
+
+### The net proved the change was CONFINED, which is its other job
+
+A design change is supposed to differ. What must not differ is everything else:
+**6 of 40 view cells changed — cardio, sleep and settings, in both contexts —
+and the sheets lane is 106/106 identical.** Nothing else moved.
+
+> A crude first pass called 23 cells changed and sent me hunting through `home`
+> and `calendar`. It was comparing the whole record including `renderMs`; the
+> tool's own diff had said 34/40 identical all along and was right. **Compare
+> what the tool compares, or you will chase your own timing jitter.**
 
 ## v363 — the reminder system is TOLD, not called
 

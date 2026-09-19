@@ -7629,8 +7629,12 @@ body.theme-light {
 
 /* Save center: uses the same section, button and color tokens as Settings. */
 .save-center .section-title { margin-top: 0; }
-.save-center-row { display: grid; grid-template-columns: minmax(90px, .7fr) minmax(0, 1.3fr); gap: 12px; padding: 10px 0; align-items: start; border-bottom: 1px solid var(--border); }
-.save-center-row > span { color: var(--text-mute); font-size: 13px; }
+/* [v364] ONE COLUMN, NOT TWO. The label column repeated the value's own
+   subject — «على هذا الجهاز» over «محفوظ على هذا الجهاز» — and squeezed the
+   sentence into 1.3fr, where the cloud state wrapped to two lines. The states
+   name themselves, so the label was cost with no information in it. */
+.save-center-row { padding: 10px 0; border-bottom: 1px solid var(--border); }
+.save-center-row:last-of-type { border-bottom: 0; }
 .save-center-row > strong { font-size: 14px; line-height: 1.6; font-weight: 600; overflow-wrap: anywhere; }
 .save-center[data-state="failed"] #sc-device { color: var(--red); }
 .save-center #sc-detail { color: var(--red); font-size: 14px; line-height: 1.7; }
@@ -8497,6 +8501,23 @@ body.ember-on .ember {
 }
 
 /* =========================================================================
+/* Settings groups (v364) — the page carried TWELVE .section-title dividers at
+   one weight, in no order, under two unexplained buttons. .section-title is
+   11px uppercase with a rule line: it is a LABEL, and the level that was
+   missing sits ABOVE it. So this adds a heading and changes no section. */
+.settings-group { margin-bottom: 30px; }
+.settings-group:last-child { margin-bottom: 0; }
+.settings-group-title {
+  font-size: 17px;
+  font-weight: 700;
+  color: var(--text);
+  margin: 0;
+}
+/* The first divider in a group carries .section-title's 22px top margin, which
+   was sized to separate one section from the NEXT. Under its own heading that
+   reads as a gap rather than as a pair, so the first one tightens. The
+   save-centre already sets 0 and is left alone. */
+.settings-group > .settings-section:first-of-type > .section-title { margin-top: 12px; }
    ^^^ EVERYTHING ABOVE, THEN THE IDENTITY LAYER BELOW. ^^^
 
    The layer was moved back here in v262. It had drifted into the MIDDLE of the

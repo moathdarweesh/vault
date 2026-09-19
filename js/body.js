@@ -231,7 +231,14 @@ function dayLedgerHtml({ entries, days, renderEntry, emptyText, addAttr }) {
   }
   const windowStart = ledgerDayIso(days - 1);
   const older = entries.filter((x) => x.date < windowStart).length;
-  return { html: rows.join(''), more: older > 0 || days < 28 };
+  // ⚠️ AN EMPTY DAY IS INFORMATION ONLY AS A GAP. Between days that have
+  // something, "nothing on the 17th" is a fact worth a row and a + to fill it.
+  // With nothing in the window at all it is one sentence repeated `days` times,
+  // under a heading that says «all sessions» and over three stat boxes already
+  // reading 0 — which is what the owner saw and called illogical. The caller
+  // shows one empty state instead. Nothing about the populated case changes.
+  const empty = !entries.some((x) => x.date >= windowStart);
+  return { html: rows.join(''), more: older > 0 || days < 28, empty };
 }
 // Module scope, not nested in renderCardio: the Program tab and Home both render
 // a cardio row now, and a second copy of this mapping would be an agreement
@@ -314,7 +321,9 @@ function renderCardio(el) {
       <button class="btn btn-primary" id="add-cardio-btn">${icon('plus', 20)} ${t('log')}</button>
     </div>
 
-    <div class="ledger">${cardioLedger.html}</div>
+    ${cardioLedger.empty
+      ? emptyState({ title: t('ledger_empty_cardio'), text: t('ledger_empty_cardio_sub') })
+      : `<div class="ledger">${cardioLedger.html}</div>`}
     ${cardioLedger.more ? `<button type="button" class="btn btn-ghost btn-block" id="more-cardio-days">${t('ledger_older')}</button>` : ''}
   `;
   $('#more-cardio-days', el)?.addEventListener('click', () => { viewContext.cardioDays = cardioDays + 7; renderCardio(el); });
@@ -744,7 +753,9 @@ function renderSleep(el) {
       <button class="btn btn-primary" id="add-sleep-btn">${icon('plus', 20)} ${t('log')}</button>
     </div>
 
-    <div class="ledger">${sleepLedger.html}</div>
+    ${sleepLedger.empty
+      ? emptyState({ title: t('ledger_empty_sleep'), text: t('ledger_empty_sleep_sub') })
+      : `<div class="ledger">${sleepLedger.html}</div>`}
     ${sleepLedger.more ? `<button type="button" class="btn btn-ghost btn-block" id="more-sleep-days">${t('ledger_older')}</button>` : ''}
   `;
 

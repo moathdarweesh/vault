@@ -12,7 +12,7 @@
 // build. The literal below is the fallback (file://, or a stripped query) and is
 // still bumped by `npm run release` — see CLAUDE.md "CACHE WORKFLOW".
 const VAULT_BUILD = (() => {
-  const FALLBACK = 'v363';
+  const FALLBACK = 'v364';
   try {
     const src = (document.currentScript && document.currentScript.src) || '';
     const m = src.match(/[?&]v=(\d+)/);
@@ -4547,144 +4547,163 @@ function renderSettings(el) {
       <p class="page-subtitle">${t('settings_subtitle')}</p>
     </div>
 
-    <button class="btn btn-ghost btn-block" data-plan-history>${t('cx_plan_history')}</button>
-    <button class="btn btn-ghost btn-block" data-recent-changes>${t('cx_recent')}</button>
-    <div class="settings-section save-center" id="save-center">
-      <div class="section-title">${t('sc_title')}</div>
-      <div class="save-center-status" role="status" aria-live="polite" aria-atomic="true">
-        <div class="save-center-row"><span>${t('sc_device')}</span><strong id="sc-device"></strong></div>
-        <div class="save-center-row"><span>${t('sc_cloud')}</span><strong id="sc-cloud"></strong></div>
-        <p id="sc-detail" hidden></p>
+    <section class="settings-group">
+      <h2 class="settings-group-title">${t('set_g_account')}</h2>
+      <div class="settings-section save-center" id="save-center">
+        <div class="section-title">${t('sc_title')}</div>
+        <div class="save-center-status" role="status" aria-live="polite" aria-atomic="true">
+          <div class="save-center-row"><strong id="sc-device"></strong></div>
+          <div class="save-center-row"><strong id="sc-cloud"></strong></div>
+          <p id="sc-detail" hidden></p>
+        </div>
+        <p class="settings-hint" id="sc-time"></p>
+        <button type="button" class="btn btn-ghost btn-block" id="sc-action"></button>
+        <p class="settings-hint">${t('sc_photos')}</p>
       </div>
-      <p class="settings-hint" id="sc-time"></p>
-      <button type="button" class="btn btn-ghost btn-block" id="sc-action"></button>
-      <p class="settings-hint">${t('sc_photos')}</p>
-    </div>
 
-    ${(window.Cloud && Cloud.configured()) ? `
-    <div class="settings-section" id="account-section">
-      <div class="section-title" style="margin-top:0">${t('account')}</div>
-      <div id="account-body">
-        <button class="settings-action-row" style="cursor:default">
-          <div class="settings-action-icon">${icon('globe', 20)}</div>
+      ${(window.Cloud && Cloud.configured()) ? `
+      <div class="settings-section" id="account-section">
+        <div class="section-title" style="margin-top:0">${t('account')}</div>
+        <div id="account-body">
+          <button class="settings-action-row" style="cursor:default">
+            <div class="settings-action-icon">${icon('globe', 20)}</div>
+            <div class="settings-action-main">
+              <div class="settings-action-title">${t('auth_checking')}</div>
+            </div>
+          </button>
+        </div>
+      </div>` : ''}
+    </section>
+
+    <section class="settings-group">
+      <h2 class="settings-group-title">${t('set_g_look')}</h2>
+      <div class="settings-section">
+        <div class="section-title"${(window.Cloud && Cloud.configured()) ? '' : ' style="margin-top:0"'}>${t('language')}</div>
+        <div class="lang-toggle">
+          <button class="lang-option ${currentLang === 'ar' ? 'active' : ''}" data-lang="ar">العربية</button>
+          <button class="lang-option ${currentLang === 'en' ? 'active' : ''}" data-lang="en">English</button>
+        </div>
+      </div>
+
+      ${currentLang === 'ar' ? `
+      <div class="settings-section">
+        <div class="section-title">${t('translate_ex_title')}</div>
+        <p class="settings-hint">${t('translate_ex_sub')}</p>
+        <div class="lang-toggle">
+          <button class="lang-option ${exNamesMode(prefs) === 'translit' ? 'active' : ''}" data-translate-ex="translit">${t('translate_ex_on')}</button>
+          <button class="lang-option ${exNamesMode(prefs) === 'ar' ? 'active' : ''}" data-translate-ex="ar">${t('translate_ex_full')}</button>
+          <button class="lang-option ${exNamesMode(prefs) === 'en' ? 'active' : ''}" data-translate-ex="en">${t('translate_ex_off')}</button>
+        </div>
+      </div>` : ''}
+
+      <div class="settings-section">
+        <div class="section-title">${t('theme')}</div>
+        ${modeToggleHtml(currentTheme)}
+      </div>
+
+      <div class="settings-section">
+        <div class="section-title">${t('unit_label')}</div>
+        <div class="unit-toggle">
+          <button class="unit-option ${(prefs.unit || 'kg') === 'kg' ? 'active' : ''}" data-unit="kg">${t('kg_label')}</button>
+          <button class="unit-option ${prefs.unit === 'lb' ? 'active' : ''}" data-unit="lb">${t('lb_label')}</button>
+        </div>
+      </div>
+    </section>
+
+    <section class="settings-group">
+      <h2 class="settings-group-title">${t('set_g_remind')}</h2>
+      <div class="settings-section">
+        <div class="section-title">${t('health_section')}</div>
+        <button class="settings-action-row" id="health-btn">
+          <div class="settings-action-icon">${icon('heartPulse', 20)}</div>
           <div class="settings-action-main">
-            <div class="settings-action-title">${t('auth_checking')}</div>
+            <div class="settings-action-title">${t('health_connect')}</div>
+            <div class="settings-action-sub">${t('health_connect_sub')}</div>
+            <!-- The row is a STATUS, not a label: web / not installed / needs an update /
+                 not connected / partly connected / connected + last sync. -->
+            <div class="settings-action-sub health-status" id="health-status">${escapeHtml(window.Health && Health.statusText ? Health.statusText(Health.status()) : t('health_only_android'))}</div>
           </div>
         </button>
       </div>
-    </div>` : ''}
 
-    <div class="settings-section">
-      <div class="section-title"${(window.Cloud && Cloud.configured()) ? '' : ' style="margin-top:0"'}>${t('language')}</div>
-      <div class="lang-toggle">
-        <button class="lang-option ${currentLang === 'ar' ? 'active' : ''}" data-lang="ar">العربية</button>
-        <button class="lang-option ${currentLang === 'en' ? 'active' : ''}" data-lang="en">English</button>
+      <div class="settings-section">
+        <div class="section-title">${t('remind_title')}</div>
+        <button class="settings-action-row" id="notifications-btn">
+          <div class="settings-action-icon">${icon('bell', 20)}</div>
+          <div class="settings-action-main">
+            <div class="settings-action-title">${t('notif_settings_title')}</div>
+            <div class="settings-action-sub">${(() => {
+              const c = DB.notif.get().channels;
+              const n = Object.keys(c).filter((k) => c[k].on).length;
+              const unseen = (() => { try { return DB.notif.unseenCount(); } catch (_) { return 0; } })();
+              const base = t('notif_settings_of').replace('{n}', fmtNum(n));
+              return unseen ? base + ' · ' + escapeHtml(t('notif_unseen').replace('{n}', fmtNum(unseen))) : base;
+            })()}</div>
+          </div>
+          ${(() => { try { return DB.notif.unseenCount() ? '<span class="ntfs-badge"></span>' : ''; } catch (_) { return ''; } })()}
+          <span class="icon-mirror settings-action-chev">${icon('chevronRight', 16)}</span>
+        </button>
       </div>
-    </div>
+    </section>
 
-    ${currentLang === 'ar' ? `
-    <div class="settings-section">
-      <div class="section-title">${t('translate_ex_title')}</div>
-      <p class="settings-hint">${t('translate_ex_sub')}</p>
-      <div class="lang-toggle">
-        <button class="lang-option ${exNamesMode(prefs) === 'translit' ? 'active' : ''}" data-translate-ex="translit">${t('translate_ex_on')}</button>
-        <button class="lang-option ${exNamesMode(prefs) === 'ar' ? 'active' : ''}" data-translate-ex="ar">${t('translate_ex_full')}</button>
-        <button class="lang-option ${exNamesMode(prefs) === 'en' ? 'active' : ''}" data-translate-ex="en">${t('translate_ex_off')}</button>
+    <section class="settings-group">
+      <h2 class="settings-group-title">${t('set_g_data')}</h2>
+      <div class="settings-section">
+        <div class="section-title">${t('set_history')}</div>
+        <button class="btn btn-ghost btn-block" data-plan-history>${t('cx_plan_history')}</button>
+        <button class="btn btn-ghost btn-block" data-recent-changes>${t('cx_recent')}</button>
       </div>
-    </div>` : ''}
 
-    <div class="settings-section">
-      <div class="section-title">${t('theme')}</div>
-      ${modeToggleHtml(currentTheme)}
-    </div>
-
-    <div class="settings-section">
-      <div class="section-title">${t('unit_label')}</div>
-      <div class="unit-toggle">
-        <button class="unit-option ${(prefs.unit || 'kg') === 'kg' ? 'active' : ''}" data-unit="kg">${t('kg_label')}</button>
-        <button class="unit-option ${prefs.unit === 'lb' ? 'active' : ''}" data-unit="lb">${t('lb_label')}</button>
+      <div class="settings-section">
+        <div class="section-title">${t('data')}</div>
+        <button class="settings-action-row" id="export-btn">
+          <div class="settings-action-icon">${icon('download', 20)}</div>
+          <div class="settings-action-main">
+            <div class="settings-action-title">${t('export_data')}</div>
+            <div class="settings-action-sub">${t('export_data_sub')}</div>
+          </div>
+        </button>
+        <button class="settings-action-row" id="import-btn">
+          <div class="settings-action-icon">${icon('upload', 20)}</div>
+          <div class="settings-action-main">
+            <div class="settings-action-title">${t('import_data')}</div>
+            <div class="settings-action-sub">${t('import_data_sub')}</div>
+          </div>
+        </button>
+        <button class="settings-action-row is-danger" id="reset-btn">
+          <div class="settings-action-icon">${icon('refresh', 20)}</div>
+          <div class="settings-action-main">
+            <div class="settings-action-title">${t('reset_data')}</div>
+            <div class="settings-action-sub">${t('reset_data_sub')}</div>
+          </div>
+        </button>
       </div>
-    </div>
+    </section>
 
-    <div class="settings-section">
-      <div class="section-title">${t('health_section')}</div>
-      <button class="settings-action-row" id="health-btn">
-        <div class="settings-action-icon">${icon('heartPulse', 20)}</div>
-        <div class="settings-action-main">
-          <div class="settings-action-title">${t('health_connect')}</div>
-          <div class="settings-action-sub">${t('health_connect_sub')}</div>
-          <!-- The row is a STATUS, not a label: web / not installed / needs an update /
-               not connected / partly connected / connected + last sync. -->
-          <div class="settings-action-sub health-status" id="health-status">${escapeHtml(window.Health && Health.statusText ? Health.statusText(Health.status()) : t('health_only_android'))}</div>
-        </div>
-      </button>
-    </div>
+    <section class="settings-group">
+      <h2 class="settings-group-title">${t('set_g_app')}</h2>
+      <div class="settings-section">
+        <div class="section-title">${t('feedback_title')}</div>
+        <button class="settings-action-row" id="feedback-btn">
+          <div class="settings-action-icon icon-mirror">${icon('send', 20)}</div>
+          <div class="settings-action-main">
+            <div class="settings-action-title">${t('feedback_title')}</div>
+            <div class="settings-action-sub">${t('feedback_sub')}</div>
+          </div>
+        </button>
+      </div>
 
-    <div class="settings-section">
-      <div class="section-title">${t('remind_title')}</div>
-      <button class="settings-action-row" id="notifications-btn">
-        <div class="settings-action-icon">${icon('bell', 20)}</div>
-        <div class="settings-action-main">
-          <div class="settings-action-title">${t('notif_settings_title')}</div>
-          <div class="settings-action-sub">${(() => {
-            const c = DB.notif.get().channels;
-            const n = Object.keys(c).filter((k) => c[k].on).length;
-            const unseen = (() => { try { return DB.notif.unseenCount(); } catch (_) { return 0; } })();
-            const base = t('notif_settings_of').replace('{n}', fmtNum(n));
-            return unseen ? base + ' · ' + escapeHtml(t('notif_unseen').replace('{n}', fmtNum(unseen))) : base;
-          })()}</div>
-        </div>
-        ${(() => { try { return DB.notif.unseenCount() ? '<span class="ntfs-badge"></span>' : ''; } catch (_) { return ''; } })()}
-        <span class="icon-mirror settings-action-chev">${icon('chevronRight', 16)}</span>
-      </button>
-    </div>
-
-    <div class="settings-section">
-      <div class="section-title">${t('feedback_title')}</div>
-      <button class="settings-action-row" id="feedback-btn">
-        <div class="settings-action-icon icon-mirror">${icon('send', 20)}</div>
-        <div class="settings-action-main">
-          <div class="settings-action-title">${t('feedback_title')}</div>
-          <div class="settings-action-sub">${t('feedback_sub')}</div>
-        </div>
-      </button>
-    </div>
-
-    <div class="settings-section">
-      <div class="section-title">${t('data')}</div>
-      <button class="settings-action-row" id="export-btn">
-        <div class="settings-action-icon">${icon('download', 20)}</div>
-        <div class="settings-action-main">
-          <div class="settings-action-title">${t('export_data')}</div>
-          <div class="settings-action-sub">${t('export_data_sub')}</div>
-        </div>
-      </button>
-      <button class="settings-action-row" id="import-btn">
-        <div class="settings-action-icon">${icon('upload', 20)}</div>
-        <div class="settings-action-main">
-          <div class="settings-action-title">${t('import_data')}</div>
-          <div class="settings-action-sub">${t('import_data_sub')}</div>
-        </div>
-      </button>
-      <button class="settings-action-row is-danger" id="reset-btn">
-        <div class="settings-action-icon">${icon('refresh', 20)}</div>
-        <div class="settings-action-main">
-          <div class="settings-action-title">${t('reset_data')}</div>
-          <div class="settings-action-sub">${t('reset_data_sub')}</div>
-        </div>
-      </button>
-    </div>
-
-    <div class="settings-section">
-      <div class="section-title">${t('about_title')}</div>
-      <a class="settings-action-row" href="privacy.html?lang=${(DB.prefs.get().lang) || 'en'}" target="_blank" rel="noopener">
-        <div class="settings-action-icon">${icon('info', 20)}</div>
-        <div class="settings-action-main">
-          <div class="settings-action-title">${t('privacy_policy')}</div>
-          <div class="settings-action-sub">${t('privacy_policy_sub')}</div>
-        </div>
-      </a>
-    </div>
+      <div class="settings-section">
+        <div class="section-title">${t('about_title')}</div>
+        <a class="settings-action-row" href="privacy.html?lang=${(DB.prefs.get().lang) || 'en'}" target="_blank" rel="noopener">
+          <div class="settings-action-icon">${icon('info', 20)}</div>
+          <div class="settings-action-main">
+            <div class="settings-action-title">${t('privacy_policy')}</div>
+            <div class="settings-action-sub">${t('privacy_policy_sub')}</div>
+          </div>
+        </a>
+      </div>
+    </section>
   `;
 
   // Account (cloud sync) — populated async since the session check is async.
