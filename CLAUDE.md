@@ -82,7 +82,7 @@ a faster TTFB — not fewer bytes.
 npm run release          # bump every marker + verify, then commit all files together
 ```
 
-**Current version: v364.** APK: build 22 / v3.1.
+**Current version: v365.** APK: build 22 / v3.1.
 
 `scripts/release.js` rewrites **every** marker and then re-reads them from disk to confirm; it exits non-zero if any disagree, and prints the count per file (derived, never hard-coded — the docs used to say 16 while the real count was 15). The markers are `?v=N` in `index.html` (every script and stylesheet, the `js/vendor/supabase.js` preload, both `icons/icon.svg` links, `manifest.json`), the `__cleaned_vN` sessionStorage key, the `FALLBACK` literal in `app.js`, `version.json` → `web`, the `?v=` in `manifest.json`, `admin.html`, `privacy.html` and `get/index.html`, and the `Current version` line in this file. `scripts/check-contracts.js` (pre-commit) refuses a commit where any of them disagree.
 
@@ -2614,6 +2614,96 @@ light + no door → `#faf5f0`; dark → `#000000` throughout.
   images are square (2732×2732), so short and long edge are the same number.
 - **"The 2500ms cap opens onto an empty shell"** and **"the app behind the door is
   not aria-hidden"** — both already answered in v343's note.
+
+## v365 — the widget snapshot: the half that can be proved before the APK exists
+
+The owner asked for home-screen widgets on both platforms, chose to defer iOS
+entirely, and left the Android decision to me. I read the shipped binary rather
+than the source to decide it:
+
+```
+aapt2 dump xmltree download/THE-VAULT.apk --file AndroidManifest.xml
+versionCode = 22   debuggable = true   allowBackup = false
+```
+
+> ⚠️ **EVERY INSTALLED COPY IS DEBUGGABLE, WHICH VOIDS `allowBackup="false"`.**
+> `adb run-as` and `chrome://inspect` both work on a debuggable app, so the
+> WebView storage — session token included — is readable, which is exactly what
+> build 21 added the backup flag to prevent. **The fix has been in
+> `build.gradle` since v348 (`debuggable false`) and `versionCode` is still 22,
+> so it has never been built.** Sixteen releases of waiting.
+
+So the APK is owed whether or not a widget ever ships, and the widget's marginal
+cost becomes the widget itself. **And every Android widget is a manifest
+receiver, so every widget revision costs a new APK and a manual install for ~10
+people** — which is why build 23 will carry the three that read ONE snapshot and
+not the fourth (quick-log needs working buttons, the only part with real
+unknowns; an install is not spent on an unknown).
+
+### This release is the WEB half, and it is inert
+
+`DB.widget.snapshot()` is a pure read over eight DB namespaces; `push()` hands it
+to a Capacitor Preferences plugin **no shipped APK carries yet** and does nothing
+when it is absent — the same shape `js/health.js` and `js/notify.js` use, which
+contract 26 enforces. So it ships on an ordinary push, is verified by the
+machinery that already exists, and starts landing the day an APK carries the
+plugin. Holding it back until then would mean shipping both halves at once,
+untested. Views 40/40, sheets 106/106, zero differences.
+
+### Two rules the snapshot is built around
+
+> ⚠️ **THE DAY IS RESOLVED AT WRITE TIME, NEVER PASSED IN FROM A RENDER.** This
+> codebase has shipped the render-time-day bug six times. A widget makes it
+> strictly worse than a screen does: a phone left untouched past midnight keeps
+> the snapshot on screen for hours, so a stale day is not a flicker, it is the
+> whole display.
+
+> ⚠️ **AND LOGOUT MUST CLEAR IT, WHICH NO EXISTING SWEEP COULD DO.** The snapshot
+> lives in native storage, outside every `localStorage.removeItem` in
+> `clearLocalUserData`. Without the one line added there, the next account on a
+> shared phone finds the previous user's weight and calories **on the home
+> screen** — the v351 leak, on the least private surface the device has.
+
+It carries numbers and the plan slot's own name: no photos, no session token, no
+logs. Measured at **331 bytes**, and the suite fails if it grows past 900 or
+gains an array.
+
+### scripts/test-widget-snapshot.js — the thirteenth suite
+
+A source half asserts the day comes from `todayISO()` and never from a sliced
+timestamp. A behaviour half runs the real `js/storage.js` in a vm: shape, an
+explicit past date honoured, nothing forbidden in the JSON, **inert with no
+plugin**, landing and clearing with one, a throwing plugin contained, an empty
+install answering with nulls, and `computeStreak` read at call time because it
+lives in a later script.
+
+**6 of 6 mutations caught**, `js/storage.js` restored byte-for-byte: the UTC
+slice, a captured day, `push()` claiming success with no plugin, `clear()` not
+removing the key, a history array reaching the snapshot, and `computeStreak`
+called unguarded.
+
+> **Two of my own mistakes are in the suite as comments, because both make a test
+> vacuous rather than red.** Objects built inside the vm realm are not
+> `deepStrictEqual` to ours — the failure prints them looking identical (the trap
+> already recorded on `test-plan-import.js`), so the comparisons are JSON. And my
+> cardio seed passed `'walk'`, which is the ICON name; the type id is
+> `'walking'`, so `add()` refused, nothing was created, and every assertion about
+> `snap.cardio` would have been testing an absence. **Every seed asserts it took
+> now** — a seed that fails silently makes the whole suite prove nothing.
+
+### Next, and what it needs from the owner
+
+Build 23 = the `debuggable false` fix + the plugin + the three widgets. Before
+any build, `npm run sync`: the root `capacitor.config.json` differs from the copy
+in `android/app/src/main/assets`. Same debug signing key, so it installs over
+build 22 with no uninstall and no data loss; the signing-key decision stays
+separate and is the owner's.
+
+> ⚠️ **And none of this project's verification reaches native code.** 39
+> contracts, 13 suites and the fingerprint net are all web-side. The widget will
+> be verified the way v212, v304 and build 22 were: build it, then read the built
+> binary with `aapt2` — never trust the source. This project has shipped an icon
+> that was right in source and wrong in the binary three times.
 
 ## v364 — «وين المنطق؟»: the ledger, and twelve headings at one weight
 

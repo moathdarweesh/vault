@@ -3468,6 +3468,108 @@ const DB = {
       return added;
     },
   },
+
+  /* ===== THE HOME-SCREEN WIDGET SNAPSHOT =========================================
+   *
+   * A widget is NATIVE code running outside the WebView, so it cannot read the
+   * localStorage everything else in this app lives in. It is handed a small
+   * snapshot in shared native storage instead, and this is the writer.
+   *
+   * ⚠️ TODAY THIS IS INERT, ON PURPOSE. push() looks for a Capacitor Preferences
+   * plugin that no shipped APK carries yet, and does nothing when it is absent —
+   * the same shape every later module in this app uses (js/health.js and
+   * js/notify.js both no-op off-native, and contract 26 enforces the guard). So
+   * this ships to the web on an ordinary push, costs nothing, and starts landing
+   * the day an APK carries the plugin. The alternative — holding the web half
+   * back until the APK is ready — would mean shipping both at once, untested.
+   *
+   * ⚠️ WHAT IT MAY NOT CARRY. Numbers, and the plan slot's own name. No photos,
+   * no session token, no logs, no food or exercise history. The snapshot sits in
+   * native storage where it survives the app being closed, so anything in it is
+   * readable by anyone holding the unlocked phone — and the widget draws it on
+   * the home screen, which is the least private surface the phone has.
+   */
+  widget: {
+    /**
+     * Everything a widget can draw, for ONE calendar day.
+     *
+     * ⚠️ THE DAY IS RESOLVED HERE, AT WRITE TIME, NEVER PASSED IN FROM A RENDER.
+     * This codebase has shipped the render-time-day bug six times (see the water
+     * and supplement writes in v357). A widget makes it worse than a screen does:
+     * a phone left untouched past midnight keeps the snapshot on screen for
+     * hours, so a stale day is not a flicker, it is the whole display.
+     */
+    snapshot(date) {
+      const iso = date || todayISO();
+      const prefs = DB.prefs.get();
+      const nut = DB.nutrition.get();
+      const targets = (nut && nut.targets) || {};
+      const eaten = DB.foodLogs.totalsForDate(iso);
+      const slot = DB.plan.workoutForDate(new Date(iso + 'T12:00:00'));
+      const weights = DB.bodyweight.list();
+      const night = DB.sleep.latest();
+      const due = DB.cardioPlan.forDate(iso);
+      const next = due.find((r) => !r.doneId) || due[0] || null;
+
+      // computeStreak lives in js/app.js, which loads AFTER this file — so it is
+      // read at CALL time and guarded, exactly as DB.notif.text() reads t() and
+      // fmtNum(). A snapshot taken before app.js has run reports no streak
+      // rather than throwing.
+      const streak = typeof computeStreak === 'function' ? computeStreak() : 0;
+
+      const round = (n) => Math.round(Number(n) || 0);
+      const kg = weights.length ? Number(weights[weights.length - 1].kg) : null;
+      const older = weights.find((w) => w.date >= addDaysISO(iso, -30));
+
+      return {
+        v: 1,
+        at: Date.now(),
+        day: iso,
+        lang: prefs.lang || 'en',
+        unit: prefs.unit || 'kg',
+        workout: slot ? { name: String(slot.name || ''), count: (slot.exerciseIds || []).length } : null,
+        rest: !slot,
+        kcal: targets.calories > 0 ? { eaten: round(eaten.calories), goal: round(targets.calories) } : null,
+        protein: targets.protein > 0 ? { eaten: round(eaten.protein), goal: round(targets.protein) } : null,
+        water: { ml: round(DB.water.get(iso)), goal: round(DB.water.goal()) },
+        streak,
+        cardio: next ? { type: String(next.type || ''), minutes: round(next.duration), done: !!next.doneId } : null,
+        weight: kg == null ? null : {
+          kg: Math.round(kg * 10) / 10,
+          delta30: older && older.kg != null ? Math.round((kg - Number(older.kg)) * 10) / 10 : null,
+        },
+        sleep: night && night.durationMinutes ? { minutes: round(night.durationMinutes) } : null,
+      };
+    },
+
+    /** Hand the snapshot to the native side. A no-op wherever that side is absent. */
+    push() {
+      const P = this._plugin();
+      if (!P) return false;
+      try {
+        P.set({ key: VAULT_KEYS.widget, value: JSON.stringify(this.snapshot()) });
+        return true;
+      } catch (_) { return false; }
+    },
+
+    /**
+     * ⚠️ CALLED ON LOGOUT, AND THAT IS NOT HOUSEKEEPING. The snapshot outlives
+     * the WebView by design, so without this the next account on a shared phone
+     * finds the previous user's weight and calories ON THE HOME SCREEN — the v351
+     * leak, on the least private surface the device has.
+     */
+    clear() {
+      const P = this._plugin();
+      if (!P) return false;
+      try { P.remove({ key: VAULT_KEYS.widget }); return true; } catch (_) { return false; }
+    },
+
+    _plugin() {
+      try {
+        return (window.Capacitor && Capacitor.Plugins && Capacitor.Plugins.Preferences) || null;
+      } catch (_) { return null; }
+    },
+  },
 };
 
 // Re-read STATE from localStorage (after cloud sync swaps in pulled data).

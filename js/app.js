@@ -12,7 +12,7 @@
 // build. The literal below is the fallback (file://, or a stripped query) and is
 // still bumped by `npm run release` — see CLAUDE.md "CACHE WORKFLOW".
 const VAULT_BUILD = (() => {
-  const FALLBACK = 'v364';
+  const FALLBACK = 'v365';
   try {
     const src = (document.currentScript && document.currentScript.src) || '';
     const m = src.match(/[?&]v=(\d+)/);
@@ -4309,6 +4309,28 @@ function scheduleSaveCenterUpdate() {
   Promise.resolve().then(() => { saveCenterUpdatePending = false; updateSaveCenter(); });
 }
 window.addEventListener('vault:save-state', scheduleSaveCenterUpdate);
+
+/* ── the home-screen widget snapshot ──────────────────────────────────────
+ *
+ * COALESCED, not per-save. `vault:save-state` fires on every write — a tick on
+ * a set, a cup of water, each keystroke that commits — and the snapshot reads
+ * eight DB namespaces to build. This is the same shape scheduleSaveCenterUpdate
+ * above uses, and for the same reason.
+ *
+ * It is inert until an APK carries the plugin (DB.widget.push() returns false),
+ * so this costs a timer and nothing else on the web.
+ */
+let widgetPushPending = false;
+function scheduleWidgetPush() {
+  if (widgetPushPending) return;
+  widgetPushPending = true;
+  setTimeout(() => {
+    widgetPushPending = false;
+    try { DB.widget.push(); } catch (_) {}
+  }, 400);
+}
+window.addEventListener('vault:save-state', scheduleWidgetPush);
+window.addEventListener('vault:store-adopted', scheduleWidgetPush);
 // ANOTHER WINDOW WROTE THE STORE AND storage.js ADOPTED IT - repaint, carefully.
 //
 // NOT over an open sheet, and NOT inside the guided run. A re-render there

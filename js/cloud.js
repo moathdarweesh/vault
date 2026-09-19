@@ -37,6 +37,12 @@ window.VAULT_KEYS = Object.freeze({
   unitSeeded: 'vault_default_unit_seeded_v1',
   updateDismissed: 'vault_update_dismissed_build',   // js/update.js — per DEVICE, deliberately not swept on logout
   webReloadGuard: 'vault_wr_',                        // js/update.js — sessionStorage, + target build: one auto-reload per session per target
+  widget: 'vault_widget_v1',               // DB.widget — the home-screen snapshot. NOT localStorage:
+                                           // it is written to NATIVE shared storage (Capacitor
+                                           // Preferences) where a widget can read it, the way
+                                           // webReloadGuard above is sessionStorage. It is in this
+                                           // registry because it is a key this app owns and must
+                                           // sweep on logout — see DB.widget.clear().
 });
 (function () {
   'use strict';
@@ -1514,6 +1520,12 @@ window.VAULT_KEYS = Object.freeze({
   // deletion. A synced user restores from the cloud on next sign-in.
   function clearLocalUserData() {
     if (typeof DB !== 'undefined' && DB.undo) DB.undo.clear();
+    // ⚠️ THE WIDGET SNAPSHOT LIVES IN NATIVE STORAGE, OUTSIDE EVERY SWEEP BELOW.
+    // localStorage.removeItem cannot reach it, so without this line the next
+    // account on a shared phone finds the previous one's weight and calories
+    // drawn on the HOME SCREEN — the v351 leak on the least private surface the
+    // device has.
+    if (typeof DB !== 'undefined' && DB.widget) { try { DB.widget.clear(); } catch (_) {} }
     syncActivity = { uid: '', active: 0, outcome: '', confirmedAt: '' };
     try {
       localStorage.removeItem(VAULT_KEYS.store);
