@@ -82,7 +82,7 @@ a faster TTFB — not fewer bytes.
 npm run release          # bump every marker + verify, then commit all files together
 ```
 
-**Current version: v362.** APK: build 22 / v3.1.
+**Current version: v363.** APK: build 22 / v3.1.
 
 `scripts/release.js` rewrites **every** marker and then re-reads them from disk to confirm; it exits non-zero if any disagree, and prints the count per file (derived, never hard-coded — the docs used to say 16 while the real count was 15). The markers are `?v=N` in `index.html` (every script and stylesheet, the `js/vendor/supabase.js` preload, both `icons/icon.svg` links, `manifest.json`), the `__cleaned_vN` sessionStorage key, the `FALLBACK` literal in `app.js`, `version.json` → `web`, the `?v=` in `manifest.json`, `admin.html`, `privacy.html` and `get/index.html`, and the `Current version` line in this file. `scripts/check-contracts.js` (pre-commit) refuses a commit where any of them disagree.
 
@@ -2614,6 +2614,52 @@ light + no door → `#faf5f0`; dark → `#000000` throughout.
   images are square (2732×2732), so short and long edge are the same number.
 - **"The 2500ms cap opens onto an empty shell"** and **"the app behind the door is
   not aria-hidden"** — both already answered in v343's note.
+
+## v363 — the reminder system is TOLD, not called
+
+Five call sites in two domains reached into the notification domain by name:
+three workout save paths called `maybeAskNotifPermission()`, and two supplement
+paths called `armNotifications()` then `syncRemindersOrWarn()`. They are two
+`vault:*` events now — `vault:session-saved` and `vault:reminders-changed` —
+with both listeners INSIDE the notifications block, so they travel with it.
+
+### ⚠️ THE REASON IS NOT TIDINESS: A CHECK CAN SEE AN EVENT
+
+Every one of those five calls sat inside a bare `try { … } catch (_) {}` or was
+unguarded, so a rename or a load failure made it **silently do nothing, for
+ever**. That is verbatim the v251 failure — the arming function "was never
+called at boot… so a normal session armed zero in-app timers, and on the web
+reminders did not exist at all". **Contract 7 refuses a `vault:*` event that is
+dispatched and never listened for, or listened for and never dispatched. It has
+no way to see a swallowed ReferenceError.**
+
+The dispatch is synchronous, so nothing about the order of work moved: the same
+code runs at the same moment, reached by a name the tooling can check. The three
+workout sites also carried a comment saying there are THREE save paths and all
+three must ask — one name now, and a fourth save path cannot forget.
+
+Shell calls were deliberately left direct (`afterScripts`, `refreshAfterSync`):
+the shell is allowed to call a domain, that is what a shell is. What went was
+domain→domain.
+
+### scripts/test-notif-events.js — the twelfth suite, and the first to test this at all
+
+Two halves, because either alone proves nothing. A **source** half asserts no
+function outside the notifications domain or the shell names those three by
+name — a green browser check over an app that still called directly would say
+nothing about whether the old path was removed. A **browser** half spies on the
+three and dispatches each event, asserting the calls happen synchronously, once,
+and in the pair's original order, and that an unrelated `vault:*` event reaches
+neither.
+
+> ⚠️ **THE SPIES WORK ONLY BECAUSE A TOP-LEVEL `function` IN A CLASSIC SCRIPT IS
+> A PROPERTY OF THE GLOBAL OBJECT.** `const`/`let` are not — they live in the
+> declarative record and cannot be replaced from outside. The technique covers
+> function declarations only, which is what these five names are.
+
+Proved able to fail, 3 of 3: the pair reordered, a workout path calling by name
+again, and the listener deleted (that one is caught by contract 7, not the
+suite). Views 40/40, sheets 106/106, zero differences.
 
 ## v362 — js/body.js, and a boundary that turns a shared helper into a private one
 

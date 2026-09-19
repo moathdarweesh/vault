@@ -12,7 +12,7 @@
 // build. The literal below is the fallback (file://, or a stripped query) and is
 // still bumped by `npm run release` — see CLAUDE.md "CACHE WORKFLOW".
 const VAULT_BUILD = (() => {
-  const FALLBACK = 'v362';
+  const FALLBACK = 'v363';
   try {
     const src = (document.currentScript && document.currentScript.src) || '';
     const m = src.match(/[?&]v=(\d+)/);
@@ -784,6 +784,31 @@ function armNotifications() {
   });
   return notifTimers.length;
 }
+
+/* ── what the rest of the app tells this domain ───────────────────────────
+ *
+ * Both of these used to be DIRECT CALLS from other domains: three workout save
+ * paths called maybeAskNotifPermission(), and two supplement paths called
+ * armNotifications() followed by syncRemindersOrWarn(). Every one of them was
+ * inside a bare try/catch or was an unguarded call, so a rename would have made
+ * them silently do nothing — the exact shape of the v251 failure, where the
+ * arming function had no caller on the normal path and no reminders existed at
+ * all on the web.
+ *
+ * ⚠️ AN EVENT IS NOT TIDINESS HERE, IT IS THE ONLY VERSION A CHECK CAN SEE.
+ * Contract 7 refuses a `vault:*` event that is dispatched and never listened
+ * for, or listened for and never dispatched. It has no way to see a swallowed
+ * ReferenceError. The dispatch is also SYNCHRONOUS, so nothing about the order
+ * of work changes — this is the same code running at the same moment, reached
+ * by a name the tooling can check.
+ */
+window.addEventListener('vault:session-saved', () => { maybeAskNotifPermission(); });
+window.addEventListener('vault:reminders-changed', () => {
+  // The pair, in the order the supplement sheet used: arm the in-app timers
+  // first, then run the OS sequence, which is what reports a failure to the user.
+  try { armNotifications(); } catch (_) {}
+  syncRemindersOrWarn();
+});
 
 // ===========================================================================
 // THE IN-APP NOTIFICATION BAR — APPLY-notifications.md §9
@@ -3574,7 +3599,7 @@ function openSessionModal(exerciseId, sessionId = null) {
     closeModal();
     renderView(currentView);
     offerUndo(existing ? t('session_updated') : t('session_saved'));
-    maybeAskNotifPermission();
+    try { window.dispatchEvent(new CustomEvent('vault:session-saved')); } catch (_) {}
   });
 }
 
@@ -6020,7 +6045,7 @@ function renderSessionDay(el) {
       // the exercise-detail modal), and wiring only this one meant a user who
       // logs through guided mode was never asked, ever. It self-gates on
       // `asked`, so calling it from all three is correct, not merely harmless.
-      maybeAskNotifPermission();
+      try { window.dispatchEvent(new CustomEvent('vault:session-saved')); } catch (_) {}
     })
   );
 }
@@ -6708,7 +6733,7 @@ function renderSessionRun(el) {
       });
       if (!goBack()) navigate('session-day', { date: runCtx.runDate });   // session-day reads `date`; `dow` was a key nothing consumed
       showToast(t('session_saved'));   // after the navigate, which hides any toast it finds
-      maybeAskNotifPermission();
+      try { window.dispatchEvent(new CustomEvent('vault:session-saved')); } catch (_) {}
     });
     return;
   }
@@ -7688,8 +7713,7 @@ function openSupplementModal(id = null) {
     // the UI, and silently never fired.
     try { DB.notif.syncSuppDoses(suppId, name, times); } catch (_) {}
     // Times changed → the alarm set is stale. No-op off-native.
-    try { armNotifications(); } catch (_) {}
-    syncRemindersOrWarn();
+    try { window.dispatchEvent(new CustomEvent('vault:reminders-changed')); } catch (_) {}
     closeModal();
     renderView(currentView);
   });
@@ -7705,8 +7729,7 @@ function openSupplementModal(id = null) {
           // reminders keep arriving — an orphan alarm for a deleted thing is
           // exactly what sync()'s full-replace exists to prevent.
           try { DB.notif.syncSuppDoses(existing.id, '', []); } catch (_) {}
-          try { armNotifications(); } catch (_) {}
-          syncRemindersOrWarn();
+          try { window.dispatchEvent(new CustomEvent('vault:reminders-changed')); } catch (_) {}
           closeModal();
           showToast(t('deleted'));
           renderView(currentView);
