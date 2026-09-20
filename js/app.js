@@ -12,7 +12,7 @@
 // build. The literal below is the fallback (file://, or a stripped query) and is
 // still bumped by `npm run release` — see CLAUDE.md "CACHE WORKFLOW".
 const VAULT_BUILD = (() => {
-  const FALLBACK = 'v380';
+  const FALLBACK = 'v381';
   try {
     const src = (document.currentScript && document.currentScript.src) || '';
     const m = src.match(/[?&]v=(\d+)/);
@@ -1491,6 +1491,34 @@ function buzz(kind) {
 // change and opens the screen that owns that change - the plan is edited where
 // the plan is edited. A review that quietly rearranged the week would be a
 // review nobody could trust opening.
+// What this launch actually cost, in the order a person experiences it:
+// the first byte, the first pixel, the app declaring itself usable, and the
+// door getting out of the way. Numbers, not adjectives - «فيه تأخير بسيط» is
+// not something a desktop harness under reduced-motion can confirm or deny.
+function bootTimingText() {
+  try {
+    const nav = performance.getEntriesByType('navigation')[0];
+    const paint = performance.getEntriesByType('paint').find((p) => p.name === 'first-contentful-paint');
+    // NOT `t`: that is the translator, and shadowing it here made every
+    // t('boot_…') call below a call on a plain object. Lint cannot see it -
+    // the name is legal - and it would have thrown on the Settings screen.
+    const stamps = window.__vltT || {};
+    const ms = (n) => (n > 0 ? Math.round(n) + 'ms' : '—');
+    return [
+      t('boot_ttfb') + ' ' + ms(nav && nav.responseStart),
+      t('boot_paint') + ' ' + ms(paint && paint.startTime),
+      // ⚠️ ALL FOUR ON ONE ORIGIN. The door keeps its own clock relative to
+      // when it mounted, so printing those two beside first-byte and
+      // first-paint put two origins on one line - and the reading then said
+      // the app was ready 293ms BEFORE the first pixel, which is nonsense the
+      // eye accepts because the numbers look reasonable. t0 puts them back on
+      // navigation time, which is the order a person actually experiences.
+      t('boot_ready') + ' ' + ms(stamps.ready && stamps.ready + stamps.t0),
+      t('boot_door') + ' ' + ms(stamps.open && stamps.open + stamps.t0),
+    ].join(' · ');
+  } catch (_) { return '—'; }
+}
+
 function weeklyReviewDue() {
   if (DB.prefs.reviewOff()) return null;
   const { lastStart, lastEnd } = weekRanges();
@@ -4865,6 +4893,14 @@ function renderSettings(el) {
       <div class="settings-section">
         <div class="section-title">${t('theme')}</div>
         ${modeToggleHtml(currentTheme)}
+      </div>
+
+      <div class="settings-section">
+        <div class="section-title">${t('boot_title')}</div>
+        <!-- Four numbers from THIS launch, read off the phone rather than
+             inferred from a desktop harness. Rendered as a plain line because
+             it is a reading, not a control. -->
+        <div class="settings-hint" id="boot-timing">${escapeHtml(bootTimingText())}</div>
       </div>
 
       <div class="settings-section">
@@ -9456,6 +9492,8 @@ function afterScripts(fn) {
   // screen behind the door now. The clock opens anyway after its cap, so a
   // boot that never reaches this line costs a delay, never a lock-out.
   window.__vltReady = 1;
+  // The moment the app declares itself usable, on the door's own clock.
+  try { if (window.__vltT && !window.__vltT.ready) window.__vltT.ready = performance.now() - window.__vltT.t0; } catch (_) {}
   setupKeyboardHandling(); // hide the nav + keep the focused field above the keyboard
   setupEmber();            // the void's reaction to the hand (no-op under reduced motion)
   setupBarAutoHide();      // the top bar leaves on the way down, returns at the top

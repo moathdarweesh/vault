@@ -82,7 +82,7 @@ a faster TTFB — not fewer bytes.
 npm run release          # bump every marker + verify, then commit all files together
 ```
 
-**Current version: v380.** APK: build 24 / v3.3.
+**Current version: v381.** APK: build 24 / v3.3.
 
 `scripts/release.js` rewrites **every** marker and then re-reads them from disk to confirm; it exits non-zero if any disagree, and prints the count per file (derived, never hard-coded — the docs used to say 16 while the real count was 15). The markers are `?v=N` in `index.html` (every script and stylesheet, the `js/vendor/supabase.js` preload, both `icons/icon.svg` links, `manifest.json`), the `__cleaned_vN` sessionStorage key, the `FALLBACK` literal in `app.js`, `version.json` → `web`, the `?v=` in `manifest.json`, `admin.html`, `privacy.html` and `get/index.html`, and the `Current version` line in this file. `scripts/check-contracts.js` (pre-commit) refuses a commit where any of them disagree.
 
@@ -2678,6 +2678,38 @@ the rows pre-filled from last time as performed sets ("confirmed without a
 throwaway edit" is the recorded intent; whether an untouched row should count
 is the owner's call); a saved food **4 taps**. The day card's Save measures
 **69×40** — under the 44 floor.
+
+## v381 — T4.3: the launch, timed on a phone instead of inferred
+
+**Every measurement in this project so far has run under `reduced-motion`**,
+where the vault door is never mounted at all — so the launch sequence the owner
+actually sees has never been timed. The plan asked for «بضع لقطاتٍ زمنيّة …
+تُقرأ من هاتفك بعد التثبيت», and that is what this is: four numbers, in the
+order a person experiences them, on the Settings screen.
+
+The door already kept its own clock (`performance.now()`, since v343, because
+the wall clock can be corrected backwards mid-boot). It now also records when
+the app said it was ready and when the leaves parted, and Settings reads them
+beside the navigation timings the browser already has.
+
+Measured on a real launch with the door genuinely running:
+
+```
+أوّل بايت 30ms · أوّل رسم 344ms · جاهزيّة التطبيق 363ms · انفتاح الباب 1468ms
+```
+
+> ⚠️ **TWO ORIGINS ON ONE LINE IS A READING THAT LIES, AND THE EYE ACCEPTS IT.**
+> The door's clock starts when the door mounts, not at navigation, so the first
+> version of this line reported `app ready 211ms` beside `first paint 504ms` —
+> the app apparently ready 293ms **before the first pixel**. Every number was
+> correct and the line was nonsense. All four are on navigation time now, and
+> they read monotonically, which is the only way a reader can use them.
+
+> **And one bug lint could not see:** `bootTimingText()` declared
+> `const t = window.__vltT` — shadowing `t`, the translator — so every
+> `t('boot_…')` call inside it became a call on a plain object. The name is
+> legal, so no rule fires; it would simply have thrown on the Settings screen.
+> It is `stamps` now.
 
 ## v380 — T4.1: larger text, and the two boxes that could not take it
 
