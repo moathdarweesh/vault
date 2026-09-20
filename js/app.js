@@ -12,7 +12,7 @@
 // build. The literal below is the fallback (file://, or a stripped query) and is
 // still bumped by `npm run release` — see CLAUDE.md "CACHE WORKFLOW".
 const VAULT_BUILD = (() => {
-  const FALLBACK = 'v385';
+  const FALLBACK = 'v386';
   try {
     const src = (document.currentScript && document.currentScript.src) || '';
     const m = src.match(/[?&]v=(\d+)/);
@@ -5002,20 +5002,6 @@ function renderSettings(el) {
 
       <div class="settings-section">
         <div class="section-title">${t('data')}</div>
-        <button class="settings-action-row" id="export-btn">
-          <div class="settings-action-icon">${icon('download', 20)}</div>
-          <div class="settings-action-main">
-            <div class="settings-action-title">${t('export_data')}</div>
-            <div class="settings-action-sub">${t('export_data_sub')}</div>
-          </div>
-        </button>
-        <button class="settings-action-row" id="import-btn">
-          <div class="settings-action-icon">${icon('upload', 20)}</div>
-          <div class="settings-action-main">
-            <div class="settings-action-title">${t('import_data')}</div>
-            <div class="settings-action-sub">${t('import_data_sub')}</div>
-          </div>
-        </button>
         <button class="settings-action-row is-danger" id="reset-btn">
           <div class="settings-action-icon">${icon('refresh', 20)}</div>
           <div class="settings-action-main">
@@ -5137,34 +5123,23 @@ function renderSettings(el) {
   // Feedback / suggestions
   $('#feedback-btn', el)?.addEventListener('click', showFeedback);
 
-  // Export
-  $('#export-btn', el).addEventListener('click', () => { exportBackupFile(); });
-
-  // Import
-  $('#import-btn', el).addEventListener('click', () => {
-    const input = document.createElement('input');
-    input.type = 'file';
-    input.accept = 'application/json';
-    input.addEventListener('change', () => {
-      const file = input.files[0];
-      if (!file) return;
-      const reader = new FileReader();
-      reader.onload = () => {
-        const ok = DB.importJSON(reader.result);
-        if (ok) {
-          showToast(t('imported'));
-          const p = DB.prefs.get();
-          applyTheme(p.theme || 'dark');
-          applyLang(p.lang || 'en');
-          navigate('home');
-        } else {
-          showToast(t('import_failed'));
-        }
-      };
-      reader.readAsText(file);
-    });
-    input.click();
-  });
+  // ⚠️ THERE IS NO EXPORT OR IMPORT ROW IN SETTINGS, BY OWNER DECISION.
+  // «شيل اي شي بيصدر بيانات عشان يكون المستخدم محكور عندي» — the browsable
+  // route out of the app is gone, and its two handlers with it.
+  //
+  // exportBackupFile() SURVIVES, reachable from exactly two places, and neither
+  // is portability:
+  //   · showUnreadableDialog() — the stored blob will not parse, so the app is
+  //     in READ-ONLY mode and this is the only action it offers. What it writes
+  //     is the raw unreadable original, which importJSON() REFUSES by
+  //     definition (v350), so it is not a file anyone can leave with.
+  //   · the save centre, and only on `failed` — the device could not WRITE.
+  // A user in either state is not choosing to go somewhere else; they are about
+  // to lose everything. Deleting the rescue would not add lock-in, it would add
+  // data loss. If that is wanted too, it is these two call sites.
+  //
+  // DB.importJSON() also survives and is NOT dead: cloud.js's applyRemote()
+  // calls importRaw() on every pull, which is how a new device is restored.
 
   // Reset
   $('#reset-btn', el).addEventListener('click', () => {

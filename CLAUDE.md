@@ -83,7 +83,7 @@ npm run verify           # 43 contracts + lint + 13 suites — THE GATE
 npm run release          # bump every marker and re-read them; runs NO tests
 ```
 
-**Current version: v385.** APK: build 24 / v3.3.
+**Current version: v386.** APK: build 24 / v3.3.
 
 > ⚠️ **`npm run release` RUNS NO TESTS, AND THIS LINE USED TO READ AS IF IT DID.**
 > It said «bump every marker + verify», where *verify* meant the MARKERS — and
@@ -2734,6 +2734,63 @@ the rows pre-filled from last time as performed sets ("confirmed without a
 throwaway edit" is the recorded intent; whether an untouched row should count
 is the owner's call); a saved food **4 taps**. The day card's Save measures
 **69×40** — under the 44 floor.
+
+## v386 — the route out of the app is closed, and a word that told you nothing
+
+Two owner instructions, one of them with a screenshot: **«شيل اي شي بيصدر بيانات
+عشان يكون المستخدم محكور عندي»**, and — as the example of the whole rule —
+**«كلمة تقدير الي بتكون عند الاكله»**.
+
+### The data rows are gone from Settings
+
+| | before | after |
+|---|---|---|
+| action rows in Settings | **11** | **9** |
+| the Data group | تصدير · استيراد · إعادة تعيين | **إعادة تعيين** |
+| the screen | 2669px | **2503px** |
+
+`exportBackupFile()` itself **survives, reachable from exactly two places, and
+neither is a way out of the app**:
+
+- **`showUnreadableDialog()`** — the stored blob will not parse, so the app is in
+  READ-ONLY mode and refuses every write. This is the only action it offers, and
+  what it writes is the raw unreadable original, which `importJSON()` **refuses
+  by definition** (v350). It is not a file anyone can leave with.
+- **the save centre, and only on `failed`** — the device could not WRITE.
+
+> **I kept those two deliberately, and it is one line to overrule me.** A user in
+> either state is not choosing to go elsewhere; they are about to lose
+> everything. Deleting the rescue would not add lock-in, it would add data loss —
+> and this project has already paid that bill once, when a set of exercise photos
+> became unrecoverable. If they should go too, it is those two call sites.
+
+`DB.importJSON()` also survives and is **not** dead code: `cloud.js`'s
+`applyRemote()` calls `importRaw()` on every pull, which is how a new device is
+restored from the cloud.
+
+### «تقدير» — and why it is the right example
+
+v376 painted a source tag beside every food name — «تقدير» for an AI or voice
+estimate, «من الملصق» for a barcode. Measured on a seeded day, before and after:
+
+```
+before   ["شوفان من الملصق", "دجاج مشوي تقدير", "أرز"]
+after    ["شوفان",           "دجاج مشوي",       "أرز"]
+tags painted: 2 → 0
+```
+
+**Nothing left the data.** `source` is still stored on every row — measured after
+the change: `[barcode, ai, manual]`. What went is a word on screen that told you
+where a figure came from, which is not something you can act on while reading
+your day's calories.
+
+### What the contracts did on their own
+
+Contract 38 — the v358 inverse — named **all seven** strings the moment their
+screens went: `export_data_sub`, `import_data`, `import_data_sub`, `imported`,
+`import_failed`, `fl_src_label`, `fl_src_estimate`. Deleted from both
+dictionaries, which stay at parity (**en 1114 / ar 1114**). `.food-log-src` went
+with its markup, and its comment with it.
 
 ## v385 — T4.2: the heading ladder, and the dialogs that had no name
 

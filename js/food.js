@@ -2307,19 +2307,19 @@ function renderFoodLog(el) {
   // Only the two that change how you should READ the number are labelled. A
   // tag on every row is five tags on five rows, which is noise; manual, saved
   // and recipe are the user's OWN figures and need no comment on themselves.
-  const foodSrcTag = (src) => (src === 'barcode' ? t('fl_src_label')
-    : (src === 'ai' || src === 'voice') ? t('fl_src_estimate') : '');
-
+  // ⚠️ NO SOURCE TAG ON THE ROW. v376 painted «تقدير» / «من الملصق» beside the
+  // name, and the owner named it as the example of text the user does not need:
+  // it says where a figure came from, which changes nothing he can act on. The
+  // `source` field is still stored on every row — nothing was lost from the
+  // data, only from the screen.
   function foodRowHtml(e) {
     const m = e.servings || 1;
-    const srcTag = foodSrcTag(e.source);
     return `
       <div class="food-log-row" data-food-row="${e.id}">
         <div class="food-log-main">
           <div class="food-log-name">
             ${escapeHtml(e.name)}
             ${m !== 1 ? `<span class="food-log-x num">× ${fmtNum(m)}</span>` : ''}
-            ${srcTag ? `<span class="food-log-src">${escapeHtml(srcTag)}</span>` : ''}
           </div>
           <div class="food-log-meta">
             <span><span class="num">${fmtNum(Math.round(e.calories * m))}</span> ${t('cal')}</span>
