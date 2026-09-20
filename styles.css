@@ -480,10 +480,10 @@ body[dir="rtl"] .back-btn svg {
    blanket container-class rule would flip the wrong thing sometimes. */
 body[dir="rtl"] .icon-mirror svg { transform: scaleX(-1); }
 
-body[dir="rtl"] .sets-row-reps,
-body[dir="rtl"] .sets-row-weight {
-  justify-content: flex-start;
-}
+body[dir="rtl"] .sets-row-reps { justify-content: flex-start; }
+/* flex-END, not flex-start: this cell is direction: ltr now, so flex-end is the
+   right-hand edge - the same edge flex-start meant while it inherited rtl. */
+body[dir="rtl"] .sets-row-weight { justify-content: flex-end; }
 
 body[dir="rtl"] .session-card-volume { text-align: left; }
 body[dir="rtl"] .home-center-icon svg { transform: none; }
@@ -1900,6 +1900,12 @@ button.schedule-prev-row { width: 100%; font: inherit; color: inherit; text-alig
 .sets-row.best .sets-row-num { color: var(--accent-text); }
 
 /* Dual-unit weight (e.g. "60 kg  132 lb") */
+/* ⚠️ A MEASUREMENT IS ONE OBJECT AND ITS PARTS HAVE AN ORDER. These three
+   spans - figure, unit, the other unit - are flex items, so in an RTL row they
+   are laid out RIGHT to left and each unit is torn from its own number.
+   Measured in Arabic before this: authored "660 lb 299.4 kg" painted
+   "lb 660 kg 299.4". The containers below carry direction: ltr so the group
+   keeps its authored order; the row around them is still RTL. */
 .w-num {
   font-weight: 700;
   color: var(--text);
@@ -1917,9 +1923,15 @@ button.schedule-prev-row { width: 100%; font: inherit; color: inherit; text-alig
   margin-left: 8px;
   white-space: nowrap;
 }
+/* The weight is a figure with its unit, so the GROUP reads left-to-right even
+   in an RTL row - see the .w-num banner above. direction also decides what
+   flex-start means, which is why the RTL override below says flex-end: the
+   cell's content must stay on the same visual edge it was always on. */
+.sets-row-weight, .session-card-volume-value { direction: ltr; }
 .sets-row.best .w-num { color: var(--accent-text); }
-body[dir="rtl"] .w-alt { margin-left: 0; margin-right: 8px; }
-body[dir="rtl"] .w-unit { margin-left: 0; margin-right: 2px; }
+/* No RTL margin flip any more: the group is LTR, so the authored margins are
+   the correct ones. Flipping them treated the symptom - the unit sitting on
+   the wrong side - while leaving the ORDER scrambled. */
 
 .session-actions {
   display: flex;

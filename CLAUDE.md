@@ -82,7 +82,7 @@ a faster TTFB — not fewer bytes.
 npm run release          # bump every marker + verify, then commit all files together
 ```
 
-**Current version: v373.** APK: build 24 / v3.3.
+**Current version: v374.** APK: build 24 / v3.3.
 
 `scripts/release.js` rewrites **every** marker and then re-reads them from disk to confirm; it exits non-zero if any disagree, and prints the count per file (derived, never hard-coded — the docs used to say 16 while the real count was 15). The markers are `?v=N` in `index.html` (every script and stylesheet, the `js/vendor/supabase.js` preload, both `icons/icon.svg` links, `manifest.json`), the `__cleaned_vN` sessionStorage key, the `FALLBACK` literal in `app.js`, `version.json` → `web`, the `?v=` in `manifest.json`, `admin.html`, `privacy.html` and `get/index.html`, and the `Current version` line in this file. `scripts/check-contracts.js` (pre-commit) refuses a commit where any of them disagree.
 
@@ -2678,6 +2678,38 @@ the rows pre-filled from last time as performed sets ("confirmed without a
 throwaway edit" is the recorded intent; whether an untouched row should count
 is the owner's call); a saved food **4 taps**. The day card's Save measures
 **69×40** — under the 44 floor.
+
+## v374 — T2.6: a measurement is one object, and its parts have an order
+
+The plan listed five Arabic number/unit defects. **Measured in the running app,
+three of the five were not defects at all**, and that is the useful half:
+
+| the plan | painted, in an RTL line | verdict |
+|---|---|---|
+| «g160» — a unit before its number | `<span class="num">160kg</span>` → **`160kg`** | **refuted** — digits and a Latin unit inside one span form one run and read correctly |
+| «30 الدقائق» | «مدة: 30 دقيقة» → **`مدة: 30 دقيقة`** | **refuted** |
+| «660 1,455 lb kg» on 7 of 7 cards | authored `660 · lb · 299.4 kg` → **`lb 660 kg 299.4`** | **confirmed** |
+
+**The confirmed one is not a bidi problem, it is a FLEX problem**, which is why
+the existing `body[dir="rtl"]` rules could never have fixed it: they flipped the
+`margin-left`/`margin-right` of `.w-unit` and `.w-alt` — moving the unit to the
+other side of a number it had already been torn from. The three spans are flex
+items, and in an RTL row flex lays them out right to left, so each unit lands
+beside the wrong figure.
+
+`.sets-row-weight` and `.session-card-volume-value` carry `direction: ltr` now,
+so the group keeps its authored order while the row around it stays RTL.
+Measured after: **`299.4 kg 660 lb`** and **`1,200 kg 2,646 lb`**, both exactly
+as authored. The margin flips are gone — with an LTR group the authored margins
+are the correct ones.
+
+> ⚠️ **`direction` ALSO DECIDES WHAT `flex-start` MEANS.** The cell had
+> `body[dir="rtl"] … { justify-content: flex-start }`, which was the RIGHT edge
+> while it inherited `rtl` and became the LEFT edge the moment the group turned
+> LTR. It says `flex-end` now, and the edge was measured rather than reasoned:
+> the content sits at x 270–375 inside a cell spanning 35–375 — flush right,
+> where it has always been. `.sets-row-reps` is deliberately left alone: it
+> shares the rule but not the problem.
 
 ## v373 — T2.3: the halos that were 42, and the rail that made one unfixable
 
