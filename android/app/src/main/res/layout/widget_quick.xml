@@ -1,0 +1,71 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Quick log. 4x1.
+
+  The widget cannot write into the app: the app's data lives in the WebView's
+  own storage, which nothing outside it may open. So each button is a
+  PendingIntent that OPENS the app on the action (a ?ql= parameter the web side
+  reads at boot and performs), rather than pretending to write from here.
+
+  Three buttons at 44dp: the project's touch floor, and the reason this widget
+  is 4x1 rather than smaller.
+-->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/widget_root"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@drawable/widget_bg"
+    android:padding="14dp"
+    android:orientation="horizontal"
+    android:baselineAligned="false">
+
+    <TextView
+        android:id="@+id/widget_q1"
+        android:layout_width="0dp"
+        android:layout_height="44dp"
+        android:layout_weight="1.4"
+        android:gravity="center"
+        android:background="@drawable/widget_btn_accent"
+        android:textSize="13sp"
+        android:textColor="#1a0800"
+        android:fontFamily="@font/vault_sans_bold"
+        android:maxLines="1"
+        android:ellipsize="end"
+        android:paddingStart="8dp"
+        android:paddingEnd="8dp"
+        android:text="" />
+
+    <TextView
+        android:id="@+id/widget_q2"
+        android:layout_width="0dp"
+        android:layout_height="44dp"
+        android:layout_weight="1"
+        android:layout_marginStart="8dp"
+        android:gravity="center"
+        android:background="@drawable/widget_btn_ghost"
+        android:textSize="13sp"
+        android:textColor="#fdfaf7"
+        android:fontFamily="@font/vault_sans"
+        android:maxLines="1"
+        android:ellipsize="end"
+        android:paddingStart="8dp"
+        android:paddingEnd="8dp"
+        android:text="" />
+
+    <TextView
+        android:id="@+id/widget_q3"
+        android:layout_width="0dp"
+        android:layout_height="44dp"
+        android:layout_weight="1"
+        android:layout_marginStart="8dp"
+        android:gravity="center"
+        android:background="@drawable/widget_btn_ghost"
+        android:textSize="13sp"
+        android:textColor="#fdfaf7"
+        android:fontFamily="@font/vault_sans"
+        android:maxLines="1"
+        android:ellipsize="end"
+        android:paddingStart="8dp"
+        android:paddingEnd="8dp"
+        android:text="" />
+</LinearLayout>

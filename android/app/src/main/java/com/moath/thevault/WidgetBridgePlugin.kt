@@ -1,7 +1,5 @@
 package com.moath.thevault
 
-import android.appwidget.AppWidgetManager
-import android.content.ComponentName
 import android.content.Context
 import com.getcapacitor.JSObject
 import com.getcapacitor.Plugin
@@ -79,8 +77,7 @@ class WidgetBridgePlugin : Plugin() {
     /** What the app can see of the bridge, so the web side never has to guess. */
     @PluginMethod
     fun status(call: PluginCall) {
-        val manager = AppWidgetManager.getInstance(context)
-        val placed = manager.getAppWidgetIds(ComponentName(context, VaultWidgetProvider::class.java)).size
+        val placed = VaultWidgets.placedCount(context)
         val result = JSObject()
         result.put("available", true)
         result.put("placed", placed)
@@ -88,11 +85,13 @@ class WidgetBridgePlugin : Plugin() {
         call.resolve(result)
     }
 
+    // ⚠️ ALL FOUR, NOT THE ONE THIS FILE USED TO KNOW ABOUT. Build 23 had a
+    // single provider and repainted it by name; a second widget added later
+    // would have gone stale on every save with nothing to see, because a
+    // widget that is never repainted simply keeps its last face.
     private fun repaint() {
         try {
-            val manager = AppWidgetManager.getInstance(context)
-            val ids = manager.getAppWidgetIds(ComponentName(context, VaultWidgetProvider::class.java))
-            if (ids.isNotEmpty()) VaultWidgetProvider.render(context, manager, ids)
+            VaultWidgets.repaintAll(context)
         } catch (_: Throwable) {
             // A widget that fails to repaint must never take a save down with it.
         }

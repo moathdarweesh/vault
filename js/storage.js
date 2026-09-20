@@ -3555,6 +3555,10 @@ const DB = {
           today: t('today'), rest: t('rest_day'), exercises: t('exercises'),
           kcal: t('calories'), protein: t('protein_g'), water: t('water'),
           since: t('widget_since'), hoursShort: t('widget_hours_short'),
+          // the three widgets added in build 24 draw these
+          remaining: t('widget_remaining'), streakUnit: t('widget_streak_unit'),
+          dayUnit: t('streak_days'), qWorkout: t('widget_q_workout'),
+          qWeight: t('bodyweight'), qWater: t('widget_q_water'),
         },
       };
     },

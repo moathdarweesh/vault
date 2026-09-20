@@ -1,10 +1,39 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- The widget surface: the app's surface-1 (#0d0a07) with the machined edge the
-     identity layer requires — a 1px warm border, never a shadow. The radius is
-     16dp because that is what Android clips a widget to; the inner controls
-     take 12dp, which is the app's own 2:1 corner law. -->
-<shape xmlns:android="http://schemas.android.com/apk/res/android" android:shape="rectangle">
-    <solid android:color="#0d0a07" />
-    <corners android:radius="16dp" />
-    <stroke android:width="1dp" android:color="#1F2B2620" />
-</shape>
+<!--
+  The widget tile: the app's surface-1, the icon's bar field over it, and the
+  machined edge on top. Three layers, in that order.
+
+  The pinstripe is the SAME device as the app icon's - a 2dp bar on an 11dp
+  pitch at 3.5% white - so the tile reads as a sibling of the launcher icon
+  rather than as a card the system drew. It is an 11x1 mdpi PNG tiled by the
+  platform; mdpi is deliberate, because 11px at mdpi IS 11dp and Android then
+  keeps the PITCH at 11dp on every density.
+
+  The radius is 16dp (Android clips a widget to it) and inner controls take
+  12dp - the app's 2:1 corner law.
+
+  The stroke is LIGHT on a dark tile: the border token is rgba(255,232,212,.11), which
+  is #1CFFE8D4 in Android's #AARRGGBB. Build 23 had #1F2B2620 here, a dark
+  line at 12% alpha, and it could not be seen at all.
+-->
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <item>
+        <shape android:shape="rectangle">
+            <solid android:color="#0d0a07" />
+            <corners android:radius="16dp" />
+        </shape>
+    </item>
+    <item>
+        <bitmap
+            android:src="@drawable/widget_pinstripe"
+            android:tileMode="repeat"
+            android:gravity="fill" />
+    </item>
+    <item>
+        <shape android:shape="rectangle">
+            <solid android:color="@android:color/transparent" />
+            <corners android:radius="16dp" />
+            <stroke android:width="1dp" android:color="#1CFFE8D4" />
+        </shape>
+    </item>
+</layer-list>

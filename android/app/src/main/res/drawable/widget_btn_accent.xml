@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  The one filled action. 12dp is the M rung of the button scale; the text on it
+  is the accent-ink token (#1a0800), which measures 6.78:1 on this fill.
+-->
+<shape xmlns:android="http://schemas.android.com/apk/res/android" android:shape="rectangle">
+    <solid android:color="#ff6a00" />
+    <corners android:radius="12dp" />
+</shape>

@@ -118,8 +118,15 @@ function pageMeasure(opts) {
   if (!root) return { error: 'no root for ' + rootSel };
   const vw = window.innerWidth, vh = window.innerHeight;
   const nav = document.querySelector('.bottom-nav');
+  // ⚠️ A HIDDEN ELEMENT HAS A RECT OF ZEROS, NOT null. styles.css:3300 hides the
+  // nav on the guided run (body[data-view="session-run"] .bottom-nav{display:none}),
+  // so "nav ? navRect.top : vh" read fold = 0 there: every one of its controls was
+  // "belowFold" and NONE was above it — on the screen that hides the nav
+  // precisely to give the run the whole viewport. The fold is the nav's top
+  // only when the nav is actually drawn.
   const navRect = nav ? nav.getBoundingClientRect() : null;
-  const fold = navRect ? navRect.top : vh;
+  const navShown = !!navRect && navRect.height > 0 && getComputedStyle(nav).display !== 'none';
+  const fold = navShown ? navRect.top : vh;
   const main = document.querySelector('.main');
   const mainRect = main ? main.getBoundingClientRect() : null;
 
@@ -295,7 +302,7 @@ function pageMeasure(opts) {
 
   return {
     coveredBy,
-    vw, vh, fold, navH: navRect ? Math.round(navRect.height) : 0,
+    vw, vh, fold, navShown, navH: navShown ? Math.round(navRect.height) : 0,
     scroller: main ? { scrollH: main.scrollHeight, clientH: main.clientHeight, top: Math.round(mainRect.top) } : null,
     dir: document.documentElement.dir || document.body.dir, lang,
     fontsLoaded: fontsOk,

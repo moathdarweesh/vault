@@ -12,7 +12,7 @@
 // build. The literal below is the fallback (file://, or a stripped query) and is
 // still bumped by `npm run release` — see CLAUDE.md "CACHE WORKFLOW".
 const VAULT_BUILD = (() => {
-  const FALLBACK = 'v366';
+  const FALLBACK = 'v367';
   try {
     const src = (document.currentScript && document.currentScript.src) || '';
     const m = src.match(/[?&]v=(\d+)/);
@@ -1411,6 +1411,51 @@ window.addEventListener('vault:load-failed', showUnreadableDialog);
   App.addListener('backButton', () => {
     if (!goBack()) App.exitApp();
   });
+})();
+
+// The quick-log widget taps: the widget cannot write into this app (its data
+// lives in the WebView's own storage, which nothing outside may open), so each
+// button OPENS the app carrying thevault://quick/<action> and this performs it.
+//
+// ⚠️ TWO DOORS, AND BOTH ARE REAL. A cold launch delivers the url through
+// App.getLaunchUrl(); a warm one — the app already in memory, which is the
+// common case on Android — delivers it through the appUrlOpen event and
+// getLaunchUrl still returns the ORIGINAL launch, so listening to only one of
+// them means the button works once and then silently stops.
+//
+// ⚠️ AND AN ACTION IS SPENT ONCE. Without the guard a resume would re-run the
+// last one: tap +250 in the morning, come back to the app at noon, and a
+// second cup is logged that nobody poured.
+let lastQuickAction = '';
+function runQuickAction(url) {
+  const m = /thevault:\/\/quick\/(\w+)/.exec(String(url || ''));
+  if (!m) return;
+  const action = m[1] + '|' + Date.now();
+  if (lastQuickAction && lastQuickAction.split('|')[0] === m[1] && Date.now() - Number(lastQuickAction.split('|')[1]) < 4000) return;
+  lastQuickAction = action;
+  try {
+    if (m[1] === 'water250') {
+      // todayISO() HERE, at write time — never a date captured earlier.
+      DB.water.add(todayISO(), 250);
+      navigate('food', {}, { fromPop: true });
+      showToast(t('water') + ' +250 ' + t('unit_ml'));
+    } else if (m[1] === 'weight') {
+      openWeightSheet();
+    } else if (m[1] === 'workout') {
+      const btn = document.getElementById('home-start-workout');
+      if (btn) btn.click(); else navigate('session-day', {}, { fromPop: true });
+    }
+  } catch (_) {}
+}
+
+(function wireQuickLog() {
+  const App = window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.App;
+  if (!App) return;
+  if (App.addListener) App.addListener('appUrlOpen', (e) => runQuickAction(e && e.url));
+  if (App.getLaunchUrl) {
+    // after the first render, so navigate() and the sheets exist
+    afterScripts(() => { Promise.resolve(App.getLaunchUrl()).then((r) => runQuickAction(r && r.url)).catch(() => {}); });
+  }
 })();
 
 // iOS-style large-title behaviour: the sticky top bar shows its small title only

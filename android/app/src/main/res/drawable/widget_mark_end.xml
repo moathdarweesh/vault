@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  One plate of the app's brand lockup (js/ui.js brandLockup), as a vector so it
+  stays exact at any widget size. The plates are the ACCENT; the wordmark beside
+  them is text. Together: plate VAULT / TRAIN plate.
+
+  The 10:15 aspect is the spec's, and brandLockup derives every size from the
+  VAULT font size: plate height = VAULT x 1.35, plate width = that x 10/15,
+  TRAIN = VAULT / 2, gap = VAULT x 0.57.
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="10dp"
+    android:height="15dp"
+    android:viewportWidth="8"
+    android:viewportHeight="12"
+    android:tint="#ff6a00">
+    <path android:fillColor="#ffffffff" android:pathData="M1.6,0 h0.8 a1.6,1.6 0 0 1 1.6,1.6 v8.8 a1.6,1.6 0 0 1 -1.6,1.6 h-0.8 a1.6,1.6 0 0 1 -1.6,-1.6 v-8.8 a1.6,1.6 0 0 1 1.6,-1.6 z" />
+    <path android:fillColor="#ffffffff" android:pathData="M6.2,3 h0.6 a1.2,1.2 0 0 1 1.2,1.2 v3.6 a1.2,1.2 0 0 1 -1.2,1.2 h-0.6 a1.2,1.2 0 0 1 -1.2,-1.2 v-3.6 a1.2,1.2 0 0 1 1.2,-1.2 z" />
+</vector>

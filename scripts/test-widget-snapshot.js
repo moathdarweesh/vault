@@ -195,7 +195,11 @@ assert.equal(snap.cardio.done, false);
     today: 'L:today', rest: 'L:rest_day', exercises: 'L:exercises',
     kcal: 'L:calories', protein: 'L:protein_g', water: 'L:water',
     since: 'L:widget_since', hoursShort: 'L:widget_hours_short',
-  }, 'the eight widget words are not each wired to their own key');
+    // the three widgets build 24 adds draw these six
+    remaining: 'L:widget_remaining', streakUnit: 'L:widget_streak_unit',
+    dayUnit: 'L:streak_days', qWorkout: 'L:widget_q_workout',
+    qWeight: 'L:bodyweight', qWater: 'L:widget_q_water',
+  }, 'the fourteen widget words are not each wired to their own key');
   delete c.t;
 }
 

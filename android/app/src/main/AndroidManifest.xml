@@ -85,6 +85,53 @@
                 android:name="android.appwidget.provider"
                 android:resource="@xml/widget_today_info" />
         </receiver>
+
+        <!--
+          ⚠️ EVERY WIDGET IS ITS OWN RECEIVER, AND THAT IS WHY THEY SHIP
+          TOGETHER. A receiver is a manifest entry, so adding one later
+          costs a new APK and a manual install for everyone. Four now, in
+          one build, rather than four builds.
+
+          exported="true" is REQUIRED and is not a loosening: the launcher
+          is a different app and must be able to bind these, which is what
+          a widget IS. They carry no data of their own - each reads a
+          SharedPreferences file private to this package.
+        -->
+        <receiver
+            android:name=".CaloriesWidgetProvider"
+            android:label="@string/widget_calories_label"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/widget_calories_info" />
+        </receiver>
+
+        <receiver
+            android:name=".StreakWidgetProvider"
+            android:label="@string/widget_streak_label"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/widget_streak_info" />
+        </receiver>
+
+        <receiver
+            android:name=".QuickWidgetProvider"
+            android:label="@string/widget_quick_label"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/widget_quick_info" />
+        </receiver>
     </application>
 
     <!-- Permissions -->

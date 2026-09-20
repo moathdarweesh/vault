@@ -1,12 +1,12 @@
 {
   "_comment": "Update manifest. `web` is the latest web build — it MUST equal the ?v=N in index.html on every release (scripts/release.js writes both); js/update.js reads it fresh (no-store) and reloads the entry html so web/CSS/JS updates reach all devices without a reinstall. `apk` only triggers the in-app download banner when apk.build here is GREATER than the versionCode installed on the device. To release a NEW APK: bump android/app/build.gradle versionCode + versionName, `npm run sync`, build, commit the APK to download/THE-VAULT.apk, then set apk.build/apk.version here to the same numbers (scripts/check-contracts.js refuses a mismatch) and push.",
-  "web": 366,
+  "web": 367,
   "apk": {
-    "build": 23,
-    "version": "3.2",
+    "build": 24,
+    "version": "3.3",
     "url": "https://raw.githubusercontent.com/moathdarweesh/vault/main/download/THE-VAULT.apk",
-    "notes_ar": "ودجت على الشاشة الرئيسيّة: تمرين اليوم وعدد حركاته، والسعرات والبروتين والماء بأشرطةٍ مقابل أهدافك — تُقرأ دون فتح التطبيق، وتُحدَّث مع كلّ حفظ. وتغييرٌ أمنيّ لا يُرى: كانت الحزم السابقة قابلةً للتنقيح، فكان تخزين المتصفّح داخلها مقروءًا عبر USB رغم تعطيل النسخ الاحتياطيّ؛ أُغلق هذا.",
-    "notes_en": "A home-screen widget: today's workout and its exercise count, plus calories, protein and water as bars against your goals — readable without opening the app, refreshed on every save. And one invisible security change: previous builds were debuggable, which made the WebView storage readable over USB despite backups being off. That is closed.",
-    "sha256": "31865ff5c4f922e7597ba3bca3dd6a026dbeefb90d580bac0286ef7bd80fbc84"
+    "notes_ar": "أربع ودجات على الشاشة الرئيسيّة بدل واحدة: «اليوم» بتمرينك والسعرات والبروتين والماء، و«المتبقّي» برقمٍ كبير، و«السلسلة»، و«تسجيل سريع» بثلاثة أزرار تفتح التطبيق على الفعل مباشرةً. وتحمل كلّها علامة التطبيق — لوحَي الأثقال البرتقاليَّين — وخطوطه الثلاثة وبلاطته ونسيج أيقونته، فتبدو قطعةً منه لا بطاقةً رسمها النظام.",
+    "notes_en": "Four home-screen widgets instead of one: Today (your workout plus calories, protein and water), Left (one big number), Streak, and Quick log (three buttons that open the app straight on the action). All four carry the app's own mark — the two orange plates — with its three typefaces, its tile and its icon texture, so they read as part of the app rather than a card the system drew.",
+    "sha256": "410bcfc998868e4de5ea741160e7a86b720e62bd5bb7622c7ec2690434f13ca5"
   }
 }

@@ -82,7 +82,7 @@ a faster TTFB — not fewer bytes.
 npm run release          # bump every marker + verify, then commit all files together
 ```
 
-**Current version: v366.** APK: build 23 / v3.2.
+**Current version: v367.** APK: build 24 / v3.3.
 
 `scripts/release.js` rewrites **every** marker and then re-reads them from disk to confirm; it exits non-zero if any disagree, and prints the count per file (derived, never hard-coded — the docs used to say 16 while the real count was 15). The markers are `?v=N` in `index.html` (every script and stylesheet, the `js/vendor/supabase.js` preload, both `icons/icon.svg` links, `manifest.json`), the `__cleaned_vN` sessionStorage key, the `FALLBACK` literal in `app.js`, `version.json` → `web`, the `?v=` in `manifest.json`, `admin.html`, `privacy.html` and `get/index.html`, and the `Current version` line in this file. `scripts/check-contracts.js` (pre-commit) refuses a commit where any of them disagree.
 
@@ -2678,6 +2678,128 @@ the rows pre-filled from last time as performed sets ("confirmed without a
 throwaway edit" is the recorded intent; whether an untouched row should count
 is the owner's call); a saved food **4 taps**. The day card's Save measures
 **69×40** — under the 44 floor.
+
+## v367 — APK build 24: four widgets, and the mark the app actually uses
+
+The owner's verdict on build 23's widget: «ما عجبتني، ما فيها هويّة ولا شكل
+جذّاب». Then, on the first redesign: **«هذي الهويّة لا أريدها، انظر في التصميم
+الحالي»** — and he was reading his own app correctly.
+
+### ⚠️ I DESIGNED AGAINST A DOCUMENT THAT HAS BEEN WRONG FOR 140 RELEASES
+
+`docs/BRAND.md` §1 and this file both say the in-app mark is THE CUT. It is not.
+`styles.css` says so in its own words — `/* --- THE CUT is retired --- */` — and
+has since **v227**. CLAUDE.md's own v348 note already recorded the problem:
+*"three documents agree with each other and disagree with the app."* I read the
+documents instead of the running app, and built a whole widget family on a mark
+the app dropped 140 releases ago.
+
+**The live mark is `brandLockup()` (js/ui.js:522):** two bar PLATES flanking
+`VAULT` with `TRAIN` beneath it. Measured off the running app rather than
+guessed — plate 10×15, gap 6, VAULT 11px Archivo 800 at .2em, TRAIN 5.5px mono
+at .3em, plates in `--accent`.
+
+Then the owner cut it further: **the plates ALONE, no wordmark** — «الي علامته
+خطوط البرتقاليّة فقط كأنّها أثقال». He is right on the measurement too:
+`brandLockup` derives TRAIN at half the VAULT size, so inside a widget it lands
+at **6.5px**, under every legibility floor this project has; and the app itself
+drops the sub-line below size 10. A shape reads at any size. A 5.5px word does
+not.
+
+> **The rule this leaves behind: measure the app, not the document.** BRAND.md
+> and CLAUDE.md's mark sections are still wrong and are now knowingly wrong —
+> correcting them is its own commit, and until then `styles.css` and
+> `js/ui.js` are the authority.
+
+### The four, and why four in ONE build
+
+| | size | what it is |
+|---|---|---|
+| `VaultWidgetProvider` | 4×2 | today's workout + kcal/protein/water, the streak chip, the mark |
+| `CaloriesWidgetProvider` | 2×2 | what is LEFT to eat, one big mono number |
+| `StreakWidgetProvider` | 2×2 | the streak, today's split under a rule |
+| `QuickWidgetProvider` | 4×1 | workout · weight · +250, three buttons |
+
+⚠️ **Every widget is a manifest receiver, so every widget revision costs a new
+APK and a manual install for ~10 people.** Four now, in one build, rather than
+four builds. The class name `VaultWidgetProvider` is kept for the same reason:
+a widget the owner already placed is bound to THAT name, and renaming it would
+make it vanish on update rather than change.
+
+### The quick-log widget cannot write, and does not pretend to
+
+The app's data lives in the WebView's own storage, which nothing outside it may
+open — that is the whole reason `DB.widget.push()` hands out a snapshot. So each
+button carries `thevault://quick/<action>` and the web side performs it.
+
+> ⚠️ **TWO DOORS, AND BOTH ARE REAL.** A cold launch delivers the url through
+> `App.getLaunchUrl()`; a warm one — the app already in memory, the common case
+> on Android — delivers it through `appUrlOpen`, and `getLaunchUrl` still
+> returns the ORIGINAL launch. Listening to one means the button works once and
+> then silently stops.
+> ⚠️ **AND AN ACTION IS SPENT ONCE.** Without the 4-second guard a resume
+> re-runs the last one: tap +250 in the morning, come back at noon, and a second
+> cup is logged that nobody poured.
+> ⚠️ **AND EACH PENDINGINTENT NEEDS ITS OWN REQUEST CODE.** Intents differing
+> only by DATA are "the same" to `PendingIntent.getActivity`, so three buttons
+> sharing a request code collapse into whichever was created last — three
+> buttons, one action, silently. The action is hashed into the request code.
+
+### What build 23 got wrong in the pixels
+
+- ⚠️ **The machined edge was never drawn.** The tile's stroke was `#1F2B2620` —
+  a **dark** line at 12% on a `#0d0a07` tile, i.e. invisible. `--border` is
+  `rgba(255,232,212,.11)`, which in Android's `#AARRGGBB` is **`#1CFFE8D4`** —
+  light. Every colour in the widget drawables is computed from the token now
+  rather than typed, because that conversion is exactly where it went wrong.
+- The tile had no texture. It carries the icon's own bar field now: a 2dp bar on
+  an 11dp pitch at 3.5% white, as an 11×1 **mdpi** PNG tiled by the platform.
+  mdpi is deliberate — 11px at mdpi IS 11dp, so the PITCH stays 11dp on every
+  density; `nodpi` would pin it to 11 physical px, a 3.7dp pitch on a 3× screen.
+- The widget drew in the launcher's font. Three faces ship in `res/font/` now
+  (Archivo, JetBrains Mono, IBM Plex Sans Arabic — all OFL, 776 KB, header of
+  every file checked), so numbers are mono and words are the app's face.
+
+### Rules that bite, found while writing it
+
+> ⚠️ **REMOTEVIEWS HAS A FIXED VIEW SET AND PLAIN `View` IS NOT IN IT** — nor is
+> `Space`. Every bar, plate and divider is an `ImageView` with a background,
+> which IS in the set and which `setInt(id,"setBackgroundResource",…)` repaints.
+> A `View` inflates fine in the app and throws in the launcher's process, on the
+> home screen, where there is no console. The generator asserts the view set.
+> ⚠️ **THE LAYOUT DIRECTION FOLLOWS THE APP, NOT THE PHONE.** A widget inflated
+> in the launcher's process takes the LAUNCHER's locale, so an Arabic app on an
+> English phone would draw its Arabic words left-to-right.
+> `setLayoutDirection` from the snapshot's own `lang` is what keeps them together.
+> ⚠️ **`--` MAY NOT APPEAR IN AN XML COMMENT**, and the guard I wrote for it
+> caught *my own* comment (`--border`) on its first run. It cost a build on 23.
+
+**Not a lock-screen widget.** The design called the streak tile «القفل» at
+first; Android removed lock-screen widgets from phones in 12 and brought them
+back in 14 for TABLETS only, so a phone cannot host one. It is a home-screen
+identity tile, which is what it always was.
+
+### Measured
+
+40 contracts · lint · **13 suites, 0 failed, 0 skipped**. The widget suite
+caught the six new snapshot words itself and was updated to expect fourteen.
+Read out of the BINARY, never the source — and AAPT2 path shortening renames
+every resource file (`res/EY.xml`, `res/Cf.ttf`), so a filename grep proves
+nothing and every id is resolved through the resource table:
+
+| | |
+|---|---|
+| `versionCode='24' versionName='3.3'` | ✓ |
+| `android:debuggable` | absent · `allowBackup=false` intact |
+| the four receivers | all present by class name |
+| the six Kotlin classes | all in `classes2.dex` |
+| 5 fonts · 4 layouts · 9 drawables · 4 labels | all resolve through the table |
+| `widget_today` compiled | links real `@font/…` and `@drawable/widget_mark_*` ids |
+
+> The build printed `e: Daemon compilation failed: Could not connect to Kotlin
+> compile daemon` and then `BUILD SUCCESSFUL`. That is exactly the case where
+> reading the binary is the only honest check — Gradle fell back to in-process
+> compilation and every class is genuinely there.
 
 ## v366 — APK build 23: the widget reaches the phone, and a leak found on the way
 

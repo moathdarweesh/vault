@@ -1,11 +1,13 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
-  The ONLY string the widget owns. Everything it draws comes from the snapshot,
-  because the app's language is a preference inside the app and not the system
-  locale — see VaultWidgetProvider's header. This one is the label the launcher
-  shows in its own widget picker, which is chrome the app never renders and so
-  cannot supply.
+  The ONLY strings the widgets own, and each is the label the LAUNCHER shows in
+  its own widget picker - chrome the app never renders and so cannot supply.
+  Everything a widget DRAWS comes from the snapshot instead, because the app's
+  language is a preference inside the app rather than the system locale.
 -->
 <resources>
     <string name="widget_today_label" translatable="false">VAULT</string>
+    <string name="widget_calories_label" translatable="false">VAULT · kcal</string>
+    <string name="widget_streak_label" translatable="false">VAULT · streak</string>
+    <string name="widget_quick_label" translatable="false">VAULT · log</string>
 </resources>

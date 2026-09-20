@@ -9,12 +9,12 @@
   as the last time the app ran, and costs nothing while it is closed.
 -->
 <appwidget-provider xmlns:android="http://schemas.android.com/apk/res/android"
-    android:minWidth="250dp"
+    android:minWidth="110dp"
     android:minHeight="110dp"
-    android:targetCellWidth="4"
+    android:targetCellWidth="2"
     android:targetCellHeight="2"
     android:updatePeriodMillis="0"
-    android:initialLayout="@layout/widget_today"
-    android:previewLayout="@layout/widget_today"
-    android:resizeMode="horizontal|vertical"
+    android:initialLayout="@layout/widget_streak"
+    android:previewLayout="@layout/widget_streak"
+    android:resizeMode="none"
     android:widgetCategory="home_screen" />
