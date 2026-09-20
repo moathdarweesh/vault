@@ -22,7 +22,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const { start, ROOT } = require('./fp/server.js');
 const { seedFixture } = require('./fp/fixture.js');
-const { openContext, settle } = require('./fingerprint-net.js');
+const { openContext, openPage, settle } = require('./fingerprint-net.js');
 
 const OUT = path.join(ROOT, '.uxaudit');
 
@@ -112,8 +112,8 @@ async function drive(page, steps, ctxName) {
     const fx = await page.evaluate(seedFixture);
     // every day trains, so Home has a workout to start
     await page.evaluate((fx) => DB.plan.setRotation({ cycle: [{ name: 'Push', exerciseIds: [fx.exerciseId, fx.exerciseId2] }], trainingDays: [0, 1, 2, 3, 4, 5, 6], anchor: addDaysISO(fx.today, -7) }), fx);
-    const home = async () => { await page.evaluate(() => { try { closeModal(); } catch (_) {} document.querySelectorAll('.sheet-overlay, .img-lightbox').forEach((e) => e.remove()); const m = document.querySelector('.main'); if (m) m.scrollTop = 0; navigate('home', {}, { fromPop: true }); }); await settle(page, '.view.active'); await page.clock.runFor(6000); await page.waitForTimeout(60); };
-    const read = (fn, arg) => page.evaluate(fn, arg);
+    const home = async (pg = page) => { await pg.evaluate(() => { try { closeModal(); } catch (_) {} document.querySelectorAll('.sheet-overlay, .img-lightbox').forEach((e) => e.remove()); const m = document.querySelector('.main'); if (m) m.scrollTop = 0; navigate('home', {}, { fromPop: true }); }); await settle(pg, '.view.active'); await pg.clock.runFor(6000); await pg.waitForTimeout(60); };
+    const read = (fn, arg, pg = page) => pg.evaluate(fn, arg);
 
     // ── 1. a cup of water ────────────────────────────────────────────────────
     await home();
@@ -257,10 +257,98 @@ async function drive(page, steps, ctxName) {
     const df1 = await read((d) => DB.foodLogs.listForDate(d).length, fx.today), fu1 = await undoTop();
     dupes.push({ path: 'a saved food (picker stays open)', wrote: (df1 - df0) + ' rows', undoTop: fu1, wasAlreadyDoubled: twiceInLedger(fu0), twiceInLedger: twiceInLedger(fu1), one: '1 row', single: df1 - df0 === 1, expected: 'one row - v357 put an 800ms guard here', steps: dfF.steps });
 
+    // -- 5. THE RESUME: the app is CLOSED mid-workout, and comes back ---------
+    // v189 built this and v296 reshaped it, and it has never been measured
+    // against a real close. Every check until now was a re-render inside one
+    // living page - which is the case the feature does not have to survive.
+    // viewContext dies with the document; the database does not, and the run's
+    // position is DERIVED from it rather than stored, so this is the only test
+    // that touches the thing that can actually be wrong.
+    //
+    // The close is a NEW PAGE in the same context, not a reload: the old
+    // document is destroyed, every JS global with it, and localStorage stays -
+    // which is exactly what an Android WebView kill leaves behind. It opens
+    // through openPage() so it arrives fenced, clocked and ready by the same
+    // code the first page used; a second spelling of that setup would drift,
+    // and the first thing to drift would be the fence.
+    await page.evaluate((a) => { DB.sessions.listAll().filter((s) => s.date === a.today).forEach((s) => DB.sessions.remove(s.id)); }, fx);
+    // A KNOWN PLAN FOR THAT EXERCISE, seeded rather than inherited from the
+    // fixture: three sets last time means the run opens on three empty rows,
+    // so 'how many sets am I doing' is a number this probe controls instead of
+    // a property of whichever exercise the fixture happened to build.
+    await page.evaluate((a) => { DB.sessions.add({ exerciseId: a.exerciseId2, date: addDaysISO(a.today, -3), sets: [{ reps: 12, weight: 40 }, { reps: 10, weight: 45 }, { reps: 8, weight: 50 }] }); }, fx);
+    await home();
+    const runIn = await drive(page, [
+      { sel: '#home-start-workout', label: 'start today (hero)' },
+      { sel: '.view.active #sd-start-run', label: 'start the guided run', after: 800 },
+      // THE SECOND EXERCISE, NEVER THE FIRST. Logging on exercise 1 makes the
+      // correct answer 0, which is also the answer a broken runIdx gives - and
+      // that was not hypothetical: planting `runIdx = 0` against a first-exercise
+      // probe changed nothing in this report, so the probe was proving nothing.
+      { sel: '.view.active .run-nav [data-next]', label: 'next exercise', after: 900 },
+      { sel: '.view.active .run-set-row[data-set="0"] [data-field="reps"]', type: '10' },
+      { sel: '.view.active .run-set-row[data-set="0"] [data-field="weight"]', type: '55' },
+      { sel: '.view.active .run-set-row[data-set="0"] [data-done]', label: 'tick the set', after: 1500 },
+    ], ctxName);
+    const runState = (pg) => read(() => {
+      const v = document.querySelector('.view.active');
+      const rows = [...v.querySelectorAll('.run-set-row')];
+      return {
+        view: v.id,
+        exercise: (v.querySelector('.run-ex-name') || {}).textContent || '',
+        rows: rows.length,
+        ticked: rows.filter((r) => r.querySelector('[data-done]').classList.contains('done')).length,
+        values: rows.map((r) => [r.querySelector('[data-field="reps"]').value, r.querySelector('[data-field="weight"]').value]),
+      };
+    }, null, pg);
+    const beforeClose = await runState(page);
+    const dbBefore = await read((a) => DB.sessions.listAll().filter((s) => s.date === a.today).map((s) => ({ ex: s.exerciseId, sets: s.sets })), fx);
+
+    await page.close();
+    const re = await openPage(ctx, origin, { lang: 'ar', theme: 'dark' });
+    const page2 = re.page;
+    const backIn = await drive(page2, [
+      { sel: '#home-start-workout', label: 'start today (hero)' },
+      { sel: '.view.active #sd-start-run', label: 'start the guided run', after: 800 },
+    ], ctxName);
+    const afterOpen = await runState(page2);
+    const dbAfter = await read((a) => DB.sessions.listAll().filter((s) => s.date === a.today).map((s) => ({ ex: s.exerciseId, sets: s.sets })), fx, page2);
+
+    const resume = {
+      tapsToLogTheSet: runIn.taps,
+      tapsToGetBackIn: backIn.taps,
+      exerciseBefore: beforeClose.exercise,
+      exerciseAfter: afterOpen.exercise,
+      sameExercise: !!beforeClose.exercise && beforeClose.exercise === afterOpen.exercise,
+      tickedBefore: beforeClose.ticked,
+      tickedAfter: afterOpen.ticked,
+      rowsBefore: beforeClose.rows,
+      rowsAfter: afterOpen.rows,
+      valuesBefore: beforeClose.values,
+      valuesAfter: afterOpen.values,
+      dbBefore, dbAfter,
+      // The set has to come back as a PERFORMED set, not as an empty row that
+      // merely looks the same: the numbers survive in the database and the tick
+      // is restored from them.
+      setSurvived: JSON.stringify(dbBefore) === JSON.stringify(dbAfter) && dbAfter.length === 1 && dbAfter[0].sets.length >= 1,
+      tickRestored: afterOpen.ticked >= 1,
+      // REOPENING MUST NOT OFFER FEWER ROWS THAN YOU HAD. The run resumes its
+      // POSITION from the database, but the row count came from last time's
+      // session or from the slot's targets - and once a session exists for
+      // today that signal was dropped, so the set you were ABOUT to do had no
+      // row waiting. 'Resume, do not restart' has to cover the plan for the
+      // exercise, not only the sets already in the database.
+      nextSetReady: afterOpen.rows >= beforeClose.rows,
+    };
+    resume.ok = resume.sameExercise && resume.setSurvived && resume.tickRestored && resume.nextSetReady;
+
+    const contained2 = re.guard.assertContained();
+    for (const e of re.errors) errors.push('(after reopen) ' + e);
     const contained = guard.assertContained();
+    contained.afterReopen = contained2;
     await ctx.close();
     fs.mkdirSync(OUT, { recursive: true });
-    fs.writeFileSync(path.join(OUT, 'flows.json'), JSON.stringify({ results, dupes, errors, contained }, null, 2));
+    fs.writeFileSync(path.join(OUT, 'flows.json'), JSON.stringify({ results, dupes, resume, errors, contained }, null, 2));
 
     console.log('\nux-flows — taps from Home to the write (ar/dark/375, seeded):\n');
     for (const r of results) {
@@ -276,9 +364,17 @@ async function drive(page, steps, ctxName) {
       console.log(`      a fixed-point bounce would instead have hit ${t && t.aFixedPointBounceWouldHit}`);
     }
 
+    console.log('\nthe guided run, after the app is CLOSED mid-workout:\n');
+    console.log(`  logged a set in ${resume.tapsToLogTheSet} taps, closed the page, reopened, back in the run in ${resume.tapsToGetBackIn} taps`);
+    console.log(`  the run opens on            ${resume.exerciseAfter || '(nothing)'}${resume.sameExercise ? '  - the same exercise' : '  <-- NOT the exercise it was on (' + resume.exerciseBefore + ')'}`);
+    console.log(`  set rows                    ${resume.rowsBefore} -> ${resume.rowsAfter}, ticked ${resume.tickedBefore} -> ${resume.tickedAfter}${resume.tickRestored ? '' : '  <-- THE TICK DID NOT COME BACK'}${resume.nextSetReady ? '' : '  <-- NO ROW LEFT FOR THE SET YOU WERE ABOUT TO DO'}`);
+    console.log(`  what is in the database     ${JSON.stringify(resume.dbAfter.map((s) => s.sets))}${resume.setSurvived ? '  - unchanged by the close' : '  <-- CHANGED BY THE CLOSE'}`);
+    console.log(`  the rows on screen          ${JSON.stringify(resume.valuesAfter)}`);
+    console.log(`  ${resume.ok ? 'RESUMED' : 'DID NOT RESUME'}`);
+
     if (errors.length) { console.log('\npage errors:'); for (const e of errors) console.log('  ✗ ' + e); }
     console.log('\nfence: ' + JSON.stringify(contained));
-    if (results.some((r) => !r.landed)) process.exitCode = 1;
+    if (results.some((r) => !r.landed) || !resume.ok) process.exitCode = 1;
   } finally {
     await browser.close(); await srv.close();
   }

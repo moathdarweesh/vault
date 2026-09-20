@@ -12,7 +12,7 @@
 // build. The literal below is the fallback (file://, or a stripped query) and is
 // still bumped by `npm run release` — see CLAUDE.md "CACHE WORKFLOW".
 const VAULT_BUILD = (() => {
-  const FALLBACK = 'v368';
+  const FALLBACK = 'v369';
   try {
     const src = (document.currentScript && document.currentScript.src) || '';
     const m = src.match(/[?&]v=(\d+)/);
@@ -6483,6 +6483,23 @@ function renderSessionRun(el) {
       // and count as done.
       sets = today.sets.map((s) => ({ reps: s.reps, weight: s.weight, done: s.done !== false, phReps: s.reps, phWeight: s.weight }));
       savedId = today.id;
+      // RESUME THE PLAN, NOT ONLY THE HISTORY. How many sets you are doing
+      // comes from the slot's targets or from last time, and this branch
+      // dropped that the moment a session existed for today - so closing the
+      // app after set 1 of 3 and coming back left ONE row, with nothing
+      // waiting for the set you were about to do. Measured before the fix:
+      // three rows became one. Empty rows can never invent history, because
+      // commitExercise drops every row with no reps and no weight.
+      //
+      // The previous session is read with today's row EXCLUDED. `last` above
+      // is sorted by date descending and today's own session is the newest,
+      // so inside this branch it IS today - and padding to its own length is
+      // a no-op that looks like a fix.
+      const prev = DB.sessions.lastForExercise(exId, today.id);
+      const planned = day?.targets?.[exId]?.sets || prev?.sets.length || 0;
+      for (let i = sets.length; i < planned; i++) {
+        sets.push({ reps: '', weight: '', done: false, phReps: prev?.sets[i]?.reps ?? '', phWeight: prev?.sets[i]?.weight ?? '' });
+      }
     } else if (day?.targets?.[exId]?.sets) {
       // Planned sets are EMPTY until performed; targets never become history.
       sets = Array.from({ length: day.targets[exId].sets }, (_, i) => ({

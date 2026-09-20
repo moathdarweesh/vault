@@ -196,6 +196,18 @@ async function openContext(browser, origin, { lang, theme, width, fenceFn = fenc
     timezoneId: TZ,
     locale: lang === 'ar' ? 'ar-SA' : 'en-US',
   });
+  return Object.assign({ ctx }, await openPage(ctx, origin, { lang, theme, fenceFn }));
+}
+
+/* Everything a PAGE needs to be usable: the frozen clock, the fence, error
+   capture, deterministic randomness, the load, and the app's own readiness.
+   It is its own function because a page is opened twice in one run whenever a
+   probe has to close the app and come back to it on the same store -
+   scripts/ux-flows.js does exactly that to prove the guided run resumes - and
+   a second spelling of this setup would drift from the one the net trusts.
+   The first divergence would be the fence, and an unfenced page makes
+   guard.assertContained() a claim about a page that was never guarded. */
+async function openPage(ctx, origin, { lang, theme, fenceFn = fence }) {
   const page = await ctx.newPage();
   await page.clock.install({ time: FROZEN });
   // fenceFn: the net's own fence by default; scripts/ux-audit.js passes one that
@@ -260,7 +272,7 @@ async function openContext(browser, origin, { lang, theme, width, fenceFn = fenc
     applyLang(lang); applyTheme(theme);
   }, { lang, theme });
 
-  return { ctx, page, errors, guard };
+  return { page, errors, guard };
 }
 
 /* ⚠️ THE HANG LANE. The owner's condition on the whole refactor is «لا يعلّق
@@ -717,7 +729,7 @@ function diffOne(a, b, lane) {
 // Guarded so the file can be REQUIRED for its record-path helpers without
 // running a capture. scripts/test-fingerprint.js needs to know where a record
 // lands, and a second spelling of that filename is exactly what broke it.
-module.exports = { OUT, recordFile, lanesOf, openContext, settle, timedRender, withBrowser, FROZEN, TZ, MATRIX };
+module.exports = { OUT, recordFile, lanesOf, openContext, openPage, settle, timedRender, withBrowser, FROZEN, TZ, MATRIX };
 
 if (require.main === module) (async () => {
   try {

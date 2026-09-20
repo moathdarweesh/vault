@@ -82,7 +82,7 @@ a faster TTFB — not fewer bytes.
 npm run release          # bump every marker + verify, then commit all files together
 ```
 
-**Current version: v368.** APK: build 24 / v3.3.
+**Current version: v369.** APK: build 24 / v3.3.
 
 `scripts/release.js` rewrites **every** marker and then re-reads them from disk to confirm; it exits non-zero if any disagree, and prints the count per file (derived, never hard-coded — the docs used to say 16 while the real count was 15). The markers are `?v=N` in `index.html` (every script and stylesheet, the `js/vendor/supabase.js` preload, both `icons/icon.svg` links, `manifest.json`), the `__cleaned_vN` sessionStorage key, the `FALLBACK` literal in `app.js`, `version.json` → `web`, the `?v=` in `manifest.json`, `admin.html`, `privacy.html` and `get/index.html`, and the `Current version` line in this file. `scripts/check-contracts.js` (pre-commit) refuses a commit where any of them disagree.
 
@@ -2678,6 +2678,67 @@ the rows pre-filled from last time as performed sets ("confirmed without a
 throwaway edit" is the recorded intent; whether an untouched row should count
 is the owner's call); a saved food **4 taps**. The day card's Save measures
 **69×40** — under the 44 floor.
+
+## v369 — T1.1: the guided run resumes its POSITION, and now its plan too
+
+v189 built the resume and v296 reshaped it, and in the eleven months since,
+**it had never once been measured against a real close.** Every check was a
+re-render inside one living page — which is the case the feature does not have
+to survive. `viewContext` dies with the document; the database does not, and
+the run's position is DERIVED from it rather than stored, so a close is the
+only gesture that touches the part that can be wrong.
+
+`ux-flows.js` has a fifth path now: start the run, move to the second
+exercise, log a set, **close the page**, reopen, and walk back in. The close is
+a NEW PAGE in the same context, not a reload — the old document and every JS
+global go, `localStorage` stays, which is what an Android WebView kill leaves
+behind. It arrives through `openPage()`, split out of `openContext()` for this
+and exported, so the reopened page is fenced, clocked and ready by the same
+code the first one used; a second spelling would drift, and the first thing to
+drift would be the fence. **The split was proved inert the way this project
+requires: a matrix on each side, 160/160 cells identical, 0 differences.**
+
+### ⚠️ MY FIRST PROBE COULD NOT HAVE FAILED, AND THE PLANTED DEFECT PROVED IT
+
+The plan's own suggested mutation is `runIdx = 0` always. Planted against a
+probe that logged its set on the FIRST exercise, **the report did not change at
+all** — because the correct answer there is also 0. A probe whose subject is
+the default value is a probe that cannot see the bug it was written for.
+
+It logs on the **second** exercise now. With the same mutation planted it fails
+by name — `NOT the exercise it was on (كيبل كروس أوفر)`, the tick gone, the
+rows empty — and with `js/app.js` restored byte-for-byte it passes. 1 of 1.
+
+### What the proof then found: the position came back, the PLAN did not
+
+| after closing mid-exercise | before | after |
+|---|---|---|
+| the exercise | كيبل كروس أوفر | **the same** |
+| the logged set, in the database | `{reps:10, weight:55}` | **unchanged** |
+| its ✓ | restored | restored |
+| **set rows on screen** | **3** | **1** |
+
+`runInit`'s saved-session branch mapped today's sets 1:1, so the moment a
+session existed for today the row count — which is how many sets you are
+DOING, and which comes from the slot's `targets` or from last time — was
+dropped. Close the app after set 1 of 3 and you came back to one row, with
+nothing waiting for the set you were about to do. The feature's own comment
+says **"RESUME, do not restart"**; it resumed the position and restarted the
+plan. It now pads back out to the planned count, and the padding can never
+invent history because `commitExercise` drops every row with no reps and no
+weight — measured: **3 → 3, and the database still holds exactly one set.**
+
+> ⚠️ **INSIDE THAT BRANCH, `last` IS TODAY.** `lastForExercise` sorts by date
+> descending and today's own session is the newest, so padding to `last.sets
+> .length` there is padding to your own length — a no-op that reads as a fix.
+> It reads `lastForExercise(exId, today.id)`, with today's row excluded, which
+> is the same discipline v189 already applied to the suggestion and the
+> best/last cells for exactly this reason.
+
+**The fingerprint net's 160/160 is again WEAK evidence for this change** and is
+reported as such: the matrix runs the empty state, where `runInit` takes its
+no-history branch and never reaches the code that moved. What the net is doing
+here is its second job — proving nothing ELSE moved — and that holds.
 
 ### T1.3 — the duplicate-tap lane, and three ways it lied before it was true
 
