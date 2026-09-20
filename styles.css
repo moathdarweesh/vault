@@ -7727,6 +7727,22 @@ body:has(.toast.has-action.show) .modal { padding-bottom: calc(var(--nav-h) + va
    sat in two unrelated boxes. Today's cardio is one object, so it gets one
    surface: the BLOCK is the card, and everything inside it is flat and divided
    by a rule instead of by a gap. */
+/* Coming back after a gap. It sits ABOVE the hero, is not a hero itself (no
+   radial glow, no numeral) and carries no colour that reads as a warning: the
+   message is that nothing was lost. */
+.home-return {
+  background: var(--surface-1);
+  border: 1px solid var(--border);
+  border-radius: var(--card-radius);
+  padding: 16px;
+  margin-bottom: var(--sp-3);
+  box-shadow: var(--elev-1);
+}
+.home-return-title { font-size: var(--fs-body); font-weight: 700; color: var(--text); }
+.home-return-sub { font-size: var(--fs-caption); color: var(--text-mute); margin-top: 4px; }
+.home-return-actions { display: flex; gap: 10px; margin-top: 14px; }
+.home-return-actions .btn { flex: 1; }
+
 .home-sched {
   margin-bottom: 18px;
   background: var(--card-bg);

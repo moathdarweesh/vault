@@ -82,7 +82,7 @@ a faster TTFB — not fewer bytes.
 npm run release          # bump every marker + verify, then commit all files together
 ```
 
-**Current version: v377.** APK: build 24 / v3.3.
+**Current version: v378.** APK: build 24 / v3.3.
 
 `scripts/release.js` rewrites **every** marker and then re-reads them from disk to confirm; it exits non-zero if any disagree, and prints the count per file (derived, never hard-coded — the docs used to say 16 while the real count was 15). The markers are `?v=N` in `index.html` (every script and stylesheet, the `js/vendor/supabase.js` preload, both `icons/icon.svg` links, `manifest.json`), the `__cleaned_vN` sessionStorage key, the `FALLBACK` literal in `app.js`, `version.json` → `web`, the `?v=` in `manifest.json`, `admin.html`, `privacy.html` and `get/index.html`, and the `Current version` line in this file. `scripts/check-contracts.js` (pre-commit) refuses a commit where any of them disagree.
 
@@ -2678,6 +2678,75 @@ the rows pre-filled from last time as performed sets ("confirmed without a
 throwaway edit" is the recorded intent; whether an untouched row should count
 is the owner's call); a saved food **4 taps**. The day card's Save measures
 **69×40** — under the 44 floor.
+
+## v378 — T3.3 and T3.4, and the red drop the weekly review was to be built on
+
+Three changes, each measured; they ship together because each is small,
+independent, and the first is the defect T3.2 says must be fixed before the
+weekly review is built on top of it.
+
+### ⚠️ NOT DOING SOMETHING YET IS NOT DOING IT WORSE
+
+`renderCompareWorkouts` handed `deltaBlock` this week's best against last
+week's. With nothing logged this week the figure is **0**, so an exercise the
+user simply had not reached yet was drawn as a **red drop the full size of last
+week's best**. On a Tuesday that is most of the Compare screen in red, about a
+week that has barely started.
+
+A delta is only meaningful when BOTH weeks have a number. The two one-sided
+cases are states, not changes, and each now says which it is — «لم تتمرّنه بعد
+هذا الأسبوع» or «جديد هذا الأسبوع». Measured: trained last week, nothing yet
+this week → `compare-delta flat`, no arrow, no red.
+
+### T3.3 — coming back
+
+A gap is the moment an app is most likely to be deleted, and Home met it with
+the same hero as any other day: no acknowledgement, and no route back in that
+did not start with a decision.
+
+**The tone IS the design.** It states a fact and opens two doors — no streak
+language, no "you missed 12 days", no red, and nothing that reads as a warning.
+The one thing a returning user is actually unsure of is whether their plan
+survived, so that is the sentence: «خطّتك محفوظة كما تركتها».
+
+Seven days, counted from the last session **of any kind** — a fortnight of
+cardio is not a break — and it disappears the moment anything is logged, so
+nobody sees it twice. Measured at 12 days away, then again after logging today:
+
+```
+12 days away      title "خطّتك محفوظة كما تركتها" · "مضى 12 يومًا منذ آخر جلسة"
+                  doors ["تابِع اليوم", "رتّب أسبوعك"]
+after logging     no card
+```
+
+> ⚠️ **AND MY FIRST DRAFT BLANKED THE WHOLE HOME SCREEN.** The block read
+> `todayIsoNow`, a `const` declared further down the same function — a TDZ
+> `ReferenceError` that took the entire render with it. Contracts and lint both
+> passed; **the probe caught it**, which is the argument for measuring a change
+> rather than reading it.
+
+### T3.4 — the buzz
+
+One `buzz(kind)`, so the rule lives in one place, and deliberately short
+patterns: a set ✓ is the tap you make forty times in a workout and gets the
+smallest possible tick (12ms); a personal best is the rare one and earns a
+double. The rest alarm keeps its own longer pattern — it has to reach you with
+the phone face down.
+
+Measured: ON → `[12]` and `[16,60,26]`; OFF → nothing at all; and with
+`navigator.vibrate` deleted entirely it does not throw. **It is a no-op on iOS**
+— Safari has never shipped the API — and that is acceptable because it is a
+confirmation and never the only signal: every caller already shows something.
+
+The switch reuses the **unit toggle's** shape, the two-option control this
+settings page already has, rather than adding a third kind of switch;
+`.ntfs-switch` is the reminders page's `role="switch"` button and copying it
+here would be a second spelling of "on or off". Tapping ON answers with the
+thing itself.
+
+> **Contract 35 caught an invented token on the way**: `--radius-card` does not
+> exist (`--card-radius` does). That is the `--text-muted` class of bug from
+> v314, in the exact place the contract was written for.
 
 ## v377 — T2.5: the search speaks the language people type
 

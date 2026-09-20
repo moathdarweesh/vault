@@ -1160,6 +1160,13 @@ const DB = {
     setExNames(mode) { const m = (mode === 'en' || mode === 'ar') ? mode : 'translit'; STATE.prefs.exNames = m; STATE.prefs.translateExercises = m !== 'en'; save(); },
     // Default rest between sets. Set from the idle rest bar's ±15; the live ±15
     // only move the running clock. 15 s to 10 min, whole seconds.
+    // Haptics. Default ON: the buzz confirms a tap the thumb made without
+    // looking, which is the whole gesture on the run screen. Stored as a
+    // preference rather than read from the OS because there is no OS setting to
+    // read - navigator.vibrate is silently ignored where it is unwanted, which
+    // looks identical to a feature that does not work.
+    haptics() { return STATE.prefs.haptics !== false; },
+    setHaptics(on) { STATE.prefs.haptics = !!on; save(); },
     setRestSec(sec) { const n = Math.round(Number(sec)); STATE.prefs.restSec = Number.isFinite(n) ? Math.min(600, Math.max(15, n)) : 90; save(); },
     // First-run welcome flow: true once the user has seen (or skipped) it.
     onboarded() { return !!(STATE.prefs && STATE.prefs.onboarded); },

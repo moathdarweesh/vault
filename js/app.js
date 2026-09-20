@@ -12,7 +12,7 @@
 // build. The literal below is the fallback (file://, or a stripped query) and is
 // still bumped by `npm run release` — see CLAUDE.md "CACHE WORKFLOW".
 const VAULT_BUILD = (() => {
-  const FALLBACK = 'v377';
+  const FALLBACK = 'v378';
   try {
     const src = (document.currentScript && document.currentScript.src) || '';
     const m = src.match(/[?&]v=(\d+)/);
@@ -1458,6 +1458,23 @@ function runQuickAction(url) {
   }
 })();
 
+// ONE BUZZER, so the rule lives in one place. navigator.vibrate exists only on
+// Android Chrome - iOS Safari has never shipped it - so this is a no-op on the
+// phone half the world uses, and that is fine: it is a confirmation, never the
+// only signal. Every caller here already shows something on screen too.
+//
+// The patterns are deliberately short. A set ✓ is the tap you make forty times
+// in a workout, so it gets the smallest possible tick; a personal best is the
+// rare one and earns a double. The rest-timer alarm keeps its own longer
+// pattern - it has to reach you with the phone face down.
+function buzz(kind) {
+  try {
+    if (!navigator.vibrate) return;
+    if (!DB.prefs.haptics()) return;
+    navigator.vibrate(kind === 'pr' ? [16, 60, 26] : 12);
+  } catch (_) {}
+}
+
 // iOS-style large-title behaviour: the sticky top bar shows its small title only
 // AFTER the big <h1 class="page-title"> has scrolled out of view — so at the top
 // of the page you never see the same title twice (big header + bar). Pages that
@@ -1908,6 +1925,27 @@ function renderHome(el) {
       </div></div>`;
   })();
 
+  // COMING BACK. A gap is the moment the app is most likely to be deleted, and
+  // until now Home met it with the same hero as any other day - no
+  // acknowledgement, and no route back in that did not start with a decision.
+  //
+  // The tone is the whole design: it states a FACT and offers two doors. No
+  // streak language, no "you missed 12 days", no red. The plan it is reassuring
+  // you about is still there, which is the one thing a returning user is
+  // actually unsure of.
+  //
+  // Seven days, counted from the last session of any kind - not from the last
+  // TRAINING day, because a fortnight of cardio is not a break. It disappears
+  // the moment anything is logged, so nobody sees it twice.
+  const lastSessionIso = allSessions.length ? allSessions[0].date : '';
+  const lastCardioIso = allCardio.length ? (allCardio.map((c) => c.date).sort().pop() || '') : '';
+  const lastAnyIso = [lastSessionIso, lastCardioIso].filter(Boolean).sort().pop() || '';
+  // todayISO() and not todayIsoNow: that const is declared further down, and
+  // reading it here threw a TDZ ReferenceError that took the WHOLE Home render
+  // with it - a blank screen, caught by measuring rather than by reading.
+  const daysAway = lastAnyIso ? Math.round((new Date(todayISO() + 'T12:00:00') - new Date(lastAnyIso + 'T12:00:00')) / 86400000) : 0;
+  const comingBack = daysAway >= 7 && hasAnyPlan;
+
   // TWO KINDS OF REST DAY, and they are not the same thing.
   //   · DECLINED  — the plan had a workout and the user said no. The way out is
   //     undo, because nobody needs persuading INTO training.
@@ -1942,6 +1980,16 @@ function renderHome(el) {
   const doneInPlan = planIdsToday.filter((id) => coveredToday.has(id)).length;
   const workoutOpen = doneInPlan > 0 && doneInPlan < planIdsToday.length;
   const workoutDone = planIdsToday.length > 0 && doneInPlan === planIdsToday.length;
+
+  const comingBackHtml = !comingBack ? '' : `
+    <div class="home-return">
+      <div class="home-return-title">${escapeHtml(t('back_title'))}</div>
+      <div class="home-return-sub">${escapeHtml(t('back_sub').replace('{n}', fmtNum(daysAway)))}</div>
+      <div class="home-return-actions">
+        <button type="button" class="btn btn-primary" id="home-back-train">${t('back_continue')}</button>
+        <button type="button" class="btn btn-ghost" id="home-back-plan">${t('back_replan')}</button>
+      </div>
+    </div>`;
 
   let heroHtml = '';
   if (minToday.length) {
@@ -2077,6 +2125,8 @@ function renderHome(el) {
 
     ${weekStripHtml}
 
+    ${comingBackHtml}
+
     ${heroHtml}
 
     ${cardioSchedHtml}
@@ -2169,6 +2219,8 @@ function renderHome(el) {
   // Recompute the day at click time so it stays correct if Home was left open
   // across midnight.
   $('#home-log-food', el)?.addEventListener('click', () => navigate('food'));
+  $('#home-back-train', el)?.addEventListener('click', () => navigate('session-day'));
+  $('#home-back-plan', el)?.addEventListener('click', () => navigate('planner'));
   $('#home-start-workout', el)?.addEventListener('click', () => {
     // No plan set up yet → open the plan/schedules screen so the user picks a
     // ready-made plan or builds one, instead of landing in an empty session.
@@ -4217,7 +4269,19 @@ function renderCompareWorkouts() {
             <div class="compare-week-sub">${fmtNum(thisW.reduce((s, x) => s + x.sets.length, 0))} ${t('sessions_n').toLowerCase()}</div>
           </div>
         </div>
-        ${deltaBlock(convertWeightForDisplay(thisBest), convertWeightForDisplay(lastBest), unitLabel())}
+        ${
+          // ⚠️ NOT DOING SOMETHING YET IS NOT DOING IT WORSE. deltaBlock compares
+          // two figures, and with nothing logged this week the figure is 0 - so an
+          // exercise the user simply has not reached yet was drawn as a red drop
+          // the full size of last week's best. On a Tuesday that is most of the
+          // screen in red, about a week that has barely started.
+          //
+          // A delta is only meaningful when BOTH weeks have a number. The two
+          // one-sided cases are states, not changes, and each says which it is.
+          thisBest > 0 && lastBest > 0
+            ? deltaBlock(convertWeightForDisplay(thisBest), convertWeightForDisplay(lastBest), unitLabel())
+            : `<div class="compare-delta flat">${icon('minus', 16)} ${thisBest > 0 ? t('cmp_new_this_week') : t('cmp_not_yet')}</div>`
+        }
       </button>
     `;
   }).filter(Boolean).join('');
@@ -4722,6 +4786,14 @@ function renderSettings(el) {
       </div>
 
       <div class="settings-section">
+        <div class="section-title">${t('haptics')}</div>
+        <div class="unit-toggle">
+          <button class="unit-option ${DB.prefs.haptics() ? 'active' : ''}" data-haptics="1">${t('haptics_on')}</button>
+          <button class="unit-option ${DB.prefs.haptics() ? '' : 'active'}" data-haptics="0">${t('haptics_off')}</button>
+        </div>
+      </div>
+
+      <div class="settings-section">
         <div class="section-title">${t('unit_label')}</div>
         <div class="unit-toggle">
           <button class="unit-option ${(prefs.unit || 'kg') === 'kg' ? 'active' : ''}" data-unit="kg">${t('kg_label')}</button>
@@ -4873,6 +4945,14 @@ function renderSettings(el) {
   );
 
   // Unit toggle
+  el.querySelectorAll('[data-haptics]').forEach((b) =>
+    b.addEventListener('click', () => {
+      DB.prefs.setHaptics(b.dataset.haptics === '1');
+      if (b.dataset.haptics === '1') buzz();   // answer the tap with the thing itself
+      renderSettings(el);
+    })
+  );
+
   el.querySelectorAll('[data-unit]').forEach((b) =>
     b.addEventListener('click', () => {
       DB.prefs.setUnit(b.dataset.unit);
@@ -6207,6 +6287,7 @@ function renderSessionDay(el) {
       }
       const prMsg = checkPR(exId, prior, cleaned, viewContext.sdUnit);
       if (prMsg) {
+        buzz('pr');
         showToast(prMsg);
       } else {
         showToast(wasUpdate ? t('session_updated') : t('session_saved'));
@@ -7291,6 +7372,7 @@ function renderSessionRun(el) {
         // Refuse it visibly and leave the row untouched.
         if (!(Number(set.reps) > 0 || Number(set.weight) > 0)) { showToast(t('add_at_least_one')); return; }
         set.done = true;
+        buzz();
         startRestTimer(restDefaultSec(), i, ex.id, set);
       } else {
         set.done = false;
