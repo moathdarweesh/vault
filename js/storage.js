@@ -1075,9 +1075,24 @@ function cleanMealItems(items) {
 
 const DB = {
   search: {
+    // ة → ه is the fold that was missing, and it was measured rather than
+    // assumed: «تونه» found nothing while «تونة» found three, because the
+    // catalogue's spelling and the typist's disagree on one letter. It is the
+    // same class as the أ and ى folds already here.
+    //
+    // THE SYNONYM PASS CANONICALISES BOTH SIDES, which is what makes it
+    // symmetric: the query and the catalogue entry are put through the same
+    // table, so «فراخ» finds «دجاج» and a row named «فراخ» would be found by
+    // «دجاج». It is per WORD, because the entries are phrases («صدر دجاج
+    // مشوي») and only the word is the synonym. Read at call time through a
+    // typeof guard: catalog.js loads before storage.js, but a guard costs
+    // nothing and this file already guards every borrowed name that way.
     normalize(value) {
-      return String(value || '').toLowerCase().normalize('NFKC').replace(/[٠-٩۰-۹]/g, c => String('٠١٢٣٤٥٦٧٨٩'.includes(c) ? '٠١٢٣٤٥٦٧٨٩'.indexOf(c) : '۰۱۲۳۴۵۶۷۸۹'.indexOf(c)))
-        .replace(/[\u064b-\u065f\u0670\u0640]/g, '').replace(/[أإآٱ]/g, 'ا').replace(/ى/g, 'ي').trim();
+      const base = String(value || '').toLowerCase().normalize('NFKC').replace(/[٠-٩۰-۹]/g, c => String('٠١٢٣٤٥٦٧٨٩'.includes(c) ? '٠١٢٣٤٥٦٧٨٩'.indexOf(c) : '۰۱۲۳۴۵۶۷۸۹'.indexOf(c)))
+        .replace(/[\u064b-\u065f\u0670\u0640]/g, '').replace(/[أإآٱ]/g, 'ا').replace(/ى/g, 'ي').replace(/ة/g, 'ه').trim();
+      const syn = typeof FOOD_SYNONYMS !== 'undefined' ? FOOD_SYNONYMS : null;
+      if (!syn || !base) return base;
+      return base.split(/\s+/).map((w) => syn[w] || w).join(' ');
     },
     query(text, aliases = {}) {
       const q = this.normalize(text).slice(0, 160);

@@ -406,6 +406,30 @@ const EXERCISE_NAME_AR_FULL = {
 
 // Built-in catalog of common foods with pre-computed macros (per serving).
 // Bilingual name + serving; calories/protein/carbs match the DB.foods shape.
+// WHAT PEOPLE CALL FOOD IS NOT WHAT THE CATALOGUE CALLS IT. Measured against
+// the app's own 219 presets with 24 ordinary Arabic queries: 17 found
+// something and SEVEN found nothing - and not for one reason but two. Five are
+// genuine synonyms (a different word for the same food), and the sixth and
+// seventh were the letter fold below.
+//
+// KEYS ARE THE FOLDED FORM - after DB.search.normalize has done its work, so
+// after ة becomes ه and أ becomes ا. Writing a key in its unfolded spelling
+// makes an entry that can never match, silently.
+//
+// ⚠️ لبن AND حليب ARE NOT MERGED, DELIBERATELY. In the Gulf and the Levant لبن
+// is yoghurt or buttermilk; in Egypt it is milk. A synonym that is only a
+// synonym in some dialects is a WRONG ANSWER for the rest, and both words
+// already find their own rows. A map like this earns its bytes only where the
+// two words name the same food everywhere.
+const FOOD_SYNONYMS = {
+  'فراخ': 'دجاج',        // Egyptian for chicken
+  'بطاطس': 'بطاطا',      // the other spelling of potato
+  'بندوره': 'طماطم',     // Levantine for tomato
+  'عيش': 'خبز',          // Egyptian for bread
+  'معكرونه': 'مكرونه',   // the other spelling of pasta
+  'جبنه': 'جبن',         // the catalogue's own word is the bare stem
+};
+
 const FOOD_PRESETS = [
   // Protein
   { cat: 'protein', en: 'Chicken Breast', ar: 'صدر دجاج', s: '100g', sa: '١٠٠غ', cal: 165, pro: 31, carb: 0, f: 4.6 },

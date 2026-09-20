@@ -82,7 +82,7 @@ a faster TTFB — not fewer bytes.
 npm run release          # bump every marker + verify, then commit all files together
 ```
 
-**Current version: v376.** APK: build 24 / v3.3.
+**Current version: v377.** APK: build 24 / v3.3.
 
 `scripts/release.js` rewrites **every** marker and then re-reads them from disk to confirm; it exits non-zero if any disagree, and prints the count per file (derived, never hard-coded — the docs used to say 16 while the real count was 15). The markers are `?v=N` in `index.html` (every script and stylesheet, the `js/vendor/supabase.js` preload, both `icons/icon.svg` links, `manifest.json`), the `__cleaned_vN` sessionStorage key, the `FALLBACK` literal in `app.js`, `version.json` → `web`, the `?v=` in `manifest.json`, `admin.html`, `privacy.html` and `get/index.html`, and the `Current version` line in this file. `scripts/check-contracts.js` (pre-commit) refuses a commit where any of them disagree.
 
@@ -2678,6 +2678,41 @@ the rows pre-filled from last time as performed sets ("confirmed without a
 throwaway edit" is the recorded intent; whether an untouched row should count
 is the owner's call); a saved food **4 taps**. The day card's Save measures
 **69×40** — under the 44 floor.
+
+## v377 — T2.5: the search speaks the language people type
+
+The plan asked for «٢٠ استعلامًا حقيقيًّا تُقاس أوّلًا». Twenty-four were, against
+the app's own 219 presets — written the way a Gulf or Levantine speaker types
+them, not the way the catalogue spells them:
+
+> **17 of 24 found something. SEVEN found nothing** — and not for one reason
+> but two, which is why measuring first mattered.
+
+| what failed | the real cause |
+|---|---|
+| `تونه` (while `تونة` found 3) | **ة is the one letter the normaliser never folded**, beside the أ and ى folds it already had |
+| `جبنة` (while `جبن` found 8) | **folding could not have fixed it**: the query is LONGER than the catalogue's word |
+| `فراخ` `بطاطس` `بندورة` `عيش` `معكرونة` | genuine synonyms — a different word for the same food |
+
+So both halves were needed, and neither alone would have done: `ة → ه` in
+`DB.search.normalize`, and a six-entry `FOOD_SYNONYMS` map in `js/catalog.js`,
+where the food data lives. **Measured after: 24 of 24.**
+
+**The synonym pass canonicalises BOTH sides**, which is what makes it
+symmetric: query and catalogue entry go through the same table, so «فراخ»
+finds «دجاج» and a row the user named «فراخ» is found by «دجاج». It runs per
+WORD, because entries are phrases («صدر دجاج مشوي») and only the word is the
+synonym.
+
+> ⚠️ **THE KEYS ARE THE FOLDED FORM** — after ة→ه and أ→ا. A key written in its
+> unfolded spelling is an entry that can never match, silently, which is this
+> project's favourite shape of bug.
+
+> ⚠️ **لبن AND حليب ARE NOT MERGED, AND THAT IS THE DECISION.** In the Gulf and
+> the Levant لبن is yoghurt or buttermilk; in Egypt it is milk. A synonym that
+> is only a synonym in some dialects is a WRONG ANSWER for the rest — and both
+> words already find their own rows (6 and 5). A map like this earns its bytes
+> only where the two words name the same food everywhere.
 
 ## v376 — T2.4: where a figure came from, and yesterday in one sheet
 
