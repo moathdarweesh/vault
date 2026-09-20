@@ -12,7 +12,7 @@
 // build. The literal below is the fallback (file://, or a stripped query) and is
 // still bumped by `npm run release` — see CLAUDE.md "CACHE WORKFLOW".
 const VAULT_BUILD = (() => {
-  const FALLBACK = 'v371';
+  const FALLBACK = 'v372';
   try {
     const src = (document.currentScript && document.currentScript.src) || '';
     const m = src.match(/[?&]v=(\d+)/);
@@ -1926,6 +1926,23 @@ function renderHome(el) {
   const minToday = allSessions
     .filter((s) => s.date === todayISO() && s.kind === 'minimum');
 
+  // IS TODAY'S WORKOUT OPEN? Home had three hero branches and not one of them
+  // knew a session was half done: log two exercises of five, come back to Home,
+  // and the hero still read «ابدأ تمرين اليوم» — the same words, the same
+  // filled button, as before you started. The screen you look at most had no
+  // idea you were mid-workout.
+  //
+  // Counted by EXERCISES COVERED, never by sets: a plan slot is a list of
+  // exercises and "2 of 5" is the only count that means anything to the person
+  // reading it. A session with no sets is not coverage — the guided run writes
+  // a row the moment a number is typed, and an empty one is an intention.
+  const todayIsoNow = todayISO();
+  const planIdsToday = hasPlanToday ? todayPlan.exerciseIds.filter((id) => exerciseById[id]) : [];
+  const coveredToday = new Set(allSessions.filter((s) => s.date === todayIsoNow && s.sets.length > 0).map((s) => s.exerciseId));
+  const doneInPlan = planIdsToday.filter((id) => coveredToday.has(id)).length;
+  const workoutOpen = doneInPlan > 0 && doneInPlan < planIdsToday.length;
+  const workoutDone = planIdsToday.length > 0 && doneInPlan === planIdsToday.length;
+
   let heroHtml = '';
   if (minToday.length) {
     const mins = minToday.length * 10;
@@ -1968,6 +1985,44 @@ function renderHome(el) {
         </button>` : `
         <button class="hero-ghost-cta" id="home-undo-rest" type="button">
           ${icon('refresh', 20)}<span>${t('rest_undo')}</span>
+        </button>`}
+      </div>
+    `;
+  } else if (workoutOpen || workoutDone) {
+    // Two states of one fact, and the CTA is the difference.
+    //   OPEN     — «كمّل تمرينك», «2 من 5», and the same filled button in the
+    //              same place, so the tap you already know still starts.
+    //   FINISHED — the workout is not a task any more, so the filled button
+    //              goes: what is left today is eating, and that is one tap in a
+    //              LINE, not a slab. The numbers are the day's own, read back.
+    // The CTA keeps its PLACE - last element of the card, full width - so the
+    // tap you already know still lands on it. It is not pixel-identical and the
+    // measurement says so: the finished state sits 14px higher (338 against
+    // 352) because a ghost control is shorter than a filled one and the rest
+    // chip is gone from the eyebrow row. Claiming "it does not move" would have
+    // been a comment this file's own numbers contradict.
+    const todaySets = allSessions
+      .filter((s) => s.date === todayIsoNow && coveredToday.has(s.exerciseId))
+      .reduce((n, s) => n + s.sets.length, 0);
+    const heaviest = allSessions
+      .filter((s) => s.date === todayIsoNow)
+      .reduce((m, s) => s.sets.reduce((k, x) => Math.max(k, Number(x.weight) || 0), m), 0);
+    heroHtml = `
+      <div class="hero-card">
+        <div class="hero-eyebrow-row">
+          <div class="hero-eyebrow">${workoutDone ? t('home_workout_done') : t('home_workout_open')} · ${escapeHtml(dayName(now.getDay(), true))}</div>
+          ${workoutDone ? '' : restChipHtml}
+        </div>
+        <div class="hero-title">${escapeHtml(todayPlan.name || t('start_workout'))}</div>
+        <div class="hero-meta">${workoutDone
+          ? `${t('home_done_sets').replace('{n}', fmtNum(todaySets))}${heaviest > 0 ? ` · ${fmtWeight(heaviest)} ${unitLabel()}` : ''}`
+          : t('home_workout_progress').replace('{a}', fmtNum(doneInPlan)).replace('{b}', fmtNum(planIdsToday.length))}</div>
+        ${workoutDone ? `
+        <button class="hero-ghost-cta" id="home-log-food" type="button">
+          ${icon('utensils', 20)}<span>${t('home_log_food')}</span>
+        </button>` : `
+        <button class="hero-cta hero-cta-btn" id="home-start-workout" type="button">
+          ${icon('dumbbell', 20)}<span>${t('home_workout_continue')}</span>
         </button>`}
       </div>
     `;
@@ -2113,6 +2168,7 @@ function renderHome(el) {
   // "Start Workout" hero card → straight into today's session logging.
   // Recompute the day at click time so it stays correct if Home was left open
   // across midnight.
+  $('#home-log-food', el)?.addEventListener('click', () => navigate('food'));
   $('#home-start-workout', el)?.addEventListener('click', () => {
     // No plan set up yet → open the plan/schedules screen so the user picks a
     // ready-made plan or builds one, instead of landing in an empty session.

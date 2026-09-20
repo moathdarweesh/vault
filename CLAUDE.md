@@ -82,7 +82,7 @@ a faster TTFB — not fewer bytes.
 npm run release          # bump every marker + verify, then commit all files together
 ```
 
-**Current version: v371.** APK: build 24 / v3.3.
+**Current version: v372.** APK: build 24 / v3.3.
 
 `scripts/release.js` rewrites **every** marker and then re-reads them from disk to confirm; it exits non-zero if any disagree, and prints the count per file (derived, never hard-coded — the docs used to say 16 while the real count was 15). The markers are `?v=N` in `index.html` (every script and stylesheet, the `js/vendor/supabase.js` preload, both `icons/icon.svg` links, `manifest.json`), the `__cleaned_vN` sessionStorage key, the `FALLBACK` literal in `app.js`, `version.json` → `web`, the `?v=` in `manifest.json`, `admin.html`, `privacy.html` and `get/index.html`, and the `Current version` line in this file. `scripts/check-contracts.js` (pre-commit) refuses a commit where any of them disagree.
 
@@ -2678,6 +2678,44 @@ the rows pre-filled from last time as performed sets ("confirmed without a
 throwaway edit" is the recorded intent; whether an untouched row should count
 is the owner's call); a saved food **4 taps**. The day card's Save measures
 **69×40** — under the 44 floor.
+
+## v372 — T2.1: Home knows the workout is half done
+
+Home had three hero branches and **not one of them knew a session was open.**
+Log two exercises of five, come back, and the hero still read «ابدأ تمرين
+اليوم» — the same words and the same filled button as before you started. The
+screen the owner looks at most had no idea he was mid-workout.
+
+A fourth branch now sits ahead of `hasPlanToday`, in two states of one fact:
+
+| | eyebrow | meta | CTA |
+|---|---|---|---|
+| not started | خطة اليوم | ٢ تمارين · ٢ مجموعة هذا الأسبوع | **تمرين اليوم** (filled) |
+| open | **قيد التنفيذ** | **١ من ٢ تمارين** | **أكمل تمرينك** (filled) |
+| finished | **اكتمل** | **٣ مجموعة · 65 kg** | **سجّل أكلك** (line, not slab) |
+
+**Counted by EXERCISES COVERED, never by sets.** A plan slot is a list of
+exercises, and "1 of 2" is the only count that means anything to the person
+reading it. A session with no sets is not coverage: the guided run writes a row
+the moment a number is typed, and an empty one is an intention.
+
+**Finished is not a task, so it loses the filled button.** What is left of the
+day is eating, and that is a line, not a slab. The rest chip goes with it — a
+finished workout has nothing to decline.
+
+> **The CTA keeps its PLACE and the comment says exactly how much it moves.**
+> First draft asserted "THE CTA DOES NOT MOVE"; the measurement said 352 → 352
+> → **338**, because a ghost control is shorter than a filled one and the
+> eyebrow row lost its chip. 14px, in the state where the label changed anyway
+> — but a comment this file's own numbers contradict is a defect, so it states
+> the number instead of denying it.
+
+Two defects in my own branch, both caught by rendering it rather than reading
+it: the meta read **«3 المجموعات · 65»** — `t('sets')` is the COLUMN LABEL, and
+a definite article after a numeral is not Arabic, while `fmtWeight()` returns a
+bare figure and the unit comes from `unitLabel()` separately. It is
+«٣ مجموعة · 65 kg» now, the singular tamyīz being the house style
+`sessions_this_week` already uses.
 
 ## v371 — T1.4: the save centre shrinks when there is nothing to do
 
