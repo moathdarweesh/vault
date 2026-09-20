@@ -12,7 +12,7 @@
 // build. The literal below is the fallback (file://, or a stripped query) and is
 // still bumped by `npm run release` — see CLAUDE.md "CACHE WORKFLOW".
 const VAULT_BUILD = (() => {
-  const FALLBACK = 'v378';
+  const FALLBACK = 'v379';
   try {
     const src = (document.currentScript && document.currentScript.src) || '';
     const m = src.match(/[?&]v=(\d+)/);
@@ -1473,6 +1473,88 @@ function buzz(kind) {
     if (!DB.prefs.haptics()) return;
     navigator.vibrate(kind === 'pr' ? [16, 60, 26] : 12);
   } catch (_) {}
+}
+
+// ── THE WEEKLY REVIEW ───────────────────────────────────────────────────────
+//
+// Shown ONCE, on the first open after a week ends, and never again for that
+// week. The stamp is the reviewed week's START DATE rather than a flag, so it
+// can never read "already seen" for a week that has not happened yet, and the
+// definition of "a week" stays in exactly one place (WEEK_START).
+//
+// It reports THREE things and no more: whether the week happened, one
+// comparable improvement, and one suggestion with its reason. A review that
+// lists everything is a report nobody finishes; the point is to be read in the
+// four seconds between opening the app and starting to use it.
+//
+// ⚠️ THE SUGGESTION IS NEVER APPLIED BY THE SHEET. It names what it would
+// change and opens the screen that owns that change - the plan is edited where
+// the plan is edited. A review that quietly rearranged the week would be a
+// review nobody could trust opening.
+function weeklyReviewDue() {
+  if (DB.prefs.reviewOff()) return null;
+  const { lastStart, lastEnd } = weekRanges();
+  // ⚠️ weekRanges() RETURNS DATE OBJECTS, NOT ISO STRINGS. Stamping the Date
+  // stored String(date) - a locale-formatted sentence - and the comparison
+  // then held a string against a Date, which can never be equal. Measured
+  // before the fix: the review opened on EVERY app open, for ever. isoOf()
+  // is storage.js's local-day formatter, the same one todayISO() is built on.
+  const weekKey = isoOf(lastStart);
+  // Nothing to review before the app has a week of history behind it.
+  if (DB.prefs.reviewSeen() === weekKey) return null;
+  const sessions = DB.sessions.listAll().filter((s) => inRangeISO(s.date, lastStart, lastEnd));
+  if (!sessions.length) return null;
+  const plan = DB.plan.get();
+  const planned = Array.isArray(plan.trainingDays) ? plan.trainingDays.length : 0;
+  const days = [...new Set(sessions.map((s) => s.date))].length;
+  return { weekKey, lastStart, lastEnd, sessions, planned, days };
+}
+
+function openWeeklyReview() {
+  const due = weeklyReviewDue();
+  if (!due) return;
+  const { weekKey, lastStart, lastEnd, planned, days } = due;
+  DB.prefs.setReviewSeen(weekKey);
+
+  // ONE comparable improvement: the exercise whose best weight rose most, and
+  // only where BOTH weeks have a figure - the same rule v378 put on the
+  // Compare panel, for the same reason. An exercise done last week and not the
+  // week before is new, not improved.
+  const { thisStart, thisEnd } = { thisStart: lastStart, thisEnd: lastEnd };
+  const prevStart = addDaysISO(lastStart, -7), prevEnd = addDaysISO(lastStart, -1);
+  const bestIn = (list) => list.reduce((m, s) => s.sets.reduce((k, x) => Math.max(k, Number(x.weight) || 0), m), 0);
+  let win = null;
+  for (const ex of DB.exercises.list()) {
+    const all = DB.sessions.listByExercise(ex.id);
+    const now = bestIn(all.filter((s) => inRangeISO(s.date, thisStart, thisEnd)));
+    const before = bestIn(all.filter((s) => inRangeISO(s.date, prevStart, prevEnd)));
+    if (now > 0 && before > 0 && now > before && (!win || now - before > win.gain)) {
+      win = { name: exDisplayName(ex), gain: now - before, now };
+    }
+  }
+
+  // ONE suggestion, and only when the number supports it. Fewer sessions than
+  // the plan asks for is the only thing this is confident enough to raise, and
+  // it opens the rotation editor rather than touching the plan itself.
+  const short = planned > 0 && days < planned;
+
+  const overlay = openModal(`
+    <div class="modal-header">
+      <div class="modal-title">${t('wr_title')}</div>
+      <button class="icon-btn icon-btn-tile" data-close>${icon('close', 20)}</button>
+    </div>
+    <div class="wr-line wr-lead">${escapeHtml(t('wr_sessions').replace('{a}', fmtNum(days)).replace('{b}', fmtNum(planned || days)))}</div>
+    ${win ? `<div class="wr-line">${escapeHtml(t('wr_up').replace('{name}', win.name).replace('{n}', fmtWeight(win.gain) + ' ' + unitLabel()))}</div>` : ''}
+    ${short ? `<div class="wr-line wr-sug">${escapeHtml(t('wr_short'))}</div>` : ''}
+    <div class="cx-actions">
+      ${short ? `<button type="button" class="btn btn-primary" id="wr-plan">${t('wr_open_plan')}</button>` : ''}
+      <button type="button" class="btn btn-ghost" id="wr-done">${t('wr_done')}</button>
+    </div>
+    <button type="button" class="link-btn wr-off" id="wr-off">${t('wr_never')}</button>
+  `);
+  overlay.querySelector('#wr-done')?.addEventListener('click', () => closeModal());
+  overlay.querySelector('#wr-plan')?.addEventListener('click', () => { closeModal(); navigate('planner'); });
+  overlay.querySelector('#wr-off')?.addEventListener('click', () => { DB.prefs.setReviewOff(true); closeModal(); showToast(t('wr_off_done')); });
 }
 
 // iOS-style large-title behaviour: the sticky top bar shows its small title only
@@ -9393,6 +9475,11 @@ function afterScripts(fn) {
   // one, and a 1.5 s timer armed while app.js was still being evaluated raced
   // its arrival — the callback found no window.Notify and silently armed nothing.
   afterScripts(() => {
+    // The weekly review, once a week, on the first open after the week ends.
+    // AFTER the scripts, so it can never race the splash or the boot render -
+    // a sheet opened behind a closed door is a sheet nobody sees, and the
+    // stamp would be spent on it. It is a no-op every other day of the week.
+    try { openWeeklyReview(); } catch (_) {}
     try { armNotifications(); } catch (_) {}
     // reconcile() before sync(), and chained rather than merely ordered: sync()
     // rewrites the armed manifest that reconcile() reads to work out what fired

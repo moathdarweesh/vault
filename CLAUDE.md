@@ -82,7 +82,7 @@ a faster TTFB — not fewer bytes.
 npm run release          # bump every marker + verify, then commit all files together
 ```
 
-**Current version: v378.** APK: build 24 / v3.3.
+**Current version: v379.** APK: build 24 / v3.3.
 
 `scripts/release.js` rewrites **every** marker and then re-reads them from disk to confirm; it exits non-zero if any disagree, and prints the count per file (derived, never hard-coded — the docs used to say 16 while the real count was 15). The markers are `?v=N` in `index.html` (every script and stylesheet, the `js/vendor/supabase.js` preload, both `icons/icon.svg` links, `manifest.json`), the `__cleaned_vN` sessionStorage key, the `FALLBACK` literal in `app.js`, `version.json` → `web`, the `?v=` in `manifest.json`, `admin.html`, `privacy.html` and `get/index.html`, and the `Current version` line in this file. `scripts/check-contracts.js` (pre-commit) refuses a commit where any of them disagree.
 
@@ -2678,6 +2678,67 @@ the rows pre-filled from last time as performed sets ("confirmed without a
 throwaway edit" is the recorded intent; whether an untouched row should count
 is the owner's call); a saved food **4 taps**. The day card's Save measures
 **69×40** — under the 44 floor.
+
+## v379 — T3.1 and T3.2: the routine is derived, and the week reports itself once
+
+### T3.1 — `DB.routine`, and it stores nothing
+
+What time you usually train, which weekdays you actually turn up on, how many
+sessions a normal week holds — every one of those is already implied by the
+sessions in the blob. So **none of it is stored**: no new key, no new blob
+field, nothing to migrate, nothing that can go stale or disagree with the log
+it came from, nothing extra to sync.
+
+> ⚠️ **THE HABIT IS WHAT YOU DID, NOT WHAT YOU PLANNED.** The plan already
+> says which days are training days; asking it would only report what the user
+> once intended. These answers come from `createdAt` and `date` on real
+> sessions — which is exactly why they can disagree with the plan, and that
+> disagreement is the whole point of a weekly review.
+
+Two details that decide whether the answers are true:
+
+- **The hour is the MODE, not the mean.** An average of 07:00 and 19:00 is
+  13:00 — a time this person has never trained.
+- **Days are counted once each, not once per exercise.** Five exercises on a
+  Monday are one Monday.
+
+Everything is `null`/`enough: false` rather than a guess below six sessions: a
+"usual hour" derived from two sessions is not a habit, it is two numbers.
+Measured against eight seeded weeks of Sun/Tue/Thu:
+
+```
+no history      {enough: false, sessions: 0}
+eight weeks     {enough: true, sessions: 24, perWeek: 3, usualHour: 21, usualDays: [0,2,4]}
+```
+
+### T3.2 — the weekly review
+
+Once, on the first open after a week ends, and never again for that week.
+**Three things and no more**: whether the week happened, one comparable
+improvement, one suggestion with its reason. A review that lists everything is
+a report nobody finishes.
+
+**The suggestion is never applied by the sheet.** It names what it would change
+and opens the screen that owns that change — the plan is edited where the plan
+is edited. A review that quietly rearranged the week would be one nobody could
+trust opening.
+
+The improvement uses the same rule v378 put on the Compare panel, for the same
+reason: both weeks must have a figure, because an exercise done last week and
+not the week before is **new**, not improved.
+
+> ⚠️ **`weekRanges()` RETURNS DATE OBJECTS, NOT ISO STRINGS**, and that one
+> assumption would have shipped the feature inside out. The stamp stored
+> `String(date)` — a locale-formatted sentence — and then compared that string
+> against a `Date`, which can never be equal. **Measured before the fix: the
+> review opened on every single app open, for ever.** It is `isoOf(lastStart)`
+> now, storage.js's own local-day formatter, on both sides. The stamp is a
+> DATE rather than a flag for the same family of reason: a boolean would need
+> something to reset it, and whatever reset it would be a second place that
+> decides when a week ends.
+
+Measured: it opens once, returns `nothing opened` on the next call in the same
+week, and «لا تعرضها مجدّدًا» keeps it away even with the stamp cleared.
 
 ## v378 — T3.3 and T3.4, and the red drop the weekly review was to be built on
 

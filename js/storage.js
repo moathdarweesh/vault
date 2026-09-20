@@ -1120,6 +1120,66 @@ const DB = {
       return results.sort((a,b) => a.score-b.score || b.date.localeCompare(a.date)).slice(0,60);
     },
   },
+  // ── THE ROUTINE, DERIVED ─────────────────────────────────────────────────
+  //
+  // What time you usually train, which weekdays you actually turn up on, how
+  // many sessions a normal week holds for you. Every one of those is already
+  // implied by the sessions in the blob, so NONE of it is stored: there is no
+  // new key, no new blob field, nothing to migrate, nothing that can go stale
+  // or disagree with the log it came from, and nothing extra to sync.
+  //
+  // ⚠️ THE HABIT IS WHAT YOU DID, NOT WHAT YOU PLANNED. The plan already says
+  // which days are training days; asking it would only tell us what the user
+  // once intended. These answers come from `createdAt` and `date` on real
+  // sessions, which is why they can disagree with the plan - and that
+  // disagreement is the whole point of a weekly review.
+  //
+  // Everything is null rather than a guess when there is not enough to say so.
+  // A "usual hour" derived from two sessions is not a habit, it is two numbers.
+  routine: {
+    WINDOW: 56,          // eight weeks: long enough to average, short enough to be current
+    MIN_SESSIONS: 6,     // under this there is no habit to report
+
+    get() {
+      const from = addDaysISO(todayISO(), -this.WINDOW);
+      const rows = STATE.sessions.filter((s) => s.date >= from);
+      if (rows.length < this.MIN_SESSIONS) return { enough: false, sessions: rows.length };
+
+      // The HOUR comes from createdAt, which is when the row was written -
+      // i.e. when you were actually in the gym. `date` is a calendar day and
+      // carries no time at all.
+      const hours = rows.map((s) => {
+        const d = new Date(s.createdAt);
+        return Number.isFinite(d.getTime()) ? d.getHours() : null;
+      }).filter((h) => h !== null);
+      // The MODE, not the mean: an average of 07:00 and 19:00 is 13:00, which
+      // is a time this person has never trained.
+      const byHour = {};
+      hours.forEach((h) => { byHour[h] = (byHour[h] || 0) + 1; });
+      const usualHour = hours.length ? Number(Object.keys(byHour).sort((a, b) => byHour[b] - byHour[a])[0]) : null;
+
+      // DAYS are counted once each, not once per exercise: five exercises on a
+      // Monday are one Monday.
+      const days = [...new Set(rows.map((s) => s.date))];
+      const byDow = {};
+      days.forEach((iso) => { const d = new Date(iso + 'T12:00:00'); byDow[d.getDay()] = (byDow[d.getDay()] || 0) + 1; });
+      const weeks = Math.max(1, Math.round(this.WINDOW / 7));
+      // A weekday counts as usual when it carries at least a third of the
+      // weeks - below that it is an exception, not a routine.
+      const usualDays = Object.keys(byDow).map(Number).filter((d) => byDow[d] >= Math.max(2, weeks / 3)).sort();
+
+      return {
+        enough: true,
+        sessions: rows.length,
+        trainingDays: days.length,
+        perWeek: Math.round((days.length / weeks) * 10) / 10,
+        usualHour,
+        usualDays,
+        lastDate: days.sort().pop() || null,
+      };
+    },
+  },
+
   undo: {
     list() {
       const owner = operationOwner();
@@ -1167,6 +1227,13 @@ const DB = {
     // looks identical to a feature that does not work.
     haptics() { return STATE.prefs.haptics !== false; },
     setHaptics(on) { STATE.prefs.haptics = !!on; save(); },
+    // The week whose review has been shown, as that week's START date. A
+    // boolean would have to be reset by something, and whatever reset it would
+    // be a second place that decides when a week ends.
+    reviewSeen() { return STATE.prefs.reviewSeen || ''; },
+    setReviewSeen(iso) { STATE.prefs.reviewSeen = String(iso || ''); save(); },
+    reviewOff() { return STATE.prefs.reviewOff === true; },
+    setReviewOff(off) { STATE.prefs.reviewOff = !!off; save(); },
     setRestSec(sec) { const n = Math.round(Number(sec)); STATE.prefs.restSec = Number.isFinite(n) ? Math.min(600, Math.max(15, n)) : 90; save(); },
     // First-run welcome flow: true once the user has seen (or skipped) it.
     onboarded() { return !!(STATE.prefs && STATE.prefs.onboarded); },

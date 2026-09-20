@@ -7730,6 +7730,12 @@ body:has(.toast.has-action.show) .modal { padding-bottom: calc(var(--nav-h) + va
 /* Coming back after a gap. It sits ABOVE the hero, is not a hero itself (no
    radial glow, no numeral) and carries no colour that reads as a warning: the
    message is that nothing was lost. */
+/* The weekly review: three lines, read in the seconds before the app is used. */
+.wr-line { font-size: var(--fs-body); color: var(--text); line-height: 1.7; margin-top: 10px; }
+.wr-lead { font-weight: 700; }
+.wr-sug { color: var(--text-mute); }
+.wr-off { display: block; margin: 16px auto 0; }
+
 .home-return {
   background: var(--surface-1);
   border: 1px solid var(--border);
