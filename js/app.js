@@ -12,7 +12,7 @@
 // build. The literal below is the fallback (file://, or a stripped query) and is
 // still bumped by `npm run release` — see CLAUDE.md "CACHE WORKFLOW".
 const VAULT_BUILD = (() => {
-  const FALLBACK = 'v374';
+  const FALLBACK = 'v375';
   try {
     const src = (document.currentScript && document.currentScript.src) || '';
     const m = src.match(/[?&]v=(\d+)/);
@@ -5879,7 +5879,15 @@ function renderSessionDay(el) {
     const last = DB.sessions.lastForExercise(exId);
     let sets;
     if (today) sets = today.sets.map((s) => ({ reps: s.reps, weight: s.weight }));
-    else if (last) sets = last.sets.map((s) => ({ reps: s.reps, weight: s.weight }));
+    // LAST TIME'S NUMBERS ARE A SUGGESTION, NOT A RECORD. They used to arrive as
+    // real input values, so one tap on Save logged every row as a performed set:
+    // measured in the tap probe, typing ONE set and saving wrote TWO, the second
+    // being last week's, and nothing on the screen distinguished the two. They
+    // are ghosts now - the same shape the guided run has always used - and the
+    // save path already drops a row with no reps and no weight, so confirming
+    // the whole card is a deliberate tap on "same as last time" rather than a
+    // side effect of saving.
+    else if (last) sets = last.sets.map((s) => ({ reps: '', weight: '', phReps: s.reps, phWeight: s.weight }));
     else sets = [{ reps: '', weight: '' }]; // start with one empty set (faint "0" placeholders)
     sdState[exId] = { sets, savedSessionId: today ? today.id : null, dirty: false };
     return sdState[exId];
@@ -5905,6 +5913,10 @@ function renderSessionDay(el) {
     // pre-filled with real values (from last workout) so it can be confirmed
     // without a throwaway edit. A brand-new empty card stays clean.
     const hasValues = st.sets.some((s) => (Number(s.reps) || 0) > 0 || (Number(s.weight) || 0) > 0);
+    // Offered only while there is something to confirm: a ghost to take and no
+    // figure of your own yet. It is not a shortcut past the numbers, it is the
+    // zero-effort path the pre-filled values used to provide by accident.
+    const hasGhosts = !isLogged && !hasValues && st.sets.some((s) => (Number(s.phReps) || 0) > 0 || (Number(s.phWeight) || 0) > 0);
     const showSave = st.dirty || (!isLogged && hasValues);
 
     let bgHtml;
@@ -5918,11 +5930,16 @@ function renderSessionDay(el) {
 
     const setsRows = st.sets.map((s, i) => {
       const wDisplay = (s.weight === '' || s.weight == null) ? '' : modalConvertForDisplay(Number(s.weight));
+      // The ghost is last time's figure. A number input's placeholder must carry
+      // RAW digits - it is not localized - which is the same rule the guided run
+      // records on its own rows.
+      const phReps = (s.phReps === '' || s.phReps == null) ? '0' : String(s.phReps);
+      const phW = (s.phWeight === '' || s.phWeight == null) ? '0' : String(modalConvertForDisplay(Number(s.phWeight)));
       return `
         <div class="sd-set-row" data-ex="${escapeHtml(ex.id)}" data-set="${i}">
           <div class="sd-set-n num">${i + 1}</div>
-          <input type="number" inputmode="numeric" step="1" min="0" placeholder="0" value="${numAttr(s.reps)}" data-field="reps" aria-label="${escapeHtml(t('reps'))}">
-          <input type="number" inputmode="decimal" step="0.5" min="0" placeholder="0" value="${numAttr(wDisplay)}" data-field="weight" aria-label="${escapeHtml(viewContext.sdUnit)}">
+          <input type="number" inputmode="numeric" step="1" min="0" placeholder="${numAttr(phReps)}" value="${numAttr(s.reps)}" data-field="reps" aria-label="${escapeHtml(t('reps'))}">
+          <input type="number" inputmode="decimal" step="0.5" min="0" placeholder="${numAttr(phW)}" value="${numAttr(wDisplay)}" data-field="weight" aria-label="${escapeHtml(viewContext.sdUnit)}">
           <button type="button" class="sd-set-remove" data-remove-set aria-label="${escapeHtml(t('delete'))}">${icon('close', 16)}</button>
         </div>
       `;
@@ -5948,6 +5965,7 @@ function renderSessionDay(el) {
         <div class="sd-sets" data-ex-sets="${escapeHtml(ex.id)}">${setsRows}</div>
 
         <div class="sd-card-actions">
+          ${hasGhosts ? `<button type="button" class="btn btn-ghost sd-like-last" data-like-last="${escapeHtml(ex.id)}">${icon('refresh', 18)} ${t('sd_like_last')}</button>` : ''}
           <button type="button" class="btn btn-ghost sd-add-set-btn" data-add-set="${escapeHtml(ex.id)}">${icon('plus', 20)} ${t('add_set')}</button>
           <button type="button" class="btn btn-primary sd-save-btn${showSave ? '' : ' sd-hidden'}" data-save-ex="${escapeHtml(ex.id)}">${isLogged ? t('update') : t('save')}</button>
         </div>
@@ -6128,7 +6146,24 @@ function renderSessionDay(el) {
       const last = st.sets[st.sets.length - 1];
       // Copy the last row's values, preserving an intentional 0 (bodyweight).
       const keep = (v) => (v !== '' && v != null ? v : '');
-      st.sets.push({ reps: keep(last?.reps), weight: keep(last?.weight) });
+      // Copy the GHOST as well: a new row under ghosted ones would otherwise be
+      // the only row on the card with no hint of what was done last time.
+      st.sets.push({ reps: keep(last?.reps), weight: keep(last?.weight), phReps: keep(last?.phReps), phWeight: keep(last?.phWeight) });
+      st.dirty = true;
+      renderSessionDay(el);
+    })
+  );
+
+  // "Same as last time" — every ghost becomes a real figure in one tap, which
+  // is the whole point: the effort stays zero for the ordinary case while the
+  // screen stops claiming you performed sets you never confirmed.
+  el.querySelectorAll('[data-like-last]').forEach((b) =>
+    b.addEventListener('click', () => {
+      const st = initState(b.dataset.likeLast);
+      st.sets.forEach((s) => {
+        if ((s.reps === '' || s.reps == null) && s.phReps !== '' && s.phReps != null) s.reps = Number(s.phReps);
+        if ((s.weight === '' || s.weight == null) && s.phWeight !== '' && s.phWeight != null) s.weight = s.phWeight;
+      });
       st.dirty = true;
       renderSessionDay(el);
     })

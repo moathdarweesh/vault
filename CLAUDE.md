@@ -82,7 +82,7 @@ a faster TTFB — not fewer bytes.
 npm run release          # bump every marker + verify, then commit all files together
 ```
 
-**Current version: v374.** APK: build 24 / v3.3.
+**Current version: v375.** APK: build 24 / v3.3.
 
 `scripts/release.js` rewrites **every** marker and then re-reads them from disk to confirm; it exits non-zero if any disagree, and prints the count per file (derived, never hard-coded — the docs used to say 16 while the real count was 15). The markers are `?v=N` in `index.html` (every script and stylesheet, the `js/vendor/supabase.js` preload, both `icons/icon.svg` links, `manifest.json`), the `__cleaned_vN` sessionStorage key, the `FALLBACK` literal in `app.js`, `version.json` → `web`, the `?v=` in `manifest.json`, `admin.html`, `privacy.html` and `get/index.html`, and the `Current version` line in this file. `scripts/check-contracts.js` (pre-commit) refuses a commit where any of them disagree.
 
@@ -2678,6 +2678,44 @@ the rows pre-filled from last time as performed sets ("confirmed without a
 throwaway edit" is the recorded intent; whether an untouched row should count
 is the owner's call); a saved food **4 taps**. The day card's Save measures
 **69×40** — under the 44 floor.
+
+## v375 — T2.2: last time's numbers are a suggestion, not a record
+
+The day card pre-filled every row with last week's figures **as real input
+values**, so one tap on Save logged them all as performed sets. Measured in the
+tap probe before the change: **typing ONE set and saving wrote TWO** — the
+second being last week's — and nothing on the screen told the two apart.
+
+The plan calls this «تمييزٌ واضح بين المقترَح والمنجَز», and the fix is the
+shape the guided run has always used: **they are ghosts now.** The save path
+already drops a row with no reps and no weight, so confirming the whole card
+became a deliberate act instead of a side effect of saving.
+
+**The zero-effort path is kept, not removed.** «كالمرّة السابقة» (141×44) turns
+every ghost into a real figure in one tap, and is offered only while there is
+something to confirm — a ghost to take and no figure of your own yet.
+
+| | before | after |
+|---|---|---|
+| on arrival | last week's numbers, as values | empty, ghosts `8/40` · `8/42.5` |
+| type ONE set, Save | **2 sets written** | **1 set** — `{reps:9, weight:62.5}` |
+| «كالمرّة السابقة» → Save | — | both rows, deliberately |
+
+Two controls the audit measured under the tap floor went with it, and both for
+the reason v373 recorded — **a halo is measured from the PADDING box, so a 1px
+border costs it 2px**:
+
+| | before | after |
+|---|---|---|
+| `.run-set-done` — the ✓ on every set of every workout | 26px box, `inset:-9px` → **42** | `-10px` → **44 × 44** |
+| `.sd-save-btn` — the card's own commit | `height: auto` → **69 × 40** | `min-height: var(--btn-h-m)` → **69 × 44** |
+
+> **One thing that looked like a defect and was not.** The probe reported the
+> card's buttons `covered`, and what covered them was `div.add-sheet.ntfp-sheet`
+> — the notification-permission sheet the app raises on the FIRST logged workout
+> (v363's `vault:session-saved`). Real behaviour; the probe was working behind
+> it. Worth recording because "the control is covered" reads as a layout bug and
+> was a sequencing one.
 
 ## v374 — T2.6: a measurement is one object, and its parts have an order
 
