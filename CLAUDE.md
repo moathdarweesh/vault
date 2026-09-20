@@ -82,7 +82,7 @@ a faster TTFB — not fewer bytes.
 npm run release          # bump every marker + verify, then commit all files together
 ```
 
-**Current version: v372.** APK: build 24 / v3.3.
+**Current version: v373.** APK: build 24 / v3.3.
 
 `scripts/release.js` rewrites **every** marker and then re-reads them from disk to confirm; it exits non-zero if any disagree, and prints the count per file (derived, never hard-coded — the docs used to say 16 while the real count was 15). The markers are `?v=N` in `index.html` (every script and stylesheet, the `js/vendor/supabase.js` preload, both `icons/icon.svg` links, `manifest.json`), the `__cleaned_vN` sessionStorage key, the `FALLBACK` literal in `app.js`, `version.json` → `web`, the `?v=` in `manifest.json`, `admin.html`, `privacy.html` and `get/index.html`, and the `Current version` line in this file. `scripts/check-contracts.js` (pre-commit) refuses a commit where any of them disagree.
 
@@ -2678,6 +2678,49 @@ the rows pre-filled from last time as performed sets ("confirmed without a
 throwaway edit" is the recorded intent; whether an untouched row should count
 is the owner's call); a saved food **4 taps**. The day card's Save measures
 **69×40** — under the 44 floor.
+
+## v373 — T2.3: the halos that were 42, and the rail that made one unfixable
+
+The audit found ≥7 controls whose "44px" halo measured 42, and named the cause:
+
+> ⚠️ **`inset: -4px` IS MEASURED FROM THE PADDING BOX, so each 1px border costs
+> the halo 2px.** A 36px bordered control with `inset: -4px` reaches 42, not 44.
+
+Seven of the eleven haloed controls carry a 1px border and moved to `-5px`;
+the four that are borderless (`.compare-tab`, `.bundle-add`, `.rec-del`,
+`.rec-act`) were already right and growing them would have made them 46 for
+nothing. **Which ones have a border was checked, not assumed.**
+
+Two more had a different cause and would not have answered to any inset:
+
+- **`.data-actions` was `gap: 2px`** — two 32px controls whose 44px halos
+  overlap, so the later one wins the shared strip and each measured **34 wide
+  against 44 tall**. `.vault-bar-actions` was `gap: 4px` with the same result
+  (**40 wide**). 12px each, the arithmetic v324 already applied to `.link-btn`.
+
+> ⚠️ **AND `overflow-x: auto` MAKES THE OTHER AXIS CLIP TOO.** CSS does not
+> allow `visible` on one axis beside a scrolling one, so `.filter-bar` cut every
+> child's `::after` at its own padding box — 2px above. `.filter-pill` measured
+> **42 with its inset computing to `-5px`**, and no change to the pill could ever
+> have fixed it. The rail's top padding is 6px now. This is worth remembering
+> for every future halo: **a control inside a horizontal rail cannot have a halo
+> bigger than that rail's padding.**
+
+Measured after, by real hit-testing outward from each centre — a halo counts, a
+neighbour stealing an edge counts against:
+
+| | box | before | after |
+|---|---|---|---|
+| `.calendar-nav-btn` | 36×36 | 42 | **44 × 44** |
+| `.vault-action` | 36×36 | 40 wide | **44 × 44** |
+| `.ledger-add` | 343×36 | 42 tall | **81 × 44** |
+| `.filter-pill` | 57×36 | 42 tall | **58 × 44** |
+| `.data-actions .icon-btn` | 32×32 | 34 wide | **44 × 44** |
+
+Also removed: `.hero-card .planner-day-muscles`, which **v368 left behind** when
+it deleted the markup and the muscle block. Nothing catches a dead selector
+here — contract 35 checks that every `var(--x)` exists, not that every rule has
+something to style.
 
 ## v372 — T2.1: Home knows the workout is half done
 

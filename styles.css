@@ -1079,7 +1079,12 @@ body.theme-light input[type="date"], body.theme-light input[type="time"] { color
   gap: 8px;
   overflow-x: auto;
   margin: 0 -16px 16px;
-  padding: 2px 16px 8px;
+  /* ⚠️ overflow-x: auto MAKES THE OTHER AXIS CLIP TOO - CSS does not allow
+     visible on one axis beside a scrolling one - so this rail cuts every
+     child's ::after halo at its own padding box. With 2px above, .filter-pill's
+     44px halo measured 42 however its inset was written, and no change to the
+     pill could have fixed it. 6px is the halo's 5px plus a pixel. */
+  padding: 6px 16px 8px;
   scrollbar-width: none;
 }
 .filter-bar::-webkit-scrollbar { display: none; }
@@ -1988,7 +1993,7 @@ body[dir="rtl"] .w-unit { margin-left: 0; margin-right: 2px; }
   appearance: none; -webkit-appearance: none; -webkit-tap-highlight-color: transparent;
   transition: color 0.15s, border-color 0.15s;
 }
-.ledger-add::after { content: ''; position: absolute; inset: -4px 0; }   /* 44px target on a 36px row */
+.ledger-add::after { content: ''; position: absolute; inset: -5px 0; }   /* 44px on a 36px row: -5, not -4, because the 1px border costs the halo 2px */
 .ledger-add svg { width: 14px; height: 14px; flex-shrink: 0; color: var(--accent-text); }
 .ledger-add:active { color: var(--text); border-color: var(--accent-line); }
 
@@ -2069,7 +2074,10 @@ body[dir="rtl"] .w-unit { margin-left: 0; margin-right: 2px; }
 
 .data-actions {
   display: flex;
-  gap: 2px;
+  /* 12px, not 2px: these are two 32px controls whose 44px halos overlap at 2px
+     apart, so the later one wins the shared strip and each measured 34 wide
+     against 44 tall. The same arithmetic v324 applied to .link-btn. */
+  gap: 12px;
   margin-inline-start: 4px;
   flex-shrink: 0;
 }
@@ -3489,7 +3497,9 @@ body[data-view="session-run"] .bottom-nav { display: none; }
 .ai-portion-btn::after { content: ''; position: absolute; inset: -5px; }
 /* Three more 36px controls that a thumb has to hit: the header action, the
    calendar's month arrows, and the set-remove in session-day. Same treatment. */
-.vault-action::after, .calendar-nav-btn::after, .sd-set-remove::after { content: ''; position: absolute; inset: -4px; }
+/* -5px, not -4px: the halo is measured from the PADDING box, so each 1px
+   border costs it 2px and these measured 42 rather than 44. */
+.vault-action::after, .calendar-nav-btn::after, .sd-set-remove::after { content: ''; position: absolute; inset: -5px; }
 .bundle-add::after { content: ''; position: absolute; inset: -4px -2px; }   /* 44x44 over a 40x36 button */
 /* (.data-actions .icon-btn is an .icon-btn: the centred 44px halo above already
    applies. A second, inset-based ::after on top of it shifted the box 22px
@@ -4343,7 +4353,7 @@ body[dir="rtl"] .picker-row { text-align: right; }
   appearance: none; -webkit-appearance: none; -webkit-tap-highlight-color: transparent;
   transition: transform var(--dur-press), background 0.15s;
 }
-.rt-step button::after { content: ''; position: absolute; inset: -4px; }
+.rt-step button::after { content: ''; position: absolute; inset: -5px; }   /* 1px border → -5 to reach 44 */
 .rt-step button svg { width: 16px; height: 16px; }
 .rt-step button:active { transform: scale(var(--press-scale)); background: var(--surface-hi); }
 .rt-step input {
@@ -6059,7 +6069,6 @@ body[dir="rtl"] .bento-card.wide .bento-added-stripe { left: 14px; }
   color: var(--text-mute);
   position: relative;
 }
-.hero-card .planner-day-muscles { margin-top: var(--sp-3); position: relative; }
 /* Nutrition twin of the workout hero. Same card, one extra element: a slim
    progress bar, because "calories left" only means something next to how far
    through the day's target you already are. */
@@ -7616,7 +7625,9 @@ body.theme-light {
    The search button and the action share one group at the end instead, which is
    also why the old width:40px spacer span is gone: with two children the mark
    stays put whether or not the screen has an action. */
-.vault-bar-actions { display: flex; align-items: center; gap: 4px; }
+/* 12px, not 4px: two 36px controls whose 44px halos overlap at 4px apart, so
+   the later one wins the shared strip and the first measured 40 wide. */
+.vault-bar-actions { display: flex; align-items: center; gap: 12px; }
 
 /* Everyday tools: scoped to the convenience panels. */
 .cx-stack { display:flex; flex-direction:column; gap:14px; min-width:0; }
@@ -7908,7 +7919,7 @@ body.ember-on .ember {
 }
 .sl-chip span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .sl-chip svg { width: 14px; height: 14px; flex: none; }
-.sl-chip::after { content: ''; position: absolute; inset: -4px 0; }   /* 44px on a 36px chip */
+.sl-chip::after { content: ''; position: absolute; inset: -5px 0; }   /* 44px on a 36px chip: the 1px border costs 2 */
 .sl-chip:active { border-color: var(--accent-line); background: var(--surface-3); }
 
 /* ---- The two named boxes over the list (v332) -------------------------------
@@ -8618,7 +8629,7 @@ body.theme-light .home-center-icon {
 /* S size. It measured 40px / r8 — on neither the height nor the radius scale.
    The halo carries the 44px target the 36px box gives up. */
 .filter-pill { border-radius: var(--radius-btn-s); }
-.filter-pill::after { content: ''; position: absolute; inset: -4px 0; }
+.filter-pill::after { content: ''; position: absolute; inset: -5px 0; }   /* 1px border → -5 to reach 44 */
 /* 13px, not --radius-sm: the icon spec fixes the active tab's pill at 13 around
    a 32px box. Written as a literal because no token holds that value, and this
    declaration has to live HERE — the same selector earlier in the file is
