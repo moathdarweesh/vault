@@ -1131,5 +1131,71 @@ const contract = (name, problems) => {
   contract(`every corner radius in styles.css at or above ${floor}px is a token or a named exception (${scale.size - KEYWORDS.length} rungs, ${Object.keys(ALLOWED).length} exceptions)`, problems);
 }
 
+// ── 42 · no control wears a capsule or a circle ─────────────────────────────
+// Device 4 of the identity layer is NO CIRCLES, and beside it the layer states
+// the other half in its own words: "Capsules are for TRANSIENT chips only.
+// Anything that holds STATE gets the machined corner."
+//
+// Nothing could see a breach of either. A class called `*-chip` reads as a chip
+// in review however it is emitted, so a <button> that navigates somewhere, and
+// a 20px <button> at 999px — which on a 20px box IS a circle — both sat in the
+// app for as long as they had existed. The question the law actually asks is
+// not what a class is called: it is whether the ELEMENT is a control.
+//
+// SCOPE: the class a control is emitted with, in the view scripts and the four
+// pages. A decoration inside a control is not covered — `.wk-disc` is a <span>
+// and is named in v384's note as the one device-4 item this cannot reach.
+{
+  const PILL = /(^|\s)(50%|999px|9999px|var\(--radius-pill\b|var\(--chip-radius\b)/;
+  const ALLOWED = {
+    '.rest-chip': 'the one capsule argued for in writing (styles.css and js/app.js both state the case): no state class, a static label, and the decision belongs to the sheet it opens',
+  };
+
+  // Every class a <button> or an <a> is emitted with, across the view scripts
+  // and the pages. A control is what the TAG says, never what the name suggests.
+  const controls = new Set();
+  for (const f of [...VIEWS, ...PAGE_FILES]) {
+    const text = src[f] || read(f);
+    for (const m of text.matchAll(/<(button|a)\b[^>]*?\bclass=["'`]([^"'`]*)["'`]/gi)) {
+      for (const c of m[2].split(/\s+/)) {
+        const name = c.replace(/\$\{[^}]*\}/g, '').trim();
+        if (/^[a-z][a-z0-9-]*$/i.test(name)) controls.add('.' + name);
+      }
+    }
+  }
+
+  // ⚠️ THE LAST DECLARATION WINS, AND THE FIRST RUN PROVED WHY THAT MATTERS.
+  // It reported .filter-pill, which declares var(--radius-pill) at 1128 and is
+  // overridden to var(--radius-btn-s) by the identity layer at 8743 — the layer
+  // is physically last and wins by source order at equal specificity, which is
+  // the whole reason it is last. Reading the FIRST declaration would have
+  // reported a control that is already correct and, worse, would have missed a
+  // control made wrong by a later rule. The same trap contract 41 had to close.
+  //
+  // Each declaration is attributed by walking BACK to its own opening brace,
+  // rather than by splitting the file into rules: a rule walk desynchronises on
+  // the first @media, and the identity layer sits past several of them.
+  const css = read('styles.css');
+  const last = new Map();          // control class -> its LAST border-radius
+  for (const m of css.matchAll(/border-radius:\s*([^;}]+)/gi)) {
+    const open = css.lastIndexOf('{', m.index);
+    if (open < 0) continue;
+    const prev = Math.max(css.lastIndexOf('}', open), css.lastIndexOf('{', open - 1), css.lastIndexOf(';', open));
+    const sel = css.slice(prev + 1, open).replace(/\/\*[\s\S]*?\*\//g, ' ').trim();
+    if (!sel || sel.startsWith('@') || /::(before|after)/.test(sel)) continue;
+    const line = css.slice(0, m.index).split(/\r?\n/).length;
+    for (const c of sel.match(/\.[a-z][a-z0-9-]*/gi) || []) {
+      if (controls.has(c)) last.set(c, { value: m[1].trim(), sel, line });
+    }
+  }
+
+  const problems = [];
+  for (const [c, r] of last) {
+    if (!PILL.test(r.value) || ALLOWED[c]) continue;
+    problems.push(`styles.css:${r.line} ${r.sel} — ${c} is emitted as a control and its last radius is ${r.value}: a capsule or a circle. Give it a var(--radius-btn-*) rung, or name it in ALLOWED with the reason.`);
+  }
+  contract(`no control wears a capsule or a circle (${controls.size} control classes, ${Object.keys(ALLOWED).length} named exception)`, problems);
+}
+
 console.log(failures.length ? `\ncheck-contracts: ${failures.length} broken contract(s)` : '\ncheck-contracts: all contracts hold');
 process.exit(failures.length ? 1 : 0);

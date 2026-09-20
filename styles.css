@@ -455,11 +455,17 @@ body { --accent-text: var(--accent); }
 }
 .time-chip-x {
   display: inline-flex; align-items: center; justify-content: center;
-  width: 20px; height: 20px; padding: 0;
-  border: none; border-radius: var(--radius-pill);
+  /* 28, not 20: the halo has to live inside the chip or it steals the row
+     above (the rows wrap at gap 8). 28 + 8 either side is exactly 44, and the
+     8px sits inside the chip's own height. */
+  position: relative;
+  width: 28px; height: 28px; padding: 0;
+  /* --radius-pill on a 20px box is a CIRCLE, which device 4 forbids outright. */
+  border: none; border-radius: var(--radius-sm);
   background: var(--surface-3); color: var(--text-mute);
   cursor: pointer; -webkit-tap-highlight-color: transparent;
 }
+.time-chip-x::after { content: ''; position: absolute; inset: -8px; }
 .time-chip-x svg { width: 16px; height: 16px; }
 .time-empty { font-size: var(--fs-meta); color: var(--text-dim); font-weight: 600; }
 .time-add { display: flex; gap: 8px; align-items: center; margin-top: 10px; flex-wrap: wrap; }
@@ -1339,7 +1345,12 @@ body.theme-light input[type="date"], body.theme-light input[type="time"] { color
 .supp-presets { display: flex; flex-wrap: wrap; gap: 8px; }
 .supp-preset {
   padding: 9px 13px;
-  border-radius: var(--chip-radius, 999px);
+  /* Stateful (.picked / .added below), so the machined corner, not the capsule.
+     This was --chip-radius's only reader in the whole stylesheet; the token is
+     the CHIP radius and is correct as a capsule — what was wrong is a button
+     reading it. It now joins its three unread siblings. */
+  border-radius: var(--radius-btn-s);
+  position: relative;
   background: var(--surface-2);
   border: 1px solid var(--border);
   color: var(--text-dim);
@@ -1350,6 +1361,8 @@ body.theme-light input[type="date"], body.theme-light input[type="time"] { color
   -webkit-tap-highlight-color: transparent;
   transition: background .15s, border-color .15s, color .15s;
 }
+/* 40px drawn, so 38px of padding box: -3px each side is exactly 44. */
+.supp-preset::after { content: ''; position: absolute; inset: -3px 0; }
 .supp-preset.picked { background: var(--accent-soft, var(--surface-2)); border-color: var(--accent-text); color: var(--text); }
 /* Already in the user's list — still tappable (they may want a second entry at a
    different dose), just visibly de-emphasised. */
@@ -2532,6 +2545,8 @@ button.schedule-prev-row { width: 100%; font: inherit; color: inherit; text-alig
 @media (hover: hover) { .type-option.type-option-add:hover svg { color: var(--accent-text); } }
 
 /* Icon picker chips inside the new-cardio-type modal */
+/* gap 8, not 6: each chip's halo reaches 4px out, so at 6px two halos overlap
+   by 2px and the later one wins the shared strip (v373). At 8 they just touch. */
 .cardio-icon-chips {
   display: grid;
   grid-template-columns: repeat(5, 1fr);
@@ -2540,14 +2555,17 @@ button.schedule-prev-row { width: 100%; font: inherit; color: inherit; text-alig
 .cardio-icon-chip {
   background: var(--surface-2);
   border: 1px solid var(--border);
-  border-radius: 10px;
+  border-radius: var(--radius-btn-s);
   padding: 8px;
+  position: relative;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   color: var(--text-mute);
   transition: background-color 0.15s, border-color 0.15s, color 0.15s, transform 0.12s;
 }
+/* 38px drawn - 2px of border = 36px of padding box; -4px each side is 44. */
+.cardio-icon-chip::after { content: ''; position: absolute; inset: -4px; }
 .cardio-icon-chip svg { width: 20px; height: 20px; }
 .cardio-icon-chip.active {
   background: var(--accent-soft);
@@ -2799,7 +2817,6 @@ body.rest-active .toast { bottom: calc(var(--safe-b) + var(--rest-h, 72px) + 28p
   text-transform: uppercase;
   letter-spacing: 0.04em;
   padding: 6px 10px;
-  border-radius: 999px;
   cursor: pointer;
 }
 .toast-action { position: relative; }
@@ -2982,7 +2999,9 @@ body.rest-active .toast { bottom: calc(var(--safe-b) + var(--rest-h, 72px) + 28p
   align-items: center;
   justify-content: center;
   width: 20px; height: 20px;
-  border-radius: 999px;
+  /* 999px on a 20px box is a circle, and .current repaints this - a stateful
+     circle inside a machined parent, two shapes arguing in one component. */
+  border-radius: var(--radius-sm);
   background: var(--surface-3);
   color: var(--text-mute);
   font-size: 11px;
@@ -4167,19 +4186,27 @@ body[dir="rtl"] .picker-row { text-align: right; }
 
 .supp-toggle:active { transform: scale(var(--press-scale)); }
 
+/* gap 12, not 8: each swatch's halo reaches 6px out, so 12 is where two halos
+   meet exactly instead of fighting over a shared strip (v373). The row wraps —
+   it already declares it — and eight real 44px targets beat eight 32px ones. */
 .color-swatches {
   display: flex;
-  gap: 8px;
+  gap: 12px;
   flex-wrap: wrap;
 }
 
+/* A <button data-color> carrying .active — a stateful control, so the machined
+   corner, and 50% on a 32px box is the circle device 4 forbids outright.
+   36 drawn - 4 of border = 32 of padding box; -6 each side is exactly 44. */
 .color-swatch {
-  width: 32px;
-  height: 32px;
-  border-radius: 50%;
+  position: relative;
+  width: 36px;
+  height: 36px;
+  border-radius: var(--radius-btn-s);
   border: 2px solid transparent;
   transition: transform 0.12s;
 }
+.color-swatch::after { content: ''; position: absolute; inset: -6px; }
 
 .color-swatch.active {
   border-color: var(--text);
@@ -6053,11 +6080,15 @@ body[dir="rtl"] .bento-card.wide .bento-added-stripe { left: 14px; }
   align-items: center;
   gap: 6px;
   flex-shrink: 0;
-  min-height: 44px;
+  min-height: var(--btn-h-m);
   padding: 8px 16px;
   background: rgba(var(--accent-rgb), 0.12);
   border: 1px solid rgba(var(--accent-rgb), 0.3);
-  border-radius: var(--radius-pill);
+  /* NOT a capsule: this is a <button data-goto="calendar"> sitting in the Home
+     header of every session. The law reserves the capsule for a TRANSIENT chip,
+     and a permanent navigation control is the opposite of transient. On the
+     M rung, which is the height it already had. */
+  border-radius: var(--radius-btn-m);
   color: var(--accent-text);
   font-family: inherit;
   font-size: var(--fs-body);
@@ -8019,7 +8050,7 @@ body.ember-on .ember {
    already too tall. The heading has to be able to CLOSE. Shut, the block is two
    44px rows whatever the source count is — 96px at 10 sources and 96px at 40.
    Reused unchanged: .sl-chips, .sl-chip (its 36px body, its ellipsis, its ::after
-   inset:-4px halo), .num, and .cx-stack's rhythm. The two names are the food
+   inset:-5px halo - the 1px border costs 2, so -4 would draw 42), .num, and .cx-stack's rhythm. The two names are the food
    picker's own tab labels — tab_recipes / tab_bundles — so nothing new is taught. */
 .sl-sources { display: flex; flex-direction: column; gap: var(--sp-2); }
 .sl-grp { display: flex; flex-direction: column; gap: var(--sp-2); }

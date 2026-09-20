@@ -12,7 +12,7 @@
 // build. The literal below is the fallback (file://, or a stripped query) and is
 // still bumped by `npm run release` — see CLAUDE.md "CACHE WORKFLOW".
 const VAULT_BUILD = (() => {
-  const FALLBACK = 'v383';
+  const FALLBACK = 'v384';
   try {
     const src = (document.currentScript && document.currentScript.src) || '';
     const m = src.match(/[?&]v=(\d+)/);
@@ -3096,8 +3096,14 @@ function weekStrip(activeIso = null, variant = '', sessions, cardio) {
     // The state goes in the LABEL too, not only in a colour — the border is the
     // whole signal here, and a border is invisible to a screen reader.
     const stateLabel = moved ? ' · ' + t('day_moved_in') : skipped ? ' · ' + t('day_rest_taken') : '';
+    // ⚠️ THE COMPACT RAIL IS pointer-events: none, WHICH DOES NOT STOP ENTER.
+    // styles.css says in its own words that the strip "is not interactive
+    // there", and it is not - to a finger. A keyboard reached every one of the
+    // seven and could fire the [data-day] handler from a sheet that has no day
+    // to open. disabled is the whole answer: out of the tab order, and the
+    // click never dispatches whatever raised it.
     chips.push(`
-      <button class="wk-chip${cls ? ' ' + cls : ''}" data-day="${iso}"
+      <button class="wk-chip${cls ? ' ' + cls : ''}" data-day="${iso}"${variant === 'compact' ? ' disabled' : ''}
               ${activeIso === iso ? 'aria-current="date"' : ''}
               aria-label="${escapeHtml(formatDate(iso) + stateLabel)}">
         <span class="wk-dow">${escapeHtml(dayName(dd.getDay(), false))}</span>

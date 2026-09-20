@@ -82,7 +82,7 @@ a faster TTFB — not fewer bytes.
 npm run release          # bump every marker + verify, then commit all files together
 ```
 
-**Current version: v383.** APK: build 24 / v3.3.
+**Current version: v384.** APK: build 24 / v3.3.
 
 `scripts/release.js` rewrites **every** marker and then re-reads them from disk to confirm; it exits non-zero if any disagree, and prints the count per file (derived, never hard-coded — the docs used to say 16 while the real count was 15). The markers are `?v=N` in `index.html` (every script and stylesheet, the `js/vendor/supabase.js` preload, both `icons/icon.svg` links, `manifest.json`), the `__cleaned_vN` sessionStorage key, the `FALLBACK` literal in `app.js`, `version.json` → `web`, the `?v=` in `manifest.json`, `admin.html`, `privacy.html` and `get/index.html`, and the `Current version` line in this file. `scripts/check-contracts.js` (pre-commit) refuses a commit where any of them disagree.
 
@@ -2678,6 +2678,123 @@ the rows pre-filled from last time as performed sets ("confirmed without a
 throwaway edit" is the recorded intent; whether an untouched row should count
 is the owner's call); a saved food **4 taps**. The day card's Save measures
 **69×40** — under the 44 floor.
+
+## v384 — T4.2: the chips group — what a control is, not what it is called
+
+The identity layer states both halves of this law in its own words:
+
+```
+4. No circles          — straight edges, butt caps, mitre joins
+/* Capsules are for TRANSIENT chips only. Anything that holds STATE gets the
+   machined corner. */
+```
+
+> ⚠️ **AND NOTHING COULD SEE A BREACH OF EITHER.** A class called `*-chip` reads
+> as a chip in review however it is emitted — so a `<button data-goto="calendar">`
+> in the Home header of every session, and a 20px `<button>` at `999px` (which on
+> a 20px box **is** a circle), both sat in the app for as long as they had
+> existed. The question the law actually asks is not what a class is called: it
+> is whether the **element** is a control.
+
+Measured in the running app, before and after:
+
+| | tag | before | after |
+|---|---|---|---|
+| `.streak-chip` — Home header, every session | `button` | `999px` | **12px**, hit 87×45 |
+| `.supp-preset` — stateful (`.picked`/`.added`) | `button` | `999px`, 40px tall | **10px**, hit 84×**44** |
+| `.color-swatch` — stateful (`.active`) | `button` | **`50%`**, 32px | **10px**, 36px, hit 48×48 |
+| `.time-chip-x` | `button` | **`999px` on 20×20 — a circle** | **8px**, 28×28 |
+| `.cycle-chip-num` — repainted by `.current` | `span` | **`999px` on 20×20** | **8px** |
+| `.cardio-icon-chip` | `button` | 10px literal, **38px, no halo** | token, hit 60×**44** |
+| `.toast-action` | `button` | `999px` | **0**, hit 46×46 |
+
+Four of those are also the tap floor: `.supp-preset` stood at 40, `.color-swatch`
+at 32, `.time-chip-x` at **20** — the worst target in the app — and
+`.cardio-icon-chip` at 38 with nothing around it.
+
+> **Every halo had to be paid for in the GAP, which is the v373 lesson arriving
+> from the other side.** A 4px halo in a 6px grid gap means two halos overlap by
+> 2px and the later one wins the shared strip, so the earlier control measures 42.
+> `.cardio-icon-chips` went 6 → 8, `.color-swatches` 8 → 12, and `.time-chip-x`
+> was GROWN (20 → 28) rather than haloed further, because its rows wrap at gap 8
+> and a 12px halo would have reached into the row above.
+
+### `.toast-action` and `.color-swatch` were found by the contract, not by me
+
+Both turned up on contract 42's first run over a tree I had already swept by
+hand. `.toast-action` then answered itself by being read: it is
+`background: transparent; border: none` in every state, so the `999px` had
+nothing to round — not an exception to name, a declaration that painted nothing.
+
+### Contract 42, and the trap it walked into first
+
+It refuses a capsule or a circle on any class a `<button>` or an `<a>` is emitted
+with, across the four view scripts and the four pages.
+
+> ⚠️ **ITS FIRST RUN REPORTED `.filter-pill`, WHICH IS CORRECT.** That rule
+> declares `var(--radius-pill)` at 1128 and the identity layer overrides it to
+> `var(--radius-btn-s)` at 8743 — the layer is physically last and wins by source
+> order, which is the whole reason it is last. Reading the FIRST declaration
+> would have reported a control that is already right and, worse, **would have
+> missed a control made wrong by a later rule.** It takes the last declaration
+> now: the same trap contract 41 had to close two releases ago, met again from
+> the other direction.
+
+It attributes each declaration by walking BACK to its own opening brace rather
+than splitting the file into rules — a rule walk desynchronises on the first
+`@media`, and the identity layer sits past several of them.
+
+**Proved able to fail, 5 of 5**, `styles.css` restored byte-for-byte: both
+shipped defects replanted at their own rules fire by name, a new circular control
+fires, and a non-control `<span>` at `999px` and a later rule that CORRECTS an
+earlier capsule both stay silent.
+
+One named exception: **`.rest-chip`**, the one capsule argued for in writing —
+`styles.css` and `js/app.js` both state the case, and the code backs it (no state
+class, a static label, the decision belongs to the sheet it opens).
+
+### ⚠️ A STRIP THAT IS "NOT INTERACTIVE" WAS REACHABLE BY KEYBOARD
+
+`.wk-compact .wk-chip` is `pointer-events: none`, and the stylesheet says in its
+own words that the strip *"is not interactive there"*. It is not — **to a
+finger**. `pointer-events` does not stop Enter, so a keyboard reached all seven
+and could fire the `[data-day]` handler from a sheet with no day to open. They
+carry `disabled` now: out of the tab order, and the click never dispatches.
+
+### What this does NOT do, named rather than implied
+
+**`.wk-disc` is still a 50% circle**, and it is the most-rendered shape in the
+app — seven of them on Home and seven more in the Day view, with the plan state
+painted on the circle itself. It is a `<span>` inside the button, so contract 42
+cannot reach it by design (the contract's scope is the class a CONTROL is emitted
+with), and it is a device-4 contradiction rather than a chip wearing a button's
+clothes, which is what this thread was asked to fix. Changing it is one line —
+`border-radius: var(--radius-sm)` — and it restyles the screen the owner looks at
+most, so it is his call and not a side effect of this one.
+
+Also left: the three unread `--chip-*` properties, and now `--chip-radius` with
+them. The token is the CHIP radius and a capsule is correct for a chip; what was
+wrong was a stateful `<button>` reading it. v358's decision stands — an empty
+rung in a designed scale is not dead weight.
+
+### What both net lanes say
+
+Views **160/160 identical** — every chip in this release lives in a sheet, so
+that is containment and nothing more. Sheets **104 of 110 identical**, and every
+difference is one this change made: `999px → 10px` (36), `50% → 10px` (32),
+`999px → 8px` (2), `position: static → relative` (88, which is what a halo
+needs), the two gaps, and the boxes of the controls that grew.
+
+> ⚠️ **AND 60 `overflowX` FLIPS, WHICH HAD TO BE CHASED RATHER THAN WAVED AT.**
+> A halo is CONTENT to its scroll ancestor, and `.modal` is `overflow-y: auto`,
+> which makes its `overflow-x` computed non-visible — so a negative-inset
+> `::after` can give a sheet a horizontal scrollbar **without moving a single
+> box**, which is exactly what `.rec-del` did in v329. Every changed box in the
+> diff was identical before and after, so the flip is the halo being visible to
+> `scrollWidth` on the inner containers. Measured on the two sheets that carry
+> these controls: `scrollWidth === clientWidth` on both, `scrolls: false`, and
+> the document does not scroll either. The halos sit inside the sheet's own
+> padding.
 
 ## v383 — T4.2: the Arabic copy group — a numeral's noun, and the fold's English
 
