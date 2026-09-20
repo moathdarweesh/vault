@@ -82,7 +82,7 @@ a faster TTFB — not fewer bytes.
 npm run release          # bump every marker + verify, then commit all files together
 ```
 
-**Current version: v370.** APK: build 24 / v3.3.
+**Current version: v371.** APK: build 24 / v3.3.
 
 `scripts/release.js` rewrites **every** marker and then re-reads them from disk to confirm; it exits non-zero if any disagree, and prints the count per file (derived, never hard-coded — the docs used to say 16 while the real count was 15). The markers are `?v=N` in `index.html` (every script and stylesheet, the `js/vendor/supabase.js` preload, both `icons/icon.svg` links, `manifest.json`), the `__cleaned_vN` sessionStorage key, the `FALLBACK` literal in `app.js`, `version.json` → `web`, the `?v=` in `manifest.json`, `admin.html`, `privacy.html` and `get/index.html`, and the `Current version` line in this file. `scripts/check-contracts.js` (pre-commit) refuses a commit where any of them disagree.
 
@@ -2678,6 +2678,45 @@ the rows pre-filled from last time as performed sets ("confirmed without a
 throwaway edit" is the recorded intent; whether an untouched row should count
 is the owner's call); a saved food **4 taps**. The day card's Save measures
 **69×40** — under the 44 floor.
+
+## v371 — T1.4: the save centre shrinks when there is nothing to do
+
+Measured before touching it, at 375×812, and the number that decided the
+change is not the height but its **invariance**:
+
+| | card | share of the settings fold |
+|---|---|---|
+| synced | 261px | **34.8%** |
+| error | 261px | 34.8% |
+| every other state | 261px | 34.8% |
+
+The block was IDENTICAL in every state — including a **52px «إعادة المزامنة»
+button with no job** when everything is already synced, and a **44px caveat**
+about photo backups, describing a failure that is not happening.
+
+**CALM is derived in `saveCenterModel`, beside every other decision about this
+card**, and it is exactly "nothing failed and the cloud is confirmed". In it
+the device line goes (it is implied — a device that failed to write is never
+calm), the action goes, the caveat goes. What is left is the state and when it
+was confirmed:
+
+| | before | after |
+|---|---|---|
+| synced | 261px · 34.8% | **111px · 14.8%** |
+| error | 261px | **261px — unchanged** |
+
+**The nine v310 state strings are untouched**, per v364's rule: each carries
+real information and the calm line is composed from the ones that already
+exist rather than from a new sentence. No key was added or removed.
+
+The rows are hidden with `display: none` rather than visually — the status
+block is `aria-live`, and a screen reader should hear what the screen shows,
+not the two lines it no longer shows.
+
+> **The fingerprint net could not see this either, and says so honestly:** the
+> matrix runs the empty, signed-out state, where the cloud is not `synced`, so
+> `calm` is false and the card stays whole. Its 144/160 is containment — the
+> only differences are the build label and the one `id` this change adds.
 
 ## v370 — T1.2: the tick that logs numbers you never typed
 

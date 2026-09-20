@@ -12,7 +12,7 @@
 // build. The literal below is the fallback (file://, or a stripped query) and is
 // still bumped by `npm run release` — see CLAUDE.md "CACHE WORKFLOW".
 const VAULT_BUILD = (() => {
-  const FALLBACK = 'v370';
+  const FALLBACK = 'v371';
   try {
     const src = (document.currentScript && document.currentScript.src) || '';
     const m = src.match(/[?&]v=(\d+)/);
@@ -4304,6 +4304,14 @@ function saveCenterModel(local, cloud) {
     action: failed ? 'export' : status === 'signin' || status === 'unlinked' ? 'login' :
       status === 'conflict' || status === 'blocked' ? 'review' : 'retry',
     disabled: !failed && (status === 'syncing' || cloud.online === false),
+    // CALM: everything is saved and confirmed, so there is nothing to do and
+    // nothing to explain. Measured before this: the card was 261px - 34.8% of
+    // the settings fold - and IDENTICAL in every state, synced or failing,
+    // including a 52px "re-sync" button with no job and a 44px caveat about a
+    // failure mode that is not happening. The three lines that carry real
+    // information stay; the two that only matter when something is wrong appear
+    // when something is wrong.
+    calm: !failed && status === 'synced',
   };
 }
 function updateSaveCenter() {
@@ -4313,6 +4321,9 @@ function updateSaveCenter() {
   const cloud = window.Cloud && Cloud.syncState ? Cloud.syncState() : { status: 'unlinked' };
   const model = saveCenterModel(local, cloud);
   card.dataset.state = model.status;
+  // An attribute, not a class: it is derived state like data-state beside it,
+  // and the two are read together in the stylesheet.
+  if (model.calm) card.dataset.calm = '1'; else delete card.dataset.calm;
   $('#sc-device', card).textContent = t(model.deviceKey);
   $('#sc-cloud', card).textContent = t(model.cloudKey);
   const detail = $('#sc-detail', card);
@@ -4611,7 +4622,7 @@ function renderSettings(el) {
         </div>
         <p class="settings-hint" id="sc-time"></p>
         <button type="button" class="btn btn-ghost btn-block" id="sc-action"></button>
-        <p class="settings-hint">${t('sc_photos')}</p>
+        <p class="settings-hint" id="sc-photos">${t('sc_photos')}</p>
       </div>
 
       ${(window.Cloud && Cloud.configured()) ? `
