@@ -1,18 +1,54 @@
 # THE VAULT — Brand & Design System
 
-> The identity is **THE CUT**: *one line shears the name, and that line is the whole
-> brand.* Flat edges, a strict grid, pure black, one colour that leads.
+> The identity is **flat edges, a strict grid, pure black, and one colour that
+> leads.** It is carried by two marks, and which one you see depends on where you
+> are standing: **the LOCKUP inside the app**, and **THE CUT on everything that
+> represents the app from outside it** — the icons and the download page.
 > Every rule here is enforceable and was derived by measuring the codebase, not asserted.
 
 ---
 
-## 1. The mark — THE CUT
+## 1. The marks — THE LOCKUP (in the app) and THE CUT (on the outside)
 
-**There is no symbol.** No logo beside the name, no glyph in the top bar. A single
-horizontal line cuts through the wordmark: it is the door, and it is the line only
-you cross. One element carries the whole meaning, so nothing competes for attention —
-and the line detaches from the name and still works alone, which is what makes it
-survive down to 16px.
+> ⚠️ **THIS SECTION DESCRIBED ONE MARK FOR 158 RELEASES WHILE THE APP SHIPPED
+> TWO.** It said the in-app mark was the cut wordmark and pointed at a `.cut`
+> class in `styles.css`. That class was **deleted at v227** — the stylesheet says
+> so in its own words (`/* --- THE CUT is retired --- */`) — and the top bar has
+> drawn the LOCKUP ever since. v348 recorded that three documents agreed with
+> each other and disagreed with the app; v367 then designed a whole widget family
+> against this page and had to throw it away. **Measure the app, not the
+> document.**
+
+### 1a. Inside the app — THE LOCKUP
+
+`brandLockup(size)` in **`js/ui.js`** is the mark, and the only mark, on every
+in-app surface. Two **plates** flank the name: the left and right halves of
+`ICONS.dumbbell`, cropped by viewBox so the mark follows the icon set
+automatically if that glyph ever changes. Between them, `VAULT` in Archivo 800 at
+`.2em` over `TRAIN` in JetBrains Mono at `.3em`.
+
+| Rule | Value |
+|---|---|
+| Sizes | **exactly two** — `header` (VAULT 11px) and `splash` (32px). A caller cannot invent a third; anything that is not `'splash'` is the header. |
+| Plate height | `round(v × 1.35)` — 14.9px at header, 43.2px at splash |
+| Plate width | `round(plateH × 10/15)` — 9.9px / 28.8px |
+| Sub-line | `round(v × 0.5)`, drawn only at `v ≥ 10` |
+| Gap | `round(v × 0.57)` |
+| Colour | plates and `TRAIN` in `--accent`; `VAULT` in `--text` |
+
+The two viewBox strings are pinned by the spec and are literals for that reason.
+**Three call sites**, all in `js/app.js`: the top bar (`vaultBar`, on five
+screens), the sign-in gate, and onboarding step 0.
+
+> `admin.html` hand-inlines the same two plate SVGs twice rather than calling
+> `brandLockup` — it is a standalone page with no access to `js/ui.js`. They are
+> byte-identical to the live ones today and nothing keeps them so.
+
+### 1b. Outside the app — THE CUT
+
+A single horizontal line cuts through the wordmark: it is the door, and it is the
+line only you cross. The line detaches from the name and still works alone, which
+is what makes it survive down to 16px.
 
 The cut is **two layers, never one**: a **slot** the colour of the surface behind the
 text, and an **accent hairline** sitting inside it. A single orange line is not the
@@ -39,13 +75,19 @@ mark; it is the DON'T at the bottom of this section.
 | App icon, PWA + Android launcher | cut **V** on a tile, 11% slot | `icons/icon.svg`, `res/drawable/ic_launcher_foreground.xml` |
 | Android themed icon | the same V with the slot as a **hole** | `res/drawable/ic_launcher_monochrome.xml` |
 | Status-bar notification | **the slot alone** on a tile | `res/drawable/ic_stat_vault.xml` |
-| In-app top bar, login, first run | the cut **wordmark** | `.cut` in `styles.css`, IDENTITY LAYER device 7 |
+| **In-app top bar, login, first run** | **the LOCKUP — plates + VAULT/TRAIN** | **`brandLockup()` in `js/ui.js`** |
+| **Admin console** | the same lockup, hand-inlined | `admin.html` (two copies, not from `js/ui.js`) |
 | Download page | the cut wordmark, masked | `get/index.html` |
+| **Privacy page** | the cut wordmark, painted | **`privacy.html`** — its own `--cut-slot` / `--cut-hair`, undocumented until now |
+| **Web splash** | five bars + VAULT, no cut and no plates | `index.html` + `styles.css` `.vs-*` |
 
 **Two ways to draw the slot, and the surface decides which.** On a flat surface,
-paint it in that surface's own token — this is what `.cut` does through `--cut-bg`,
-and every context that moves the mark onto a different surface MUST override it or
-the slot reads as a bar laid on top. On a surface that is a gradient, an image, or
+paint it in that surface's own token — `privacy.html` does this with its own
+`--cut-slot` / `--cut-hair`, and every context that moves the mark onto a
+different surface MUST override it or the slot reads as a bar laid on top. (The
+shared `.cut` class and its `--cut-bg` that this paragraph used to name were
+deleted from `styles.css` at v227; the two surviving cut implementations each
+carry their own, which is why neither drifted when the class went.) On a surface that is a gradient, an image, or
 anything translucent, no single colour can match it: mask the band away instead, so
 whatever is behind shows through. `get/index.html` is the masked case, and its
 hairline lives on the parent because a mask also erases the element's own pseudo
@@ -140,7 +182,8 @@ the 16 `--cat-*` muscle hues.
 
 ## 3. Geometry — the 2-unit grid
 
-The grid governs the icon set. (The *signature* is §1 — the cut. This section is
+The grid governs the icon set. (The *signatures* are §1 — the lockup inside the
+app, the cut outside it. This section is
 about the icons, which are a supporting system, not the mark.) Since v211 the set is
 FILLED — two masses per glyph, base plus accent — rather than stroked, so the
 caps/joins rule below describes the *silhouettes* rather than a stroke.

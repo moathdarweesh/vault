@@ -405,6 +405,20 @@ function openModal(innerHtml, { variant = 'sheet', dismissible = true } = {}) {
   const overlay = root.querySelector('.modal-overlay');
   overlay.dataset.dismissible = dismissible ? '1' : '0';
 
+  // ⚠️ NO DIALOG IN THIS APP HAD AN ACCESSIBLE NAME. The element above
+  // carries role="dialog" aria-modal="true" and neither aria-labelledby nor
+  // aria-label, and 35 of the 38 titles under it are <div class="modal-title">,
+  // so a screen reader announced "dialog" and nothing else - on every sheet in
+  // the app. Wiring it HERE fixes all 38 from one place and carries every sheet
+  // written after this one; doing it at the call sites would be 38 chances to
+  // forget. A sheet with no title keeps no name rather than gaining a wrong one.
+  const dlg = overlay.querySelector('[role="dialog"]');
+  const title = dlg && dlg.querySelector('.modal-title');
+  if (title) {
+    if (!title.id) title.id = 'vlt-modal-title-' + (++__modalTitleSeq);
+    dlg.setAttribute('aria-labelledby', title.id);
+  }
+
   // The sheet RISES on its own — `.modal` has run `sheetUp` since long before
   // the motion spec, and a second mechanism here would fight it. All that is
   // marked is that this IS a bottom sheet, so closeModal knows to play an exit
@@ -460,6 +474,8 @@ function openModal(innerHtml, { variant = 'sheet', dismissible = true } = {}) {
 }
 
 let __modalReturnFocus = null;
+// One counter, so two sheets open in sequence cannot claim the same id.
+let __modalTitleSeq = 0;
 let __modalKeydown = null;
 
 function closeModal() {
@@ -563,10 +579,13 @@ function brandLockup(size = 'header') {
 // Compact, icon-less empty state (the large graphic was dropped app-wide for a
 // cleaner look). iconName is kept in the signature for call-site compatibility
 // but is no longer rendered.
+// The headline is an <h2> and not a div: an empty state is often the WHOLE of
+// what a screen has to say (exercise-detail renders nothing else when the id
+// is gone), and a styled div gives a screen reader no outline at all.
 function emptyState({ iconName, title, text }) {
   return `
     <div class="empty">
-      <div class="empty-title">${escapeHtml(title)}</div>
+      <h2 class="empty-title">${escapeHtml(title)}</h2>
       <div class="empty-text">${escapeHtml(text)}</div>
     </div>
   `;

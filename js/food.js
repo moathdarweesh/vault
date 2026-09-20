@@ -2342,6 +2342,7 @@ function renderFoodLog(el) {
       <button class="back-btn" data-goto="food" aria-label="${escapeHtml(t('back'))}">${icon('back', 20)}</button>
       <div class="detail-top-title">${t('food_log_title')}</div>
     </div>
+    <h1 class="sr-only">${t('food_log_title')}</h1>
 
     <div class="day-nav">
       <!-- prev = back(◀), next = chevronRight(▶). These were swapped, so in

@@ -12,7 +12,7 @@
 // build. The literal below is the fallback (file://, or a stripped query) and is
 // still bumped by `npm run release` — see CLAUDE.md "CACHE WORKFLOW".
 const VAULT_BUILD = (() => {
-  const FALLBACK = 'v384';
+  const FALLBACK = 'v385';
   try {
     const src = (document.currentScript && document.currentScript.src) || '';
     const m = src.match(/[?&]v=(\d+)/);
@@ -434,6 +434,7 @@ function renderNotifications(el) {
       <button class="back-btn" data-goto="settings" aria-label="${escapeHtml(t('back'))}">${icon('back', 20)}</button>
       <div class="detail-top-title">${t('notif_settings_title')}</div>
     </div>
+    <h1 class="sr-only">${t('notif_settings_title')}</h1>
 
     ${(!denied && typeof Notification !== 'undefined' && Notification.permission === 'default') ? `
       <button class="settings-action-row ntfs-enable" id="ntfs-enable">
@@ -2223,6 +2224,8 @@ function renderHome(el) {
   el.innerHTML = `
     ${vaultBar({ action: icon('settings', 19), actionLabel: t('settings_title') })}
 
+    <h1 class="sr-only">${t('nav_home')}</h1>
+
     <div class="home-head">
       <div class="home-head-text">
         <div class="home-hello">${escapeHtml(dayLabel)}</div>
@@ -3552,7 +3555,7 @@ function renderExerciseDetail(el, exerciseId) {
                onerror="this.closest('.detail-hero').classList.add('empty'); this.remove();">
         </div>
         <div class="detail-hero-overlay">
-          <div class="detail-hero-name">${escapeHtml(exDisplayName(ex))}</div>
+          <h1 class="detail-hero-name">${escapeHtml(exDisplayName(ex))}</h1>
           <div class="detail-hero-cat pill cat-${escapeHtml(ex.category)}">${escapeHtml(categoryLabel(ex.category))}</div>
         </div>
       </div>
@@ -3561,7 +3564,7 @@ function renderExerciseDetail(el, exerciseId) {
       <div class="detail-hero-wrap">
         <div class="detail-hero empty">${ex.isCustom ? t('custom_exercise_label') : escapeHtml(categoryLabel(ex.category).toUpperCase())}</div>
         <div class="detail-hero-overlay">
-          <div class="detail-hero-name">${escapeHtml(exDisplayName(ex))}</div>
+          <h1 class="detail-hero-name">${escapeHtml(exDisplayName(ex))}</h1>
           <div class="detail-hero-cat pill cat-${escapeHtml(ex.category)}">${escapeHtml(categoryLabel(ex.category))}</div>
         </div>
       </div>

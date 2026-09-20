@@ -178,12 +178,25 @@
   --fs-caption: 11px;
   /* Added after measuring the stylesheet: 12px (49 uses) and 14px (34 uses) were
      the 2nd and 4th most-used sizes in the whole file and had NO token to name
-     them — which is most of why --fs-* adoption sat at 9%. --fs-page is the 26px
-     .page-title introduced in v200. All three are declared at the values already
-     in use, so this is a naming fix with zero visual change. */
+     them — which is most of why --fs-* adoption sat at 9%. Both are declared at
+     the values already in use, so this is a naming fix with zero visual change.
+
+     ⚠️ This comment used to claim a third, «--fs-page ... the 26px .page-title»,
+     and that token was NEVER DECLARED — .page-title carried a 26px literal from
+     v200 until the heading ladder below. Prose describing a change that did not
+     land is how the app's most-used heading sat out v380's large-text scale. */
 
   --fs-label:   14px;
   --fs-meta:    12px;
+
+  /* THE HEADING LADDER - three rungs, and every heading in the app is on one.
+     They were five ad-hoc literals (26 page / 20 sheet / 18 bar / 17 group /
+     16 empty), which is not a ladder, and being literals they were invisible to
+     the v380 large-text scale: the person who asked for bigger type got a
+     bigger BODY under headings that had not moved. */
+  --fs-h1:      26px;
+  --fs-h2:      20px;
+  --fs-h3:      17px;
 
 /* LARGER TEXT — the eleven type tokens, +10% and rounded to whole pixels.
    This app is written in pixels: there is no rem root to scale and no
@@ -214,6 +227,9 @@ body.text-lg {
   --fs-caption:  12px;
   --fs-label:    15px;
   --fs-meta:     13px;
+  --fs-h1:       29px;
+  --fs-h2:       22px;
+  --fs-h3:       19px;
 }
   --fw-display: 700;   /* WEIGHT CAP (v293): the loaded faces top out at 700 (IBM Plex Sans Arabic, JetBrains Mono); every 800/900 was synthetic bold — the browser smearing 700 — so 700 is what those elements were really wearing, drawn properly. Archivo (brand lockup only) is the one 800. */
   --fw-title:   700;
@@ -871,8 +887,11 @@ body.theme-light .home-center-icon { box-shadow: 0 8px 24px rgba(255, 106, 0, 0.
 .page-title {
   /* 26px, not 32px. At 32 it tied exactly with .stat-cell-value (32/900), so the
      eye was pulled equally to a heading read once and to the numbers that are the
-     actual content — and the type scale jumped 18 -> 32 with nothing between. */
-  font-size: 26px;
+     actual content — and the type scale jumped 18 -> 32 with nothing between.
+     It was a LITERAL until the heading ladder: the comment above the type scale
+     named a --fs-page that was never declared, so the app's most-used heading
+     sat out v380's large-text scale entirely. */
+  font-size: var(--fs-h1);
   font-weight: 700;
   letter-spacing: -0.03em;
   line-height: 1.05;
@@ -1700,9 +1719,11 @@ body[dir="rtl"] .bento-card-content { text-align: right; }
 /* Auto-hide: tucked up out of view while scrolling down, revealed on scroll up */
 .detail-top.tuck { transform: translateY(-115%); }
 
+/* 18 -> 20: a bar title is the same LEVEL as a sheet title, and the ladder has
+   one value for that level. */
 .detail-top-title {
   flex: 1;
-  font-size: 18px;
+  font-size: var(--fs-h2);
   font-weight: 700;
   letter-spacing: -0.025em;
   white-space: nowrap;
@@ -1774,9 +1795,10 @@ body[dir="rtl"] .bento-card-content { text-align: right; }
   gap: 12px;
   z-index: 2;
 }
-
+/* 28 -> 26: the exercise name over the photo IS that screen's h1, and the
+   ladder has one value for an h1. */
 .detail-hero-name {
-  font-size: 28px;
+  font-size: var(--fs-h1);
   font-weight: 700;
   letter-spacing: -0.035em;
   color: #ffffff;
@@ -2154,8 +2176,9 @@ button.schedule-prev-row { width: 100%; font: inherit; color: inherit; text-alig
   align-items: center;
 }
 
+/* 16 -> 17: an empty state's headline is a heading like any other. */
 .empty-title {
-  font-size: 16px;
+  font-size: var(--fs-h3);
   font-weight: 700;
   color: var(--text);
   margin-bottom: 8px;
@@ -2272,7 +2295,7 @@ button.schedule-prev-row { width: 100%; font: inherit; color: inherit; text-alig
 }
 
 .modal-title {
-  font-size: 20px;
+  font-size: var(--fs-h2);
   font-weight: 700;
   letter-spacing: -0.03em;
   line-height: 1.2;
@@ -3491,7 +3514,7 @@ body[data-view="session-run"] .bottom-nav { display: none; }
 .run-ex-media img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
 .run-ex-media.sd-thumb-zoom { cursor: zoom-in; }
 .run-ex-name {
-  font-size: var(--fs-title, 24px);
+  font-size: var(--fs-h1);
   font-weight: 700;
   letter-spacing: -0.02em;
   color: var(--text);
@@ -8585,8 +8608,10 @@ body.ember-on .ember {
    missing sits ABOVE it. So this adds a heading and changes no section. */
 .settings-group { margin-bottom: 30px; }
 .settings-group:last-child { margin-bottom: 0; }
+
+/* Already 17, and now named: the third rung, and it scales with the other two. */
 .settings-group-title {
-  font-size: 17px;
+  font-size: var(--fs-h3);
   font-weight: 700;
   color: var(--text);
   margin: 0;

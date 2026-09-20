@@ -1197,5 +1197,47 @@ const contract = (name, problems) => {
   contract(`no control wears a capsule or a circle (${controls.size} control classes, ${Object.keys(ALLOWED).length} named exception)`, problems);
 }
 
+// ── 43 · every view has a heading ───────────────────────────────────────────
+// Four of the twenty rendered no <h1>-<h6> at all — home, exercise-detail,
+// foodlog and notifications — so a screen reader got no document outline on the
+// app's most-used screen and on three others. Nothing could see it: each of the
+// four DOES draw a title, as a <div> with a class that looks like a heading, and
+// a styled div is invisible to the outline and to every heading shortcut.
+//
+// ⚠️ AND THE BAR TITLE CANNOT BE THAT HEADING. `.detail-top` sets
+// `bar.inert = tuck` on scroll-down, so an <h1> inside it LEAVES the
+// accessibility tree the moment the user scrolls — a heading that exists only at
+// the top of the page. The three that have no other title carry an sr-only h1 in
+// the CONTENT instead.
+{
+  const problems = [];
+  const app = src['js/app.js'];
+  const cases = [...app.matchAll(/case\s+'([a-z-]+)':\s*(render[A-Za-z]+)\(/g)];
+  if (cases.length < 15) problems.push('could not read the renderView switch — the contract is checking nothing');
+
+  // The renderer's own body, brace-matched from its declaration, so a heading
+  // emitted by a DIFFERENT function does not count for this view.
+  const bodyOf = (name) => {
+    for (const f of VIEWS) {
+      const text = src[f];
+      const at = text.indexOf('function ' + name + '(');
+      if (at < 0) continue;
+      let i = text.indexOf('{', at), depth = 0;
+      for (let j = i; j < text.length; j++) {
+        if (text[j] === '{') depth++;
+        else if (text[j] === '}' && --depth === 0) return text.slice(at, j + 1);
+      }
+    }
+    return null;
+  };
+
+  for (const [, view, fn] of cases) {
+    const body = bodyOf(fn);
+    if (!body) { problems.push(`${view}: ${fn}() is not a top-level function in any view script`); continue; }
+    if (!/<h[1-6][\s>]/.test(body)) problems.push(`${view}: ${fn}() emits no <h1>-<h6>. A styled <div> gives a screen reader no outline — and a heading inside .detail-top goes inert on scroll, so it belongs in the content (class="sr-only" when the screen shows no title of its own).`);
+  }
+  contract(`every view emits a real heading (${cases.length} views)`, problems);
+}
+
 console.log(failures.length ? `\ncheck-contracts: ${failures.length} broken contract(s)` : '\ncheck-contracts: all contracts hold');
 process.exit(failures.length ? 1 : 0);

@@ -82,7 +82,7 @@ a faster TTFB — not fewer bytes.
 npm run release          # bump every marker + verify, then commit all files together
 ```
 
-**Current version: v384.** APK: build 24 / v3.3.
+**Current version: v385.** APK: build 24 / v3.3.
 
 `scripts/release.js` rewrites **every** marker and then re-reads them from disk to confirm; it exits non-zero if any disagree, and prints the count per file (derived, never hard-coded — the docs used to say 16 while the real count was 15). The markers are `?v=N` in `index.html` (every script and stylesheet, the `js/vendor/supabase.js` preload, both `icons/icon.svg` links, `manifest.json`), the `__cleaned_vN` sessionStorage key, the `FALLBACK` literal in `app.js`, `version.json` → `web`, the `?v=` in `manifest.json`, `admin.html`, `privacy.html` and `get/index.html`, and the `Current version` line in this file. `scripts/check-contracts.js` (pre-commit) refuses a commit where any of them disagree.
 
@@ -380,11 +380,15 @@ the same identity on two surfaces. `docs/BRAND.md` is the authority.
 - **`applyTheme()`'s `<meta name="theme-color">` must track `--bg` exactly**
   (`#000000` / `#faf5f0`) or the phone paints a seam above the app.
 - **The IDENTITY LAYER must stay PHYSICALLY LAST in `styles.css`** — it drifted into the middle of the file over v218–v227 (about 500 lines of component CSS ended up appended after it) and was moved back at v262. Its authority is pure SOURCE ORDER at equal (0,1,0) specificity, so anything below it silently wins; the drift it exists to prevent had already shipped inside those blocks (day labels at 10/9px, under the 11px floor). **Append new component CSS ABOVE the banner that now marks the boundary, never below it.** The move was verified inert: 504 computed-style fingerprints across every element of all 20 views in both themes, zero changed.
-- **The IDENTITY LAYER at the end of `styles.css` is the authority** for the four
+- **The IDENTITY LAYER at the end of `styles.css` is the authority** for the
   devices that make the app recognisable — the machined edge (fill separates, a
-  border MEANS interactive), the 2:1 corner law, no circles, and the five-bar
-  field. It sits **last on purpose**: those rules have the same (0,1,0) specificity
-  as the component rules they override, so only source order makes them win.
+  border MEANS interactive), the 2:1 corner law, no circles, the bar tick, and the
+  duotone icon colour law. It sits **last on purpose**: those rules have the same
+  (0,1,0) specificity as the component rules they override, so only source order
+  makes them win. Its own banner lists **seven**, and its seventh — «THE CUT» — is
+  PROSE WITH NO RULE BLOCK behind it: the numbered sections stop at 6, because the
+  cut left the stylesheet at v227. Contracts 41 and 42 now enforce devices 2 and 4
+  directly.
 - Zeroing `--card-border` drops the outline from **nine** components via the
   "Unified card surface" block. Anything that consumes it must be handed
   `box-shadow: var(--elev-1)` in the same breath or it loses its edge and gains
@@ -406,10 +410,30 @@ One face for text, one for the mark, one for figures. The Google Fonts link in
   `letter-spacing` that tightened Inter's figures was removed — it fought the
   mono metrics.
 
-### The mark is THE CUT (v216) — there is no symbol
-The Claude Design spec "Vault Logo CUT" replaced both earlier marks. A single
-horizontal line shears the name: a **slot** in the surface colour with an
-**accent hairline** inside it. Two layers, never one. `docs/BRAND.md` §1 is the law;
+### TWO MARKS: the LOCKUP inside the app, THE CUT on the outside
+
+> ⚠️ **THIS SECTION SAID «the mark is THE CUT» FOR 158 RELEASES WHILE THE TOP BAR
+> DREW SOMETHING ELSE.** `styles.css` has carried `/* --- THE CUT is retired --- */`
+> since **v227**, `.cut` and `--cut-bg` do not exist in it, and the in-app mark
+> has been the AJ lockup ever since. v348 recorded that three documents agreed
+> with each other and disagreed with the app; v367 designed a widget family
+> against this page and had to throw it away. Corrected here, from the code.
+
+**Inside the app: `brandLockup(size)` in `js/ui.js`.** Two plates — the left and
+right halves of `ICONS.dumbbell`, cropped by viewBox so the mark follows the icon
+set — flanking `VAULT` (Archivo 800, `.2em`, `--text`) over `TRAIN` (JetBrains
+Mono, `.3em`, `--accent`); the plates are `--accent`. **Exactly two sizes**,
+`header` (VAULT 11px) and `splash` (32px), and a caller cannot invent a third.
+Three call sites, all in `js/app.js`: `vaultBar()` (five screens), the sign-in
+gate, onboarding step 0. `admin.html` hand-inlines the same two plate SVGs twice
+because it cannot reach `js/ui.js`; nothing keeps those copies in step.
+
+**Outside the app, THE CUT survives on four surfaces** — `icons/icon.svg`,
+`res/drawable/ic_launcher_foreground.xml` (and `ic_launcher_monochrome.xml` /
+`ic_stat_vault.xml` with it), `get/index.html`, and `privacy.html`, which paints
+its own and which `docs/BRAND.md` had never listed. A single horizontal line
+shears the name: a **slot** in the surface colour with an **accent hairline**
+inside it. Two layers, never one. `docs/BRAND.md` §1 is the law;
 the short version:
 
 - Slot **7%** of the type size, floor **2px**. Hairline **1.5px** minimum.
@@ -421,10 +445,13 @@ the short version:
   `--accent`, which is only 2.87:1 on the bone ground.
 
 **Two ways to draw the slot; the surface picks.** Flat surface → paint it in
-that surface's token (`.cut` does this via `--cut-bg`, and any context that
-moves the mark onto a different surface MUST override it). Gradient or
-translucent surface → mask the band away instead, because no single colour
-matches it. `get/index.html` is the masked case.
+that surface's token (`privacy.html` does this with its own `--cut-slot` /
+`--cut-hair`, and any context that moves the mark onto a different surface MUST
+override it). Gradient or translucent surface → mask the band away instead,
+because no single colour matches it. `get/index.html` is the masked case. The
+shared `.cut` class and its `--cut-bg` that this paragraph used to name went with
+v227; each surviving implementation carries its own, which is why neither broke
+when the class was deleted.
 
 **The Android themed icon needs its own file.** A monochrome layer is flattened
 to alpha and tinted one colour, so the foreground's painted slot would come out
@@ -434,9 +461,16 @@ using two quadrilaterals — one per diagonal — because a single rectangle acr
 both would count odd in the gap between them and fill in solid.
 
 **The five bars are texture now, not a mark.** They survive as the pinstripe on
-the app icon and as the section tick. They are no longer the in-app logo (the
-top bar is the cut wordmark) and no longer the status-bar icon (that is the slot
-mark). Do not reintroduce them as a logo.
+the app icon and as the section tick. They are no longer the in-app logo (the top
+bar is the LOCKUP) and no longer the status-bar icon (that is the slot mark). Do
+not reintroduce them as a logo.
+
+> ⚠️ **AND THE WEB SPLASH DRAWS THEM ANYWAY** — `index.html`'s `.vs-bolt` field is
+> five bars with the middle one in `#ff6a00`, above `VAULT` in Archivo. It is
+> frame 0 of a sequence whose first frame is a PNG already installed on phones
+> (v340), so it cannot be changed without a new APK and it is not a logo in the
+> sense this rule forbids — it is the launch animation. Stated because a reader
+> comparing the rule against the app will otherwise find it and assume drift.
 
 ### App icon vs LAUNCHER icon — two different files (v212)
 `icons/icon.svg` is the PWA / browser-tab icon **only** — since v314 the
@@ -529,14 +563,26 @@ accent in `var(--icon-accent)`. Nothing is stroked.
 
 ### Type scale & RTL invariants (v200–v201)
 - **Nothing renders below 11px.** 24 declarations were at 9–10px; all raised.
-  Fractional sizes are gone. 12/13/14/15 are NOT unified — they carry 157
+  **Fractional sizes are NOT gone** — this line claimed they were and 23
+  declarations still carry `.5px` (12.5 and 13.5, in the sleep labels, the
+  rotation rows and the reminders sheet). They were never swept after v201, and
+  the claim is corrected here rather than acted on: nothing in the app depends
+  on it, and re-rounding 23 sizes is its own measured change. 12/13/14/15 are
+  NOT unified — they carry 157
   declarations in distinct roles across 18 views.
 - `.page-title` is **26px**, not 32: at 32 it tied exactly with `.stat-cell-value`,
-  so a heading read once competed with the numbers that are the content.
+  so a heading read once competed with the numbers that are the content. Since
+  v385 it reads `--fs-h1` rather than a literal — it was a literal for 185
+  releases while the comment above the type scale claimed a `--fs-page` that was
+  never declared, which is how the app's most-used heading sat out v380's
+  larger-text scale.
 - **One section-header system per screen.** `.rot-section-title` (+ optional
   `.rot-section-head` for a trailing action, `.rot-section-sub` for context) is the
-  Program tab's; `.section-title` draws a `::after` rule and must not be mixed in
-  beside it.
+  Program tab's; `.section-title` carries the identity layer's BAR TICK and must
+  not be mixed in beside it. (It drew a full-width `::after` rule when this line
+  was written; the identity layer sets `content: none` on that and adds a 2px
+  `::before` bar instead — the rule is the same, its reason is a different
+  mark.)
 - **`text-align: start`, never `left`,** unless a `body[dir="rtl"]` override exists
   for that exact selector. Three rules shipped Arabic left-aligned inside RTL rows.
 - A `<button>` with no `color` inherits the UA `buttontext` default — `.settings-action-row`
@@ -2679,6 +2725,150 @@ throwaway edit" is the recorded intent; whether an untouched row should count
 is the owner's call); a saved food **4 taps**. The day card's Save measures
 **69×40** — under the 44 floor.
 
+## v385 — T4.2: the heading ladder, and the dialogs that had no name
+
+The last of the plan's furniture threads, and the two things it found are both
+larger than the word «ladder» suggests.
+
+### ⚠️ NO DIALOG IN THIS APP HAD AN ACCESSIBLE NAME
+
+`openModal()` emits `role="dialog" aria-modal="true"` with **neither
+`aria-labelledby` nor `aria-label`**, and **35 of the 38 titles under it are
+`<div class="modal-title">`**. So every sheet in the app announced itself as
+*"dialog"* and nothing else — the saved-food picker, the calculator, the recipe
+ledger, the weight sheet, the reminders page, all of them, for as long as they
+have existed.
+
+The wiring is in `openModal`, not at the call sites: one edit names all 38 and
+carries every sheet written after it, where 38 edits would be 38 chances to
+forget. A sheet with no title keeps no name rather than gaining a wrong one.
+Measured on three:
+
+```
+saved-foods  {"labelledby":"vlt-modal-title-1","name":"أكل محفوظ"}
+calculator   {"labelledby":"vlt-modal-title-2","name":"حاسبة السعرات"}
+weight       {"labelledby":"vlt-modal-title-3","name":"الوزن"}
+```
+
+### Four of twenty views rendered no heading at all
+
+`home`, `exercise-detail`, `foodlog` and `notifications`. Each **does** draw a
+title — as a `<div>` with a class that looks like a heading — and a styled div
+is invisible to the document outline and to every heading shortcut.
+
+> ⚠️ **AND THE BAR TITLE CANNOT BE THAT HEADING.** `.detail-top` sets
+> `bar.inert = tuck` on scroll-down, so an `<h1>` inside it **leaves the
+> accessibility tree the moment the user scrolls** — a heading that exists only
+> while you are at the top of the page. That is worse than none, because it
+> looks fixed.
+
+So `exercise-detail`'s hero name — visible, in the content, in both its photo
+and no-photo branches — becomes the real `<h1>` it always was. The other three
+carry an `sr-only` `<h1>` in the content, each named with the key that screen
+already uses (Home takes the word from its own nav button, so the nav and the
+outline cannot drift apart). No pixel moves.
+
+**`emptyState()`'s headline went with them.** It is often the WHOLE of what a
+screen has to say — `exercise-detail` renders nothing else when the id is gone,
+which is exactly the state the fingerprint net captures it in — so its `<div>`
+is an `<h2>` now. Measured after: **20 of 20 views render a real heading**,
+where it had been 16, and the net's own fallback captures are covered too.
+
+### The ladder: three rungs, and the reason it was five
+
+| | was | is |
+|---|---|---|
+| `.page-title` (17 sites) | 26px **literal** | `--fs-h1` |
+| `.detail-hero-name` | 28px | `--fs-h1` (26) |
+| `.run-ex-name` | `--fs-title` (24) | `--fs-h1` (26) |
+| `.modal-title` (38 sheets) | 20px | `--fs-h2` |
+| `.detail-top-title` | 18px | `--fs-h2` (20) |
+| `.settings-group-title` | 17px | `--fs-h3` |
+| `.empty-title` | 16px | `--fs-h3` (17) |
+
+> ⚠️ **AND EVERY ONE OF THOSE WAS A LITERAL, WHICH MEANT v380 NEVER REACHED
+> THEM.** The comment above the type scale has claimed since v200 that
+> «`--fs-page` is the 26px `.page-title`» — **that token was never declared**.
+> So when v380 raised the eleven tokens for larger text, the person who asked
+> for bigger type got a bigger BODY under headings that had not moved a pixel.
+> Prose describing a change that did not land is how the app's most-used heading
+> sat out its own accessibility feature.
+
+Measured on the Settings screen, which is the one view with two levels:
+
+```
+normal  h1 26px · h3 17px
+large   h1 29px · h3 19px
+```
+
+> **One measurement of my own was wrong first, and the mistake is the useful
+> part.** A probe that toggled `body.text-lg` and read `getComputedStyle` in the
+> same synchronous block reported 26px at both sizes — so I went looking for a
+> broken selector in a stylesheet that was fine. Reading the custom properties
+> straight off `body` in a fresh pass said 15→17 and 26→29 immediately. **Toggle
+> and measure in the same task and you can read the state you started from.**
+
+### Contract 43
+
+Every view in the `renderView` switch must emit an `<h1>`–`<h6>` from its own
+renderer — brace-matched from the declaration, so a heading emitted by a
+different function does not count for this view. **Proved able to fail 3 of 3**,
+both scripts restored byte-for-byte: Home's heading removed fires by name,
+foodlog's fires, and a `<div class="page-title">` in place of the `<h1>` fires —
+which is the whole point, since that div is exactly what the four were already
+drawing.
+
+### And the mark documentation, corrected at last
+
+v367 recorded that «BRAND.md and CLAUDE.md's mark sections are still wrong and
+are now **knowingly** wrong — correcting them is its own commit». This is that
+commit, and every claim in it was read out of the code rather than the documents:
+
+- **`.cut` and `--cut-bg` do not exist in `styles.css`** and have not since v227.
+  The file says so in its own words. Both documents pointed the in-app top bar at
+  that class.
+- **The in-app mark is `brandLockup()`** — two half-`dumbbell` plates flanking
+  VAULT over TRAIN, exactly two sizes, three call sites. `admin.html` hand-inlines
+  the same two plate SVGs twice because it cannot reach `js/ui.js`, and nothing
+  keeps those copies in step.
+- **THE CUT survives on FOUR surfaces**, not three: the icons, the download page,
+  and **`privacy.html`**, which paints its own `--cut-slot` / `--cut-hair` and
+  which `docs/BRAND.md`'s shipping table had never listed at all.
+- **The identity layer's banner lists SEVEN devices and its seventh has no rule
+  block** — the numbered sections stop at 6, because the cut left the stylesheet
+  at v227. CLAUDE.md said «four devices». Contracts 41 and 42 now enforce two of
+  them outright.
+- **The web splash still draws the five bars**, which the same page forbids as a
+  mark. It is frame 0 of a sequence whose first frame is a PNG already on phones
+  (v340), so it is the launch animation and not a logo — stated, because a reader
+  checking the rule against the app will otherwise find it and assume drift.
+
+Two more stale claims in the type-scale law went with them: **fractional sizes
+are not gone** (23 declarations still carry `.5px`, corrected rather than acted
+on — re-rounding 23 sizes is its own measured change), and `.section-title` no
+longer draws a `::after` rule; the identity layer sets `content: none` on it and
+adds the 2px bar tick instead.
+
+### What both net lanes say, and why the headline number is not the answer
+
+This is the first release where reading `N/M cells identical` would have been
+useless: **8 of 160 views and 20 of 110 sheets**. `emptyState()` appears on
+nearly every screen in the EMPTY state, which is exactly what the matrix
+renders, so a one-pixel change to its headline touches almost every cell. The
+number says "this release moved a lot of screens", which is true and tells you
+nothing about whether it moved anything it should not have.
+
+So the diff was accounted for element by element instead:
+
+| | |
+|---|---|
+| **sheets** | **ZERO elements whose class changed.** 90 `acc` + 90 `id` — every dialog gaining the accessible name it never had — plus 4 on the empty state. Nothing else, in 110 cells. |
+| **views** | **24 cells gained exactly ONE element** — the `sr-only` `<h1>`, on home, notifications and foodlog, across all 8 contexts. The other 136 have the identical element count. |
+| the rest | `detail-top-title` 18→20 (96), the empty state's tag and its 1px, and the boxes that reflow by that 1px |
+
+**Every difference is one this change made.** The per-element accounting is what
+proves that; the cell count could not have.
+
 ## v384 — T4.2: the chips group — what a control is, not what it is called
 
 The identity layer states both halves of this law in its own words:
@@ -3758,9 +3948,11 @@ drops the sub-line below size 10. A shape reads at any size. A 5.5px word does
 not.
 
 > **The rule this leaves behind: measure the app, not the document.** BRAND.md
-> and CLAUDE.md's mark sections are still wrong and are now knowingly wrong —
-> correcting them is its own commit, and until then `styles.css` and
-> `js/ui.js` are the authority.
+> and CLAUDE.md's mark sections were still wrong and knowingly wrong after this
+> release — **corrected at v385**, from the code: both now describe TWO marks,
+> the lockup inside the app and the cut on the icons and the download page, and
+> both name `privacy.html`, which paints a cut and which BRAND.md had never
+> listed at all.
 
 ### The four, and why four in ONE build
 
