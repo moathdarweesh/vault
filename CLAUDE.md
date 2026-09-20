@@ -2679,6 +2679,67 @@ throwaway edit" is the recorded intent; whether an untouched row should count
 is the owner's call); a saved food **4 taps**. The day card's Save measures
 **69×40** — under the 44 floor.
 
+### T1.3 — the duplicate-tap lane, and three ways it lied before it was true
+
+`ux-flows.js` now runs each of the four daily writes a second time with the
+final button tapped **twice, 120ms apart** — a bounced thumb, a dropped frame,
+or a phone that read one press as two. Nobody taps twice in 120ms on purpose.
+
+**Every one of the four holds, and each by a DIFFERENT mechanism** — which is
+the useful part, because three of those mechanisms are accidents of something
+else and only one is a guard:
+
+| | | how |
+|---|---|---|
+| water +250 | **doubles, by design** | a cup is a STEPPER — three taps mean 750ml |
+| body weight | one row | the button stays live and **accepts** the second tap; `changeSlice`short-circuits a write whose value is unchanged, and the day already holds that entry |
+| a set | one row | the card's Save **removes itself** once it commits — `the control is gone` |
+| a saved food | one row | the v357 800ms `disabled` guard, measured **refusing** |
+
+Nothing needed fixing, so nothing was changed. **Named residual:** body weight
+is the only one of the four with no guard of any kind — it is protected by a
+data coincidence, not a decision, and it would break silently if that sheet
+ever gained a second field or logging ever became multi-entry per day.
+
+#### ⚠️ THREE WAYS THE LANE REPORTED SOMETHING FALSE FIRST
+
+1. **"2 sets after a double tap" is not a duplicate.** The day card also
+   commits the rows it pre-filled from last time, so a single, correct save
+   already produces more than one set. I had written the expected count as a
+   constant I guessed, and it read as a defect. The fix is that the set case
+   carries **its own one-tap control**, run from the same cleared state, so the
+   pre-filled rows cancel out. Both come out `1 session / 2 sets`.
+2. **A fixed-coordinate second tap could not reach the guard it claimed to
+   test.** Proved by DELETING the v357 guard: the lane still said ONE — because
+   the undo toast resizes the open sheet (v324's `:has(.toast.show)`
+   reservation), the row slid **134px** out from under the point, and the
+   second click landed on the modal. That case was decoration. The second tap
+   FOLLOWS the control now, which is also the likelier human gesture; what a
+   fixed-point bounce *would* have hit is recorded beside it from the same
+   instant, without spending a second click. With the guard removed the lane
+   now says **DOUBLED, 2 rows**, and with it restored, ONE.
+3. **Counting the undo ledger proved nothing at all.** It reported `0 new
+   entries` for all four — including the saved-food add, which demonstrably
+   pushes one. The ledger is a **ring buffer capped at 5**, `changeSlice`
+   shifts the oldest out, and the fixture already saturates it, so the length
+   is pinned at 5 forever: the delta was a property of the container. It reads
+   the HEAD now, which is what the user sees in «آخر التعديلات» — and the set
+   case then shows exactly one `session_saved` above my own `session_deleted`.
+   **Water and body weight never appear in that ledger at all**, so for those
+   two the row count is the only evidence there is; that is stated rather than
+   left to look like a clean result.
+
+#### ⚠️ AND MY OWN PATCHER PRINTED THREE SUCCESSES IT THEN THREW AWAY
+
+It accumulated edits in memory and wrote the file **once at the end**, so when
+a later assertion fired, the two edits already applied were discarded — while
+the `ok` lines they had printed stood as evidence they had landed. I only
+caught it because the next run showed `undefined` where the new field should
+be. A patcher writes after each edit and **reads the bytes back**, or it says
+up front that nothing is written until all of them pass. Printing success
+before durability is the same failure this project keeps recording in the app,
+turned inward on the tooling that checks it.
+
 ## v368 — T1.5: the three actions the shell's own furniture was hiding
 
 The first task out of the owner's research plan, and the one it ranked first

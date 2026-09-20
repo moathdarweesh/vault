@@ -50,11 +50,51 @@ async function drive(page, steps, ctxName) {
     const under = box && !inNav ? (box.y + box.height / 2 > fold || box.y < 0) : null;
     if (under) await loc.scrollIntoViewIfNeeded();
     const b2 = await loc.boundingBox();
+    const cx = b2.x + b2.width / 2, cy = b2.y + b2.height / 2;
     // a REAL click at the centre: a covered or 42px control fails or lands elsewhere
-    await page.mouse.click(b2.x + b2.width / 2, b2.y + b2.height / 2);
+    await page.mouse.click(cx, cy);
+    let second = null, atOldPoint = null, moved = null;
+    if (s.twice) {
+      // THE BOUNCE WINDOW IS FAKE-CLOCK TIME, WHICH IS WHAT A GUARD READS.
+      // 120ms is under every debounce in this app, so a site with no guard
+      // writes twice.
+      //
+      // A FIXED-COORDINATE SECOND TAP MEASURES THE WRONG THING, and that was
+      // proved rather than reasoned: with the v357 guard on the saved-food row
+      // DELETED, the fixed-point lane still reported ONE row - because the undo
+      // toast resizes the open sheet (v324's :has(.toast.show) reservation),
+      // the row slid out from under the point, and the second click landed on
+      // the modal. The guard it claimed to be testing was never exercised, so
+      // that case was decoration.
+      //
+      // So the second tap FOLLOWS the control to wherever it now is, which is
+      // also the likelier human gesture: a tap that seems not to have
+      // registered is repeated AT THE BUTTON, which the user can still see.
+      // What a fixed-point bounce would have hit is recorded beside it, read at
+      // the same instant, without spending a second click on it.
+      await page.clock.runFor(120);
+      await page.waitForTimeout(30);
+      atOldPoint = await page.evaluate(([x, y]) => {
+        const at = document.elementFromPoint(x, y);
+        if (!at) return 'nothing';
+        const el = at.closest('button, a, [role="button"], input, label') || at;
+        const cls = typeof el.className === 'string' && el.className.trim()
+          ? '.' + el.className.trim().split(/\s+/).slice(0, 2).join('.') : '';
+        return el.tagName.toLowerCase() + (el.id ? '#' + el.id : '') + cls + (el.disabled ? ' [disabled]' : '');
+      }, [cx, cy]);
+      const b3 = (await loc.count()) ? await loc.boundingBox() : null;
+      if (!b3) {
+        second = 'the control is gone - there is nothing to tap twice';
+      } else {
+        moved = Math.round(Math.abs(b3.x - b2.x) + Math.abs(b3.y - b2.y));
+        const off = await loc.evaluate((el) => !!el.disabled).catch(() => false);
+        second = (off ? 'refused [disabled]' : 'accepted') + (moved ? ' - the control had moved ' + moved + 'px' : '');
+        await page.mouse.click(b3.x + b3.width / 2, b3.y + b3.height / 2);
+      }
+    }
     await page.clock.runFor(s.after || 400);
     await page.waitForTimeout(60);
-    log.push({ kind: 'tap', sel: s.sel, y: Math.round(box.y), h: Math.round(box.height), w: Math.round(box.width), scrolledToReach: !!under, label: s.label || '' });
+    log.push({ kind: 'tap', sel: s.sel, y: Math.round(box.y), h: Math.round(box.height), w: Math.round(box.width), scrolledToReach: !!under, label: s.label || '', twice: !!s.twice, secondTap: second, aFixedPointBounceWouldHit: atOldPoint, movedPx: moved });
   }
   return { ctx: ctxName, taps: log.filter((l) => l.kind === 'tap').length, typing: log.filter((l) => l.kind === 'type').length, steps: log };
 }
@@ -123,16 +163,119 @@ async function drive(page, steps, ctxName) {
     const f1 = await read((d) => DB.foodLogs.listForDate(d).length, fx.today);
     results.push({ path: 'a saved food', ...food, proof: `DB.foodLogs today ${f0} → ${f1}`, landed: f1 === f0 + 1 });
 
+    // -- THE DUPLICATE-TAP LANE ----------------------------------------------
+    // The same four writes, with the FINAL button tapped twice 120ms apart. A
+    // human cannot tap twice in 120ms on purpose; that is a bounced thumb, a
+    // dropped frame, or a phone that registered one press as two. What must
+    // come out of it is ONE row.
+    //
+    // WATER IS DELIBERATELY NOT EXPECTED TO REFUSE, and that is a decision and
+    // not an omission. A cup is a STEPPER - three taps mean 750ml - so an
+    // 800ms lock-out would break the ordinary gesture to prevent a rare one,
+    // and the mistake is already both visible (the running total under the
+    // cups) and one tap from undone (the -250 beside them). It is measured all
+    // the same, because "two cups" has to be on the record as a choice.
+    const dupes = [];
+    // A WRITE THAT IS IDEMPOTENT IN THE DATA STILL RUNS ITS TRANSACTION TWICE.
+    // Body weight is one entry per day, so saving the same figure twice leaves
+    // one row - but each save can leave its own entry in the undo ledger, and
+    // the user then reads the same change listed twice in "the latest changes".
+    // That is a duplicate they can see, so the ledger is read beside the row.
+    //
+    // COUNTING IT WOULD PROVE NOTHING: the ledger is a RING BUFFER CAPPED AT 5
+    // (changeSlice shifts the oldest out) and the fixture already saturates it,
+    // so length is pinned at 5 and a delta of 0 is a property of the container,
+    // not of the app. The first draft of this lane reported 0 for all four
+    // cases, including the saved-food add, which demonstrably pushes an entry.
+    // The HEAD of the list is what the user reads, so that is what is compared.
+    const undoTop = () => read(() => (DB.undo.list() || []).slice(0, 2).map((e) => e.label));
+    const twiceInLedger = (t) => !!(t && t[0] && t[0] === t[1]);
+
+    await home();
+    const dw0 = await read((d) => DB.water.get(d), fx.today), du0 = await undoTop();
+    const dwF = await drive(page, [
+      { sel: '.view.active [data-unified-search]', label: 'search (top bar)' },
+      { sel: '#cx-quick .cx-actions button:first-child', label: '+250', twice: true, after: 1400 },
+    ], ctxName);
+    const dw1 = await read((d) => DB.water.get(d), fx.today), du1 = await undoTop();
+    dupes.push({ path: 'water +250 ml', wrote: (dw1 - dw0) + ' ml', undoTop: du1, wasAlreadyDoubled: twiceInLedger(du0), twiceInLedger: twiceInLedger(du1), one: '250 ml', single: dw1 - dw0 === 250, expected: 'a stepper: repeat taps ARE the gesture', steps: dwF.steps });
+
+    await home();
+    const dbw0 = await read(() => DB.bodyweight.list().length), bu0 = await undoTop();
+    const dbwF = await drive(page, [
+      { sel: '.view.active [data-unified-search]', label: 'search (top bar)' },
+      { sel: '#cx-quick [data-ql="weight"]', label: 'weight' },
+      { sel: '#weight-input', type: '81.3' },
+      { sel: '#weight-save', label: 'save', twice: true, after: 1400 },
+    ], ctxName);
+    const dbw1 = await read((d) => { const l = DB.bodyweight.list(); return { n: l.length, today: (l.find((e) => e.date === d) || {}).kg }; }, fx.today), bu1 = await undoTop();
+    dupes.push({ path: 'body weight save', wrote: (dbw1.n - dbw0) + ' new rows (today=' + dbw1.today + ')', undoTop: bu1, wasAlreadyDoubled: twiceInLedger(bu0), twiceInLedger: twiceInLedger(bu1), one: '0 new rows', single: dbw1.n === dbw0, expected: 'one entry per day by construction', steps: dbwF.steps });
+
+    // THE SET NEEDS ITS OWN ONE-TAP CONTROL, AND THIS IS THE WHOLE POINT.
+    // The day card does NOT commit one row: it also commits the rows it
+    // pre-filled from last time, so a single, correct save already produces
+    // more than one set. Reading "2 sets" after a double tap and calling it a
+    // duplicate would have been a finding invented out of a constant I had
+    // guessed. The only honest control is the SAME FLOW WITH ONE TAP from the
+    // same cleared state, so the two are compared against each other and the
+    // pre-filled rows cancel out.
+    const clearToday = () => page.evaluate((a) => { DB.sessions.listAll().filter((s) => s.date === a.today).forEach((s) => DB.sessions.remove(s.id)); }, fx);
+    const setFlow = (twice) => [
+      { sel: '#home-start-workout', label: 'start today (hero)' },
+      { sel: '.view.active [data-set="0"] [data-field="reps"]', type: '9' },
+      { sel: '.view.active [data-set="0"] [data-field="weight"]', type: '62.5' },
+      { sel: '.view.active .sd-save-btn:not(.sd-hidden)', label: 'save (card)', twice, after: 2000 },
+    ];
+    const readToday = () => read((a) => { const l = DB.sessions.listAll().filter((s) => s.date === a.today); return { n: l.length, sets: l.reduce((t, s) => t + s.sets.length, 0) }; }, fx);
+
+    await clearToday(); await home();
+    await drive(page, setFlow(false), ctxName);
+    const ctrl = await readToday();
+
+    await clearToday(); await home();
+    const su0 = await undoTop();
+    const dsF = await drive(page, setFlow(true), ctxName);
+    const ds1 = await readToday(); const su1 = await undoTop();
+    dupes.push({
+      path: 'a set (session-day save)',
+      wrote: ds1.n + ' sessions / ' + ds1.sets + ' sets',
+      undoTop: su1, wasAlreadyDoubled: twiceInLedger(su0), twiceInLedger: twiceInLedger(su1),
+      one: ctrl.n + ' sessions / ' + ctrl.sets + ' sets (measured, same flow, one tap)',
+      single: ds1.n === ctrl.n && ds1.sets === ctrl.sets,
+      expected: 'identical to its own one-tap control',
+      steps: dsF.steps,
+    });
+
+    await home();
+    const df0 = await read((d) => DB.foodLogs.listForDate(d).length, fx.today), fu0 = await undoTop();
+    const dfF = await drive(page, [
+      { sel: '.bottom-nav .nav-btn[data-view="food"]', label: 'Food tab' },
+      { sel: '#food-fab', label: 'FAB +' },
+      { sel: '.add-tile[data-method="saved"]', label: 'saved foods tile', after: 600 },
+      { sel: '#modal-root .picker-row[data-add-saved="0"]', label: 'first saved food', twice: true, after: 2000 },
+    ], ctxName);
+    const df1 = await read((d) => DB.foodLogs.listForDate(d).length, fx.today), fu1 = await undoTop();
+    dupes.push({ path: 'a saved food (picker stays open)', wrote: (df1 - df0) + ' rows', undoTop: fu1, wasAlreadyDoubled: twiceInLedger(fu0), twiceInLedger: twiceInLedger(fu1), one: '1 row', single: df1 - df0 === 1, expected: 'one row - v357 put an 800ms guard here', steps: dfF.steps });
+
     const contained = guard.assertContained();
     await ctx.close();
     fs.mkdirSync(OUT, { recursive: true });
-    fs.writeFileSync(path.join(OUT, 'flows.json'), JSON.stringify({ results, errors, contained }, null, 2));
+    fs.writeFileSync(path.join(OUT, 'flows.json'), JSON.stringify({ results, dupes, errors, contained }, null, 2));
 
     console.log('\nux-flows — taps from Home to the write (ar/dark/375, seeded):\n');
     for (const r of results) {
       console.log(`  ${r.path.padEnd(32)} ${String(r.taps).padStart(2)} taps · ${r.typing} typed · ${r.landed ? 'LANDED' : 'DID NOT LAND'}   ${r.proof}`);
       for (const s of r.steps) console.log('      ' + (s.kind === 'tap' ? `tap  ${s.label.padEnd(22)} y=${String(s.y).padStart(4)} ${s.w}×${s.h}${s.scrolledToReach ? '  (under the nav — scrolled to reach)' : ''}` : `type ${s.value}`));
     }
+    console.log('\nthe same four writes, tapped TWICE 120ms apart:\n');
+    for (const d of dupes) {
+      console.log(`  ${d.path.padEnd(34)} wrote ${String(d.wrote).padEnd(30)} (one tap = ${d.one})`);
+      console.log(`      undo ledger head: ${JSON.stringify(d.undoTop)}${d.twiceInLedger && !d.wasAlreadyDoubled ? '  <-- THE SAME CHANGE LISTED TWICE' : ''}`);
+      const t = d.steps[d.steps.length - 1];
+      console.log(`      ${d.single ? 'ONE' : 'DOUBLED'} · second tap on the control: ${t && t.secondTap} · ${d.expected}`);
+      console.log(`      a fixed-point bounce would instead have hit ${t && t.aFixedPointBounceWouldHit}`);
+    }
+
     if (errors.length) { console.log('\npage errors:'); for (const e of errors) console.log('  ✗ ' + e); }
     console.log('\nfence: ' + JSON.stringify(contained));
     if (results.some((r) => !r.landed)) process.exitCode = 1;
