@@ -82,7 +82,7 @@ a faster TTFB — not fewer bytes.
 npm run release          # bump every marker + verify, then commit all files together
 ```
 
-**Current version: v379.** APK: build 24 / v3.3.
+**Current version: v380.** APK: build 24 / v3.3.
 
 `scripts/release.js` rewrites **every** marker and then re-reads them from disk to confirm; it exits non-zero if any disagree, and prints the count per file (derived, never hard-coded — the docs used to say 16 while the real count was 15). The markers are `?v=N` in `index.html` (every script and stylesheet, the `js/vendor/supabase.js` preload, both `icons/icon.svg` links, `manifest.json`), the `__cleaned_vN` sessionStorage key, the `FALLBACK` literal in `app.js`, `version.json` → `web`, the `?v=` in `manifest.json`, `admin.html`, `privacy.html` and `get/index.html`, and the `Current version` line in this file. `scripts/check-contracts.js` (pre-commit) refuses a commit where any of them disagree.
 
@@ -2678,6 +2678,54 @@ the rows pre-filled from last time as performed sets ("confirmed without a
 throwaway edit" is the recorded intent; whether an untouched row should count
 is the owner's call); a saved food **4 taps**. The day card's Save measures
 **69×40** — under the 44 floor.
+
+## v380 — T4.1: larger text, and the two boxes that could not take it
+
+The app is written in **pixels throughout** — no `rem` root to scale, no
+`text-size-adjust` — so honouring the OS font size would mean rewriting
+thousands of declarations. What IS possible is the plan's own limited version:
+**the type scale is already ELEVEN tokens**, so raising those eleven raises
+every size in the app from one place. `body.text-lg` redefines them at +10%,
+rounded to whole pixels.
+
+Declared on **body, not `:root`**, for the reason `--accent-text` is: `var()`
+resolves on the element the property is declared on, and the class lives on
+body.
+
+> ⚠️ **THE PRE-PAINT SCRIPT WRITES `className =`, WHICH REPLACES EVERY CLASS.**
+> The size has to be written in the same breath as the theme, because
+> `applyTheme()` later uses `classList` and would not have restored it — the app
+> would paint at one size and jump to the other a few hundred milliseconds in.
+> Measured across a real relaunch (a new page on the same store): `--fs-body`
+> `15px → 17px`, the class present in the first frame, and `theme-dark` still
+> beside it.
+
+### What the measurement found, which is the point of the task
+
+The plan asks that this be measured «أنّ لا صندوقًا ينقصّ». Walked across all 20
+views in both contexts, comparing each view at normal size against itself at
++10% so a box that already overflowed is not blamed on this change. **Three
+cells gained a clipped box, from two causes:**
+
+- **`.row-between` overflowed by 23px on Supplements**, pushing the whole view
+  7px wide — a horizontal page scroll. A heading beside two labelled buttons,
+  in a flex row with no wrap. **It wraps now**, and that is worth having
+  regardless: a long translation would have done the same thing at the normal
+  size.
+- **`.stat-cell-label` ran 6–8px past its cell** on Home and Program. It
+  already declares `text-overflow: ellipsis`, so it was truncating *by design*
+  — but «SESSIO…» is the opposite of what someone asking for larger text wants.
+  It wraps at the large size instead: two readable lines beat one truncated
+  one, and the cell is already a centred flex column.
+
+Measured after: **no box clips at +10% that did not already clip at normal
+size.**
+
+> **And the shared utility was proved inert at the normal size** rather than
+> assumed. Diffing the stylesheet change alone against the identical tree:
+> **96 differences, every one of them the two declared properties**
+> (`flex-wrap`, `gap`) across 48 cells, and **zero `box` changes**. The wrap
+> costs nothing while the row fits.
 
 ## v379 — T3.1 and T3.2: the routine is derived, and the week reports itself once
 

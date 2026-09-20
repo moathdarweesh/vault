@@ -927,7 +927,7 @@ function mirrorUi(extra) {
   try {
     const p = (STATE && STATE.prefs) || {};
     let cur = {}; try { cur = JSON.parse(localStorage.getItem(VAULT_KEYS.ui) || '{}') || {}; } catch (_) {}
-    localStorage.setItem(VAULT_KEYS.ui, JSON.stringify({ ...cur, ...(extra || {}), theme: p.theme, lang: p.lang }));
+    localStorage.setItem(VAULT_KEYS.ui, JSON.stringify({ ...cur, ...(extra || {}), theme: p.theme, lang: p.lang, textLg: p.textLg === true }));
   } catch (_) {}
 }
 let lastSaveResult = { ok: true, code: null, savedAt: '' };
@@ -1230,6 +1230,13 @@ const DB = {
     // The week whose review has been shown, as that week's START date. A
     // boolean would have to be reset by something, and whatever reset it would
     // be a second place that decides when a week ends.
+    // LARGER TEXT. The app is written in pixels throughout - there is no rem
+    // root to scale and no text-size-adjust - so honouring the OS font size
+    // would mean rewriting thousands of declarations. What IS possible is this:
+    // the type scale is already ELEVEN tokens, so raising those eleven raises
+    // every size in the app from one place.
+    textLg() { return STATE.prefs.textLg === true; },
+    setTextLg(on) { STATE.prefs.textLg = !!on; save(); mirrorUi(); },
     reviewSeen() { return STATE.prefs.reviewSeen || ''; },
     setReviewSeen(iso) { STATE.prefs.reviewSeen = String(iso || ''); save(); },
     reviewOff() { return STATE.prefs.reviewOff === true; },

@@ -184,6 +184,37 @@
 
   --fs-label:   14px;
   --fs-meta:    12px;
+
+/* LARGER TEXT — the eleven type tokens, +10% and rounded to whole pixels.
+   This app is written in pixels: there is no rem root to scale and no
+   text-size-adjust, so honouring the OS font size would mean rewriting
+   thousands of declarations. The SCALE is already tokenised, so raising the
+   eleven raises every size in the app from one place.
+
+   Declared on BODY and not :root, for the reason --accent-text is: var()
+   resolves on the element the property is declared on, and the class that
+   turns this on lives on body. */
+/* The stat strip's label is an UPPERCASE MICRO-LABEL with tracking, and it
+   is chrome: the NUMBER above it is the content. At the larger size it ran
+   6-8px past its cell and was ellipsised into «SESSIO…», which is the
+   opposite of what someone asking for larger text wants. It wraps instead -
+   two readable lines beat one truncated one, and the cell is already a
+   centred flex column so a wrapped label stays centred. */
+body.text-lg .stat-cell-label { white-space: normal; overflow: visible; }
+
+body.text-lg {
+  --fs-btn-l:    17px;
+  --fs-btn-m:    15px;
+  --fs-btn-s:    14px;
+  --fs-hero:     44px;
+  --fs-display:  35px;
+  --fs-title:    26px;
+  --fs-body:     17px;
+  --fs-sub:      14px;
+  --fs-caption:  12px;
+  --fs-label:    15px;
+  --fs-meta:     13px;
+}
   --fw-display: 700;   /* WEIGHT CAP (v293): the loaded faces top out at 700 (IBM Plex Sans Arabic, JetBrains Mono); every 800/900 was synthetic bold — the browser smearing 700 — so 700 is what those elements were really wearing, drawn properly. Archivo (brand lockup only) is the one 800. */
   --fw-title:   700;
   --fw-body:    500;
@@ -5506,8 +5537,15 @@ body[dir="rtl"] .bento-card.wide .bento-added-stripe { left: 14px; }
 /* =========================================================================
    UTILITIES
    ========================================================================= */
+/* A heading beside its actions. It WRAPS: the supplements header carries a
+   title and two labelled buttons, and at the larger type size it overflowed
+   by 23px - pushing the whole view into a horizontal scroll. Wrapping costs
+   nothing while the row fits, and a long translation would have done the
+   same thing at the normal size. */
 .row-between {
   display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
   justify-content: space-between;
   align-items: center;
 }

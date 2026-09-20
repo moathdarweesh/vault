@@ -12,7 +12,7 @@
 // build. The literal below is the fallback (file://, or a stripped query) and is
 // still bumped by `npm run release` — see CLAUDE.md "CACHE WORKFLOW".
 const VAULT_BUILD = (() => {
-  const FALLBACK = 'v379';
+  const FALLBACK = 'v380';
   try {
     const src = (document.currentScript && document.currentScript.src) || '';
     const m = src.match(/[?&]v=(\d+)/);
@@ -4868,6 +4868,14 @@ function renderSettings(el) {
       </div>
 
       <div class="settings-section">
+        <div class="section-title">${t('text_size')}</div>
+        <div class="unit-toggle">
+          <button class="unit-option ${DB.prefs.textLg() ? '' : 'active'}" data-textlg="0">${t('text_size_normal')}</button>
+          <button class="unit-option ${DB.prefs.textLg() ? 'active' : ''}" data-textlg="1">${t('text_size_large')}</button>
+        </div>
+      </div>
+
+      <div class="settings-section">
         <div class="section-title">${t('haptics')}</div>
         <div class="unit-toggle">
           <button class="unit-option ${DB.prefs.haptics() ? 'active' : ''}" data-haptics="1">${t('haptics_on')}</button>
@@ -5027,6 +5035,14 @@ function renderSettings(el) {
   );
 
   // Unit toggle
+  el.querySelectorAll('[data-textlg]').forEach((b) =>
+    b.addEventListener('click', () => {
+      DB.prefs.setTextLg(b.dataset.textlg === '1');
+      document.body.classList.toggle('text-lg', DB.prefs.textLg());
+      renderSettings(el);
+    })
+  );
+
   el.querySelectorAll('[data-haptics]').forEach((b) =>
     b.addEventListener('click', () => {
       DB.prefs.setHaptics(b.dataset.haptics === '1');
