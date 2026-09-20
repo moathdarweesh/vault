@@ -82,7 +82,7 @@ a faster TTFB — not fewer bytes.
 npm run release          # bump every marker + verify, then commit all files together
 ```
 
-**Current version: v382.** APK: build 24 / v3.3.
+**Current version: v383.** APK: build 24 / v3.3.
 
 `scripts/release.js` rewrites **every** marker and then re-reads them from disk to confirm; it exits non-zero if any disagree, and prints the count per file (derived, never hard-coded — the docs used to say 16 while the real count was 15). The markers are `?v=N` in `index.html` (every script and stylesheet, the `js/vendor/supabase.js` preload, both `icons/icon.svg` links, `manifest.json`), the `__cleaned_vN` sessionStorage key, the `FALLBACK` literal in `app.js`, `version.json` → `web`, the `?v=` in `manifest.json`, `admin.html`, `privacy.html` and `get/index.html`, and the `Current version` line in this file. `scripts/check-contracts.js` (pre-commit) refuses a commit where any of them disagree.
 
@@ -2678,6 +2678,90 @@ the rows pre-filled from last time as performed sets ("confirmed without a
 throwaway edit" is the recorded intent; whether an untouched row should count
 is the owner's call); a saved food **4 taps**. The day card's Save measures
 **69×40** — under the 44 floor.
+
+## v383 — T4.2: the Arabic copy group — a numeral's noun, and the fold's English
+
+Two threads the plan names, both measured in the running app first because both
+are claims about a rendered string.
+
+### 1. «20 المجموعات» — the definite article after a numeral
+
+```
+ar  exercises  ["20 المجموعات · 65 kg", …]
+ar  compare    ["9 المجموعات", "11 المجموعات"]
+```
+
+> ⚠️ **`t('sets')` IS THE COLUMN LABEL.** «المجموعات» is right over a column and
+> wrong after a numeral, and **v372 hit this exact trap on the Home hero** — it
+> was still live in three more places, two of them reading `t('sessions_n')`,
+> whose name says *sessions* and whose value says *sets*.
+
+One key for the count, named for what it is rather than for the first screen
+that needed it: `home_done_sets` → **`n_sets`** (`'{n} sets'` / `'{n} مجموعة'`),
+used at all four sites. `sessions_n` had no caller left afterwards and **contract
+38 named it in the same run** — the v358 inverse doing exactly its job. Measured
+after: «20 مجموعة», «9 مجموعة», «11 مجموعة», and the English untouched.
+
+> **What was deliberately NOT changed, and the reason is not laziness.**
+> `${n} ${t('exercises')}` paints «٥ تمارين». Formal Arabic takes the plural
+> genitive for 3–10 and the singular accusative for 11+ («٢٠ تمرينًا»), so the
+> code's English-shaped singular/plural rule is **right in the common range and
+> wrong above ten** — while the house style since v372 is a flat singular. Both
+> are defensible, a tamyīz engine is not what a UI needs, and swapping one
+> imperfect rule for another under cover of a copy fix would be a change nobody
+> asked for. Named here instead.
+
+### 2. The four templates spoke English inside the Arabic fold
+
+```
+titles     ["Push / Pull / Legs", "Upper / Lower", "Full Body", "Bro Split"]
+day chips  ["Push","Pull","Legs","Upper A","Lower A", … ,"Chest","Back","Legs","Shoulders","Arms"]
+cycle      ["Push","Pull","Legs"]           ← and these are in the user's PLAN
+```
+
+The DESCRIPTIONS were already translated (`tmpl_desc_*`, in both dictionaries);
+the names and the day chips never were, so each card read half in one language
+and half in the other.
+
+> ⚠️ **TRANSLATING THE CATALOG WOULD HAVE BEEN THE WRONG FIX, AND WORSE THAN
+> NONE.** Adopting a template writes `{ name: w.name }` into the cycle, so the
+> day name is **user data**. A translated literal would fix only plans adopted
+> afterwards, and would freeze whichever language was current at adoption into
+> the blob for ever.
+
+So `PLAN_DAY_AR` (js/catalog.js) is a **display map**, and `planDayName()` is
+the same decision `exDisplayName()` already makes for exercises — which means it
+repairs every plan ever adopted, and a day the user renamed is simply not in the
+map. Proved in the running app rather than asserted:
+
+```
+stored in the plan : ["Push","Pull","Legs","يوم الكتف عندي"]
+displayed, ar      : ["دفع","سحب","أرجل","يوم الكتف عندي"]
+displayed, en      : ["Push","Pull","Legs","يوم الكتف عندي"]
+stored is untouched: true
+```
+
+Eight render sites go through it. **The vocabulary is the app's own** — صدر /
+ظهر / أرجل / أكتاف / ذراع are `cat_Chest`…`cat_Arms`, and the Arabic
+descriptions already said «دفع / سحب / أرجل», so the sheet now speaks one
+language to itself. `tmpl_name_*` joins the existing `tmpl_desc_*` family and
+contract 5 picked it up without being told (12 prefix families → 13).
+
+Two smaller things fell out of the same sweep: the rotation editor carried a
+**hard-coded English `'Workout'`** fallback while its two siblings both used
+`t('workout_label')`, and `openScheduleModal()` takes either a built-in or an
+admin-curated server preset with no flag on the object to tell them apart —
+hence `tmplDisplayName()`, which asks the only question that can be answered
+(is this id one of the four?) instead of guessing from the shape.
+
+### What both net lanes say
+
+The sheets lane: **108 of 110 cells identical**, and every difference in the
+other two is a word this change translated, plus the box each translated word
+now occupies. The views lane: **160/160 identical, 0 differences** — which is
+containment and **not** evidence for the change, because the matrix runs the
+EMPTY state, where there is no plan to draw a cycle chip for and no set to
+count. The evidence for the change itself is the seeded probe above.
 
 ## v382 — T4.2: the corner law, and the rung the scale had abandoned
 

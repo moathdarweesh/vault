@@ -12,7 +12,7 @@
 // build. The literal below is the fallback (file://, or a stripped query) and is
 // still bumped by `npm run release` — see CLAUDE.md "CACHE WORKFLOW".
 const VAULT_BUILD = (() => {
-  const FALLBACK = 'v382';
+  const FALLBACK = 'v383';
   try {
     const src = (document.currentScript && document.currentScript.src) || '';
     const m = src.match(/[?&]v=(\d+)/);
@@ -2173,7 +2173,7 @@ function renderHome(el) {
         </div>
         <div class="hero-title">${escapeHtml(todayPlan.name || t('start_workout'))}</div>
         <div class="hero-meta">${workoutDone
-          ? `${t('home_done_sets').replace('{n}', fmtNum(todaySets))}${heaviest > 0 ? ` · ${fmtWeight(heaviest)} ${unitLabel()}` : ''}`
+          ? `${t('n_sets').replace('{n}', fmtNum(todaySets))}${heaviest > 0 ? ` · ${fmtWeight(heaviest)} ${unitLabel()}` : ''}`
           : t('home_workout_progress').replace('{a}', fmtNum(doneInPlan)).replace('{b}', fmtNum(planIdsToday.length))}</div>
         ${workoutDone ? `
         <button class="hero-ghost-cta" id="home-log-food" type="button">
@@ -2406,6 +2406,25 @@ function exDisplayName(ex) {
   return EXERCISE_NAME_AR[raw] || raw;
 }
 
+// A built-in template's name is a dictionary key; an admin-curated preset's is
+// server content and can only be escaped. openScheduleModal() takes either.
+function tmplDisplayName(tmpl) {
+  return WORKOUT_TEMPLATES.some((x) => x.id === tmpl.id)
+    ? t('tmpl_name_' + String(tmpl.id).replace(/-/g, '_'))
+    : escapeHtml(tmpl.name || '');
+}
+
+// The four built-in templates ship their workout days in English, and adopting
+// one WRITES that name into the plan - so this translates for DISPLAY and the
+// stored value never moves. Every plan ever adopted reads correctly, and a day
+// the user renamed is not in the map and comes back untouched. Same decision as
+// exDisplayName() above, for the same reason.
+function planDayName(name) {
+  const raw = String(name == null ? '' : name);
+  if ((DB.prefs.get().lang || 'en') !== 'ar') return raw;
+  return PLAN_DAY_AR[raw] || raw;
+}
+
 // Search should find an exercise by whichever name the user can see, so match
 // the raw English name AND the displayed (possibly Arabic) one.
 function exMatchesQuery(ex, q) {
@@ -2506,7 +2525,7 @@ function bentoCardHtml(ex, i, { showPR = true, toggle = null, stats = null } = {
 
   let metaText;
   if (stats.totalSets > 0) {
-    metaText = `${stats.totalSets} ${t('sets').toLowerCase()}`;
+    metaText = t('n_sets').replace('{n}', fmtNum(stats.totalSets));
     if (stats.maxWeight > 0) metaText += ` · ${fmtWeight(stats.maxWeight)} ${unitLabel()}`;
   } else {
     metaText = t('no_sessions_yet');
@@ -2628,7 +2647,7 @@ function renderProgram(el) {
   const cycleHtml = cycle.map((slot, i) => `
       <div class="cycle-chip ${i === currentIdx ? 'current' : ''}">
         <span class="cycle-chip-num num">${fmtNum(i + 1)}</span>
-        <span class="cycle-chip-name">${escapeHtml(slot.name || t('workout_label'))}</span>
+        <span class="cycle-chip-name">${escapeHtml(planDayName(slot.name) || t('workout_label'))}</span>
       </div>`).join('');
 
   // ---- Next training days (rest days omitted — the planner's preview shows the
@@ -2654,7 +2673,7 @@ function renderProgram(el) {
     <button type="button" class="schedule-prev-row" data-day-iso="${iso}">
       <span class="schedule-prev-day">${isToday ? t('today') : escapeHtml(dayName(dow, true))}</span>
       <span class="schedule-prev-arrow"></span>
-      <span class="schedule-prev-workout">${escapeHtml(w.name || t('workout_label'))}</span>
+      <span class="schedule-prev-workout">${escapeHtml(planDayName(w.name) || t('workout_label'))}</span>
     </button>`).join('');
 
   // ---- This week vs last week ----------------------------------------------
@@ -4371,12 +4390,12 @@ function renderCompareWorkouts() {
           <div class="compare-week">
             <div class="compare-week-label">${t('last_week_label')}</div>
             <div class="compare-week-value num">${lastBest > 0 ? fmtWeight(lastBest) : '—'}<span style="font-size:12px;color:var(--text-mute);font-weight:700;margin-left:3px">${lastBest > 0 ? unitLabel() : ''}</span></div>
-            <div class="compare-week-sub">${fmtNum(lastW.reduce((s, x) => s + x.sets.length, 0))} ${t('sessions_n').toLowerCase()}</div>
+            <div class="compare-week-sub">${t('n_sets').replace('{n}', fmtNum(lastW.reduce((s, x) => s + x.sets.length, 0)))}</div>
           </div>
           <div class="compare-week">
             <div class="compare-week-label">${t('this_week_label')}</div>
             <div class="compare-week-value num">${thisBest > 0 ? fmtWeight(thisBest) : '—'}<span style="font-size:12px;color:var(--text-mute);font-weight:700;margin-left:3px">${thisBest > 0 ? unitLabel() : ''}</span></div>
-            <div class="compare-week-sub">${fmtNum(thisW.reduce((s, x) => s + x.sets.length, 0))} ${t('sessions_n').toLowerCase()}</div>
+            <div class="compare-week-sub">${t('n_sets').replace('{n}', fmtNum(thisW.reduce((s, x) => s + x.sets.length, 0)))}</div>
           </div>
         </div>
         ${
@@ -4798,7 +4817,7 @@ function openPreviousProgramPreview(preview) {
   const expectedPlan = JSON.stringify(DB.plan.get()), exercises = DB.exercises.list();
   const expectedExercises = JSON.stringify(exercises.map(e => ({id:e.id,name:e.name,category:e.category})));
   const missing = [...new Set(plan.cycle.flatMap(slot => slot.exerciseIds))].filter(id => !exercises.some(e => e.id === id));
-  const renderPlan = (value, catalog) => (value.cycle || []).map(slot => `<div class="cx-item"><strong>${escapeHtml(slot.name)}</strong>${slot.exerciseIds.map(id => {
+  const renderPlan = (value, catalog) => (value.cycle || []).map(slot => `<div class="cx-item"><strong>${escapeHtml(planDayName(slot.name))}</strong>${slot.exerciseIds.map(id => {
     const ex = catalog.find(e => e.id === id), target = slot.targets?.[id];
     return `<span>${escapeHtml(ex?.name || id)}${target ? ' · ' + escapeHtml([target.sets,target.reps,target.notes].filter(Boolean).join(' / ')) : ''}</span>`;
   }).join('')}</div>`).join('');
@@ -5257,7 +5276,7 @@ function renderPlanner(el) {
           <div class="rot-slot" data-slot="${i}">
             <div class="rot-slot-head">
               <span class="rot-slot-num num">${fmtNum(i + 1)}</span>
-              <span class="rot-slot-name">${escapeHtml(slot.name || 'Workout')}</span>
+              <span class="rot-slot-name">${escapeHtml(planDayName(slot.name) || t('workout_label'))}</span>
               <span class="rot-slot-meta">${fmtNum(exObjs.length)} ${exObjs.length === 1 ? t('exercise') : t('exercises')}</span>
               <span class="rot-slot-actions">
                 <button type="button" class="icon-btn icon-btn-tile" data-up="${i}" aria-label="${t('move_up')}" ${i === 0 ? 'disabled' : ''}>↑</button>
@@ -5285,7 +5304,7 @@ function renderPlanner(el) {
       <button type="button" class="schedule-prev-row ${w ? '' : 'rest'}" data-day-iso="${iso}">
         <span class="schedule-prev-day">${escapeHtml(dayName(d.getDay(), true))}</span>
         <span class="schedule-prev-arrow">${w ? '→' : ''}</span>
-        <span class="schedule-prev-workout">${w ? escapeHtml(w.name) : t('rest_day')}</span>
+        <span class="schedule-prev-workout">${w ? escapeHtml(planDayName(w.name)) : t('rest_day')}</span>
       </button>`;
   }).join('');
 
@@ -5614,10 +5633,10 @@ function openPlanTargetsEditor(index) {
 function openTemplatesModal() {
   const cards = WORKOUT_TEMPLATES.map((tmpl) => `
     <div class="compare-card" style="margin-bottom:8px">
-      <div class="compare-card-title">${escapeHtml(tmpl.name)}</div>
+      <div class="compare-card-title">${t('tmpl_name_' + tmpl.id.replace(/-/g, '_'))}</div>
       <div style="font-size:12px;color:var(--text-mute);margin-bottom:10px">${t('tmpl_desc_' + tmpl.id.replace(/-/g, '_'))} · <span class="num">${fmtNum(tmpl.days.length)}</span> ${t('workouts_label')}</div>
       <div style="display:flex;flex-wrap:wrap;gap:5px;margin-bottom:12px">
-        ${tmpl.days.map((d) => `<span class="today-plan-chip">${escapeHtml(d.name)}</span>`).join('')}
+        ${tmpl.days.map((d) => `<span class="today-plan-chip">${escapeHtml(planDayName(d.name))}</span>`).join('')}
       </div>
       <button class="btn btn-primary btn-block" data-apply="${tmpl.id}">${t('apply')}</button>
     </div>
@@ -5630,7 +5649,7 @@ function openTemplatesModal() {
       <div class="compare-card-title">${escapeHtml(tmpl.name)} <span class="today-plan-chip" style="margin-inline-start:6px">${t('preset_badge')}</span></div>
       <div style="font-size:12px;color:var(--text-mute);margin-bottom:10px">${tmpl.description ? escapeHtml(tmpl.description) + ' · ' : ''}<span class="num">${fmtNum(tmpl.days.length)}</span> ${t('workouts_label')}</div>
       <div style="display:flex;flex-wrap:wrap;gap:5px;margin-bottom:12px">
-        ${tmpl.days.map((d) => `<span class="today-plan-chip">${escapeHtml(d.name)}</span>`).join('')}
+        ${tmpl.days.map((d) => `<span class="today-plan-chip">${escapeHtml(planDayName(d.name))}</span>`).join('')}
       </div>
       <button class="btn btn-primary btn-block" data-apply-server="${tmpl.id}">${t('apply')}</button>
     </div>
@@ -5698,7 +5717,7 @@ function openScheduleModal(tmpl) {
         <div class="schedule-prev-row ${w ? '' : 'rest'}">
           <span class="schedule-prev-day">${escapeHtml(dayName(d.getDay(), true))}</span>
           <span class="schedule-prev-arrow">${w ? '→' : ''}</span>
-          <span class="schedule-prev-workout">${w ? escapeHtml(w.name) : t('rest_day')}</span>
+          <span class="schedule-prev-workout">${w ? escapeHtml(planDayName(w.name)) : t('rest_day')}</span>
         </div>`);
     }
     box.innerHTML = rows.join('');
@@ -5712,7 +5731,7 @@ function openScheduleModal(tmpl) {
     <div class="modal-header">
       <div>
         <div class="modal-title">${t('schedule_title')}</div>
-        <div class="modal-subtitle">${escapeHtml(tmpl.name)} · <span id="schedule-count" class="num">${fmtNum(training.size)}</span> ${t('schedule_days_label')}</div>
+        <div class="modal-subtitle">${tmplDisplayName(tmpl)} · <span id="schedule-count" class="num">${fmtNum(training.size)}</span> ${t('schedule_days_label')}</div>
       </div>
       <button class="icon-btn icon-btn-tile" data-close>${icon('close', 20)}</button>
     </div>

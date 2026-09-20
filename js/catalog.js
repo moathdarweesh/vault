@@ -109,6 +109,25 @@ ICONS.palette = ICONS.swatches;
 // Workout templates (predefined)
 // Each day's `exercises` are matched to user's library by name.
 // ==========================================================================
+// The workout-day names the four templates ship with, for DISPLAY only.
+//
+// ⚠️ THE NAME IS STORED IN THE PLAN, NOT READ BACK FROM HERE. Adopting a
+// template writes `{ name: w.name }` into the cycle, so translating the
+// catalog literal would fix only plans adopted afterwards and would freeze
+// whichever language was current at adoption into the user's own data. A
+// display map is the same decision exDisplayName() already makes for
+// exercises: it repairs every plan ever adopted, and a day the user renamed
+// is simply not in the map and passes through untouched.
+//
+// The muscle words are the app's own (cat_Chest / cat_Back / cat_Legs /
+// cat_Shoulders / cat_Arms), so the chips and the exercise filter agree.
+const PLAN_DAY_AR = {
+  'Push': 'دفع', 'Pull': 'سحب', 'Legs': 'أرجل',
+  'Upper A': 'علوي أ', 'Lower A': 'سفلي أ', 'Upper B': 'علوي ب', 'Lower B': 'سفلي ب',
+  'Day A': 'يوم أ', 'Day B': 'يوم ب', 'Day C': 'يوم ج',
+  'Chest': 'صدر', 'Back': 'ظهر', 'Shoulders': 'أكتاف', 'Arms': 'ذراع',
+};
+
 const WORKOUT_TEMPLATES = [
   {
     id: 'ppl',
