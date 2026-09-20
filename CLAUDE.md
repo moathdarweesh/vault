@@ -79,10 +79,20 @@ a faster TTFB — not fewer bytes.
 ## CACHE WORKFLOW — now automated. **Do not bump by hand.**
 
 ```bash
-npm run release          # bump every marker + verify, then commit all files together
+npm run verify           # 43 contracts + lint + 13 suites — THE GATE
+npm run release          # bump every marker and re-read them; runs NO tests
 ```
 
 **Current version: v385.** APK: build 24 / v3.3.
+
+> ⚠️ **`npm run release` RUNS NO TESTS, AND THIS LINE USED TO READ AS IF IT DID.**
+> It said «bump every marker + verify», where *verify* meant the MARKERS — and
+> v383, v384 and v385 were each pushed on that reading, with only the pre-commit
+> hook's contracts behind them. The suites were run afterwards and all thirteen
+> passed, so nothing shipped broken; but for the length of three releases the
+> claim «13 suites» in a commit message was a thing I had not checked. The gate
+> is `npm run verify`, it is a separate command, and the SHIPPING section's
+> sequence has always spelled both.
 
 `scripts/release.js` rewrites **every** marker and then re-reads them from disk to confirm; it exits non-zero if any disagree, and prints the count per file (derived, never hard-coded — the docs used to say 16 while the real count was 15). The markers are `?v=N` in `index.html` (every script and stylesheet, the `js/vendor/supabase.js` preload, both `icons/icon.svg` links, `manifest.json`), the `__cleaned_vN` sessionStorage key, the `FALLBACK` literal in `app.js`, `version.json` → `web`, the `?v=` in `manifest.json`, `admin.html`, `privacy.html` and `get/index.html`, and the `Current version` line in this file. `scripts/check-contracts.js` (pre-commit) refuses a commit where any of them disagree.
 
