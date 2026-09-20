@@ -1069,5 +1069,67 @@ const contract = (name, problems) => {
   contract(`DB.widget reaches the native plugin by the name it registers, and calls only @PluginMethods it declares (${calls.size} calls, ${methods.size} declared)`, problems);
 }
 
+// ── 41 · every corner is on the scale ───────────────────────────────────────
+// The identity layer's second device is the corner law, and a radius written as
+// a literal drifts away from it SILENTLY: `14px` WAS --radius until the identity
+// layer redefined it to 16, and thirteen boxes went on wearing the value the
+// scale had abandoned. Nothing could see that — contract 35 proves every
+// var(--x) EXISTS, never that a literal should have been one.
+//
+// Two decisions make this checkable rather than noisy:
+//
+//   · THE SCALE IS THE EFFECTIVE ONE, not every declaration in the file. This
+//     stylesheet's identity layer is physically last and wins by source order at
+//     equal specificity, so --radius is 16px and the 14px above it is dead. A
+//     contract that read both would have gone on blessing exactly the abandoned
+//     value it exists to catch.
+//   · IT GOVERNS ONLY RADII AT OR ABOVE THE SCALE'S OWN FLOOR. Under that there
+//     is no token to reach for — a 2px scrollbar thumb, a 1px dash, a 3px dot
+//     are shapes, not corners — so the scale has nothing to say about them.
+//     The boundary is derived from the scale, not a range waved through.
+//
+// SCOPE: styles.css, which is the app. admin.html (48 radii) is a standalone
+// owner console with its own look and is deliberately outside the identity
+// layer; privacy.html and get/index.html carry three and four of their own.
+{
+  const css = read('styles.css');
+  const rung = new Map();          // name -> value, LAST declaration wins
+  for (const m of css.matchAll(/^[ \t]*(--(?:radius|card-radius|chip-radius)[a-z-]*):[ \t]*([^;]+);/gm)) rung.set(m[1], m[2].trim());
+  const KEYWORDS = ['0', '0px', '50%', '100%', 'inherit', 'initial', 'unset'];
+  const scale = new Set(KEYWORDS);
+  for (const v of rung.values()) if (/^\d+(?:\.\d+)?px$/.test(v)) scale.add(v);
+  const floor = Math.min(...[...scale].filter((v) => /px$/.test(v)).map(parseFloat).filter((n) => n > 0));
+
+  // Two, and each names the selector it belongs to. A radius earns a place
+  // here only where the scale has nothing to offer - not where nobody snapped
+  // it yet, which is how a contract launders drift instead of catching it.
+  const ALLOWED = {
+    '5px': '.mode-swatch-card / .mode-swatch-bar - a card drawn at about a quarter scale, where the 16px rung would be four times too round',
+    '13px': '.nav-btn.active::before - the icon spec fixes the active tab pill at 13 around a 32px box, and the identity layer says so in its own comment',
+  };
+
+  const problems = [];
+  css.split(/\r?\n/).forEach((line, i) => {
+    if (/^\s*(\/\*|\*|\/\/)/.test(line)) return;
+    for (const m of line.matchAll(/border(?:-[a-z]+)?-radius:\s*([^;}]+)/gi)) {
+      // Strip balanced function calls whole — var(--x, 999px) IS a token, and
+      // splitting it on whitespace would report its own fallback as a literal.
+      // A nested call (var(--a, var(--b)), calc(var(--x) * .5)) needs the
+      // innermost stripped first, or its outer half survives as debris.
+      let flat = m[1];
+      for (let n = 0; n < 8 && /[a-z-]+\([^()]*\)/i.test(flat); n++) flat = flat.replace(/[a-z-]+\([^()]*\)/gi, ' ');
+      flat = flat.trim();
+      for (const part of flat.split(/[\s/]+/)) {
+        const v = part.trim();
+        if (!v || scale.has(v) || ALLOWED[v]) continue;
+        const px = /^(\d+(?:\.\d+)?)px$/.exec(v);
+        if (px && parseFloat(px[1]) < floor) continue;   // below the scale's floor
+        problems.push(`styles.css:${i + 1} border-radius: ${v} is off the corner scale — use a var(--radius*) token, or name it in ALLOWED with its reason`);
+      }
+    }
+  });
+  contract(`every corner radius in styles.css at or above ${floor}px is a token or a named exception (${scale.size - KEYWORDS.length} rungs, ${Object.keys(ALLOWED).length} exceptions)`, problems);
+}
+
 console.log(failures.length ? `\ncheck-contracts: ${failures.length} broken contract(s)` : '\ncheck-contracts: all contracts hold');
 process.exit(failures.length ? 1 : 0);

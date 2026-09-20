@@ -441,7 +441,7 @@ async function captureModals(browser, origin, opts) {
       // a clean slate: no sheet from the previous entry, the host view up
       await page.evaluate((host) => { try { closeModal(); } catch (_) {} const r = document.getElementById('modal-root'); if (r) r.innerHTML = ''; navigate(host, {}, { fromPop: true }); }, m.host || 'home');
       await settle(page, '.view.active');
-      const t = await timedRender(page, cellId, async ({ name, args, fixture, confirm }) => {
+      const t = await timedRender(page, cellId, async ({ name, args, fixture, confirm, pre }) => {
         const noop = () => {};
         const resolve = (a) => {
           if (a && typeof a === 'object' && 'v' in a) return a.v;
@@ -453,11 +453,15 @@ async function captureModals(browser, origin, opts) {
         };
         let argv = args.map(resolve);
         if (confirm) argv = [{ ...argv[0], onConfirm: noop }];
+        // A sheet that only opens under a CONDITION needs that condition made
+        // true first, or the net lists it, captures nothing, and reports a
+        // failure every run that everyone learns to read past.
+        if (pre) new Function('fixture', pre)(fixture);
         const t0 = performance.now();
         const r = window[name].apply(null, argv);
         if (r && typeof r.then === 'function') await r;
         return performance.now() - t0;
-      }, { name: m.name, args: m.args, fixture: fx, confirm: !!m.confirm });
+      }, { name: m.name, args: m.args, fixture: fx, confirm: !!m.confirm, pre: m.pre || null });
       timings.push({ cell: cellId, ms: Math.round(t * 10) / 10 });
       if (t > SLOW_MS) problems.push(cellId + ': opening took ' + Math.round(t) + 'ms (ceiling ' + SLOW_MS + 'ms)');
       const rootSel = m.root || '#modal-root';

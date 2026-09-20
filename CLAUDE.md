@@ -82,7 +82,7 @@ a faster TTFB — not fewer bytes.
 npm run release          # bump every marker + verify, then commit all files together
 ```
 
-**Current version: v381.** APK: build 24 / v3.3.
+**Current version: v382.** APK: build 24 / v3.3.
 
 `scripts/release.js` rewrites **every** marker and then re-reads them from disk to confirm; it exits non-zero if any disagree, and prints the count per file (derived, never hard-coded — the docs used to say 16 while the real count was 15). The markers are `?v=N` in `index.html` (every script and stylesheet, the `js/vendor/supabase.js` preload, both `icons/icon.svg` links, `manifest.json`), the `__cleaned_vN` sessionStorage key, the `FALLBACK` literal in `app.js`, `version.json` → `web`, the `?v=` in `manifest.json`, `admin.html`, `privacy.html` and `get/index.html`, and the `Current version` line in this file. `scripts/check-contracts.js` (pre-commit) refuses a commit where any of them disagree.
 
@@ -2678,6 +2678,99 @@ the rows pre-filled from last time as performed sets ("confirmed without a
 throwaway edit" is the recorded intent; whether an untouched row should count
 is the owner's call); a saved food **4 taps**. The day card's Save measures
 **69×40** — under the 44 floor.
+
+## v382 — T4.2: the corner law, and the rung the scale had abandoned
+
+Measured across all 20 views before anything was touched — every box at least
+24px square, so a 2px chip's corner is not counted as a design decision:
+
+```
+across all views: 9 distinct radii — 5px, 8px, 9px, 10px, 12px, 14px, 16px, 24px, 999px
+```
+
+Three of the nine are on no rung. **And the largest group was wearing a value the
+scale itself had thrown away:** `--radius` is declared `14px` at line 148 and
+redefined to `16px` by the identity layer at 8677, which is physically last and
+wins by source order — so `14px` has been dead since v227, and thirteen boxes
+went on spelling it out by hand.
+
+| | |
+|---|---|
+| 13 × `14px` | → `var(--radius)` — the rung they were already trying to be |
+| 4 × `9px` | → `var(--radius-sm)` |
+| `.modal` `20px 20px 0 0` | → the token: the identity layer already renders it 24, so the declaration was **describing a paint that never happened** |
+| `.nav-btn.active::before` `13px` at line 810 | **deleted** — the identity layer sets the same selector and says in its own comment that the earlier one changes nothing |
+| `.add-sheet` 26 · `.food-fab` 20 · `.onb-logo` 20 | → `var(--radius-lg)` |
+| `.add-tile-icon` 15 | → `var(--radius)`, the same rung as the `.add-tile` beside it |
+| `.ai-edit-f > input` 11 · `.health-card-icon` 11 | → `var(--radius-btn-m)` |
+
+**Measured after: 9 distinct radii → 7, and every survivor is a rung** (`5px` is
+the named exception below; `999px` is `--radius-pill`).
+
+### Contract 41, and the two decisions that make it checkable
+
+> ⚠️ **THE SCALE HAS TO BE THE EFFECTIVE ONE, OR THE CONTRACT BLESSES THE EXACT
+> VALUE IT EXISTS TO CATCH.** My first draft collected every `--radius*`
+> declaration in the file — which includes the dead `14px` and the dead `22px`.
+> It would have passed a stylesheet full of the drift it was written for. It
+> takes the LAST declaration of each name now, which is what the cascade does
+> here, and the rung count fell from 8 to 6 the moment it did.
+
+> **And it governs only radii at or above the scale's own floor (8px).** Under
+> that there is no token to reach for — a 2px scrollbar thumb, a 1px dash, a 3px
+> dot are shapes, not corners. That boundary is derived from the scale rather
+> than a range waved through, which is the difference between a contract and a
+> filter.
+
+Two named exceptions, each naming its selector: **`5px`** for the two
+theme-swatch miniatures (a card at about a quarter scale, where 16 would be four
+times too round) and **`13px`** for the nav's active pill, which the identity
+layer already justifies in writing — the icon spec fixes it at 13 around a 32px
+box. Nothing else. A radius earns a place there only where the scale has nothing
+to offer, never where nobody has snapped it yet: that is how a contract launders
+drift instead of catching it.
+
+**Proved able to fail, 5 of 5**, `styles.css` restored byte-for-byte: a planted
+`14px` — *the historical defect* — fires, an ordinary off-scale `19px` fires,
+and a real token, a `3px` below the floor and a nested `var(--card-radius,
+var(--radius))` all stay silent. The nested case needed the strip to run
+innermost-first; one pass left the outer half of the call as debris and reported
+a token's own fallback as a literal.
+
+### What both net lanes say
+
+Every difference in 318 (views) and 275 (sheets) is a radius this change made —
+`14px→16px`, `9px→8px`, `15px→16px`, `26px→24px` — plus the known
+image-load race. **Nothing else moved**, which is the containment the net exists
+for; the visual change itself is the point and is listed above.
+
+### ⚠️ AND THE NET HAD BEEN REPORTING A FAILURE NOBODY ACTED ON
+
+Capturing the sheets lane printed, on both sides of the diff and so on every run
+since v379:
+
+```
+✗ modal/ar/dark/375/weekly-review: rendered EMPTY (0 children) — the renderer threw or did nothing
+```
+
+`openWeeklyReview()` opens **only when a review is due** (`if (!due) return`), and
+the fixture seeds no session in last week. So the sheet was listed in the net,
+captured nothing, and announced it every time — the exact shape this project
+keeps paying for, a red check that everyone learns to read past.
+
+`scripts/fp/modals.js` entries take a **`pre`** now: JS evaluated in the page just
+before the opener, with the fixture in scope. Weekly review's makes its condition
+true — a session dated inside last week, and the seen-stamp cleared. Measured
+after: **16 elements and the review's own Arabic in the cell**, where there had
+been zero.
+
+### Still open in T4.2, named rather than implied
+
+The corner group is closed. The plan's other threads are not: the heading ladder
+(**4 of 20 views render no `<h1>`–`<h6>` at all**, and Settings is the only screen
+with a second level), chips wearing a button's clothes, the «20 المجموعات»
+grammar, and the English template names inside the Arabic fold. Each is its own
+measurement and its own release.
 
 ## v381 — T4.3: the launch, timed on a phone instead of inferred
 

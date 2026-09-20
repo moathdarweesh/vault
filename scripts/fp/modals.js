@@ -16,6 +16,9 @@
 //   '$lightbox'              — an inline SVG data: URL
 //   { v: … }                 — a literal
 // `host` is the view the sheet is opened from (some read the current view).
+// `pre` is JS evaluated in the page just before the opener, with `fixture` in
+// scope — for a sheet that answers only under a condition, which must be made
+// true or the net captures an absence and calls it a failure.
 'use strict';
 
 const ENTRIES = [
@@ -27,7 +30,13 @@ const ENTRIES = [
   { id: 'time-entry-food', name: 'openTimeEntryModal', args: [{ v: { kind: 'food' } }, '$noop'], host: 'notifications' },
   { id: 'lightbox', name: 'openImageLightbox', args: ['$lightbox', { v: 'photo' }], host: 'exercises', root: '.img-lightbox', closeBy: 'remove' },
   { id: 'weight', name: 'openWeightSheet', args: [], host: 'home' },
-  { id: 'weekly-review', name: 'openWeeklyReview', args: [], host: 'home' },
+  // openWeeklyReview() answers ONLY when a review is due, so listed plain it
+  // captured nothing and the run reported a failure on every pass. `pre` makes
+  // the condition true: a session inside LAST week, and the seen-stamp cleared.
+  { id: 'weekly-review', name: 'openWeeklyReview', args: [], host: 'home',
+    pre: "var r = weekRanges(); var d = isoOf(r.lastStart); " +
+         "DB.sessions.add({ exerciseId: fixture.exerciseId, date: d, sets: [{ reps: 8, weight: 60 }] }); " +
+         "DB.prefs.setReviewSeen(null);" },
   { id: 'repeat-yesterday', name: 'openRepeatYesterday', args: ['$today', '$noop'], host: 'food' },
   { id: 'reorder', name: 'openReorderSheet', args: [{ v: 0 }, '$noop'], host: 'planner', root: '#reorder-sheet-overlay', closeBy: 'remove' },
   { id: 'add-exercise-chooser', name: 'openAddExerciseChooser', args: [{ v: 0 }, '$noop'], host: 'planner' },
