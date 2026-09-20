@@ -82,7 +82,7 @@ a faster TTFB — not fewer bytes.
 npm run release          # bump every marker + verify, then commit all files together
 ```
 
-**Current version: v367.** APK: build 24 / v3.3.
+**Current version: v368.** APK: build 24 / v3.3.
 
 `scripts/release.js` rewrites **every** marker and then re-reads them from disk to confirm; it exits non-zero if any disagree, and prints the count per file (derived, never hard-coded — the docs used to say 16 while the real count was 15). The markers are `?v=N` in `index.html` (every script and stylesheet, the `js/vendor/supabase.js` preload, both `icons/icon.svg` links, `manifest.json`), the `__cleaned_vN` sessionStorage key, the `FALLBACK` literal in `app.js`, `version.json` → `web`, the `?v=` in `manifest.json`, `admin.html`, `privacy.html` and `get/index.html`, and the `Current version` line in this file. `scripts/check-contracts.js` (pre-commit) refuses a commit where any of them disagree.
 
@@ -2678,6 +2678,111 @@ the rows pre-filled from last time as performed sets ("confirmed without a
 throwaway edit" is the recorded intent; whether an untouched row should count
 is the owner's call); a saved food **4 taps**. The day card's Save measures
 **69×40** — under the 44 floor.
+
+## v368 — T1.5: the three actions the shell's own furniture was hiding
+
+The first task out of the owner's research plan, and the one it ranked first
+because it was already measured. Every number below is from `.uxaudit/pass2` —
+the 20 views WITH data, ar/dark/375 and en/light/412 — taken before anything
+was touched.
+
+| | before | after |
+|---|---|---|
+| Home hero | 315px | **186px** |
+| calories card visible above the fold | **45** of 214px | **174** of 214px |
+| the weight card | y=1028 | y=**899** |
+| water «+250» hit box (ar) | **35**×36 | **53**×36 |
+| exercise-detail hero | 281 / 309 | **211 / 232** |
+| «سجّل جلسة» | y=718 / 758 — **below the 748 fold** | y=**648 / 681**, above it in both |
+| its hit box (ar) | 53×**30** | 53×**44** |
+
+### 1. Home's hero carried a SECOND copy of the muscle heatmap
+
+`js/app.js:1727` already recorded the decision: *"The muscle heatmap moved to
+the Program tab (renderProgram)."* The hero kept its own copy anyway — 117px of
+chips plus a 12px margin, **129px inside a 315px card**. That is why the
+calories numeral's top edge landed on **y=748 exactly**, the fold line, and why
+v318's own measured ladder (151–252px of that card visible) had stopped holding.
+
+Deleting it took `groupMusclesFromExercises`'s only caller, twelve now-dead CSS
+rules (1,578 bytes) and — the part a grep would miss — the last reader of
+`anterior` and `posterior`. **Contract 38 (every dictionary key must be
+reachable) would have failed the commit**, so both keys left both dictionaries
+in the same change. That is the contract doing exactly the job v358 built it for.
+
+### 2. ⚠️ THE FLOATING ADD BUTTON OWNS A COLUMN, NOT A MOMENT
+
+The Food screen's FAB is absolutely positioned in `.app` at
+`inset-inline-start: 16px` and is 68 wide, so it covers x 16..84 of the start
+edge **at every scroll position**. The water row sits under it: in Arabic the
+«+250» cup measured a **35px** effective hit box out of a 126px-wide control,
+while «+500» beside it measured a full 53. In English 53px of it were covered.
+
+So the fix is a reserved column (`padding-inline-start: 76px` = the FAB's 16px
+inset + its 68px width − the card's own 16px padding + 8px of clearance), not a
+shorter hero. **A height fix would only have held at `scrollTop: 0`.**
+
+> **And the cup is still flagged `tap<44`, honestly**: it is **36px TALL** with
+> no halo, which is a different defect — T2.3 in the plan, one line of `inset`
+> away, and not this task's to claim.
+
+### 3. The detail hero photo went 4:3 → 16:9, and NOT into the top bar
+
+At 4:3 a decorative stock photo took **281px of a 375px phone — 37.6% of the
+fold** — and pushed the screen's only filled action to y=718 (30 of its 44px
+visible) in Arabic and y=758, entirely under the nav, in English. Seven of the
+eight seeded screens that have a filled action keep it above the fold; this was
+the exception.
+
+> ⚠️ **Moving the button into `.detail-top` was the tidy-looking fix and is
+> wrong.** That bar tucks itself away on scroll (`app.js` adds `.tuck` and sets
+> `bar.inert = true`), so an action parked there would leave the accessibility
+> tree the moment the user scrolled — hiding it *more* thoroughly than the nav
+> did. The photo is `object-fit: cover`, so 16:9 crops rather than distorts.
+
+### What the fingerprint net can and cannot say here
+
+Both lanes report **160/160 views and 106/106 sheets identical**, and that is
+**weak evidence for this change** — stated plainly rather than quoted as a pass.
+The matrix runs the **EMPTY state**: Home takes a different hero branch, Food
+shows the setup card, and exercise-detail renders its not-found stub. The net
+never renders what moved.
+
+The real containment check is the audit's own 40 **seeded** cells, diffed
+`pass2` against `t15`:
+
+```
+CHANGED  ar_dark_375/home              scrollH 1516 -> 1387 · primary y 481 -> 352
+CHANGED  ar_dark_375/exercise-detail   flags {tap<44:1, belowFold:14} -> {belowFold:14}
+                                       scrollH 2811 -> 2741 · primary y 718 (below) -> 648 (above)
+CHANGED  en_light_412/home             scrollH 1516 -> 1387 · primary y 481 -> 352
+CHANGED  en_light_412/exercise-detail  flags {belowFold:15} -> {belowFold:14}
+                                       scrollH 2582 -> 2504 · primary y 758 (below) -> 681 (above)
+
+4 cells changed · 36 identical, of 40 seeded cells
+```
+
+> **Food is absent from that list and it was NOT untouched.** The comparison key
+> is `counts.flags`, and the cup's count stayed `tap<44: 6` because its height
+> still fails — so a real 35→53 improvement produced no diff at this resolution.
+> **A coarse key that cannot see a fix it should see is a coarse key that cannot
+> see a regression either**; the per-element hit box is what proved this one, and
+> the diff key is the thing to sharpen before the next task leans on it.
+
+### ⚠️ DETECT THE DOMINANT LINE ENDING, NEVER ITS PRESENCE
+
+The patcher wrote LF search strings against CRLF files and matched nothing, so
+it gained an ending-detector — `s.includes('\r\n')`. Then one of my own
+replacements joined with `'\r\n'` into a file the tool was treating as LF,
+**and the detector then read those 22 self-inflicted CRLF as proof the whole
+file was CRLF**, silently breaking the next edit. A file's ending is the one
+most of its lines use, not any ending that occurs in it. (`core.autocrlf` is
+`true` here, so the working tree is CRLF throughout and git stores LF — which
+is also why the committed diff is 13 added / 74 removed and not a whole file.)
+
+The allow-list guard caught a second one: my own class list omitted
+`planner-side-label`, and the CSS removal refused rather than cutting a rule it
+had not been told about.
 
 ## v367 — APK build 24: four widgets, and the mark the app actually uses
 

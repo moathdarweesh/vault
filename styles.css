@@ -1674,7 +1674,13 @@ body[dir="rtl"] .bento-card-content { text-align: right; }
 
 .detail-hero {
   width: 100%;
-  aspect-ratio: 4 / 3;
+  /* 16:9, not 4:3. At 4:3 this decorative photo took 281px of a 375px phone —
+     37.6% of the fold — and pushed the screen's only filled action to y=718
+     (30 of its 44px visible) in Arabic, and to y=758, fully under the nav, in
+     English. The photo is object-fit: cover, so this crops rather than
+     distorts. Seven of the eight seeded screens with a filled action already
+     keep it above the fold; this was the exception. */
+  aspect-ratio: 16 / 9;
   background: var(--hero-surface);
   position: relative;
   overflow: hidden;
@@ -2994,78 +3000,6 @@ body.rest-active .toast { bottom: calc(var(--safe-b) + var(--rest-h, 72px) + 28p
 }
 .rot-slot-actions { flex-shrink: 0; display: flex; gap: 4px; }
 .rot-slot-ex { display: flex; flex-wrap: wrap; gap: 4px; }
-
-/* Muscle groups inside a planner day card */
-.planner-day-muscles {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  padding-top: 10px;
-  border-top: 1px solid var(--border);
-  width: 100%;
-}
-
-.planner-side {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-
-.planner-side-label {
-  font-size: 11px;
-  font-weight: 700;
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
-  color: var(--text-dim);
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-}
-
-.planner-side-label::before {
-  content: '';
-  display: inline-block;
-  width: 16px;   /* handoff §4: the group rule is 16x2px */
-  height: 2px;
-  border-radius: 2px;
-  background: var(--text-faint);
-}
-
-.planner-side.anterior .planner-side-label { color: var(--accent-text); }
-.planner-side.anterior .planner-side-label::before { background: var(--accent); }
-.planner-side.posterior .planner-side-label { color: var(--green); }
-.planner-side.posterior .planner-side-label::before { background: var(--green); }
-
-.planner-muscle-chips {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 4px;
-}
-
-.muscle-chip {
-  display: inline-flex;
-  align-items: center;
-  padding: 4px 10px;
-  border-radius: 999px;
-  font-size: 11px;
-  font-weight: 700;
-  border: 1px solid var(--border-hi);
-  background: var(--surface-2);
-  color: var(--text);
-  letter-spacing: 0.01em;
-}
-
-.muscle-chip.anterior {
-  background: var(--accent-soft);
-  border-color: var(--accent-line);
-  color: var(--accent-text);
-}
-
-.muscle-chip.posterior {
-  background: var(--green-soft);
-  border-color: var(--green-soft);
-  color: var(--green);
-}
 
 .planner-empty-hint {
   font-size: 12px;
@@ -4895,7 +4829,12 @@ button.bundle-main {
 .water-nums { font-size: 13px; color: var(--text-dim); font-weight: 600; white-space: nowrap; }
 .water-bar { height: 8px; border-radius: 999px; background: var(--surface-3); overflow: hidden; }
 .water-fill { display: block; height: 100%; border-radius: 999px; background: linear-gradient(90deg, var(--water-2), var(--water)); transition: width 0.5s cubic-bezier(0.22, 1, 0.36, 1); }
-.water-actions { display: flex; gap: 8px; margin-top: 12px; }
+/* padding-inline-start reserves the floating add button's column: it is
+   absolutely positioned in .app at inset-inline-start:16px and is 68 wide,
+   so it covers the start edge at EVERY scroll position, and the measured
+   cost was the "+250" cup losing its edge to a 35px hit box. A shorter hero
+   would only have moved this row out of the way at scrollTop 0. */
+.water-actions { display: flex; gap: 8px; margin-top: 12px; padding-inline-start: 76px; }
 .water-cup {
   flex: 1; padding: 0 8px; border-radius: var(--radius-btn-s);
   background: var(--surface-3); border: 1px solid var(--border); color: var(--text);

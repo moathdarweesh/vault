@@ -30,7 +30,6 @@ const I18N = {
     cat_All: 'All',
 
     // Muscle groups (for the planner)
-    anterior: 'Anterior', posterior: 'Posterior',
     muscle_chest: 'Chest', muscle_upper_chest: 'Upper Chest',
     muscle_front_delts: 'Front Delts', muscle_side_delts: 'Side Delts', muscle_rear_delts: 'Rear Delts',
     muscle_biceps: 'Biceps', muscle_triceps: 'Triceps', muscle_forearms: 'Forearms',
@@ -1012,7 +1011,6 @@ const I18N = {
     cat_All: 'الكل',
 
     // Muscle groups (for the planner)
-    anterior: 'أمامي', posterior: 'خلفي',
     muscle_chest: 'الصدر', muscle_upper_chest: 'الصدر العلوي',
     muscle_front_delts: 'الكتف الأمامي', muscle_side_delts: 'الكتف الجانبي', muscle_rear_delts: 'الكتف الخلفي',
     muscle_biceps: 'البايسبس', muscle_triceps: 'الترايسبس', muscle_forearms: 'الساعد',

@@ -12,7 +12,7 @@
 // build. The literal below is the fallback (file://, or a stripped query) and is
 // still bumped by `npm run release` — see CLAUDE.md "CACHE WORKFLOW".
 const VAULT_BUILD = (() => {
-  const FALLBACK = 'v367';
+  const FALLBACK = 'v368';
   try {
     const src = (document.currentScript && document.currentScript.src) || '';
     const m = src.match(/[?&]v=(\d+)/);
@@ -1973,16 +1973,6 @@ function renderHome(el) {
     `;
   } else if (hasPlanToday) {
     const exObjs = todayPlan.exerciseIds.map((id) => exerciseById[id]).filter(Boolean);
-    const muscles = groupMusclesFromExercises(exObjs);
-    const sideRow = (label, keys, sideClass) => keys.length === 0 ? '' : `
-      <div class="planner-side ${sideClass}">
-        <span class="planner-side-label">${escapeHtml(label)}</span>
-        <div class="planner-muscle-chips">
-          ${keys.map((k) => `<span class="muscle-chip ${sideClass}">${escapeHtml(t('muscle_' + k))}</span>`).join('')}
-        </div>
-      </div>
-    `;
-
     heroHtml = `
       <div class="hero-card">
         <div class="hero-eyebrow-row">
@@ -1991,10 +1981,6 @@ function renderHome(el) {
         </div>
         <div class="hero-title">${escapeHtml(todayPlan.name || t('start_workout'))}</div>
         <div class="hero-meta">${fmtNum(exObjs.length)} ${exObjs.length === 1 ? t('exercise') : t('exercises')} · ${fmtNum(weekSetsCount)} ${t('sessions_this_week')}</div>
-        <div class="planner-day-muscles">
-          ${sideRow(t('anterior'), muscles.anterior, 'anterior')}
-          ${sideRow(t('posterior'), muscles.posterior, 'posterior')}
-        </div>
         ${fullCtaHtml}
       </div>
     `;
