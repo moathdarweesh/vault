@@ -149,7 +149,7 @@ function openWeightSheet() {
         <span class="weight-input-unit">${unitLabel()}</span>
         <button class="btn btn-primary" id="weight-save">${t('save')}</button>
       </div>
-      ${entries.length ? `<div class="weight-history">${history}</div>` : `<div class="weight-empty-hint">${t('weight_empty_hint')}</div>`}
+      ${entries.length ? `<div class="weight-history">${history}</div>` : ''}
     `;
   };
   const overlay = openModal(`
@@ -298,7 +298,6 @@ function renderCardio(el) {
     <div class="page-header">
       <div class="page-eyebrow">${t('this_week')}</div>
       <h1 class="page-title">${t('cardio')}</h1>
-      <p class="page-subtitle">${t('cardio_subtitle')}</p>
     </div>
 
     <div class="stat-row">
@@ -322,7 +321,7 @@ function renderCardio(el) {
     </div>
 
     ${cardioLedger.empty
-      ? emptyState({ title: t('ledger_empty_cardio'), text: t('ledger_empty_cardio_sub') })
+      ? emptyState({ title: t('ledger_empty_cardio') })
       : `<div class="ledger">${cardioLedger.html}</div>`}
     ${cardioLedger.more ? `<button type="button" class="btn btn-ghost btn-block" id="more-cardio-days">${t('ledger_older')}</button>` : ''}
   `;
@@ -387,7 +386,6 @@ function openCardioModal(cardioId = null, presetDate = null) {
     <div class="modal-header">
       <div>
         <div class="modal-title">${existing ? t('edit_cardio') : t('log_cardio')}</div>
-        <div class="modal-subtitle">${t('cardio_quick')}</div>
       </div>
       <button class="icon-btn icon-btn-tile" data-close>${icon('close', 20)}</button>
     </div>
@@ -559,7 +557,6 @@ function openNewCardioTypeModal(onCreated) {
       <div class="modal-header">
         <div>
           <div class="modal-title">${t('new_cardio_type')}</div>
-          <div class="modal-subtitle">${t('new_cardio_type_sub')}</div>
         </div>
         <button class="icon-btn icon-btn-tile" data-cardio-type-cancel aria-label="${escapeHtml(t('cancel'))}">${icon('close', 20)}</button>
       </div>
@@ -697,7 +694,6 @@ function renderSleep(el) {
     <div class="page-header">
       <div class="page-eyebrow">${t('nights_logged_t')}</div>
       <h1 class="page-title">${t('sleep')}</h1>
-      <p class="page-subtitle">${t('sleep_subtitle')}</p>
     </div>
 
     <div class="stat-row">
@@ -754,7 +750,7 @@ function renderSleep(el) {
     </div>
 
     ${sleepLedger.empty
-      ? emptyState({ title: t('ledger_empty_sleep'), text: t('ledger_empty_sleep_sub') })
+      ? emptyState({ title: t('ledger_empty_sleep') })
       : `<div class="ledger">${sleepLedger.html}</div>`}
     ${sleepLedger.more ? `<button type="button" class="btn btn-ghost btn-block" id="more-sleep-days">${t('ledger_older')}</button>` : ''}
   `;

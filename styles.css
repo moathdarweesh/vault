@@ -4845,7 +4845,6 @@ button.bundle-main {
 }
 .nutri-setup-main { flex: 1; min-width: 0; }
 .nutri-setup-title { font-size: 16px; font-weight: 700; }
-.nutri-setup-text { font-size: 13px; color: var(--text-mute); margin-top: 2px; }
 
 /* Hero: calorie ring + macro tracks */
 .nutri-hero {
@@ -5002,7 +5001,6 @@ button.bundle-main {
   appearance: none; -webkit-appearance: none; -webkit-tap-highlight-color: transparent;
 }
 .weight-row-del:active { background: var(--surface-3); color: var(--danger, #ef4444); }
-.weight-empty-hint { text-align: center; font-size: 13px; color: var(--text-mute); padding: 14px 8px 4px; }
 
 /* (.nutri-coach — the coach's entry button — was removed at v219 with the CTA
    itself. The rules below still serve openCoach's MODAL, which is dormant but
@@ -5106,7 +5104,6 @@ button.bundle-main {
   min-height: 74px;
 }
 .add-tile-text { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
-.add-tile-sub { font-size: 12px; font-weight: 500; color: var(--text-mute); line-height: 1.35; }
 .add-tile-title { font-size: 13px; font-weight: 700; line-height: 1.2; }
 
 .calc-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
@@ -6219,7 +6216,6 @@ body[dir="rtl"] .bento-card.wide .bento-added-stripe { left: 14px; }
 .hero-cta svg { width: 20px; height: 20px; }
 /* First-run hero: an inviting title + subtitle instead of a wall of zeros. */
 .hero-first-title { font-size: var(--fs-title); font-weight: var(--fw-display); letter-spacing: var(--tracking-tight); line-height: 1.15; margin: var(--sp-2) 0 var(--sp-1); position: relative; }
-.hero-first-sub { font-size: var(--fs-sub); color: var(--text-mute); position: relative; }
 /* Primary "start today's workout" button at the top of the Train tab. */
 /* .train-start-today removed: that button was a duplicate of Home's hero CTA. */
 .hero-cta.ghost {
@@ -7016,7 +7012,6 @@ body[dir="rtl"] .ntfs-switch.on .ntfs-knob { transform: translateX(-18px); }
 
 .ntfa-empty { padding: var(--sp-3) 0; font-size: 13px; color: var(--text-dim); }
 .ntfa-empty-title { font-size: 14px; font-weight: 600; color: var(--text-mute); margin-bottom: 4px; }
-.ntfa-empty-text { font-size: 12.5px; line-height: 1.5; color: var(--text-dim); }
 
 /* What the daily limit held back, and why. A guard that deletes silently is a
    guard the user experiences as a broken feature. --warn, not --red: nothing

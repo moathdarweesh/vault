@@ -12,7 +12,7 @@
 // build. The literal below is the fallback (file://, or a stripped query) and is
 // still bumped by `npm run release` — see CLAUDE.md "CACHE WORKFLOW".
 const VAULT_BUILD = (() => {
-  const FALLBACK = 'v386';
+  const FALLBACK = 'v387';
   try {
     const src = (document.currentScript && document.currentScript.src) || '';
     const m = src.match(/[?&]v=(\d+)/);
@@ -289,7 +289,6 @@ function notifTodayHtml() {
       ${arrived.length ? `<div class="ntfa-label">${t('notif_arrived')}</div>${arrivedHtml}` : ''}
       <div class="ntfa-label">${t('notif_upcoming')}</div>
       ${upcoming.length ? upcomingHtml : `<div class="ntfa-empty">${t('notif_up_empty')}</div>`}
-      ${upcoming.length ? `<div class="ntfs-hint">${t('notif_up_hint')}</div>` : ''}
       ${dropped ? `<div class="ntfa-held">${icon('info', 16)} ${escapeHtml(t('notif_dropped').replace('{n}', fmtNum(dropped)))}</div>` : ''}
     </div>`;
 }
@@ -306,7 +305,6 @@ function notifHistoryHtml() {
       <div class="card ntfa-group">
         <div class="ntfa-empty">
           <div class="ntfa-empty-title">${t('notif_log_empty_title')}</div>
-          <div class="ntfa-empty-text">${t('notif_log_empty_text')}</div>
         </div>
       </div>`;
   }
@@ -1896,7 +1894,6 @@ function renderHome(el) {
         <button class="hero-card hero-first hero-food" id="home-food-hero">
           <div class="hero-eyebrow">${t('calories')}</div>
           <div class="hero-first-title">${t('nutri_setup_title')}</div>
-          <div class="hero-first-sub">${t('nutri_setup_text')}</div>
           <div class="hero-cta">${icon('target', 20)}<span>${t('nutri_setup_cta')}</span></div>
         </button>`;
     }
@@ -2108,7 +2105,7 @@ function renderHome(el) {
     const what = minToday.length === 1 ? t('rest_min_one') : t('rest_min_half');
     heroHtml = `
       <div class="hero-card hero-rest">
-        <div class="hero-eyebrow">${t('rest_day')} · ${escapeHtml(dayName(now.getDay(), true))}</div>
+        <div class="hero-eyebrow">${t('rest_day')}</div>
         <div class="hero-title">${t('min_logged')}</div>
         <div class="hero-meta">${escapeHtml(
           t('min_logged_sub').replace('{what}', what).replace('{n}', fmtNum(mins)))}</div>
@@ -2129,7 +2126,7 @@ function renderHome(el) {
     //     stays visible the rest of the day. No reproach, no red mark.
     heroHtml = `
       <div class="hero-card hero-rest">
-        <div class="hero-eyebrow">${t('rest_day')} · ${escapeHtml(dayName(now.getDay(), true))}</div>
+        <div class="hero-eyebrow">${t('rest_day')}</div>
         <div class="hero-title">${t('rest_today_title')}</div>
         <div class="hero-meta">${scheduledRest
           ? t('rest_day_muscles')
@@ -2169,7 +2166,7 @@ function renderHome(el) {
     heroHtml = `
       <div class="hero-card">
         <div class="hero-eyebrow-row">
-          <div class="hero-eyebrow">${workoutDone ? t('home_workout_done') : t('home_workout_open')} · ${escapeHtml(dayName(now.getDay(), true))}</div>
+          <div class="hero-eyebrow">${workoutDone ? t('home_workout_done') : t('home_workout_open')}</div>
           ${workoutDone ? '' : restChipHtml}
         </div>
         <div class="hero-title">${escapeHtml(todayPlan.name || t('start_workout'))}</div>
@@ -2190,7 +2187,7 @@ function renderHome(el) {
     heroHtml = `
       <div class="hero-card">
         <div class="hero-eyebrow-row">
-          <div class="hero-eyebrow">${t('today_plan')} · ${escapeHtml(dayName(now.getDay(), true))}</div>
+          <div class="hero-eyebrow">${t('today_plan')}</div>
           ${restChipHtml}
         </div>
         <div class="hero-title">${escapeHtml(todayPlan.name || t('start_workout'))}</div>
@@ -2203,7 +2200,7 @@ function renderHome(el) {
     // today's session directly (session-day handles an empty/rest day itself).
     heroHtml = `
       <button class="hero-card" id="home-start-workout">
-        <div class="hero-eyebrow">${t('this_week')} · ${escapeHtml(dayName(now.getDay(), true))}</div>
+        <div class="hero-eyebrow">${t('this_week')}</div>
         <div class="hero-numeral num anim" data-count="${weekSetsCount}">0</div>
         <div class="hero-meta">${t('sessions_this_week')}</div>
         <div class="hero-cta">${icon('dumbbell', 20)}<span>${t('today_workout')}</span></div>
@@ -2213,9 +2210,7 @@ function renderHome(el) {
     // First run / inactive: no wall of zeros — one inviting CTA straight into today.
     heroHtml = `
       <button class="hero-card hero-first" id="home-start-workout">
-        <div class="hero-eyebrow">${escapeHtml(dayName(now.getDay(), true))}</div>
         <div class="hero-first-title">${t('first_workout_title')}</div>
-        <div class="hero-first-sub">${t('first_workout_sub')}</div>
         <div class="hero-cta">${icon('dumbbell', 20)}<span>${t('start_first_workout')}</span></div>
       </button>
     `;
@@ -2739,7 +2734,7 @@ function renderProgram(el) {
     if (count >= 5) lvl = 3;
     if (count >= 8) lvl = 4;
     return `
-      <button class="heat-cell lvl-${lvl}" data-muscle="${escapeHtml(cat)}" aria-label="${escapeHtml(categoryLabel(cat))}">
+      <button class="heat-cell lvl-${lvl}" data-muscle="${escapeHtml(cat)}">
         <div class="heat-cell-name">${escapeHtml(categoryLabel(cat))}</div>
         <div class="heat-cell-count num">${count}</div>
       </button>`;
@@ -2770,11 +2765,10 @@ function renderProgram(el) {
 
     <div class="page-header">
       <h1 class="page-title">${t('program_title')}</h1>
-      <p class="page-subtitle">${t('program_subtitle')}</p>
     </div>
 
     ${cycle.length === 0 ? `
-      ${emptyState({ iconName: 'calendar', title: t('program_no_plan_title'), text: t('program_no_plan_sub') })}
+      ${emptyState({ iconName: 'calendar', title: t('program_no_plan_title') })}
       <button class="btn btn-primary btn-block" data-goto="planner">${icon('plus', 20)} ${t('program_build')}</button>
     ` : `
       <div class="rot-section">
@@ -2951,7 +2945,6 @@ function renderExercises(el) {
 
     <div class="page-header">
       <h1 class="page-title">${t('train')}</h1>
-      <p class="page-subtitle">${t('train_subtitle')}</p>
     </div>
 
     <div class="exq-toolbar">
@@ -3005,7 +2998,7 @@ function renderExercises(el) {
     `;
 
     if (filtered.length === 0) {
-      grid.innerHTML = emptyState({ iconName: 'search', title: t('no_matches'), text: t('no_matches_hint') });
+      grid.innerHTML = emptyState({ iconName: 'search', title: t('no_matches') });
     } else {
       cards.splice(1, 0, addCard); // after the first (wide) card
       grid.innerHTML = `<div class="bento-grid">${cards.join('')}</div>`;
@@ -3410,7 +3403,6 @@ function openNewExerciseModal(exerciseId = null, opts = {}) {
     <div class="modal-header">
       <div>
         <div class="modal-title">${existing ? t('edit_session') : t('new_exercise')}</div>
-        <div class="modal-subtitle">${t('new_exercise_sub')}</div>
       </div>
       <button class="icon-btn icon-btn-tile" data-close>${icon('close', 20)}</button>
     </div>
@@ -3656,7 +3648,7 @@ function renderExerciseDetail(el, exerciseId) {
     </div>
 
     ${sessions.length === 0
-      ? emptyState({ iconName: 'dumbbell', title: t('no_sessions'), text: t('log_session_tap') })
+      ? emptyState({ iconName: 'dumbbell', title: t('no_sessions') })
       : `<div class="session-list">${sessionsHtml}</div>`
     }
   `;
@@ -4866,7 +4858,6 @@ function renderSettings(el) {
     <div class="page-header">
       <div class="page-eyebrow">${icon('settings', 16)}</div>
       <h1 class="page-title">${t('settings_title')}</h1>
-      <p class="page-subtitle">${t('settings_subtitle')}</p>
     </div>
 
     <section class="settings-group">
@@ -5001,7 +4992,6 @@ function renderSettings(el) {
       </div>
 
       <div class="settings-section">
-        <div class="section-title">${t('data')}</div>
         <button class="settings-action-row is-danger" id="reset-btn">
           <div class="settings-action-icon">${icon('refresh', 20)}</div>
           <div class="settings-action-main">
@@ -5015,7 +5005,6 @@ function renderSettings(el) {
     <section class="settings-group">
       <h2 class="settings-group-title">${t('set_g_app')}</h2>
       <div class="settings-section">
-        <div class="section-title">${t('feedback_title')}</div>
         <button class="settings-action-row" id="feedback-btn">
           <div class="settings-action-icon icon-mirror">${icon('send', 20)}</div>
           <div class="settings-action-main">
@@ -5300,7 +5289,6 @@ function renderPlanner(el) {
 
     <div class="page-header">
       <h1 class="page-title">${t('planner_title')}</h1>
-      <p class="page-subtitle">${t('planner_subtitle')}</p>
     </div>
 
     <div style="display:flex;gap:8px;margin-bottom:16px">
@@ -6227,7 +6215,7 @@ function renderSessionDay(el) {
     }
 
     ${totalEx === 0
-      ? emptyState({ iconName: 'dumbbell', title: t('rest_day'), text: t('no_plan_today_sub') })
+      ? emptyState({ iconName: 'dumbbell', title: t('rest_day') })
       : `<div class="sd-list">${exObjs.map(renderExerciseCard).join('')}</div>`
     }
 
@@ -7070,7 +7058,7 @@ function renderSessionRun(el) {
         <button class="back-btn" data-back aria-label="${escapeHtml(t('back'))}">${icon('back', 20)}</button>
         <div class="detail-top-title">${escapeHtml(dayName(dow, true))}</div>
       </div>
-      ${emptyState({ iconName: 'dumbbell', title: t('rest_day'), text: t('no_plan_today_sub') })}
+      ${emptyState({ iconName: 'dumbbell', title: t('rest_day') })}
     `;
     return;
   }
@@ -7896,7 +7884,6 @@ function openRemindersModal() {
       <div class="modal-header">
         <div>
           <div class="modal-title">${t('remind_title')}</div>
-          <div class="modal-subtitle">${t('remind_sub')}</div>
         </div>
         <button class="icon-btn icon-btn-tile" data-close aria-label="${escapeHtml(t('close'))}">${icon('close', 20)}</button>
       </div>
@@ -7993,7 +7980,7 @@ function openRemindersModal() {
     $('#rem-test')?.addEventListener('click', once(async () => {
       if (window.Notify) await Notify.gate();
       const res = window.Notify ? await Notify.test() : { ok: false, reason: 'unsupported' };
-      showToast(res.ok ? t('remind_test_sent') : `${t('remind_test_failed')} · ${res.reason}`);
+      showToast(res.ok ? t('remind_test_sent') : t('remind_test_failed'));
       // The test lands in the log, so re-read the status: `pending` moved.
       paintStatus();
     }));
@@ -8855,7 +8842,7 @@ function renderCustomExercises(el) {
     </div>
 
     ${customs.length === 0
-      ? emptyState({ title: t('ce_empty_title'), text: t('ce_empty_text') })
+      ? emptyState({ title: t('ce_empty_title') })
       : `<div class="data-list">${rows}</div>`}
   `;
 
@@ -8976,9 +8963,7 @@ function renderPersonalRecords(el) {
     </div>
 
     <div class="page-header">
-      <div class="page-eyebrow">${t('tools_section')}</div>
       <h1 class="page-title">${t('pr_view_title')}</h1>
-      <p class="page-subtitle">${t('pr_card_sub')}</p>
     </div>
 
     ${rows.length === 0

@@ -83,7 +83,7 @@ npm run verify           # 43 contracts + lint + 13 suites — THE GATE
 npm run release          # bump every marker and re-read them; runs NO tests
 ```
 
-**Current version: v386.** APK: build 24 / v3.3.
+**Current version: v387.** APK: build 24 / v3.3.
 
 > ⚠️ **`npm run release` RUNS NO TESTS, AND THIS LINE USED TO READ AS IF IT DID.**
 > It said «bump every marker + verify», where *verify* meant the MARKERS — and
@@ -2734,6 +2734,122 @@ the rows pre-filled from last time as performed sets ("confirmed without a
 throwaway edit" is the recorded intent; whether an untouched row should count
 is the owner's call); a saved food **4 taps**. The day card's Save measures
 **69×40** — under the 44 floor.
+
+## v387 — the app-wide declutter: thirty lines that named what you were already looking at
+
+The owner's instruction, and it is the rule for every screen from here on:
+
+> «التطبيق كامل بدي ما يكون فيه كتابة ما إلها معنى أو ما إلها لازم — بدي واجهته
+> نظيفة تمامًا ومش زحمة، ويكون فقط الأشياء الي المستخدم بيحتاجها»
+
+v386 answered the two examples he named (the export route, and «تقدير» beside a
+food). This is the sweep those two implied, over every view and every sheet.
+
+**Thirty strings left the screens, twenty-nine keys left both dictionaries, and
+five CSS rules left the stylesheet with them.** Measured seeded, ar/dark/375,
+before and after, on the same fixture:
+
+| | before | after |
+|---|---|---|
+| Settings | 2503px · 15 section labels | **2409px · 13** |
+| Program | 1116px | 1091px |
+| Planner | 1043px | 1017px |
+| Cardio | 924px | 898px |
+| Sleep | 1082px | 1057px |
+| Reminders | 1789px | 1720px |
+| Records | 236px | **188px** |
+| the first-run hero | **184px** — «الثلاثاء / جاهز للتمرين؟ / سجّل أول تمرين لتبدأ. / ابدأ أول تمرين» | **144px** — «جاهز للتمرين؟ / ابدأ أول تمرين» |
+
+Every affected view lost **exactly one element per removed line** (149 → 148,
+957 → 956, 177 → 175 …), which is the accounting that says nothing else went
+with them, and **every screen still renders a real heading and zero empty
+boxes** — measured, per view and per sheet, not inferred.
+
+### What the thirty were, and the one question that decided each
+
+*Does it tell you something you cannot already see on this screen?*
+
+- **Seven page subtitles** under seven page titles — «دورتك، وحجم عملك الأسبوعي،
+  وأرقامك القياسية» under «برنامجي», «تتبّع متى تنام ومتى تصحى» under «النوم».
+  Each describes the screen you are standing on.
+- **Six sheet subtitles**, same shape — «معادلة Mifflin-St Jeor» under «حاسبة
+  السعرات», «تنبيهات المكمّلات والماء» under «التذكيرات».
+- **Nine empty-state second lines** telling you to press a button that is on
+  screen and already labelled: «اضغط "سجّل جلسة" لتسجيل أول مجموعة»، «جرّب بحث
+  مختلف»، «سجّل جلسةً بالزرّ في الأعلى».
+- **The weekday, printed twice on Home.** Every one of the six hero branches
+  appended `· الخميس` to its eyebrow while `.home-hello` prints «الخميس، ٢٠
+  سبتمبر» in full, from the same `now`, directly above it.
+- **«البيانات»** labelling one row, and **«إرسال ملاحظة»** painted twice four
+  lines apart — a heading and then the button's own title.
+- **«أدوات»** as the eyebrow of the personal-records page, which is not a tool.
+- **`cx_amount_hint`**, which said «كميات المشتريات مستقلة عنها» — about the
+  purchase-quantity layer **v329 deleted**. A sentence describing a feature that
+  has not existed for fifty-eight releases.
+
+### Two defects the sweep turned up on the way
+
+- **`empty_day_drop` was still in dialect** — «يوم راحة — اضغط + أو اسحب تمرين
+  **لهون**» — a v336 violation that survived that release's sweep because that
+  string is only drawn on an empty rotation slot. It is «يوم راحة» now: the
+  state, with the instruction and the dialect gone in one edit.
+- **`.heat-cell` carried an `aria-label` that duplicated its own visible name**,
+  and an `aria-label` REPLACES an element's content — so a screen reader heard
+  «صدر» and never the SET COUNT inside it, which is the only reason that cell
+  exists. The attribute is gone; the name now comes from the content, count and
+  all. (The same lesson as v324's favourited meal button, in a second place.)
+- And the reminder test toast joined `t('remind_test_failed')` to `res.reason`,
+  an internal English token — «تعذّر الإرسال · unsupported». The suffix is gone.
+
+### ⚠️ THE METHOD, BECAUSE THE FIRST ATTEMPT AT THIS DESTROYED THREE FILES
+
+The first pass deleted whole LINES containing a needle. Several of those needles
+sat inside a ternary branch:
+
+```
+-      ? emptyState({ iconName: 'dumbbell', title: t('no_sessions'), text: t('log_session_tap') })
+```
+
+so `js/app.js`, `js/food.js` and `js/body.js` all stopped parsing —
+`SyntaxError: Missing } in template expression`. **And the patcher reported 22
+successes, because its read-back only checked that the string was gone.** A
+needle can be gone from a file that no longer parses.
+
+Three things fix that class, and all three are in this release:
+
+1. **`emptyState()`'s `text` is OPTIONAL now** (`js/ui.js`) — the `.empty-text`
+   div is not drawn at all rather than drawn empty. So nine of the thirty are a
+   removed PROPERTY, never a removed line.
+2. **A line is dropped only when it is self-contained** — the patcher counts
+   braces and backticks on it and refuses otherwise, which is exactly what would
+   have stopped the ternary cuts.
+3. **`node --check` after EVERY single edit**, with the pre-edit bytes restored
+   on any failure. Not after the file, not at the end: after each one. 38 of 38
+   applied, every one parsed back.
+
+### What was deliberately KEPT, and why
+
+The instruction is about text with no meaning, not about text that is short.
+
+- **The greeting** («صباح الخير») and **«الراحة جزء من الخطة — العضلة تكبر اليوم
+  لا أمس»** — the app's voice on the two screens where it has something to say.
+- **`boot_title` + the launch timings** — v381, which the owner commissioned.
+- **«الأصناف» and «كل الجلسات»** — each sits in a `.row-between` with its screen's
+  primary button, so removing the label moves the button to the other edge. A
+  layout regression to save one word is not a trade.
+- **`sl_empty`** and **`barcode_hint`** — each is the ONLY content of the box it
+  is in; deleting it leaves an empty box, which is the owner's own first law.
+- **`delete_sleep_text`** — a confirm dialog naming what a destructive action
+  does. One line from being removable, and it should not be.
+
+### What the checks say
+
+43 contracts · lint · **13 suites, 0 failed, 0 skipped**. Both fingerprint lanes
+on the finished tree: **no page errors, no empty cells, no raw keys, no empty
+icons** across 160 view cells and 110 sheet cells. **Contract 38 named all
+twenty-nine dead keys itself** the moment their last caller went — the v358
+inverse doing the whole job it was built for — and both dictionaries stay at
+parity (**en 1085 / ar 1085**, from 1114).
 
 ## v386 — the route out of the app is closed, and a word that told you nothing
 

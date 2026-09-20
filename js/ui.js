@@ -582,11 +582,15 @@ function brandLockup(size = 'header') {
 // The headline is an <h2> and not a div: an empty state is often the WHOLE of
 // what a screen has to say (exercise-detail renders nothing else when the id
 // is gone), and a styled div gives a screen reader no outline at all.
+// `text` is OPTIONAL. Most of the second lines in this app told the user to
+// press a button that was already on screen and already labelled, which is the
+// owner’s own test for clutter — so the element is not drawn at all rather than
+// drawn empty, and an empty state can be one honest sentence.
 function emptyState({ iconName, title, text }) {
   return `
     <div class="empty">
       <h2 class="empty-title">${escapeHtml(title)}</h2>
-      <div class="empty-text">${escapeHtml(text)}</div>
+      ${text ? `<div class="empty-text">${escapeHtml(text)}</div>` : ''}
     </div>
   `;
 }

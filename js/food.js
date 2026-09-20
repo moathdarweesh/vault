@@ -165,7 +165,6 @@ function nutritionDashboardHtml(date) {
         <div class="nutri-setup-icon">${icon('target', 22)}</div>
         <div class="nutri-setup-main">
           <div class="nutri-setup-title">${t('nutri_setup_title')}</div>
-          <div class="nutri-setup-text">${t('nutri_setup_text')}</div>
         </div>
       </button>
     `;
@@ -552,7 +551,7 @@ function openAddSheet(date, onChange) {
         ${DB.foodLogs.listForDate(addDaysISO(date || todayISO(), -1)).length ? `
         <button class="add-tile wide" data-method="repeat">
           <span class="add-tile-icon recipe">${icon('refresh', 24)}</span>
-          <span class="add-tile-text"><span class="add-tile-title">${t('fl_repeat_title')}</span><span class="add-tile-sub">${t('fl_repeat_sub')}</span></span>
+          <span class="add-tile-text"><span class="add-tile-title">${t('fl_repeat_title')}</span></span>
         </button>` : ''}
         ${tile({ k: 'voice', icon: 'mic', title: t('add_voice') })}
         ${tile({ k: 'chat', icon: 'message', title: t('add_chat') })}
@@ -562,7 +561,7 @@ function openAddSheet(date, onChange) {
         ${tile({ k: 'manual', icon: 'edit', title: t('add_manual') })}
         <button class="add-tile wide" data-method="recipe">
           <span class="add-tile-icon recipe">${icon('chart', 24)}</span>
-          <span class="add-tile-text"><span class="add-tile-title">${t('add_recipe')}</span><span class="add-tile-sub">${t('add_recipe_sub')}</span></span>
+          <span class="add-tile-text"><span class="add-tile-title">${t('add_recipe')}</span></span>
         </button>
       </div>
     </div>`;
@@ -611,7 +610,6 @@ function openCalculatorModal(onSave) {
     <div class="modal-header">
       <div>
         <div class="modal-title">${t('calc_title')}</div>
-        <div class="modal-subtitle">${t('calc_sub')}</div>
       </div>
       <button class="icon-btn icon-btn-tile" data-close>${icon('close', 20)}</button>
     </div>
@@ -1941,7 +1939,6 @@ function openFoodLibraryModal() {
     <div class="modal-header">
       <div>
         <div class="modal-title">${t('food_library_title')}</div>
-        <div class="modal-subtitle">${t('food_library_sub')}</div>
       </div>
       <button class="icon-btn icon-btn-tile" data-close>${icon('close', 20)}</button>
     </div>
@@ -1953,7 +1950,7 @@ function openFoodLibraryModal() {
 
     <div class="food-lib-body" id="food-lib-body">
       ${buildSections()}
-      <div id="food-lib-empty" style="display:none">${emptyState({ iconName: 'search', title: t('no_matches_simple'), text: t('no_matches_text') })}</div>
+      <div id="food-lib-empty" style="display:none">${emptyState({ iconName: 'search', title: t('no_matches_simple') })}</div>
     </div>
 
     <div class="form-actions">
@@ -2017,7 +2014,7 @@ function openMealEditor(existing = null, onSave = () => {}) {
          grey. .cx-stack label.cx-row restores the row, and the <span> is what
          picks up the flex:1 that .cx-row grants only to a span or a label. -->
     <label class="cx-row"><span>${t('cx_favorite')}</span><input type="checkbox" id="cx-favorite" ${existing?.favorite ? 'checked' : ''}></label>
-    <p class="settings-hint">${t('cx_amount_hint')}</p><div id="cx-meal-items"></div>
+    <div id="cx-meal-items"></div>
     <label>${t('cx_saved_food')}<select id="cx-food" class="input"><option value="">—</option>${foods.map((f,i) => `<option value="${i}">${escapeHtml(f.name)}</option>`).join('')}</select></label>
     <button class="btn btn-ghost" id="cx-food-add">${t('add')}</button>
     <button class="btn btn-primary" id="cx-meal-save">${t('save')}</button>
@@ -2379,7 +2376,7 @@ function renderFoodLog(el) {
 
     <div class="data-list" id="food-log-list" style="gap:6px">
       ${entries.length === 0
-        ? emptyState({ iconName: 'apple', title: t('no_food_logged'), text: t('no_food_logged_text') })
+        ? emptyState({ iconName: 'apple', title: t('no_food_logged') })
         : items
       }
     </div>
@@ -2478,7 +2475,7 @@ function renderFoodLog(el) {
     const row = btn.closest('[data-food-row]');
     if (row) row.remove();
     if (!$('#food-log-list', el).querySelector('[data-food-row]')) {
-      $('#food-log-list', el).innerHTML = emptyState({ iconName: 'apple', title: t('no_food_logged'), text: t('no_food_logged_text') });
+      $('#food-log-list', el).innerHTML = emptyState({ iconName: 'apple', title: t('no_food_logged') });
     }
     refreshTotals();
     offerUndo(t('food_removed'), result);
