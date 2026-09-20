@@ -27,6 +27,7 @@ const ENTRIES = [
   { id: 'time-entry-food', name: 'openTimeEntryModal', args: [{ v: { kind: 'food' } }, '$noop'], host: 'notifications' },
   { id: 'lightbox', name: 'openImageLightbox', args: ['$lightbox', { v: 'photo' }], host: 'exercises', root: '.img-lightbox', closeBy: 'remove' },
   { id: 'weight', name: 'openWeightSheet', args: [], host: 'home' },
+  { id: 'repeat-yesterday', name: 'openRepeatYesterday', args: ['$today', '$noop'], host: 'food' },
   { id: 'reorder', name: 'openReorderSheet', args: [{ v: 0 }, '$noop'], host: 'planner', root: '#reorder-sheet-overlay', closeBy: 'remove' },
   { id: 'add-exercise-chooser', name: 'openAddExerciseChooser', args: [{ v: 0 }, '$noop'], host: 'planner' },
   { id: 'new-exercise', name: 'openNewExerciseModal', args: [{ v: null }], host: 'exercises' },

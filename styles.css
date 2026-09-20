@@ -5121,6 +5121,14 @@ button.bundle-main {
   gap: 6px;
 }
 
+/* A quiet aside on the name line, not a chip: the identity layer reserves a
+   capsule for a TRANSIENT chip, and this is a standing property of the row. */
+.food-log-src {
+  font-size: var(--fs-caption);
+  font-weight: 600;
+  color: var(--text-mute);
+  margin-inline-start: 6px;
+}
 .food-log-x {
   font-size: 11px;
   color: var(--text-mute);

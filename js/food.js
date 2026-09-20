@@ -466,6 +466,70 @@ function openBarcodeScanner(date, onSave) {
 // ===========================================================================
 // Add sheet — one "+" opens an animated bottom sheet with every add method.
 // ===========================================================================
+// REPEAT YESTERDAY. Most days are not new days: the breakfast is the breakfast.
+// Logging it again cost the whole capture path - chat, photo, barcode or a hunt
+// through saved foods - for food the app already had, with the portions already
+// decided.
+//
+// It is a LIST WITH CHOICES, never a "copy the day" button: nobody eats the
+// same four things every day, and an all-or-nothing repeat would be wrong often
+// enough to stop being used. Everything starts ticked because the common case
+// is most of it.
+//
+// The portions come across verbatim (`servings`), which is the other half of
+// "as they were" - a repeat that silently logged one serving of a 1.5-serving
+// meal would be a different meal.
+function openRepeatYesterday(date, onChange) {
+  // todayISO() HERE, at the moment this opens - never a date captured by a
+  // render that may have painted before midnight.
+  const day = date || todayISO();
+  const prevDay = addDaysISO(day, -1);
+  const prev = DB.foodLogs.listForDate(prevDay);
+  const overlay = openModal(`
+    <div class="modal-header">
+      <div class="modal-title">${t('fl_repeat_title')}</div>
+      <button class="icon-btn icon-btn-tile" data-close>${icon('close', 20)}</button>
+    </div>
+    ${prev.length ? `
+    <div class="cx-stack cx-list" id="ry-list">
+      ${prev.map((e, i) => {
+        const m = e.servings || 1;
+        // .sl-tick is the ticked row this app already has - the shopping
+        // list's - rather than a second one that merely resembles it. Its
+        // checkbox is the app's own orange square (v330), not the browser's.
+        return `<label class="sl-tick" data-ry-row="${i}">
+          <input type="checkbox" data-ry="${i}" checked>
+          <span class="sl-text">
+            <span class="sl-name">${escapeHtml(e.name)}${m !== 1 ? ` <span class="num">\u00d7 ${fmtNum(m)}</span>` : ''}</span>
+            <span class="sl-amt"><span class="num">${fmtNum(Math.round(e.calories * m))}</span> ${t('cal')}</span>
+          </span>
+        </label>`;
+      }).join('')}
+    </div>
+    <div class="cx-actions">
+      <button type="button" class="btn btn-primary" id="ry-add">${t('fl_repeat_add')}</button>
+    </div>` : `<div class="calc-preview-hint" style="text-align:center;padding:18px">${t('fl_repeat_empty')}</div>`}
+  `);
+  const addBtn = overlay.querySelector('#ry-add');
+  if (addBtn) addBtn.addEventListener('click', () => {
+    if (addBtn.disabled) return;
+    addBtn.disabled = true; setTimeout(() => { addBtn.disabled = false; }, 800);
+    const picked = [...overlay.querySelectorAll('[data-ry]:checked')]
+      .map((c) => prev[Number(c.dataset.ry)])
+      .filter(Boolean)
+      .map((e) => ({ name: e.name, servings: e.servings || 1, calories: e.calories, protein: e.protein,
+        carbs: e.carbs, fat: e.fat || 0, source: e.source || 'saved' }));
+    if (!picked.length) { showToast(t('fl_repeat_none')); return; }
+    // ONE write for the whole selection, and the day is resolved again here:
+    // the sheet can stand open across midnight.
+    const result = DB.foodLogs.addMany(date || todayISO(), picked);
+    if (!result.ok) { convenienceError(result); return; }
+    closeModal();
+    if (typeof onChange === 'function') onChange();
+    offerUndo(t('fl_repeat_added').replace('{n}', fmtNum(picked.length)), result);
+  });
+}
+
 function openAddSheet(date, onChange) {
   const app = document.querySelector('.app');
   if (!app) return;
@@ -485,6 +549,11 @@ function openAddSheet(date, onChange) {
       <div class="sheet-handle"></div>
       <div class="add-sheet-title">${t('add_sheet_title')}</div>
       <div class="add-grid">
+        ${DB.foodLogs.listForDate(addDaysISO(date || todayISO(), -1)).length ? `
+        <button class="add-tile wide" data-method="repeat">
+          <span class="add-tile-icon recipe">${icon('refresh', 24)}</span>
+          <span class="add-tile-text"><span class="add-tile-title">${t('fl_repeat_title')}</span><span class="add-tile-sub">${t('fl_repeat_sub')}</span></span>
+        </button>` : ''}
         ${tile({ k: 'voice', icon: 'mic', title: t('add_voice') })}
         ${tile({ k: 'chat', icon: 'message', title: t('add_chat') })}
         ${tile({ k: 'photo', icon: 'camera', title: t('add_photo') })}
@@ -511,7 +580,8 @@ function openAddSheet(date, onChange) {
     if (!btn) return;
     const method = btn.dataset.method;
     close(() => {
-      if (method === 'voice') openVoiceCapture(date, onChange);
+      if (method === 'repeat') openRepeatYesterday(date, onChange);
+      else if (method === 'voice') openVoiceCapture(date, onChange);
       else if (method === 'chat' || method === 'photo') {
         // Runs from a detached 260 ms callback; foodai.js is the sixth script,
         // so it is checked here exactly like every other FoodAI site.
@@ -2229,14 +2299,27 @@ function renderFoodLog(el) {
   const dayLabel = isToday ? t('today_totals') : formatDate(ctx.date);
 
   // One food-log row (also used when quick-add appends a single row live).
+  // WHERE A FIGURE CAME FROM IS PART OF THE FIGURE. Every row has carried a
+  // `source` since the day it was written - ai, voice, barcode, manual, recipe,
+  // saved - and none of it has ever been drawn, so a number read off a package
+  // and a number a model guessed looked exactly alike.
+  //
+  // Only the two that change how you should READ the number are labelled. A
+  // tag on every row is five tags on five rows, which is noise; manual, saved
+  // and recipe are the user's OWN figures and need no comment on themselves.
+  const foodSrcTag = (src) => (src === 'barcode' ? t('fl_src_label')
+    : (src === 'ai' || src === 'voice') ? t('fl_src_estimate') : '');
+
   function foodRowHtml(e) {
     const m = e.servings || 1;
+    const srcTag = foodSrcTag(e.source);
     return `
       <div class="food-log-row" data-food-row="${e.id}">
         <div class="food-log-main">
           <div class="food-log-name">
             ${escapeHtml(e.name)}
             ${m !== 1 ? `<span class="food-log-x num">× ${fmtNum(m)}</span>` : ''}
+            ${srcTag ? `<span class="food-log-src">${escapeHtml(srcTag)}</span>` : ''}
           </div>
           <div class="food-log-meta">
             <span><span class="num">${fmtNum(Math.round(e.calories * m))}</span> ${t('cal')}</span>

@@ -82,7 +82,7 @@ a faster TTFB — not fewer bytes.
 npm run release          # bump every marker + verify, then commit all files together
 ```
 
-**Current version: v375.** APK: build 24 / v3.3.
+**Current version: v376.** APK: build 24 / v3.3.
 
 `scripts/release.js` rewrites **every** marker and then re-reads them from disk to confirm; it exits non-zero if any disagree, and prints the count per file (derived, never hard-coded — the docs used to say 16 while the real count was 15). The markers are `?v=N` in `index.html` (every script and stylesheet, the `js/vendor/supabase.js` preload, both `icons/icon.svg` links, `manifest.json`), the `__cleaned_vN` sessionStorage key, the `FALLBACK` literal in `app.js`, `version.json` → `web`, the `?v=` in `manifest.json`, `admin.html`, `privacy.html` and `get/index.html`, and the `Current version` line in this file. `scripts/check-contracts.js` (pre-commit) refuses a commit where any of them disagree.
 
@@ -2678,6 +2678,66 @@ the rows pre-filled from last time as performed sets ("confirmed without a
 throwaway edit" is the recorded intent; whether an untouched row should count
 is the owner's call); a saved food **4 taps**. The day card's Save measures
 **69×40** — under the 44 floor.
+
+## v376 — T2.4: where a figure came from, and yesterday in one sheet
+
+### The log never said which numbers were guesses
+
+Every food row has carried a `source` since the day it was written — `ai`,
+`voice`, `barcode`, `manual`, `recipe`, `saved` — and **none of it had ever
+been drawn.** A figure read off a package and a figure a model estimated looked
+exactly alike, which is the one distinction a calorie log actually owes you.
+
+**Only the two that change how you should READ the number are labelled**:
+`barcode` → «من الملصق», `ai`/`voice` → «تقدير». A tag on every row is five
+tags on five rows, which is noise — `manual`, `saved` and `recipe` are the
+user's OWN figures and need no comment on themselves. Measured on a seeded day:
+
+| | |
+|---|---|
+| شوفان (barcode) | **«من الملصق»** |
+| دجاج مشوي (ai) | **«تقدير»** |
+| أرز (manual) | no tag |
+
+It is a quiet aside on the name line, deliberately **not** a chip: the identity
+layer reserves a capsule for a TRANSIENT chip, and this is a standing property
+of the row.
+
+### «كرّر أمس»
+
+Most days are not new days — the breakfast is the breakfast. Logging it again
+cost the whole capture path (chat, photo, barcode, or a hunt through saved
+foods) for food the app already had, with the portions already decided.
+
+**A list with choices, never a "copy the day" button.** Nobody eats the same
+four things every day, and an all-or-nothing repeat would be wrong often enough
+to stop being used. Everything starts ticked because the common case is most of
+it. The tile appears only when yesterday actually holds something.
+
+**The portions come across verbatim**, which is the other half of "as they
+were": a repeat that silently logged one serving of a 1.5-serving meal would be
+a different meal. Measured — three items yesterday (×1.5, ×1, ×2), one unticked:
+
+```
+logged to today: [{"شوفان", servings: 1.5, src: barcode},
+                  {"أرز",   servings: 2,   src: manual}]
+```
+
+The unticked item stayed behind, the portions and the sources survived, and it
+is ONE `addMany` write with an Undo offered on it. The day is resolved with
+`todayISO()` at the moment the button is pressed, never captured when the sheet
+opened — the sheet can stand open across midnight.
+
+The row reuses **`.sl-tick`, the ticked row this app already has** (the shopping
+list's), rather than a second one that merely resembles it — so its checkbox is
+the app's own orange square from v330 and not the browser's white one.
+
+> ⚠️ **AND I REPEATED, IN THE SAME SESSION, THE PATCHER BUG I HAD JUST WRITTEN
+> DOWN.** A script added the English keys, threw on the Arabic anchor, and
+> discarded the English write with it — because it still buffered and wrote at
+> the end. **Contract 5 caught it by name** (`AR only: fl_repeat_*`), and
+> contract 36 caught the new sheet missing from the fingerprint net in the same
+> run. Two checks, two real catches, on a change that looked finished.
 
 ## v375 — T2.2: last time's numbers are a suggestion, not a record
 
