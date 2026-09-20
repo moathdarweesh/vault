@@ -257,7 +257,83 @@ async function drive(page, steps, ctxName) {
     const df1 = await read((d) => DB.foodLogs.listForDate(d).length, fx.today), fu1 = await undoTop();
     dupes.push({ path: 'a saved food (picker stays open)', wrote: (df1 - df0) + ' rows', undoTop: fu1, wasAlreadyDoubled: twiceInLedger(fu0), twiceInLedger: twiceInLedger(fu1), one: '1 row', single: df1 - df0 === 1, expected: 'one row - v357 put an 800ms guard here', steps: dfF.steps });
 
-    // -- 5. THE RESUME: the app is CLOSED mid-workout, and comes back ---------
+    // -- 5. THE TICK THAT INVENTS NUMBERS -------------------------------------
+    // The ✓ in the guided run is the app's most frequent write, and on an
+    // UNTOUCHED row it fills reps and weight from last time's ghost and commits
+    // them - a performed set the user never typed. Un-ticking does not take it
+    // back (it only flips done:false, and an un-ticked set still counts in
+    // stats and PRs, v298), and before this lane existed no toast was raised at
+    // all. So the one ✓ that can surprise you now offers Undo, and an ordinary
+    // ✓ over typed numbers stays silent, because a toast every ninety seconds
+    // mid-workout is noise and that tick is already its own undo.
+    //
+    // THREE PHASES FROM THE SAME STATE, and that is not tidiness: DB.undo.apply
+    // is LIFO and refuses a token that is no longer the newest entry, so a
+    // probe that ticks, un-ticks, re-ticks and THEN taps Undo is testing a
+    // stale token rather than the feature. The first draft did exactly that and
+    // reported STALE against working code.
+    const tickRead = (pg) => read((a) => {
+      const v = document.querySelector('.view.active');
+      const row = v.querySelector('.run-set-row[data-set="0"]');
+      const toast = document.querySelector('.toast.show');
+      return {
+        screen: row ? [row.querySelector('[data-field="reps"]').value, row.querySelector('[data-field="weight"]').value] : null,
+        db: DB.sessions.listAll().filter((x) => x.date === a.today && x.exerciseId === a.exerciseId).map((x) => x.sets),
+        undoOffered: !!(toast && toast.querySelector('.toast-action')),
+        toast: toast ? (toast.querySelector('.toast-msg') || toast).textContent.trim() : null,
+      };
+    }, fx, pg);
+    const freshRun = async () => {
+      await page.evaluate((a) => {
+        DB.sessions.listAll().filter((s) => s.date === a.today).forEach((s) => DB.sessions.remove(s.id));
+        DB.undo.clear();
+        const t = document.querySelector('.toast'); if (t) t.classList.remove('show');
+      }, fx);
+      await home();
+      await drive(page, [
+        { sel: '#home-start-workout', label: 'start today (hero)' },
+        { sel: '.view.active #sd-start-run', label: 'start the guided run', after: 800 },
+      ], ctxName);
+    };
+
+    await freshRun();
+    await drive(page, [{ sel: '.view.active .run-set-row[data-set="0"] [data-done]', label: 'tick an untouched row', after: 1200 }], ctxName);
+    const tickA = await tickRead(page);
+    await drive(page, [{ sel: '.toast.show .toast-action', label: 'take the Undo', after: 1200 }], ctxName);
+    const tickAUndone = await tickRead(page);
+
+    await freshRun();
+    await drive(page, [
+      { sel: '.view.active .run-set-row[data-set="0"] [data-done]', label: 'tick', after: 1000 },
+      { sel: '.view.active .run-set-row[data-set="0"] [data-done]', label: 'un-tick', after: 1000 },
+    ], ctxName);
+    const tickB = await tickRead(page);
+
+    await freshRun();
+    await page.evaluate(() => {
+      const r = document.querySelector('.view.active .run-set-row[data-set="0"]');
+      for (const f of ['reps', 'weight']) {
+        const i = r.querySelector('[data-field="' + f + '"]');
+        i.value = f === 'reps' ? '7' : '35';
+        i.dispatchEvent(new Event('input', { bubbles: true }));
+        i.dispatchEvent(new Event('change', { bubbles: true }));
+      }
+    });
+    await page.clock.runFor(900); await page.waitForTimeout(60);
+    await page.evaluate(() => { const t = document.querySelector('.toast'); if (t) t.classList.remove('show'); });
+    await drive(page, [{ sel: '.view.active .run-set-row[data-set="0"] [data-done]', label: 'tick over typed numbers', after: 1200 }], ctxName);
+    const tickC = await tickRead(page);
+
+    const tick = {
+      invented: tickA, afterUndo: tickAUndone, unticked: tickB, typed: tickC,
+      offeredOnInvented: tickA.undoOffered,
+      undoRemovedIt: tickAUndone.db.length === 0,
+      untickStillKeepsIt: tickB.db.length === 1,
+      silentWhenTyped: !tickC.undoOffered,
+    };
+    tick.ok = tick.offeredOnInvented && tick.undoRemovedIt && tick.untickStillKeepsIt && tick.silentWhenTyped;
+
+    // -- 6. THE RESUME: the app is CLOSED mid-workout, and comes back ---------
     // v189 built this and v296 reshaped it, and it has never been measured
     // against a real close. Every check until now was a re-render inside one
     // living page - which is the case the feature does not have to survive.
@@ -348,7 +424,7 @@ async function drive(page, steps, ctxName) {
     contained.afterReopen = contained2;
     await ctx.close();
     fs.mkdirSync(OUT, { recursive: true });
-    fs.writeFileSync(path.join(OUT, 'flows.json'), JSON.stringify({ results, dupes, resume, errors, contained }, null, 2));
+    fs.writeFileSync(path.join(OUT, 'flows.json'), JSON.stringify({ results, dupes, tick, resume, errors, contained }, null, 2));
 
     console.log('\nux-flows — taps from Home to the write (ar/dark/375, seeded):\n');
     for (const r of results) {
@@ -364,6 +440,12 @@ async function drive(page, steps, ctxName) {
       console.log(`      a fixed-point bounce would instead have hit ${t && t.aFixedPointBounceWouldHit}`);
     }
 
+    console.log('\nthe ✓ that fills an untouched row from last time:\n');
+    console.log(`  tick an untouched row       db ${JSON.stringify(tick.invented.db)} · ${tick.offeredOnInvented ? 'Undo offered: ' + JSON.stringify(tick.invented.toast) : 'NO UNDO OFFERED'}`);
+    console.log(`  take the Undo               db ${JSON.stringify(tick.afterUndo.db)}${tick.undoRemovedIt ? '  - the set the user never typed is gone' : '  <-- IT IS STILL THERE'}`);
+    console.log(`  un-tick instead             db ${JSON.stringify(tick.unticked.db)}${tick.untickStillKeepsIt ? '  - unchanged: "not done" is not "delete"' : '  <-- un-ticking deleted it'}`);
+    console.log(`  ✓ over numbers you typed    ${tick.silentWhenTyped ? 'silent, as it must be' : '<-- OFFERED AN UNDO NOBODY NEEDS'}`);
+
     console.log('\nthe guided run, after the app is CLOSED mid-workout:\n');
     console.log(`  logged a set in ${resume.tapsToLogTheSet} taps, closed the page, reopened, back in the run in ${resume.tapsToGetBackIn} taps`);
     console.log(`  the run opens on            ${resume.exerciseAfter || '(nothing)'}${resume.sameExercise ? '  - the same exercise' : '  <-- NOT the exercise it was on (' + resume.exerciseBefore + ')'}`);
@@ -374,7 +456,7 @@ async function drive(page, steps, ctxName) {
 
     if (errors.length) { console.log('\npage errors:'); for (const e of errors) console.log('  ✗ ' + e); }
     console.log('\nfence: ' + JSON.stringify(contained));
-    if (results.some((r) => !r.landed) || !resume.ok) process.exitCode = 1;
+    if (results.some((r) => !r.landed) || !resume.ok || !tick.ok) process.exitCode = 1;
   } finally {
     await browser.close(); await srv.close();
   }

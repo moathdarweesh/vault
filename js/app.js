@@ -12,7 +12,7 @@
 // build. The literal below is the fallback (file://, or a stripped query) and is
 // still bumped by `npm run release` — see CLAUDE.md "CACHE WORKFLOW".
 const VAULT_BUILD = (() => {
-  const FALLBACK = 'v369';
+  const FALLBACK = 'v370';
   try {
     const src = (document.currentScript && document.currentScript.src) || '';
     const m = src.match(/[?&]v=(\d+)/);
@@ -7161,13 +7161,26 @@ function renderSessionRun(el) {
     // empty, fill it from the "last time" ghost — one tap = "same as last time".
     row.querySelector('[data-done]')?.addEventListener('click', () => {
       const set = st.sets[i];
+      // Did this ✓ INVENT the numbers? Ticking an untouched row fills it from
+      // last time's ghost and commits — a performed set the user never typed —
+      // and un-ticking does NOT take it back (it only flips done:false, and an
+      // un-ticked set still counts in stats and PRs, v298). Measured before
+      // this: tick an empty row and DB.sessions holds {reps:8,weight:40} with
+      // no toast raised anywhere. So the one ✓ that can surprise you is the one
+      // that offers Undo; an ordinary ✓ over numbers you typed does not,
+      // because a toast every ninety seconds mid-workout is noise and that tick
+      // is already its own undo.
+      let invented = false;
+      const hadSession = !!st.savedSessionId;
       if (!set.done) {
         if ((set.reps === '' || set.reps == null) && set.phReps !== '' && set.phReps != null) {
           set.reps = Number(set.phReps);
+          invented = true;
           const r = row.querySelector('[data-field="reps"]'); if (r) r.value = String(set.reps);
         }
         if ((set.weight === '' || set.weight == null) && set.phWeight !== '' && set.phWeight != null) {
           set.weight = set.phWeight;
+          invented = true;
           const w = row.querySelector('[data-field="weight"]'); if (w) w.value = String(convDisplay(Number(set.weight)));
         }
         // A set with no numbers cannot be "done". On a first-ever exercise the
@@ -7190,7 +7203,16 @@ function renderSessionRun(el) {
       // Ticking a set is the strongest "I finished this" signal in the screen,
       // and it can fill the row from the ghost values without any field being
       // touched — so it must persist on its own, not wait for a blur.
+      //
+      // The token is captured BEFORE the write and compared after, the same
+      // guard the blur commit uses: commitExercise can decline to write, and
+      // offering the PREVIOUS entry would undo something the user never asked
+      // about — which is worse than offering nothing.
+      const tokenBefore = DB.undo.list()[0]?.token;
       commitExercise(ex.id);
+      if (invented && DB.undo.list()[0]?.token !== tokenBefore) {
+        offerUndo(t(hadSession ? 'run_filled_updated' : 'run_filled_saved'));
+      }
     });
     // Delete this set and persist immediately. A logged one-set exercise can be
     // removed this way too; Undo puts it back at its original position.

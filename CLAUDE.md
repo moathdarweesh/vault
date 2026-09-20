@@ -82,7 +82,7 @@ a faster TTFB — not fewer bytes.
 npm run release          # bump every marker + verify, then commit all files together
 ```
 
-**Current version: v369.** APK: build 24 / v3.3.
+**Current version: v370.** APK: build 24 / v3.3.
 
 `scripts/release.js` rewrites **every** marker and then re-reads them from disk to confirm; it exits non-zero if any disagree, and prints the count per file (derived, never hard-coded — the docs used to say 16 while the real count was 15). The markers are `?v=N` in `index.html` (every script and stylesheet, the `js/vendor/supabase.js` preload, both `icons/icon.svg` links, `manifest.json`), the `__cleaned_vN` sessionStorage key, the `FALLBACK` literal in `app.js`, `version.json` → `web`, the `?v=` in `manifest.json`, `admin.html`, `privacy.html` and `get/index.html`, and the `Current version` line in this file. `scripts/check-contracts.js` (pre-commit) refuses a commit where any of them disagree.
 
@@ -2678,6 +2678,41 @@ the rows pre-filled from last time as performed sets ("confirmed without a
 throwaway edit" is the recorded intent; whether an untouched row should count
 is the owner's call); a saved food **4 taps**. The day card's Save measures
 **69×40** — under the 44 floor.
+
+## v370 — T1.2: the tick that logs numbers you never typed
+
+The plan said sets have no undo. **They do** — `changeSlice` records every
+session write and four paths already offer it. What had none was the one write
+that can happen with no input at all: **✓ on an untouched row fills reps and
+weight from last time's ghost and commits them.** Measured before the fix:
+
+| | on screen | in the database | toast |
+|---|---|---|---|
+| before ✓ | empty, ghost `8 / 40` | — | none |
+| after ✓, nothing typed | `8 / 40` | **`{reps:8, weight:40}`** | **none at all** |
+| after un-✓ | `8 / 40` | **still there**, `done:false` | none |
+
+Un-ticking does not take it back — it means "not done", not "delete" — and per
+v298 an un-ticked set still counts in stats and PRs. So a mis-tap wrote a set
+the user never performed, into their volume and their records, silently.
+
+**Only the ✓ that INVENTED the numbers offers Undo.** An ordinary ✓ over
+figures you typed stays silent: a toast every ninety seconds mid-workout is
+noise, and that tick is already its own undo. The token is captured before the
+write and compared after — the same guard the blur commit uses — because
+`commitExercise` can decline to write and offering the PREVIOUS entry would
+undo something nobody asked about.
+
+Measured after, in three phases: the offer appears («سُجّلت بأرقام المرّة
+السابقة»), taking it leaves **`db: []`** and an empty row; un-ticking still
+keeps the set; a typed ✓ raises nothing. Proved able to fail both ways —
+`invented &&` → `false &&` loses the offer, → `true &&` fires on the typed
+tick — with `js/app.js` restored byte-for-byte each time.
+
+> ⚠️ **`DB.undo.apply` IS LIFO, SO EACH PHASE STARTS FROM THE SAME STATE.** The
+> first probe ticked, un-ticked, re-ticked and then tapped Undo — testing a
+> token that was no longer the newest entry. It reported STALE against working
+> code, which reads exactly like a broken feature.
 
 ## v369 — T1.1: the guided run resumes its POSITION, and now its plan too
 
