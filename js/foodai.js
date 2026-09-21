@@ -28,9 +28,36 @@
   // the Worker says both 'rate limited' and 'rate_limited', and the second used
   // to reach the screen raw.
   const WORKER_ERR_RE = /^(unauthorized|rate limited|daily limit|image too large|audio too large|too large|service unavailable|server misconfigured|upstream|no result|parse error|method not allowed|no input|http \d+)/;
+  // ⚠️ ONE READER OF A FAILED WORKER RESPONSE. There were FOUR copies of this
+  // block — photo/food, plan import, chat and voice — each spelling the same
+  // agreement slightly differently, and when the Worker learned to say
+  // UPSTREAM_AUTH and MODEL_RETIRED, three of them would have gone on showing
+  // «صار خطأ». A boundary with four spellings has three that drift.
+  // `dailyKey` is the only thing a caller may vary: the plan import says it in
+  // its own words.
+  // Spelled `data.code === '…'` throughout, deliberately: contract 30 reads
+  // both sides of this boundary by grepping for exactly that, and a shorter
+  // alias makes the agreement invisible to the checker and to the next reader.
+  function workerError(res, data, dailyKey) {
+    data = data || {};
+    if (data.code === 'DAILY_LIMIT' || data.error === 'daily limit') return new Error(tr(dailyKey || 'ai_daily_limit'));
+    if (res.status === 429 || data.code === 'RATE_LIMIT' || data.error === 'rate_limited') return new Error(tr('ai_rate_limit'));
+    // Ours, not the user's: the key or its project was refused, or every model
+    // id we ask for is retired. One sentence for both — the CODE is what tells
+    // the owner which, and it never reaches the screen.
+    if (data.code === 'UPSTREAM_AUTH' || data.code === 'MODEL_RETIRED') return new Error(tr('ai_err_service'));
+    return new Error(data.error || ('HTTP ' + res.status));
+  }
+
   function friendlyErr(e) {
     const raw = (e && e.message) || '';
     const m = raw.toLowerCase().replace(/_/g, ' ');
+    // ⚠️ THIS MUST STAY ABOVE THE NETWORK BRANCH. processImage's own rejection
+    // is the literal string 'image load failed' (the browser could not decode
+    // the file — HEIC is the common case), and the network test below is the
+    // UNANCHORED /load failed/, for Safari's fetch error. Below it, an
+    // undecodable photo told the user to check their internet connection.
+    if (/^image load failed/.test(m)) return tr('ai_err_image_read');
     if ((e && e.name === 'TypeError') || /failed to fetch|load failed|networkerror|network request/i.test(m)) {
       return tr('auth_err_network');
     }
@@ -104,19 +131,10 @@
       body: JSON.stringify(payload),
     });
     const data = await res.json().catch(() => ({}));
-    if (!res.ok) {
-      // Quota hit on every free model — surface a friendly message.
-      // The DAILY budget and the per-minute burst are both 429. Read the BODY
-      // first: telling someone to try again in a minute when the limit lasts
-      // until midnight is a lie they will act on for hours.
-      if (data && (data.code === 'DAILY_LIMIT' || data.error === 'daily limit')) {
-        throw new Error(tr('ai_daily_limit'));
-      }
-      if (res.status === 429 || (data && (data.code === 'RATE_LIMIT' || data.error === 'rate_limited'))) {
-        throw new Error(tr('ai_rate_limit'));
-      }
-      throw new Error((data && data.error) || ('HTTP ' + res.status));
-    }
+    // The DAILY budget and the per-minute burst are both 429, and only the BODY
+    // tells them apart: "try again in a minute" when the limit lasts until
+    // midnight is a lie someone will act on for hours. workerError knows.
+    if (!res.ok) throw workerError(res, data);
     return toItems(data);
   }
 
@@ -399,11 +417,7 @@
       body: JSON.stringify({ mode: 'workout-plan', image }),
     });
     const data = await res.json().catch(() => ({}));
-    if (!res.ok) {
-      if (data.code === 'DAILY_LIMIT') throw new Error(tr('pi_daily_limit'));
-      if (res.status === 429) throw new Error(tr('ai_rate_limit'));
-      throw new Error(data.error || ('HTTP ' + res.status));
-    }
+    if (!res.ok) throw workerError(res, data, 'pi_daily_limit');
     // A client ahead of the Worker receives {items:[]}. Fail explicitly rather
     // than passing an old food response off as an empty workout image.
     if (!data.plan || !Array.isArray(data.plan.days)) throw new Error(tr('pi_unavailable'));
@@ -747,11 +761,19 @@
             const box = document.getElementById('ai-results');
             let qHtml = `<span class="ai-q">${tr('ai_photo')}</span>`;
             let image = null;
+            // ⚠️ THIS `catch` USED TO BE `catch (_) {}`, AND IT WAS A SECOND
+            // SOURCE OF «صار خطأ» WITH NO NETWORK CALL AT ALL. processImage
+            // rejects for two real, ordinary reasons — a photo over 40
+            // megapixels (a 50MP or 200MP phone camera clears that by itself)
+            // and a file the browser cannot decode (HEIC) — and both were
+            // discarded here, so the generic error below replaced a reason the
+            // user could have acted on. Keep it and let friendlyErr name it.
+            let imgErr = null;
             try {
               const pic = await processImage(file);
               qHtml = `<img class="ai-photo-thumb" src="${pic.dataUrl}" alt="">`;
               image = pic.image;
-            } catch (_) {}
+            } catch (e) { imgErr = e; }
             // OFFER TO EXPLAIN THE PHOTO before spending the call. A picture
             // cannot show what is inside a dish, how it was cooked, or the oil
             // in it, and that is exactly where a photo estimate goes wrong. So
@@ -778,7 +800,7 @@
               const p0 = document.getElementById(id + '-p');
               if (p0) { p0.classList.remove('ai-photo-ask'); p0.innerHTML = `${shown}<span class="ai-dots">${tr('ai_analyzing')}</span>`; }
               try {
-                if (!image) throw new Error(tr('ai_error'));
+                if (!image) throw (imgErr || new Error(tr('ai_error')));
                 const { items } = await window.FoodAI.analyzeImage(image, note);
                 showResult(id, shown, items, box);
               } catch (e) {
@@ -893,11 +915,7 @@
       body: JSON.stringify({ text: String(prompt || ''), mode: 'chat' }),
     });
     const data = await res.json().catch(() => ({}));
-    if (!res.ok) {
-      if (data && (data.code === 'DAILY_LIMIT' || data.error === 'daily limit')) throw new Error(tr('ai_daily_limit'));
-      if (res.status === 429) throw new Error(tr('ai_rate_limit'));
-      throw new Error((data && data.error) || ('HTTP ' + res.status));
-    }
+    if (!res.ok) throw workerError(res, data);
     // Worker may answer as {reply} (chat mode) or fall back to the items shape.
     if (data && typeof data.reply === 'string') return data.reply.trim();
     if (data && Array.isArray(data.items)) {
@@ -934,11 +952,7 @@
       body: JSON.stringify({ audio: audio, prompt: VOICE_PROMPT }),
     });
     const data = await res.json().catch(() => ({}));
-    if (!res.ok) {
-      if (data && (data.code === 'DAILY_LIMIT' || data.error === 'daily limit')) throw new Error(tr('ai_daily_limit'));
-      if (res.status === 429) throw new Error(tr('ai_rate_limit'));
-      throw new Error((data && data.error) || ('HTTP ' + res.status));
-    }
+    if (!res.ok) throw workerError(res, data);
     return { items: toItems(data).items, transcript: (data && data.transcript) || '' };
   }
 

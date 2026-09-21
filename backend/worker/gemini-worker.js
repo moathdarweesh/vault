@@ -6,14 +6,22 @@
 // named GEMINI_KEY with your free Gemini API key (Settings → Variables → Add
 // secret). See backend/README.md for step-by-step.
 
-// Free-tier models tried IN ORDER. If one is out of its daily/minute quota
-// (429) or unavailable (404), the Worker falls through to the next. Ordered by
-// QUALITY first — the lite model is too weak (it echoes the examples), so it is
-// only a last resort. gemini-2.0-flash is the high-quota safety net once
-// gemini-2.5-flash hits its small daily free limit.
+// Free-tier models tried IN ORDER, QUALITY first — the lite model is too weak
+// (it echoes the examples), so it is only a last resort. The middle one is the
+// high-quota safety net once the first hits its small daily free limit.
+//
+// ⚠️ A MODEL ID IS A DEPENDENCY WITH AN EXPIRY DATE, AND NOTHING HERE WATCHES IT.
+// `gemini-2.0-flash` sat in this list for 112 days after Google SHUT IT DOWN on
+// 2026-06-01 (read from ai.google.dev/gemini-api/docs/deprecations on
+// 2026-09-21: release 2025-02-05, shutdown 2026-06-01, recommended replacement
+// gemini-3.6-flash — which that same table shows alive with no shutdown date).
+// It cost nothing visible only because the FIRST model answered; the day it did
+// not, this entry was a guaranteed wasted round trip. Re-read that table when
+// touching this list, and see the 404 branch below — a retirement must page the
+// owner, not tell the user the service is busy.
 const MODELS = [
   'gemini-2.5-flash',
-  'gemini-2.0-flash',
+  'gemini-3.6-flash',
   'gemini-2.5-flash-lite',
 ];
 
@@ -179,12 +187,27 @@ async function callModel(model, key, req) {
     return { error: 'upstream fetch failed' };
   }
 
-  if (res.status === 429 || res.status === 404) return { rateLimited: true };
+  if (res.status === 429) return { rateLimited: true };
+  // ⚠️ 404 IS NOT 429, AND CONFLATING THEM HID A DEAD MODEL FOR 112 DAYS. A 404
+  // means this id is retired or misspelled — a permanent fact about our own
+  // configuration. Reported as "rate limited" it reached the user as «the free
+  // AI service is busy, try again in a minute», advice that could never come
+  // true, and reached the owner as nothing at all. It still falls through to the
+  // next model (the run must survive one dead id), but it is now named.
+  if (res.status === 404) {
+    console.error('[gemini-worker] model retired or unknown:', model);
+    return { retired: true };
+  }
 
   if (!res.ok) {
     let msg = 'HTTP ' + res.status;
     try { const e = await res.json(); msg = (e.error && e.error.message) || msg; } catch (_) {}
-    console.error('[gemini-worker] upstream error:', msg);
+    console.error('[gemini-worker] upstream error:', res.status, msg);
+    // 400 and 403 are properties of the KEY or its project, never of a model —
+    // so they fail on every model, on every request, for ever, and they are the
+    // one upstream class the owner must act on rather than wait out. The code
+    // travels; the message never does (it can quote the key's own project).
+    if (res.status === 400 || res.status === 403) return { error: 'upstream_error', auth: true };
     return { error: 'upstream_error' };
   }
 
@@ -428,6 +451,8 @@ export default {
     // Try each model until one answers. Track whether failures were all quota.
     let lastError = null;
     let allRateLimited = true;
+    let upstreamAuth = false;
+    let retired = [];
     for (const model of MODELS) {
       const r = await callModel(model, key, req);
       if (r.ok) {
@@ -437,7 +462,12 @@ export default {
         return json({ items: r.items }, 200, origin);
       }
       if (r.rateLimited) { lastError = 'rate_limited'; continue; }
+      // A retired id is our configuration being wrong, not the service being
+      // busy — so it must never satisfy `allRateLimited` and send the user away
+      // with "try again in a minute". It is collected and named instead.
+      if (r.retired) { retired.push(model); allRateLimited = false; lastError = 'model_retired'; continue; }
       allRateLimited = false;
+      if (r.auth) upstreamAuth = true;
       lastError = r.error;
     }
 
@@ -445,7 +475,26 @@ export default {
     // a friendly "try again later" message instead of a raw English error.
     if (allRateLimited) return json({ error: 'rate_limited', code: 'RATE_LIMIT' }, 429, origin);
     // Generic 502 — don't leak the internal error string to the client.
-    console.error('[gemini-worker] all models failed, last error:', lastError);
+    console.error('[gemini-worker] all models failed, last error:', lastError,
+      retired.length ? '· retired ids: ' + retired.join(', ') : '');
+    // ⚠️ THIS 502 USED TO CARRY NOTHING. Four distinct internal failures —
+    // 'upstream fetch failed', 'upstream_error', 'no result', 'parse error' —
+    // were all flattened into one opaque body, which the client then flattened
+    // again into the single word «صار خطأ». So this whole class of outage was
+    // undiagnosable from a phone, and the only record of which one it was went
+    // to a console with no log sink attached. The CODE travels now (never the
+    // message, which can quote the key's own project):
+    //   UPSTREAM_AUTH  — Google refused the KEY or its project (400/403). A
+    //                    permanent fact the owner must act on, not wait out.
+    //   MODEL_RETIRED  — every id in MODELS is gone. Ours to fix, not the user's.
+    //   UPSTREAM       — anything else.
+    // Spelled as LITERALS at the return, not assembled into a variable: contract
+    // 30 reads both sides of this boundary by grepping for the string, and a
+    // computed `code: code` is invisible to it — and to the next reader.
+    if (upstreamAuth) return json({ error: 'service unavailable', code: 'UPSTREAM_AUTH' }, 502, origin);
+    if (retired.length === MODELS.length) return json({ error: 'service unavailable', code: 'MODEL_RETIRED' }, 502, origin);
+    // Anything else keeps the old bare shape: no code, because there is nothing
+    // to say that «صار خطأ» does not already say.
     return json({ error: 'service unavailable' }, 502, origin);
   },
 };

@@ -83,7 +83,7 @@ npm run verify           # 43 contracts + lint + 13 suites — THE GATE
 npm run release          # bump every marker and re-read them; runs NO tests
 ```
 
-**Current version: v387.** APK: build 24 / v3.3.
+**Current version: v388.** APK: build 24 / v3.3.
 
 > ⚠️ **`npm run release` RUNS NO TESTS, AND THIS LINE USED TO READ AS IF IT DID.**
 > It said «bump every marker + verify», where *verify* meant the MARKERS — and
@@ -2734,6 +2734,158 @@ the rows pre-filled from last time as performed sets ("confirmed without a
 throwaway edit" is the recorded intent; whether an untouched row should count
 is the owner's call); a saved food **4 taps**. The day card's Save measures
 **69×40** — under the 44 floor.
+
+## v388 — «صار خطأ» on every food photo: one message hiding six different failures
+
+The owner's report: **«فيه مشكلة بالتصوير — دائماً بيطلع لي صار خطأ»**, on the
+installed app.
+
+«صار خطأ» is `ai_error`, and it is not a message — it is `friendlyErr`'s
+**fallback**, reached when an error matches none of the five it can name. So the
+first job was not to fix anything, it was to find out *which* failure the app had
+stopped being able to describe. Five parallel lenses, every finding
+adversarially verified, and the answer turned out to be that **six distinct
+failures all render as that one sentence.**
+
+### The measurement that located it, and it is not in the app at all
+
+`ai_budget_take` is called by the Worker **only after** every gate — method,
+CORS, per-IP limit, the caller's identity, the per-caller burst, input
+validation, the size caps, **and the check that `GEMINI_KEY` is bound** — and
+**immediately before** the Gemini loop. So its call log is a tracer through the
+whole request. Supabase `edge_logs`, read-only:
+
+```
+21 POSTs to /rest/v1/rpc/ai_budget_take in 24h · every one 409 · three in the last hour
+```
+
+That single query settles nine hypotheses at once: the photos **do** reach the
+Worker, the key **is** bound, the session is valid, the image is not too large,
+CORS and CSP are fine, and the request shape has not drifted. The failure is
+inside the model loop, and nowhere else.
+
+### ⚠️ AND THE OBVIOUS SUSPECT IS THE ONE THE CODE RULES OUT
+
+`gemini-2.0-flash` **was shut down by Google on 2026-06-01** and was still the
+second entry in `MODELS`, 112 days later. That is a real defect and it is fixed
+here. **It is not what the owner was seeing**, and the reason is one line:
+
+```js
+if (res.status === 429 || res.status === 404) return { rateLimited: true };
+```
+
+A retired model answers **404**, which this treats as **429** — so had all three
+ids been dead, the Worker would have returned `RATE_LIMIT` and the app would
+have said «الخدمة مشغولة — جرّب بعد دقيقة»: advice about a wait that would never
+end. A model retirement could never produce «صار خطأ». The eliminating evidence
+and the bug were the same line.
+
+What is left is the only upstream shape that reaches the fallback: a non-2xx
+that is **neither 404 nor 429** — a **400 or 403**, which are properties of the
+**key or its project**, never of a model. That is why all three fail together,
+on every request, for ever: *«دائماً»* was the diagnosis all along.
+
+### Six failures, one sentence — now five sentences
+
+| upstream | before | after |
+|---|---|---|
+| 403 — Google refuses the KEY | «صار خطأ» | **`UPSTREAM_AUTH`** → «تعذّر الوصول إلى خدمة الذكاء — الخلل عندنا لا عندك» |
+| 400 — Google refuses the REQUEST | «صار خطأ» | **`UPSTREAM_AUTH`** → the same |
+| 404 — every id retired | **«مشغولة، جرّب بعد دقيقة»** (a lie) | **`MODEL_RETIRED`** → «الخلل عندنا», and the log **names each dead id** |
+| 429 — genuinely busy | «مشغولة، جرّب بعد دقيقة» | unchanged |
+| 500 — upstream broken | «صار خطأ» | «صار خطأ» — correct, nothing more to say |
+| the photo never left the phone | «صار خطأ» | «الملف كبير جداً» / «تعذّرت قراءة هذه الصورة» |
+
+Proved by running the **real** `gemini-worker.js` in a vm against a stubbed
+upstream and the **real** `friendlyErr` over the result — never a copy, so the
+table cannot drift from what ships.
+
+### ⚠️ THE SECOND PRODUCER WAS IN THE CLIENT, AND IT NEVER TOUCHED THE NETWORK
+
+```js
+try { const pic = await processImage(file); … } catch (_) {}   // the reason, destroyed
+…
+if (!image) throw new Error(tr('ai_error'));                    // «صار خطأ», no request at all
+```
+
+`processImage` rejects for two ordinary reasons — a photo over **40 megapixels**
+(a 50MP or 200MP phone camera clears that by itself) and a file the browser
+cannot decode (HEIC) — and both were thrown away and replaced with the generic
+error. The `catch` keeps the reason now.
+
+> **A free discriminator this leaves behind, for the next time:** the picker
+> replaces the bubble with a `<img>` thumbnail **only on success**. Thumbnail
+> visible → the photo was processed and the failure is downstream. The bare word
+> «صورة» → it never left the phone.
+
+### ⚠️ THE 502 CARRIED NOTHING, SO THIS CLASS WAS UNDIAGNOSABLE FROM A PHONE
+
+`callModel` returns four distinct failures — `upstream fetch failed`,
+`upstream_error`, `no result`, `parse error` — and the loop assigned every one of
+them to `lastError`, **logged it, and returned the fixed string `service
+unavailable`**. So all four were unreachable by any client, and the only record
+of which one it was went to a console with no sink attached. The code travels
+now; the message never does, because a Google error message can quote the key's
+own project.
+
+### ⚠️ AND WRANGLER WAS ACTIVELY SWITCHING THE BLACK BOX OFF
+
+`wrangler.toml` had no `[observability]` block. Cloudflare enables Workers Logs
+by default only for **newly created** Workers, and this one's first deploy was
+2026-07-18 — but the stronger half is that **wrangler sends
+`observability: { enabled: false }` on every deploy when the config omits it**,
+so switching it on in the dashboard is undone by the next `wrangler deploy`. It
+has to live in the file. It does now (`enabled = true`, full sampling; the free
+plan keeps 3 days).
+
+That is the third time this project has recorded the same shape — `reportError`
+posting into a table that did not exist, the feedback cap that could never be
+true, and now the one log line that names Google's refusal, written to nothing.
+
+### One defect the proof caught in the fix itself
+
+The new «تعذّرت قراءة هذه الصورة» branch was placed **below** the network branch,
+whose test is the **unanchored** `/load failed/` — and `processImage` rejects
+with the literal `image load failed`. So an undecodable HEIC would have told the
+user to check their internet connection. Caught by running the mapping rather
+than reading it; the branch sits above the network test now, with a comment
+saying why the order is load-bearing.
+
+### Four spellings of one agreement, and three of them had drifted
+
+The same failed-response block existed **four times** — photo/food, plan import,
+chat and voice — each worded slightly differently. The first fix taught one of
+them the new codes; the other three would have gone on showing «صار خطأ» for
+exactly the failure this release exists to name. `workerError(res, data,
+dailyKey)` is the one reader now, and `dailyKey` is the only thing a caller may
+vary (the plan import says it in its own words).
+
+> It is spelled `data.code === '…'` throughout on purpose. **Contract 30 reads
+> both sides of this boundary by grepping for that literal**, and it failed the
+> commit twice while this was written: once for the Worker assembling
+> `code: code` into a variable, and once for a two-character `d.code` alias
+> here. Both times the checker was right — a computed or abbreviated spelling
+> makes the agreement invisible to the next reader as well.
+
+### Deployed
+
+Worker version **`6338e97f-cc65-4304-b12b-d776931eef71`**, 2026-09-21T18:55Z,
+read back from `wrangler deployments list` as 100% of live traffic rather than
+inferred from a successful upload. No secret changed, so this is the ordinary
+`npx wrangler deploy` path from `backend/worker/`.
+
+### Still the owner's, and named plainly
+
+- **The daily AI budget has been dead since 2026-09-06** — 21 of 21 calls
+  refused with 409, `ai_usage` frozen at that date, and the Worker fails **open**
+  on it. So the shared free-tier cap has protected nothing for over two weeks.
+  `backend/pending/29_ai-usage-fk-repair-v25.sql` is the repair and it is a live
+  write.
+- **The next photo now names its own cause.** «الخلل عندنا» confirms the key or
+  its project; check in AI Studio / Google Cloud whether
+  the Generative Language API is still enabled, whether the key has gained an
+  HTTP-referrer or IP restriction (a Worker's egress IP is not stable, so such a
+  restriction fails permanently), and whether the free tier still covers it.
 
 ## v387 — the app-wide declutter: thirty lines that named what you were already looking at
 

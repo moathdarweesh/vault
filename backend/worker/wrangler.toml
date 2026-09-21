@@ -28,3 +28,15 @@ name = "RATE_LIMITER"
 type = "ratelimit"
 namespace_id = "1001"
 simple = { limit = 60, period = 60 }
+
+# ⚠️ WITHOUT THIS BLOCK THE WORKER'S OWN BLACK BOX RECORDS NOTHING, AND
+# WRANGLER ACTIVELY TURNS IT OFF. gemini-worker.js logs Google's verbatim
+# refusal with console.error before flattening it into an opaque 502 — the
+# only place that reason survives. Cloudflare enables logs by default only for
+# NEWLY created Workers (this one's first deploy was 2026-07-18), and wrangler
+# sends `observability: { enabled: false }` on every deploy when the config
+# omits it, so even switching it on in the dashboard is undone by the next
+# `wrangler deploy`. It has to live here. Retention is 3 days on the free plan.
+[observability]
+enabled = true
+head_sampling_rate = 1
