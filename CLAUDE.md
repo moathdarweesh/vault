@@ -83,7 +83,7 @@ npm run verify           # 43 contracts + lint + 13 suites — THE GATE
 npm run release          # bump every marker and re-read them; runs NO tests
 ```
 
-**Current version: v391.** APK: build 24 / v3.3.
+**Current version: v392.** APK: build 24 / v3.3.
 
 > ⚠️ **`npm run release` RUNS NO TESTS, AND THIS LINE USED TO READ AS IF IT DID.**
 > It said «bump every marker + verify», where *verify* meant the MARKERS — and
@@ -2734,6 +2734,42 @@ the rows pre-filled from last time as performed sets ("confirmed without a
 throwaway edit" is the recorded intent; whether an untouched row should count
 is the owner's call); a saved food **4 taps**. The day card's Save measures
 **69×40** — under the 44 floor.
+
+## v392 — same recipe, different amounts: the ingredients sheet scales
+
+The owner, one release after the ingredients sheet: **«بدي بقصة الوصفة أقدر
+أغير الكميات … على أساس إني بدي نفس الوصفة وكميات غير»** — asked which of two
+readings he meant (edit the stored amounts, or scale them for today's
+cooking), the second sentence answered it: the recipe stays, the amounts move.
+
+So the servings line at the top of `openRecipeView` is the editor's own
+stepper (`.rt-serv` / `.rt-step`, `rec_servings` / `rec_serv_less` /
+`rec_serv_more` — zero new keys) used as a **SCALER, not an edit**: it opens
+at the recipe's count, and every amount is rewritten in place at
+`chosen ÷ base`. An amount is free text, so `recScaleQty()` moves only its
+leading number — Latin or Arabic-Indic, with a decimal — and leaves the rest
+of the string alone; a string with no number («رشّة») is left exactly as
+written, and at the recipe's own count every amount is the original string
+again, digits and all. Nothing is written to the recipe.
+
+Measured seeded, ar/dark/375, a 4-serving recipe:
+
+| servings | أرز بسمتي | دجاج | بصل | ملح |
+|---|---|---|---|---|
+| 4 (opens here) | 500 غ | ١ كيلو | ٣ حبات | رشّة |
+| 5 | 625 غ | 1.25 كيلو | 3.75 حبات | رشّة |
+| 2 | 250 غ | 0.5 كيلو | 1.5 حبات | رشّة |
+| back to 4 | 500 غ | ١ كيلو | ٣ حبات | رشّة |
+
+The floor is 1, the stored recipe is byte-identical afterwards, the step
+buttons are 36px with the stepper's own 44px halo.
+
+> **The probe caught the first version stepping 1 → 0 → 4.** `parseInt(v) ||
+> base` reads a typed or stepped 0 as «blank» and jumps to the recipe's count
+> — 0 is a number and `||` cannot tell it from `NaN`. It asks
+> `Number.isFinite(raw)` now and clamps to 1–99.
+
+45 contracts · lint · 13 suites.
 
 ## v391 — the recipe's name opens its ingredients
 

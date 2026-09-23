@@ -865,16 +865,62 @@ function openManualFoodEntry(date, onSave) {
 // number a cook needs, how many servings it makes. The list itself holds no
 // controls; «تعديل» below it is the way to change anything, and it returns
 // to the picker the way the card's own pencil does.
+// SAME RECIPE, DIFFERENT AMOUNTS (owner, v392: «بدي نفس الوصفة وكميات غير»).
+// The servings stepper at the top of the sheet is a SCALER for today's cooking,
+// not an edit: nothing is written to the recipe. An amount is free text, so
+// only its leading number moves — «200 غ» at 2 of 4 servings is «100 غ»,
+// «٣ حبات» is «1.5 حبات», «رشّة ملح» is left exactly as written — and at the
+// recipe's own count every amount is the original string again.
+function recScaleQty(qty, factor) {
+  const s = String(qty || '');
+  if (factor === 1) return s;
+  const m = s.match(/[0-9\u0660-\u0669\u06F0-\u06F9]+(?:[.,\u066B][0-9\u0660-\u0669\u06F0-\u06F9]+)?/);
+  if (!m) return s;
+  const latin = m[0].replace(/[\u0660-\u0669]/g, (d) => String(d.charCodeAt(0) - 0x660))
+    .replace(/[\u06F0-\u06F9]/g, (d) => String(d.charCodeAt(0) - 0x6F0)).replace(/[,\u066B]/g, '.');
+  const n = Number(latin);
+  if (!Number.isFinite(n)) return s;
+  const v = Math.round(n * factor * 100) / 100;
+  return s.slice(0, m.index) + String(v) + s.slice(m.index + m[0].length);
+}
+
 function openRecipeView(date, rec, onSave) {
   // Re-read by id: the picker's copy can be older than an edit made since.
   const r = DB.recipes.list().find((x) => x.id === rec.id) || rec;
+  const base = Math.max(1, Number(r.servings) || 1);
   const modal = convenienceModal(`
     <div class="modal-header"><h2 class="modal-title">${escapeHtml(r.name)}</h2><button class="icon-btn" data-close aria-label="${escapeHtml(t('close'))}">${icon('close', 20)}</button></div>
     <div class="cx-stack">
-      <div class="settings-hint"><span class="num">${fmtNum(r.servings)}</span> ${t('rec_u_serv')}</div>
-      <div class="cx-list rec-view">${(r.items || []).map((it) => `<div class="cx-row"><span>${escapeHtml(it.name)}</span>${String(it.qty || '').trim() ? `<span class="num rec-view-qty" dir="auto">${escapeHtml(it.qty)}</span>` : ''}</div>`).join('')}</div>
+      <div class="rt-serv"><span class="rt-serv-k">${t('rec_servings')}</span>
+        <span class="rt-step">
+          <button type="button" data-step="-1" aria-label="${escapeHtml(t('rec_serv_less'))}">${icon('minus', 16)}</button>
+          <input type="number" id="rec-view-servings" class="num" inputmode="numeric" min="1" max="99" step="1" value="${base}" aria-label="${escapeHtml(t('rec_servings'))}">
+          <button type="button" data-step="1" aria-label="${escapeHtml(t('rec_serv_more'))}">${icon('plus', 16)}</button>
+        </span></div>
+      <div class="cx-list rec-view">${(r.items || []).map((it, i) => `<div class="cx-row"><span>${escapeHtml(it.name)}</span>${String(it.qty || '').trim() ? `<span class="num rec-view-qty" dir="auto" data-qty="${i}">${escapeHtml(it.qty)}</span>` : ''}</div>`).join('')}</div>
       <button type="button" class="btn btn-ghost" data-edit-view>${t('rec_edit')}</button>
     </div>`);
+  const servInput = modal.querySelector('#rec-view-servings');
+  // Rewrites the amount spans in place — the rows never re-render, so the eye
+  // stays where it was and the stepper keeps focus.
+  const paint = () => {
+    // parseInt alone: a 0 typed or stepped down to is a NUMBER, and `|| base` would read it as blank and jump to 4.
+    const raw = parseInt(servInput.value, 10);
+    const n = Number.isFinite(raw) ? Math.min(99, Math.max(1, raw)) : base;
+    if (String(n) !== servInput.value) servInput.value = String(n);
+    const f = n / base;
+    modal.querySelectorAll('[data-qty]').forEach((el) => {
+      const it = (r.items || [])[Number(el.dataset.qty)];
+      el.textContent = recScaleQty(it && it.qty, f);
+    });
+  };
+  modal.querySelectorAll('[data-step]').forEach((b) => b.addEventListener('click', () => {
+    const cur = parseInt(servInput.value, 10);
+    servInput.value = String((Number.isFinite(cur) ? cur : base) + Number(b.dataset.step));
+    paint();
+  }));
+  servInput.addEventListener('input', paint);
+  servInput.addEventListener('change', paint);
   modal.querySelector('[data-edit-view]').addEventListener('click', () => {
     openRecipeEditor(date, r, () => openSavedFoodPicker(date, onSave, 'recipes'));
   });
