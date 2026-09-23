@@ -83,7 +83,7 @@ npm run verify           # 43 contracts + lint + 13 suites — THE GATE
 npm run release          # bump every marker and re-read them; runs NO tests
 ```
 
-**Current version: v392.** APK: build 24 / v3.3.
+**Current version: v393.** APK: build 24 / v3.3.
 
 > ⚠️ **`npm run release` RUNS NO TESTS, AND THIS LINE USED TO READ AS IF IT DID.**
 > It said «bump every marker + verify», where *verify* meant the MARKERS — and
@@ -2734,6 +2734,34 @@ the rows pre-filled from last time as performed sets ("confirmed without a
 throwaway edit" is the recorded intent; whether an untouched row should count
 is the owner's call); a saved food **4 taps**. The day card's Save measures
 **69×40** — under the 44 floor.
+
+## v393 — the completed workout says «مكتمل», and stops pointing at food
+
+The owner, on the finished hero: **«ليش هنا طلع لي سجّل أكلك؟ … ما بدي تطلع
+هنا سجّل أكلك بسبب إنه تحتها بشوي فيه لتسجيل الأكل»** — and: **«إذا أنهيت
+التمرين يتسجّل إنه مكتمل، بس خلّي لها شروط: مش أي واحد يعمل تخطّي كل التمارين
+ويحطّ إنهاء تحطّ له مكتمل»**.
+
+The first is the v387 law read back at v372: the calories card directly below
+IS where food is logged, so a «سجّل أكلك» line two cards above it named what
+the screen already showed. Gone, with `home_log_food` from both dictionaries
+(contract 38 named it). The completed hero holds **no control** now: the
+eyebrow says «مكتمل», a soft check tile (`.hero-done-mark`, `--accent-soft`,
+not a filled control) sits where the rest chip was, and the meta is the day's
+own sets and heaviest weight.
+
+The second was already true and is now stated in the code: **there is no
+«finish» button that marks a day done.** `workoutDone` is coverage of the
+PLAN — every exercise in today's slot has a session today with at least one
+real set (`commitExercise` drops a row with no reps and no weight). Dropping
+or skipping exercises in the guided run narrows the RUN (`runOnly`), never the
+plan slot, so a run that skipped three of four and walked past the last reads
+«1 من 4», not «مكتمل». Measured seeded: 4 of 4 covered → «مكتمل», the mark,
+no button; 3 of 4 with the fourth dropped from the run → «قيد التنفيذ · 3 من
+4» and the filled «أكمل تمرينك»; a fourth session with an empty set list →
+still 3 of 4.
+
+45 contracts · lint · 13 suites.
 
 ## v392 — same recipe, different amounts: the ingredients sheet scales
 

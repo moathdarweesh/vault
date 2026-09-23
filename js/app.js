@@ -12,7 +12,7 @@
 // build. The literal below is the fallback (file://, or a stripped query) and is
 // still bumped by `npm run release` — see CLAUDE.md "CACHE WORKFLOW".
 const VAULT_BUILD = (() => {
-  const FALLBACK = 'v392';
+  const FALLBACK = 'v393';
   try {
     const src = (document.currentScript && document.currentScript.src) || '';
     const m = src.match(/[?&]v=(\d+)/);
@@ -2148,18 +2148,24 @@ function renderHome(el) {
       </div>
     `;
   } else if (workoutOpen || workoutDone) {
-    // Two states of one fact, and the CTA is the difference.
-    //   OPEN     — «كمّل تمرينك», «2 من 5», and the same filled button in the
-    //              same place, so the tap you already know still starts.
-    //   FINISHED — the workout is not a task any more, so the filled button
-    //              goes: what is left today is eating, and that is one tap in a
-    //              LINE, not a slab. The numbers are the day's own, read back.
-    // The CTA keeps its PLACE - last element of the card, full width - so the
-    // tap you already know still lands on it. It is not pixel-identical and the
-    // measurement says so: the finished state sits 14px higher (338 against
-    // 352) because a ghost control is shorter than a filled one and the rest
-    // chip is gone from the eyebrow row. Claiming "it does not move" would have
-    // been a comment this file's own numbers contradict.
+    // Two states of one fact.
+    //   OPEN      — «أكمل تمرينك», «2 من 5», and the same filled button in the
+    //               same place, so the tap you already know still starts.
+    //   COMPLETED — the workout is not a task any more, so the card holds NO
+    //               control: the eyebrow says «مكتمل», a check tile sits where
+    //               the rest chip was, and the numbers are the day's own, read
+    //               back. v372 put a «سجّل أكلك» line here; the owner removed it
+    //               (v393) — the calories card directly below IS where food is
+    //               logged, and a link to it two cards above it named what the
+    //               screen already showed.
+    //
+    // ⚠️ COMPLETED IS EARNED BY COVERAGE OF THE PLAN, NEVER BY A BUTTON. There is
+    // no «finish» that marks a day done: `workoutDone` is true only when EVERY
+    // exercise in today's plan slot has a session today with at least one real
+    // set (commitExercise drops a row with no reps and no weight). Dropping or
+    // skipping exercises in the guided run narrows the RUN (runOnly), never the
+    // plan slot — so a run that skipped three of four exercises and walked past
+    // the last one reads «1 من 4», not «مكتمل».
     const todaySets = allSessions
       .filter((s) => s.date === todayIsoNow && coveredToday.has(s.exerciseId))
       .reduce((n, s) => n + s.sets.length, 0);
@@ -2170,16 +2176,13 @@ function renderHome(el) {
       <div class="hero-card">
         <div class="hero-eyebrow-row">
           <div class="hero-eyebrow">${workoutDone ? t('home_workout_done') : t('home_workout_open')}</div>
-          ${workoutDone ? '' : restChipHtml}
+          ${workoutDone ? `<span class="hero-done-mark" aria-hidden="true">${icon('check', 18)}</span>` : restChipHtml}
         </div>
         <div class="hero-title">${escapeHtml(todayPlan.name || t('start_workout'))}</div>
         <div class="hero-meta">${workoutDone
           ? `${t('n_sets').replace('{n}', fmtNum(todaySets))}${heaviest > 0 ? ` · ${fmtWeight(heaviest)} ${unitLabel()}` : ''}`
           : t('home_workout_progress').replace('{a}', fmtNum(doneInPlan)).replace('{b}', fmtNum(planIdsToday.length))}</div>
-        ${workoutDone ? `
-        <button class="hero-ghost-cta" id="home-log-food" type="button">
-          ${icon('utensils', 20)}<span>${t('home_log_food')}</span>
-        </button>` : `
+        ${workoutDone ? '' : `
         <button class="hero-cta hero-cta-btn" id="home-start-workout" type="button">
           ${icon('dumbbell', 20)}<span>${t('home_workout_continue')}</span>
         </button>`}
@@ -2329,7 +2332,6 @@ function renderHome(el) {
   // "Start Workout" hero card → straight into today's session logging.
   // Recompute the day at click time so it stays correct if Home was left open
   // across midnight.
-  $('#home-log-food', el)?.addEventListener('click', () => navigate('food'));
   $('#home-back-train', el)?.addEventListener('click', () => navigate('session-day'));
   $('#home-back-plan', el)?.addEventListener('click', () => navigate('planner'));
   $('#home-start-workout', el)?.addEventListener('click', () => {

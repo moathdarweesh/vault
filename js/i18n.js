@@ -555,9 +555,9 @@ const I18N = {
     // Planner
     planner_title: 'Workout Rotation',
     today_plan: "Today's Plan",
-    home_workout_open: 'In progress', home_workout_done: 'Finished',
+    home_workout_open: 'In progress', home_workout_done: 'Completed',
     home_workout_progress: '{a} of {b} exercises', n_sets: '{n} sets',
-    home_workout_continue: 'Continue your workout', home_log_food: 'Log your food',
+    home_workout_continue: 'Continue your workout',
     no_plan_today_sub: 'No exercises scheduled for today.',
     start_workout: 'Start Workout', guided_mode: 'Guided mode',
     today_workout: "Today's workout",
@@ -1535,9 +1535,9 @@ const I18N = {
 
     planner_title: 'دورة التمرين',
     today_plan: 'خطة اليوم',
-    home_workout_open: 'قيد التنفيذ', home_workout_done: 'اكتمل',
+    home_workout_open: 'قيد التنفيذ', home_workout_done: 'مكتمل',
     home_workout_progress: '{a} من {b} تمارين', n_sets: '{n} مجموعة',
-    home_workout_continue: 'أكمل تمرينك', home_log_food: 'سجّل أكلك',
+    home_workout_continue: 'أكمل تمرينك',
     no_plan_today_sub: 'لا توجد تمارين مجدولة اليوم.',
     start_workout: 'ابدأ التمرين', guided_mode: 'الوضع الموجّه',
     today_workout: 'تمرين اليوم',

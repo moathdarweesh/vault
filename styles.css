@@ -7271,6 +7271,13 @@ body.theme-light {
   gap: 10px;
 }
 .hero-eyebrow-row .hero-eyebrow { margin: 0; }
+/* The completed workout's mark: the rest chip's seat, a soft tile, not a control
+   (the accent leg of the duotone check reads on the soft ground). */
+.hero-done-mark {
+  flex: none; width: 36px; height: 36px;
+  display: inline-flex; align-items: center; justify-content: center;
+  border-radius: var(--radius-btn-s); background: var(--accent-soft); color: var(--accent-text);
+}
 .rest-chip {
   position: relative;      /* anchors the enlarged hit area below */
   z-index: 1;              /* see the ::after note — .hero-title paints over it otherwise */
