@@ -83,7 +83,7 @@ npm run verify           # 43 contracts + lint + 13 suites — THE GATE
 npm run release          # bump every marker and re-read them; runs NO tests
 ```
 
-**Current version: v390.** APK: build 24 / v3.3.
+**Current version: v391.** APK: build 24 / v3.3.
 
 > ⚠️ **`npm run release` RUNS NO TESTS, AND THIS LINE USED TO READ AS IF IT DID.**
 > It said «bump every marker + verify», where *verify* meant the MARKERS — and
@@ -2734,6 +2734,83 @@ the rows pre-filled from last time as performed sets ("confirmed without a
 throwaway edit" is the recorded intent; whether an untouched row should count
 is the owner's call); a saved food **4 taps**. The day card's Save measures
 **69×40** — under the 44 floor.
+
+## v391 — the recipe's name opens its ingredients
+
+The owner, on the recipe card: **«بدي زر يكون بإمكاني أشوف المكونات عشان أعمل
+الطبخة نفسها لما بدي إياها»**. The card had three controls — add, edit, delete
+— and none of them was *read*: the only way to see what goes into «كبسة دجاج»
+was to open the editor, a form.
+
+**No fourth control was added.** The NAME is the door, which is the meal
+card's own precedent (v314: «the NAME is a `<button>` that opens the
+editor»), and `openRecipeView()` (`js/food.js`) is a read-only sheet: the
+recipe's name as its title, one line with the one number a cook needs («٤
+حصص»), then every ingredient with its amount **exactly as typed** — «500 غ»,
+«١ كيلو», or nothing at all — never parsed, never scaled, and no macros: at
+the stove the arithmetic is noise. The list holds zero controls; «تعديل»
+under it is the way to change anything and returns to the picker the way the
+card's own pencil does. Zero new dictionary keys — the title is the data, and
+`rec_u_serv` / `rec_edit` / `close` already existed.
+
+Measured seeded, ar/dark/375 and en/light/412: the name button 194–219×60,
+the sheet named by `aria-labelledby` after the recipe, three rows with the
+amounts hugging the end (`.rec-view-qty`, `flex: none` — `.cx-row > span` is
+`flex: 1`, which would have split each row 50/50 with a two-character
+amount), a blank amount rendering the name alone, 0 controls inside the
+list, «تعديل» 44px tall and opening the editor with the same three rows. The
+sheet is in the fingerprint net (`recipe-view`, contract 36).
+
+### And «كرّر أمس» starts with nothing ticked
+
+The owner, on the repeat-yesterday sheet: **«لا تجعل الديفلت كله مختار — لا
+تجعل ولا شي مختار»**. v376 ticked everything on the reasoning that the common
+case is most of the day; he has overruled it, and the sheet is a list to pick
+FROM now. The add button is disabled until a box is ticked and re-derives
+that on every change — a filled «أضف المختار» that answers a tap with «اختر
+شيئًا أولًا» is a button that does nothing, which this project deletes rather
+than ships. `fl_repeat_none` stays as the belt behind it.
+
+### And the split's day names follow the exercise-name setting
+
+The owner, on the templates sheet: **«ليش صارت أسماء الجداول معرّبة تمام وأنا
+مختار إنها تكون كل الأسامي بالإنجليزي؟»** He was right: v383's `planDayName`
+asked only «is the UI Arabic?», so a person who chose English exercise names
+(`prefs.exNames === 'en'`) read «دفع / سحب / أرجل» over «Bench Press» — two
+decisions on one screen. «Push / Pull / Legs» is the same vocabulary as the
+exercise names beside it, so it takes the same decision: `planDayName` and
+`tmplDisplayName` return the English name when `exNamesMode()` is `'en'`,
+and the Arabic display map otherwise (`translit` is Arabic letters too). The
+stored value never moves, as before. The sheet's subtitle — «اختار برنامج
+يعبّي خطتك الأسبوعية», dialect AND a v387 subtitle that describes the sheet
+you are standing on — went with it, from both dictionaries.
+
+### Barcode: the amount starts at the product's own serving
+
+The owner: **«خاصية الباركود ليش المنتجات اللي فيها قليلة، وممكن يطلع المنتج
+صح بس وزنه مختلف كليًّا؟»** Two different answers. The coverage is the
+database's, not the app's: Open Food Facts is the free, crowd-sourced source
+and its Gulf shelf is thin — a product nobody has ever scanned into it is
+«not found» here, and there is no free source with better GCC coverage to
+fall back to. The weight WAS ours: the figures come per 100 g and the box
+opened at **100 g for every product** — a 30 g bar, a 330 ml can — so the
+product read as right and its weight as wrong. It now asks for
+`serving_quantity` and `product_quantity` too, and `defaultGrams()` opens the
+box at the label's serving, else a single-serve package (≤ 400), else 100.
+Still editable; nothing else on the card changed.
+
+### And the photo analysis that «got slow like never before»
+
+Not measurable from here without a session token, so it is made measurable
+instead: `callModel` in the Worker now logs **every attempt's model, status
+and milliseconds** (Workers Logs, on since v388) and bounds each attempt at
+**25 s** — a timeout falls through to the next id exactly as a network error
+does. The likely shape, to be read off the next slow photo's log: the loop
+tries three ids in order and each attempt re-uploads the photo, so a
+rate-limited first id plus a slow second one is three sequential round trips.
+Deployed with `npx wrangler deploy` (no secret changed).
+
+45 contracts · lint · 13 suites.
 
 ## v390 — no zoom, «Continue with Google», and the hold that had no way out
 

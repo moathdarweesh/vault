@@ -813,7 +813,6 @@ const I18N = {
 
     // Templates
     templates_title: 'Templates',
-    templates_subtitle: 'Pick a program to pre-fill your weekly plan.',
     template_applied: 'Template applied',
     apply: 'Apply',
 
@@ -1792,7 +1791,6 @@ const I18N = {
     remove_from_day: 'إزالة من اليوم',
 
     templates_title: 'القوالب',
-    templates_subtitle: 'اختار برنامج يعبّي خطتك الأسبوعية.',
     template_applied: 'تم تطبيق القالب',
     apply: 'طبّق',
 

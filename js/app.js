@@ -12,7 +12,7 @@
 // build. The literal below is the fallback (file://, or a stripped query) and is
 // still bumped by `npm run release` — see CLAUDE.md "CACHE WORKFLOW".
 const VAULT_BUILD = (() => {
-  const FALLBACK = 'v390';
+  const FALLBACK = 'v391';
   try {
     const src = (document.currentScript && document.currentScript.src) || '';
     const m = src.match(/[?&]v=(\d+)/);
@@ -2410,9 +2410,10 @@ function exDisplayName(ex) {
 // A built-in template's name is a dictionary key; an admin-curated preset's is
 // server content and can only be escaped. openScheduleModal() takes either.
 function tmplDisplayName(tmpl) {
-  return WORKOUT_TEMPLATES.some((x) => x.id === tmpl.id)
-    ? t('tmpl_name_' + String(tmpl.id).replace(/-/g, '_'))
-    : escapeHtml(tmpl.name || '');
+  if (!WORKOUT_TEMPLATES.some((x) => x.id === tmpl.id)) return escapeHtml(tmpl.name || '');
+  // A template's name is made of its day names, so it follows the same
+  // decision the days do (planDayName): English exercise names, English split.
+  return exNamesMode() === 'en' ? escapeHtml(tmpl.name || '') : t('tmpl_name_' + String(tmpl.id).replace(/-/g, '_'));
 }
 
 // The four built-in templates ship their workout days in English, and adopting
@@ -2420,9 +2421,15 @@ function tmplDisplayName(tmpl) {
 // stored value never moves. Every plan ever adopted reads correctly, and a day
 // the user renamed is not in the map and comes back untouched. Same decision as
 // exDisplayName() above, for the same reason.
+//
+// ⚠️ AND IT FOLLOWS THE EXERCISE-NAME SETTING, NOT ONLY THE UI LANGUAGE (v391).
+// «Push / Pull / Legs» is the same vocabulary as the exercise names beside it;
+// a person who chose English exercise names (`prefs.exNames === 'en'`) and
+// then read «دفع / سحب / أرجل» over «Bench Press» was reading two decisions
+// on one screen. v383 asked only «is the UI Arabic?» — the owner caught it.
 function planDayName(name) {
   const raw = String(name == null ? '' : name);
-  if ((DB.prefs.get().lang || 'en') !== 'ar') return raw;
+  if ((DB.prefs.get().lang || 'en') !== 'ar' || exNamesMode() === 'en') return raw;
   return PLAN_DAY_AR[raw] || raw;
 }
 
@@ -5609,7 +5616,7 @@ function openPlanTargetsEditor(index) {
 function openTemplatesModal() {
   const cards = WORKOUT_TEMPLATES.map((tmpl) => `
     <div class="compare-card" style="margin-bottom:8px">
-      <div class="compare-card-title">${t('tmpl_name_' + tmpl.id.replace(/-/g, '_'))}</div>
+      <div class="compare-card-title">${tmplDisplayName(tmpl)}</div>
       <div style="font-size:12px;color:var(--text-mute);margin-bottom:10px">${t('tmpl_desc_' + tmpl.id.replace(/-/g, '_'))} · <span class="num">${fmtNum(tmpl.days.length)}</span> ${t('workouts_label')}</div>
       <div style="display:flex;flex-wrap:wrap;gap:5px;margin-bottom:12px">
         ${tmpl.days.map((d) => `<span class="today-plan-chip">${escapeHtml(planDayName(d.name))}</span>`).join('')}
@@ -5635,7 +5642,6 @@ function openTemplatesModal() {
     <div class="modal-header">
       <div>
         <div class="modal-title">${t('templates_title')}</div>
-        <div class="modal-subtitle">${t('templates_subtitle')}</div>
       </div>
       <button class="icon-btn icon-btn-tile" data-close>${icon('close', 20)}</button>
     </div>

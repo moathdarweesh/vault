@@ -177,15 +177,28 @@ async function callModel(model, key, req) {
   if (chat) body.systemInstruction = { parts: [{ text: CHAT_SYSTEM }] };
   if (plan) body.systemInstruction = { parts: [{ text: PLAN_SYSTEM }] };
 
+  // EVERY ATTEMPT IS TIMED AND BOUNDED. The loop below tries the ids in order,
+  // and each attempt re-uploads the whole request (a photo included) — so a
+  // photo that lands on a rate-limited first id and a slow second one costs
+  // three sequential round trips, and the user reads it as «the AI got slow».
+  // The timing line is what makes that visible in Workers Logs (observability
+  // is on since v388); the 25 s ceiling is what stops one stalled attempt from
+  // holding the whole request for minutes — a timeout is a fetch failure, so it
+  // falls through to the next id exactly as a network error does.
+  const ATTEMPT_MS = 25000;
+  const t0 = Date.now();
   let res;
   try {
     res = await fetch(
       `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${encodeURIComponent(key)}`,
-      { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }
+      { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
+        signal: (typeof AbortSignal !== 'undefined' && AbortSignal.timeout) ? AbortSignal.timeout(ATTEMPT_MS) : undefined }
     );
   } catch (e) {
+    console.error('[gemini-worker] attempt', model, (e && e.name === 'TimeoutError') ? 'TIMEOUT' : 'fetch failed', 'after', Date.now() - t0, 'ms');
     return { error: 'upstream fetch failed' };
   }
+  console.log('[gemini-worker] attempt', model, 'status', res.status, 'in', Date.now() - t0, 'ms');
 
   if (res.status === 429) return { rateLimited: true };
   // ⚠️ 404 IS NOT 429, AND CONFLATING THEM HID A DEAD MODEL FOR 112 DAYS. A 404

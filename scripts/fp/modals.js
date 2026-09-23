@@ -56,6 +56,7 @@ const ENTRIES = [
   { id: 'manual-food', name: 'openManualFoodEntry', args: ['$today', '$noop'], host: 'food' },
   { id: 'recipe-new', name: 'openRecipeEditor', args: ['$today', { v: null }, '$noop'], host: 'food' },
   { id: 'recipe-edit', name: 'openRecipeEditor', args: ['$today', '$recipe', '$noop'], host: 'food' },
+  { id: 'recipe-view', name: 'openRecipeView', args: ['$today', '$recipe', '$noop'], host: 'food' },
   { id: 'saved-foods', name: 'openSavedFoodPicker', args: ['$today', '$noop', { v: 'foods' }], host: 'food' },
   { id: 'saved-recipes', name: 'openSavedFoodPicker', args: ['$today', '$noop', { v: 'recipes' }], host: 'food' },
   { id: 'saved-bundles', name: 'openSavedFoodPicker', args: ['$today', '$noop', { v: 'bundles' }], host: 'food' },

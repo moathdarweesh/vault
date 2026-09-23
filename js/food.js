@@ -337,7 +337,7 @@ function openBarcodeScanner(date, onSave) {
     let failed = false;   // a DNS failure, offline, a 5xx — none of them is "unknown barcode"
     try {
       const res = await fetch('https://world.openfoodfacts.org/api/v2/product/' +
-        encodeURIComponent(code) + '.json?fields=product_name,nutriments');
+        encodeURIComponent(code) + '.json?fields=product_name,nutriments,serving_quantity,product_quantity');
       const data = await res.json();
       product = data && data.product;
     } catch (_) { failed = true; }
@@ -379,8 +379,25 @@ function openBarcodeScanner(date, onSave) {
   manualGo.addEventListener('click', doManual);
   manualInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); doManual(); } });
 
+  // THE AMOUNT BOX STARTS AT THE PRODUCT'S OWN SERVING, not at 100 g. The
+  // figures come per 100 g and used to be shown for exactly 100 g whatever
+  // the product was — so a 30 g bar and a 330 ml can both opened as «100 غ»,
+  // which read as the product being right and its weight wrong (owner report,
+  // v391). Open Food Facts carries the serving the label states
+  // (serving_quantity, grams or ml) and the package size (product_quantity);
+  // the serving wins, a single-serve package is next, and 100 g is only the
+  // fallback when the record says nothing. The box stays editable either way.
+  function defaultGrams(product) {
+    const serving = Number(product.serving_quantity);
+    if (Number.isFinite(serving) && serving >= 1 && serving <= 1000) return Math.round(serving);
+    const pack = Number(product.product_quantity);
+    if (Number.isFinite(pack) && pack >= 1 && pack <= 400) return Math.round(pack);
+    return 100;
+  }
+
   function showResult(product, n) {
     const name = String(product.product_name || t('add_barcode')).slice(0, 80);
+    const grams0 = defaultGrams(product);
     const per100 = {
       cal: Math.round(+n['energy-kcal_100g'] || 0),
       pro: Math.round((+n['proteins_100g'] || 0) * 10) / 10,
@@ -393,7 +410,7 @@ function openBarcodeScanner(date, onSave) {
         <div class="bc-name">${escapeHtml(name)}</div>
         <div class="bc-amount-row">
           <label class="form-label" for="bc-grams">${t('bc_amount')}</label>
-          <input type="number" inputmode="numeric" id="bc-grams" value="100" min="1" step="10">
+          <input type="number" inputmode="numeric" id="bc-grams" value="${grams0}" min="1" step="10">
           <span class="bc-unit">${t('unit_g')}</span>
         </div>
         <div class="ai-macros" id="bc-macros"></div>
@@ -402,7 +419,7 @@ function openBarcodeScanner(date, onSave) {
     const gramsInput = result.querySelector('#bc-grams');
     const macrosEl = result.querySelector('#bc-macros');
     const scaled = () => {
-      const g = Math.max(1, parseInt(gramsInput.value, 10) || 100);
+      const g = Math.max(1, parseInt(gramsInput.value, 10) || grams0);
       const f = g / 100;
       return {
         name: name + ' ~' + fmtNum(g) + t('unit_g'),
@@ -472,8 +489,9 @@ function openBarcodeScanner(date, onSave) {
 //
 // It is a LIST WITH CHOICES, never a "copy the day" button: nobody eats the
 // same four things every day, and an all-or-nothing repeat would be wrong often
-// enough to stop being used. Everything starts ticked because the common case
-// is most of it.
+// enough to stop being used. NOTHING starts ticked (owner decision, v391 —
+// «لا تجعل الديفلت كله مختار»; v376 had ticked everything): the person picks
+// what they ate again, and the add button waits until something is picked.
 //
 // The portions come across verbatim (`servings`), which is the other half of
 // "as they were" - a repeat that silently logged one serving of a 1.5-serving
@@ -497,7 +515,7 @@ function openRepeatYesterday(date, onChange) {
         // list's - rather than a second one that merely resembles it. Its
         // checkbox is the app's own orange square (v330), not the browser's.
         return `<label class="sl-tick" data-ry-row="${i}">
-          <input type="checkbox" data-ry="${i}" checked>
+          <input type="checkbox" data-ry="${i}">
           <span class="sl-text">
             <span class="sl-name">${escapeHtml(e.name)}${m !== 1 ? ` <span class="num">\u00d7 ${fmtNum(m)}</span>` : ''}</span>
             <span class="sl-amt"><span class="num">${fmtNum(Math.round(e.calories * m))}</span> ${t('cal')}</span>
@@ -510,9 +528,15 @@ function openRepeatYesterday(date, onChange) {
     </div>` : `<div class="calc-preview-hint" style="text-align:center;padding:18px">${t('fl_repeat_empty')}</div>`}
   `);
   const addBtn = overlay.querySelector('#ry-add');
+  // The button is live only while something is ticked — a filled button that
+  // answers with «choose something first» is a button that does nothing.
+  const syncAdd = () => { if (addBtn) addBtn.disabled = !overlay.querySelector('[data-ry]:checked'); };
+  const list = overlay.querySelector('#ry-list');
+  if (list) list.addEventListener('change', syncAdd);
+  syncAdd();
   if (addBtn) addBtn.addEventListener('click', () => {
     if (addBtn.disabled) return;
-    addBtn.disabled = true; setTimeout(() => { addBtn.disabled = false; }, 800);
+    addBtn.disabled = true; setTimeout(syncAdd, 800);
     const picked = [...overlay.querySelectorAll('[data-ry]:checked')]
       .map((c) => prev[Number(c.dataset.ry)])
       .filter(Boolean)
@@ -834,6 +858,28 @@ function openManualFoodEntry(date, onSave) {
 //
 // Totals are never stored; DB.recipes.totals() derives them on read. A stored
 // total silently disagrees with its own ingredients the moment one is edited.
+// THE INGREDIENTS, TO COOK FROM. The card says what a serving COSTS; this says
+// what goes IN — every ingredient with its amount exactly as it was typed
+// («200 غ», «٣ حبات»), never parsed, never scaled, and no macros: at the
+// stove the arithmetic is noise. One line above the list carries the one
+// number a cook needs, how many servings it makes. The list itself holds no
+// controls; «تعديل» below it is the way to change anything, and it returns
+// to the picker the way the card's own pencil does.
+function openRecipeView(date, rec, onSave) {
+  // Re-read by id: the picker's copy can be older than an edit made since.
+  const r = DB.recipes.list().find((x) => x.id === rec.id) || rec;
+  const modal = convenienceModal(`
+    <div class="modal-header"><h2 class="modal-title">${escapeHtml(r.name)}</h2><button class="icon-btn" data-close aria-label="${escapeHtml(t('close'))}">${icon('close', 20)}</button></div>
+    <div class="cx-stack">
+      <div class="settings-hint"><span class="num">${fmtNum(r.servings)}</span> ${t('rec_u_serv')}</div>
+      <div class="cx-list rec-view">${(r.items || []).map((it) => `<div class="cx-row"><span>${escapeHtml(it.name)}</span>${String(it.qty || '').trim() ? `<span class="num rec-view-qty" dir="auto">${escapeHtml(it.qty)}</span>` : ''}</div>`).join('')}</div>
+      <button type="button" class="btn btn-ghost" data-edit-view>${t('rec_edit')}</button>
+    </div>`);
+  modal.querySelector('[data-edit-view]').addEventListener('click', () => {
+    openRecipeEditor(date, r, () => openSavedFoodPicker(date, onSave, 'recipes'));
+  });
+}
+
 function openRecipeEditor(date, existing, onDone) {
   // THE INGREDIENT LEDGER (v301). The sheet is a LIST, not a spreadsheet.
   //
@@ -1412,12 +1458,12 @@ function openSavedFoodPicker(date, onSave, initialTab) {
       const per = DB.recipes.perServing(r);
       return `
       <div class="bundle-card">
-        <div class="bundle-main">
+        <button type="button" class="bundle-main" data-view-rec="${escapeHtml(r.id)}">
           <div class="bundle-name">${escapeHtml(r.name)}</div>
           <div class="bundle-meta"><span class="num">${fmtNum(r.items.length)}</span> ${t('rec_u_ing')} ·
             <span class="num">${fmtNum(r.servings)}</span> ${t('rec_u_serv')} ·
             <span class="num">${fmtNum(per.calories)}</span> ${t('cal')} ${t('rec_u_per')}</div>
-        </div>
+        </button>
         <button type="button" class="btn btn-primary bundle-add" data-log-rec="${escapeHtml(r.id)}" aria-label="${escapeHtml(t('add'))}">${icon('plus', 16)}</button>
         <button type="button" class="icon-btn" data-edit-rec="${escapeHtml(r.id)}" aria-label="${escapeHtml(t('rec_edit'))}">${icon('edit', 16)}</button>
         <button type="button" class="icon-btn danger" data-del-rec="${escapeHtml(r.id)}" aria-label="${escapeHtml(t('delete'))}">${icon('trash', 16)}</button>
@@ -1444,6 +1490,13 @@ function openSavedFoodPicker(date, onSave, initialTab) {
       if (!result.ok) { convenienceError(result); return; }
       if (typeof onSave === 'function') onSave();
       offerUndo(t('rec_logged').replace('{name}', r.name), result);
+    }));
+    // THE NAME IS THE DOOR to the ingredients — the meal card's precedent
+    // (v314): a person at the stove wants the list, and the row already has
+    // three controls.
+    listEl.querySelectorAll('[data-view-rec]').forEach((b) => b.addEventListener('click', () => {
+      const r = DB.recipes.list().find((x) => x.id === b.dataset.viewRec);
+      if (r) openRecipeView(date, r, onSave);
     }));
     listEl.querySelectorAll('[data-edit-rec]').forEach((b) => b.addEventListener('click', () => {
       const r = DB.recipes.list().find((x) => x.id === b.dataset.editRec);
