@@ -5592,23 +5592,15 @@ body[dir="rtl"] .bento-card.wide .bento-added-stripe { left: 14px; }
 }
 .mb-16 { margin-bottom: 16px; }
 
-/* "Synced from watch" badge in the sleep log */
-.src-badge {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  margin-inline-start: 8px;
-  padding: 2px 7px;
-  border-radius: 999px;
-  font-size: 11px;
-  font-weight: 700;
-  letter-spacing: 0.02em;
-  color: var(--accent-text);
-  background: var(--accent-soft);
-  border: 1px solid var(--accent-line);
-  vertical-align: middle;
-}
-.src-badge svg { width: 16px; height: 16px; }
+/* A time range («11:10 PM → 7:05 AM») inside a .data-title. The title is a
+   non-wrapping flex row, so the range is ONE item that wraps as text — at the
+   arrow, never inside a time. `dir="ltr"` is on the markup: a range has an
+   order and the arrow must point along it in both scripts (v374). The source
+   («من الساعة») that used to ride here as a capsule is a word in .data-meta
+   now, the way the cardio row carries «تم» — a standing property of the row is
+   never a chip. */
+.time-range { white-space: normal; }
+.time-word  { white-space: nowrap; }
 
 /* ---- Health Connect modal ---- */
 .health-msg {

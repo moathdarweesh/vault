@@ -83,7 +83,7 @@ npm run verify           # 43 contracts + lint + 13 suites — THE GATE
 npm run release          # bump every marker and re-read them; runs NO tests
 ```
 
-**Current version: v388.** APK: build 24 / v3.3.
+**Current version: v389.** APK: build 24 / v3.3.
 
 > ⚠️ **`npm run release` RUNS NO TESTS, AND THIS LINE USED TO READ AS IF IT DID.**
 > It said «bump every marker + verify», where *verify* meant the MARKERS — and
@@ -2734,6 +2734,71 @@ the rows pre-filled from last time as performed sets ("confirmed without a
 throwaway edit" is the recorded intent; whether an untouched row should count
 is the owner's call); a saved food **4 taps**. The day card's Save measures
 **69×40** — under the 44 floor.
+
+## v389 — the «الساعة» badge that sat in the middle of the sleep row
+
+The owner: **«في النوم المسجَّل فيه علامة الساعة أو المزامنة — علامة الساعة بتيجي
+بالنصف وشكلها مش كويس»**. Measured on an imported night at ar/dark/375 before
+anything was touched:
+
+| | |
+|---|---|
+| the badge's box | x 109–175 |
+| its own title column | x 166–289 |
+| the duration value's column | x 124–154 |
+
+So the badge had **spilled 57px out of the title column and was sitting on top
+of the value column**, beside `7:55`, reading as a third figure — exactly
+«بالنصف». And the same screenshot showed the second half of «شكلها مش كويس»: the
+title had wrapped as **«11:10» over «PM», «7:05» over «AM»** — four fragments.
+
+### One cause for both: `.data-title` is a non-wrapping flex row
+
+The range was three flex items — a time, an arrow, a time — plus the badge as a
+fourth. A flex row that cannot wrap does two bad things to items that do not fit:
+it lets text break *inside* an item (so each time split at its own space), and it
+pushes whatever is left clean out of the box (so the badge landed in the middle of
+the row). The badge was not misplaced; it was **overflow**.
+
+- **The range is ONE item now** — `<span class="num time-range" dir="ltr">` holding
+  two `.time-word` spans that cannot break — so it wraps as text, at the arrow,
+  never inside a time. `dir="ltr"` is v374's rule applied one row over: a range
+  has an order and the arrow points along it in both scripts. Measured after:
+  «11:10 PM →» / «7:05 AM», **0 elements outside the title box** (was 1).
+- **The source is a word in the meta line** — «مدة النوم · من الساعة» — the way the
+  cardio row already carries «تم» (v326): a standing property of the row is text,
+  never a chip. `.src-badge` was a **capsule** (`border-radius: 999px`) on a
+  `<span>`, which is why contract 42 could not see it (its scope is controls), and
+  it went with its markup. Both dictionaries: «الساعة» → «من الساعة», 'Watch' →
+  'From the watch'.
+- **The cardio twin got the same edit** (`js/body.js:273`), and the measurement
+  turned up one more thing there: its meta read **«30 الدقائق»** — `t('minutes')`
+  is the COLUMN LABEL, and after a numeral the definite article is the v383
+  «20 المجموعات» trap — and `js/body.js:281` was the **only** cardio site in the
+  app spelling it that way; the Home rows, the day view and the stat strip all use
+  `unit_min`. It reads «30 د · 150 سعرة · من الساعة» now.
+
+> The probe's first run seeded the night with `DB.sleep.add({…, source:
+> 'health'})` and **no badge appeared** — `add()` is a field whitelist and drops
+> `source`. `importFromHealth()` is the only writer of `source`/`hcKey`, so the
+> probe seeds through it, the way Health Connect really does. A seed that
+> silently loses the field under test proves nothing, which is the widget suite's
+> lesson (v365) met again.
+
+### Named, not fixed
+
+`formatTime12` paints Latin **PM / AM** inside the Arabic UI («11:10 PM»). Every
+sleep figure on the Home card and the ledger carries it. It is a separate
+decision about the whole formatter, not a side effect of this row.
+
+### What both net lanes say
+
+Sheets **110/110 identical**. Views **152/160**, and all 24 differences are one
+string — the footer's build label, `v386 → v388`, because the baseline was
+captured before v388's marker bump. Neither lane renders an imported night (the
+matrix is the empty state; the fixture seeds none), so the evidence for the
+change itself is the seeded probe above, and the net's job here is the other
+one: proving nothing else moved. It holds.
 
 ## v388 — «صار خطأ» on every food photo: one message hiding six different failures
 

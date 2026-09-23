@@ -270,7 +270,7 @@ function renderCardio(el) {
       <div class="data-row">
         <div class="data-icon ${tm.cls}">${icon(tm.iconName, 20)}</div>
         <div class="data-main">
-          <div class="data-title">${escapeHtml(tm.label)}${c.source === 'health' ? `<span class="src-badge">${icon('refresh', 16)}${t('from_watch')}</span>` : ''}</div>
+          <div class="data-title">${escapeHtml(tm.label)}</div>
           <div class="data-meta">
             <!-- The day header above the row carries the date now.
                  Coerced, not interpolated raw. These arrive from the synced
@@ -278,9 +278,13 @@ function renderCardio(el) {
                  as untrusted, and they land in innerHTML — so a string field
                  carrying markup would execute. A number field can only ever be
                  a number; forcing that is stricter than escaping and cheaper. -->
-            <span class="num">${fmtNum(Math.round(Number(c.duration) || 0))} ${t('minutes').toLowerCase()}</span>
+            <!-- unit_min («د»), the same noun every other cardio figure in the app
+                 uses — t('minutes') is the COLUMN LABEL «الدقائق», and after a numeral
+                 the definite article is not Arabic (the v383 «20 المجموعات» trap). -->
+            <span class="num">${fmtNum(Math.round(Number(c.duration) || 0))} ${t('unit_min')}</span>
             <span class="dot-sep"></span>
             <span class="num">${fmtNum(Math.round(Number(c.calories) || 0))} ${t('cal')}</span>
+            ${c.source === 'health' ? `<span class="dot-sep"></span><span>${escapeHtml(t('from_watch'))}</span>` : ''}
           </div>
         </div>
         <div class="data-actions">
@@ -673,9 +677,17 @@ function renderSleep(el) {
     <div class="data-row">
       <div class="data-icon sleep">${icon('bed', 20)}</div>
       <div class="data-main">
-        <div class="data-title"><span class="num">${formatTime12(s.sleepTime)}</span> <span aria-hidden="true">→</span> <span class="num">${formatTime12(s.wakeTime)}</span>${s.source === 'health' ? `<span class="src-badge">${icon('refresh', 16)}${t('from_watch')}</span>` : ''}</div>
+        <!-- ⚠️ ONE ltr RUN, NOT THREE FLEX ITEMS. .data-title is a non-wrapping
+             flex row, so as three items the range could not wrap between the
+             times: each time broke INSIDE itself instead («11:10» over «PM»),
+             and anything after them was pushed clean out of the column into the
+             middle of the row — which is where the «الساعة» badge used to land.
+             A range is one object with an order (v374), and each time is a
+             word that must not break. -->
+        <div class="data-title"><span class="num time-range" dir="ltr"><span class="time-word">${formatTime12(s.sleepTime)}</span> <span aria-hidden="true">→</span> <span class="time-word">${formatTime12(s.wakeTime)}</span></span></div>
         <div class="data-meta">
           <span>${escapeHtml(t('total_sleep'))}</span>
+          ${s.source === 'health' ? `<span class="dot-sep"></span><span>${escapeHtml(t('from_watch'))}</span>` : ''}
         </div>
         ${sleepStagesHtml(s, { compact: true })}
       </div>
