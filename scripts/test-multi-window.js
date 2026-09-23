@@ -143,17 +143,34 @@ function staleIsNotAStorageFailure() {
   assert.equal(c.saveCenterModel({ ok: false, code: 'WRITE_FAILED' }, cloud).detailKey, 'sc_write_failed');
 }
 
+// Sign the device in as `user` once through `entry`, the way a normal boot
+// does, so the guard records the address that uid signed in with. Returns
+// nothing; the requests it makes are not the test's business.
+async function bootAs(s, entry, user) {
+  s.session({ user });
+  s.query(async () => ({ data: null, error: null }));
+  await s.c.Cloud[entry]();
+}
+
 // ── V-03 a foreign blob is preserved under its own owner and never uploaded ──
-async function foreignBlobIsNeverAdopted(entry) {
+// `emails`: the same scenario with both accounts carrying an address — and two
+// DIFFERENT addresses, which is a shared phone, so the v351 answer must hold
+// exactly as it did before the same-person case existed.
+async function foreignBlobIsNeverAdopted(entry, emails) {
   const s = context(), { c, values, keys } = s;
   const ex = firstExercise(c);
   const alice = c.DB.sessions.add({ exerciseId: ex, date: DAY, sets: [{ reps: 5, weight: 100 }] });
+  if (emails) {
+    await bootAs(s, entry, { id: 'alice', email: 'Alice@Example.invalid' });
+    assert.ok(values.has(keys.lastEmail), 'a boot records the address its uid signed in with');
+    assert.equal(JSON.parse(values.get(keys.lastEmail)).email, 'alice@example.invalid', 'a boot records the address its uid signed in with, lower-cased');
+  }
 
   // THE REAL TRIGGER, and it is not "go offline and tap Logout": offline with a
   // valid token makes signOut() fail and the user stays signed in. It is a
   // logout whose PUSH failed — another device advanced the row, a 5xx, a banned
   // account — where app.js deliberately KEEPS the unpushed blob.
-  s.session({ user: { id: 'bob' } });
+  s.session({ user: emails ? { id: 'bob', email: 'bob@example.invalid' } : { id: 'bob' } });
   assert.equal(c.Cloud.getLastUid(), 'alice', 'the device still carries the previous owner');
   assert.equal(c.Cloud.localHasData(), true, 'and still carries their data');
 
@@ -165,7 +182,7 @@ async function foreignBlobIsNeverAdopted(entry) {
 
   const requests = [];
   s.query(async (r) => { requests.push(r); return { data: null, error: null }; });   // bob's row is empty
-  await c.Cloud[entry]();
+  assert.notEqual(await c.Cloud[entry](), 'duplicate', 'two different addresses are two people, never "the same person"');
 
   assert.equal((values.get(keys.store) || '').includes(alice.id), false,
     "the previous account's blob is off the device");
@@ -184,6 +201,81 @@ async function foreignBlobIsNeverAdopted(entry) {
   assert.equal(c.Cloud.recoveryInfo(), null, 'and bob is never offered a Restore of it');
   values.set(keys.lastUid, 'alice');
   assert.ok(c.Cloud.recoveryInfo(), 'its owner is offered it when they sign back in');
+  if (emails) assert.deepEqual(JSON.parse(values.get(keys.lastEmail)), { uid: 'bob', email: 'bob@example.invalid' }, 'after the sweep the address describes the new owner');
+}
+
+// ── the SAME PERSON, a SECOND ACCOUNT: held, never swept, never uploaded ─────
+// «Continue with Google» can make a new uid for an address that already has an
+// account (Supabase links only to a CONFIRMED address). Treating that as a
+// shared phone swept the person's own history into the one rescue slot — which
+// a second bounce overwrites and a logout deletes — and the app looked empty.
+async function sameEmailSecondAccountIsHeld(entry) {
+  const s = context(), { c, values, keys } = s;
+  const ex = firstExercise(c);
+  const mine = c.DB.sessions.add({ exerciseId: ex, date: DAY, sets: [{ reps: 5, weight: 100 }] });
+  await bootAs(s, entry, { id: 'alice', email: 'owner@example.invalid' });
+  values.set(keys.img + 'mine-ex', 'data:image/jpeg;base64,AAAA');
+  values.set(keys.notifLog, '[{"text":"my reminder"}]');
+  const storeBefore = values.get(keys.store);
+
+  // The same address, typed differently: Supabase lower-cases, a person may not.
+  s.session({ user: { id: 'alice-google', email: 'OWNER@example.invalid' } });
+  const requests = [];
+  s.query(async (r) => { requests.push(r); return { data: null, error: null }; });
+  assert.equal(await c.Cloud[entry](), 'duplicate', 'the sync stops and says why');
+
+  assert.equal(values.get(keys.store), storeBefore, 'the blob is byte-for-byte where it was');
+  assert.ok(c.DB.sessions.listAll().some((x) => x.id === mine.id), 'and the app still shows it');
+  assert.equal(c.Cloud.getLastUid(), 'alice', 'the device still says whose it is');
+  assert.equal(values.get(keys.img + 'mine-ex'), 'data:image/jpeg;base64,AAAA', 'photos kept');
+  assert.equal(values.get(keys.notifLog), '[{"text":"my reminder"}]', 'reminder log kept');
+  const rescue = values.get(keys.recovery);
+  assert.notEqual(rescue ? JSON.parse(rescue).reason : '', 'foreign-account', 'nothing was swept into the rescue slot');
+  // One row DOES leave: the client_errors note that this happened, so the owner
+  // can see it in the console. It names no address and carries no data.
+  const toRow = () => requests.filter((r) => r.table !== 'client_errors');
+  assert.equal(toRow().length, 0, 'not one read or write reached the second account\'s row');
+  assert.equal(JSON.stringify(requests).toLowerCase().includes('owner@'), false, 'the address is never reported');
+
+  // A save fires a push BEFORE the next guard runs; it must refuse too.
+  c.DB.prefs.setUnit('lb');
+  assert.equal(await c.Cloud.push(), 'duplicate', 'a push as the second account is refused');
+  assert.equal(toRow().length, 0, 'and it sent nothing');
+
+  // Back as the original account, everything is ordinary again.
+  s.session({ user: { id: 'alice', email: 'owner@example.invalid' } });
+  assert.notEqual(await c.Cloud[entry](), 'duplicate', 'the original account syncs as before');
+
+  // The address describes LAST_UID_KEY, so a logout's sweep takes it too — the
+  // next person on this phone must not be judged against the last one's address.
+  c.Cloud.clearLocalUserData();
+  assert.equal(values.has(keys.lastEmail), false, 'logout sweeps the remembered address');
+}
+
+// ── the deliberate way out: the hold is released and the v351 sweep runs ──────
+// «Continue with this account» rescues the previous account's blob under ITS
+// uid, sweeps the device, and hands it to the new uid — after which neither a
+// sync nor a push reads as a second account.
+async function releaseSweepsUnderTheOldUid(entry) {
+  const s = context(), { c, values, keys } = s;
+  const ex = firstExercise(c);
+  const mine = c.DB.sessions.add({ exerciseId: ex, date: DAY, sets: [{ reps: 5, weight: 100 }] });
+  await bootAs(s, entry, { id: 'alice', email: 'owner@example.invalid' });
+  values.set(keys.img + 'mine-ex', 'data:image/jpeg;base64,AAAA');
+  s.session({ user: { id: 'alice-google', email: 'owner@example.invalid' } });
+  s.query(async () => ({ data: null, error: null }));
+  assert.equal(await c.Cloud[entry](), 'duplicate', 'held first');
+  assert.equal(await c.Cloud.releaseDuplicateHold(), true, 'the hold is released on request');
+  const rescue = JSON.parse(values.get(keys.recovery) || 'null');
+  assert.ok(rescue && rescue.reason === 'foreign-account' && rescue.uid === 'alice', 'the previous account\'s blob is rescued under ITS uid');
+  assert.ok(String(rescue.raw).includes(mine.id), 'and the rescue holds the data');
+  assert.ok(!(values.get(keys.store) || '').includes(mine.id), 'the device no longer shows it');
+  assert.equal(values.has(keys.img + 'mine-ex'), false, 'the photo side store went with it');
+  assert.equal(c.Cloud.getLastUid(), 'alice-google', 'the device now belongs to the second account');
+  assert.deepEqual(JSON.parse(values.get(keys.lastEmail)), { uid: 'alice-google', email: 'owner@example.invalid' }, 'and the address describes it');
+  assert.notEqual(await c.Cloud[entry](), 'duplicate', 'the next sync no longer reads as a second account');
+  c.DB.prefs.setUnit('lb');
+  assert.notEqual(await c.Cloud.push(), 'duplicate', 'nor does a push');
 }
 
 // ── V-03 the negative control: one account's own device is left alone ────────
@@ -245,8 +337,11 @@ async function run() {
   // BOTH entry points reach the same pushed() branch, so both need the guard.
   for (const entry of ['resolveOnLogin', 'bootSync']) {
     await foreignBlobIsNeverAdopted(entry);
+    await foreignBlobIsNeverAdopted(entry, true);
     await sameAccountIsUntouched(entry);
+    await sameEmailSecondAccountIsHeld(entry);
+    await releaseSweepsUnderTheOldUid(entry);
   }
-  console.log('PASS multi-window: sibling writes adopted not overwritten, STALE recorded, READ-ONLY and garbage refused, photos kept; a foreign blob is rescued under its own uid and never uploaded (login + boot), and never swept when the rescue cannot be written; restore reports its upload half');
+  console.log('PASS multi-window: sibling writes adopted not overwritten, STALE recorded, READ-ONLY and garbage refused, photos kept; a foreign blob is rescued under its own uid and never uploaded (login + boot, with and without addresses), and never swept when the rescue cannot be written; a same-address second account is held — nothing swept, pulled or pushed (login + boot + push) — and released on request by the same sweep under the old uid; restore reports its upload half');
 }
 run().catch((error) => { console.error(error); process.exitCode = 1; });

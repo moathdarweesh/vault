@@ -733,10 +733,13 @@ function renderSleep(el) {
         <div class="sleep-hero-label">${t('last_night')}</div>
         <div class="sleep-hero-dur num" dir="ltr">${formatDuration(latest.durationMinutes)}</div>
         ${latest.stages ? sleepStagesHtml(latest, { compact: true }) : ''}
+        <!-- The SAME range idiom as the ledger row below it (v389): one ltr run,
+             not three flex items. As three items an RTL row laid them right to
+             left with the arrow still pointing right, so the hero read
+             «6:40 AM → 11:05 PM» — wake before sleep — directly above a row that
+             read the opposite. A range has an order; the arrow points along it. -->
         <div class="sleep-hero-times">
-          ${icon('moon', 16)}<span class="num" dir="ltr">${formatTime12(latest.sleepTime)}</span>
-          <span aria-hidden="true">→</span>
-          <span class="num" dir="ltr">${formatTime12(latest.wakeTime)}</span>
+          ${icon('moon', 16)}<span class="num time-range" dir="ltr"><span class="time-word">${formatTime12(latest.sleepTime)}</span> <span aria-hidden="true">→</span> <span class="time-word">${formatTime12(latest.wakeTime)}</span></span>
         </div>
       </div>
       ${latest.stages ? (() => {

@@ -19,6 +19,7 @@ window.VAULT_KEYS = Object.freeze({
   imgAt: 'vault_img_at_',                  // + exerciseId → the photo's stamp
   ui: 'vault_ui',                          // pre-paint mirror of prefs (theme, lang, nav labels)
   lastUid: 'vault_last_uid',
+  lastEmail: 'vault_last_email',           // {uid, email} — the address lastUid signed in with; the same-person test in guardForeignBlob
   recovery: 'vault_pre_sync_backup',       // the rescue copy taken before an overwrite
   recoveryFailed: 'vault_pre_sync_backup_failed',
   catalog: 'vault_catalog_cache',
@@ -50,6 +51,12 @@ window.VAULT_KEYS = Object.freeze({
   // ---- config (fill these from Supabase → Project Settings → API) ----------
   const SUPABASE_URL = 'https://ilmusnuchqlpirywonzx.supabase.co';
   const SUPABASE_ANON_KEY = 'sb_publishable_ZBR2VENMP2O_K2YTMePCsw_NfLC9FSI';
+  // Where Supabase sends the browser back to after an emailed link or an OAuth
+  // round trip. ONE spelling: the password reset and the Google sign-in both
+  // use it, and it is the entry already in the project's redirect allow-list.
+  // GitHub Pages serves only the root with a query or fragment — a path such
+  // as /vault/auth/callback would 404.
+  const SITE_URL = 'https://moathdarweesh.github.io/vault/';
   const TABLE = 'vault_data';
   const STORE_KEY = VAULT_KEYS.store;
 
@@ -178,12 +185,36 @@ window.VAULT_KEYS = Object.freeze({
   //
   // Returns true when it acted and false when it did not — including the case
   // where the rescue could not be written and the device is deliberately left
-  // untouched. Both callers ignore it and go on to localHasData(), which is the
-  // same answer read from the store itself.
-  function guardForeignBlob(uid) {
+  // untouched. Both callers go on to localHasData() in those cases, which is
+  // the same answer read from the store itself.
+  //
+  // ⚠️ AND ONE CASE IS NOT A SHARED PHONE AT ALL: returns 'duplicate'. A new
+  // uid arriving with the SAME EMAIL the previous uid signed in with is one
+  // person holding two accounts — the typical way is «Continue with Google»
+  // creating a second account instead of linking to the email one (Supabase
+  // links automatically only to a CONFIRMED address). Sweeping would hide the
+  // person's whole history from them behind a rescue slot that a second bounce
+  // overwrites and a logout deletes. So nothing is swept, nothing is pulled or
+  // pushed, and the caller returns 'duplicate' for app.js to explain.
+  function guardForeignBlob(uid, email) {
     const prev = getLastUid();
-    if (!prev || prev === uid) return false;
-    if (!localHasData()) { setLastUid(uid); return false; }   // nothing to protect
+    if (!prev || prev === uid) { rememberEmail(uid, email); return false; }
+    if (!localHasData()) { setLastUid(uid); rememberEmail(uid, email); return false; }   // nothing to protect
+    if (isSecondAccountOfLast(uid, email)) {
+      if (!dupReported) {
+        dupReported = true;
+        try { reportError('manual', 'same-email second account: device held, not swept', 'cloud.js', 0); } catch (_) {}
+      }
+      return 'duplicate';
+    }
+    return sweepToAccount(uid, email, prev);
+  }
+
+  // THE SWEEP ITSELF: rescue the previous account's blob under ITS uid, clear
+  // the device, and make `uid` its owner. Two callers — guardForeignBlob, when
+  // two different addresses prove a shared phone, and releaseDuplicateHold,
+  // when the person holding two accounts chooses the new one on purpose.
+  function sweepToAccount(uid, email, prev) {
     // ⚠️ THE RESCUE IS THE WHOLE POINT, SO ITS FAILURE IS THE GATE. snapshotRaw
     // returns false when it could not write (quota, private mode) and records
     // RECOVERY_FAILED_KEY; the first version of this guard discarded both and
@@ -213,7 +244,55 @@ window.VAULT_KEYS = Object.freeze({
     // A deliberate whole-blob replacement, which is exactly what reload() is for.
     try { if (typeof DB !== 'undefined' && DB.reload) DB.reload(); } catch (_) {}
     setLastUid(uid);
+    rememberEmail(uid, email);
     return true;
+  }
+
+  // THE WAY OUT OF THE HOLD. «Continue with this account» is a real need —
+  // the old password is lost, or two accounts is the intent — and a dialog
+  // whose only button is «sign out» locks that person out of the app for
+  // good. So the v351 shared-phone answer is offered DELIBERATELY: the
+  // previous account's blob is rescued under its own uid (restorable by
+  // that account, refused to this one), the device is swept, and this uid
+  // becomes the owner — so the next boot and the next push stop reading
+  // as a second account. The uid and address come from the SESSION, never
+  // from an argument a dialog could get wrong. Resolves true when the device
+  // was released, false when the rescue could not be written (nothing was
+  // swept, exactly as the guard behaves) or there is no session.
+  async function releaseDuplicateHold() {
+    const s = await getSession();
+    if (!s || !s.user) return false;
+    const uid = s.user.id, email = s.user.email, prev = getLastUid();
+    if (!prev || prev === uid) { rememberEmail(uid, email); return true; }              // nothing is held
+    if (!localHasData()) { setLastUid(uid); rememberEmail(uid, email); return true; }   // nothing to set aside
+    return sweepToAccount(uid, email, prev);
+  }
+  let dupReported = false;   // one client_errors row per page load, not one per foreground
+
+  // THE ADDRESS THE LAST UID SIGNED IN WITH, stored as a PAIR so it can never
+  // describe a different uid than LAST_UID_KEY does: a pair whose uid is not
+  // the current last uid reads as "unknown", never as a match. Lower-cased,
+  // because Supabase stores addresses lower-cased and a person types either.
+  function rememberEmail(uid, email) {
+    if (!uid || !email) return;
+    const rec = JSON.stringify({ uid, email: String(email).toLowerCase() });
+    // Every foreground passes through here; write only when it changes.
+    try { if (localStorage.getItem(VAULT_KEYS.lastEmail) !== rec) localStorage.setItem(VAULT_KEYS.lastEmail, rec); } catch (_) {}
+  }
+  function getLastEmail() {
+    try {
+      const rec = JSON.parse(localStorage.getItem(VAULT_KEYS.lastEmail) || 'null');
+      return rec && rec.uid && rec.uid === getLastUid() && typeof rec.email === 'string' ? rec.email : '';
+    } catch (_) { return ''; }
+  }
+  // Is `uid` a SECOND account of the person this device last belonged to?
+  // Stateless on purpose — read from storage every time — so pushOnce can ask
+  // it too: a save in the first second of a page load fires a push BEFORE the
+  // boot sync has run the guard, and that push would otherwise insert the
+  // previous account's blob into the new account's empty row.
+  function isSecondAccountOfLast(uid, email) {
+    const prev = getLastUid(), known = getLastEmail();
+    return !!(prev && uid && prev !== uid && known && email && known === String(email).toLowerCase());
   }
 
   // ---- auth ----------------------------------------------------------------
@@ -226,6 +305,128 @@ window.VAULT_KEYS = Object.freeze({
     const s = await getSession();
     return s && s.user ? s.user.email : null;
   }
+
+  // ---- sign-in providers -----------------------------------------------
+  // WHICH DOORS ARE OPEN, asked of the project itself: GET /auth/v1/settings is
+  // public (the publishable key is the whole credential) and answers
+  // external.google. A button gated on a hard-coded flag would either show a
+  // door that is shut — Supabase answers «provider is not enabled» after a
+  // full-page trip to nowhere — or stay hidden after the owner opens it. ONE
+  // request per page load, the promise cached; a 4 s ceiling; ANY failure
+  // (offline, CSP, a 5xx, a body that is not JSON) resolves {google:false},
+  // because an unknown door is a shut one.
+  let providersPromise = null;
+  function providers() {
+    if (providersPromise) return providersPromise;
+    const shut = { google: false };
+    providersPromise = new Promise((resolve) => {
+      if (!configured() || typeof fetch !== 'function') { resolve(shut); return; }
+      const ctrl = (typeof AbortController !== 'undefined') ? new AbortController() : null;
+      const timer = setTimeout(() => { try { if (ctrl) ctrl.abort(); } catch (_) {} resolve(shut); }, 4000);
+      fetch(SUPABASE_URL + '/auth/v1/settings', {
+        headers: { apikey: SUPABASE_ANON_KEY }, cache: 'no-store', signal: ctrl ? ctrl.signal : undefined,
+      })
+        .then((res) => (res.ok ? res.json() : null))
+        .then((j) => resolve({ google: !!(j && j.external && j.external.google === true) }))
+        .catch(() => resolve(shut))
+        .finally(() => clearTimeout(timer));
+    });
+    return providersPromise;
+  }
+  // «Continue with Google» — the WEB redirect flow. The browser leaves for
+  // Google and comes back to SITE_URL with the session in the #fragment (this
+  // client is flowType 'implicit', detectSessionInUrl on — do NOT switch it to
+  // pkce: the password reset depends on implicit), which the SDK consumes on
+  // that fresh page load; bootCloud → bootSync takes it from there, NOT
+  // afterLogin. A failed return comes back to the same URL with #error=…, which
+  // app.js reads before the SDK loads (oauthReturnError).
+  //
+  // Never called in the native shell: Google refuses OAuth in an embedded
+  // WebView, and Capacitor would open the page in Chrome, landing the session in
+  // the wrong browser. The native door is an ID token, not this.
+  // prompt=select_account: a phone usually holds several Google accounts, and
+  // silently taking the first is how a second VAULT account gets made.
+  async function signInWithGoogle() {
+    if (!(await ensureSdk())) return { error: 'network' };
+    const c = sb(); if (!c) return { error: 'not_configured' };
+    try {
+      const { error } = await c.auth.signInWithOAuth({
+        provider: 'google',
+        options: { redirectTo: SITE_URL, queryParams: { prompt: 'select_account' } },
+      });
+      if (error) return { error: error.message };
+      return { ok: true };
+    } catch (e) { return { error: (e && e.message) || 'network' }; }
+  }
+  // ==== NATIVE GOOGLE SIGN-IN (Android shell) — BEGIN ========================
+  // The native door, and ONLY the native door: GoogleSignInPlugin.kt (Credential
+  // Manager) hands back a Google ID token and this block trades it for a
+  // Supabase session with signInWithIdToken. Build 24 carries no such plugin, so
+  // on every phone installed today googleNativePlugin() is null and nothing
+  // below runs. Contract 44 holds the two halves together: the name reached
+  // here is the name the Kotlin registers, and every P.<m>( is a @PluginMethod.
+  //
+  // ⚠️ NO CAPTCHA GUARDS THIS DOOR, AND NONE CAN. GoTrue's middleware
+  // (internal/api/middleware.go, isIgnoreCaptchaRoute) returns true for POST
+  // /token with grant_type=id_token, so a Turnstile token sent here is never
+  // verified. What stands in its place is Google itself: an ID token needs a
+  // real Google account, and its audience must be this project's web client.
+  // `tok` is accepted only so a token already in hand is not wasted if Supabase
+  // ever starts checking; the caller never waits for one.
+  function googleNativePlugin() {
+    try { return (window.Capacitor && Capacitor.Plugins && Capacitor.Plugins.GoogleSignIn) || null; } catch (_) { return null; }
+  }
+  // Whether to draw the button at all: the shell carries the plugin, the owner
+  // has put a web client ID in capacitor.config.json (status().configured), and
+  // the project itself says the Google provider is on. Any doubt is false.
+  async function googleNativeReady() {
+    const P = googleNativePlugin();
+    if (!P || !configured()) return false;
+    try {
+      const [st, prov] = await Promise.all([P.status(), providers()]);
+      return !!(st && st.configured === true && prov && prov.google === true);
+    } catch (_) { return false; }
+  }
+  // Google's account sheet → { cred: { idToken, nonce, email } } or
+  // { error: 'native:<code>' }. The code is the plugin's own stable string
+  // (cancelled | no_credential | no_play_services | bad_token | not_configured
+  // | unexpected) — never the message text. `nonce` is the RAW nonce: Google
+  // was given its SHA-256 hex, and Supabase hashes this value to compare.
+  async function pickGoogleNative() {
+    const P = googleNativePlugin();
+    if (!P) return { error: 'native:not_configured' };
+    try {
+      const r = await P.signIn();
+      if (!r || !r.idToken || !r.nonce) return { error: 'native:bad_token' };
+      return { cred: { idToken: String(r.idToken), nonce: String(r.nonce), email: String(r.email || '') } };
+    } catch (e) {
+      return { error: 'native:' + ((e && e.code) || 'unexpected') };
+    }
+  }
+  // The address this device's data belongs to, when a Google account with a
+  // DIFFERENT address is about to sign in over it; '' otherwise. That second
+  // account would be a second uid, and guardForeignBlob would sweep this
+  // device's history into the one rescue slot — the app would open empty. The
+  // same-address case is not asked here: Supabase links it to the existing
+  // account, and guardForeignBlob holds the device if it ever does not.
+  function deviceHeldByOther(email) {
+    const known = getLastEmail();
+    if (!getLastUid() || !known || !localHasData()) return '';
+    return known === String(email || '').toLowerCase() ? '' : known;
+  }
+  async function signInWithGoogleNative(cred, tok) {
+    if (!(await ensureSdk())) return { error: 'network' };
+    const c = sb(); if (!c) return { error: 'not_configured' };
+    if (!cred || !cred.idToken || !cred.nonce) return { error: 'native:bad_token' };
+    try {
+      const { data, error } = await c.auth.signInWithIdToken({
+        provider: 'google', token: cred.idToken, nonce: cred.nonce, options: withCaptcha(tok),
+      });
+      if (error) return { error: error.message };
+      return { user: data.user, session: data.session };
+    } catch (e) { return { error: (e && e.message) || 'network' }; }
+  }
+  // ==== NATIVE GOOGLE SIGN-IN (Android shell) — END ==========================
   // ---- Turnstile ---------------------------------------------------------
   // Bot protection on the three unauthenticated doors: sign-up, sign-in and
   // password reset. Sign-up is open, so without this one script can farm
@@ -387,8 +588,7 @@ window.VAULT_KEYS = Object.freeze({
   // PASSWORD_RECOVERY event (see onPasswordRecovery) so the user can set a new one.
   async function resetPassword(email, tok) {
     const c = sb(); if (!c) return { error: 'not_configured' };
-    const redirectTo = 'https://moathdarweesh.github.io/vault/';
-    const { error } = await c.auth.resetPasswordForEmail((email || '').trim(), Object.assign({ redirectTo }, withCaptcha(tok)));
+    const { error } = await c.auth.resetPasswordForEmail((email || '').trim(), Object.assign({ redirectTo: SITE_URL }, withCaptcha(tok)));
     if (error) return { error: error.message };
     return { ok: true };
   }
@@ -743,6 +943,10 @@ window.VAULT_KEYS = Object.freeze({
     // discard local data that was never sent. The fire-and-forget callers below
     // ignore the return value, so naming it is safe.
     if (!c || !s) return 'nosession';
+    // The same person's SECOND account must never receive the first one's blob
+    // (see guardForeignBlob). Checked here as well as at the guard, because a
+    // save can fire this push before the boot sync has run the guard at all.
+    if (isSecondAccountOfLast(s.user.id, s.user.email)) return 'duplicate';
     const raw = exportRaw();
     let blob; try { blob = JSON.parse(raw || '{}'); } catch (_) { blob = {}; }
     // SAFETY GUARD (data-loss protection): never SILENTLY overwrite a cloud backup
@@ -1029,8 +1233,10 @@ window.VAULT_KEYS = Object.freeze({
   async function resolveOnLoginCore() {
     const s = await getSession(); if (!s) return 'offline';
     const uid = s.user.id;
-    // BEFORE localHasData() is consulted anywhere below.
-    guardForeignBlob(uid);
+    // BEFORE localHasData() is consulted anywhere below. 'duplicate' stops the
+    // whole sync: no pull, no push, nothing swept — app.js explains and offers
+    // the one way out (sign out, sign back in the original way).
+    if (guardForeignBlob(uid, s.user.email) === 'duplicate') return 'duplicate';
     let remote;
     try { remote = await pull(); } catch (_) { return 'offline'; }
     if (remote === undefined) return 'offline';
@@ -1146,8 +1352,10 @@ window.VAULT_KEYS = Object.freeze({
     if (!s) { recordSyncOutcome(activityFor(getLastUid()), 'nosession'); return 'offline'; }
     const uid = s.user.id;
     // The boot path reaches the same pushed() branch, so it needs the same guard,
-    // and it must run before the fast path's own localHasData() below.
-    guardForeignBlob(uid);
+    // and it must run before the fast path's own localHasData() below. This is
+    // also where an OAuth return lands: it is a fresh page load, so it arrives
+    // HERE, never through resolveOnLogin.
+    if (guardForeignBlob(uid, s.user.email) === 'duplicate') return 'duplicate';
 
     // FAST PATH — the overwhelmingly common one. A foreground where neither
     // side has moved used to cost a full blob DOWN and a full blob UP; it now
@@ -1541,6 +1749,7 @@ window.VAULT_KEYS = Object.freeze({
       localStorage.removeItem(VAULT_KEYS.foodaiCache);
       localStorage.removeItem(CATALOG_CACHE_KEY);
       localStorage.removeItem(LAST_UID_KEY);
+      localStorage.removeItem(VAULT_KEYS.lastEmail);   // it describes LAST_UID_KEY and goes with it
       localStorage.removeItem(VAULT_KEYS.ui);   // the pre-paint mirror of prefs — the next account must not inherit this one's frame
       // The reminder side store and the one-time unit seed: user B on a shared
       // phone used to open Notifications and read user A's log.
@@ -1621,6 +1830,9 @@ window.VAULT_KEYS = Object.freeze({
   window.Cloud = {
     configured, ensureSdk, getSession, currentEmail,
     signUp, signIn, signOut, changePassword, resetPassword, onPasswordRecovery,
+    providers, signInWithGoogle,
+    googleNativeReady, pickGoogleNative, signInWithGoogleNative, deviceHeldByOther,
+    releaseDuplicateHold,
     pull, push, flush, onLocalChange, resume,
     listPlanHistory, readPlanHistory, checkPlanRestoreVersion,
     snapshotLocal, recoveryInfo, recoveryFailedAt, restoreRecovery, isSettled,

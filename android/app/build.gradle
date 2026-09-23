@@ -1,3 +1,5 @@
+import org.jetbrains.kotlin.gradle.dsl.JvmTarget
+
 apply plugin: 'com.android.application'
 apply plugin: 'org.jetbrains.kotlin.android'
 
@@ -7,9 +9,6 @@ android {
     compileOptions {
         sourceCompatibility JavaVersion.VERSION_21
         targetCompatibility JavaVersion.VERSION_21
-    }
-    kotlinOptions {
-        jvmTarget = '21'
     }
     defaultConfig {
         applicationId "com.moath.thevault"
@@ -46,6 +45,13 @@ android {
     }
 }
 
+// kotlinOptions {} is deprecated from Kotlin 2.0; the compilerOptions DSL replaces it.
+kotlin {
+    compilerOptions {
+        jvmTarget = JvmTarget.fromTarget('21')
+    }
+}
+
 repositories {
     flatDir{
         dirs '../capacitor-cordova-android-plugins/src/main/libs', 'libs'
@@ -61,7 +67,16 @@ dependencies {
 
     // Health Connect — read steps, heart rate, oxygen and sleep from Samsung Health.
     implementation "androidx.health.connect:connect-client:1.1.0"
-    implementation "org.jetbrains.kotlinx:kotlinx-coroutines-android:1.8.1"
+    // 1.9.0, not 1.8.1: androidx.credentials 1.6.0 requires kotlinx-coroutines-core 1.9.0 at runtime.
+    implementation "org.jetbrains.kotlinx:kotlinx-coroutines-android:1.9.0"
+
+    // Native Google sign-in (GoogleSignInPlugin.kt): Credential Manager + the Google ID option.
+    // googleid is declared at 1.2.1 on purpose: credentials-play-services-auth 1.6.0 pulls
+    // googleid 1.1.0 transitively, and the explicit line is what makes 1.2.1 win.
+    // Google Play services arrive transitively; no google-services.json, no Firebase.
+    implementation "androidx.credentials:credentials:1.6.0"
+    implementation "androidx.credentials:credentials-play-services-auth:1.6.0"
+    implementation "com.google.android.libraries.identity.googleid:googleid:1.2.1"
 
     testImplementation "junit:junit:$junitVersion"
     androidTestImplementation "androidx.test.ext:junit:$androidxJunitVersion"

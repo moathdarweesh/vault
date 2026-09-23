@@ -1239,5 +1239,80 @@ const contract = (name, problems) => {
   contract(`every view emits a real heading (${cases.length} views)`, problems);
 }
 
+// ── 44 · the native Google sign-in reaches a plugin that exists, by its name ─
+// Contract 40's two agreements, for the second hand-written plugin — and both
+// fail as silently here as they did for the widget:
+//
+//   the NAME    — Capacitor.Plugins.GoogleSignIn vs @CapacitorPlugin(name)
+//                 A rename on either side makes googleNativePlugin() return
+//                 null, which IS the no-APK path: the button is simply never
+//                 drawn, on every phone, for ever, and nothing says why.
+//   the METHODS — P.status / P.signIn vs @PluginMethod
+//                 A Capacitor call rejects ASYNCHRONOUSLY; googleNativeReady()
+//                 would read the rejection as "not ready" and keep the door
+//                 shut with no error anywhere.
+//
+// Plus the third half this plugin adds: it reads its web client ID from
+// capacitor.config.json → plugins.<name>.webClientId, so the config must carry
+// that key under the SAME name, and the value must be empty (owner has not
+// filled it) or a Google client ID — never a secret-shaped string.
+//
+// The JS side is read from the delimited block in js/cloud.js only, so a `P.`
+// anywhere else in that file cannot satisfy or trip this check; and app.js's
+// native-button hook must reach the same name.
+{
+  const KT = 'android/app/src/main/java/com/moath/thevault/GoogleSignInPlugin.kt';
+  const kt = exists(KT) ? read(KT) : '';
+  const cloud = src['js/cloud.js'];
+  const BEGIN = '// ==== NATIVE GOOGLE SIGN-IN (Android shell) — BEGIN';
+  const END = '// ==== NATIVE GOOGLE SIGN-IN (Android shell) — END';
+  const b = cloud.indexOf(BEGIN), e = cloud.indexOf(END);
+  const problems = [];
+  const block = (b >= 0 && e > b) ? cloud.slice(b, e) : '';
+  if (!block) problems.push('js/cloud.js has lost its NATIVE GOOGLE SIGN-IN BEGIN/END block — the contract would be checking nothing');
+  if (!kt) problems.push(`${KT} is missing`);
+  const calls = new Set([...block.matchAll(/\bP\.(\w+)\s*\(/g)].map((m) => m[1]));
+  let methods = new Set();
+  if (kt && block) {
+    const named = kt.match(/@CapacitorPlugin\s*\(\s*name\s*=\s*"(\w+)"/);
+    const reached = block.match(/Capacitor\.Plugins\.(\w+)\)?\s*\|\|\s*null/);
+    if (!named) problems.push(`${KT} carries no @CapacitorPlugin(name = "...")`);
+    if (!reached) problems.push('js/cloud.js no longer reaches the Google plugin through Capacitor.Plugins.<name> || null');
+    if (named && reached && named[1] !== reached[1]) {
+      problems.push(`js/cloud.js asks for Capacitor.Plugins.${reached[1]} but the Kotlin registers "${named[1]}" - the Google button would silently never appear`);
+    }
+    const hook = src['js/app.js'].match(/function mountGoogleNativeButton\([\s\S]*?Capacitor\.Plugins\.(\w+)/);
+    if (!hook) problems.push('js/app.js has no mountGoogleNativeButton reaching Capacitor.Plugins.<name>');
+    else if (named && hook[1] !== named[1]) problems.push(`js/app.js's native Google hook tests Capacitor.Plugins.${hook[1]} but the Kotlin registers "${named[1]}"`);
+    methods = new Set([...kt.matchAll(/^[^\S\r\n]*@PluginMethod\s*\r?\n\s*fun\s+(\w+)\s*\(/gm)].map((m) => m[1]));
+    if (!calls.size) problems.push('the native block calls no P.<method>( — the contract would be checking nothing');
+    for (const c of calls) {
+      if (!methods.has(c)) problems.push(`js/cloud.js calls P.${c}() but ${KT} has no @PluginMethod ${c} - the call rejects asynchronously and reads as "not ready"`);
+    }
+    if (named) {
+      let cfg = null;
+      try { cfg = JSON.parse(read('capacitor.config.json')); } catch (_) { problems.push('capacitor.config.json does not parse'); }
+      const pc = cfg && cfg.plugins && cfg.plugins[named[1]];
+      if (cfg && (!pc || typeof pc.webClientId !== 'string')) problems.push(`capacitor.config.json has no plugins.${named[1]}.webClientId string - the plugin reads its web client ID there`);
+      else if (pc && pc.webClientId !== '' && !/^[\w-]+\.apps\.googleusercontent\.com$/.test(pc.webClientId)) problems.push(`capacitor.config.json plugins.${named[1]}.webClientId is neither empty nor a Google client ID ("<n>.apps.googleusercontent.com") - never put a secret there`);
+    }
+  }
+  contract(`the native Google sign-in reaches its plugin by the name it registers, and calls only @PluginMethods it declares (${calls.size} calls, ${methods.size} declared)`, problems);
+}
+
+// 45 — no zoom. The owner's decision (2026-09-23): the app must never zoom. The
+// viewport meta is the web half of that, and a meta is a string nothing else
+// reads — an edit that "tidies" it would ship pinch-zoom back to every phone
+// with no test going red.
+{
+  const meta = (read('index.html').match(/<meta\s+name="viewport"\s+content="([^"]*)"/) || [])[1] || '';
+  const problems = [];
+  if (!meta) problems.push('index.html has no <meta name="viewport" content="..."> — the app has no viewport rule at all');
+  for (const want of ['maximum-scale=1', 'user-scalable=no']) {
+    if (meta && !meta.split(',').map((s) => s.trim()).includes(want)) problems.push(`index.html's viewport meta lacks "${want}" — the app can zoom again (owner decision 2026-09-23: it must not)`);
+  }
+  contract("the app cannot zoom: index.html's viewport meta carries maximum-scale=1 and user-scalable=no", problems);
+}
+
 console.log(failures.length ? `\ncheck-contracts: ${failures.length} broken contract(s)` : '\ncheck-contracts: all contracts hold');
 process.exit(failures.length ? 1 : 0);

@@ -1061,10 +1061,10 @@ input, select, textarea {
   width: 100%;
   font: inherit;
   /* 16px is the iOS threshold: below it, Safari/WebKit auto-zooms the page when a
-     field takes focus. The app previously suppressed that with
-     `user-scalable=no`, which also blocked deliberate pinch-zoom. Now that zoom is
-     allowed again (accessibility), inputs must be >=16px so focusing a field does
-     not yank the viewport. */
+     field takes focus. The viewport meta carries `user-scalable=no` again since
+     2026-09-23 (owner decision: no zoom), but Safari on iOS has ignored that
+     value since iOS 10, so the focus-zoom guard is still THIS rule: inputs must
+     be >=16px so focusing a field does not yank the viewport. */
   font-size: 16px;
   background: var(--surface-2);
   border: 1px solid var(--border);
@@ -3231,9 +3231,10 @@ body.rest-active .toast { bottom: calc(var(--safe-b) + var(--rest-h, 72px) + 28p
   border-radius: 10px;
   color: var(--text);
   /* 16, not 15 — the one declared override that undercut the global input rule.
-     Pinch-zoom is enabled app-wide, so any input under 16px makes iOS zoom the
-     whole page on focus (see the viewport note in index.html), and these are
-     the reps/weight fields a user focuses more than anything else. */
+     iOS ignores the viewport's user-scalable=no, so any input under 16px still
+     makes iOS zoom the whole page on focus (see the viewport note in
+     index.html), and these are the reps/weight fields a user focuses more than
+     anything else. */
   font-size: 16px;
   font-weight: 700;
   text-align: center;
@@ -4565,11 +4566,11 @@ button.bundle-main {
   border: 1px solid var(--border); background: var(--surface-2);
   color: var(--text);
   /* NO font-size here — it inherits the global `input, select, textarea` 16px,
-     and that 16 is functional rather than typographic: pinch-zoom is enabled
-     app-wide (WCAG 1.4.4), so anything under 16px makes iOS zoom the viewport
-     the moment a field takes focus and leaves the page zoomed. This rule
-     declared 14px, which is the food chat's own text input — one of the two
-     most-typed-in fields in the app. */
+     and that 16 is functional rather than typographic: iOS ignores the
+     viewport's user-scalable=no, so anything under 16px makes iOS zoom the
+     viewport the moment a field takes focus and leaves the page zoomed. This
+     rule declared 14px, which is the food chat's own text input — one of the
+     two most-typed-in fields in the app. */
 }
 .ai-results {
   display: flex; flex-direction: column; gap: 12px;
@@ -5742,6 +5743,11 @@ body[dir="rtl"] .bento-card.wide .bento-added-stripe { left: 14px; }
 /* ==========================================================================
    Auth gate (cloud sign-in)
    ========================================================================== */
+/* ⚠️ ANY SHEET OPENED OVER THE SIGN-IN CARD MUST OUTRANK IT. .modal-overlay is
+   z-index 100 and .auth-gate 1000, so «نسيت كلمة السر؟», the Google confirm and
+   the duplicate-account hold all opened UNDERNEATH the card — reachable, invisible,
+   un-tappable. Scoped to the gate being mounted, so ordinary sheets keep their rung. */
+body:has(> .auth-gate) .modal-overlay { z-index: 1001; }
 .auth-gate {
   position: fixed;
   inset: 0;
@@ -5931,6 +5937,30 @@ body[dir="rtl"] .bento-card.wide .bento-added-stripe { left: 14px; }
   text-align: center;
 }
 .auth-card .btn-block { height: var(--btn-h-l); font-size: var(--fs-btn-l); }
+
+/* «Continue with Google» — appended by mountGoogleButton ONLY when the project
+   reports the provider on, so none of this reserves space while it is not.
+   The button is the auth scale's large rung (the .btn-block rule above: 52px,
+   --radius-btn-l, --fs-btn-l), full width like #auth-submit, and GHOST — a
+   bordered surface, because a border in this app MEANS "you can press this",
+   and the filled accent stays the email form's one primary action. The "or"
+   rule between them is text, not a control, so it carries no border of its own. */
+.auth-or {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 14px 0 12px;
+  font-size: 13px;
+  color: var(--text-mute);
+}
+.auth-or::before, .auth-or::after { content: ''; flex: 1; height: 1px; background: var(--border); }
+.auth-card .auth-google { gap: 10px; }   /* Google's spacing: 10px after the logo */
+/* The mark is Google's, drawn with literal fills (GOOGLE_G_SVG in app.js), so
+   the duotone law's currentColor / --icon-accent never reaches it and nothing
+   here may set either on it. Only its SIZE is set: 18px, Google's own, where
+   .btn svg would make it 20. It sits first in the DOM, so a flex row puts it at
+   the inline START in both directions (left in English, right in Arabic). */
+.auth-google svg { width: 18px; height: 18px; }
 
 /* Mandatory-username gate */
 .uname-field { position: relative; }

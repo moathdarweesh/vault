@@ -9,7 +9,10 @@ buildscript {
     dependencies {
         classpath 'com.android.tools.build:gradle:8.13.0'
         classpath 'com.google.gms:google-services:4.4.4'
-        classpath 'org.jetbrains.kotlin:kotlin-gradle-plugin:1.9.24'
+        // 2.3.21, not 1.9.24: androidx.credentials 1.6.0 (native Google sign-in) is compiled
+        // with Kotlin 2.1.20, and a 1.9 compiler reads metadata at most one release ahead (2.0).
+        // The 2.3.20-2.3.21 row of the KGP table covers Gradle 7.6.3-9.3.0 and AGP 8.2.2-9.0.0.
+        classpath 'org.jetbrains.kotlin:kotlin-gradle-plugin:2.3.21'
 
         // NOTE: Do not place your application dependencies here; they belong
         // in the individual module build.gradle files

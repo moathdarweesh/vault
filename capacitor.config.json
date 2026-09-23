@@ -13,9 +13,13 @@
     },
     "SystemBars": {
       "style": "DARK"
+    },
+    "GoogleSignIn": {
+      "webClientId": ""
     }
   },
   "android": {
-    "minWebViewVersion": 80
+    "minWebViewVersion": 80,
+    "zoomEnabled": false
   }
 }

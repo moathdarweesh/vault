@@ -83,7 +83,7 @@ npm run verify           # 43 contracts + lint + 13 suites — THE GATE
 npm run release          # bump every marker and re-read them; runs NO tests
 ```
 
-**Current version: v389.** APK: build 24 / v3.3.
+**Current version: v390.** APK: build 24 / v3.3.
 
 > ⚠️ **`npm run release` RUNS NO TESTS, AND THIS LINE USED TO READ AS IF IT DID.**
 > It said «bump every marker + verify», where *verify* meant the MARKERS — and
@@ -681,7 +681,7 @@ Full findings + verification in `docs/CODEBASE_REVIEW.md`. The load-bearing rule
 - **Worker chat mode** runs under a fixed server-side `CHAT_SYSTEM` and ignores the client `prompt` entirely; food/photo/audio still take `prompt || text` as the user turn (food/photo under the strict JSON `SYSTEM` instruction). Requires the manual Cloudflare paste-deploy — **deployed 2026-09-02 as version `d356f094`** (the owner pasted from the clipboard; the dashboard editor is a cross-origin iframe that browser automation cannot type into, so this step stays manual).
 - **Error visibility.** `Cloud.reportError()` + `window.onerror`/`unhandledrejection` write to `client_errors` (`backend/migrations/11_client-errors-v9.sql`, **APPLIED + VERIFIED live 2026-08-05**): signed-in users only, no user content, per-session dedupe, DB-side rate cap of 20/hour, 30-day retention via `admin_prune_client_errors()`. The reporter must never throw and never block.
   > It sat in `pending/` for weeks while the client was already reporting into it — and `reportError` ends `.then(() => {}, () => {})`, swallowing both outcomes, so **every crash on every device was posted to a table that did not exist and silently discarded**. The mechanism built because "everything on this path fails silently" was itself failing silently, and had collected exactly zero rows. Verified after applying: 9 columns, 4 indexes, RLS on, 1 trigger, 2 definer functions, and a policy map of `DELETE:admin | INSERT:own | SELECT:own | SELECT:admin` — **no UPDATE policy for anyone**, so nobody can edit or erase evidence of a bug.
-- **Accessibility invariants.** Both modes pass WCAG AA across 15 views and the modals, swept with a scrim-aware auditor. `--text-ghost` is for input placeholders and `--text-faint` is **decorative only** (~1.4:1 in light by design) — do not "unify" them, and never use `--text-faint` for text a user has to read. Muted tokens are calibrated against **`--surface-3`**, the worst surface they land on, never against `--bg`. Pinch-zoom is enabled, which means **inputs must stay ≥16px** or iOS focus-zoom returns.
+- **Accessibility invariants.** Both modes pass WCAG AA across 15 views and the modals, swept with a scrim-aware auditor. `--text-ghost` is for input placeholders and `--text-faint` is **decorative only** (~1.4:1 in light by design) — do not "unify" them, and never use `--text-faint` for text a user has to read. Muted tokens are calibrated against **`--surface-3`**, the worst surface they land on, never against `--bg`. **Zoom is OFF since 2026-09-23 (owner decision, v390: «ما بدي ينعمل زوم» after the app enlarged on his phone)** — the viewport carries `maximum-scale=1, user-scalable=no`, contract 45 enforces it, and the Android shell pins `textZoom` to 100 so the phone's font-size setting cannot scale the app either (that half reaches phones only with APK 25). The in-app «خطّ أكبر» setting (v380, `body.text-lg`) is the accessible route. **Inputs still stay ≥16px**: iOS ignores `user-scalable=no`, so focus-zoom would return there.
 - **Worker auth** (`backend/worker/gemini-worker.js`) fails **closed** on any 4xx and open only on 5xx/network error, plus a per-caller rate limit. Requires a manual Cloudflare redeploy.
 - **v296 (2026-09-05) — the glitch/smoothness/code review, 24 fixes + the rest bar + 14 controls.** Invariants it adds:
   - **`renderSessionRun` reads `runCtx`, never `viewContext`.** `navigate()` replaces `viewContext` synchronously, but the blur→`setTimeout(0)` commit of a half-typed set fires after that swap; reading `viewContext` there threw and the set never reached the DB (a v291 regression). Any new listener inside the run screen must close over `runCtx`.
@@ -2734,6 +2734,110 @@ the rows pre-filled from last time as performed sets ("confirmed without a
 throwaway edit" is the recorded intent; whether an untouched row should count
 is the owner's call); a saved food **4 taps**. The day card's Save measures
 **69×40** — under the 44 floor.
+
+## v390 — no zoom, «Continue with Google», and the hold that had no way out
+
+Three owner instructions, one build workflow (Opus 5.5, six verifier
+MUST_FIXes applied), and the sleep hero's arrow from the v389 pass.
+
+### 1. «ما بدي ينعمل زوم» — the app is pinned to scale 1
+
+The phone had enlarged the app mid-session. Two causes, two halves:
+
+- **Web:** the viewport meta carried no `maximum-scale`, so a pinch or a
+  double-tap scaled the whole shell. It reads `maximum-scale=1,
+  user-scalable=no` now, and **contract 45** refuses a commit where either
+  token is missing — proved by removing `user-scalable=no` and watching it
+  fire by name, `index.html` restored byte-for-byte.
+- **Native:** Android's WebView also honours the phone's own font-size
+  setting through `textZoom`, which no meta can touch. `MainActivity.
+  pinTextZoom()` sets it to 100 and `capacitor.config.json` carries
+  `android.zoomEnabled: false`. **That half reaches phones only with APK 25**
+  (built, unpublished — see §4); until then the web meta alone is what an
+  installed phone gets, and the phone's font-size slider can still scale it.
+
+The in-app «خطّ أكبر» (v380) is the accessible route and is untouched.
+Inputs stay ≥16px: iOS ignores `user-scalable=no` and would focus-zoom.
+
+### 2. Google sign-in — the web half is live but DARK, the native half waits for APK 25
+
+**Web (`Cloud.providers()` / `signInWithGoogle`):** the button is gated on
+`GET /auth/v1/settings → external.google`, one cached request per load, 4 s
+ceiling, any failure reads as «shut». So it appears the moment the owner
+enables the provider in Supabase and never before — a button for a door that
+is not open would answer «provider is not enabled» after a full-page trip.
+It is hidden inside the native shell: Google refuses OAuth in a WebView.
+
+**Native (`GoogleSignInPlugin.kt`, Credential Manager + googleid →
+`signInWithIdToken` with a raw nonce; Supabase hashes it SHA-256):**
+contract 44 pins the JS ↔ Kotlin surface. Ships only in APK 25, and only
+after the owner fills `plugins.GoogleSignIn.webClientId` in
+`capacitor.config.json` — it is an empty string in the committed tree.
+
+> ⚠️ **SUPABASE LINKS A GOOGLE IDENTITY TO AN EXISTING EMAIL ACCOUNT ONLY WHEN
+> THAT ADDRESS IS CONFIRMED.** Sign-up here is auto-confirmed without
+> verification, so «Continue with Google» on an existing email account creates
+> a SECOND uid with the same address. `guardForeignBlob` treats that as
+> «duplicate», not as a shared phone: nothing swept, pulled or pushed, and
+> `showDuplicateAccountDialog` explains. `VAULT_KEYS.lastEmail` is a `{uid,
+> email}` pair so it can never describe a uid other than `lastUid`.
+
+### 3. The six MUST_FIXes, and the one that was a lockout
+
+The verifiers' list, in the order they were applied:
+
+| # | finding | fix |
+|---|---|---|
+| 2 | Back closed the non-dismissible hold dialog | `goBack()` returns early over a `[data-dismissible="0"]` overlay |
+| 4 | the native Google tap set `ov.style.zIndex` inline to clear the auth gate | `body:has(> .auth-gate) .modal-overlay { z-index: 1001 }` in `styles.css`; the inline line and its dead `const ov` are gone |
+| 5 | `test-multi-window.js` had no same-email case | `sameEmailSecondAccountIsHeld`, both entry points + push, 7/7 mutations caught |
+| 3, 6 | reporting: the meta is a no-op inside the APK; textZoom needs APK 25 | §1 above, and CLAUDE.md's accessibility invariants |
+| **1** | **the hold dialog's only button was «sign out» — a person whose old password is lost, or who wants two accounts, was locked out of the app for good** | **«المتابعة بهذا الحساب»** |
+
+**#1 is the v351 shared-phone sweep offered DELIBERATELY.** `Cloud.
+releaseDuplicateHold()` reads the uid and address from the SESSION (never
+from an argument a dialog could get wrong), rescues the previous account's
+blob under ITS uid — restorable by that account, refused to this one — sweeps
+the device through `clearLocalUserData()`, and hands the device to the new
+uid, so the next boot and the next push stop reading as a second account.
+The sweep is one function now, `sweepToAccount(uid, email, prev)`, with two
+callers: the guard when two different addresses prove a shared phone, and
+the release when the person chooses. A rescue that cannot be written sweeps
+nothing, exactly as the guard behaves.
+
+> ⚠️ **ONE DIALOG, TWO STAGES, AND DELIBERATELY NOT `confirmDialog()`.** That
+> helper closes the sheet on cancel — which here would drop the person into
+> the empty second account with the hold still set and nothing on screen
+> saying so. Both stages are the same non-dismissible dialog re-rendered, and
+> «رجوع» re-renders stage 1, so there is no state in which the hold is set and
+> the dialog is gone.
+
+Measured in the running app, ar/dark/375 and en/light/412: two 50px buttons
+per stage, `aria-labelledby` on both, `data-dismissible="0"` on both, no raw
+key; «رجوع» → stage 1; a refused release keeps the dialog, re-enables the
+button and toasts «تعذّر وضع البيانات السابقة جانبًا…»; an accepted one calls
+`releaseDuplicateHold` once and reloads. The suite's new case
+(`releaseSweepsUnderTheOldUid`, login + boot) asserts the rescue's
+`uid === 'alice'`, the store no longer holds the session, the photo side
+store went with it, `lastUid`/`lastEmail` describe the new account, and
+neither the next sync nor a push says «duplicate» — **and it fails by name
+when the release is mutated to claim success without sweeping.**
+
+### 4. The sleep hero, and the release notes on what is NOT live
+
+The v389 row fix left the hero above it wrapping «11:10» over «PM»; it uses
+the same `.time-range` / `.time-word` idiom now, `dir="ltr"`.
+
+**Owner steps, none of them code:** in Google Cloud create an Android OAuth
+client with the debug cert's SHA-1 (`79:8A:7B:E5:A7:4F:1E:07:A1:04:16:F3:B2:
+7F:D2:9E:47:ED:1F:83`) and a Web client; enable Google in Supabase Auth with
+the Web client's id/secret (the secret never enters this repo — the owner
+pastes it); write the Web client id into `plugins.GoogleSignIn.webClientId`;
+then build and publish APK 25 (`versionCode` stays 24 in the committed tree
+until that day). The web button lights up on its own the moment the provider
+is enabled.
+
+45 contracts · lint · **13 suites, 0 failed, 0 skipped**.
 
 ## v389 — the «الساعة» badge that sat in the middle of the sleep row
 

@@ -4,6 +4,7 @@ import android.graphics.Color;
 import android.os.Build;
 import android.os.Bundle;
 
+import com.getcapacitor.Bridge;
 import com.getcapacitor.BridgeActivity;
 
 public class MainActivity extends BridgeActivity {
@@ -12,8 +13,43 @@ public class MainActivity extends BridgeActivity {
         // Must register before super.onCreate so the bridge knows the plugin.
         registerPlugin(HealthConnectPlugin.class);
         registerPlugin(WidgetBridgePlugin.class);
+        registerPlugin(GoogleSignInPlugin.class);
         super.onCreate(savedInstanceState);
         applyLegacyBarColors();
+        pinTextZoom();
+    }
+
+    /**
+     * NO ZOOM, the native half (owner decision, 2026-09-23: no zoom at all).
+     *
+     * Pinch and double-tap zoom were NEVER possible in this shell, so nothing
+     * here touches them: Capacitor's `zoomEnabled` defaults to false
+     * (CapConfig.java:287), Bridge.initWebView() therefore calls
+     * settings.setBuiltInZoomControls(false) (Bridge.java:612), and Chromium's
+     * AwSettings gates every gesture zoom on that flag
+     * (supportsMultiTouchZoomLocked = mSupportZoom && mBuiltInZoomControls;
+     * double-tap additionally needs mUseWideViewport, which Capacitor never sets).
+     *
+     * What CAN enlarge the app in this shell is TEXT ZOOM. AwSettings' constructor
+     * reads the phone's Font size slider: "By default, scale the text size by the
+     * system font scale factor. Embedders may override this by invoking
+     * setTextZoom()", and updateFontScaleLocked() re-applies it on every context
+     * change EXCEPT when the embedder has called setTextZoom(), which sets
+     * mTextZoomSetByEmbedder and makes the re-apply return early. So this one
+     * call pins text at 100% for the life of the WebView, whatever the phone's
+     * accessibility font size says. Layout is in CSS px and never followed that
+     * slider anyway, which is why a raised font scale reads as a broken zoom:
+     * the text grows and the boxes do not. The accessible route is the in-app
+     * larger-text setting (body.text-lg, v380), which scales the eleven type
+     * tokens and is untouched by this.
+     *
+     * NATIVE: reaches a phone only with a NEW APK. Until then the web layer's
+     * viewport meta already stops pinch in Chrome, and the WebView never pinched.
+     */
+    private void pinTextZoom() {
+        Bridge bridge = getBridge();
+        if (bridge == null || bridge.getWebView() == null) return;   // the no_webview fallback layout
+        bridge.getWebView().getSettings().setTextZoom(100);
     }
 
     /**

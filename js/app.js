@@ -12,7 +12,7 @@
 // build. The literal below is the fallback (file://, or a stripped query) and is
 // still bumped by `npm run release` — see CLAUDE.md "CACHE WORKFLOW".
 const VAULT_BUILD = (() => {
-  const FALLBACK = 'v389';
+  const FALLBACK = 'v390';
   try {
     const src = (document.currentScript && document.currentScript.src) || '';
     const m = src.match(/[?&]v=(\d+)/);
@@ -1189,6 +1189,9 @@ function goBack() {
   // `:not(.is-out)` — a sheet the user already dismissed lingers in the DOM for
   // its 260ms exit. Reading the root as 'non-empty' there made Back close a
   // corpse instead of popping the view, so one press did nothing.
+  // A dialog opened with dismissible:false MUST be answered (the duplicate-account
+  // hold is one): Back is swallowed the way the splash swallows it, never closed.
+  if (document.querySelector('#modal-root .modal-overlay[data-dismissible="0"]:not(.is-out)')) return true;
   if (document.querySelector('#modal-root .modal-overlay:not(.is-out)')) { closeModal(); return true; }
   if (document.getElementById('auth-gate')) return true; // don't slip behind login
   if (navStack.length > 1) {
@@ -5041,6 +5044,7 @@ function renderSettings(el) {
       const result = await Cloud.resume({ force: true });
       if (result === 'pulled') refreshAfterSync();
       if (result === 'conflict') showConflictDialog();
+      if (result === 'duplicate') showDuplicateAccountDialog();
     } catch (_) { /* Cloud owns the failure state shown below. */ }
     finally { updateSaveCenter(); }
   });
@@ -8284,6 +8288,8 @@ function showAuthGate(mode) {
     }
   } catch (_) {}
 
+  mountGoogleButton(gate, err);
+
   const run = async () => {
     // Enter on the password field calls run() directly, around the disabled
     // button: a keyboard bounce sent two sign-ins and two afterLogin()s.
@@ -8337,6 +8343,265 @@ function showAuthGate(mode) {
   if (forgot) forgot.addEventListener('click', () => showForgotPassword(document.getElementById('auth-email').value));
 }
 
+// Google's own four-colour "G", drawn as Google ships it. NOT an ICONS glyph and
+// NOT under the duotone law: that law is about THIS app's marks, and Google's
+// branding rules forbid recolouring theirs («you can't change the size or color
+// of the Google "G" logo»). Every fill is a literal, so neither currentColor nor
+// --icon-accent reaches it; aria-hidden because the label beside it says it all.
+const GOOGLE_G_SVG = '<svg viewBox="0 0 48 48" width="18" height="18" aria-hidden="true" focusable="false">' +
+  '<path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/>' +
+  '<path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/>' +
+  '<path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/>' +
+  '<path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/>' +
+  '</svg>';
+
+// «Continue with Google» on the sign-in card — appended ONLY once the project
+// itself says the provider is on (Cloud.providers() reads the public
+// /auth/v1/settings). While that is unknown, or false, or unreachable, the card
+// is exactly the card it was: nothing is reserved, the same rule as the
+// Turnstile slot (v305), so a shut door costs no one a blank gap.
+//
+// ⚠️ NEVER IN THE NATIVE SHELL. Google forbids the authorization request in an
+// embedded WebView, and Capacitor would hand the navigation to Chrome, so the
+// session would land in a browser the app cannot read. The shell hands off to
+// mountGoogleNativeButton (below): Credential Manager → an ID token →
+// supabase.auth.signInWithIdToken, in this same slot, only on an APK that
+// carries Capacitor.Plugins.GoogleSignIn.
+function mountGoogleButton(gate, err) {
+  if (isNativeShell()) { mountGoogleNativeButton(gate, err); return; }
+  if (!window.Cloud || typeof Cloud.providers !== 'function' || typeof Cloud.signInWithGoogle !== 'function') return;
+  Cloud.providers().then((p) => {
+    if (!p || p.google !== true) return;
+    // The card may have been rebuilt (language switch, sign-in ⇄ sign-up)
+    // while the answer was in flight; that rebuild mounts its own.
+    if (!gate.isConnected || gate.querySelector('#auth-google')) return;
+    const anchor = gate.querySelector('.auth-switch');
+    if (!anchor) return;
+    anchor.insertAdjacentHTML('beforebegin', `
+      <div class="auth-or" aria-hidden="true">${t('auth_or')}</div>
+      <button type="button" class="btn btn-ghost btn-block auth-google" id="auth-google">${GOOGLE_G_SVG}<span>${t('auth_google')}</span></button>`);
+    const btn = gate.querySelector('#auth-google');
+    btn.addEventListener('click', async () => {
+      if (btn.disabled) return;
+      btn.disabled = true;
+      err('');
+      let r;
+      try { r = await Cloud.signInWithGoogle(); } catch (e) { r = { error: (e && e.message) || 'network' }; }
+      // Success means the browser is already leaving for Google; the button
+      // stays disabled so a second tap cannot start a second round trip.
+      if (r && r.error) { err(translateAuthError(r.error)); btn.disabled = false; }
+    });
+    // Back from Google's page by the browser's Back button: a page restored
+    // from the back-forward cache would otherwise keep a dead button.
+    window.addEventListener('pageshow', (e) => { if (e.persisted) btn.disabled = false; }, { once: true });
+  }).catch(() => {});
+}
+
+// «متابعة بحساب Google» INSIDE THE ANDROID SHELL — the native door. Same slot,
+// same markup and the same classes as the web button, so it is the same design;
+// only the click differs: GoogleSignInPlugin.kt (Credential Manager) returns a
+// Google ID token and Cloud.signInWithGoogleNative trades it for a session, with
+// no trip through a browser. Then afterLogin() — the SAME path the password
+// sign-in takes — so the duplicate-account guard, the username gate and
+// enforceAccountStatus all apply unchanged.
+//
+// Drawn ONLY when the APK carries the plugin (build 24 does not: its
+// Capacitor.Plugins has no GoogleSignIn, so its card is byte-identical to
+// before), the owner has filled the web client ID (status().configured), and
+// the project says the Google provider is on. Until all three, nothing is
+// reserved.
+function mountGoogleNativeButton(gate, err) {
+  if (!isNativeShell()) return;
+  if (typeof Capacitor === 'undefined' || !Capacitor.Plugins || !Capacitor.Plugins.GoogleSignIn) return;
+  if (!window.Cloud || typeof Cloud.googleNativeReady !== 'function' || typeof Cloud.signInWithGoogleNative !== 'function') return;
+  Cloud.googleNativeReady().then((ready) => {
+    if (!ready) return;
+    if (!gate.isConnected || gate.querySelector('#auth-google')) return;
+    const anchor = gate.querySelector('.auth-switch');
+    if (!anchor) return;
+    anchor.insertAdjacentHTML('beforebegin', `
+      <div class="auth-or" aria-hidden="true">${t('auth_or')}</div>
+      <button type="button" class="btn btn-ghost btn-block auth-google" id="auth-google">${GOOGLE_G_SVG}<span>${t('auth_google')}</span></button>`);
+    const btn = gate.querySelector('#auth-google');
+    btn.addEventListener('click', () => nativeGoogleTap(btn, err));
+  }).catch(() => {});
+}
+
+async function nativeGoogleTap(btn, err) {
+  if (btn.disabled) return;
+  btn.disabled = true;
+  err('');
+  let picked;
+  try { picked = await Cloud.pickGoogleNative(); } catch (_) { picked = { error: 'native:unexpected' }; }
+  if (picked.error) {
+    btn.disabled = false;
+    // Mapped by the plugin's CODE, never by message text. A closed sheet is
+    // the person's own choice and says nothing.
+    const code = String(picked.error).replace(/^native:/, '');
+    if (code === 'cancelled') err('');
+    else if (code === 'no_credential') err(t('auth_google_none'));
+    else if (code === 'no_play_services') err(t('auth_google_no_play'));
+    else err(t('auth_google_failed'));
+    return;
+  }
+  // ⚠️ A DIFFERENT GOOGLE ADDRESS OVER THIS DEVICE'S DATA IS A SECOND ACCOUNT.
+  // Signing it in would sweep this phone's history into the one rescue slot
+  // (guardForeignBlob) and open the other account. Asked BEFORE Supabase is
+  // called, while nothing has happened yet; cancelling leaves everything as it
+  // was. The addresses are text from the network: confirmDialog escapes both.
+  const held = Cloud.deviceHeldByOther ? Cloud.deviceHeldByOther(picked.cred.email) : '';
+  if (held) {
+    btn.disabled = false;
+    confirmDialog({
+      title: t('auth_google_other_title'),
+      text: t('auth_google_other_text').replace('{held}', () => held).replace('{google}', () => picked.cred.email),
+      confirmLabel: t('auth_google_other_go'),
+      onConfirm: () => { finishNativeGoogle(btn, err, picked.cred); },
+    });
+    // ⚠️ A SHEET OPENED FROM THE SIGN-IN CARD WAS DRAWN UNDER IT. .modal-overlay is
+    // z-index 100 and .auth-gate 1000 — measured: the card's own button took the
+    // tap aimed at the sheet's. The stylesheet lifts every overlay over a mounted
+    // gate (`body:has(> .auth-gate) .modal-overlay`, styles.css); nothing inline.
+    return;
+  }
+  await finishNativeGoogle(btn, err, picked.cred);
+}
+
+async function finishNativeGoogle(btn, err, cred) {
+  btn.disabled = true;
+  // Supabase does not check a captcha on the id_token grant (see cloud.js), so
+  // this never WAITS for one: a token already solved rides along, nothing more.
+  let tok = '';
+  try { if (Cloud.captcha) tok = await Cloud.captcha.token(1); } catch (_) { tok = ''; }
+  let res;
+  try { res = await Cloud.signInWithGoogleNative(cred, tok); } catch (e) { res = { error: (e && e.message) || 'network' }; }
+  if (res.error) {
+    try { if (tok && Cloud.captcha) Cloud.captcha.reset(); } catch (_) {}
+    const m = String(res.error).toLowerCase();
+    // Wrong audience, a nonce that does not match, or the provider switched
+    // off between the settings read and the tap: all three are the project's
+    // configuration, not anything the person did.
+    if (m.includes('audience') || m.includes('nonce') || m.includes('provider')) err(t('auth_google_misconfig'));
+    else if (m.startsWith('native:')) err(t('auth_google_failed'));
+    else err(translateAuthError(res.error));
+    btn.disabled = false;
+    return;
+  }
+  await afterLogin();
+}
+
+// A FAILED OAuth return lands on the site root with the reason in the URL —
+// «the error details will be returned as query fragments in the URL»
+// (supabase.com/docs/guides/auth/redirect-urls): error, error_code,
+// error_description, in the #fragment for this implicit-flow client (the query
+// is read too, so a PKCE-shaped return is not silent either). Nothing read them,
+// so a cancelled or refused Google sign-in dropped the user on the sign-in card
+// with no word at all. This reads them ONCE, clears them from the address bar
+// without a reload (a reload would lose the message, and a URL that still said
+// #error would say it again on the next refresh), and returns an i18n KEY —
+// never the description itself, which is text from the network and never
+// rendered. A SUCCESSFUL return (#access_token=…) is left strictly alone: the
+// SDK consumes that one.
+function takeOAuthReturnError() {
+  try {
+    const hash = new URLSearchParams(String(location.hash || '').replace(/^#/, ''));
+    const query = new URLSearchParams(String(location.search || ''));
+    const inHash = hash.has('error') || hash.has('error_code') || hash.has('error_description');
+    const inQuery = query.has('error_code') || query.has('error_description');
+    if (!inHash && !inQuery) return null;
+    const src = inHash ? hash : query;
+    const code = String(src.get('error_code') || '').toLowerCase();
+    const said = [src.get('error'), code, src.get('error_description')].join(' ').toLowerCase();
+    const u = new URL(location.href);
+    ['error', 'error_code', 'error_description'].forEach((k) => u.searchParams.delete(k));
+    history.replaceState(history.state, '', u.pathname + u.search + (inHash ? '' : u.hash));
+    // The same URL shape carries an EMAILED link's failure too, and this
+    // project's only emailed link is the password reset: an expired or reused
+    // one arrives as error=access_denied&error_code=otp_expired, which must not
+    // read as «Google sign-in was cancelled».
+    if (code.indexOf('otp') === 0) return 'auth_link_expired';
+    return said.includes('access_denied') ? 'auth_google_cancelled' : 'auth_google_failed';
+  } catch (_) { return null; }
+}
+
+// THE SAME PERSON, A SECOND ACCOUNT. Cloud's guard refused to sweep this device
+// because the account that just signed in carries the same email as the one
+// whose data is on it (see guardForeignBlob in js/cloud.js) — the usual cause is
+// «Continue with Google» making a new account instead of linking. Nothing was
+// pulled, pushed or swept, and pushes to the new account are refused.
+//
+// It cannot be dismissed, and its ONE action is a sign-out that touches ONLY
+// the session. Settings' logout is deliberately not reused: it flushes and then
+// CLEARS THIS DEVICE, which would delete exactly the data this dialog has just
+// promised is safe. Shown from both doors — bootCloud (a cold start, which is
+// where an OAuth return lands) and afterLogin (the interactive sign-in) — and
+// from a resume, so no path leaves the person inside the empty second account.
+let __duplicateHeld = false;
+function showDuplicateAccountDialog() {
+  __duplicateHeld = true;
+  hideAuthGate();
+  // The username gate has no close and no sign-out; the second account has no
+  // handle, so ensureUsername may already have mounted it over everything.
+  const ug = document.getElementById('username-gate');
+  if (ug) ug.remove();
+  if (document.getElementById('dup-account-signout') || document.getElementById('dup-account-release')) return;
+  // ONE dialog, TWO STAGES, and deliberately not confirmDialog(): that helper
+  // closes the sheet on cancel, which here would drop the person into the
+  // empty second account with the hold still set and nothing on screen
+  // saying so. Both stages are the same non-dismissible dialog re-rendered,
+  // so there is no state in which the hold is set and the dialog is gone.
+  const label = (overlay) => {
+    const dlg = overlay.querySelector('[role="dialog"]');
+    if (dlg) dlg.setAttribute('aria-labelledby', 'dup-account-title');
+  };
+  const stage2 = () => {
+    const overlay = openModal(`
+      <div class="confirm-title" id="dup-account-title">${t('dup_account_confirm_title')}</div>
+      <div class="confirm-text">${t('dup_account_confirm_text')}</div>
+      <div class="form-actions">
+        <button type="button" class="btn btn-ghost" id="dup-account-back">${t('back')}</button>
+        <button type="button" class="btn btn-danger" id="dup-account-release">${t('dup_account_continue')}</button>
+      </div>
+    `, { variant: 'confirm', dismissible: false });
+    label(overlay);
+    overlay.querySelector('#dup-account-back').addEventListener('click', stage1);
+    const go = overlay.querySelector('#dup-account-release');
+    go.addEventListener('click', async () => {
+      if (go.disabled) return;
+      go.disabled = true;
+      let released = false;
+      try { released = await Cloud.releaseDuplicateHold(); } catch (_) { released = false; }
+      // A rescue that could not be written swept nothing (cloud.js), so the
+      // previous data is still here and the dialog stays up.
+      if (!released) { go.disabled = false; showToast(t('dup_account_release_failed')); return; }
+      location.reload();   // the device belongs to this account now; boot as it over the swept store
+    });
+  };
+  function stage1() {
+  const overlay = openModal(`
+    <div class="confirm-title" id="dup-account-title">${t('dup_account_title')}</div>
+    <div class="confirm-text">${t('dup_account_text')}</div>
+    <button type="button" class="btn btn-primary btn-block" id="dup-account-signout">${t('logout')}</button>
+    <button type="button" class="btn btn-ghost btn-block" id="dup-account-continue">${t('dup_account_continue')}</button>
+  `, { variant: 'confirm', dismissible: false });
+  label(overlay);
+  const btn = overlay.querySelector('#dup-account-signout');
+  btn.addEventListener('click', async () => {
+    if (btn.disabled) return;
+    btn.disabled = true;
+    try { await Cloud.signOut(); } catch (_) {}
+    let still = null;
+    try { still = await Cloud.getSession(); } catch (_) { still = null; }
+    // Offline, Supabase keeps the session rather than half-ending it; say so
+    // and leave the dialog up rather than reloading into the same account.
+    if (still) { btn.disabled = false; showToast(t('auth_err_network')); return; }
+    location.reload();   // no session → the sign-in card, over this device's data, untouched
+  });
+  overlay.querySelector('#dup-account-continue').addEventListener('click', stage2);
+  }
+  stage1();
+}
+
 // Mandatory unique username. Once a user is logged in AND online, they MUST pick
 // a handle before using the app — even already-registered users. Enforced by a
 // blocking gate (no skip). No-ops when offline or logged out so a solo/offline
@@ -8344,8 +8609,10 @@ function showAuthGate(mode) {
 const USERNAME_RE = /^[A-Za-z0-9_]{3,20}$/;
 async function ensureUsername() {
   if (!window.Cloud || !Cloud.configured || !Cloud.configured() || !Cloud.getUsername) return;
+  if (__duplicateHeld) return;
   let info;
   try { info = await Cloud.getUsername(); } catch (_) { return; }
+  if (__duplicateHeld) return;         // the second account of a held device has no handle, and must not be asked for one
   if (!info || info.offline) return;   // couldn't verify → don't lock anyone out
   if (info.username) return;           // already chosen
   showUsernameGate();
@@ -8482,6 +8749,7 @@ async function afterLogin() {
   try {
     const r = await Cloud.resolveOnLogin();
     if (r === 'conflict') { hideAuthGate(); showConflictDialog(); return; }
+    if (r === 'duplicate') { showDuplicateAccountDialog(); return; }
     hideAuthGate();
     if (r !== 'pushed' && r !== 'pulled') { showToast(t('sc_error')); return; }
     refreshAfterSync();
@@ -8975,6 +9243,9 @@ function renderPersonalRecords(el) {
 
 async function bootCloud() {
   if (!window.Cloud || !Cloud.configured()) return; // not set up → local-only
+  // Read (and clear) a failed OAuth return BEFORE the SDK starts: it is a key
+  // or null, and it is said below on whichever surface this boot ends on.
+  const oauthErr = takeOAuthReturnError();
   await Cloud.ensureSdk(); // load the Supabase SDK on demand
   // Opened from a password-reset link → let the user set a new password.
   Cloud.onPasswordRecovery(() => showChangePassword(true));
@@ -8997,17 +9268,20 @@ async function bootCloud() {
     const offline = (typeof navigator !== 'undefined' && navigator.onLine === false);
     const known = !!(Cloud.wasLinked && Cloud.wasLinked()) && !!(Cloud.localHasData && Cloud.localHasData());
     if (offline && known) {
-      try { showToast(t('auth_offline_grace')); } catch (_) {}
+      try { showToast(t(oauthErr || 'auth_offline_grace')); } catch (_) {}
       return; // let them train; sync resumes when the connection does
     }
     showAuthGate('in');
+    if (oauthErr) { const e = document.getElementById('auth-err'); if (e) e.textContent = t(oauthErr); }
     return;
   }
+  if (oauthErr) { try { showToast(t(oauthErr)); } catch (_) {} }
   // Already logged in — pick up any changes from other devices in the background.
   try {
     const r = await Cloud.bootSync();
     if (r === 'pulled') refreshAfterSync();
     else if (r === 'conflict') showConflictDialog(); // both sides changed → ask
+    else if (r === 'duplicate') { showDuplicateAccountDialog(); return; }   // nothing below may act as the second account
   } catch (_) {}
   ensureUsername(); // enforce a handle for already-logged-in users too
   if (Cloud.touchLastSeen) Cloud.touchLastSeen();  // fire-and-forget activity stamp
@@ -9557,6 +9831,7 @@ function afterScripts(fn) {
     let r; try { r = await Cloud.resume(); } catch (_) { return; }
     if (r === 'pulled') refreshAfterSync();
     else if (r === 'conflict') showConflictDialog();
+    else if (r === 'duplicate') showDuplicateAccountDialog();
   }
   // "Sync resumes when you reconnect" — app.js has promised this to the user in
   // both languages since the offline grace path was written, and NOTHING
