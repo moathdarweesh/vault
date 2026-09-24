@@ -2096,16 +2096,14 @@ button.schedule-prev-row { width: 100%; font: inherit; color: inherit; text-alig
   gap: 12px;
 }
 
+/* Colour and centring only. Every .data-icon is a figure row's end tile since
+   v395 and carries .fig-row-tile, which owns the size (36px, 18px glyph). */
 .data-icon {
-  width: 42px;
-  height: 42px;
-  border-radius: 12px;
   display: flex;
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
 }
-.data-icon svg { width: 20px; height: 20px; }
 
 .data-icon.treadmill { background: var(--cat-back-bg); color: var(--cat-back); }
 .data-icon.walking   { background: var(--cat-legs-bg); color: var(--cat-legs); }
@@ -2115,39 +2113,6 @@ button.schedule-prev-row { width: 100%; font: inherit; color: inherit; text-alig
 .data-icon.food      { background: var(--cat-arms-bg); color: var(--cat-arms); }
 .data-icon.sleep     { background: var(--cat-shoulders-bg); color: var(--cat-shoulders); }
 .data-icon.workout   { background: var(--cat-legs-bg); color: var(--cat-legs); }
-
-.data-main {
-  flex: 1;
-  min-width: 0;
-}
-
-.data-title {
-  font-size: 14px;
-  font-weight: 700;
-  letter-spacing: -0.015em;
-  margin-bottom: 4px;
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
-
-.data-meta {
-  font-size: 12px;
-  color: var(--text-mute);
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex-wrap: wrap;
-  font-variant-numeric: tabular-nums;
-}
-
-.data-value {
-  font-size: 13px;
-  font-weight: 700;
-  color: var(--text);
-  font-variant-numeric: tabular-nums;
-  letter-spacing: -0.02em;
-}
 
 .data-actions {
   display: flex;
@@ -4816,44 +4781,50 @@ button.bundle-main {
 .sl-bar-wrap { margin-top: 8px; }
 .sl-bar-wrap .sl-bar { height: 6px; }
 
-/* THE SLEEP LEDGER ROW (v394) — the number first. One <button> per night: the
-   duration at title size in the first column, the range and its source beside
-   it, a 36px tile at the end, and the stage bar as the card's bottom EDGE
-   (.sl-edge: no radius, no wrap — it is the card's edge, not a chip inside it).
-   The button reset mirrors button.bundle-main; .data-row's padding moves onto
-   .sleep-row-main so the edge can run flush to the card's own corners. */
-/* .data-row.sleep-row, not .sleep-row: the unified card surface re-declares
+/* THE FIGURE ROW (v394 sleep → v395 every .data-row) — the number first.
+   [figure][title / sub][one square]: the row's figure at title size in the
+   first column (figRowFig in js/ui.js), a text column, and ONE square at the
+   end — the category tile when the row is a DOOR (the whole row is a <button>
+   that opens the item's sheet, where delete lives), the CONTROL when the row
+   carries an action (Home's tick). Sleep adds the stage bar as the card's
+   bottom EDGE (.sl-edge: no radius — it is the card's edge, not a chip).
+   .data-row.fig-row, not .fig-row: the unified card surface re-declares
    .data-row's padding 1,200 lines below this block at equal specificity, and
-   source order would hand the 12px back — measured: 100px rows, the edge
-   floating 12px above the card's bottom. */
-.data-row.sleep-row {
-  flex-direction: column; align-items: stretch; gap: 0;
-  width: 100%; padding: 0; overflow: hidden;
-  font: inherit; color: var(--text); text-align: start; cursor: pointer;
+   source order would hand the 12px back (measured on v394: 100px rows, the
+   edge floating 12px above the card's bottom). The padding moves onto
+   .fig-row-main so an edge can run flush to the card's own corners. */
+.data-row.fig-row { flex-direction: column; align-items: stretch; gap: 0; padding: 0; }
+/* The button reset mirrors button.bundle-main. The springy RETURN is here, the
+   way DOWN comes from the global press list (button.fig-row:active is in it). */
+/* overflow:hidden lives HERE, on the door rows, not on every figure row: it
+   exists so sleep's edge runs to the card's corners, and on Home's div rows it
+   clipped the tick's own focus ring and one pixel of its 44px halo. */
+button.data-row.fig-row {
+  width: 100%; overflow: hidden; font: inherit; color: var(--text); text-align: start; cursor: pointer;
   appearance: none; -webkit-appearance: none; -webkit-tap-highlight-color: transparent;
-  /* The springy RETURN, like every card in the global press list; the way
-     DOWN comes from that list (.sleep-row:active is in it), not from here. */
   transition: transform 300ms var(--ease-back);
 }
-.sleep-row-main { display: flex; align-items: center; gap: 12px; padding: 12px 14px; min-height: 72px; box-sizing: border-box; }
-.sleep-row-dur { flex: none; min-width: 76px; font-size: 26px; font-weight: 700; letter-spacing: -0.02em; line-height: 1; }
-/* The figure is direction:ltr (.num), so `start` inside its 76px box is LEFT —
-   in an RTL row that put the column's slack between the figure and the card's
-   edge, and «7:55» started 15px further in than «10:15». Physical `right`, not
-   `end`: `end` would resolve against the element's own ltr. */
-body[dir="rtl"] .sleep-row-dur { text-align: right; }
-/* A flex column whose cross-axis start is the row's inline start, so the ltr
-   range hugs the reading edge in both scripts without a per-direction rule. */
-.sleep-row-text { flex: 1; min-width: 0; display: flex; flex-direction: column; align-items: flex-start; gap: 4px; }
-/* No white-space here: .time-range (later in the file, same specificity) keeps
-   `normal` with nowrap on each .time-word, so the range breaks only at the
-   arrow when it must (a zoomed font) and the row grows past its 72px floor
-   instead of clipping under the tile. A `nowrap` first written here was inert
-   and would have been the wrong rule had it applied — the review caught it. */
-.sleep-row-range { font-size: 13px; font-weight: 700; }
-.sleep-row-src { font-size: 12px; color: var(--text-mute); }
-.sleep-row-icon { width: 36px; height: 36px; border-radius: var(--radius-sm); }
-.sleep-row-icon svg { width: 18px; height: 18px; }
+.fig-row-main { display: flex; align-items: center; gap: 12px; padding: 12px 14px; min-height: 72px; box-sizing: border-box; }
+/* position:relative so the PR row's .sr-only label (position:absolute) is
+   contained here and scrolls with its row instead of landing on .app. */
+.fig-row-fig { flex: none; min-width: 76px; display: flex; position: relative; }
+.fig-row-fig.is-wide { min-width: 100px; }
+.fig-row-val { display: inline-flex; align-items: baseline; gap: 4px; }
+.fig-row-num { font-size: 26px; font-weight: 700; letter-spacing: -0.02em; line-height: 1; }
+.fig-row-unit { font-size: 12px; font-weight: 700; color: var(--text-mute); }
+/* A flex column whose cross-axis start is the row's inline start, so an ltr
+   run (the sleep range) hugs the reading edge in both scripts. */
+.fig-row-text { flex: 1; min-width: 0; display: flex; flex-direction: column; align-items: flex-start; gap: 4px; }
+.fig-row-title { font-size: 14px; font-weight: 700; max-width: 100%; overflow-wrap: anywhere; }
+/* No white-space on the range: .time-range (later in the file, same
+   specificity) keeps `normal` with nowrap on each .time-word, so a zoomed
+   range breaks only at the arrow and the row grows past its 72px floor
+   instead of clipping under the tile (the v394 review). */
+.fig-row-range { font-size: 13px; font-weight: 700; }
+.fig-row-sub { font-size: 12px; color: var(--text-mute); max-width: 100%; overflow-wrap: anywhere; }
+.fig-row-sub .num { white-space: nowrap; }
+.fig-row-tile { width: 36px; height: 36px; border-radius: var(--radius-sm); }
+.fig-row-tile svg { width: 18px; height: 18px; }
 .sl-edge { height: 4px; border-radius: 0; }
 .sl-legend { display: grid; grid-template-columns: repeat(2, 1fr); gap: 6px 14px; margin-top: 12px; }
 .sl-leg-item { display: flex; align-items: center; gap: 8px; font-size: 12px; }
@@ -5633,13 +5604,11 @@ body[dir="rtl"] .bento-card.wide .bento-added-stripe { left: 14px; }
 }
 .mb-16 { margin-bottom: 16px; }
 
-/* A time range («11:10 PM → 7:05 AM») inside a .data-title. The title is a
-   non-wrapping flex row, so the range is ONE item that wraps as text — at the
-   arrow, never inside a time. `dir="ltr"` is on the markup: a range has an
-   order and the arrow must point along it in both scripts (v374). The source
-   («من الساعة») that used to ride here as a capsule is a word in .data-meta
-   now, the way the cardio row carries «تم» — a standing property of the row is
-   never a chip. */
+/* A time range («11:10 PM → 7:05 AM»): the sleep row's .fig-row-range and the
+   sleep hero. ONE item that wraps as text — at the arrow, never inside a time.
+   `dir="ltr"` is on the markup: a range has an order and the arrow must point
+   along it in both scripts (v374). The source («من الساعة») is a word in the
+   row's .fig-row-sub, never a chip. */
 .time-range { white-space: normal; }
 .time-word  { white-space: nowrap; }
 
@@ -6050,11 +6019,6 @@ body:has(> .auth-gate) .modal-overlay { z-index: 1001; }
   text-decoration: underline;
 }
 
-/* Personal Records */
-/* .pr-row: override .data-row's center alignment so the trophy icon top-aligns when the meta line wraps */
-.pr-row { align-items: flex-start; }
-/* .pr-stats: override .data-meta gap from 8px to match dot-sep spacing at narrower widths */
-.pr-stats { gap: 8px; }
 
 /* =========================================================================
    ATHLETIC PREMIUM FOUNDATION (v77)
@@ -6096,7 +6060,7 @@ body:has(> .auth-gate) .modal-overlay { z-index: 1001; }
 .nav-btn:active, .btn:active,
 .session-card:active, .heat-cell:active,
 .calendar-cell:active, .bento-card:active, .compare-card:active,
-.filter-pill:active, .settings-action-row:active, .sleep-row:active {
+.filter-pill:active, .settings-action-row:active, button.fig-row:active {
   /* §5: FAST down, SPRINGY back. The base rules carry the 300ms --ease-back
      return; this shortens the way DOWN to --dur-tap, so the two directions
      differ — which is the whole feel the spec asks for. */
@@ -7922,10 +7886,11 @@ body:has(.toast.has-action.show) .modal { padding-bottom: calc(var(--nav-h) + va
 /* The rule above the FIRST row is what ties it to the lead cardio above it. */
 .home-sched .data-list > :first-child { border-top: 1px solid var(--border); }
 .home-sched .ledger-add { margin-top: var(--sp-2); }
-/* Done is carried by the control's own label and the geometry. This wash only
-   reinforces it, so colour is never the sole signal. */
-.data-row.is-done .data-title { color: var(--text-mute); }
-.data-row.is-done .data-icon { opacity: 0.6; }
+/* Inside the block the rows run to its own padding, not the card's. */
+.home-sched .fig-row-main { padding-inline: 0; }
+/* Done is carried by the control's own label and the «تم» sub-line. This wash
+   only reinforces it, so colour is never the sole signal. */
+.fig-row.is-done .fig-row-num, .fig-row.is-done .fig-row-title { color: var(--text-mute); }
 
 /* ---- Today's cardio: a task card that shrinks when the task is paid --------
    THREE SIZES, ONE FAMILY, and the ladder between them is the whole idea:
@@ -7950,7 +7915,8 @@ body:has(.toast.has-action.show) .modal { padding-bottom: calc(var(--nav-h) + va
    settled things should recede — but --surface-1 on --bg is ~1.08:1 in dark,
    and with no border and no bevel the strip would have no edge at all. */
 /* Settled differs by STATE, not by size: every cardio is the same row, so the
-   done one keeps its height and is marked by the .is-done wash and its meta. */
+   done one keeps its height and is marked by the .is-done wash and its «تم»
+   sub-line. */
 
 /* THE TICK IS THE WHOLE CONTROL. The word beside it repeated what the check
    already says and cost more width than the duration it sat next to, so the owed
@@ -7962,12 +7928,13 @@ body:has(.toast.has-action.show) .modal { padding-bottom: calc(var(--nav-h) + va
    button must also set `color`, or it inherits the UA `buttontext` default,
    which measured 2.23:1 here once before. */
 /* ONE GEOMETRY FOR BOTH. They were 36x36 and 70x36 — a 34px difference that
-   moved the name column between rows (217px against 183px) and made two rows of
-   the same kind look like two different things. Both are now the SAME SQUARE as
-   the category tile that opens the row, so a row reads [42][name][42] and every
-   row is the mirror of every other. The undo lost its word for the same reason
-   the check did; «تم» still sits in the meta line, so the done state is carried
-   by text and the .is-done wash, never by colour alone. */
+   moved the name column between rows and made two rows of the same kind look
+   like two different things. Both are one 42px square, the row's ONE end
+   square (v395: a figure row reads [figure][title][42] here — the tick took the
+   category tile's place, since this row carries an action rather than opening
+   a sheet). The undo lost its word for the same reason the check did; «تم»
+   sits in the .fig-row-sub line, so the done state is carried by text and the
+   .is-done wash, never by colour alone. */
 .cardio-do, .cardio-undo {
   position: relative;
   flex: none;

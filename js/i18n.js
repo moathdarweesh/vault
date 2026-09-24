@@ -78,7 +78,7 @@ const I18N = {
 
     // Exercise detail
     log_session: 'Log Session',
-    edit_session: 'Edit Session',
+    edit_session: 'Edit Session', edit_exercise: 'Edit exercise',
     max_weight: 'Max Weight', max_reps: 'Max Reps',
     exercise: 'exercise', exercises: 'exercises',
     history: 'History',
@@ -1067,7 +1067,7 @@ const I18N = {
     custom_exercise_label: 'تمرين مخصص',
 
     log_session: 'سجّل جلسة',
-    edit_session: 'تعديل الجلسة',
+    edit_session: 'تعديل الجلسة', edit_exercise: 'تعديل التمرين',
     max_weight: 'أقصى وزن', max_reps: 'أقصى تكرار',
     exercise: 'تمرين', exercises: 'تمارين',
     history: 'السجل',

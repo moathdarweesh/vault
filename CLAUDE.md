@@ -83,7 +83,7 @@ npm run verify           # 43 contracts + lint + 13 suites — THE GATE
 npm run release          # bump every marker and re-read them; runs NO tests
 ```
 
-**Current version: v394.** APK: build 24 / v3.3.
+**Current version: v395.** APK: build 24 / v3.3.
 
 > ⚠️ **`npm run release` RUNS NO TESTS, AND THIS LINE USED TO READ AS IF IT DID.**
 > It said «bump every marker + verify», where *verify* meant the MARKERS — and
@@ -2734,6 +2734,94 @@ the rows pre-filled from last time as performed sets ("confirmed without a
 throwaway edit" is the recorded intent; whether an untouched row should count
 is the owner's call); a saved food **4 taps**. The day card's Save measures
 **69×40** — under the 44 floor.
+
+## v395 — every row the sleep row's shape: the figure row
+
+The owner, on v394: **«خلّي صفّ الكارديو وأيّ شي آخر بيتّفق بالتصميم القديم
+يصيروا زي التصميم الجديد»**. «The old design» is the `.data-row` component —
+tile first, title and meta, a value, a pencil and a bin — and seven sites
+still drew it. All seven are the **figure row** now, one component:
+
+| site | figure | end square | the row is |
+|---|---|---|---|
+| sleep ledger (v394) | 6:40 | sleep tile | the door → the night's sheet |
+| cardio ledger | 30 د | the type's tile | the door → the session's sheet (Delete moved in) |
+| Home — today's cardio | 30 د | **the tick / the undo** | a task row, not a door |
+| Program — cardio schedule | 30 د | the type's tile | the door → the schedule's sheet (it had Delete) |
+| Program — top records | 142.5 kg | trophy | static |
+| Personal records | 142.5 kg | trophy | static |
+| «تماريني» | — (the photo leads) | — | the door → the exercise's sheet (Delete moved in) |
+
+- **`figRowFig(value, unit, srLabel)` in `js/ui.js` is the ONE first column.**
+  It is a flex container in the ROW's direction, so the figure hugs the row's
+  start edge whatever its width (the v394 inset lesson, now structural rather
+  than a `body[dir=rtl]` patch — that rule is gone). A Latin unit («kg»,
+  «min») keeps the pair in ltr order, v374's rule for a measurement; an
+  Arabic unit («د») follows the row, so «30 د» reads number-then-unit in both
+  scripts. `srLabel` names a figure whose meaning the eye takes from context
+  (the record row's «أعلى وزن»).
+- **ONE square at the end of a row**: the category tile where the row is a
+  door, the CONTROL where the row carries an action. Home's cardio rows are
+  the second kind, so the tick took the tile's place and the type is named by
+  its title.
+- **Delete moved into the sheet** for the cardio session and the custom
+  exercise, the sleep sheet's shape: `confirmDialog` → remove → repaint through
+  the router → focus lands on the screen's add button. From the exercise's own
+  page the sheet's delete leaves the page the way that page's own delete does.
+- A cardio session with **0 calories** draws no «0 سعرة»: that is not a fact
+  about the walk.
+- `.sleep-row*` → `.fig-row*`; `.pr-row`, `.pr-stats` and the
+  `.data-row.is-done` wash went with their last users.
+
+Measured seeded at ar/dark/375 and en/light/412, every site: row heights 72
+(76 with sleep's edge; 73 inside Home's block, whose rows run to the block's
+padding), the figure 14px from the start edge, the end square 14px from the
+end, 0 controls inside a door, 0 overflowing descendants, each door opening
+its sheet, each sheet delete removing its row and landing focus on «سجّل» /
+the add button.
+
+### What the pre-push review found — 19 agents, 4 lenses, every finding verified
+
+- **The exercise page's delete from the sheet showed no toast.** `navigate()`
+  hides any toast it finds, and the sheet raised its toast BEFORE navigating
+  — the v296 rule, missed. It navigates first now, with the page's own
+  «تم حذف التمرين».
+- **`overflow: hidden` on every figure row clipped Home's tick** — its focus
+  ring and one pixel of its 44px halo, because a Home row is a div holding a
+  control flush to its edge. The clip exists only so sleep's edge reaches the
+  card's corners, so it lives on the door rows (`button.data-row.fig-row`) now.
+- **Focus after a sheet delete** now lands on an add control on every path:
+  the cardio schedule's sheet (a door since this release) and the exercise
+  sheet reached from the post-create toast on other views, not only
+  «تماريني».
+- **A weight column needs a wider floor.** «142.5 kg» outgrows the 76px that
+  fits «10:15», so the record titles started at different x down one list;
+  `figRowFig(…, wide)` gives weights 100px. Measured: both titles at 126px.
+- The record sub-line's «166 kg» could wrap between number and unit
+  (`.fig-row-sub .num { white-space: nowrap }`); the `.sr-only` label was
+  positioned against `.app` and did not scroll with its row
+  (`.fig-row-fig { position: relative }`); the door rows' names now read
+  figure-first, the way the row reads.
+- Dead: `.data-main`, `.data-title`, `.data-meta`, `.data-value` had no users
+  left, and `.data-icon`'s 42px/20px sizing was overridden everywhere — it is
+  colour and centring only now. Three comments that still described the
+  [42][name][42] geometry and a «meta line» were rewritten.
+- **Refuted but fixed anyway:** the exercise sheet was titled «تعديل الجلسة»
+  (Edit Session) — pre-existing, but the «تماريني» row now leads straight
+  into it and it now holds the delete. `edit_exercise` «تعديل التمرين».
+
+**Still on the old pattern, deliberately NOT converted here** because each is
+its own component rather than the `.data-row` the owner pointed at: the
+supplement row (a toggle plus a pencil), the food-log rows, an exercise's
+session history, the weight history in its sheet, and the recipe cards. Each
+is a design decision about a different screen.
+
+> ⚠️ **THE PATCHER FOUND A FILE WHOSE LINE ENDINGS CHANGE INSIDE ONE
+> BLOCK.** `js/body.js`'s cardio row mixed CRLF template lines with LF comment
+> lines written by an earlier edit, so an anchor matched in neither ending.
+> The patch now normalises each file to LF before matching; `core.autocrlf`
+> stores LF in the repo either way, so the committed diff carries only the
+> real edits (177 lines in, 144 out, across four files).
 
 ## v394 — the sleep row: the number first
 

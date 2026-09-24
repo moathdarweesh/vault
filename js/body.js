@@ -264,34 +264,35 @@ function renderCardio(el) {
   const weekCal = weekItems.reduce((s, c) => s + c.calories, 0);
 
   const cardioDays = viewContext.cardioDays || 7;
+  // THE FIGURE ROW (v395), the sleep row's shape: the minutes first, the type
+  // and its calories beside them, the type's own tile at the end. The row is
+  // the door to the session's sheet and delete lives inside it (v394).
+  //
+  // Coerced, not interpolated raw: duration and calories arrive from the synced
+  // blob and from imported backups, both untrusted, and land in innerHTML — a
+  // number field can only ever be a number, which is stricter than escaping.
+  // unit_min («د»), never t('minutes') — that is the COLUMN LABEL «الدقائق», and
+  // after a numeral the definite article is not Arabic (the v383 trap). A zero
+  // calorie figure (a manual walk logged without one) is not drawn: «0 سعرة»
+  // is not a fact about the walk.
   const renderCardioEntry = (c) => {
     const tm = resolveCardioType(c.type);
+    const min = Math.round(Number(c.duration) || 0);
+    const cal = Math.round(Number(c.calories) || 0);
+    const watch = c.source === 'health';
+    // The name reads the way the row reads: the figure, then the type.
+    const label = `${formatDate(c.date)} — ${fmtNum(min)} ${t('unit_min')} — ${tm.label}${cal > 0 ? ` — ${fmtNum(cal)} ${t('cal')}` : ''}${watch ? ` — ${t('from_watch')}` : ''}`;
     return `
-      <div class="data-row">
-        <div class="data-icon ${tm.cls}">${icon(tm.iconName, 20)}</div>
-        <div class="data-main">
-          <div class="data-title">${escapeHtml(tm.label)}</div>
-          <div class="data-meta">
-            <!-- The day header above the row carries the date now.
-                 Coerced, not interpolated raw. These arrive from the synced
-                 blob and from imported backups, both of which CLAUDE.md names
-                 as untrusted, and they land in innerHTML — so a string field
-                 carrying markup would execute. A number field can only ever be
-                 a number; forcing that is stricter than escaping and cheaper. -->
-            <!-- unit_min («د»), the same noun every other cardio figure in the app
-                 uses — t('minutes') is the COLUMN LABEL «الدقائق», and after a numeral
-                 the definite article is not Arabic (the v383 «20 المجموعات» trap). -->
-            <span class="num">${fmtNum(Math.round(Number(c.duration) || 0))} ${t('unit_min')}</span>
-            <span class="dot-sep"></span>
-            <span class="num">${fmtNum(Math.round(Number(c.calories) || 0))} ${t('cal')}</span>
-            ${c.source === 'health' ? `<span class="dot-sep"></span><span>${escapeHtml(t('from_watch'))}</span>` : ''}
+      <button type="button" class="data-row fig-row" data-edit-cardio="${escapeHtml(c.id)}" aria-label="${escapeHtml(label)}">
+        <div class="fig-row-main">
+          ${figRowFig(fmtNum(min), t('unit_min'))}
+          <div class="fig-row-text">
+            <div class="fig-row-title">${escapeHtml(tm.label)}</div>
+            ${cal > 0 || watch ? `<div class="fig-row-sub">${cal > 0 ? `<span class="num">${fmtNum(cal)}</span> ${t('cal')}` : ''}${cal > 0 && watch ? ' · ' : ''}${watch ? escapeHtml(t('from_watch')) : ''}</div>` : ''}
           </div>
+          <div class="data-icon ${tm.cls} fig-row-tile" aria-hidden="true">${icon(tm.iconName, 18)}</div>
         </div>
-        <div class="data-actions">
-          <button class="icon-btn" data-edit-cardio="${escapeHtml(c.id)}" aria-label="${escapeHtml(t('edit'))}">${icon('edit', 16)}</button>
-          <button class="icon-btn danger" data-delete-cardio="${escapeHtml(c.id)}" aria-label="${escapeHtml(t('delete'))}">${icon('trash', 16)}</button>
-        </div>
-      </div>
+      </button>
     `;
   };
   const cardioLedger = dayLedgerHtml({ entries: list, days: cardioDays, renderEntry: renderCardioEntry, emptyText: t('ledger_no_cardio'), addAttr: 'data-ledger-cardio' });
@@ -336,19 +337,6 @@ function renderCardio(el) {
   $('#add-cardio-btn', el).addEventListener('click', () => openCardioModal());
   el.querySelectorAll('[data-edit-cardio]').forEach((b) =>
     b.addEventListener('click', () => openCardioModal(b.dataset.editCardio))
-  );
-  el.querySelectorAll('[data-delete-cardio]').forEach((b) =>
-    b.addEventListener('click', () => {
-      confirmDialog({
-        title: t('delete_cardio_q'),
-        text: t('delete_cardio_text'),
-        onConfirm: () => {
-          DB.cardio.remove(b.dataset.deleteCardio);
-          showToast(t('deleted'));
-          renderCardio(el);
-        },
-      });
-    })
   );
 
   // Pull the watch's newest exercise sessions on open. Health Connect sessions
@@ -417,9 +405,29 @@ function openCardioModal(cardioId = null, presetDate = null) {
 
     <div class="form-actions">
       <button type="button" class="btn btn-ghost" data-close>${t('cancel')}</button>
+      ${existing ? `<button type="button" class="btn btn-danger" id="delete-cardio-btn">${t('delete')}</button>` : ''}
       <button type="button" class="btn btn-primary" id="save-cardio-btn">${existing ? t('update') : t('save')}</button>
     </div>
   `);
+
+  // Delete lives here since v395 (the ledger row carries no controls) — the
+  // sleep sheet's shape exactly: confirmDialog replaces #modal-root, the
+  // ledger repaints through the router, and focus lands on «سجّل» because the
+  // repaint detached the row closeModal() had just focused.
+  $('#delete-cardio-btn')?.addEventListener('click', () => {
+    if (!existing) return;
+    confirmDialog({
+      title: t('delete_cardio_q'),
+      text: t('delete_cardio_text'),
+      onConfirm: () => {
+        DB.cardio.remove(existing.id);
+        showToast(t('deleted'));
+        renderView(currentView);
+        const home = document.getElementById('add-cardio-btn');
+        if (home) home.focus({ preventScroll: true });
+      },
+    });
+  });
 
   $('#cardio-type-selector').addEventListener('click', (e) => {
     if (e.target.closest('#cardio-add-type')) {
@@ -535,6 +543,10 @@ function openCardioScheduleModal(id = null) {
         if (!result.ok) { convenienceError(result); return; }
         closeModal();
         renderView(currentView);
+        // The row that opened this sheet is a door since v395, and the repaint
+        // just detached it — land on the list's add control, not <body>.
+        const home = document.querySelector('#cardio-sched-list [data-cardio-sched-add]');
+        if (home) home.focus({ preventScroll: true });
         offerUndo(t('cardio_sched_deleted'), result);
       },
     });
@@ -703,14 +715,14 @@ function renderSleep(el) {
   // gets from position: the date, «مدة النوم», «وقت النوم», «وقت الاستيقاظ».
   const sleepRowLabel = (s) => `${formatDate(s.date)} — ${t('total_sleep')} ${formatDuration(s.durationMinutes)} — ${t('sleep_time')} ${formatTime12(s.sleepTime)} — ${t('wake_time')} ${formatTime12(s.wakeTime)}${s.source === 'health' ? ` — ${t('from_watch')}` : ''}`;
   const renderSleepEntry = (s) => `
-    <button type="button" class="data-row sleep-row" data-edit-sleep="${escapeHtml(s.id)}" aria-label="${escapeHtml(sleepRowLabel(s))}">
-      <div class="sleep-row-main">
-        <div class="sleep-row-dur num" dir="ltr">${formatDuration(s.durationMinutes)}</div>
-        <div class="sleep-row-text">
-          <div class="num time-range sleep-row-range" dir="ltr"><span class="time-word">${formatTime12(s.sleepTime)}</span> <span aria-hidden="true">→</span> <span class="time-word">${formatTime12(s.wakeTime)}</span></div>
-          ${s.source === 'health' ? `<div class="sleep-row-src">${escapeHtml(t('from_watch'))}</div>` : ''}
+    <button type="button" class="data-row fig-row" data-edit-sleep="${escapeHtml(s.id)}" aria-label="${escapeHtml(sleepRowLabel(s))}">
+      <div class="fig-row-main">
+        ${figRowFig(formatDuration(s.durationMinutes))}
+        <div class="fig-row-text">
+          <div class="num time-range fig-row-range" dir="ltr"><span class="time-word">${formatTime12(s.sleepTime)}</span> <span aria-hidden="true">→</span> <span class="time-word">${formatTime12(s.wakeTime)}</span></div>
+          ${s.source === 'health' ? `<div class="fig-row-sub">${escapeHtml(t('from_watch'))}</div>` : ''}
         </div>
-        <div class="data-icon sleep sleep-row-icon">${icon('bed', 18)}</div>
+        <div class="data-icon sleep fig-row-tile">${icon('bed', 18)}</div>
       </div>
       ${sleepEdgeHtml(s)}
     </button>

@@ -81,6 +81,25 @@ function fmtWeight(kg) {
   return fmtNum(convertWeightForDisplay(kg));
 }
 
+// THE FIGURE ROW's first column (v394 sleep → v395 every .data-row): one
+// number at title size, its unit beside it. The column is a flex container in
+// the ROW's direction, so the pair hugs the row's START edge whatever its
+// width — the v394 inset lesson («7:55» sat 15px further in than «10:15» when
+// the figure was an ltr block with `text-align: start`). A Latin unit («kg»,
+// «min») keeps the pair in ltr order, v374's rule for a measurement; an Arabic
+// unit («د») follows the row, so «30 د» reads number-then-unit in both
+// scripts. `srLabel` names a figure whose meaning the eye takes from context
+// (the record row's «أعلى وزن», t('pr_max_weight')). `wide` gives a list of
+// WEIGHTS a wider floor: «142.5 kg» outgrows the 76px that fits «10:15», and a
+// column floor narrower than its widest figure lets every title start at a
+// different x down one list. `value` arrives formatted (fmtNum,
+// formatDuration, fmtWeight) and is escaped anyway.
+function figRowFig(value, unit, srLabel, wide) {
+  const u = unit ? String(unit) : '';
+  const latin = !!u && !/[\u0600-\u06FF]/.test(u);
+  return `<div class="fig-row-fig${wide ? ' is-wide' : ''}">${srLabel ? `<span class="sr-only">${escapeHtml(srLabel)}</span>` : ''}<span class="fig-row-val"${latin ? ' dir="ltr"' : ''}><span class="num fig-row-num">${escapeHtml(String(value))}</span>${u ? `<span class="fig-row-unit">${escapeHtml(u)}</span>` : ''}</span></div>`;
+}
+
 // Dual-unit weight: shows primary unit (per user's pref) + the other unit beside it.
 // Returns inline HTML: "<span>60</span><span>kg</span><span class="w-alt">132 lb</span>"
 function fmtWeightDual(kg) {

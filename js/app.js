@@ -12,7 +12,7 @@
 // build. The literal below is the fallback (file://, or a stripped query) and is
 // still bumped by `npm run release` — see CLAUDE.md "CACHE WORKFLOW".
 const VAULT_BUILD = (() => {
-  const FALLBACK = 'v394';
+  const FALLBACK = 'v395';
   try {
     const src = (document.currentScript && document.currentScript.src) || '';
     const m = src.match(/[?&]v=(\d+)/);
@@ -1996,15 +1996,18 @@ function renderHome(el) {
     // than the duration it sat next to.
     const owedRowHtml = (r) => {
       const tm = resolveCardioType(r.type);
+      // THE FIGURE ROW (v395): the minutes first, like every cardio row. ONE
+      // square at the end of a row — the type's tile where the row is a door,
+      // the CONTROL where the row carries an action — so here it is the tick,
+      // and the type is named by its title.
       return `
-      <div class="data-row">
-        <div class="data-icon ${tm.cls}" aria-hidden="true">${icon(tm.iconName, 20)}</div>
-        <div class="data-main">
-          <div class="data-title">${escapeHtml(tm.label)}</div>
-          <div class="data-meta"><span class="num">${fmtNum(r.duration)}</span> ${t('unit_min')}</div>
-        </div>
+      <div class="data-row fig-row">
+        <div class="fig-row-main">
+        ${figRowFig(fmtNum(r.duration), t('unit_min'))}
+        <div class="fig-row-text"><div class="fig-row-title">${escapeHtml(tm.label)}</div></div>
         <button type="button" class="cardio-do" data-cardio-done="${escapeHtml(r.id)}"
                 aria-label="${escapeHtml(t('cardio_mark_done_a11y').replace('{x}', tm.label))}">${icon('check', 20)}</button>
+        </div>
       </div>`;
     };
 
@@ -2015,14 +2018,13 @@ function renderHome(el) {
     const settledHtml = (r) => {
       const tm = resolveCardioType(r.type);
       return `
-      <div class="data-row is-done">
-        <div class="data-icon ${tm.cls}" aria-hidden="true">${icon(tm.iconName, 20)}</div>
-        <div class="data-main">
-          <div class="data-title">${escapeHtml(tm.label)}</div>
-          <div class="data-meta"><span class="num">${fmtNum(r.duration)}</span> ${t('unit_min')} · ${t('done')}</div>
-        </div>
+      <div class="data-row fig-row is-done">
+        <div class="fig-row-main">
+        ${figRowFig(fmtNum(r.duration), t('unit_min'))}
+        <div class="fig-row-text"><div class="fig-row-title">${escapeHtml(tm.label)}</div><div class="fig-row-sub">${t('done')}</div></div>
         <button type="button" class="cardio-undo" data-cardio-done="${escapeHtml(r.id)}"
                 aria-label="${escapeHtml(t('cardio_undo_a11y').replace('{x}', tm.label))}">${icon('refresh', 20)}</button>
+        </div>
       </div>`;
     };
 
@@ -2640,18 +2642,19 @@ function renderProgram(el) {
   const cardioSchedRowsHtml = DB.cardioPlan.list().map((r) => {
     const tm = resolveCardioType(r.type);
     const dayList = weekOrder().filter((d) => r.days.indexOf(d) !== -1).map((d) => dayName(d, true)).join(' · ');
+    // THE FIGURE ROW (v395): the whole row is the door to the schedule's sheet
+    // (which already holds its delete), the pencil is gone.
     return `
-      <div class="data-row">
-        <div class="data-icon ${tm.cls}" aria-hidden="true">${icon(tm.iconName, 20)}</div>
-        <div class="data-main">
-          <div class="data-title">${escapeHtml(tm.label)}</div>
-          <div class="data-meta">
-            <span>${escapeHtml(dayList)}</span><span class="dot-sep"></span>
-            <span><span class="num">${fmtNum(r.duration)}</span> ${t('unit_min')}</span>
+      <button type="button" class="data-row fig-row" data-cardio-sched-edit="${escapeHtml(r.id)}" aria-label="${escapeHtml(`${fmtNum(r.duration)} ${t('unit_min')} — ${tm.label} — ${dayList}`)}">
+        <div class="fig-row-main">
+          ${figRowFig(fmtNum(r.duration), t('unit_min'))}
+          <div class="fig-row-text">
+            <div class="fig-row-title">${escapeHtml(tm.label)}</div>
+            <div class="fig-row-sub">${escapeHtml(dayList)}</div>
           </div>
+          <div class="data-icon ${tm.cls} fig-row-tile" aria-hidden="true">${icon(tm.iconName, 18)}</div>
         </div>
-        <button type="button" class="icon-btn" data-cardio-sched-edit="${escapeHtml(r.id)}" aria-label="${escapeHtml(t('edit'))}">${icon('edit', 16)}</button>
-      </div>`;
+      </button>`;
   }).join('');
 
   const cycleHtml = cycle.map((slot, i) => `
@@ -2870,15 +2873,14 @@ function renderProgram(el) {
         </div>
         <div class="data-list">
           ${prRows.map(({ ex, snap }) => `
-            <div class="data-row pr-row">
-              <div class="data-icon custom" aria-hidden="true">${icon('trophy', 20)}</div>
-              <div class="data-main">
-                <div class="data-title">${escapeHtml(exDisplayName(ex))}</div>
-                <div class="data-meta pr-stats">
-                  <span>${escapeHtml(t('pr_max_weight'))}: <span class="num">${fmtWeight(snap.maxWeight)}${unitLabel()}</span></span>
-                  <span class="dot-sep"></span>
-                  <span>${escapeHtml(t('pr_est_orm'))}: <span class="num">${fmtWeight(Math.round(snap.bestORM))}${unitLabel()}</span></span>
+            <div class="data-row fig-row">
+              <div class="fig-row-main">
+                ${figRowFig(fmtWeight(snap.maxWeight), unitLabel(), t('pr_max_weight'), true)}
+                <div class="fig-row-text">
+                  <div class="fig-row-title">${escapeHtml(exDisplayName(ex))}</div>
+                  <div class="fig-row-sub">${escapeHtml(t('pr_est_orm'))}: <span class="num" dir="ltr">${fmtWeight(Math.round(snap.bestORM))} ${unitLabel()}</span></div>
                 </div>
+                <div class="data-icon custom fig-row-tile" aria-hidden="true">${icon('trophy', 18)}</div>
               </div>
             </div>
           `).join('')}
@@ -3414,7 +3416,7 @@ function openNewExerciseModal(exerciseId = null, opts = {}) {
   openModal(`
     <div class="modal-header">
       <div>
-        <div class="modal-title">${existing ? t('edit_session') : t('new_exercise')}</div>
+        <div class="modal-title">${existing ? t('edit_exercise') : t('new_exercise')}</div>
       </div>
       <button class="icon-btn icon-btn-tile" data-close>${icon('close', 20)}</button>
     </div>
@@ -3445,9 +3447,36 @@ function openNewExerciseModal(exerciseId = null, opts = {}) {
 
     <div class="form-actions">
       <button type="button" class="btn btn-ghost" data-close>${t('cancel')}</button>
+      ${existing && existing.isCustom ? `<button type="button" class="btn btn-danger" id="delete-exercise-sheet-btn">${t('delete')}</button>` : ''}
       <button type="button" class="btn btn-primary" id="save-exercise-btn">${existing ? t('save') : t('save')}</button>
     </div>
   `);
+
+  // Delete lives here since v395 («تماريني» rows carry no controls). From the
+  // exercise's own page the page is gone after the delete, so that path leaves
+  // it exactly as its own delete button does (navigate('workouts')); from the
+  // list, the list repaints and focus lands on its add button.
+  $('#delete-exercise-sheet-btn')?.addEventListener('click', () => {
+    if (!existing || !existing.isCustom) return;
+    confirmDialog({
+      title: t('delete_exercise_q'),
+      text: t('delete_exercise_text'),
+      confirmLabel: t('delete'),
+      onConfirm: () => {
+        DB.exercises.remove(existing.id);
+        // navigate() hides any toast it finds, so the confirmation is raised
+        // AFTER it (v296) — the page's own delete does exactly this.
+        if (currentView === 'exercise-detail') { navigate('workouts'); showToast(t('exercise_deleted')); return; }
+        renderView(currentView);
+        showToast(t('exercise_deleted'));
+        // The sheet is also reached from the post-create toast on other views,
+        // so land on whichever add control the repainted view actually shows.
+        const viewEl = document.querySelector(`.view[data-view="${currentView}"]`);
+        const home = viewEl && viewEl.querySelector('#ce-add, #add-exercise-btn, #sd-add-ex');
+        if (home) home.focus({ preventScroll: true });
+      },
+    });
+  });
 
   // The uploader is buttons only (since v94): the picked photo changes the
   // labels, it is not previewed here. (This used to query a #ex-image-preview
@@ -9086,20 +9115,18 @@ function renderCustomExercises(el) {
   const rows = customs.map((ex) => {
     const url = exerciseImgSrc(ex);
     return `
-      <div class="data-row">
-        <span class="ms-thumb" data-cat="${escapeHtml(ex.category)}">
-          <span class="ms-thumb-fallback">${escapeHtml(initialsOf(exDisplayName(ex)))}</span>
-          ${url ? `<img src="${escapeHtml(url)}" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="this.remove()">` : ''}
-        </span>
-        <div class="data-main">
-          <div class="data-title">${escapeHtml(exDisplayName(ex))}</div>
-          <div class="data-meta">${escapeHtml(categoryLabel(ex.category))}</div>
+      <button type="button" class="data-row fig-row" data-edit-custom="${escapeHtml(ex.id)}">
+        <div class="fig-row-main">
+          <span class="ms-thumb" data-cat="${escapeHtml(ex.category)}" aria-hidden="true">
+            <span class="ms-thumb-fallback">${escapeHtml(initialsOf(exDisplayName(ex)))}</span>
+            ${url ? `<img src="${escapeHtml(url)}" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="this.remove()">` : ''}
+          </span>
+          <div class="fig-row-text">
+            <div class="fig-row-title">${escapeHtml(exDisplayName(ex))}</div>
+            <div class="fig-row-sub">${escapeHtml(categoryLabel(ex.category))}</div>
+          </div>
         </div>
-        <div class="data-actions">
-          <button class="icon-btn" data-edit-custom="${ex.id}" aria-label="${escapeHtml(t('edit'))}">${icon('edit', 16)}</button>
-          <button class="icon-btn danger" data-del-custom="${ex.id}" aria-label="${escapeHtml(t('delete'))}">${icon('trash', 16)}</button>
-        </div>
-      </div>`;
+      </button>`;
   }).join('');
 
   el.innerHTML = `
@@ -9123,15 +9150,9 @@ function renderCustomExercises(el) {
   `;
 
   $('#ce-add', el)?.addEventListener('click', () => openNewExerciseModal(null));
+  // The row is the door (v395); delete lives in the exercise's own sheet.
   el.querySelectorAll('[data-edit-custom]').forEach((b) =>
     b.addEventListener('click', () => openNewExerciseModal(b.dataset.editCustom)));
-  el.querySelectorAll('[data-del-custom]').forEach((b) =>
-    b.addEventListener('click', () => confirmDialog({
-      title: t('delete_exercise_q'),
-      text: t('delete_exercise_text'),
-      confirmLabel: t('delete'),
-      onConfirm: () => { DB.exercises.remove(b.dataset.delCustom); showToast(t('deleted')); renderView('custom-exercises'); },
-    })));
 }
 
 // Every logged session for ONE muscle group, newest first, grouped by day.
@@ -9219,15 +9240,14 @@ function renderPersonalRecords(el) {
     .sort((a, b) => a.ex.name.localeCompare(b.ex.name));
 
   const listHtml = rows.map(({ ex, snap }) => `
-    <div class="data-row pr-row">
-      <div class="data-icon custom" aria-hidden="true">${icon('trophy', 20)}</div>
-      <div class="data-main">
-        <div class="data-title">${escapeHtml(exDisplayName(ex))}</div>
-        <div class="data-meta pr-stats">
-          <span>${escapeHtml(t('pr_max_weight'))}: <span class="num">${fmtWeight(snap.maxWeight)}${unitLabel()}</span></span>
-          <span class="dot-sep"></span>
-          <span>${escapeHtml(t('pr_est_orm'))}: <span class="num">${fmtWeight(Math.round(snap.bestORM))}${unitLabel()}</span></span>
+    <div class="data-row fig-row">
+      <div class="fig-row-main">
+        ${figRowFig(fmtWeight(snap.maxWeight), unitLabel(), t('pr_max_weight'), true)}
+        <div class="fig-row-text">
+          <div class="fig-row-title">${escapeHtml(exDisplayName(ex))}</div>
+          <div class="fig-row-sub">${escapeHtml(t('pr_est_orm'))}: <span class="num" dir="ltr">${fmtWeight(Math.round(snap.bestORM))} ${unitLabel()}</span></div>
         </div>
+        <div class="data-icon custom fig-row-tile" aria-hidden="true">${icon('trophy', 18)}</div>
       </div>
     </div>
   `).join('');
