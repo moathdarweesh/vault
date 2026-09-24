@@ -83,7 +83,7 @@ npm run verify           # 43 contracts + lint + 13 suites — THE GATE
 npm run release          # bump every marker and re-read them; runs NO tests
 ```
 
-**Current version: v393.** APK: build 24 / v3.3.
+**Current version: v394.** APK: build 24 / v3.3.
 
 > ⚠️ **`npm run release` RUNS NO TESTS, AND THIS LINE USED TO READ AS IF IT DID.**
 > It said «bump every marker + verify», where *verify* meant the MARKERS — and
@@ -2734,6 +2734,60 @@ the rows pre-filled from last time as performed sets ("confirmed without a
 throwaway edit" is the recorded intent; whether an untouched row should count
 is the owner's call); a saved food **4 taps**. The day card's Save measures
 **69×40** — under the 44 floor.
+
+## v394 — the sleep row: the number first
+
+The owner, on the v389 row: **«تصميمها مش مرتب — غيّر التصميم بشكل أرتب
+وجذري»**. Three directions were drawn on a design canvas beside the current
+row, each at the app's own tokens; he chose **ب · الرقم أوّلًا**.
+
+The v389 row put five things in one line — a range that wrapped to two, a
+caption, the stage bar, the figure, and two icon buttons — and measured
+**128px**. Now:
+
+- **The duration is the row's identity**, at title size (26px mono) in the
+  first column; the range sits beside it — one ltr run that breaks only at
+  the arrow if a zoomed font ever forces it (v374/v389; a `nowrap` first
+  written on it was INERT, `.time-range { white-space: normal }` sits later
+  in the file and wins, and the review caught that its behaviour is the right
+  one); «من الساعة» under it only for a watch night; the tile shrinks to
+  36px at the row's end; the stage bar is the card's own **bottom edge**
+  (`.sl-edge`, 4px, no radius). A night with no stage data draws the empty
+  track, so every row keeps one shape and an empty edge says «no stage data»
+  rather than painting a fill that means nothing.
+- **The row holds no controls: it IS the control.** The whole row is a
+  `<button>` that opens the night's sheet, and **delete moved into that
+  sheet** — the meal card's precedent (v314) and the recipe view's (v391). The
+  pencil and the bin were half the old row's height in halos alone.
+- `.sleep-row-text` is a flex column with `align-items: flex-start`, so the
+  ltr range hugs the row's reading edge in both scripts with no
+  per-direction rule.
+
+The pre-push review (four lenses, every finding adversarially verified)
+added two things: **the button's accessible name** — its text is three
+unlabelled numerals, «7:30 11:10 PM 7:05 AM», in which a screen reader cannot
+tell the duration from a third clock time, so `aria-label` carries the date,
+«مدة النوم», «وقت النوم», «وقت الاستيقاظ» and the source around the visible
+strings; and **focus after delete** lands on the ledger's «سجّل» button
+rather than `<body>` (the repaint detaches the row `closeModal()` had just
+focused — inherited from the v389 path, fixed while here). Two more: the
+row's press joins the **global press list** (fast `--ease-out` down, 300ms
+`--ease-back` return) instead of its own overshoot curve on the way down;
+and in Arabic the duration hugs the row's start edge — `.num` makes the
+figure `ltr`, so `start` in its 76px box was LEFT and «7:55» sat 15px further
+in than «10:15»; `body[dir="rtl"] .sleep-row-dur { text-align: right }`.
+Six of the review's eighteen verifiers were cut off by a model usage limit;
+every finding they would have checked was either already confirmed by
+another verifier or is an «info — verified clean» note.
+
+The label also surfaced two dialect strings the sleep SHEET had carried
+since it was written — `wake_time` «وقت الصحيان» and `sleep_quick` «الصباح
+الذي صحيت فيه» — the v336 per-screen sweep applied to a screen that sweep
+never reached. «وقت الاستيقاظ» and «استيقظت» now.
+
+The cardio ledger row beside it keeps its v389 shape: its icon is the type's
+own colour and IS its identity (walk vs run), which is the one thing this
+row's design moved to the end. Making them one shape is a separate decision.
 
 ## v393 — the completed workout says «مكتمل», and stops pointing at food
 

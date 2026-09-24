@@ -4815,6 +4815,46 @@ button.bundle-main {
 .sleep-mini-value { font-family: 'JetBrains Mono', monospace; font-size: 22px; font-weight: 700; color: var(--text); margin-top: 4px; }
 .sl-bar-wrap { margin-top: 8px; }
 .sl-bar-wrap .sl-bar { height: 6px; }
+
+/* THE SLEEP LEDGER ROW (v394) — the number first. One <button> per night: the
+   duration at title size in the first column, the range and its source beside
+   it, a 36px tile at the end, and the stage bar as the card's bottom EDGE
+   (.sl-edge: no radius, no wrap — it is the card's edge, not a chip inside it).
+   The button reset mirrors button.bundle-main; .data-row's padding moves onto
+   .sleep-row-main so the edge can run flush to the card's own corners. */
+/* .data-row.sleep-row, not .sleep-row: the unified card surface re-declares
+   .data-row's padding 1,200 lines below this block at equal specificity, and
+   source order would hand the 12px back — measured: 100px rows, the edge
+   floating 12px above the card's bottom. */
+.data-row.sleep-row {
+  flex-direction: column; align-items: stretch; gap: 0;
+  width: 100%; padding: 0; overflow: hidden;
+  font: inherit; color: var(--text); text-align: start; cursor: pointer;
+  appearance: none; -webkit-appearance: none; -webkit-tap-highlight-color: transparent;
+  /* The springy RETURN, like every card in the global press list; the way
+     DOWN comes from that list (.sleep-row:active is in it), not from here. */
+  transition: transform 300ms var(--ease-back);
+}
+.sleep-row-main { display: flex; align-items: center; gap: 12px; padding: 12px 14px; min-height: 72px; box-sizing: border-box; }
+.sleep-row-dur { flex: none; min-width: 76px; font-size: 26px; font-weight: 700; letter-spacing: -0.02em; line-height: 1; }
+/* The figure is direction:ltr (.num), so `start` inside its 76px box is LEFT —
+   in an RTL row that put the column's slack between the figure and the card's
+   edge, and «7:55» started 15px further in than «10:15». Physical `right`, not
+   `end`: `end` would resolve against the element's own ltr. */
+body[dir="rtl"] .sleep-row-dur { text-align: right; }
+/* A flex column whose cross-axis start is the row's inline start, so the ltr
+   range hugs the reading edge in both scripts without a per-direction rule. */
+.sleep-row-text { flex: 1; min-width: 0; display: flex; flex-direction: column; align-items: flex-start; gap: 4px; }
+/* No white-space here: .time-range (later in the file, same specificity) keeps
+   `normal` with nowrap on each .time-word, so the range breaks only at the
+   arrow when it must (a zoomed font) and the row grows past its 72px floor
+   instead of clipping under the tile. A `nowrap` first written here was inert
+   and would have been the wrong rule had it applied — the review caught it. */
+.sleep-row-range { font-size: 13px; font-weight: 700; }
+.sleep-row-src { font-size: 12px; color: var(--text-mute); }
+.sleep-row-icon { width: 36px; height: 36px; border-radius: var(--radius-sm); }
+.sleep-row-icon svg { width: 18px; height: 18px; }
+.sl-edge { height: 4px; border-radius: 0; }
 .sl-legend { display: grid; grid-template-columns: repeat(2, 1fr); gap: 6px 14px; margin-top: 12px; }
 .sl-leg-item { display: flex; align-items: center; gap: 8px; font-size: 12px; }
 .sl-dot { width: 9px; height: 9px; border-radius: 3px; flex-shrink: 0; }
@@ -6056,7 +6096,7 @@ body:has(> .auth-gate) .modal-overlay { z-index: 1001; }
 .nav-btn:active, .btn:active,
 .session-card:active, .heat-cell:active,
 .calendar-cell:active, .bento-card:active, .compare-card:active,
-.filter-pill:active, .settings-action-row:active {
+.filter-pill:active, .settings-action-row:active, .sleep-row:active {
   /* §5: FAST down, SPRINGY back. The base rules carry the 300ms --ease-back
      return; this shortens the way DOWN to --dur-tap, so the two directions
      differ — which is the whole feel the spec asks for. */

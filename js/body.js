@@ -640,7 +640,13 @@ function sleepStagesHtml(entry, opts) {
   const total = deep + light + rem + awake;
   if (total <= 0) return '';
   const seg = (v, cls) => (v > 0 ? `<span class="sl-seg ${cls}" style="width:${(v / total * 100)}%"></span>` : '');
-  const bar = `<div class="sl-bar">${seg(deep, 'deep')}${seg(rem, 'rem')}${seg(light, 'light')}${seg(awake, 'awake')}</div>`;
+  const segs = `${seg(deep, 'deep')}${seg(rem, 'rem')}${seg(light, 'light')}${seg(awake, 'awake')}`;
+  // EDGE: the bar as the bottom edge of a card — no radius, no wrap, 4px (the
+  // ledger row, v394). A row with no stage data draws the empty track instead
+  // (sleepEdgeHtml), so every row keeps one shape and an empty edge honestly
+  // says «no stage data» rather than painting a fill that means nothing.
+  if (opts && opts.edge) return `<div class="sl-bar sl-edge">${segs}</div>`;
+  const bar = `<div class="sl-bar">${segs}</div>`;
   if (opts && opts.compact) return `<div class="sl-bar-wrap">${bar}</div>`;
   const q = sleepQuality(s);
   const leg = (v, cls, label) => (v > 0
@@ -673,30 +679,41 @@ function renderSleep(el) {
   const latest = list[0];
 
   // One row per night, under its day header (the header carries the date).
+  //
+  // THE NUMBER FIRST (v394, the owner's pick of three on a design canvas). The
+  // v389 row put five things in one line — a range that wrapped, a caption, a
+  // bar, the figure, two buttons — and measured 128px. This is 76: the
+  // duration is the row's identity at title size in the first column, the
+  // range sits beside it on ONE line (still one ltr run — v374/v389: a range
+  // has an order, and each time is a word that must not break), «من الساعة»
+  // under it only when the night came from the watch, the tile shrinks to the
+  // end of the row, and the stage bar is the card's own bottom EDGE.
+  //
+  // The row holds NO controls: it IS the control. The whole row opens the
+  // night's sheet, and delete lives inside that sheet — the meal card's
+  // precedent (v314), the recipe view's (v391). A per-row pencil and bin were
+  // what made two rows of the same kind not line up, and 44px halos on 32px
+  // controls were half of the row's height.
+  const sleepEdgeHtml = (s) => sleepStagesHtml(s, { edge: true }) || '<div class="sl-bar sl-edge"></div>';
+  // THE NAME SAYS WHAT THE NUMERALS ARE. The row's text is three unlabelled
+  // figures — «7:30 11:10 PM 7:05 AM» — and a screen reader cannot tell the
+  // duration from a third clock time, nor which time is which; two nights with
+  // the same times on different dates would read identically. The label
+  // carries every visible string (label-in-name, v324) plus the words the eye
+  // gets from position: the date, «مدة النوم», «وقت النوم», «وقت الاستيقاظ».
+  const sleepRowLabel = (s) => `${formatDate(s.date)} — ${t('total_sleep')} ${formatDuration(s.durationMinutes)} — ${t('sleep_time')} ${formatTime12(s.sleepTime)} — ${t('wake_time')} ${formatTime12(s.wakeTime)}${s.source === 'health' ? ` — ${t('from_watch')}` : ''}`;
   const renderSleepEntry = (s) => `
-    <div class="data-row">
-      <div class="data-icon sleep">${icon('bed', 20)}</div>
-      <div class="data-main">
-        <!-- ⚠️ ONE ltr RUN, NOT THREE FLEX ITEMS. .data-title is a non-wrapping
-             flex row, so as three items the range could not wrap between the
-             times: each time broke INSIDE itself instead («11:10» over «PM»),
-             and anything after them was pushed clean out of the column into the
-             middle of the row — which is where the «الساعة» badge used to land.
-             A range is one object with an order (v374), and each time is a
-             word that must not break. -->
-        <div class="data-title"><span class="num time-range" dir="ltr"><span class="time-word">${formatTime12(s.sleepTime)}</span> <span aria-hidden="true">→</span> <span class="time-word">${formatTime12(s.wakeTime)}</span></span></div>
-        <div class="data-meta">
-          <span>${escapeHtml(t('total_sleep'))}</span>
-          ${s.source === 'health' ? `<span class="dot-sep"></span><span>${escapeHtml(t('from_watch'))}</span>` : ''}
+    <button type="button" class="data-row sleep-row" data-edit-sleep="${escapeHtml(s.id)}" aria-label="${escapeHtml(sleepRowLabel(s))}">
+      <div class="sleep-row-main">
+        <div class="sleep-row-dur num" dir="ltr">${formatDuration(s.durationMinutes)}</div>
+        <div class="sleep-row-text">
+          <div class="num time-range sleep-row-range" dir="ltr"><span class="time-word">${formatTime12(s.sleepTime)}</span> <span aria-hidden="true">→</span> <span class="time-word">${formatTime12(s.wakeTime)}</span></div>
+          ${s.source === 'health' ? `<div class="sleep-row-src">${escapeHtml(t('from_watch'))}</div>` : ''}
         </div>
-        ${sleepStagesHtml(s, { compact: true })}
+        <div class="data-icon sleep sleep-row-icon">${icon('bed', 18)}</div>
       </div>
-      <div class="data-value num">${formatDuration(s.durationMinutes)}</div>
-      <div class="data-actions">
-        <button class="icon-btn" data-edit-sleep="${escapeHtml(s.id)}" aria-label="${escapeHtml(t('edit'))}">${icon('edit', 16)}</button>
-        <button class="icon-btn danger" data-delete-sleep="${escapeHtml(s.id)}" aria-label="${escapeHtml(t('delete'))}">${icon('trash', 16)}</button>
-      </div>
-    </div>
+      ${sleepEdgeHtml(s)}
+    </button>
   `;
   const sleepLedger = dayLedgerHtml({ entries: list, days: sleepDays, renderEntry: renderSleepEntry, emptyText: t('ledger_no_sleep'), addAttr: 'data-ledger-sleep' });
 
@@ -776,19 +793,6 @@ function renderSleep(el) {
   el.querySelectorAll('[data-edit-sleep]').forEach((b) =>
     b.addEventListener('click', () => openSleepModal(b.dataset.editSleep))
   );
-  el.querySelectorAll('[data-delete-sleep]').forEach((b) =>
-    b.addEventListener('click', () => {
-      confirmDialog({
-        title: t('delete_sleep_q'),
-        text: t('delete_sleep_text'),
-        onConfirm: () => {
-          DB.sleep.remove(b.dataset.deleteSleep);
-          showToast(t('deleted'));
-          renderSleep(el);
-        },
-      });
-    })
-  );
 }
 
 function openSleepModal(sleepId = null, presetDate = null) {
@@ -825,9 +829,32 @@ function openSleepModal(sleepId = null, presetDate = null) {
 
     <div class="form-actions">
       <button type="button" class="btn btn-ghost" data-close>${t('cancel')}</button>
+      ${existing ? `<button type="button" class="btn btn-danger" id="delete-sleep-btn">${t('delete')}</button>` : ''}
       <button type="button" class="btn btn-primary" id="save-sleep-btn">${existing ? t('update') : t('save')}</button>
     </div>
   `);
+
+  // Delete lives here since v394 (the row carries no controls). confirmDialog
+  // REPLACES #modal-root, so this sheet is gone either way — the meal editor's
+  // precedent — and the ledger is repainted through the router, not a captured
+  // element.
+  $('#delete-sleep-btn')?.addEventListener('click', () => {
+    if (!existing) return;
+    confirmDialog({
+      title: t('delete_sleep_q'),
+      text: t('delete_sleep_text'),
+      onConfirm: () => {
+        DB.sleep.remove(existing.id);
+        showToast(t('deleted'));
+        renderView(currentView);
+        // closeModal() handed focus back to the row this sheet was opened from,
+        // and the repaint just detached it — land on the ledger's one stable
+        // control instead of <body>.
+        const home = document.getElementById('add-sleep-btn');
+        if (home) home.focus({ preventScroll: true });
+      },
+    });
+  });
 
   function updatePreview() {
     const start = $('#sleep-start').value;
