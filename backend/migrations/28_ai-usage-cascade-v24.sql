@@ -1,6 +1,17 @@
 -- ============================================================================
 -- 28_ai-usage-cascade-v24.sql — a deleted account must not leave its counter behind.
 --
+-- ⚠️ READ 30 BEFORE TRUSTING THIS FILE. The paragraph below is wrong about NOT
+-- VALID: it skips only the rows that ALREADY EXIST, and every INSERT is still
+-- checked. So from the next UTC day the budget's insert of the all-zero global
+-- row failed with 23503, the whole ai_budget_take() call rolled back, and the
+-- Worker failed open — measured live 2026-09-13, nothing billed since
+-- 2026-09-06. 30 moves the global counter out of this table and VALIDATES the
+-- constraint. This file's VERIFY could not compile as committed either: its
+-- handler said pg_catalog.position(x in y), which is SQL grammar like COALESCE
+-- and cannot be schema-qualified (so the text that ran live must have
+-- differed). It uses strpos() since the 2026-09-25 review, so the file replays.
+--
 -- 26 created public.ai_usage with a bare `user_id uuid not null` and no foreign
 -- key, so deleting a user left its per-day rows orphaned forever. Nothing reads
 -- them, nothing prunes them (admin_prune_ai_usage only drops rows older than 30
@@ -55,6 +66,6 @@ begin
   raise exception 'ROLLBACK-OK: deleting a user removed its ai_usage row (% -> %)', before_n, after_n;
 exception
   when others then
-    if pg_catalog.position('ROLLBACK-OK' in sqlerrm) = 0 then raise; end if;
+    if pg_catalog.strpos(sqlerrm, 'ROLLBACK-OK') = 0 then raise; end if;   -- strpos(): position(x in y) is grammar
     raise notice 'VERIFY ok: the cascade fires';
 end $$;

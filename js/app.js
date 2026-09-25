@@ -12,7 +12,7 @@
 // build. The literal below is the fallback (file://, or a stripped query) and is
 // still bumped by `npm run release` — see CLAUDE.md "CACHE WORKFLOW".
 const VAULT_BUILD = (() => {
-  const FALLBACK = 'v396';
+  const FALLBACK = 'v397';
   try {
     const src = (document.currentScript && document.currentScript.src) || '';
     const m = src.match(/[?&]v=(\d+)/);
@@ -1786,6 +1786,19 @@ function checkPR(exerciseId, prior, newSets, unit) {
   return t('pr_orm') + ' ' + t('pr_est_orm') + ' ' + fw(Math.round(postBest.bestORM)) + u;
 }
 
+// The best a save must beat, taken BEFORE it writes session `ownId` (null: a
+// new session). The VALUES include that session's own previous sets, so
+// re-saving a card that already holds its PR does not announce it again — the
+// reason the full snapshot was chosen. The COLD START does not: a first-ever
+// session's own earlier save is not history, and counting it made the second,
+// heavier set of anyone's first day "a new PR". (The guided run judges every
+// commit against history alone — see commitExercise — because it re-judges
+// its stash each time rather than announcing.)
+function prPrior(exerciseId, ownId) {
+  const all = DB.sessions.prSnapshot(exerciseId);
+  return ownId ? { ...all, sessionCount: DB.sessions.prSnapshot(exerciseId, ownId).sessionCount } : all;
+}
+
 // `sessions`/`cardio` are OPTIONAL and exist only so a caller that already holds
 // those arrays can hand them over instead of paying for another copy+sort — this
 // is called from renderHome, which has both in scope. Order is irrelevant here
@@ -3365,6 +3378,7 @@ function openReorderSheet(slotIdx, onDone) {
   // Work on a LOCAL copy and write once on close: the user can shuffle freely
   // without every intermediate arrangement being saved and synced.
   let ids = ((DB.plan.get().cycle || [])[slotIdx]?.exerciseIds || []).slice();
+  const opened = ids.slice();
   const byId = Object.fromEntries(DB.exercises.list().map((e) => [e.id, e]));
 
   const paint = () => {
@@ -3401,9 +3415,12 @@ function openReorderSheet(slotIdx, onDone) {
     setTimeout(() => overlay.remove(), 260);
   };
   const commit = () => {
-    // Written from the id list this sheet was opened with, so an exercise that
-    // was deleted elsewhere is not resurrected and none is silently dropped.
-    DB.plan.setSlotExercises(slotIdx, ids);
+    // The user's ORDER over the slot as it is NOW, and nothing at all when
+    // nothing moved (reorderMerge). This comment used to promise that an
+    // exercise deleted elsewhere is not resurrected, above code that wrote the
+    // list the sheet opened with, verbatim — and saved on every close.
+    const next = reorderMerge(ids, opened, (DB.plan.get().cycle || [])[slotIdx]?.exerciseIds);
+    if (next) DB.plan.setSlotExercises(slotIdx, next);
     close();
     if (typeof onDone === 'function') onDone();
   };
@@ -3793,8 +3810,10 @@ function openSessionModal(exerciseId, sessionId = null) {
   const existing = sessionId ? DB.sessions.listByExercise(exerciseId).find((s) => s.id === sessionId) : null;
   const lastSession = DB.sessions.lastForExercise(exerciseId, sessionId);
 
+  // An edit carries each stored set (`saved`), so the save EDITS it; a new
+  // session starts from last time's figures and nothing else of theirs.
   let sets = existing
-    ? existing.sets.map((s) => ({ reps: s.reps, weight: s.weight }))
+    ? existing.sets.map((s) => ({ reps: s.reps, weight: s.weight, saved: { ...s } }))
     : lastSession
     ? lastSession.sets.map((s) => ({ reps: s.reps, weight: s.weight }))
     : [{ reps: 10, weight: 0 }]; // start with one set; user adds/removes as needed
@@ -3935,22 +3954,24 @@ function openSessionModal(exerciseId, sessionId = null) {
   $('#save-session-btn').addEventListener('click', () => {
     const date = $('#session-date').value || todayISO();
     const cleaned = sets
-      .map((s) => ({ reps: Number(s.reps) || 0, weight: Number(s.weight) || 0 }))
+      .map((s) => ({ ...(s.saved || {}), reps: Number(s.reps) || 0, weight: Number(s.weight) || 0 }))
       .filter((s) => s.reps > 0 || s.weight > 0);
     if (cleaned.length === 0) { showToast(t('add_at_least_one')); return; }
-    // Snapshot BEFORE write (full snapshot including the session being edited)
-    const prior = DB.sessions.prSnapshot(exerciseId);
-    const saved = existing ? DB.sessions.update(existing.id, { date, sets: cleaned }) : DB.sessions.add({ exerciseId, date, sets: cleaned });
-    if (!saved) { convenienceError(DB.saveState()); return; }
-    const prMsg = checkPR(exerciseId, prior, cleaned);
-    if (prMsg) {
-      showToast(prMsg);
-    } else {
-      showToast(existing ? t('session_updated') : t('session_saved'));
-    }
+    // Snapshot BEFORE the write — prPrior says which sets it counts.
+    const prior = prPrior(exerciseId, existing ? existing.id : null);
+    const written = withUndo(() => (existing ? DB.sessions.update(existing.id, { date, sets: cleaned }) : DB.sessions.add({ exerciseId, date, sets: cleaned })));
+    if (!written.value) { convenienceError(DB.saveState()); return; }
+    // In the unit this sheet was showing, like session-day and the run: the
+    // preference reads "102 kg" over rows the user was reading in lb.
+    const prMsg = checkPR(exerciseId, prior, cleaned, modalUnit);
+    if (prMsg) buzz('pr');
     closeModal();
     renderView(currentView);
-    offerUndo(existing ? t('session_updated') : t('session_saved'));
+    // ONE toast, after the repaint, carrying the PR when there is one. The PR
+    // used to be raised first and painted over in the same tick by the Undo
+    // toast, so no record logged here was ever announced.
+    const message = prMsg || (existing ? t('session_updated') : t('session_saved'));
+    if (!offerUndo(message, written)) showToast(message);
     try { window.dispatchEvent(new CustomEvent('vault:session-saved')); } catch (_) {}
   });
 }
@@ -4716,7 +4737,8 @@ window.addEventListener('vault:store-adopted', scheduleWidgetPush);
 // renders the adopted state.
 window.addEventListener('vault:store-adopted', () => {
   try {
-    if (document.querySelector('#modal-root .modal-overlay:not(.is-out)')) return;
+    // The reorder sheet is an open sheet too, though it lives on .app.
+    if (document.querySelector('#modal-root .modal-overlay:not(.is-out), .sheet-overlay.open')) return;
     if (currentView === 'session-run') return;
     renderView(currentView);
   } catch (_) {}
@@ -4730,11 +4752,32 @@ window.addEventListener('offline', scheduleSaveCenterUpdate);
 function convenienceError(result) {
   showToast(t(result?.code === 'STALE' ? 'cx_stale' : result?.code === 'VALIDATION' ? 'cx_invalid' : 'sc_failed'));
 }
+// THE UNDO ON A TOAST UNDOES THE WRITE THAT TOAST ANNOUNCES — or it is not
+// offered. This used to fall back to the NEWEST ledger entry whenever its
+// caller handed it nothing, and a write that changed nothing records no entry
+// at all: "Set deleted · Undo" after removing an EMPTY row undid the set logged
+// before it, and "Edited · Undo" after an unchanged save brought back a meal
+// deleted an hour earlier. So the token always comes from the caller — a
+// changeSlice result carries its own (undoToken), and a write that returns its
+// entity instead goes through withUndo(). Contract 48 holds every call to it.
+// Returns whether an Undo was offered, so a caller can still confirm a save
+// that left nothing to undo.
 function offerUndo(message, result) {
-  if (result && !result.ok) { convenienceError(result); return; }
-  const latest = DB.undo.list()[0];
-  if (!latest || result?.changed === false) return;
-  showToast(message, { duration: 10000, actionLabel: t('undo'), onAction: () => applyConvenienceUndo(latest.token) });
+  if (result && result.ok === false) { convenienceError(result); return false; }
+  const token = result && result.undoToken;
+  if (!token) return false;
+  showToast(message, { duration: 10000, actionLabel: t('undo'), onAction: () => applyConvenienceUndo(token) });
+  return true;
+}
+// Run a write that answers with its entity rather than a changeSlice result,
+// and learn which ledger entry — if any — it made: the head is marked BEFORE
+// the write, and the entry is the write's only if the head moved. A save that
+// changed nothing leaves the head where it was, and so offers nothing.
+function withUndo(write) {
+  const before = DB.undo.list()[0]?.token;
+  const value = write();
+  const head = DB.undo.list()[0];
+  return { value, undoToken: head && head.token !== before ? head.token : null };
 }
 function applyConvenienceUndo(token) {
   const result = DB.undo.apply(token);
@@ -5818,6 +5861,16 @@ function openScheduleModal(tmpl) {
 
   $('#schedule-apply').addEventListener('click', () => {
     if (training.size === 0) return;
+    // A plan that holds exercises is somebody's work — its names, its order,
+    // its imported targets, today's place in it — and Apply replaces all of it
+    // in one tap. It asks first, as clearing the plan always has.
+    if ((DB.plan.get().cycle || []).some((s) => (s.exerciseIds || []).length)) {
+      confirmDialog({ title: t('replace_plan_q'), text: t('replace_plan_text'), confirmLabel: t('apply'), onConfirm: applySchedule });
+      return;
+    }
+    applySchedule();
+  });
+  function applySchedule() {
     const byName = Object.fromEntries(DB.exercises.list().map((e) => [e.name, e]));
     // Build the ordered CYCLE (Push, Pull, Legs…) — no longer pinned to weekdays.
     const cycle = workouts.map((w) => {
@@ -5836,7 +5889,7 @@ function openScheduleModal(tmpl) {
     // comes AFTER the navigate, which hides any toast it finds.
     navigate('home');
     showToast(t('template_applied'));
-  });
+  }
 }
 
 // Edit ONE workout in the rotation cycle. slotIdx = number (edit cycle[i]) or
@@ -6040,17 +6093,23 @@ function openSlotEditorModal(slotIdx, onAdd) {
     renderChosenList();
     $('#day-name').addEventListener('input', (e) => { dayLabel = e.target.value; });
     $('#open-picker').addEventListener('click', openPickerSheet);
+    // A whole workout in one tap, so the toast carries its Undo: removeSlot is
+    // one write over the plan, today's place in the rotation included.
     $('#day-clear-btn')?.addEventListener('click', () => {
-      if (!isNew) DB.plan.removeSlot(slotIdx);
+      const result = isNew ? null : DB.plan.removeSlot(slotIdx);
+      if (result && !result.ok) { convenienceError(result); return; }
       closeModal();
-      showToast(t('day_cleared'));
       renderView(currentView);
+      if (!offerUndo(t('day_cleared'), result)) showToast(t('day_cleared'));
     });
     $('#day-save-btn').addEventListener('click', onSave);
   }
 
   function onSave() {
     const ids = [...pickedOrder];   // preserve the user's chosen order
+    // A new workout with no name and no exercises saves nothing, so it does
+    // not say «saved».
+    if (isNew && !ids.length && !dayLabel.trim()) { closeModal(); return; }
     const name = dayLabel.trim() || 'Workout';
     // Auto-add picked exercises to the user's Train list
     ids.forEach((id) => {
@@ -6105,9 +6164,16 @@ function renderSessionDay(el) {
   // the plan when there is one, but view-level additions can be outside that
   // plan and append after its selected ids. On a rest day the list is the whole
   // selection. Either way no slot is edited.
+  //
+  // With no selection the list is the DAY AS LOGGED (dayIds): the plan, a
+  // logged substitute in the place of what it replaced, and every other
+  // exercise with a session on the date after them. The calendar opens this
+  // screen on the day a cell lights, and it used to show only what the
+  // CURRENT rotation puts there — so the training that lit a day before the
+  // plan's anchor, or on a day the rotation now calls rest, was on no card.
   const sdIds = sdOnly
     ? planIds.filter((id) => sdOnly.includes(id)).concat(sdOnly.filter((id) => !planIds.includes(id)))
-    : planIds;
+    : dayIds(planIds, loggedOn(viewContext.sdDate));
   const exObjs = sdIds.map((id) => exerciseById[id]).filter(Boolean);
 
   // Per-exercise local state for unsaved edits. Persists across re-renders
@@ -6158,7 +6224,7 @@ function renderSessionDay(el) {
       if (!cached.savedSessionId) {
         const fresh = todaySessionFor(exId);
         if (fresh) {
-          if (!cached.dirty) cached.sets = fresh.sets.map((s) => ({ reps: s.reps, weight: s.weight }));
+          if (!cached.dirty) cached.sets = fresh.sets.map((s) => ({ reps: s.reps, weight: s.weight, saved: { ...s } }));
           cached.savedSessionId = fresh.id;
         }
       }
@@ -6167,7 +6233,8 @@ function renderSessionDay(el) {
     const today = todaySessionFor(exId);
     const last = DB.sessions.lastForExercise(exId);
     let sets;
-    if (today) sets = today.sets.map((s) => ({ reps: s.reps, weight: s.weight }));
+    // `saved` carries the stored set, so a save EDITS it (see the Save handler).
+    if (today) sets = today.sets.map((s) => ({ reps: s.reps, weight: s.weight, saved: { ...s } }));
     // LAST TIME'S NUMBERS ARE A SUGGESTION, NOT A RECORD. They used to arrive as
     // real input values, so one tap on Save logged every row as a performed set:
     // measured in the tap probe, typing ONE set and saving wrote TWO, the second
@@ -6191,7 +6258,14 @@ function renderSessionDay(el) {
   // a real cycle slot (slotIdx -1, e.g. a date before the plan's anchor), and
   // when the list is FILTERED by sdOnly — the "least effort" route shows a
   // subset, and moving an item inside a subset cannot express a full-plan order.
-  const canReorder = slotIdx >= 0 && exObjs.length > 1 && !sdOnly;
+  // The sheet orders the SLOT, so it is the slot that must hold more than one:
+  // the day can also carry training logged off it (dayIds), which the sheet
+  // does not list and a reorder must never write into the cycle.
+  const canReorder = slotIdx >= 0 && planIds.filter((id) => exerciseById[id]).length > 1 && !sdOnly;
+  // A card that is on the day only because it was LOGGED there (dayIds) has no
+  // slot or selection to be removed from — a remove would do nothing, so it
+  // has none. Its session is edited or deleted like any other.
+  const onDay = (id) => planIds.includes(id) || (!!sdOnly && sdOnly.includes(id));
 
   function renderExerciseCard(ex) {
     const st = initState(ex.id);
@@ -6242,7 +6316,7 @@ function renderSessionDay(el) {
             <div class="sd-card-name">${escapeHtml(exDisplayName(ex))}</div>
           </div>
           ${isLogged ? `<div class="sd-status-pill">${icon('check', 16)} ${t('logged')}</div>` : ''}
-          <button type="button" class="icon-btn danger sd-remove-ex" data-remove-ex="${escapeHtml(ex.id)}" aria-label="${escapeHtml(t('remove_from_day'))}">${icon('trash', 20)}</button>
+          ${onDay(ex.id) ? `<button type="button" class="icon-btn danger sd-remove-ex" data-remove-ex="${escapeHtml(ex.id)}" aria-label="${escapeHtml(t('remove_from_day'))}">${icon('trash', 20)}</button>` : ''}
         </div>
 
         <div class="sd-sets-head">
@@ -6327,8 +6401,15 @@ function renderSessionDay(el) {
 
   // Add an exercise: offer two choices — pick from the library, or create a
   // brand-new custom exercise (which is then added straight to this day).
-  $('#sd-add-ex', el)?.addEventListener('click', () => openAddExerciseChooser(slotIdx, sdOnly ? (exId) => {
-    const live = Array.isArray(viewContext.sdOnly) ? viewContext.sdOnly : [];
+  //
+  // A day with NO rotation slot (the rotation calls it rest, it falls before
+  // the plan, there is no plan) takes a one-off exactly as the lagging-muscle
+  // route does: into sdOnly, the view's own list, seeded with what the day
+  // already shows. Handed the slot editor instead, it opened «Add workout»,
+  // whose Save appended a slot to the CYCLE — moving every day after it — and
+  // left the rest day showing rest.
+  $('#sd-add-ex', el)?.addEventListener('click', () => openAddExerciseChooser(slotIdx, (sdOnly || slotIdx < 0) ? (exId) => {
+    const live = Array.isArray(viewContext.sdOnly) ? viewContext.sdOnly : sdIds.slice();
     if (!live.includes(exId)) viewContext.sdOnly = live.concat(exId);
   } : null));
 
@@ -6463,8 +6544,20 @@ function renderSessionDay(el) {
     b.addEventListener('click', () => {
       const exId = b.dataset.saveEx;
       const st = initState(exId);
+      // A HALF-TYPED ROW TAKES ITS OTHER FIGURE FROM THE GHOST BESIDE IT — the
+      // rule the guided run's ✓ has always had. Typing only the reps on a row
+      // whose weight field still showed last time's 40 stored weight 0: a
+      // figure nobody entered, in the volume and every record. A row nobody
+      // touched is still dropped — a ghost is a suggestion, not a set. The
+      // stored set rides along (`saved`), so a field this card does not show
+      // survives the save.
+      const typed = (v) => !(v === '' || v == null);
       const cleaned = st.sets
-        .map((s) => ({ reps: Number(s.reps) || 0, weight: Number(s.weight) || 0 }))
+        .map((s) => {
+          const reps = typed(s.reps) ? s.reps : (typed(s.weight) ? s.phReps : '');
+          const weight = typed(s.weight) ? s.weight : (typed(s.reps) ? s.phWeight : '');
+          return { ...(s.saved || {}), reps: Number(reps) || 0, weight: Number(weight) || 0 };
+        })
         .filter((s) => s.reps > 0 || s.weight > 0);
       if (cleaned.length === 0) { showToast(t('add_at_least_one')); return; }
 
@@ -6474,36 +6567,31 @@ function renderSessionDay(el) {
         const existing = todaySessionFor(exId);
         if (existing) existingId = existing.id;
       }
-      // Snapshot BEFORE write (full snapshot including the session being edited)
-      const prior = DB.sessions.prSnapshot(exId);
       // Try to update the existing session; if it no longer exists (deleted
       // elsewhere), update() returns null and we create a fresh one instead of
       // silently losing the edit.
-      let wasUpdate = false;
-      if (existingId && DB.sessions.get(existingId)) {
-        if (!DB.sessions.update(existingId, { date: viewContext.sdDate, sets: cleaned })) { convenienceError(DB.saveState()); return; }
-        wasUpdate = true;
-      } else {
-        // Tagged 'minimum' when this session came out of the rest-day sheet, so
-        // a reduced day is still a REAL logged session — it counts in the stats
-        // and it keeps the streak — while staying distinguishable from a full one.
-        const created = DB.sessions.add({
-          exerciseId: exId, date: viewContext.sdDate, sets: cleaned,
-          kind: viewContext.sdMinimum ? 'minimum' : undefined,
-        });
-        if (!created) { convenienceError(DB.saveState()); return false; }
-        st.savedSessionId = created.id;
-      }
+      const updating = !!(existingId && DB.sessions.get(existingId));
+      // Snapshot BEFORE the write — prPrior says which sets it counts.
+      const prior = prPrior(exId, updating ? existingId : null);
+      // Tagged 'minimum' when this session came out of the rest-day sheet, so
+      // a reduced day is still a REAL logged session — it counts in the stats
+      // and it keeps the streak — while staying distinguishable from a full one.
+      const written = withUndo(() => (updating
+        ? DB.sessions.update(existingId, { date: viewContext.sdDate, sets: cleaned })
+        : DB.sessions.add({ exerciseId: exId, date: viewContext.sdDate, sets: cleaned, kind: viewContext.sdMinimum ? 'minimum' : undefined })));
+      if (!written.value) { convenienceError(DB.saveState()); return; }
       const prMsg = checkPR(exId, prior, cleaned, viewContext.sdUnit);
-      if (prMsg) {
-        buzz('pr');
-        showToast(prMsg);
-      } else {
-        showToast(wasUpdate ? t('session_updated') : t('session_saved'));
-      }
-      st.dirty = false;
+      if (prMsg) buzz('pr');
+      // The card is rebuilt from what was SAVED. Kept as it was, a card marked
+      // «logged» went on showing the untouched ghost rows under the saved one,
+      // reading as sets that were never stored.
+      delete sdState[exId];
       renderSessionDay(el);
-      offerUndo(wasUpdate ? t('session_updated') : t('session_saved'));
+      // ONE toast, carrying the PR when there is one. The PR used to be raised
+      // and then painted over in the same tick by the Undo toast — the phone
+      // vibrated for a record nobody was shown.
+      const message = prMsg || (updating ? t('session_updated') : t('session_saved'));
+      if (!offerUndo(message, written)) showToast(message);
       // §7: the permission sheet waits for the FIRST logged workout, so EVERY
       // save path calls this — there are THREE (here, guided mode's summary and
       // the exercise-detail modal), and wiring only this one meant a user who
@@ -6793,6 +6881,69 @@ function runIdxAfterDrop(idx, len) {
     return idx >= len ? len - 1 : Math.max(0, idx);
 }
 
+// THE DAY'S LIST, AS THE DATABASE REMEMBERS IT. The plan says what falls on a
+// date; the sessions say what was DONE on it, and both screens that show a day
+// (session-day, the guided run) build their list from the two. A swap lived
+// only in the run's viewContext — close the app, or step back out, and the
+// substitute and its logged sets were on neither screen while the exercise it
+// replaced was back — and a calendar day showed only what the CURRENT rotation
+// puts on it, so training logged before the plan's anchor, on a day the
+// rotation now calls rest, or off the plan could not be opened from its date.
+// `logged` is the date's sessions in the order they were logged (loggedOn): a
+// substitute — its `replaces`, written when the run's swap is logged — takes
+// the place of the plan exercise it stood in for; anything else is appended.
+function dayIds(planIds, logged) {
+  let ids = Array.isArray(planIds) ? planIds.slice() : [];
+  const rows = Array.isArray(logged) ? logged : [];
+  for (const s of rows) {
+    if (s && s.replaces && ids.includes(s.replaces) && !ids.includes(s.exerciseId)) ids = runReplace(ids, s.replaces, s.exerciseId);
+  }
+  for (const s of rows) if (s && s.exerciseId && !ids.includes(s.exerciseId)) ids.push(s.exerciseId);
+  return ids;
+}
+
+// A date's sessions in the order they were logged — dayIds' second argument.
+// One pass over the raw list, as the calendar reads it: listAll() copies and
+// sorts every session ever logged, on every render of two screens.
+function loggedOn(date) {
+  return (DB.getAll().sessions || []).filter((s) => s && s.date === date)
+    .sort((a, b) => String(a.createdAt || '').localeCompare(String(b.createdAt || '')));
+}
+
+// Where a (re-)entered run opens. The LAST exercise with a session on the run
+// date is the one you were on — possibly mid-way; opening on the first one
+// WITHOUT a session skipped past it (two sets logged, four to go, and you
+// landed on the next lift). Only the run's OWN list counts for that: whatever
+// dayIds appended was logged off the plan — earlier in the day, say — and
+// letting it win would open an evening run on the morning's extras. `own` is
+// that list. Nothing of its own logged yet: the first of its own. A list of
+// extras alone (a rest day, a day before the plan): the last of those.
+function runResumeIdx(ids, logged, own) {
+  let lastOwn = -1, firstOwn = -1, lastAny = -1;
+  ids.forEach((id, i) => {
+    const mine = own.includes(id);
+    if (mine && firstOwn === -1) firstOwn = i;
+    if (!logged.includes(id)) return;
+    lastAny = i;
+    if (mine) lastOwn = i;
+  });
+  if (lastOwn !== -1) return lastOwn;
+  if (firstOwn !== -1) return firstOwn;
+  return lastAny !== -1 ? lastAny : 0;
+}
+
+// What the reorder sheet writes when it closes: NOTHING when nothing moved (a
+// no-move close used to save and sync the whole blob), else the user's order
+// over the slot AS IT IS NOW — an exercise removed while the sheet was open
+// (another window, a pull) is not resurrected, and one added meanwhile is
+// kept, after the ones the user ordered. It used to write the list it opened
+// with, verbatim.
+function reorderMerge(ordered, opened, live) {
+  if (ordered.length === opened.length && ordered.every((id, i) => id === opened[i])) return null;
+  const now = Array.isArray(live) ? live : [];
+  return ordered.filter((id) => now.includes(id)).concat(now.filter((id) => !ordered.includes(id)));
+}
+
 // Is making this swap permanent offerable against a slot holding `ids`?
 // Three states are NOT: the slot no longer holds the old exercise (someone
 // already changed it), it ALREADY holds the new one (a write would DUPLICATE
@@ -6817,8 +6968,11 @@ function renderSessionRun(el) {
   // its button was sitting on.
   const runOnly = Array.isArray(viewContext.runOnly) ? viewContext.runOnly : null;
   const runPlanIds = (day?.exerciseIds || []);
-  // See runOrder() above the function for why the two meanings differ.
-  const runIds = runOrder(runPlanIds, runOnly, viewContext.runOrdered);
+  // See runOrder() above the function for why the two meanings differ. With no
+  // list of its own the run is the DAY AS LOGGED (dayIds) — the same list
+  // session-day shows — so a swap made before the app was closed is back in
+  // its place, with its sets.
+  const runIds = runOnly ? runOrder(runPlanIds, runOnly, viewContext.runOrdered) : dayIds(runPlanIds, loggedOn(viewContext.runDate));
   const exObjs = runIds.map((id) => exerciseById[id]).filter(Boolean);
   const totalEx = exObjs.length;
 
@@ -6827,15 +6981,12 @@ function renderSessionRun(el) {
   // RESUME, do not restart. viewContext is replaced on every navigate(), so any
   // exit — the back arrow, Android killing the WebView between sets, a reboot —
   // used to bring you back to exercise 1 with every ✓ cleared, although every
-  // set was safely in the database. Open on the first exercise that has no
-  // session on this date; if all of them do, the last one (Finish is one tap).
+  // set was safely in the database. Open on the exercise you were on: the
+  // last of the run's own with a session on this date (runResumeIdx says why
+  // the last, and why only its own).
   if (viewContext.runIdx == null) {
-    // The LAST exercise with a session on this date is the one you were on —
-    // possibly mid-way. Opening on the first exercise WITHOUT a session skipped
-    // past it (two sets logged, four to go, and you land on the next lift).
-    let last = -1;
-    exObjs.forEach((ex, i) => { if (DB.sessions.listByExercise(ex.id).some((s) => s.date === viewContext.runDate)) last = i; });
-    viewContext.runIdx = last === -1 ? 0 : last;
+    const logged = exObjs.filter((ex) => DB.sessions.listByExercise(ex.id).some((s) => s.date === viewContext.runDate)).map((ex) => ex.id);
+    viewContext.runIdx = runResumeIdx(exObjs.map((ex) => ex.id), logged, runOnly ? runIds : runIds.slice(0, runPlanIds.length));
   }
   if (!viewContext.runState) viewContext.runState = {};
   if (!viewContext.runView) viewContext.runView = 'run';
@@ -6873,7 +7024,9 @@ function renderSessionRun(el) {
       // so nothing is lost, and records done:false so a resume does not confirm
       // what you never confirmed). Sets logged by the other paths carry no flag
       // and count as done.
-      sets = today.sets.map((s) => ({ reps: s.reps, weight: s.weight, done: s.done !== false, phReps: s.reps, phWeight: s.weight }));
+      // `saved` is the stored set itself, carried so a commit EDITS it — see
+      // commitExercise — instead of rebuilding it from the figures on screen.
+      sets = today.sets.map((s) => ({ reps: s.reps, weight: s.weight, done: s.done !== false, phReps: s.reps, phWeight: s.weight, saved: { ...s } }));
       savedId = today.id;
       // RESUME THE PLAN, NOT ONLY THE HISTORY. How many sets you are doing
       // comes from the slot's targets or from last time, and this branch
@@ -6916,8 +7069,12 @@ function renderSessionRun(el) {
   function commitExercise(exId, opts = {}) {
     const st = runCtx.runState[exId];
     if (!st) return false;
+    // The stored set rides along (`saved`) and only the three figures this
+    // screen owns are written over it, so a field this build does not know
+    // survives the edit. The ghosts and flags the screen keeps on its rows are
+    // its own and never reach the database.
     const cleaned = st.sets
-      .map((s) => ({ reps: Number(s.reps) || 0, weight: Number(s.weight) || 0, done: !!s.done }))
+      .map((s) => ({ ...(s.saved || {}), reps: Number(s.reps) || 0, weight: Number(s.weight) || 0, done: !!s.done }))
       .filter((s) => s.reps > 0 || s.weight > 0);
     let existingId = st.savedSessionId;
     if (!existingId) {
@@ -6932,6 +7089,10 @@ function renderSessionRun(el) {
         delete st.prMsg;
         return true;
       }
+      // Nothing stored and nothing to store is not a failed write: the trash on
+      // an exercise with nothing logged yet trims a planned row — and was put
+      // straight back, because this answered "failed".
+      if (opts.removeEmpty) return true;
       if (opts.warnEmpty) showToast(t('add_at_least_one'));
       return false;
     }
@@ -6939,7 +7100,13 @@ function renderSessionRun(el) {
     // (openSessionModal, renderSessionDay) both do this, but guided mode never
     // did, so a PR set here was stored yet never celebrated. Must be taken before
     // the write, or the new set is already inside the "previous" best.
-    const prior = DB.sessions.prSnapshot(exId);
+    //
+    // AND IT IS HISTORY: this session's own earlier sets are left out. Every ✓,
+    // field-leave and prev/next commits again, and the snapshot used to hold
+    // what the previous commit had just written — so in a first-ever session
+    // the second, heavier set was "a new PR" (the cold start reads
+    // sessionCount, and today's own row was that one session).
+    const prior = DB.sessions.prSnapshot(exId, existingId);
     if (existingId) {
       if (!DB.sessions.update(existingId, { date: runCtx.runDate, sets: cleaned })) { convenienceError(DB.saveState()); return false; }
       st.savedSessionId = existingId;
@@ -6951,16 +7118,20 @@ function renderSessionRun(el) {
       const created = DB.sessions.add({
         exerciseId: exId, date: runCtx.runDate, sets: cleaned,
         kind: runCtx.runMinimum ? 'minimum' : undefined,
+        // A substitute says what it stands in for, so the day can be rebuilt
+        // with it in place once this run's own list is gone (dayIds).
+        replaces: runCtx.runSwaps ? runCtx.runSwaps[exId] : undefined,
       });
       if (!created) { convenienceError(DB.saveState()); return false; }
       st.savedSessionId = created.id;
     }
     // Stash rather than toast: a mid-workout toast would fight the rest-timer bar
     // (and [data-next] dismisses toasts on the way out). The summary screen shows
-    // it once the workout is done.
+    // it once the workout is done. RE-JUDGED on every commit, never only raised:
+    // a record whose set was since corrected (a typo of 1000) or deleted goes
+    // with it, where it used to stay in the summary.
     try {
-      const msg = checkPR(exId, prior, cleaned, runCtx.runUnit);
-      if (msg) st.prMsg = msg;
+      st.prMsg = checkPR(exId, prior, cleaned, runCtx.runUnit) || undefined;
     } catch (_) {}
     return true;
   }
@@ -7243,6 +7414,12 @@ function renderSessionRun(el) {
     runCtx.runOnly = runReplace(runCtx.runOnly, oldId, newId);
     // Drop the old exercise's in-memory sets so the slot does not inherit them.
     if (runCtx.runState) delete runCtx.runState[oldId];
+    // What the substitute stands in for — the PLAN's exercise, through a chain
+    // of swaps — so its session can say so when it is logged (commitExercise).
+    // runOnly dies with viewContext; the session does not.
+    const swaps = runCtx.runSwaps || (runCtx.runSwaps = {});
+    if (newId) swaps[newId] = swaps[oldId] || oldId;
+    delete swaps[oldId];
   }
   // A swap changes TODAY'S list — runOnly, which dies with viewContext. "The
   // machine is taken" is usually not a one-day fact, but asking "and for good?"
@@ -7481,29 +7658,28 @@ function renderSessionRun(el) {
     });
   });
 
-  // Tapping the suggestion writes it into the first open set — as a TARGET the
-  // user edits after actually lifting, exactly like the ghost placeholders.
-  // Weight goes through the same kg conversion the manual input path uses.
   const statsBtn = $('.run-stats[data-open-detail]', el);
   if (statsBtn) statsBtn.addEventListener('click', () =>
     navigate('exercise-detail', { exerciseId: statsBtn.dataset.openDetail }));
 
+  // Tapping the suggestion makes it the first open set's TARGET: its GHOST, the
+  // same placeholder last time's numbers use, and it writes nothing. It used to
+  // fill the fields and commit them — a performed set the user never lifted,
+  // counted in the streak, the week and the records (the "add weight" branch
+  // is by definition a new best). The ✓ is what logs it, and says where the
+  // numbers came from, with Undo; typing over it is what changes it. Every set
+  // already has numbers or is done: the target is for a new one.
   const sugBtn = $('.run-suggest', el);
   if (sugBtn) sugBtn.addEventListener('click', () => {
     const w = parseFloat(sugBtn.dataset.sugW);
     const r = parseInt(sugBtn.dataset.sugR, 10);
     if (!isFinite(w) || !isFinite(r)) return;
     let at = st.sets.findIndex((x) => !x.done && (x.reps === '' || x.reps == null) && (x.weight === '' || x.weight == null));
-    if (at === -1) at = st.sets.findIndex((x) => !x.done);
-    if (at === -1) return;                       // everything already done
-    st.sets[at].weight = w > 0 ? w : '';         // state holds kg; 0 = bodyweight, left blank
-    st.sets[at].reps = r;
-    const row = el.querySelector('.run-set-row[data-set="' + at + '"]');
-    if (row) {
-      const wi = row.querySelector('[data-field="weight"]'); if (wi) wi.value = w > 0 ? String(convDisplay(w)) : '';
-      const ri = row.querySelector('[data-field="reps"]');   if (ri) ri.value = String(r);
-    }
-    commitExercise(ex.id);
+    if (at === -1) { st.sets.push({ reps: '', weight: '', done: false }); at = st.sets.length - 1; }
+    st.sets[at].phReps = r;
+    st.sets[at].phWeight = w > 0 ? w : '';       // kg, like every ghost; 0 = bodyweight, no weight to hint
+    st.sets[at].phSug = true;                    // so the ✓ that takes it names the suggestion
+    renderSessionRun(el);
     showToast(t('sug_applied'));
   });
 
@@ -7544,7 +7720,7 @@ function renderSessionRun(el) {
       const commitOnce = () => {
         if (commitQueued) return;
         commitQueued = true;
-        setTimeout(() => { commitQueued = false; const token = DB.undo.list()[0]?.token; if (commitExercise(ex.id) && DB.undo.list()[0]?.token !== token) offerUndo(t('session_updated')); }, 0);
+        setTimeout(() => { commitQueued = false; offerUndo(t('session_updated'), withUndo(() => commitExercise(ex.id))); }, 0);
       };
       inp.addEventListener('change', commitOnce);
       inp.addEventListener('blur', commitOnce);
@@ -7597,26 +7773,28 @@ function renderSessionRun(el) {
       // and it can fill the row from the ghost values without any field being
       // touched — so it must persist on its own, not wait for a blur.
       //
-      // The token is captured BEFORE the write and compared after, the same
-      // guard the blur commit uses: commitExercise can decline to write, and
-      // offering the PREVIOUS entry would undo something the user never asked
-      // about — which is worse than offering nothing.
-      const tokenBefore = DB.undo.list()[0]?.token;
-      commitExercise(ex.id);
-      if (invented && DB.undo.list()[0]?.token !== tokenBefore) {
-        offerUndo(t(hadSession ? 'run_filled_updated' : 'run_filled_saved'));
+      // withUndo marks the ledger BEFORE the write, the same guard the blur
+      // commit uses: commitExercise can decline to write, and offering the
+      // PREVIOUS entry would undo something the user never asked about — which
+      // is worse than offering nothing. Numbers that came from the suggestion
+      // say so; "last time's numbers" would be untrue.
+      const written = withUndo(() => commitExercise(ex.id));
+      if (invented) {
+        offerUndo(t(set.phSug ? (hadSession ? 'run_sug_updated' : 'run_sug_saved') : (hadSession ? 'run_filled_updated' : 'run_filled_saved')), written);
       }
     });
     // Delete this set and persist immediately. A logged one-set exercise can be
-    // removed this way too; Undo puts it back at its original position.
+    // removed this way too; Undo puts it back at its original position. Only a
+    // delete that WROTE offers Undo: an empty row was never in the database,
+    // and the entry before it — the set just logged — is not this tap's.
     row.querySelector('[data-del-set]')?.addEventListener('click', () => {
       if (st.sets.length <= 1 && !st.savedSessionId) return;
       const previous = st.sets.slice();
       st.sets.splice(i, 1);
-      if (!commitExercise(ex.id, { removeEmpty: true })) { st.sets = previous; return; }
+      const written = withUndo(() => commitExercise(ex.id, { removeEmpty: true }));
+      if (!written.value) { st.sets = previous; return; }
       renderSessionRun(el);
-      offerUndo(t('set_deleted'));
-
+      offerUndo(t('set_deleted'), written);
     });
   });
 

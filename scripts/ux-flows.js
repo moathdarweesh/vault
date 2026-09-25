@@ -51,6 +51,18 @@ async function drive(page, steps, ctxName) {
     if (under) await loc.scrollIntoViewIfNeeded();
     const b2 = await loc.boundingBox();
     const cx = b2.x + b2.width / 2, cy = b2.y + b2.height / 2;
+    // WHAT THE CLICK WILL LAND ON, read at the instant it is sent. A covered
+    // control "fails or lands elsewhere" - and it landed elsewhere SILENTLY:
+    // the resume lane's tap on «الوضع الموجّه» hit the scrim of a sheet the
+    // reopened boot had put up, closed it, and the report blamed the app for
+    // a run that never opened. The tap is still made (it is what a thumb
+    // would do); the step records where it went, and the lane reports it.
+    const coveredBy = await loc.evaluate((el, [x, y]) => {
+      const at = document.elementFromPoint(x, y);
+      if (!at || el === at || el.contains(at)) return null;
+      const cls = typeof at.className === 'string' && at.className.trim() ? '.' + at.className.trim().split(/\s+/).slice(0, 2).join('.') : '';
+      return at.tagName.toLowerCase() + (at.id ? '#' + at.id : '') + cls;
+    }, [cx, cy]);
     // a REAL click at the centre: a covered or 42px control fails or lands elsewhere
     await page.mouse.click(cx, cy);
     let second = null, atOldPoint = null, moved = null;
@@ -94,7 +106,7 @@ async function drive(page, steps, ctxName) {
     }
     await page.clock.runFor(s.after || 400);
     await page.waitForTimeout(60);
-    log.push({ kind: 'tap', sel: s.sel, y: Math.round(box.y), h: Math.round(box.height), w: Math.round(box.width), scrolledToReach: !!under, label: s.label || '', twice: !!s.twice, secondTap: second, aFixedPointBounceWouldHit: atOldPoint, movedPx: moved });
+    log.push({ kind: 'tap', sel: s.sel, y: Math.round(box.y), h: Math.round(box.height), w: Math.round(box.width), scrolledToReach: !!under, label: s.label || '', twice: !!s.twice, secondTap: second, aFixedPointBounceWouldHit: atOldPoint, movedPx: moved, coveredBy });
   }
   return { ctx: ctxName, taps: log.filter((l) => l.kind === 'tap').length, typing: log.filter((l) => l.kind === 'type').length, steps: log };
 }
@@ -383,6 +395,25 @@ async function drive(page, steps, ctxName) {
     await page.close();
     const re = await openPage(ctx, origin, { lang: 'ar', theme: 'dark' });
     const page2 = re.page;
+    // ⚠️ THE REOPENED APP IS A NEW BOOT, AND A BOOT CAN PUT UP A SHEET. The
+    // weekly review opens 400ms after load on the first open after a week
+    // with training in it - and this lane's own seed (a session three days
+    // back, which lands in last week) is exactly that. Page one read the
+    // review before the seed existed; page two is the first to find it due.
+    // On a frozen clock the 400ms elapsed inside the FIRST tap's wait, so the
+    // sheet rose over session-day and the tap meant for «الوضع الموجّه» closed
+    // it instead: the run never opened, and this lane reported «(nothing)»,
+    // 3 -> 0 rows, DID NOT RESUME - against an app that resumes. A person
+    // reopening the app sees the sheet first and closes it. So the boot's
+    // timers run out here, the way the other lanes' home() lets them, and
+    // whatever the boot opened is closed with a real tap on its own close
+    // button - reported on its own line, never counted in the taps back in.
+    await page2.clock.runFor(6000); await page2.waitForTimeout(60);
+    const bootSheet = await page2.evaluate(() => {
+      const m = document.querySelector('#modal-root .modal-overlay:not(.is-out)');
+      return m ? ((m.querySelector('.modal-title, .confirm-title') || m).textContent || '').trim().slice(0, 60) : null;
+    });
+    if (bootSheet) await drive(page2, [{ sel: '#modal-root .modal-overlay [data-close]', label: 'close what the boot opened', after: 600 }], ctxName);
     const backIn = await drive(page2, [
       { sel: '#home-start-workout', label: 'start today (hero)' },
       { sel: '.view.active #sd-start-run', label: 'start the guided run', after: 800 },
@@ -393,6 +424,7 @@ async function drive(page, steps, ctxName) {
     const resume = {
       tapsToLogTheSet: runIn.taps,
       tapsToGetBackIn: backIn.taps,
+      bootSheet,
       exerciseBefore: beforeClose.exercise,
       exerciseAfter: afterOpen.exercise,
       sameExercise: !!beforeClose.exercise && beforeClose.exercise === afterOpen.exercise,
@@ -415,8 +447,11 @@ async function drive(page, steps, ctxName) {
       // row waiting. 'Resume, do not restart' has to cover the plan for the
       // exercise, not only the sets already in the database.
       nextSetReady: afterOpen.rows >= beforeClose.rows,
+      // A tap that landed on something else is not a tap on the control, and
+      // what the screen then shows is not the app's answer to that tap.
+      coveredTaps: runIn.steps.concat(backIn.steps).filter((st) => st.coveredBy).map((st) => st.label + ' -> ' + st.coveredBy),
     };
-    resume.ok = resume.sameExercise && resume.setSurvived && resume.tickRestored && resume.nextSetReady;
+    resume.ok = resume.sameExercise && resume.setSurvived && resume.tickRestored && resume.nextSetReady && !resume.coveredTaps.length;
 
     const contained2 = re.guard.assertContained();
     for (const e of re.errors) errors.push('(after reopen) ' + e);
@@ -429,7 +464,7 @@ async function drive(page, steps, ctxName) {
     console.log('\nux-flows — taps from Home to the write (ar/dark/375, seeded):\n');
     for (const r of results) {
       console.log(`  ${r.path.padEnd(32)} ${String(r.taps).padStart(2)} taps · ${r.typing} typed · ${r.landed ? 'LANDED' : 'DID NOT LAND'}   ${r.proof}`);
-      for (const s of r.steps) console.log('      ' + (s.kind === 'tap' ? `tap  ${s.label.padEnd(22)} y=${String(s.y).padStart(4)} ${s.w}×${s.h}${s.scrolledToReach ? '  (under the nav — scrolled to reach)' : ''}` : `type ${s.value}`));
+      for (const s of r.steps) console.log('      ' + (s.kind === 'tap' ? `tap  ${s.label.padEnd(22)} y=${String(s.y).padStart(4)} ${s.w}×${s.h}${s.scrolledToReach ? '  (under the nav — scrolled to reach)' : ''}${s.coveredBy ? '  <-- LANDED ON ' + s.coveredBy : ''}` : `type ${s.value}`));
     }
     console.log('\nthe same four writes, tapped TWICE 120ms apart:\n');
     for (const d of dupes) {
@@ -448,10 +483,12 @@ async function drive(page, steps, ctxName) {
 
     console.log('\nthe guided run, after the app is CLOSED mid-workout:\n');
     console.log(`  logged a set in ${resume.tapsToLogTheSet} taps, closed the page, reopened, back in the run in ${resume.tapsToGetBackIn} taps`);
+    if (resume.bootSheet) console.log(`  the reopened boot put up    «${resume.bootSheet}» - closed first, with one tap on its own close button`);
     console.log(`  the run opens on            ${resume.exerciseAfter || '(nothing)'}${resume.sameExercise ? '  - the same exercise' : '  <-- NOT the exercise it was on (' + resume.exerciseBefore + ')'}`);
     console.log(`  set rows                    ${resume.rowsBefore} -> ${resume.rowsAfter}, ticked ${resume.tickedBefore} -> ${resume.tickedAfter}${resume.tickRestored ? '' : '  <-- THE TICK DID NOT COME BACK'}${resume.nextSetReady ? '' : '  <-- NO ROW LEFT FOR THE SET YOU WERE ABOUT TO DO'}`);
     console.log(`  what is in the database     ${JSON.stringify(resume.dbAfter.map((s) => s.sets))}${resume.setSurvived ? '  - unchanged by the close' : '  <-- CHANGED BY THE CLOSE'}`);
     console.log(`  the rows on screen          ${JSON.stringify(resume.valuesAfter)}`);
+    for (const c of resume.coveredTaps) console.log(`  <-- A TAP LANDED ON SOMETHING ELSE: ${c}`);
     console.log(`  ${resume.ok ? 'RESUMED' : 'DID NOT RESUME'}`);
 
     if (errors.length) { console.log('\npage errors:'); for (const e of errors) console.log('  ✗ ' + e); }

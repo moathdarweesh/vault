@@ -1,3 +1,9 @@
+-- ⚠️ ARCHIVED IN THE 2026-09-25 REVIEW — NEVER RUN THIS FILE. It WAS applied
+-- (checked live 2026-08-13); delete_own_account() has been re-defined since by
+-- 16 (the caller's children deleted explicitly, in FK-safe order) and then by
+-- 18 (only the tables that survived the mirror's removal). Run today, it would
+-- put this older erasure body back. Superseded by 16 and 18.
+
 -- ============================================================================
 -- delete-own-account.sql  —  GDPR / Play "right to erasure": let a signed-in
 -- user delete THEIR OWN account and all data, with no admin/service key.

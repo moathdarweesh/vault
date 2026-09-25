@@ -1,3 +1,13 @@
+-- ⚠️ ARCHIVED IN THE 2026-09-25 REVIEW — NEVER RUN THIS FILE. It WAS applied
+-- (checked live 2026-08-13), and both functions have been re-defined since:
+-- admin_activity() by 16 and then 18, which dropped the mirror tables this body
+-- reads; admin_user_stats() by 16, 18, 19, 23 and 25 (it is
+-- admin_user_stats(p_week_start date) now). Run today, this file would put back
+-- bodies over tables that no longer exist — they compile, then fail with 42P01
+-- on the first call, which admin.html shows as an all-zero Console — and would
+-- re-create a zero-argument admin_user_stats() beside 25's, with PUBLIC holding
+-- EXECUTE and a search_path of public. Superseded by 16/18/19/23/25.
+
 -- ============================================================================
 -- admin-scale-rpc.sql  —  make the admin console survive 10k users
 -- ============================================================================

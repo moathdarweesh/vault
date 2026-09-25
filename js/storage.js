@@ -508,6 +508,39 @@ function trainingDaysBetween(anchorStr, D, trainingDays, rest, extra) {
   return count;
 }
 
+// WHERE THE ROTATION STANDS ON DATE D, as a cycle index — workoutForDate's own
+// count (elapsed training days since the anchor, modulo the cycle), whether or
+// not D itself trains: on a rest day it is the workout that comes NEXT.
+function planPosition(p, D) {
+  const len = p && Array.isArray(p.cycle) ? p.cycle.length : 0;
+  if (!len) return 0;
+  const td = Array.isArray(p.trainingDays) ? p.trainingDays : [];
+  const elapsed = trainingDaysBetween(p.anchor || todayISO(), D, td, restMap(p), extraMap(p));
+  return ((elapsed % len) + len) % len;
+}
+
+// THE LATEST ANCHOR FROM WHICH PLAN p COUNTS EXACTLY k TRAINING DAYS TO D.
+// The position is derived from the anchor, the weekdays and the cycle's
+// length, and counted as if the CURRENT weekdays and length had always
+// applied — so an edit to either one moved today's workout by an arbitrary
+// offset (adding Saturday turned a Friday's Legs into Push). The edits read
+// today's position BEFORE they change anything and re-anchor here AFTER, so
+// today keeps its workout and the rest follows in order. Nothing new is
+// stored: the position stays derived, and the cycle's order is untouched.
+function anchorAt(p, D, k) {
+  const td = Array.isArray(p.trainingDays) ? p.trainingDays : [];
+  const rest = restMap(p), extra = extraMap(p);
+  const cur = new Date(D.getFullYear(), D.getMonth(), D.getDate());
+  let count = 0, guard = 0;
+  while (count < k && guard++ < 4000) {
+    cur.setDate(cur.getDate() - 1);
+    const iso = isoOf(cur);
+    if ((td.indexOf(cur.getDay()) !== -1 || !!extra[iso]) && !rest[iso]) count++;
+  }
+  // No training day to count back over (no weekdays at all): position 0.
+  return count === k ? isoOf(cur) : isoOf(D);
+}
+
 // Date -> 'YYYY-MM-DD' using LOCAL fields. Never toISOString(): that converts to
 // UTC first, so east of Greenwich an evening date comes back as the next day.
 function isoOf(d) {
@@ -553,6 +586,17 @@ function planSlot(s) {
   };
 }
 
+// ONE SET, AS IT IS STORED — the one spelling of that rule, for the load path
+// and both write paths. Normalised, never REBUILT: reps and weight are numbers,
+// `done` is kept only as its exception (false: a guided-run set saved before
+// its ✓), and every other field rides through. The write paths rebuilt a set
+// from reps/weight/done alone, so the first edit of a set's reps erased
+// whatever a newer build had put on it — and the next push carried the loss
+// to every device (v397).
+function storedSet({ done, ...x }) {
+  return { ...x, reps: Number(x.reps) || 0, weight: Number(x.weight) || 0, ...(done === false ? { done: false } : {}) };
+}
+
 function migratePlan(plan) {
   if (plan && plan.mode === 'rotation') {
     return {
@@ -560,7 +604,10 @@ function migratePlan(plan) {
       mode: 'rotation',
       cycle: (Array.isArray(plan.cycle) ? plan.cycle : []).map(planSlot),
       trainingDays: Array.isArray(plan.trainingDays) ? plan.trainingDays.slice() : [],
-      anchor: plan.anchor || todayISO(),
+      // An EMPTY plan has no position to anchor, so none is invented: filling it
+      // here with the load day, which the next save persisted, is what made a
+      // rotation built by hand start on the wrong slot (addSlot anchors now).
+      anchor: plan.anchor || ((Array.isArray(plan.cycle) && plan.cycle.length) ? todayISO() : null),
       // This runs on EVERY load, not just on the legacy grid, and it rebuilds the
       // object field by field — so anything omitted here is silently erased from
       // the saved blob on the next write. restDates predates nothing: an existing
@@ -659,7 +706,7 @@ function loadState() {
     parsed.sessions = parsed.sessions.filter((s) => s && typeof s === 'object').map((s) => ({
       ...s,
       sets: Array.isArray(s.sets)
-        ? s.sets.filter((x) => x && typeof x === 'object').map(({ done, ...x }) => ({ ...x, reps: Number(x.reps) || 0, weight: Number(x.weight) || 0, ...(done === false ? { done: false } : {}) }))
+        ? s.sets.filter((x) => x && typeof x === 'object').map(storedSet)
         : [],
     }));
     if (JSON.stringify(parsed.sessions) !== sessionsBefore) normChanged = true;
@@ -1080,6 +1127,16 @@ function restoreStore(snap) {
 // Only feature-owned slices participate in transactions; unrelated records are
 // never restored by Undo. The stack is ephemeral and invalidated by reload.
 const undoEntries = [];
+// Forget every undo that would bring back anything of `id`: an entry whose
+// before or after names it. For the writes that change what an entry points
+// at from OUTSIDE the ledger (DB.exercises.remove purges sessions with a raw
+// save). Ids are entityIdSafe, so the quoted form cannot match anything else.
+function forgetUndoOf(id) {
+  const key = JSON.stringify(String(id));
+  for (let i = undoEntries.length - 1; i >= 0; i--) {
+    if (JSON.stringify([undoEntries[i].before, undoEntries[i].after]).includes(key)) undoEntries.splice(i, 1);
+  }
+}
 const copyData = value => value == null ? value : JSON.parse(JSON.stringify(value));
 const operationOwner = () => typeof Cloud !== 'undefined' && Cloud.getLastUid ? Cloud.getLastUid() : '';
 function changeSlice(read, write, next, label, remember = true) {
@@ -1442,8 +1499,11 @@ const DB = {
       save();
     },
     setTrainingDays(days) {
+      // Today keeps its workout — see anchorAt. An empty cycle has no position,
+      // so the plan simply starts today.
+      const now = new Date(), at = planPosition(STATE.plan, now);
       STATE.plan.trainingDays = (days || []).slice().sort((a, b) => a - b);
-      if (!STATE.plan.anchor) STATE.plan.anchor = todayISO();
+      STATE.plan.anchor = anchorAt(STATE.plan, now, at);
       save();
     },
 
@@ -1517,10 +1577,15 @@ const DB = {
         cycle.push(planSlot({ name: day.name.trim(), exerciseIds, targets }));
       }
       const oldPlan = STATE.plan, oldExercises = STATE.exercises;
+      // Appending keeps today's workout where it was (see anchorAt): the new
+      // workouts join after the old ones, and the weekdays may change as well.
+      const now = new Date();
+      const keepAt = append && (oldPlan.cycle || []).length ? planPosition(oldPlan, now) : 0;
       STATE.plan = { ...oldPlan, mode: 'rotation',
         cycle: append ? [...(oldPlan.cycle || []), ...cycle] : cycle,
         trainingDays: trainingDays.slice().sort((a, b) => a - b),
-        anchor: append && oldPlan.anchor ? oldPlan.anchor : todayISO() };
+        anchor: todayISO() };
+      if (keepAt) STATE.plan.anchor = anchorAt(STATE.plan, now, keepAt);
       STATE.exercises = [...oldExercises, ...additions];
       if (!writeStore()) {
         STATE.plan = oldPlan; STATE.exercises = oldExercises;
@@ -1533,12 +1598,28 @@ const DB = {
     // ----- cycle-slot editing (planner) -----
     addSlot(name) {
       if (!Array.isArray(STATE.plan.cycle)) STATE.plan.cycle = [];
+      // The FIRST workout starts the plan today. `if (!anchor)` never fired: the
+      // load path had already stamped an empty plan with the day the app was
+      // first loaded, so a rotation built by hand began on whatever slot
+      // `elapsed % length` landed on. Any later workout joins AFTER the
+      // others, and today keeps its own — see anchorAt.
+      const now = new Date(), at = planPosition(STATE.plan, now);
       STATE.plan.cycle.push({ name: name || 'Workout', exerciseIds: [] });
-      if (!STATE.plan.anchor) STATE.plan.anchor = todayISO();
+      STATE.plan.anchor = anchorAt(STATE.plan, now, at);
       save();
     },
+    // «Remove from cycle» takes a whole workout in one tap, so it is ONE
+    // undoable write over the plan: the slot, and the anchor that keeps today's
+    // workout where it was — an earlier one gone slides today's down a place,
+    // today's own gone hands today the one after it.
     removeSlot(i) {
-      if (Array.isArray(STATE.plan.cycle)) { STATE.plan.cycle.splice(i, 1); save(); }
+      const cycle = STATE.plan && Array.isArray(STATE.plan.cycle) ? STATE.plan.cycle : null;
+      if (!cycle || !(i >= 0 && i < cycle.length)) return { ok: false, code: 'VALIDATION' };
+      const now = new Date(), at = planPosition(STATE.plan, now), len = cycle.length - 1;
+      const next = copyData(STATE.plan);
+      next.cycle.splice(i, 1);
+      if (len) next.anchor = anchorAt(next, now, (i < at ? at - 1 : at) % len);
+      return changeSlice(() => STATE.plan, (value) => { STATE.plan = value; }, next, 'day_cleared');
     },
     moveSlot(from, to) {
       const c = STATE.plan.cycle;
@@ -2147,6 +2228,13 @@ const DB = {
         });
       }
       imgSet(id, null); imgAtSet(id, null);
+      // ...and every undo that would bring any of it back. The purge above is a
+      // raw save, outside the ledger, so an earlier 'session_deleted' entry still
+      // passed apply()'s check (the session reads null, and its `after` IS null)
+      // and Recent changes re-inserted a session whose exercise was gone —
+      // counted in the streak, the week and the calendar, with no page left to
+      // delete it from.
+      forgetUndoOf(id);
       save();
     },
     setInMyList(id, value) {
@@ -2217,18 +2305,19 @@ const DB = {
     // rest-day sheet offers instead of nothing. It is written ONLY when present,
     // so the millions of ordinary sessions do not each carry a null field: the
     // blob is serialised whole and uploaded on every save.
-    add({ exerciseId, date, sets, kind }) {
+    add({ exerciseId, date, sets, kind, replaces }) {
       const session = {
         id: uid(),
         exerciseId,
         date,
         ...(kind ? { kind } : {}),
-        sets: sets.map((s) => ({
-          reps: Number(s.reps) || 0,
-          weight: Number(s.weight) || 0,
-          // Only the exception is stored: a guided-run set saved before its ✓.
-          ...(s.done === false ? { done: false } : {}),
-        })),
+        // The plan exercise a guided-run SWAP put this one in place of, for
+        // that date only. The run's own list lives in viewContext and dies with
+        // it — a closed app, the back arrow — and this is what lets the day be
+        // rebuilt from the database with the substitute IN ITS PLACE (app.js
+        // dayIds). Only ever an id, and only ever compared with the plan's own.
+        ...(replaces && replaces !== exerciseId && entityIdSafe(replaces) ? { replaces } : {}),
+        sets: sets.map(storedSet),
         createdAt: new Date().toISOString(),
       };
       const result = changeSlice(() => STATE.sessions.find(x => x.id === session.id) || null,
@@ -2240,9 +2329,7 @@ const DB = {
       if (!s) return null;
       const next = copyData(s);
       if (date) next.date = date;
-      if (sets) {
-        next.sets = sets.map((x) => ({ reps: Number(x.reps) || 0, weight: Number(x.weight) || 0, ...(x.done === false ? { done: false } : {}) }));
-      }
+      if (sets) next.sets = sets.map(storedSet);   // edited, never rebuilt — see storedSet
       const result = changeSlice(() => STATE.sessions.find(x => x.id === id) || null,
         value => { STATE.sessions = STATE.sessions.map(x => x.id === id ? value : x); }, next, 'session_updated');
       return result.ok ? next : null;

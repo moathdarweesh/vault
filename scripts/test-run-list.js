@@ -12,10 +12,17 @@
  * Both times every contract and every suite stayed green, because none of this
  * was reachable from a test: it lived inside renderSessionRun's closure.
  *
- * It reads the FOUR functions out of the shipped js/app.js and runs them in a
- * bare context. Nothing is copied here, so this file cannot drift from what the
- * app actually executes — and app.js is not evaluated whole (it touches document
- * at top level), so no DOM shim is needed.
+ * It reads the functions out of the shipped js/app.js and runs them in a bare
+ * context. Nothing is copied here, so this file cannot drift from what the app
+ * actually executes — and app.js is not evaluated whole (it touches document at
+ * top level), so no DOM shim is needed.
+ *
+ * v397 added three: the day's list as the DATABASE remembers it (dayIds), where
+ * a re-entered run opens on that list (runResumeIdx), and what the reorder
+ * sheet writes when it closes (reorderMerge). The first two exist because a
+ * swap lived only in viewContext — close the app and the substitute's sets were
+ * on no screen — and a calendar day showed only what the CURRENT rotation puts
+ * on it, so a session logged off the plan could not be opened from its date.
  */
 const assert = require('assert');
 const fs = require('fs');
@@ -24,7 +31,7 @@ const vm = require('vm');
 
 const APP = path.resolve(__dirname, '..', 'js', 'app.js');
 const src = fs.readFileSync(APP, 'utf8');
-const NAMES = ['runOrder', 'runReplace', 'runIdxAfterDrop', 'runSwapAllowed'];
+const NAMES = ['runOrder', 'runReplace', 'runIdxAfterDrop', 'runSwapAllowed', 'dayIds', 'runResumeIdx', 'reorderMerge'];
 
 // Pull each top-level declaration out by name: from `function NAME(` to the
 // line that closes it at column 0.
@@ -40,7 +47,7 @@ for (const name of NAMES) {
 }
 const ctx = vm.createContext({});
 vm.runInContext(picked.join('\n') + '\n', ctx);
-const { runOrder, runReplace, runIdxAfterDrop, runSwapAllowed } =
+const { runOrder, runReplace, runIdxAfterDrop, runSwapAllowed, dayIds, runResumeIdx, reorderMerge } =
   vm.runInContext(`({ ${NAMES.join(', ')} })`, ctx);
 
 const PLAN = ['a', 'b', 'c', 'd', 'e'];
@@ -131,5 +138,59 @@ assert.equal(runSwapAllowed(PLAN, 'a', null), false, 'and neither is a null one'
   assert.equal(runOrder(PLAN, list, true)[idx], 'c', 'a drop slides the next exercise into place');
 }
 
+// ---- dayIds: the day as the database remembers it -------------------------
+// The plan says what falls on a date; the sessions say what was DONE on it.
+// Both screens that show a day (session-day, the guided run) build their list
+// here, so a swap survives a closed app and a calendar day shows its sets.
+const logged = (...rows) => rows.map((r) => (typeof r === 'string' ? { exerciseId: r } : r));
+eq(dayIds(PLAN, []), PLAN, 'nothing logged: the day is the plan');
+eq(dayIds(PLAN, logged('c', 'a')), PLAN, 'a logged plan exercise stays where the plan put it');
+eq(dayIds(PLAN, logged('z')), ['a', 'b', 'c', 'd', 'e', 'z'],
+   'a session off the plan is APPENDED — on screen, where it can be seen and edited');
+eq(dayIds(PLAN, logged({ exerciseId: 'x', replaces: 'b' })), ['a', 'x', 'c', 'd', 'e'],
+   'a logged substitute takes the PLACE of what it replaced — the swap survives the close');
+eq(dayIds([], logged('z', 'y')), ['z', 'y'],
+   'a day the rotation calls rest, or a day before the plan began: the list is what was logged, in order');
+eq(dayIds(undefined, logged('z')), ['z'], 'a missing plan is an empty plan');
+eq(dayIds(PLAN, logged({ exerciseId: 'x', replaces: 'q' })), ['a', 'b', 'c', 'd', 'e', 'x'],
+   'a substitute for something this plan does not hold is only appended');
+eq(dayIds(PLAN, logged({ exerciseId: 'c', replaces: 'a' })), PLAN,
+   'a "substitute" that is already on the plan is not moved — it would be on the list twice');
+eq(dayIds(PLAN, logged({ exerciseId: 'x', replaces: 'b' }, 'b')), ['a', 'x', 'c', 'd', 'e', 'b'],
+   'the replaced exercise, logged after all, comes back — appended, never lost');
+eq(dayIds(PLAN, logged('z', 'z')), ['a', 'b', 'c', 'd', 'e', 'z'], 'two sessions of one exercise are one entry');
+eq(PLAN, ['a', 'b', 'c', 'd', 'e'], 'and the plan array is never mutated');
+
+// ---- runResumeIdx: where a re-entered run opens ----------------------------
+// The LAST exercise with a session is the one you were on. Only the day's OWN
+// list counts for that: something logged off the plan earlier in the day is
+// appended after it, and letting it win would open an evening run on the
+// morning's extras.
+assert.equal(runResumeIdx(PLAN, [], PLAN), 0, 'nothing logged: the first exercise');
+assert.equal(runResumeIdx(PLAN, ['a', 'b'], PLAN), 1, 'the last one with a session — possibly mid-way');
+assert.equal(runResumeIdx(PLAN.concat('z'), ['a', 'z'], PLAN), 0,
+  'an extra logged off the plan does not pull the run past the plan exercise you were on');
+assert.equal(runResumeIdx(PLAN.concat('z'), ['z'], PLAN), 0,
+  'nothing of the plan logged yet: a fresh run starts on the plan, never on an extra logged earlier');
+assert.equal(runResumeIdx(['z', 'y'], ['z', 'y'], []), 1, 'a list of extras alone resumes on its last');
+{
+  // The v369 close, after a swap: A→X at position 0, X logged, then B logged.
+  const day = dayIds(['a', 'b', 'c'], logged({ exerciseId: 'x', replaces: 'a' }, 'b'));
+  eq(day, ['x', 'b', 'c'], 'after a swap the reopened day holds the substitute in place');
+  assert.equal(day[runResumeIdx(day, ['x', 'b'], day.slice(0, 3))], 'b',
+    'and the run reopens on the exercise it was on, not on the substitute');
+}
+
+// ---- reorderMerge: what the reorder sheet writes ---------------------------
+eq(reorderMerge(['a', 'b', 'c'], ['a', 'b', 'c'], ['a', 'b', 'c']), null,
+   'opened and closed without a move: nothing to write, nothing to sync');
+eq(reorderMerge(['c', 'a', 'b'], ['a', 'b', 'c'], ['a', 'b', 'c']), ['c', 'a', 'b'], 'a move is written');
+eq(reorderMerge(['c', 'a', 'b'], ['a', 'b', 'c'], ['a', 'b']), ['a', 'b'],
+   'an exercise removed while the sheet was open is not resurrected by closing it');
+eq(reorderMerge(['c', 'a', 'b'], ['a', 'b', 'c'], ['a', 'b', 'c', 'd']), ['c', 'a', 'b', 'd'],
+   'one added while it was open is kept, after the ones the user ordered');
+eq(reorderMerge(['a', 'b'], ['a', 'b'], ['a', 'b', 'd']), null,
+   'no move is still no write, whatever changed underneath');
+
 console.log('PASS run list: selection vs ordered, replace keeps position, drop slides, ' +
-            'swap refusals, and the v307 + v331 regressions');
+            'swap refusals, the v307 + v331 regressions, the day as logged, the resume, and the reorder write');

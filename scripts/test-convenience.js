@@ -2,6 +2,8 @@
 const assert = require('node:assert/strict');
 const vm = require('node:vm');
 const {execFileSync} = require('node:child_process');
+const fs = require('node:fs');
+const path = require('node:path');
 const {context} = require('./test-sync-status');
 const state = context(), {c} = state, db = c.DB;
 const run = code => vm.runInContext(code,c);
@@ -139,6 +141,150 @@ assert.equal(restore.ok,true);
 assert.equal(db.plan.get().cycle[0].targets[db.plan.get().cycle[0].exerciseIds[0]].sets,3);
 assert.equal(json(db.foodLogs.listForDate(date)),baseLogs); assert.equal(json(db.sessions.listAll()),baseSessions);
 assert.equal(db.undo.apply(restore.undoToken).ok,true); assert.equal(json(db.plan.get()),basePlan);
+
+// ---- A SET IS EDITED, NEVER REBUILT (v397) --------------------------------
+// loadState keeps a set's unknown fields (v396); the WRITE paths rebuilt every
+// set from reps/weight/done, so the first edit of a set's reps erased whatever
+// a newer build had put on it — and the next push carried the loss everywhere.
+{
+  const exId = db.exercises.list()[2].id;
+  const kept = db.sessions.add({exerciseId:exId,date,sets:[{reps:8,weight:40,rpe:8,tempo:'3-1-1'},{reps:8,weight:40}]});
+  assert.equal(db.sessions.get(kept.id).sets[0].rpe,8,'add keeps a per-set field it does not know');
+  const stored = db.sessions.get(kept.id).sets[0];
+  db.sessions.update(kept.id,{sets:[{...stored,reps:10},{reps:6,weight:45}]});
+  const edited = db.sessions.get(kept.id).sets;
+  assert.equal(edited[0].reps,10);
+  assert.equal(edited[0].rpe,8,'an unknown per-set field survives an edit of its reps');
+  assert.equal(edited[0].tempo,'3-1-1');
+  assert.equal(json(Object.keys(edited[1]).sort()),json(['reps','weight']),'a set that carried nothing gains nothing');
+  // `done` is still stored only as its exception, whatever the editor passes.
+  db.sessions.update(kept.id,{sets:[{...edited[0],done:true}]});
+  assert.equal('done' in db.sessions.get(kept.id).sets[0],false,'done:true is the default and is not stored');
+  db.sessions.update(kept.id,{sets:[{...edited[0],done:false}]});
+  assert.equal(db.sessions.get(kept.id).sets[0].done,false,'done:false is');
+  db.sessions.remove(kept.id);
+}
+
+// ---- AN EXERCISE THAT IS GONE TAKES ITS UNDO WITH IT (v397) ----------------
+// DB.exercises.remove purges its sessions with a raw save, outside the ledger.
+// An earlier 'session_deleted' entry still passed apply()'s STALE check (the
+// session reads null, and its `after` IS null), so Recent changes re-inserted
+// a session whose exercise no longer existed: counted in streaks, weekly sets
+// and the calendar, with no page left to delete it from.
+{
+  const custom = db.exercises.add({name:'QA orphan',category:'Chest'});
+  const s1 = db.sessions.add({exerciseId:custom.id,date,sets:[{reps:5,weight:20}]});
+  const gone = db.sessions.remove(s1.id);
+  assert.equal(gone.ok,true);
+  db.exercises.remove(custom.id);
+  assert.equal(db.undo.apply(gone.undoToken).ok,false,'undoing the deletion is refused once the exercise is gone');
+  assert.equal(db.sessions.listAll().some(x=>x.exerciseId===custom.id),false,'no orphan session comes back');
+}
+
+// ---- THE UNDO ON A TOAST UNDOES THE WRITE IT ANNOUNCES (v397) --------------
+// offerUndo bound its button to the NEWEST ledger entry whenever its caller
+// passed no result — and a write that changed nothing records no entry. So
+// "Set deleted · Undo" after removing an EMPTY row undid the set logged before
+// it; "Edited · Undo" after an unchanged save brought back a meal deleted an
+// hour earlier. offerUndo and withUndo are read out of the shipped app.js by
+// name (the way test-run-list reads the run's functions) and run here against
+// this context's real DB, with the toast recorded instead of shown.
+{
+  const APP = fs.readFileSync(path.join(__dirname,'..','js','app.js'),'utf8').split(/\r?\n/);
+  const pick = (name) => {
+    const at = APP.findIndex(l => l.startsWith(`function ${name}(`));
+    assert.ok(at !== -1, `${name} is not a top-level function in js/app.js — did it move?`);
+    const end = APP.findIndex((l, i) => i > at && l === '}');
+    return APP.slice(at, end + 1).join('\n');
+  };
+  const shown = [];
+  c.t = key => key;
+  c.showToast = (message, opts) => shown.push({message, opts});
+  c.convenienceError = () => shown.push({message:'error'});
+  c.applyConvenienceUndo = token => db.undo.apply(token);
+  run(pick('offerUndo'));
+  const exA = db.exercises.list()[3].id, exB = db.exercises.list()[4].id;
+  const a = db.sessions.add({exerciseId:exA,date,sets:[{reps:10,weight:60}]});
+  const b = db.sessions.add({exerciseId:exB,date,sets:[{reps:5,weight:30}]});
+  db.sessions.remove(b.id);   // the newest entry is now somebody else's change
+  shown.length = 0;
+  run(`offerUndo('session_updated')`);
+  assert.equal(shown.length,0,'offerUndo with no write to name offers NOTHING — the newest entry belongs to another change');
+  run(pick('withUndo'));
+  run(`offerUndo('session_updated', withUndo(() => DB.sessions.update(${json(a.id)}, {sets:[{reps:10,weight:60}]})))`);
+  assert.equal(shown.length,0,'a save that changed nothing records nothing, so it offers nothing');
+  run(`offerUndo('session_updated', withUndo(() => DB.sessions.update(${json(a.id)}, {sets:[{reps:12,weight:60}]})))`);
+  assert.equal(shown.length,1,'a save that changed something offers its own entry');
+  shown[0].opts.onAction();
+  assert.equal(db.sessions.get(a.id).sets[0].reps,10,'taking it undoes that save');
+  assert.equal(db.sessions.get(b.id),null,'and leaves the earlier deletion alone');
+  // A write that returns its changeSlice result names its entry itself.
+  shown.length = 0;
+  const removed = db.sessions.remove(a.id);
+  run(`offerUndo('session_deleted', ${json(removed)})`);
+  assert.equal(shown.length,1);
+  shown[0].opts.onAction();
+  assert.ok(db.sessions.get(a.id),'the result\'s own undoToken is the one offered');
+  shown.length = 0;
+  run(`offerUndo('x', {ok:true, changed:false})`);
+  assert.equal(shown.length,0,'an unchanged result offers nothing');
+  db.sessions.remove(a.id);
+  // The food log's editor, the reviewer's own sequence: delete row A, then
+  // save row B unchanged. Its toast offered Undo, and the Undo brought A back.
+  const fd = '2026-09-11';
+  const rowA = db.foodLogs.add(fd,{...food,name:'row A'}), rowB = db.foodLogs.add(fd,{...food,name:'row B'});
+  assert.equal(db.foodLogs.remove(fd,rowA.id).ok,true);
+  shown.length = 0;
+  run(`offerUndo('fl_edited', withUndo(() => DB.foodLogs.update(${json(fd)}, ${json(rowB.id)}, {servings:${rowB.servings}})))`);
+  assert.equal(shown.length,0,'an unchanged food-log save offers no Undo — the newest entry is the deleted row');
+  assert.equal(db.foodLogs.listForDate(fd).some(x=>x.id===rowA.id),false,'and the deleted row stays deleted');
+}
+
+// ---- THE ROTATION KEEPS ITS PLACE WHEN IT IS EDITED (v397) -----------------
+// The position is DERIVED: elapsed training days since the anchor, counted
+// with the CURRENT weekdays, indexed into the CURRENT cycle. So a weekday
+// toggle recounted the whole past as if it had always applied, and adding or
+// removing a workout changed `elapsed % length` — today's workout jumped by an
+// arbitrary offset. Its own context: these edits rebuild the plan.
+{
+  const p = context(), pdb = p.c.DB, prun = code => vm.runInContext(code, p.c);
+  const today = prun('todayISO()');
+  const iso = n => prun(`addDaysISO(todayISO(), ${n})`);
+  const at = d => { const w = pdb.plan.workoutForDate(new Date(d + 'T12:00:00')); return w ? w.name : null; };
+  const dow = d => new Date(d + 'T12:00:00').getDay();
+  const slot = name => ({name, exerciseIds:[]});
+  const ALL = [0,1,2,3,4,5,6];
+  pdb.plan.setRotation({cycle:[slot('Push'),slot('Pull'),slot('Legs')],trainingDays:ALL,anchor:iso(-10)});
+  assert.equal(at(today),'Pull','ten training days since the anchor: 10 % 3');
+  // Drop yesterday's weekday: the ten days behind today now count as eight.
+  pdb.plan.setTrainingDays(ALL.filter(d => d !== dow(iso(-1))));
+  assert.equal(at(today),'Pull','a weekday toggle keeps today\'s workout');
+  assert.equal(at(iso(1)),'Legs','and the next training day carries the next one');
+  pdb.plan.addSlot('Arms');
+  assert.equal(at(today),'Pull','adding a workout keeps today\'s');
+  assert.equal(json([1,2,3].map(n => at(iso(n)))),json(['Legs','Arms','Push']),'and the new one joins the sequence where it was added');
+  pdb.plan.removeSlot(0);
+  assert.equal(at(today),'Pull','removing an EARLIER workout keeps today\'s');
+  const r = pdb.plan.removeSlot(0);
+  assert.equal(at(today),'Legs','removing TODAY\'S workout gives today the one after it');
+  // «Remove from cycle» is one tap on a whole workout; it is undoable now.
+  assert.equal(r && r.ok,true,'removeSlot answers with its write');
+  assert.equal(pdb.undo.apply(r.undoToken).ok,true,'and that write can be undone');
+  assert.equal(json(pdb.plan.get().cycle.map(s => s.name)),json(['Pull','Legs','Arms']));
+  assert.equal(at(today),'Pull','undone byte for byte — today included');
+  // A plan built BY HAND starts on its FIRST workout. The load path used to
+  // stamp an empty plan's anchor with the day the app loaded, and the first
+  // slot added counted from that stale day.
+  pdb.plan.clearAll();
+  prun(`STATE.plan.anchor = addDaysISO(todayISO(), -20); save()`);
+  pdb.plan.addSlot('Push'); pdb.plan.addSlot('Pull'); pdb.plan.addSlot('Legs');
+  pdb.plan.setTrainingDays(ALL);
+  assert.equal(at(today),'Push','a hand-built rotation starts today on its first workout');
+  assert.equal(at(iso(1)),'Pull');
+  // And a fresh store does not invent an anchor for a plan that has no workouts.
+  pdb.resetAll(); prun('reloadState()');
+  assert.equal(pdb.plan.get().anchor,null,'an empty plan has no anchor to count from');
+}
 
 // Search includes 10k records without a persistent index or query log.
 run(`STATE.foodLogs['${date}']=Array.from({length:10000},(_,i)=>({id:'food_'+i,name:'Test meal '+i,calories:1,servings:1}))`);

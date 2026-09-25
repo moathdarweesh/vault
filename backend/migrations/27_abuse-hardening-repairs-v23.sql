@@ -19,6 +19,15 @@
 --      best-effort. Live for about twenty minutes; no user hit it.
 --
 -- Idempotent. Every section ends by CALLING what it defines.
+--
+-- ⚠️ TWO OF THESE REPAIRS STILL LEFT A HOLE — see 30. B's
+-- ai_budget_take(p_user_limit, p_global_limit) compared the counts with the
+-- CALLER's limits, so a direct PostgREST call with huge values passed every
+-- check and still charged the shared row: one account could switch the AI off
+-- for everyone, which is what B says it prevents. And A's cap (like
+-- client_errors' from 11/16) counted a created_at the client could set, so a
+-- backdated row was never counted. 30 takes the limits out of the signature
+-- and the column out of the client's reach.
 -- ============================================================================
 
 -- ── A. the feedback cap was a NO-OP ────────────────────────────────────────

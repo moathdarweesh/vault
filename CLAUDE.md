@@ -79,11 +79,11 @@ a faster TTFB — not fewer bytes.
 ## CACHE WORKFLOW — now automated. **Do not bump by hand.**
 
 ```bash
-npm run verify           # 47 contracts + lint + 13 suites — THE GATE
+npm run verify           # 48 contracts + lint + 13 suites — THE GATE
 npm run release          # bump every marker and re-read them; runs NO tests
 ```
 
-**Current version: v396.** APK: build 24 / v3.3.
+**Current version: v397.** APK: build 24 / v3.3.
 
 > ⚠️ **`npm run release` RUNS NO TESTS, AND THIS LINE USED TO READ AS IF IT DID.**
 > It said «bump every marker + verify», where *verify* meant the MARKERS — and
@@ -649,7 +649,7 @@ question worth asking still applies, and none of it is waived:
 
 > **`backend/README.md` is the authority for WHAT IS APPLIED and in WHAT ORDER.**
 > backend/ is now sorted into `migrations/` (applied, numbered by dependency),
-> `pending/`, `unverified/` (state unrecorded — check live before running),
+> `pending/` (written, NOT applied — the owner runs it), `archive/` (never run — since v397 it also holds the retired `unverified/` files and the superseded 29),
 > `archive/` (never run), `worker/` and `docs/`. The summary below is context;
 > that table is the state.
 The app is going multi-user. Alongside the legacy `vault_data` blob (still the local-first source of truth), a **normalized schema** is live in Supabase (project ref `ilmusnuchqlpirywonzx`). SQL artifacts in `backend/`:
@@ -661,7 +661,7 @@ The app is going multi-user. Alongside the legacy `vault_data` blob (still the l
 - **Applying SQL:** the Supabase SQL editor, or the Supabase MCP `execute_sql` when the session has it (that is how 23–25 were applied; `apply_migration` is refused by the permission classifier, `execute_sql` is not). `backend/README.md`'s row must record WHICH path a file took. The "destructive operations" dialog is benign ONLY when the script's drops are `drop policy/trigger if exists` guards; a real DROP/DELETE/TRUNCATE needs explicit human confirmation. See the maintainer's memory (`vault-db-v2`).
 - **Content/presets/audit/config** (`admin-write-v4.sql`, v111, applied+verified): `audit_log` (append-only, admin-read) + `audit()` logger; `app_config` (public read); `food_catalog` + `preset_plans` (global, public read); is_admin-gated definer CRUD RPCs for global exercises/cardio/foods/presets/config. App consumes them additively via `Cloud.pullCatalog()`/`bootCatalog()` (`js/app.js`) + `DB.exercises.mergeGlobal()`.
 - **DB-department audit (2026-07-11)** — full read-only review by db-architect + normalization-auditor + db-security-auditor + db-index-optimizer. Verdict: **professional (A-/B+); no Critical; no client-reachable isolation break; every table BCNF or justified; indexes ahead of the workload.** Fixes surfaced: `backend/migrations/09_hardening-v5.sql` (additive — `feedback_user_idx` + `vault_data` grant double-lock; **APPLIED** in `e54cfed`, which read the resulting grants back); `backend/archive/DROP-migration_v2.CONFIRMATION-REQUIRED.sql` (**destructive** — the leftover `migration_v2` staging schema holds unminimized cross-user PII; NOT reachable but a data-min gap; human runs out-of-band after a backup). Roadmap/optional: consolidate `admins`↔`user_flags.role`; decompose `health_prefs.hidden text[]`→`health_hidden` before analytics; `loadAll()` → aggregate RPC as users grow; hard RLS ban.
-- **Custom exercise images — durable backup** (`backend/migrations/08_storage-images-v6.sql`, **APPLIED + VERIFIED live 2026-07-17**; v120–v123): user-uploaded images (`customImage`) used to live ONLY as base64 inside the `vault_data` blob. The blob is a single mutable row with no history, so when an empty local state once overwrote it every image was destroyed — and the mirror never carried them, so a mirror restore brought back the exercise but not its picture (**this actually happened to the owner; the images were unrecoverable**). Now (v291): the base64 lives in a **side store** — one localStorage key per photo, `vault_img_<exerciseId>` — and every exercise object exposes `customImage` as a **non-enumerable accessor** onto it (`js/storage.js` `defineImgAccessor`), so readers and writers are unchanged while `JSON.stringify(STATE)` carries no photos: a set commit no longer serialises megabytes, the pre-sync snapshot fits, and a cloud pull replaces the blob and **leaves the photos alone** (they used to vanish after every foreground pull until the next heal). Still instant and still offline. An inline `customImage` found in a stored/imported/pulled blob is moved out on load; `exportJSON()` re-attaches photos so a backup file is complete; `Cloud.pushOnce` re-attaches any photo that has **no bucket copy yet** so it still travels; `imgPrune()` drops keys for exercises that no longer exist (never in READ-ONLY mode — the default state has none of the user's exercises); `clearLocalUserData()` wipes them on logout; `DB.exercises.setImage()` writes a photo without touching the blob (the boot-time heal uses it). Cards get a base64 background AFTER parsing (`hydrateCardImages`), never inside the HTML string. A durable copy is ALSO uploaded to the **private** `exercise-images` bucket at `{auth.uid()}/{exercise_id}.jpg` (owner-only RLS on `storage.objects`, 5 MB cap, image mime allowlist — **keep `image/svg+xml` OUT of that allowlist permanently: it is what rejects an active-content SVG from a poisoned imported backup**). The pointer is `imagePath` on the exercise object in the blob (the `user_exercise_prefs.custom_image_path` mirror column went with the mirror in v278). Since v291 the blob also carries `imageAt` (when the photo was last set) and `imageCleared` (an explicit removal): a device reconciles its side store against them on every load, so a photo removed or replaced on one device is removed or refetched on the others instead of resurrected and pushed back. Two rules that fell out of the second review (v292): **a NEW photo resets `imagePath` to null** (the bucket copy is stale; the upload runs again and the push carries the bytes inline until it lands — unchanged bytes on a re-save change nothing), and **the pre-sync rescue re-attaches every un-backed-up photo** exactly as the upload does, because the raw blob no longer holds any and the pull that follows a snapshot prunes the side store. A missing stamp beside a stored photo counts as *different*, never as a match. Client: `Cloud.backupExerciseImage/restoreExerciseImage/removeExerciseImage` (cloud.js), `backupExerciseImageFor()` on save + `syncExerciseImages()` after login/bootSync (app.js) which backfills any un-backed-up image AND heals an exercise whose base64 was lost but whose backup survived. **All best-effort** — every failure path leaves the local base64 untouched, so backing up can never lose an image, and the app works unchanged if the bucket is missing.
+- **Custom exercise images — durable backup** (`backend/migrations/08_storage-images-v6.sql`, **APPLIED + VERIFIED live 2026-07-17**; v120–v123): user-uploaded images (`customImage`) used to live ONLY as base64 inside the `vault_data` blob. The blob is a single mutable row with no history, so when an empty local state once overwrote it every image was destroyed — and the mirror never carried them, so a mirror restore brought back the exercise but not its picture (**this actually happened to the owner; the images were unrecoverable**). Now (v291): the base64 lives in a **side store** — one localStorage key per photo, `vault_img_<exerciseId>` — and every exercise object exposes `customImage` as a **non-enumerable accessor** onto it (`js/storage.js` `defineImgAccessor`), so readers and writers are unchanged while `JSON.stringify(STATE)` carries no photos: a set commit no longer serialises megabytes, the pre-sync snapshot fits, and a cloud pull replaces the blob and **leaves the photos alone** (they used to vanish after every foreground pull until the next heal). Still instant and still offline. An inline `customImage` found in a stored/imported/pulled blob is moved out on load; `exportJSON()` re-attaches photos so a backup file is complete; `Cloud.pushOnce` re-attaches any photo that has **no bucket copy yet** so it still travels; `imgPrune()` drops keys for exercises that no longer exist (never in READ-ONLY mode — the default state has none of the user's exercises); `clearLocalUserData()` wipes them on logout; `DB.exercises.setImage()` writes a photo without touching the blob (the boot-time heal uses it). Cards get a base64 background AFTER parsing (`hydrateCardImages`), never inside the HTML string. A durable copy is ALSO uploaded to the **private** `exercise-images` bucket at `{auth.uid()}/{exercise_id}.jpg` (owner-only RLS on `storage.objects`, 512 KB cap (live `file_size_limit` = 524288 — this line said 5 MB until v397), image mime allowlist — **keep `image/svg+xml` OUT of that allowlist permanently: it is what rejects an active-content SVG from a poisoned imported backup**). The pointer is `imagePath` on the exercise object in the blob (the `user_exercise_prefs.custom_image_path` mirror column went with the mirror in v278). Since v291 the blob also carries `imageAt` (when the photo was last set) and `imageCleared` (an explicit removal): a device reconciles its side store against them on every load, so a photo removed or replaced on one device is removed or refetched on the others instead of resurrected and pushed back. Two rules that fell out of the second review (v292): **a NEW photo resets `imagePath` to null** (the bucket copy is stale; the upload runs again and the push carries the bytes inline until it lands — unchanged bytes on a re-save change nothing), and **the pre-sync rescue re-attaches every un-backed-up photo** exactly as the upload does, because the raw blob no longer holds any and the pull that follows a snapshot prunes the side store. A missing stamp beside a stored photo counts as *different*, never as a match. Client: `Cloud.backupExerciseImage/restoreExerciseImage/removeExerciseImage` (cloud.js), `backupExerciseImageFor()` on save + `syncExerciseImages()` after login/bootSync (app.js) which backfills any un-backed-up image AND heals an exercise whose base64 was lost but whose backup survived. **All best-effort** — every failure path leaves the local base64 untouched, so backing up can never lose an image, and the app works unchanged if the bucket is missing.
 - Still pending: social features deferred. (The normalized-tables mirror was removed in v278.)
 
 ## Hardening pass (v189–v190) — invariants added by the 2026-07-25 codebase review
@@ -675,10 +675,10 @@ Full findings + verification in `docs/CODEBASE_REVIEW.md`. The load-bearing rule
 - **Mirror reconcile is gated on `blobLooksReal`** (`js/tables.js`). An empty id list makes the delete unbounded, so it only runs when the blob demonstrably holds user data.
 - **Dates: always `todayISO()` / `addDaysISO()`, never `toISOString()`** for calendar days. `toISOString()` returns the previous day for every UTC+ user — this bug class has now appeared three times. **And resolve the day when the row is WRITTEN, not when the sheet opened** (v291, the fourth appearance, via a stale closure): `openAddSheet(null, …)` means "today, decided by `todayISO()` at log time"; every `DB.foodLogs.add(date || todayISO(), …)` site and `FoodAI`'s `dateNow()` follow it. Only the history view passes an explicit past date.
 - **The guided screen does not move (v290–v291).** The rest bar is ONE persistent element with two states of the same min-height — `.rest-timer.idle` (no rest running) and `.live` (countdown, sticky) — inserted by `ensureRestBar()` directly before `.run-nav` **as a child of the view** (position:sticky can only travel inside its containing block; never wrap it). `stopRestTimer()` goes idle in place; only `clearRestTimer()` (navigate away) removes it. Re-renders (add set, next exercise) re-attach the SAME node, so the countdown never restarts. `Notify.restAlarm()` is the locked-phone alert, armed 1.5 s after `endAt` so an on-screen finish cancels it before it fires. A ✓ on a set with no numbers is refused (toast), and un-ticking stops the clock only for the set that started it.
-- **The guided run resumes.** `runIdx` opens on the first exercise with no session on the run date (the last one if all have); persisted sets come back `done: true`. The suggestion and the best/last cells read history that **excludes the run date** — today's own row must never become "last session" mid-workout. Suggestions are computed in the unit the bar is loaded in (5-lb plates for lb users), and legs are matched case-insensitively (`'Legs'` is what is stored).
+- **The guided run resumes.** `runIdx` opens on the LAST exercise that has a session on the run date — a half-done exercise must not be skipped (v369; this line said «the first with none» until v397) — or on the first when none has one; persisted sets come back `done: true`. The suggestion and the best/last cells read history that **excludes the run date** — today's own row must never become "last session" mid-workout. Suggestions are computed in the unit the bar is loaded in (5-lb plates for lb users), and legs are matched case-insensitively (`'Legs'` is what is stored).
 - **Sync decisions (v289–v291).** `push()` is serialised (one in flight; later callers share its promise); a conflict against identical bytes is a self-conflict and reports `'ok'`; `vault:push-ok` reopens the conflict-toast latch, which otherwise suppresses only repeats of one unresolved conflict. `bootSyncCore` decides pull-vs-push by the server **`version`** when both sides know it (clocks only as a fallback), and recognises its own last push through the `vault_pushing_<uid>` stamp written *before* the request, so an app killed mid-upload does not manufacture a conflict. `chooseLocal()` snapshots the cloud copy before force-pushing over it. The rescue slot (`vault_pre_sync_backup`) is stamped with its `uid` and refused for any other account, holds no backed-up photos, and records a failed write (`…_failed`) that Settings shows; logout also clears it, the `__corrupt` copy, the AI cache and the `vault_img_*` keys. READ-ONLY refusals dispatch `vault:save-failed {readonly:true}`, and `init()` asks `DB.loadFailed()` because the load-failed event fires before app.js exists. Inside the APK an `<a download>` is inert: `exportBackupFile()` shares or copies to the clipboard there.
 - **Console sinks.** Every blob-derived string in `admin.html` goes through `esc()`; enumerable values (`prefs.unit`) are whitelisted at load (`u.unit==='lb'?'lb':'kg'`) — `toUpperCase()` is not a defence. Two stored-XSS sinks (sleep times, unit → `admin_set_role` escalation) were closed in v291.
-- **Worker chat mode** runs under a fixed server-side `CHAT_SYSTEM` and ignores the client `prompt` entirely; food/photo/audio still take `prompt || text` as the user turn (food/photo under the strict JSON `SYSTEM` instruction). Requires the manual Cloudflare paste-deploy — **deployed 2026-09-02 as version `d356f094`** (the owner pasted from the clipboard; the dashboard editor is a cross-origin iframe that browser automation cannot type into, so this step stays manual).
+- **Worker chat mode** runs under a fixed server-side `CHAT_SYSTEM` and ignores the client `prompt` entirely; food/photo still take `prompt || text` as the user turn; audio runs under the fixed server-side `AUDIO_SYSTEM` since v397, and every mode returns at most `MAX_ITEMS` (40) items (food/photo under the strict JSON `SYSTEM` instruction). Deployed by the owner with `npx wrangler deploy` from `backend/worker/` (since v306; the dashboard paste of 2026-09-02, version `d356f094`, is history). ⚠️ The v391 timing cap and the v397 audio/logging/English-examples changes are committed but NOT yet deployed.
 - **Error visibility.** `Cloud.reportError()` + `window.onerror`/`unhandledrejection` write to `client_errors` (`backend/migrations/11_client-errors-v9.sql`, **APPLIED + VERIFIED live 2026-08-05**): signed-in users only, no user content, per-session dedupe, DB-side rate cap of 20/hour, 30-day retention via `admin_prune_client_errors()`. The reporter must never throw and never block.
   > It sat in `pending/` for weeks while the client was already reporting into it — and `reportError` ends `.then(() => {}, () => {})`, swallowing both outcomes, so **every crash on every device was posted to a table that did not exist and silently discarded**. The mechanism built because "everything on this path fails silently" was itself failing silently, and had collected exactly zero rows. Verified after applying: 9 columns, 4 indexes, RLS on, 1 trigger, 2 definer functions, and a policy map of `DELETE:admin | INSERT:own | SELECT:own | SELECT:admin` — **no UPDATE policy for anyone**, so nobody can edit or erase evidence of a bug.
 - **Accessibility invariants.** Both modes pass WCAG AA across 15 views and the modals, swept with a scrim-aware auditor. `--text-ghost` is for input placeholders and `--text-faint` is **decorative only** (~1.4:1 in light by design) — do not "unify" them, and never use `--text-faint` for text a user has to read. Muted tokens are calibrated against **`--surface-3`**, the worst surface they land on, never against `--bg`. **Zoom is OFF since 2026-09-23 (owner decision, v390: «ما بدي ينعمل زوم» after the app enlarged on his phone)** — the viewport carries `maximum-scale=1, user-scalable=no`, contract 45 enforces it, and the Android shell pins `textZoom` to 100 so the phone's font-size setting cannot scale the app either (that half reaches phones only with APK 25). The in-app «خطّ أكبر» setting (v380, `body.text-lg`) is the accessible route. **Inputs still stay ≥16px**: iOS ignores `user-scalable=no`, so focus-zoom would return there.
@@ -1863,7 +1863,7 @@ reviewer's claim is a lead, not a fact.
 
 ### ⚠️ HIGH — the daily AI budget has been dead for seven days, failing OPEN
 
-`backend/pending/29_ai-usage-fk-repair-v25.sql` is the fix. **It is NOT applied** — it is a live
+`backend/pending/30_ai-budget-and-caps-v26.sql` is the fix (v397 — it supersedes 29, now in `archive/`, which would have revived the budget with caller-chosen limits). **It is NOT applied** — it is a live
 write and only the owner runs it.
 
 Migration 28 added a foreign key from `ai_usage.user_id` to `auth.users(id)`, and its own header
@@ -1878,7 +1878,7 @@ which is not a user (`select count(*) from auth.users where id = '00000000-…'`
 *why* the FK had to be NOT VALID). On the first call of each new UTC day there is no sentinel row
 for `today`, so `ON CONFLICT` cannot deflect it: it is a genuine INSERT, the FK fires, 23503 aborts
 the whole SECURITY DEFINER call — **rolling back the per-user increment with it** — and
-`gemini-worker.js:339` (`if (!r.ok) return { ok: true };`) fails OPEN.
+`budgetAllows()` in `gemini-worker.js` fails OPEN (since v397 it at least LOGS the failure: `budget rpc failed OPEN: <status> <code>`).
 
 Measured live, read-only: `ai_usage` still holds exactly **2 rows, both `day = 2026-09-06`, n = 10**,
 while today is **2026-09-13**. Nothing has been billed for seven days. This is precisely the failure
@@ -2734,6 +2734,93 @@ the rows pre-filled from last time as performed sets ("confirmed without a
 throwaway edit" is the recorded intent; whether an untouched row should count
 is the owner's call); a saved food **4 taps**. The day card's Save measures
 **69×40** — under the 44 floor.
+
+## v397 — batches 2a and 7: the workout core, and the budget nobody could bill
+
+Batch 2a of the 2026-09-25 review (17 findings, the guided run and the day
+card), plus batch 7 (backend + Worker, 7 findings — the SQL is written for the
+owner, not applied). Every fix shipped with a check that FAILED on v396 first.
+
+**Undo offers only what the write just wrote.** `offerUndo` used to fall back to
+the newest undo entry, so a save that changed nothing — deleting an empty row, a
+no-op edit — offered an Undo that reversed an earlier, unrelated change (three
+lenses found it independently). One helper, `withUndo(write)` (js/app.js), marks
+the newest entry before the write and hands back an entry only if the write added
+one; every offerUndo-after-write site goes through it, and **contract 48**
+refuses an `offerUndo` that reads the undo list or is called with a message
+alone. The PR toast now carries the Undo instead of being erased by it (both
+sites), in the sheet's own unit, and the sheet buzzes on a record.
+
+- **The suggestion tap fills a placeholder and writes nothing** — the ✓ logs it,
+  with Undo («سُجِّلت بالأرقام المقترحة»). The invented-set class is closed.
+- **PR detection** judges the guided run against history only
+  (`prSnapshot(exId, existingId)`) and re-judges the stashed message on every
+  commit; `prPrior` reconciles the sheet and the day card (re-saving a record does
+  not announce it twice; a first-ever session is never a record).
+- **`storedSet` (js/storage.js) is the one per-set rule** for loadState, add and
+  update: an edit overwrites reps/weight/done and carries every other field
+  along, so an older build can no longer strip what a newer one stored.
+- **The day shows what was logged**, not only what the rotation assigns:
+  `dayIds` = the plan slot plus every exercise with a session on that date, the
+  substitute in its place (sessions carry an optional `replaces`), and
+  `runResumeIdx` reopens the run where it was. A calendar day before the plan
+  began now shows its training. Reorder appears only for a multi-exercise slot;
+  a logged-only card has no «remove from day».
+- **The rotation keeps today's workout when its shape changes**: `planPosition`
+  / `anchorAt` re-anchor on `setTrainingDays`, `addSlot`, `removeSlot` and the
+  importer's append (no new plan field, so none of the SEVEN rebuild sites
+  moved). An empty plan gets no anchor on load; `addSlot` anchors when the plan
+  is built, not when the app happened to open.
+- Also: «Remove from cycle» is one undoable write with Undo on its toast;
+  applying a template over a plan that holds exercises asks first; the trash
+  works before anything is stored; `reorderMerge` writes nothing when nothing
+  moved and never resurrects an exercise removed meanwhile; a rest day's «Add
+  exercise» is a one-off, never a new rotation slot; a half-typed row takes the
+  other figure from its ghost and the card is rebuilt from what was stored;
+  deleting an exercise drops every undo entry that could bring an orphan session
+  back (`forgetUndoOf`); a new empty workout no longer says «Day saved».
+- **Partial:** a swap with nothing logged, and drops, still live only on the
+  screen and are lost on leaving (bugs:app-3#7). The planner's ↑/↓ slot reorder
+  still moves today's workout — same class as the re-anchor, not in the finding.
+
+**The resume probe was wrong, not the app.** `ux-flows.js` said the run did not
+resume because the reopened page is a fresh boot and the weekly-review sheet
+rose 400 ms later over session-day; the tap meant for «الوضع الموجّه» closed the
+sheet instead. The probe now lets the boot timers run, closes whatever the boot
+opened with a real tap on its own line, and records what every tap lands on;
+forcing the run to open on its first exercise makes the lane fail by name.
+Measured: the run reopens on the same exercise, rows 3→3, tick kept, DB
+unchanged — RESUMED. (A real user can still tap into that sheet after a reopen;
+noted for batch 2b.)
+
+**Batch 7 — the shared AI budget** (`backend/pending/30_ai-budget-and-caps-v26.sql`,
+NOT applied; supersedes 29): `ai_budget_take()` takes NO arguments — 60 per
+account and 800 in total per UTC day are constants in its body (the old
+`(integer, integer)` overload let any signed-in caller pass 1e9 and drain the
+shared counter); the global counter lives in its own `ai_usage_global` table so
+28's foreign key can be VALIDATED and the sentinel row goes; banned/disabled
+accounts get `blocked` (`is_banned()`, the one place the ban reaches the Worker);
+`feedback`/`client_errors` lose table-level INSERT for column-level grants on
+exactly the columns cloud.js sends, and a BEFORE INSERT trigger stamps
+`created_at = now()` so a backdated row cannot dodge the hourly caps. Four VERIFY
+blocks call every path they constrain; the transaction rolls back whole. The
+Worker (not deployed): logs a budget-RPC failure by status/code (fail-open kept,
+by decision, but never silent), audio runs under a fixed `AUDIO_SYSTEM`,
+`MAX_ITEMS` 40 in every mode, English twins for every few-shot example (3 of 5
+English meals came back in Arabic, measured live). `unverified/` is retired into
+`archive/`; backend/README rows 01, 06, 10, 11, 26–28 corrected; 28's VERIFY used
+`position(x in y)`, which cannot compile — `strpos()` now.
+
+**Owner, by hand:** (1) backup, then paste `backend/pending/30_…sql` whole into
+the Supabase SQL editor and Run — expect exactly `VERIFY 1 ok` … `VERIFY 4 ok`;
+make one AI call and confirm `ai_usage_global.n` rose by one; then `git mv` it to
+`migrations/` and move its README row. (2) `cd backend/worker && npx wrangler
+deploy` (no secret change). After the deploy: remove `VOICE_PROMPT` from
+js/foodai.js with contract 24's clause, and bump the AI cache key once.
+
+48 contracts · lint · **13 suites, 0 failed, 0 skipped** (`test-sync-status-ui.js`
+now ~57 s: twenty new real-click cases). `ux-flows.js` all lanes LANDED, resume
+RESUMED.
 
 ## v396 — the review's first batch: what a synced blob may carry, and a push that cannot conflict with itself
 

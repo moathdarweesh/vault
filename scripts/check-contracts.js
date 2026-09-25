@@ -1367,5 +1367,51 @@ const contract = (name, problems) => {
   contract("the SDK's session key in VAULT_KEYS is the one it derives from SUPABASE_URL, and the client consults urlSessionAllowed for a URL session", problems);
 }
 
+// 48 — every Undo on a toast names the write it undoes. offerUndo used to fall
+// back to the NEWEST ledger entry whenever its caller handed it nothing, and a
+// write that changed nothing records no entry at all — so "Set deleted · Undo"
+// after removing an EMPTY row undid the set logged before it, and "Edited ·
+// Undo" after an unchanged save brought back a meal deleted an hour earlier.
+// Four call sites passed nothing; two more guarded themselves by comparing the
+// ledger head before and after, which is the rule written once as withUndo().
+//   (a) offerUndo reads no ledger — the token it offers comes from its caller;
+//   (b) every call hands it a second argument: the write's own changeSlice
+//       result (its undoToken) or a withUndo() record.
+{
+  const problems = [];
+  const app = src['js/app.js'];
+  const def = (app.match(/^function offerUndo\([^)]*\)\s*\{[\s\S]*?^\}/m) || [''])[0];
+  if (!def) problems.push('js/app.js has no top-level offerUndo');
+  else if (/DB\.undo\.list\s*\(/.test(def)) problems.push('offerUndo reads DB.undo.list() — the Undo it offers would be whatever entry is newest, not the write its toast announces');
+  if (!/^function withUndo\(/m.test(app)) problems.push('js/app.js has no top-level withUndo — the one place that tells a write\'s own entry from the one before it');
+  // Depth-aware: a message is often t('…').replace('{n}', fmtNum(x)), whose
+  // commas sit inside nested parentheses and are not a second argument.
+  const argsOf = (text, open) => {
+    let depth = 0, top = 0, q = null;
+    for (let i = open; i < text.length; i++) {
+      const ch = text[i];
+      if (q) { if (ch === '\\') i++; else if (ch === q) q = null; continue; }
+      if (ch === '\'' || ch === '"' || ch === '`') { q = ch; continue; }
+      if (ch === '(' || ch === '[' || ch === '{') depth++;
+      else if (ch === ')' || ch === ']' || ch === '}') { depth--; if (depth === 0) return top + 1; }
+      else if (ch === ',' && depth === 1) top++;
+    }
+    return 0;
+  };
+  let calls = 0;
+  for (const f of JS) {
+    const text = src[f];
+    for (const m of text.matchAll(/(?<![\w.])offerUndo\(/g)) {
+      if (/function\s+$/.test(text.slice(Math.max(0, m.index - 12), m.index))) continue;   // the definition
+      calls++;
+      if (argsOf(text, m.index + m[0].length - 1) < 2) {
+        const line = text.slice(0, m.index).split(/\r?\n/).length;
+        problems.push(`${f}:${line} calls offerUndo with a message and nothing else — hand it the write's result, or wrap the write in withUndo()`);
+      }
+    }
+  }
+  contract(`every Undo on a toast names the write it undoes (${calls} offerUndo calls, none reaching for the newest entry)`, problems);
+}
+
 console.log(failures.length ? `\ncheck-contracts: ${failures.length} broken contract(s)` : '\ncheck-contracts: all contracts hold');
 process.exit(failures.length ? 1 : 0);

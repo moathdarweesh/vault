@@ -2547,9 +2547,13 @@ function renderFoodLog(el) {
     }));
     overlay.querySelector('#fl-save').addEventListener('click', () => {
       const num = (sel) => { const v = parseFloat(overlay.querySelector(sel).value); return isFinite(v) && v >= 0 ? v : 0; };
-      const updated = DB.foodLogs.update(ctx.date, id, {
+      // withUndo: update() answers with the row, not the write, and a save that
+      // changed nothing records no entry — its toast used to offer the NEWEST
+      // one instead, so "Edited · Undo" brought back a meal deleted earlier.
+      const written = withUndo(() => DB.foodLogs.update(ctx.date, id, {
         servings: mult, calories: num('#fl-cal'), protein: num('#fl-pro'), carbs: num('#fl-carb'), fat: num('#fl-fat'),
-      });
+      }));
+      const updated = written.value;
       if (!updated) { closeModal(); return; }
       // Replace the row FIRST, then close: closeModal() returns focus to the
       // opener, and the opener is the pencil inside the row being replaced.
@@ -2559,7 +2563,7 @@ function renderFoodLog(el) {
       refreshTotals();
       closeModal();
       try { list.querySelector(`[data-food-row="${CSS.escape(id)}"] [data-edit-food]`)?.focus(); } catch (_) {}
-      offerUndo(t('fl_edited'));
+      offerUndo(t('fl_edited'), written);
     });
   }
 

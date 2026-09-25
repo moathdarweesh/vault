@@ -1,3 +1,8 @@
+-- ⚠️ ARCHIVED IN THE 2026-09-25 REVIEW — NEVER RUN THIS FILE. Its one index,
+-- workout_sessions_performed_idx, was created by 17, and 18 then dropped the
+-- table it indexes (the mirror's removal), so this file fails with 42P01 today.
+-- Superseded by 17 and 18.
+
 -- ============================================================================
 -- perf-indexes.sql  —  index the ONE access pattern the schema didn't cover
 -- ============================================================================

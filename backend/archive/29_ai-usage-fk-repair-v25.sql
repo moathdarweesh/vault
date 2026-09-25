@@ -1,4 +1,17 @@
 -- ============================================================================
+-- ⚠️ SUPERSEDED — NEVER RUN THIS FILE. Moved from pending/ to archive/ in the
+-- 2026-09-25 review. backend/pending/30_ai-budget-and-caps-v26.sql replaces it
+-- and repairs the same defect the other way round: it moves the global counter
+-- out of ai_usage and VALIDATES the foreign key instead of dropping it.
+-- Applied on its own, THIS file would switch the dead budget back on with 27's
+-- caller-chosen limits still in the signature (review finding database#1): one
+-- account could then push the shared figure to 800 and turn the AI off for
+-- every user, daily — and dropping the key would leave a deleted account's
+-- counters behind (security:backend#6). Kept because its diagnosis below is
+-- right and CLAUDE.md cites it.
+-- ============================================================================
+
+-- ============================================================================
 -- 29_ai-usage-fk-repair-v25.sql — the daily AI budget has been dead since v28.
 --
 -- NOT APPLIED. This file is in backend/pending/ deliberately: it is a LIVE WRITE
@@ -31,7 +44,7 @@
 -- id = '00000000-…' → 0). The whole SECURITY DEFINER call aborts with 23503 —
 -- **rolling back the per-user increment with it** — PostgREST answers 409, and
 -- the Worker's
---     if (!r.ok) return { ok: true };   // gemini-worker.js:339
+--     if (!r.ok) return { ok: true };   // gemini-worker.js, budgetAllows()
 -- fails OPEN. Every AI call since has been served with no accounting at all.
 --
 -- ── MEASURED, READ-ONLY, ON THE LIVE DATABASE ──────────────────────────────
