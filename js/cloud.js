@@ -28,6 +28,7 @@ window.VAULT_KEYS = Object.freeze({
   reminderSeen: 'vault_reminder_seen',
   hcPrompted: 'hc_prompted',
   pushing: 'vault_pushing_',               // + uid — the four per-account sync stamps
+  pushEarlier: 'vault_push_earlier_',      // + uid — EARLIER pushes whose reply never came (JSON list of stamps)
   synced: 'vault_synced_',
   linked: 'vault_linked_',
   dirty: 'vault_dirty_',
@@ -38,6 +39,9 @@ window.VAULT_KEYS = Object.freeze({
   unitSeeded: 'vault_default_unit_seeded_v1',
   updateDismissed: 'vault_update_dismissed_build',   // js/update.js — per DEVICE, deliberately not swept on logout
   webReloadGuard: 'vault_wr_',                        // js/update.js — sessionStorage, + target build: one auto-reload per session per target
+  oauthStarted: 'vault_oauth_started',     // sessionStorage: THIS TAB left for «Continue with Google» (a timestamp) — the one URL session it accepts unasked
+  authToken: 'sb-ilmusnuchqlpirywonzx-auth-token',   // the SDK's OWN session key, READ only: a URL session may not replace one stored here.
+                                                     // The SDK derives it from SUPABASE_URL; contract 47 holds the two equal.
   widget: 'vault_widget_v1',               // DB.widget — the home-screen snapshot. NOT localStorage:
                                            // it is written to NATIVE shared storage (Capacitor
                                            // Preferences) where a widget can read it, the way
@@ -103,10 +107,82 @@ window.VAULT_KEYS = Object.freeze({
     if (client) return client;
     if (!configured() || !window.supabase) return null;
     client = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
-      auth: { persistSession: true, autoRefreshToken: true },
+      auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: urlSessionAllowed },
     });
     return client;
   }
+
+  // ---- a session in the URL ------------------------------------------------
+  // LOGIN CSRF. On its defaults the SDK saves whatever session sits in the URL
+  // fragment — no check that one is already stored, none that this browser
+  // started a sign-in — so a link built from someone else's OWN tokens
+  // (#access_token=…&refresh_token=…) signed this device into their account,
+  // and guardForeignBlob then swept the owner's history aside as a shared
+  // phone. The SDK accepts a function here (called synchronously, once per page
+  // load, with the URL and its parsed params); false leaves the URL alone, so a
+  // refused session is stripped from the address bar here. Two URL sessions are
+  // this app's own, and only two:
+  //   · the return from «Continue with Google», which THIS TAB started a moment
+  //     ago — signInWithGoogle leaves a one-shot mark in sessionStorage;
+  //   · a password-reset link (type=recovery), accepted only where it replaces
+  //     nobody: no session is stored, or the stored one is the link's own
+  //     account — and a signed-out device holding another account's data is
+  //     not handed to it either. «type=recovery» is just text in a URL, so the
+  //     account is read from the token itself.
+  // The flow stays implicit: the password reset depends on it (see below).
+  let urlRefused = false;
+  const URL_SESSION_KEYS = ['access_token', 'refresh_token', 'expires_in', 'expires_at', 'token_type', 'provider_token', 'provider_refresh_token', 'type'];
+  function urlSessionAllowed(url, params) {
+    const own = takeOwnOAuthStart();   // one-shot: spent by this page load, whatever it carries
+    if (!params || !params.access_token) return false;   // nothing to take; an #error=… is app.js's (takeOAuthReturnError)
+    const ok = own || (params.type === 'recovery' && recoveryFits(tokenUid(params.access_token)));
+    if (!ok) { urlRefused = true; stripUrlSession(url); }
+    return ok;
+  }
+  // Was this tab's Google round trip started in the last ten minutes?
+  function takeOwnOAuthStart() {
+    try {
+      const at = Number(sessionStorage.getItem(VAULT_KEYS.oauthStarted) || 0);
+      sessionStorage.removeItem(VAULT_KEYS.oauthStarted);
+      const age = Date.now() - at;
+      return at > 0 && age >= 0 && age < 600000;
+    } catch (_) { return false; }
+  }
+  function recoveryFits(sub) {
+    if (!sub) return false;
+    const stored = storedSessionUid();
+    if (stored) return stored === sub;                         // never replace a signed-in account with another's link
+    const last = getLastUid();
+    return !(last && last !== sub && localHasData());          // nor hand a signed-out device holding someone's data to it
+  }
+  // The account a JWT names. Its signature is not checked and need not be: the
+  // answer is only ever used to REFUSE a URL session, never to grant one.
+  function tokenUid(jwt) {
+    try {
+      const part = String(jwt || '').split('.')[1] || '';
+      const sub = JSON.parse(atob(part.replace(/-/g, '+').replace(/_/g, '/') + '==='.slice((part.length + 3) % 4))).sub;
+      return typeof sub === 'string' ? sub : '';
+    } catch (_) { return ''; }
+  }
+  function storedSessionUid() {
+    try {
+      const rec = JSON.parse(localStorage.getItem(VAULT_KEYS.authToken) || 'null');
+      const s = rec && (rec.currentSession || rec);
+      return (s && s.user && typeof s.user.id === 'string' && s.user.id) || tokenUid(s && s.access_token);
+    } catch (_) { return ''; }
+  }
+  function stripUrlSession(url) {
+    try {
+      const u = new URL(String(url || location.href));
+      URL_SESSION_KEYS.forEach((k) => u.searchParams.delete(k));
+      const h = new URLSearchParams(u.hash.replace(/^#/, ''));
+      URL_SESSION_KEYS.forEach((k) => h.delete(k));
+      const rest = h.toString();
+      history.replaceState(history.state, '', u.pathname + u.search + (rest ? '#' + rest : ''));
+    } catch (_) {}
+  }
+  // For bootCloud: was a sign-in link refused on this page load? Read once.
+  function takeUrlRefusal() { const r = urlRefused; urlRefused = false; return r; }
 
   // ---- whole-state snapshot/restore ----------------------------------------
   const exportRaw = () => { try { return localStorage.getItem(STORE_KEY); } catch (_) { return null; } };
@@ -140,8 +216,17 @@ window.VAULT_KEYS = Object.freeze({
       try {
         if (typeof DB !== 'undefined' && DB._idsSafe && !DB._idsSafe(parsed)) return false;
       } catch (_) { return false; }
+      const before = (typeof DB !== 'undefined' && DB._storeSnapshot) ? DB._storeSnapshot() : null;
       localStorage.setItem(STORE_KEY, raw);
       if (typeof DB !== 'undefined' && DB.reload) DB.reload();
+      // A reload that lands READ-ONLY is a FAILED pull, whatever the validators
+      // said. Reporting true here let applyRemote advance the stamp, the version
+      // and the dirty flag over bytes this device could not even read — and
+      // every other device then pulled the same bytes into the same state.
+      if (before && typeof DB !== 'undefined' && DB.loadFailed && DB.loadFailed()) {
+        DB._restoreStore(before);
+        return false;
+      }
       return true;
     } catch (_) { return false; }
   }
@@ -349,6 +434,9 @@ window.VAULT_KEYS = Object.freeze({
   async function signInWithGoogle() {
     if (!(await ensureSdk())) return { error: 'network' };
     const c = sb(); if (!c) return { error: 'not_configured' };
+    // The mark the RETURN page is allowed to trust (urlSessionAllowed): this
+    // tab, and nothing a link could set, started the round trip.
+    try { sessionStorage.setItem(VAULT_KEYS.oauthStarted, String(Date.now())); } catch (_) {}
     try {
       const { error } = await c.auth.signInWithOAuth({
         provider: 'google',
@@ -608,7 +696,11 @@ window.VAULT_KEYS = Object.freeze({
   // it keeps coming back the cause is in these four values and nothing else, and
   // until now none of them was recorded anywhere — leaving the answer to guesswork.
   // Numbers and booleans only (client_errors carries no user content by rule).
-  function noteConflict(where, uid, remote) {
+  // `sent` is the push's own half — the version it was based on and the stamp
+  // it wrote — because localVer is read AFTER the fact: a sibling window that
+  // has already written the new version made every push-version-moved row read
+  // localVer == remoteVer, which is exactly what the nine unexplained rows said.
+  function noteConflict(where, uid, remote, sent) {
     try {
       const bits = [
         'at=' + where,
@@ -619,8 +711,9 @@ window.VAULT_KEYS = Object.freeze({
         'localStamp=' + String(getStamp(uid) || '').slice(0, 24),
         'remoteStamp=' + String((remote && remote.updatedAt) || '').slice(0, 24),
         'pushing=' + String(getPushing(uid) || '').slice(0, 24),
+        'earlier=' + String(pushedEarlier(uid).length),
         'localHasData=' + (localHasData() ? 1 : 0),
-      ].join(' ');
+      ].concat(sent ? ['sentVer=' + String(sent.ver), 'sentStamp=' + String(sent.stamp || '').slice(0, 24)] : []).join(' ');
       reportError('sync-conflict', bits, 'cloud.js', 0);
     } catch (_) {}
   }
@@ -698,6 +791,13 @@ window.VAULT_KEYS = Object.freeze({
   const verKey = (uid) => VAULT_KEYS.ver + uid;
   const getVersion = (uid) => { try { const v = localStorage.getItem(verKey(uid)); return v == null ? null : Number(v); } catch (_) { return null; } };
   const setVersion = (uid, v) => { try { if (typeof v === 'number' && isFinite(v)) localStorage.setItem(verKey(uid), String(v)); } catch (_) {} };
+  // What a PUSH learns about the version may only move it FORWARD. The key is
+  // shared by every window of the origin, and a slow reply can arrive after a
+  // sibling has already built on top of it — writing it then wound the shared
+  // version back under the row, and the next push conflicted with its own
+  // store. A PULL still uses setVersion: there the device follows the server —
+  // and so does a force upsert, whose reply is the row an explicit overwrite made.
+  const advanceVersion = (uid, v) => { const cur = getVersion(uid); if (typeof v === 'number' && (cur == null || !(cur > v))) setVersion(uid, v); };
 
   // ---- LAST-RESORT RECOVERY -----------------------------------------------
   // applyRemote() overwrites the WHOLE local blob. Every guard around it is an
@@ -817,6 +917,25 @@ window.VAULT_KEYS = Object.freeze({
   // so a lexicographic `>` would be wrong. Returns true if `a` is strictly newer.
   function getPushing(uid) { try { return localStorage.getItem(VAULT_KEYS.pushing + uid) || ''; } catch (_) { return ''; } }
   function clearPushing(uid) { try { localStorage.removeItem(VAULT_KEYS.pushing + uid); } catch (_) {} }
+  // EARLIER ATTEMPTS WHOSE REPLY NEVER CAME. Each one may have committed, and a
+  // push used to overwrite the single stamp before sending — so after push 1
+  // committed and lost its reply, push 2 (the 4 s retry, or the next set's
+  // debounce) replaced the one fact that would have recognised push 1's row as
+  // this device's own. They are kept here, the last few, until the server next
+  // answers anything at all.
+  function pushedEarlier(uid) {
+    try { const a = JSON.parse(localStorage.getItem(VAULT_KEYS.pushEarlier + uid) || '[]'); return Array.isArray(a) ? a.filter((x) => typeof x === 'string') : []; }
+    catch (_) { return []; }
+  }
+  function rememberEarlier(uid, iso) {
+    try { localStorage.setItem(VAULT_KEYS.pushEarlier + uid, JSON.stringify(pushedEarlier(uid).filter((x) => x !== iso).concat([iso]).slice(-8))); } catch (_) {}
+  }
+  function clearEarlier(uid) { try { localStorage.removeItem(VAULT_KEYS.pushEarlier + uid); } catch (_) {} }
+  // Is this row one of OUR uploads — the one in flight, or an earlier one whose
+  // reply was lost?
+  function ownPush(uid, updatedAt) {
+    return [getPushing(uid)].concat(pushedEarlier(uid)).some((st) => st && sameInstant(updatedAt, st));
+  }
   // Same instant, allowing for Supabase's microsecond '+00:00' form against the
   // client's millisecond 'Z' form.
   function sameInstant(a, b) {
@@ -916,14 +1035,21 @@ window.VAULT_KEYS = Object.freeze({
   // leaves it set, and the debounce fires again.
   let inFlight = null;
   function push(opts) {
-    if (inFlight) return inFlight;
+    if (inFlight) {
+      // …except a FORCE push, which is a different request: «keep this device»
+      // and restoreRecovery. Handed the plain upload in flight, it met the moved
+      // row, answered 'conflict', and the user's explicit decision was reported
+      // as failed without ever being tried. It waits its turn instead.
+      if (!(opts && opts.force)) return inFlight;
+      return inFlight.catch(() => {}).then(() => push(opts));
+    }
     // Announce success here rather than at each of pushOnce's three `return
     // 'ok'` sites — one place, and it cannot fall out of step with them. The
     // only listener is the conflict toast's latch, which must reopen once a
     // push lands again; without this a conflict the user simply dismissed would
     // silence every LATER conflict for the rest of the session, and a refusal
     // nobody is told about is worse than a refusal that nags.
-    inFlight = trackSync(() => pushOnce(opts))
+    inFlight = trackSync(() => pushExclusive(opts))
       .then((r) => {
         if (r === 'ok') {
           try { if (typeof window !== 'undefined') window.dispatchEvent(new CustomEvent('vault:push-ok')); } catch (_) {}
@@ -934,7 +1060,32 @@ window.VAULT_KEYS = Object.freeze({
     return inFlight;
   }
 
-  async function pushOnce(opts) {
+  // ONE PUSH AT A TIME ACROSS EVERY WINDOW OF THIS ORIGIN, not only inside
+  // this one. `inFlight` is per document, while everything a push decides by —
+  // the base version, the pushing stamp, the store — is shared localStorage: a
+  // second window (two tabs, an installed PWA beside a tab) read the base
+  // version while the first window's upload was still answering, matched no
+  // row, and reported a conflict against data this very store holds. Web Locks
+  // is a platform API (Chromium 69+, the WebView floor is 80), not a
+  // dependency; a lock held by a closed window is released with it. Where it is
+  // missing, pushOnce's own retry covers the ordering it can still recognise.
+  function pushExclusive(opts) {
+    try {
+      if (typeof navigator !== 'undefined' && navigator.locks && typeof navigator.locks.request === 'function') {
+        let ran = false;
+        // A lock that could not be TAKEN (a context that refuses Web Locks)
+        // must not become a push that never runs: only pushOnce's own failure
+        // is passed on; the lock's is answered by pushing without it.
+        return navigator.locks.request('vault-push', () => { ran = true; return pushOnce(opts); })
+          .catch((e) => { if (ran) throw e; return pushOnce(opts); });
+      }
+    } catch (_) {}
+    return pushOnce(opts);
+  }
+
+  // `retried` — this is the ONE conditional re-attempt the 0-rows branch below
+  // may make; it never makes a second.
+  async function pushOnce(opts, retried) {
     const force = !!(opts && opts.force);
     const c = sb(); const s = await getSession();
     // NOT a success: there is no session (signed out, or the token could not be
@@ -947,6 +1098,11 @@ window.VAULT_KEYS = Object.freeze({
     // (see guardForeignBlob). Checked here as well as at the guard, because a
     // save can fire this push before the boot sync has run the guard at all.
     if (isSecondAccountOfLast(s.user.id, s.user.email)) return 'duplicate';
+    // A blob a NEWER build wrote is not this build's to upload, forced or not:
+    // loadState keeps every field it does not know, but this code cannot vouch
+    // for what they mean. The save centre shows 'blocked' until the app
+    // updates itself; nothing on the device is lost in the meantime.
+    if (typeof DB !== 'undefined' && DB.schemaTooNew && DB.schemaTooNew()) return 'blocked';
     const raw = exportRaw();
     let blob; try { blob = JSON.parse(raw || '{}'); } catch (_) { blob = {}; }
     // SAFETY GUARD (data-loss protection): never SILENTLY overwrite a cloud backup
@@ -1023,6 +1179,10 @@ window.VAULT_KEYS = Object.freeze({
     // dirty" and called it a conflict — against this device's own push — and
     // "keep account data" then discarded whatever was logged offline since.
     // bootSyncCore recognises this stamp and adopts the row instead.
+    // A stamp still standing is an EARLIER attempt whose reply never came, and
+    // it may have committed — it is kept (pushedEarlier), not overwritten.
+    const earlier = getPushing(uid);
+    if (earlier) rememberEarlier(uid, earlier);
     try { localStorage.setItem(VAULT_KEYS.pushing + uid, iso); } catch (_) {}
     // OPTIMISTIC CONCURRENCY: when we know the base version, write CONDITIONALLY on
     // the row still being at it (atomic integer compare — no timestamp-format
@@ -1043,8 +1203,9 @@ window.VAULT_KEYS = Object.freeze({
           .select('version');
         if (!updErr) {
           if (updated && updated.length) {
-            if (typeof updated[0].version === 'number') setVersion(uid, updated[0].version);
-            setStamp(uid, iso); clearDirtyIfUnchanged(uid, raw); clearPushing(uid); markLinked(uid); return 'ok';   // a push that landed links the device
+            if (typeof updated[0].version === 'number') advanceVersion(uid, updated[0].version);
+            // The row was still at `known`, so no earlier attempt of ours committed after it.
+            setStamp(uid, iso); clearDirtyIfUnchanged(uid, raw); clearPushing(uid); clearEarlier(uid); markLinked(uid); return 'ok';   // a push that landed links the device
           }
           // 0 rows matched: the remote moved ahead (conflict) or the row is gone.
           const { data: cur, error: curErr } = await c.from(TABLE)
@@ -1064,17 +1225,40 @@ window.VAULT_KEYS = Object.freeze({
             let same = false;
             try { same = stableJson(cur.data) === stableJson(payload); } catch (_) { same = false; }
             if (same) {
-              if (typeof cur.version === 'number') setVersion(uid, cur.version);
+              if (typeof cur.version === 'number') advanceVersion(uid, cur.version);
               setStamp(uid, cur.updated_at || iso);
               clearDirtyIfUnchanged(uid, raw);
-              clearPushing(uid);
+              clearPushing(uid); clearEarlier(uid);
               return 'ok';
             }
+            // NOT A CONFLICT EITHER, IN TWO MORE SHAPES — the row is one this
+            // store has already built on:
+            //   · it carries the stamp of an EARLIER push of ours whose reply was
+            //     lost — this device's own write, a set behind (the dropped
+            //     packet in the gym the retry chain was built for);
+            //   · the shared version already names it — a sibling WINDOW's upload
+            //     answered while this one was out, and setVersion() only ever
+            //     runs once this store holds that version.
+            // So: ONE re-attempt, still CONDITIONAL on the version the row is at,
+            // built from a FRESH export — never this attempt's payload, which
+            // predates whatever was saved since. A third device that moves the
+            // row in between is still a real conflict, and a second pass never
+            // retries again.
+            if (!retried && typeof cur.version === 'number') {
+              const seen = getVersion(uid);
+              if (ownPush(uid, cur.updated_at) || (seen !== known && seen === cur.version)) {
+                advanceVersion(uid, cur.version);
+                clearPushing(uid); clearEarlier(uid);   // answered: this attempt wrote nothing, the earlier one is the row
+                return pushOnce(opts, true);
+              }
+            }
             // A REAL conflict: the remote holds something this device has never
-            // seen. Do not overwrite it; let bootSync/resume resolve it.
+            // seen. Do not overwrite it; let bootSync/resume resolve it. Noted
+            // BEFORE the stamps are cleared, with the row's own stamp and this
+            // push's base version — both used to be missing from these rows.
             try { if (typeof window !== 'undefined') window.dispatchEvent(new CustomEvent('vault:push-conflict')); } catch (_) {}
-            clearPushing(uid);   // the server answered: nothing of ours was committed
-            noteConflict('push-version-moved', uid, cur);
+            noteConflict('push-version-moved', uid, { version: cur.version, updatedAt: cur.updated_at }, { ver: known, stamp: iso });
+            clearPushing(uid); clearEarlier(uid);   // the server answered: nothing of ours is the row now
             return 'conflict';
           }
           // Missing/unreadable row: retain local changes and require sync review.
@@ -1097,8 +1281,8 @@ window.VAULT_KEYS = Object.freeze({
       if (error.code || (typeof status === 'number' && status > 0)) clearPushing(uid);
       throw new Error(error.message);
     }
-    if (up && up[0] && typeof up[0].version === 'number') setVersion(uid, up[0].version);
-    clearPushing(uid);
+    if (up && up[0] && typeof up[0].version === 'number') setVersion(uid, up[0].version);   // an explicit overwrite's reply is the new truth, even below a stale local version
+    clearPushing(uid); clearEarlier(uid);
     setStamp(uid, iso);
     clearDirtyIfUnchanged(uid, raw); // only if nothing changed while we uploaded
     return 'ok';          // the ONLY success value — callers gate on this explicitly
@@ -1186,6 +1370,32 @@ window.VAULT_KEYS = Object.freeze({
     try { return await bootSync(); } catch (_) { return 'offline'; }
     finally { resuming = false; }
   }
+  // ---- PACE ------------------------------------------------------------------
+  // A guided workout commits a set a rest apart — 90 s by default — and every
+  // save() started its own upload of the WHOLE blob 1.2 s later: the account's
+  // entire history re-sent once per set, and a server history row each time.
+  // While the run screen is open the upload is HELD instead: the first change
+  // arms one timer and the changes after it ride along, so a workout costs an
+  // upload every few minutes rather than one per set. Leaving the run screen,
+  // the app going to the background and the timer each send what is held.
+  // WHAT reaches the cloud does not change — the dirty flag is set before any
+  // wait exactly as before, so flush(), logout, resume and the next boot all
+  // read the same truth; only how often the same blob is re-sent does.
+  const RUN_HOLD_MS = 5 * 60 * 1000;
+  let pace = 'normal';
+  let heldTimer = null;
+  function sendHeld() {
+    if (!heldTimer) return;
+    clearTimeout(heldTimer); heldTimer = null;
+    if (isDirty(getLastUid())) runPush();   // a resume may already have sent it
+  }
+  // app.js's navigate(): 'run' on the guided screen, 'normal' everywhere else.
+  function setPace(p) {
+    pace = p === 'run' ? 'run' : 'normal';
+    if (pace === 'normal') sendHeld();
+  }
+  try { document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') sendHeld(); }); } catch (_) {}
+
   async function onLocalChange() {
     if (syncing) return;
     // Mark unpushed changes DIRTY FIRST, using the last-linked uid — BEFORE any
@@ -1199,6 +1409,11 @@ window.VAULT_KEYS = Object.freeze({
     if (!s) { recordSyncOutcome(activityFor(lastUid), 'nosession'); emitSyncState(); return; }
     setDirty(s.user.id, true); // (same uid in the normal case)
     clearTimeout(pushTimer);
+    // Mid-run: one held upload for everything logged until it goes (see PACE).
+    if (pace === 'run') {
+      if (!heldTimer) heldTimer = setTimeout(() => { heldTimer = null; if (isDirty(getLastUid())) runPush(); }, RUN_HOLD_MS);
+      return;
+    }
     // runPush(), not push().catch(() => {}): the failure has to start a retry
     // chain instead of vanishing.
     pushTimer = setTimeout(() => { runPush(); }, 1200);
@@ -1210,9 +1425,19 @@ window.VAULT_KEYS = Object.freeze({
     if (!remoteHasData(remote)) return false;
     // BEFORE the overwrite, not after: importRaw() replaces the stored blob, so
     // once it has run there is nothing left to copy.
-    snapshotLocal('applyRemote', uid);
+    //
+    // ⚠️ AND ONLY WHEN THE LOCAL HOLDS SOMETHING THE CLOUD MAY LACK: unsynced
+    // edits, or a device never linked to this account. A clean, linked local IS
+    // the version it last pulled or pushed — the cloud and its server history
+    // already hold it — and snapshotting it replaced the ONE slot on every
+    // routine pull: the edits «keep the account copy» had just set aside, the
+    // cloud copy chooseLocal kept, a previous account's never-uploaded blob, all
+    // gone at the next foreground after another device pushed — while the
+    // dialog promises that the other copy is kept.
+    if (isDirty(uid) || !isLinked(uid)) snapshotLocal('applyRemote', uid);
     syncing = true;
     clearTimeout(pushTimer);            // cancel any pending echo push
+    clearTimeout(heldTimer); heldTimer = null;   // …and a held one: the pull replaces what it held
     // PROPAGATE the import result. importRaw() returns false when the remote blob
     // fails to parse or fails shape validation — and this used to discard that,
     // so a FAILED pull was reported as a success. Callers then advanced the sync
@@ -1308,6 +1533,9 @@ window.VAULT_KEYS = Object.freeze({
     // the last ten versions too, since 20_vault-data-history.)
     try {
       const remote = await pull();
+      // …unless a NEWER build wrote it: «my device wins» would replace fields
+      // this build cannot read with a copy that never had them.
+      if (remote && remote.data && typeof DB !== 'undefined' && DB.schemaTooNew && DB.schemaTooNew(remote.data)) return 'failed';
       if (remote && remoteHasData(remote)) snapshotRaw(JSON.stringify(remote.data), 'pre-force-push', s.user.id);   // BEFORE markLinked: getLastUid() is still empty on a first link
     } catch (_) {}
     // Explicit user override ("my device wins") — force past the empty-blob guard.
@@ -1372,7 +1600,7 @@ window.VAULT_KEYS = Object.freeze({
       const localVer0 = getVersion(uid);
       if (meta && typeof meta.version === 'number' && typeof localVer0 === 'number'
           && meta.version === localVer0
-          && !isDirty(uid) && isLinked(uid) && localHasData() && !getPushing(uid)) {
+          && !isDirty(uid) && isLinked(uid) && localHasData() && !getPushing(uid) && !pushedEarlier(uid).length) {
         setStamp(uid, meta.updatedAt);
         return 'synced';
       }
@@ -1391,12 +1619,13 @@ window.VAULT_KEYS = Object.freeze({
     };
     if (remote === null || !remoteHasData(remote)) return pushed();
     // OUR OWN PUSH, whose answer never arrived (app killed mid-upload). The row
-    // carries the stamp this device wrote; adopt its version and carry on.
-    const attempted = getPushing(uid);
-    if (attempted && sameInstant(remote.updatedAt, attempted)) {
+    // carries a stamp this device wrote — the last attempt's, or an EARLIER
+    // one's whose reply was lost too (a single slot held only the last, which
+    // is the one that never reached the server); adopt its version and carry on.
+    if (ownPush(uid, remote.updatedAt)) {
       setStamp(uid, remote.updatedAt);
       if (typeof remote.version === 'number') setVersion(uid, remote.version);
-      clearPushing(uid);
+      clearPushing(uid); clearEarlier(uid);
       return pushed();
     }
     // DECIDE BY THE SERVER'S COUNTER, not by clocks. updated_at is written from
@@ -1759,7 +1988,7 @@ window.VAULT_KEYS = Object.freeze({
       localStorage.removeItem(VAULT_KEYS.unitSeeded);
       // The per-account and per-exercise prefix keys, by their registry names —
       // a regex here used to be a second spelling of the same prefixes.
-      const prefixes = [VAULT_KEYS.synced, VAULT_KEYS.linked, VAULT_KEYS.dirty, VAULT_KEYS.ver, VAULT_KEYS.pushing, VAULT_KEYS.img, VAULT_KEYS.imgAt];
+      const prefixes = [VAULT_KEYS.synced, VAULT_KEYS.linked, VAULT_KEYS.dirty, VAULT_KEYS.ver, VAULT_KEYS.pushing, VAULT_KEYS.pushEarlier, VAULT_KEYS.img, VAULT_KEYS.imgAt];
       Object.keys(localStorage).forEach((k) => {
         if (prefixes.some((p) => k.indexOf(p) === 0)) localStorage.removeItem(k);
       });
@@ -1829,11 +2058,11 @@ window.VAULT_KEYS = Object.freeze({
 
   window.Cloud = {
     configured, ensureSdk, getSession, currentEmail,
-    signUp, signIn, signOut, changePassword, resetPassword, onPasswordRecovery,
+    signUp, signIn, signOut, changePassword, resetPassword, onPasswordRecovery, takeUrlRefusal,
     providers, signInWithGoogle,
     googleNativeReady, pickGoogleNative, signInWithGoogleNative, deviceHeldByOther,
     releaseDuplicateHold,
-    pull, push, flush, onLocalChange, resume,
+    pull, push, flush, onLocalChange, resume, pace: setPace,
     listPlanHistory, readPlanHistory, checkPlanRestoreVersion,
     snapshotLocal, recoveryInfo, recoveryFailedAt, restoreRecovery, isSettled,
     // Read-only view of this device's sync state, so the UI can finally SAY

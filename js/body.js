@@ -260,8 +260,11 @@ function renderCardio(el) {
   const list = DB.cardio.list();
   const { thisStart, thisEnd } = weekRanges();
   const weekItems = list.filter((c) => inRangeISO(c.date, thisStart, thisEnd));
-  const weekMin = weekItems.reduce((s, c) => s + c.duration, 0);
-  const weekCal = weekItems.reduce((s, c) => s + c.calories, 0);
+  // Coerced as they are summed, like the rows below: loadState makes every
+  // stored figure a number, and a total printed into innerHTML does not rely
+  // on it — one string turned `s + c.duration` into concatenated markup.
+  const weekMin = weekItems.reduce((s, c) => s + (Number(c.duration) || 0), 0);
+  const weekCal = weekItems.reduce((s, c) => s + (Number(c.calories) || 0), 0);
 
   const cardioDays = viewContext.cardioDays || 7;
   // THE FIGURE ROW (v395), the sleep row's shape: the minutes first, the type

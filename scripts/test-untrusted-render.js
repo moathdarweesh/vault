@@ -81,4 +81,85 @@ function healthHtml(data) {
   assert.equal(c.DB._validateBlob(base), true, 'a blob without health still validates');
 }
 
-console.log('PASS untrusted render: health.js coerces and escapes every metric; exerciseImageUrl refuses a non-identifier slug (10 payloads); health validated as an object, optional');
+// ── prefs: an ENUMERABLE value arrives clamped, through every door ───────────
+// prefs.lang reached two hrefs as privacy.html?lang=${…} and prefs.unit five
+// templates as ${unit.toUpperCase()}, and loadState only FILLED them when they
+// were empty. toUpperCase() is no defence — tag and attribute names are
+// case-blind and a numeric entity survives it. Every legal value is known, so
+// the value is clamped where a blob comes in, not escaped where it goes out.
+{
+  const LANG = 'en"><img src=x onerror=alert(1)>';
+  const UNIT = '<img src=x onerror="&#97;&#108;&#101;&#114;&#116;(1)">';
+  const s = context(), { c } = s;
+  const poisoned = (b) => ({ ...b, prefs: { ...b.prefs, lang: LANG, unit: UNIT, theme: LANG } });
+  const clamped = (door) => {
+    const p = c.DB.prefs.get();
+    assert.ok(p.lang === 'en' || p.lang === 'ar', `${door}: prefs.lang arrived as ${JSON.stringify(p.lang)}`);
+    assert.ok(p.unit === 'kg' || p.unit === 'lb', `${door}: prefs.unit arrived as ${JSON.stringify(p.unit)}`);
+    assert.ok(p.theme === 'dark' || p.theme === 'light', `${door}: prefs.theme arrived as ${JSON.stringify(p.theme)}`);
+  };
+  // A backup file still IMPORTS: a bad preference is corrected, it is not a
+  // reason to refuse the user's whole history.
+  assert.equal(c.DB.importJSON(JSON.stringify(poisoned(JSON.parse(c.DB.exportJSON())))), true, 'the poisoned backup still imports');
+  clamped('a backup file');
+  assert.equal(c.Cloud.applyRemote({ data: poisoned(JSON.parse(c.DB.exportJSON())) }, 'alice'), true, 'the poisoned pull still applies');
+  clamped('a cloud pull');
+  // Another window's write is ADOPTED, not reloaded — a third door.
+  s.values.set(s.keys.store, JSON.stringify(poisoned(JSON.parse(s.values.get(s.keys.store)))));
+  c.dispatchEvent({ type: 'storage', key: s.keys.store });
+  clamped('another window');
+  c.DB.prefs.setLang(LANG);
+  assert.equal(c.DB.prefs.get().lang, 'en', 'setLang clamps, as setUnit always has');
+  c.DB.prefs.setLang('ar');
+  assert.equal(c.DB.prefs.get().lang, 'ar', 'and a real choice is kept');
+}
+
+// ── cardio week totals: a figure from a blob is a NUMBER before it is a sum ──
+// renderCardio added c.duration and c.calories up with `+` and printed the
+// totals into innerHTML, so one string from a backup turned the sum into
+// concatenated markup — `0<img src=x onerror=…>` in the stat box. Home's
+// data-count and the Compare panel repeated the same reduce. The rows beside
+// them always coerced; the totals did not. The REAL body.js renders here, on
+// the real ui.js vocabulary and dictionaries.
+{
+  const s = context(), { c } = s;
+  for (const f of ['js/i18n.js', 'js/catalog.js', 'js/ui.js', 'js/body.js']) vm.runInContext(read(f), c);
+  const app = read('js/app.js');
+  const fnSrc = (name) => {   // a top-level function, brace-matched from its declaration
+    const at = app.indexOf('function ' + name + '(');
+    for (let j = app.indexOf('{', at), d = 0; j < app.length; j++) {
+      if (app[j] === '{') d++;
+      else if (app[j] === '}' && --d === 0) return app.slice(at, j + 1);
+    }
+    throw new Error('no function ' + name + ' in js/app.js');
+  };
+  vm.runInContext(`${fnSrc('weekRanges')}\n${fnSrc('renderCompareCardio')}\nvar viewContext = {};\nfunction vaultBar() { return ''; }\nfunction deltaBlock() { return ''; }`, c);
+  const el = { innerHTML: '', querySelector: () => ({ addEventListener() {} }), querySelectorAll: () => [] };
+  const views = () => { c.renderCardio(el); return { cardio: el.innerHTML, compare: String(c.renderCompareCardio()) }; };
+  const clean = (html, where) => {
+    assert.equal(html.includes('<img'), false, `${where}: a cardio figure from the blob reached innerHTML as markup`);
+    assert.equal(html.includes('onerror'), false, `${where}: onerror in the output`);
+  };
+  const today = c.todayISO();
+  const base = JSON.parse(c.DB.exportJSON());
+  base.cardio = [
+    { id: 'cw1', type: 'walking', date: today, duration: '"><img id="pwn1" src=x onerror="window.__pwn=1">', calories: PAYLOAD },
+    { id: 'cw2', type: 'walking', date: today, duration: 30, calories: 200 },
+  ];
+  assert.equal(c.DB.importJSON(JSON.stringify(base)), true, 'the backup imports — a bad figure is corrected, not a reason to refuse it');
+  for (const row of c.DB.cardio.list()) {
+    assert.equal(typeof row.duration, 'number', `cardio ${row.id}: duration arrived as ${JSON.stringify(row.duration)}`);
+    assert.equal(typeof row.calories, 'number', `cardio ${row.id}: calories arrived as ${JSON.stringify(row.calories)}`);
+  }
+  let out = views();
+  clean(out.cardio, 'the Cardio tab'); clean(out.compare, 'the Compare panel');
+  assert.ok(/stat-box-value num">30</.test(out.cardio), 'an honest figure still sums: 30 minutes this week');
+  // The second layer on its own: a row that reached STATE without passing
+  // loadState (the shape a future write path could produce) still sums as a
+  // number, because the reducers coerce too.
+  vm.runInContext(`STATE.cardio.push({ id: 'cw3', type: 'walking', date: ${JSON.stringify(today)}, duration: ${JSON.stringify(PAYLOAD)}, calories: ${JSON.stringify(PAYLOAD)} })`, c);
+  out = views();
+  clean(out.cardio, 'the Cardio tab, reducer alone'); clean(out.compare, 'the Compare panel, reducer alone');
+}
+
+console.log('PASS untrusted render: health.js coerces and escapes every metric; exerciseImageUrl refuses a non-identifier slug (10 payloads); health validated as an object, optional; prefs.lang/unit/theme arrive clamped through a backup, a pull and another window, and setLang clamps; cardio figures arrive as numbers and the Cardio and Compare week totals print no markup, with and without loadState');

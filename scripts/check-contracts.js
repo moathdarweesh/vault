@@ -1314,5 +1314,58 @@ const contract = (name, problems) => {
   contract("the app cannot zoom: index.html's viewport meta carries maximum-scale=1 and user-scalable=no", problems);
 }
 
+// 46 — prefs.lang and prefs.unit reach markup only through a comparison. Both
+// are ENUMERABLE (en|ar, kg|lb) and both were printed raw: the privacy link at
+// two sites as href="privacy.html?lang=${(DB.prefs.get().lang) || 'en'}", and
+// the unit as ${modalUnit.toUpperCase()} and four siblings, read with `|| 'kg'`.
+// A blob carrying markup in either field broke out of the attribute on the
+// sign-in card — the screen where the password is typed. loadState clamps both
+// now; this keeps the sinks from being the next thing that trusts them.
+//   (a) no ${…} in a view script reads prefs.get().lang / .unit unless the
+//       expression compares it — `=== 'ar' ? 'ar' : 'en'` is the whole idiom;
+//   (b) the three unit variables the templates print are initialised through a
+//       comparison, never through `|| 'kg'`.
+{
+  const problems = [];
+  for (const f of VIEWS) {
+    const text = src[f];
+    const line = (i) => text.slice(0, i).split(/\r?\n/).length;
+    // one level of nested braces inside ${…} is enough for this codebase's templates
+    for (const m of text.matchAll(/\$\{((?:[^{}]|\{[^{}]*\})*)\}/g)) {
+      if (/prefs\.get\(\)\)?\.(lang|unit)\b/.test(m[1]) && !/===|!==/.test(m[1])) {
+        problems.push(`${f}:${line(m.index)} prints \${${m[1].trim()}} — a raw preference in markup; compare it (=== 'ar' ? 'ar' : 'en')`);
+      }
+    }
+    for (const m of text.matchAll(/\b(modalUnit|sdUnit|runUnit)\s*=(?!=)([^;\n]*prefs\.get\(\)[^;\n]*)/g)) {
+      if (!/===/.test(m[2])) problems.push(`${f}:${line(m.index)} ${m[1]} is read from prefs without a comparison — the templates print ${m[1]}.toUpperCase(), so it must be 'kg' or 'lb' by construction`);
+    }
+  }
+  contract('prefs.lang and prefs.unit reach markup only through a comparison (the privacy links and the three printed unit variables)', problems);
+}
+
+// 47 — VAULT_KEYS.authToken is the key the SDK stores its session under. The
+// login-CSRF guard (cloud.js urlSessionAllowed) reads it to learn whether a
+// session is already on this device, and the SDK DERIVES that key from the
+// project URL — `sb-<first label of the host>-auth-token` — while the registry
+// spells it. A project move that changed one and not the other would not break
+// sign-in: it would make the guard read nothing, and quietly let a reset link
+// for another account replace the signed-in one.
+{
+  const cloud = src['js/cloud.js'];
+  const url = (cloud.match(/SUPABASE_URL\s*=\s*'([^']+)'/) || [])[1] || '';
+  const key = (cloud.match(/\bauthToken:\s*'([^']+)'/) || [])[1] || '';
+  const sdk = exists('js/vendor/supabase.js') ? read('js/vendor/supabase.js') : '';
+  const problems = [];
+  if (!url) problems.push('js/cloud.js has no SUPABASE_URL');
+  if (!key) problems.push('VAULT_KEYS has no authToken — the login-CSRF guard cannot see a stored session');
+  // the SDK's own derivation, read from the vendored file rather than assumed
+  if (!/`sb-\$\{[a-z]\.hostname\.split\(`\.`\)\[0\]\}-auth-token`/.test(sdk)) problems.push('js/vendor/supabase.js no longer derives its storage key as sb-${hostname.split(".")[0]}-auth-token — re-read how it names the session key');
+  let want = '';
+  try { want = 'sb-' + new URL(url).hostname.split('.')[0] + '-auth-token'; } catch (_) {}
+  if (url && key && key !== want) problems.push(`VAULT_KEYS.authToken is '${key}', but the SDK stores the session under '${want}' for ${url}`);
+  if (!/detectSessionInUrl:\s*urlSessionAllowed\b/.test(cloud)) problems.push('js/cloud.js no longer hands the SDK urlSessionAllowed as detectSessionInUrl — every #access_token link would sign the device in again');
+  contract("the SDK's session key in VAULT_KEYS is the one it derives from SUPABASE_URL, and the client consults urlSessionAllowed for a URL session", problems);
+}
+
 console.log(failures.length ? `\ncheck-contracts: ${failures.length} broken contract(s)` : '\ncheck-contracts: all contracts hold');
 process.exit(failures.length ? 1 : 0);

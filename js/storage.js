@@ -4,6 +4,11 @@
 // ==========================================================================
 
 const STORAGE_KEY = VAULT_KEYS.store;   // registry: js/cloud.js
+// The blob's SHAPE version, stamped on every blob. Bump it whenever a stored
+// shape changes meaning: a build that loads a blob stamped HIGHER than its own
+// keeps every field it does not know (loadState normalises, never rebuilds) and
+// refuses to push it — see DB.schemaTooNew — so a stale tab can never write an
+// older reading of the data over a newer one. Never lowered on load.
 const SCHEMA_VERSION = 1;
 const ENTITY_ID_RE = /^[A-Za-z0-9_-]{1,64}$/;
 
@@ -584,9 +589,12 @@ function migratePlan(plan) {
 // bytes on disk are never replaced by an empty default state. Cleared only by a
 // DELIBERATE whole-blob replacement (cloud pull / backup restore / reset).
 let STATE_LOAD_FAILED = false;
+// Set when the loaded blob was written by a NEWER build (see SCHEMA_VERSION).
+let SCHEMA_TOO_NEW = false;
 
 
 function loadState() {
+  SCHEMA_TOO_NEW = false;
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (!raw) {
@@ -595,10 +603,17 @@ function loadState() {
       return fresh;
     }
     const parsed = JSON.parse(raw);
+    SCHEMA_TOO_NEW = Number(parsed.version) > SCHEMA_VERSION;
     parsed.prefs = parsed.prefs || { lang: 'en', theme: 'dark', unit: 'kg' };
-    if (!parsed.prefs.lang) parsed.prefs.lang = 'en';
+    // ENUMERABLE, so CLAMPED — not merely filled when empty. prefs.lang reaches
+    // an href and prefs.unit five templates, and a backup, a pull or another
+    // window can carry any string in either; every legal value is known, so
+    // anything else becomes the default (theme is clamped the same way below,
+    // by the v210 migration). Recorded so the corrected shape is persisted.
+    const prefsBefore = parsed.prefs.lang + '|' + parsed.prefs.unit;
+    parsed.prefs.lang = parsed.prefs.lang === 'ar' ? 'ar' : 'en';
     if (!parsed.prefs.theme) parsed.prefs.theme = 'dark';
-    if (!parsed.prefs.unit) parsed.prefs.unit = 'kg';
+    parsed.prefs.unit = parsed.prefs.unit === 'lb' ? 'lb' : 'kg';
     if (!parsed.prefs.exNames) parsed.prefs.exNames = parsed.prefs.translateExercises === false ? 'en' : 'translit';   // the boolean becomes the mode
     // Drop any leftover PIN/recovery fields from earlier versions
     if (parsed.prefs.pinHash !== undefined) delete parsed.prefs.pinHash;
@@ -626,6 +641,10 @@ function loadState() {
     // a session without `sets`, or with reps typed as '8x', broke Home and the
     // Console's SQL. This is the one place the blob is made well-formed.
     let normChanged = false;   // → migrated below: the well-formed copy must reach localStorage and the cloud, not just memory
+    if (prefsBefore !== parsed.prefs.lang + '|' + parsed.prefs.unit) normChanged = true;
+    // Raised to this build's schema, never lowered: the stamp is what lets an
+    // OLDER build recognise this blob as one it must not push.
+    if (!(Number(parsed.version) >= SCHEMA_VERSION)) { parsed.version = SCHEMA_VERSION; normChanged = true; }
     for (const k of ['exercises', 'sessions', 'cardio', 'cardioTypes', 'cardioPlan', 'foods', 'sleep', 'supplements', 'mealBundles', 'recipes', 'bodyweight', 'shoppingLists']) {
       if (k in parsed && !Array.isArray(parsed[k])) { parsed[k] = []; normChanged = true; }
     }
@@ -633,10 +652,14 @@ function loadState() {
       if (!parsed[k] || typeof parsed[k] !== 'object' || Array.isArray(parsed[k])) { parsed[k] = {}; normChanged = true; }
     }
     const sessionsBefore = JSON.stringify(parsed.sessions);
+    // A set is normalised, never REBUILT: its unknown fields ride through. This
+    // runs on every load and its result is written back, so a set rebuilt from
+    // reps/weight/done alone erased whatever a NEWER build had added to it — and
+    // the stale tab's next push carried the loss to every device, unconflicted.
     parsed.sessions = parsed.sessions.filter((s) => s && typeof s === 'object').map((s) => ({
       ...s,
       sets: Array.isArray(s.sets)
-        ? s.sets.filter((x) => x && typeof x === 'object').map((x) => ({ reps: Number(x.reps) || 0, weight: Number(x.weight) || 0, ...(x.done === false ? { done: false } : {}) }))
+        ? s.sets.filter((x) => x && typeof x === 'object').map(({ done, ...x }) => ({ ...x, reps: Number(x.reps) || 0, weight: Number(x.weight) || 0, ...(done === false ? { done: false } : {}) }))
         : [],
     }));
     if (JSON.stringify(parsed.sessions) !== sessionsBefore) normChanged = true;
@@ -672,6 +695,17 @@ function loadState() {
         duration: Math.min(1440, Math.max(0, Math.round(Number(r.duration) || 0))),
       }));
     if (JSON.stringify(parsed.cardioPlan) !== cardioPlanBefore) normChanged = true;
+    // Logged cardio ROWS, the same way: the two figures a week total adds up are
+    // NUMBERS. A string from a backup or a pull turned `s + c.duration` into
+    // string concatenation — markup in the Cardio tab's stat box, in Home's
+    // data-count attribute and on the Compare panel. A legal figure is kept
+    // exactly as it is (a watch import can carry a fraction); anything else is 0.
+    const cardioBefore = JSON.stringify(parsed.cardio);
+    const figure = (v) => { const n = Number(v); return Number.isFinite(n) && n > 0 ? n : 0; };
+    parsed.cardio = parsed.cardio
+      .filter((r) => r && typeof r === 'object' && !Array.isArray(r))
+      .map((r) => ({ ...r, duration: figure(r.duration), calories: figure(r.calories) }));
+    if (JSON.stringify(parsed.cardio) !== cardioBefore) normChanged = true;
 
     // Migration: backfill missing fields + add any new seed exercises
     const seedByName = Object.fromEntries(SEED_EXERCISES.map((e) => [e.name, e]));
@@ -1022,6 +1056,23 @@ function reloadState() {
   imgPrune();
 }
 
+// THE WAY BACK from a whole-blob replacement whose LOAD failed. The import and
+// the pull both write the new bytes and then reload; a load that throws leaves
+// the device READ-ONLY on those bytes — and loadState has already copied them
+// over the quarantine slot. Both keys go back to what they held, and the reload
+// re-decides from the old bytes. A null snapshot value means the key was absent.
+function storeSnapshot() {
+  try { return { store: localStorage.getItem(STORAGE_KEY), corrupt: localStorage.getItem(VAULT_KEYS.corrupt) }; }
+  catch (_) { return { store: null, corrupt: null }; }
+}
+function restoreStore(snap) {
+  try {
+    if (snap.store == null) localStorage.removeItem(STORAGE_KEY); else localStorage.setItem(STORAGE_KEY, snap.store);
+    if (snap.corrupt == null) localStorage.removeItem(VAULT_KEYS.corrupt); else localStorage.setItem(VAULT_KEYS.corrupt, snap.corrupt);
+  } catch (_) {}
+  reloadState();
+}
+
 // ==========================================================================
 // Public API
 // ==========================================================================
@@ -1212,7 +1263,7 @@ const DB = {
     // No `langPicked` companion flag any more: nothing needs to know whether the
     // choice was deliberate, because the app never asks. A fresh install gets
     // detectLang() and the login screen's ar/en toggle changes it.
-    setLang(lang) { STATE.prefs.lang = lang; save(); mirrorUi(); },
+    setLang(lang) { STATE.prefs.lang = lang === 'ar' ? 'ar' : 'en'; save(); mirrorUi(); },   // clamped like setUnit: the value reaches an href
     setTheme(theme) { STATE.prefs.theme = canonicalTheme(theme); save(); mirrorUi(); },
     mirrorUi(extra) { mirrorUi(extra); },
     setUnit(unit) { STATE.prefs.unit = unit === 'lb' ? 'lb' : 'kg'; save(); },
@@ -1238,7 +1289,10 @@ const DB = {
     textLg() { return STATE.prefs.textLg === true; },
     setTextLg(on) { STATE.prefs.textLg = !!on; save(); mirrorUi(); },
     reviewSeen() { return STATE.prefs.reviewSeen || ''; },
-    setReviewSeen(iso) { STATE.prefs.reviewSeen = String(iso || ''); save(); },
+    // Housekeeping, like setOnboarded: written at load + 400 ms, BEFORE the boot
+    // pull answers, where a dirty flag becomes a conflict the user never made.
+    // The stamp rides along with the next genuine edit (see saveLocal).
+    setReviewSeen(iso) { STATE.prefs.reviewSeen = String(iso || ''); saveLocal(); },
     reviewOff() { return STATE.prefs.reviewOff === true; },
     setReviewOff(off) { STATE.prefs.reviewOff = !!off; save(); },
     setRestSec(sec) { const n = Math.round(Number(sec)); STATE.prefs.restSec = Number.isFinite(n) ? Math.min(600, Math.max(15, n)) : 90; save(); },
@@ -1879,6 +1933,19 @@ const DB = {
     for (const k of ['prefs', 'foodLogs', 'supplementLogs', 'water', 'notif', 'plan', 'nutrition', 'reminders', 'health']) {
       if (k in data && data[k] != null && (typeof data[k] !== 'object' || Array.isArray(data[k]))) return false;
     }
+    // ELEMENTS, not just sections. A null or a bare value in a record list
+    // passed both checks and then threw — at the first `ex.imageSlug` in
+    // loadState (which quarantines the whole blob as unreadable) or at the first
+    // view that reads a field. `sessions` is the one list loadState already
+    // filters, so it is left to it. A food-log DAY is a list of rows and a
+    // supplement-log day a map of ticks: their readers call .some / .reduce and
+    // index by id, and a day of the wrong kind is refused, not guessed at.
+    const isRecord = (x) => !!x && typeof x === 'object' && !Array.isArray(x);
+    for (const k of ['exercises', 'cardio', 'cardioTypes', 'cardioPlan', 'sleep', 'foods', 'supplements', 'mealBundles', 'recipes', 'bodyweight', 'shoppingLists']) {
+      if (Array.isArray(data[k]) && !data[k].every(isRecord)) return false;
+    }
+    if (isRecord(data.foodLogs) && !Object.keys(data.foodLogs).every((d) => data.foodLogs[d] == null || (Array.isArray(data.foodLogs[d]) && data.foodLogs[d].every(isRecord)))) return false;
+    if (isRecord(data.supplementLogs) && !Object.keys(data.supplementLogs).every((d) => data.supplementLogs[d] == null || isRecord(data.supplementLogs[d]))) return false;
     // `name` on the list and `quantity`/`unit` on an item are LEGACY: a device on
     // an older build still syncs them into this row, so they are permitted and
     // never required. What must hold is the shape a reader depends on.
@@ -1950,12 +2017,21 @@ const DB = {
       // READ-ONLY is set, and a restore is precisely the DELIBERATE whole-blob
       // replacement that is supposed to lift READ-ONLY. reloadState() clears the
       // flag and lets loadState() re-decide from the new bytes.
+      const before = storeSnapshot();
       try {
         localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
       } catch (_) {
         return false;   // quota / private mode — say so rather than report success
       }
       reloadState();
+      // A load that FAILED is a failed import, whatever the validators said: it
+      // left the device READ-ONLY on a quarantined copy, and reporting success
+      // here pushed those bytes to every device of the account. Put the previous
+      // bytes back, and tell the caller the truth.
+      if (STATE_LOAD_FAILED) {
+        restoreStore(before);
+        return false;
+      }
       // The restored blob is now the device's truth and has to reach the cloud.
       if (typeof window !== 'undefined' && window.Cloud && window.Cloud.onLocalChange) {
         window.Cloud.onLocalChange();
@@ -1968,6 +2044,7 @@ const DB = {
   resetAll() {
     STATE = withImageAccessors(defaultState());
     STATE_LOAD_FAILED = false;   // a reset is a deliberate replacement — see importJSON
+    SCHEMA_TOO_NEW = false;      // …with this build's own default, not a newer build's blob
     imgPrune();                  // the wiped exercises' photos go with them
     save();
   },
@@ -3704,6 +3781,10 @@ const DB = {
 
 // Re-read STATE from localStorage (after cloud sync swaps in pulled data).
 DB.reload = reloadState;
+// For cloud.js's importRaw: the same way back importJSON takes when a
+// replacement's load fails (see restoreStore).
+DB._storeSnapshot = storeSnapshot;
+DB._restoreStore = restoreStore;
 // ANOTHER DOCUMENT OF THIS ORIGIN WROTE THE STORE. ADOPT IT, DO NOT PRUNE.
 //
 // changeSlice refuses a write over bytes it did not write, but writeStore - a
@@ -3759,6 +3840,9 @@ try {
 // READ-ONLY on an in-memory default. The 'vault:load-failed' event fires
 // before app.js loads (STATE is built at evaluation time), so init() asks.
 DB.loadFailed = () => STATE_LOAD_FAILED;
+// Was the loaded blob — or `blob`, when given — written by a NEWER build than
+// this one? cloud.js refuses to push such a blob, and to force-push over one.
+DB.schemaTooNew = (blob) => (blob === undefined ? SCHEMA_TOO_NEW : !!blob && Number(blob.version) > SCHEMA_VERSION);
 /* THE QUARANTINED ORIGINAL, for the one rescue offered in READ-ONLY mode.
 
    loadState() copies the unparseable blob to VAULT_KEYS.corrupt and then runs

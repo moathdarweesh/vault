@@ -79,11 +79,11 @@ a faster TTFB — not fewer bytes.
 ## CACHE WORKFLOW — now automated. **Do not bump by hand.**
 
 ```bash
-npm run verify           # 43 contracts + lint + 13 suites — THE GATE
+npm run verify           # 47 contracts + lint + 13 suites — THE GATE
 npm run release          # bump every marker and re-read them; runs NO tests
 ```
 
-**Current version: v395.** APK: build 24 / v3.3.
+**Current version: v396.** APK: build 24 / v3.3.
 
 > ⚠️ **`npm run release` RUNS NO TESTS, AND THIS LINE USED TO READ AS IF IT DID.**
 > It said «bump every marker + verify», where *verify* meant the MARKERS — and
@@ -2734,6 +2734,75 @@ the rows pre-filled from last time as performed sets ("confirmed without a
 throwaway edit" is the recorded intent; whether an untouched row should count
 is the owner's call); a saved food **4 taps**. The day card's Save measures
 **69×40** — under the 44 floor.
+
+## v396 — the review's first batch: what a synced blob may carry, and a push that cannot conflict with itself
+
+«راجع الكود والداتا بيس والتصميم والذكاء الاصطناعي … وصيانة التطبيق لو بكرا راح
+يشوفه مبرمج محترف». An 18-lens review (77 agents, every non-low finding read again
+by a skeptic) returned 211 findings; this is the first of eight batches, the one
+about security and the data layer. Full ledger: `docs/REVIEW-2026-09-25.md` (lands
+with the last batch). Every fix below shipped with a check that FAILED on v395
+first — the failure text is in the suites' own comments.
+
+- **A blob is CLAMPED where it comes in, not trusted at the sink.** `prefs.lang`
+  reached an `href` and `prefs.unit` five templates unescaped, so a backup, a
+  pull or another window could carry markup into both. `loadState()` now clamps
+  lang to en|ar and unit to kg|lb (theme was already clamped by the v210
+  migration), `setLang()` clamps too, and **contract 46** refuses any sink that
+  prints either as text. Logged cardio rows are normalised the same way
+  (duration/calories become finite numbers) — the week totals were string
+  concatenation with a poisoned value, on the Cardio tab, Home's `data-count`
+  and Compare. Record lists must hold objects only; a food-log day must be an
+  array, a supplement day a map; and an import or pull whose RELOAD lands
+  READ-ONLY is a FAILED import: both keys are put back (`storeSnapshot` /
+  `restoreStore`) and it reports false.
+- **The app no longer conflicts with itself.** The nine `push-version-moved`
+  rows with `localVer == remoteVer` (the open lead at ~line 1947) had two causes,
+  both closed in `test-multi-window.js` / `test-sync-status.js`: a sibling window's
+  slow reply wound the shared version BACK under the row (`advanceVersion` only
+  moves it forward; pushes are serialised across windows with Web Locks), and a
+  push whose reply was lost had its stamp overwritten by the next push
+  (`pushEarlier` keeps the last few unanswered stamps until the server next
+  answers). A genuine remote change still returns `'conflict'` — that case is in
+  the suite too. `noteConflict` now records `sentVer`/`sentStamp`/`earlier`.
+- **The rescue slot is not spent on routine pulls** — `applyRemote` snapshots
+  only when the device is dirty or not linked. `setReviewSeen` is a
+  `saveLocal()` write (it ran at load + 400 ms and manufactured the false
+  'conflict' the hardening pass warned about); `housekeepingIsNotAnEdit` lists all
+  six boot-time housekeeping writes and proves each is silent.
+- **A photo removed while its upload is in flight stays removed:** uploads are
+  serialised per exercise, the pointer is written only if the bytes are still
+  the photo, and a late upload deletes its own object. An unchanged, backed-up
+  photo is not re-uploaded on a rename.
+- **A newer build's blob is kept whole.** `SCHEMA_VERSION` (js/storage.js) is
+  stamped on load and never lowered; sets are normalised, never rebuilt, so
+  unknown per-set fields survive; a blob stamped higher than this build's is not
+  pushed (`DB.schemaTooNew`, status 'blocked') and «keep this device» refuses to
+  force over it. Bump the constant when a stored shape changes meaning.
+- **Login CSRF closed.** supabase-js 2.108's `detectSessionInUrl` accepts a
+  function; `urlSessionAllowed` takes a URL session only for the Google return
+  THIS tab started (one-shot sessionStorage mark, ten minutes) or a
+  `type=recovery` link whose token names the signed-in account (or no account,
+  on a device holding no one's data). Anything else is stripped from the address
+  bar and toasted (`auth_link_refused`). **Contract 47** holds
+  `VAULT_KEYS.authToken` equal to the key the SDK derives from `SUPABASE_URL` and
+  keeps the hook wired. Residual, stated: a completely fresh browser still
+  accepts a crafted recovery link — there is nothing of the victim's there.
+- **A guided run is not ten uploads.** While the run is open the first change
+  arms one 5-minute timer and later sets ride along; leaving the screen, the app
+  going to the background, or the timer sends it; a pull cancels a held push;
+  `flush()` is untouched. Measured: 10 sets → 2 uploads during the run + 1 on
+  leaving, nothing left dirty.
+
+Still open from this batch, for later batches or the owner: `admin.html` creates
+its client on the SDK defaults (the same CSRF shape); removing a backed-up photo
+never deletes its bucket object; the older set editors still rebuild sets from
+reps/weight/done; the save centre's 'blocked' button opens the conflict dialog,
+which does not fit the newer-schema case. After release: one real password-reset
+link on a device, and one real Google round trip once the provider is on.
+
+47 contracts · lint · **13 suites, 0 failed, 0 skipped**. `ux-flows.js` unchanged
+against v395 (its resume probe fails on v395 too — batch 2).
 
 ## v395 — every row the sleep row's shape: the figure row
 

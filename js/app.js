@@ -12,7 +12,7 @@
 // build. The literal below is the fallback (file://, or a stripped query) and is
 // still bumped by `npm run release` — see CLAUDE.md "CACHE WORKFLOW".
 const VAULT_BUILD = (() => {
-  const FALLBACK = 'v395';
+  const FALLBACK = 'v396';
   try {
     const src = (document.currentScript && document.currentScript.src) || '';
     const m = src.match(/[?&]v=(\d+)/);
@@ -1066,6 +1066,9 @@ function navigate(view, context = {}, opts = {}) {
   const currentViewBefore = currentView;
   currentView = view;
   viewContext = context;
+  // The guided run holds its uploads (see Cloud's PACE); any other screen
+  // sends what it held. After the blur above, so a half-typed set is in it.
+  if (window.Cloud && Cloud.pace) Cloud.pace(view === 'session-run' ? 'run' : 'normal');
 
   document.querySelector('.img-lightbox')?.remove();
   // The food add-sheet lives on `.app` (not #modal-root) — clear it too so it
@@ -1834,7 +1837,7 @@ function renderHome(el) {
 
   const allCardio = DB.cardio.list();
   const weekCardio = allCardio.filter((c) => inRangeISO(c.date, thisStart, thisEnd));
-  const cardioMinutes = weekCardio.reduce((sum, c) => sum + c.duration, 0);
+  const cardioMinutes = weekCardio.reduce((sum, c) => sum + (Number(c.duration) || 0), 0);   // coerced: it lands inside data-count="…"
 
   const lastSleep = DB.sleep.latest();
   // Home shows TODAY's TOTAL sleep (sum of every entry dated today — night +
@@ -2463,6 +2466,37 @@ function exerciseImgSrc(ex) {
   return '';
 }
 
+// ONE BUCKET WRITE AT A TIME PER EXERCISE, AND A POINTER ONLY FOR THE BYTES
+// THAT ARE STILL THE PHOTO. An upload takes seconds, and the photo can be
+// removed or replaced inside that window. The pointer used to be written
+// whenever the upload landed, so a photo removed mid-upload came back —
+// syncExerciseImages reads "no photo, but a pointer" as a LOST photo and
+// restored it from the very object that upload had just written, here and on
+// every other device — and two uploads for one exercise raced to its one key,
+// so the slower, older photo could be what the bucket kept. Queued per
+// exercise, a later photo's upload lands after an earlier one's; checked on
+// landing, a pointer is recorded only for the bytes the exercise still shows,
+// and an upload that lands after a removal deletes its own object.
+const exerciseImageJobs = new Map();
+function queueExerciseImageJob(id, job) {
+  const next = (exerciseImageJobs.get(id) || Promise.resolve()).then(job).catch(() => {});
+  exerciseImageJobs.set(id, next);
+  next.then(() => { if (exerciseImageJobs.get(id) === next) exerciseImageJobs.delete(id); });
+  return next;
+}
+function uploadExerciseImage(id, dataUrl) {
+  return queueExerciseImageJob(id, async () => {
+    if (DB.exercises.getImage(id) !== dataUrl) return;   // superseded while it waited its turn
+    const path = await Cloud.backupExerciseImage(id, dataUrl);
+    if (!path) return;
+    const ex = DB.exercises.getById(id);
+    if (ex && DB.exercises.getImage(id) === dataUrl) DB.exercises.update(id, { imagePath: path });
+    else if (ex && ex.imageCleared && Cloud.removeExerciseImage) await Cloud.removeExerciseImage(path);
+    // Replaced instead: the new photo's own upload is queued behind this one —
+    // it overwrites the object and records the pointer.
+  });
+}
+
 // Back up a custom exercise's image to its durable cloud copy. Fire-and-forget:
 // the base64 is already saved locally, so a failure here costs nothing and the
 // login pass (syncExerciseImages) retries it.
@@ -2473,19 +2507,22 @@ function backupExerciseImageFor(exerciseId, dataUrl) {
   // enough — syncExerciseImages() treats "no customImage but an imagePath" as a
   // LOST image and restores it from the bucket, so the deleted photo reappears on
   // the next boot. Drop the pointer (and the stored object) so the delete sticks.
+  // An upload still in flight has no pointer yet; it removes its own object
+  // when it lands (uploadExerciseImage).
   if (!dataUrl) {
     const ex = DB.exercises.getById(exerciseId);
     if (!ex || !ex.imagePath) return;
+    const path = ex.imagePath;   // read BEFORE update(): it is the same object, and update() nulls it
     DB.exercises.update(exerciseId, { imagePath: null });
-    try {
-      if (Cloud.removeExerciseImage) Cloud.removeExerciseImage(ex.imagePath).catch(() => {});
-    } catch (_) {}
+    if (Cloud.removeExerciseImage) queueExerciseImageJob(exerciseId, () => Cloud.removeExerciseImage(path));
     return;
   }
   if (!/^data:image\//i.test(String(dataUrl))) return; // nothing new to upload
-  Cloud.backupExerciseImage(exerciseId, dataUrl)
-    .then((path) => { if (path) DB.exercises.update(exerciseId, { imagePath: path }); })
-    .catch(() => {});
+  // Already in the bucket: the edit sheet re-sends the photo on every save, and
+  // update() keeps the pointer only while the bytes are unchanged.
+  const ex = DB.exercises.getById(exerciseId);
+  if (ex && ex.imagePath && DB.exercises.getImage(exerciseId) === dataUrl) return;
+  uploadExerciseImage(exerciseId, dataUrl);
 }
 
 // Reconcile custom exercise images against their durable copies. Runs after
@@ -2501,13 +2538,18 @@ async function syncExerciseImages() {
   for (const ex of DB.exercises.list().filter((e) => e.isCustom)) {
     try {
       if (ex.customImage && !ex.imagePath) {
-        const path = await Cloud.backupExerciseImage(ex.id, ex.customImage);
-        if (path) DB.exercises.update(ex.id, { imagePath: path });
-      } else if (!ex.customImage && ex.imagePath) {
-        const dataUrl = await Cloud.restoreExerciseImage(ex.imagePath);
+        await uploadExerciseImage(ex.id, ex.customImage);   // the same queue and landing check as a save
+      } else if (!ex.customImage && ex.imagePath && !ex.imageCleared) {
+        // imageCleared is an explicit REMOVAL: a pointer beside it is one an
+        // upload wrote after the removal (older builds could), never a lost photo.
+        const path = ex.imagePath;
+        const dataUrl = await Cloud.restoreExerciseImage(path);
+        // Re-read after the download: a photo chosen or removed while it ran is
+        // the user's latest word, and the old bucket copy must not overwrite it.
+        const now = DB.exercises.getById(ex.id);
         // setImage, not update: the restored base64 is re-derivable, so it
         // writes its own key and neither rewrites the blob nor flags it dirty.
-        if (dataUrl && DB.exercises.setImage(ex.id, dataUrl)) healed++;
+        if (dataUrl && now && !now.customImage && !now.imageCleared && now.imagePath === path && DB.exercises.setImage(ex.id, dataUrl)) healed++;
       }
     } catch (_) {}
   }
@@ -3761,7 +3803,7 @@ function openSessionModal(exerciseId, sessionId = null) {
 
   // Per-session unit selector (starts from user pref, but can be toggled inside the modal).
   // Stored weight is always kg internally; this only affects what the user types/sees here.
-  let modalUnit = (DB.prefs.get().unit) || 'kg';
+  let modalUnit = DB.prefs.get().unit === 'lb' ? 'lb' : 'kg';   // printed as modalUnit.toUpperCase(): 'kg' or 'lb' by construction
 
   function modalConvertForDisplay(kg) {
     if (modalUnit === 'lb') return Math.round(kg * KG_TO_LB * 2) / 2;
@@ -4474,10 +4516,11 @@ function renderCompareCardio() {
     return emptyState({ iconName: 'run', title: t('not_enough_data'), text: t('not_enough_cardio') });
   }
 
-  const thisMin = thisW.reduce((s, c) => s + c.duration, 0);
-  const lastMin = lastW.reduce((s, c) => s + c.duration, 0);
-  const thisCal = thisW.reduce((s, c) => s + c.calories, 0);
-  const lastCal = lastW.reduce((s, c) => s + c.calories, 0);
+  // Coerced as they are summed: these totals are printed into innerHTML below.
+  const thisMin = thisW.reduce((s, c) => s + (Number(c.duration) || 0), 0);
+  const lastMin = lastW.reduce((s, c) => s + (Number(c.duration) || 0), 0);
+  const thisCal = thisW.reduce((s, c) => s + (Number(c.calories) || 0), 0);
+  const lastCal = lastW.reduce((s, c) => s + (Number(c.calories) || 0), 0);
 
   return `
     <div class="compare-card">
@@ -5057,7 +5100,7 @@ function renderSettings(el) {
 
       <div class="settings-section">
         <div class="section-title">${t('about_title')}</div>
-        <a class="settings-action-row" href="privacy.html?lang=${(DB.prefs.get().lang) || 'en'}" target="_blank" rel="noopener">
+        <a class="settings-action-row" href="privacy.html?lang=${DB.prefs.get().lang === 'ar' ? 'ar' : 'en'}" target="_blank" rel="noopener">
           <div class="settings-action-icon">${icon('info', 20)}</div>
           <div class="settings-action-main">
             <div class="settings-action-title">${t('privacy_policy')}</div>
@@ -6073,7 +6116,7 @@ function renderSessionDay(el) {
   const sdState = viewContext.sdState;
 
   // Modal-level unit (defaults to user's prefs unit, switchable per page)
-  if (!viewContext.sdUnit) viewContext.sdUnit = (DB.prefs.get().unit) || 'kg';
+  if (!viewContext.sdUnit) viewContext.sdUnit = DB.prefs.get().unit === 'lb' ? 'lb' : 'kg';   // printed raw below: 'kg' or 'lb' by construction
 
   function modalConvertForDisplay(kg) {
     if (viewContext.sdUnit === 'lb') return Math.round(kg * KG_TO_LB * 2) / 2;
@@ -6780,7 +6823,7 @@ function renderSessionRun(el) {
   const totalEx = exObjs.length;
 
   // Persist run state across re-renders (until navigation replaces viewContext).
-  if (!viewContext.runUnit) viewContext.runUnit = viewContext.unit || (DB.prefs.get().unit) || 'kg';
+  if (!viewContext.runUnit) viewContext.runUnit = (viewContext.unit || DB.prefs.get().unit) === 'lb' ? 'lb' : 'kg';   // printed raw below: 'kg' or 'lb' by construction
   // RESUME, do not restart. viewContext is replaced on every navigate(), so any
   // exit — the back arrow, Android killing the WebView between sets, a reboot —
   // used to bring you back to exercise 1 with every ✓ cleared, although every
@@ -8289,7 +8332,7 @@ function showAuthGate(mode) {
         ${up ? t('auth_have_account') : t('auth_no_account')}
         <button type="button" data-mode="${up ? 'in' : 'up'}">${up ? t('auth_signin') : t('auth_signup')}</button>
       </div>
-      <a class="auth-legal" href="privacy.html?lang=${(DB.prefs.get().lang) || 'en'}" target="_blank" rel="noopener">${t('privacy_policy')}</a>
+      <a class="auth-legal" href="privacy.html?lang=${lang}" target="_blank" rel="noopener">${t('privacy_policy')}</a>
       ${isDevHost() ? `<button class="auth-dev-skip" id="auth-dev-skip">skip (dev only)</button>` : ''}
     </div>`;
   document.body.appendChild(gate);
@@ -9273,12 +9316,17 @@ async function bootCloud() {
   if (!window.Cloud || !Cloud.configured()) return; // not set up → local-only
   // Read (and clear) a failed OAuth return BEFORE the SDK starts: it is a key
   // or null, and it is said below on whichever surface this boot ends on.
-  const oauthErr = takeOAuthReturnError();
+  const oauthErr0 = takeOAuthReturnError();
   await Cloud.ensureSdk(); // load the Supabase SDK on demand
   // Opened from a password-reset link → let the user set a new password.
   Cloud.onPasswordRecovery(() => showChangePassword(true));
   let session = null;
   try { session = await Cloud.getSession(); } catch (_) {}
+  // A sign-in link this app did not ask for was refused (Cloud's
+  // urlSessionAllowed) — or a reset link that would have replaced the account
+  // signed in here. Known only once the SDK has looked at the URL, which the
+  // getSession() above waited for; said on the same surfaces as a failed return.
+  const oauthErr = oauthErr0 || (Cloud.takeUrlRefusal && Cloud.takeUrlRefusal() ? 'auth_link_refused' : null);
   if (!session) {
     // AN ACCOUNT IS REQUIRED — the gate has no skip and cannot be dismissed.
     //

@@ -327,7 +327,207 @@ async function restoreSaysWhichHalf() {
   assert.equal(r2.uploaded, true, 'uploaded when the push lands');
 }
 
+// ── TWO WINDOWS PUSHING AT ONCE ARE ONE ACCOUNT, NOT A CONFLICT ──────────────
+// push() was serialised INSIDE one document (`inFlight`) and nowhere else,
+// while everything it decides by — the version, the pushing stamp, the store
+// itself — is shared localStorage. Window B read the base version while window
+// A's upload was still answering; B's conditional UPDATE then matched no row,
+// the probe found A's bytes (≠ B's: B saved in between) and B reported a
+// CONFLICT against data this very store holds. Logged after the fact, when A
+// had already written the new version: `localVer == remoteVer` — the nine
+// client_errors rows CLAUDE.md records as the app raising a conflict against
+// itself.
+//
+// ONE vault_data ROW, answering the way PostgREST does: a conditional UPDATE
+// matches only at the given version. `hold(q)` keeps a reply on the wire (the
+// write itself has committed) until `release()`.
+function row(initial) {
+  const r = { version: 1, data: initial, updated_at: '2026-09-15T08:00:00.000Z', errors: [], release: null };
+  r.serve = (hold) => async (q) => {
+    if (q.table === 'client_errors') { r.errors.push(q.rows); return { data: null, error: null }; }
+    if (q.kind === 'update') {
+      const want = (q.filters.find(([k]) => k === 'version') || [])[1];
+      let answer = { data: [], error: null };
+      if (want === r.version) { r.version++; r.data = q.rows.data; r.updated_at = q.rows.updated_at; answer = { data: [{ version: r.version }], error: null }; }
+      if (hold && hold(q)) return new Promise((resolve) => { r.release = () => { r.release = null; resolve(answer); }; });
+      return answer;
+    }
+    if (q.fields === 'updated_at,version') return { data: { version: r.version, updated_at: r.updated_at }, error: null };
+    return { data: { data: r.data, version: r.version, updated_at: r.updated_at }, error: null };
+  };
+  return r;
+}
+// A Web Locks manager two contexts share: `request` runs callbacks for one name
+// one at a time, in arrival order, holding the lock until the callback settles.
+function lockManager() {
+  const chains = new Map();
+  return { request(name, fn) { const run = (chains.get(name) || Promise.resolve()).then(() => fn({ name })); chains.set(name, run.catch(() => {})); return run; } };
+}
+const settle = async () => { for (let i = 0; i < 12; i++) await new Promise((r) => setImmediate(r)); };
+const conflictsIn = (server) => server.errors.filter((e) => e && e.kind === 'sync-conflict');
+
+// With Web Locks the two uploads simply queue. Without them (an engine that has
+// none) the second must still recognise the first — and the first's reply,
+// arriving LAST, must not wind the shared version back under the second's.
+async function twoWindowsPushTogether(withLocks) {
+  const locks = withLocks ? lockManager() : null;
+  const a = context({ locks }), b = context({ values: a.values, locks });
+  deliverStorage(a, a.keys.store);                        // B's boot migration rewrote the store; A hears of it, as a browser tells it
+  const ex = firstExercise(a.c);
+  const server = row(JSON.parse(a.c.DB.exportJSON()));
+  let first = true;
+  const hold = (q) => { const h = first; first = false; return h; };   // A's upload commits; its reply is slow
+  a.query(server.serve(hold)); b.query(server.serve(null));
+
+  const setA = a.c.DB.sessions.add({ exerciseId: ex, date: DAY, sets: [{ reps: 8, weight: 60 }] });
+  deliverStorage(b, a.keys.store);                        // B adopts A's set
+  await settle();
+  const pa = a.c.Cloud.push();                            // A: base v1 → v2 committed, reply on the wire
+  await settle();
+  b.c.DB.prefs.setUnit('lb');                             // B saves in between
+  deliverStorage(a, a.keys.store);
+  await settle();
+  const pb = b.c.Cloud.push();                            // B: must not decide by a version A is still answering for
+  await settle();
+  if (server.release) server.release();
+  const [ra, rb] = [await pa, await pb];
+  assert.equal(ra, 'ok', 'window A uploads');
+  assert.equal(rb, 'ok', "window B's push called window A's upload a conflict — one store, two windows, one account");
+  assert.equal(conflictsIn(server).length, 0, 'and nothing was reported as a sync conflict');
+  assert.ok(JSON.stringify(server.data.sessions).includes(setA.id), "the row holds A's set");
+  assert.equal(server.data.prefs.unit, 'lb', "and B's change on top of it");
+  assert.equal(Number(a.values.get(a.keys.ver + 'alice')), server.version, 'the shared version names the row as it is, not as the slower reply last saw it');
+}
+
+// Without Web Locks (an engine that has none), the one ordering that can still
+// be recognised: the sibling's upload ANSWERED while this one was on the wire,
+// so the shared version already names the row the probe finds. That row is one
+// this store has incorporated — retry once, CONDITIONALLY, from a fresh export.
+async function siblingLandedWhileThisOneWasOut() {
+  const s = context(), { c, values, keys } = s;
+  const ex = firstExercise(c);
+  const server = row(JSON.parse(c.DB.exportJSON()));
+  c.DB.sessions.add({ exerciseId: ex, date: DAY, sets: [{ reps: 8, weight: 60 }] });
+  await settle();
+  const sibling = JSON.parse(values.get(keys.store));    // what the sibling window pushed…
+  const mine = c.DB.sessions.add({ exerciseId: ex, date: DAY, sets: [{ reps: 6, weight: 70 }] });   // …before this save
+  await settle();
+  const serve = server.serve(null);
+  s.query(async (q) => {
+    if (q.kind === 'update' && server.version === 1) {
+      server.version = 2; server.data = sibling; server.updated_at = '2026-09-15T08:00:05.000Z';
+      values.set(keys.ver + 'alice', '2');                // the sibling's answer, landed in the shared version
+      c.DB.prefs.setUnit('lb');                           // and this window saved once more
+      return { data: [], error: null };                   // this UPDATE matched nothing
+    }
+    return serve(q);
+  });
+  assert.equal(await c.Cloud.push(), 'ok', "a sibling window's upload that answered first is not a conflict");
+  assert.equal(conflictsIn(server).length, 0, 'and nothing was reported as one');
+  assert.equal(server.version, 3, 'the retry was a conditional write on the version the sibling produced');
+  assert.ok(JSON.stringify(server.data.sessions).includes(mine.id), "this window's set reached the row");
+  assert.equal(server.data.prefs.unit, 'lb', "and the retry sent a FRESH export — the save made while the first attempt was out is in it");
+}
+
+// The detection that must not weaken: a row moved by ANOTHER DEVICE — the shared
+// version does not name it and no stamp of ours matches it — is a real conflict.
+async function anotherDeviceIsStillAConflict() {
+  const s = context(), { c } = s;
+  const server = row(JSON.parse(c.DB.exportJSON()));
+  server.version = 2; server.updated_at = '2026-09-15T09:00:00.000Z';
+  server.data = { ...server.data, sessions: [{ id: 'phone1', exerciseId: firstExercise(c), date: DAY, sets: [{ reps: 1, weight: 1 }], createdAt: DAY + 'T09:00:00.000Z' }] };
+  c.DB.sessions.add({ exerciseId: firstExercise(c), date: DAY, sets: [{ reps: 8, weight: 60 }] });
+  await settle();
+  s.query(server.serve(null));
+  assert.equal(await c.Cloud.push(), 'conflict', 'a row another device moved is still a conflict');
+  assert.equal(server.version, 2, 'and nothing was written over it');
+  const note = conflictsIn(server).map((e) => e.msg).join(' ');
+  assert.ok(/sentVer=1\b/.test(note), 'the note records the version this push was based on: ' + note);
+  assert.ok(note.includes('remoteStamp=2026-09-15T09:00:00'), "and the row's own stamp: " + note);
+}
+
+// ── A LINK CANNOT SWAP THE ACCOUNT ON THIS DEVICE (login CSRF) ───────────────
+// The client ran on the SDK's defaults: implicit flow, detectSessionInUrl on.
+// Its _initialize() saved ANY session sitting in the URL fragment — no check
+// that one was already stored, none that this browser had started a sign-in —
+// so a link built from someone else's OWN tokens (#access_token=…) signed this
+// device into their account, and guardForeignBlob then swept the owner's
+// history aside as a shared phone. The REAL vendored SDK runs here, with
+// cloud.js's own options; only the network is faked — GoTrue's /user answers
+// for any valid token, and an attacker's own token is a valid one.
+const SDK = require('node:fs').readFileSync(require('node:path').join(__dirname, '..', 'js/vendor/supabase.js'), 'utf8');
+const AUTH_KEY = 'sb-ilmusnuchqlpirywonzx-auth-token';
+function jwt(sub) {
+  const b = (o) => Buffer.from(JSON.stringify(o)).toString('base64url');
+  const now = Math.floor(Date.now() / 1000);
+  return b({ alg: 'HS256', typ: 'JWT' }) + '.' + b({ sub, exp: now + 3600, iat: now, role: 'authenticated' }) + '.sig';
+}
+const fragment = (sub, type) => '#access_token=' + jwt(sub) + '&expires_in=3600&refresh_token=r-' + sub + '&token_type=bearer' + (type ? '&type=' + type : '');
+const storedSession = (uid) => JSON.stringify({ access_token: jwt(uid), refresh_token: 'r-' + uid, expires_in: 3600,
+  expires_at: Math.floor(Date.now() / 1000) + 3600, token_type: 'bearer', user: { id: uid, aud: 'authenticated', email: uid + '@example.invalid' } });
+async function linkArrives({ hash, signedIn, lastUid, withData, googleStarted }) {
+  const s = context(), { c, values, keys } = s;
+  if (withData) c.DB.sessions.add({ exerciseId: firstExercise(c), date: DAY, sets: [{ reps: 5, weight: 100 }] });
+  if (lastUid === null) values.delete(keys.lastUid);
+  if (signedIn) values.set(AUTH_KEY, storedSession(signedIn));
+  let href = 'https://moathdarweesh.github.io/vault/' + hash;
+  const tab = new Map();                                  // sessionStorage: per tab
+  if (googleStarted) tab.set(keys.oauthStarted, String(Date.now()));   // what signInWithGoogle leaves behind
+  Object.assign(c, {
+    URL, URLSearchParams, Headers, Request, Response, AbortController, TextEncoder, TextDecoder, atob, btoa,
+    WebSocket: class { close() {} }, setInterval: () => 0, clearInterval() {},
+    history: { state: null, replaceState(st, title, u) { href = new URL(u, href).href; } },
+    sessionStorage: { getItem: (k) => (tab.has(k) ? tab.get(k) : null), setItem: (k, v) => tab.set(k, String(v)), removeItem: (k) => tab.delete(k) },
+    fetch: async (url, init) => {
+      if (String(url).includes('/auth/v1/user')) {
+        const h = (init && init.headers) || {};
+        const auth = String((typeof h.get === 'function' ? h.get('Authorization') : (h.Authorization || h.authorization)) || '');
+        const sub = JSON.parse(Buffer.from(auth.replace(/^Bearer /, '').split('.')[1], 'base64url').toString()).sub;
+        return new Response(JSON.stringify({ id: sub, aud: 'authenticated', email: sub + '@example.invalid' }), { status: 200, headers: { 'content-type': 'application/json' } });
+      }
+      return new Response('{}', { status: 200, headers: { 'content-type': 'application/json' } });
+    },
+  });
+  Object.defineProperty(c, 'location', { configurable: true, get: () => { const u = new URL(href); return { href, hash: u.hash, search: u.search, pathname: u.pathname, origin: u.origin }; } });
+  vm.runInContext(SDK, c);                                // the real client library replaces the harness's fake
+  let recovered = false;
+  c.Cloud.onPasswordRecovery(() => { recovered = true; }); // bootCloud's order: register, then ask
+  await c.Cloud.getSession();
+  await s.advance(0);                                     // the SDK announces PASSWORD_RECOVERY from a setTimeout(…, 0)
+  const rec = JSON.parse(values.get(AUTH_KEY) || 'null');
+  return { as: rec && rec.user && rec.user.id, recovered, href, refused: !!(c.Cloud.takeUrlRefusal && c.Cloud.takeUrlRefusal()), markLeft: tab.has(keys.oauthStarted) };
+}
+async function aLinkCannotSwapTheAccount() {
+  let r = await linkArrives({ hash: fragment('mallory'), signedIn: 'alice' });
+  assert.equal(r.as, 'alice', "a link replaced alice's signed-in session with mallory's");
+  assert.equal(r.href.includes('access_token'), false, 'and the refused tokens are gone from the address bar');
+  assert.equal(r.refused, true, 'and app.js is told, so the user hears why the link did nothing');
+  r = await linkArrives({ hash: fragment('mallory', 'recovery'), signedIn: 'alice' });
+  assert.equal(r.as, 'alice', "a «password reset» link for ANOTHER account replaced alice's session");
+  assert.equal(r.recovered, false);
+  r = await linkArrives({ hash: fragment('alice', 'recovery'), signedIn: 'alice' });
+  assert.equal(r.recovered, true, "alice's own reset link, opened where alice is signed in, still reaches the new-password form");
+  assert.equal(r.as, 'alice');
+  r = await linkArrives({ hash: fragment('bob', 'recovery'), lastUid: null });
+  assert.equal(r.recovered, true, 'a reset link opened in a fresh browser still works');
+  assert.equal(r.as, 'bob');
+  r = await linkArrives({ hash: fragment('mallory', 'recovery'), withData: true });
+  assert.equal(r.as, null, "a signed-out device holding alice's data is not handed to another account by a link");
+  assert.equal(r.recovered, false);
+  r = await linkArrives({ hash: fragment('bob'), lastUid: null, googleStarted: true });
+  assert.equal(r.as, 'bob', '«Continue with Google», started in this tab, still signs in on its return');
+  assert.equal(r.markLeft, false, 'and the one-shot mark is spent');
+  r = await linkArrives({ hash: fragment('bob'), lastUid: null });
+  assert.equal(r.as, null, 'a Google-shaped return this tab never started is refused');
+  assert.equal(r.refused, true);
+}
+
 async function run() {
+  await aLinkCannotSwapTheAccount();
+  await twoWindowsPushTogether(true);
+  await twoWindowsPushTogether(false);
+  await siblingLandedWhileThisOneWasOut();
+  await anotherDeviceIsStillAConflict();
   await foreignBlobSurvivesARescueFailure();
   await restoreSaysWhichHalf();
   lossWithoutTheListener();
@@ -342,6 +542,6 @@ async function run() {
     await sameEmailSecondAccountIsHeld(entry);
     await releaseSweepsUnderTheOldUid(entry);
   }
-  console.log('PASS multi-window: sibling writes adopted not overwritten, STALE recorded, READ-ONLY and garbage refused, photos kept; a foreign blob is rescued under its own uid and never uploaded (login + boot, with and without addresses), and never swept when the rescue cannot be written; a same-address second account is held — nothing swept, pulled or pushed (login + boot + push) — and released on request by the same sweep under the old uid; restore reports its upload half');
+  console.log('PASS multi-window: a URL session cannot replace a stored one or take over a signed-out device holding data, while the own-account and fresh-browser reset links and a Google return this tab started still sign in (the real vendored SDK); two windows pushing at once are one upload queue with Web Locks and still no conflict without them (the shared version never wound back), a sibling that answered first is retried once conditionally from a fresh export, another device is still a conflict and the note carries sentVer/remoteStamp; sibling writes adopted not overwritten, STALE recorded, READ-ONLY and garbage refused, photos kept; a foreign blob is rescued under its own uid and never uploaded (login + boot, with and without addresses), and never swept when the rescue cannot be written; a same-address second account is held — nothing swept, pulled or pushed (login + boot + push) — and released on request by the same sweep under the old uid; restore reports its upload half');
 }
 run().catch((error) => { console.error(error); process.exitCode = 1; });
