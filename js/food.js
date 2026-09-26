@@ -1124,6 +1124,9 @@ function openRecipeEditor(date, existing, onDone) {
       '<div class="modal-subtitle" id="rec-sub">' + (draftNote ? escapeHtml(draftNote) : t('rec_sub')) + '</div></div>' +
       '<button class="icon-btn icon-btn-tile" data-close>' + icon('close', 20) + '</button>' +
     '</div>' +
+    // «استخراج وصفة» straight from the calculator, for a NEW recipe only: an
+    // edit and an imported draft already hold their ingredients.
+    (existing ? '' : '<button type="button" class="btn btn-ghost btn-block" id="rec-import">' + icon('sparkle', 20) + ' ' + t('rx_title') + '</button>') +
     '<input type="text" id="rec-name" class="input rec-name-top" maxlength="60" enterkeyhint="next" placeholder="' + escapeHtml(t('rec_name_ph')) + '" aria-label="' + escapeHtml(t('rec_name_ph')) + '" value="' + escapeHtml(name) + '">' +
     '<div id="rec-rows" class="rec-list"></div>' +
     '<button type="button" class="ledger-add rec-add" id="rec-add">' + icon('plus', 14) + ' <span>' + t('rec_add_ing') + '</span></button>' +
@@ -1586,6 +1589,10 @@ function openRecipeEditor(date, existing, onDone) {
     if (typeof onDone === 'function') onDone();
   }
   overlay.querySelector('#rec-save').addEventListener('click', trySave);
+  // The editor closes FIRST, and the import is handed the SAME onDone, so the
+  // draft it brings back saves to where this sheet's own save would have gone.
+  var importBtn = overlay.querySelector('#rec-import');
+  if (importBtn) importBtn.addEventListener('click', function () { closeModal(); openRecipeImport(date, onDone); });
 
   drawRows();
   // A new recipe wants the name; an existing one must NOT pop a keyboard over

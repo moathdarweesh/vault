@@ -4669,6 +4669,9 @@ button.bundle-main {
 .rx-error[hidden], .rx-actions[hidden] { display: none; }
 .rx-actions { display: flex; gap: 8px; margin-top: 16px; }
 .rx-actions > .btn { flex: 1; }
+/* The calculator's own door to it (openRecipeEditor, a new recipe only), between
+   the title and the name field: the name field's own gap under it. */
+#rec-import { margin-bottom: var(--sp-3); }
 /* «وصفة جديدة» and «استخراج وصفة» share a row, and stack under ~300 px. */
 .sfp-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
 .sfp-actions > .btn { flex: 1 1 150px; min-width: 0; }

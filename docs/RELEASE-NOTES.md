@@ -2,6 +2,22 @@
 
 One section per release since v309, newest first, moved verbatim from `CLAUDE.md` in v401 (batch 6 of the 2026-09-25 review; `docs/REVIEW-2026-09-25.md`). `CLAUDE.md` is the guide and the authority for how the app works now. A section here records what one release changed and why, in the words written at the time, so a later section — or the guide — can supersede what an earlier one says.
 
+## v402 — «استخراج وصفة» from the recipe calculator itself
+
+«خلي مكانها مباشر من عند حاسبة الوصفة». The recipe editor, when it opens for a
+NEW recipe (the add sheet's «حاسبة الوصفة» tile, or «وصفة جديدة» in وصفاتي), now
+carries `#rec-import` «استخراج وصفة» right under its subtitle; tapping it closes
+the editor and opens `openRecipeImport(date, onDone)` with the editor's own
+`onDone`, so the imported draft returns where the calculator would have. An edit
+of an existing recipe and an imported draft do not get the button. The picker's
+`#sf-import` stays. Real-click case B8 (failed first: «the calculator carries
+#rec-import — v401 has none (0)»; six planted defects each caught by name;
+scoped to `.modal-overlay:not(.is-out)` because a sheet fading out for 320 ms is
+still "visible" to Playwright). Fingerprint: only the two `recipe-new` cells
+differ, by the one added button (52 px + 12 px margin). Noted, not changed: the
+button stays visible after typing starts and, like the close X, drops what was
+typed without asking.
+
 ## v401 — batch 6, the last: one weight rule, one context key, and a guide that is a guide again
 
 The final batch of the 2026-09-25 review (`docs/REVIEW-2026-09-25.md` is the

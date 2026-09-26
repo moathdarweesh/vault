@@ -1033,6 +1033,55 @@ const RECIPE_IMPORT = [
       assert.equal(await toastText(page), await tr(page, 'rec_need_title'), 'and saving it asks for one');
     } finally { await kit.done(); }
   } },
+  { name: 'B8 «حاسبة الوصفة» opens «استخراج وصفة» directly, for a NEW recipe only, and the draft saves to where the calculator would have', async run(page) {
+    // Every wait and read is on the LIVE sheet: the case before leaves its
+    // editor fading out for 320 ms (.is-out — opacity 0, which Playwright still
+    // calls visible), and the add sheet opens this one 260 ms after the tap, so
+    // an unscoped wait landed on the leaving draft in the full run. Only the
+    // «absent» checks read the whole page: that claim is «nowhere».
+    const live = (sel) => page.locator('#modal-root .modal-overlay:not(.is-out) ' + sel);
+    // The door a thumb takes: the food FAB → the add sheet → «حاسبة الوصفة».
+    await fresh(page);
+    await page.locator('#food-fab').click();
+    await page.locator('[data-method="recipe"]').click();
+    await live('#rec-rows .rec-row').first().waitFor({ timeout: 4000 });
+    const btn = live('#rec-import');
+    assert.equal(await btn.count(), 1, 'the calculator carries #rec-import — v401 has none (' + (await btn.count()) + ')');
+    assert.equal(await btn.isVisible(), true, 'and it is on screen');
+    assert.equal((await btn.innerText()).trim(), await tr(page, 'rx_title'), 'named «استخراج وصفة»');
+    const kit = await rxKit(page);
+    try {
+      await btn.click();
+      const tiles = live('[data-rx-pick]');
+      await tiles.first().waitFor({ timeout: 4000 }).catch(() => {});
+      assert.equal(await tiles.count(), 4, 'the import opens on its four source tiles — the sheet shows ' + JSON.stringify(await page.locator('#modal-root').innerText().catch(() => '')));
+      assert.equal(await page.locator('#rec-rows').count(), 0, 'and the calculator is gone, not left under it');
+      // The SAME onDone travels on: the draft the import hands back saves to
+      // «وصفاتي», where the calculator's own save lands.
+      await live('[data-rx-pick="text"]').click();
+      await live('#rx-text').fill('200 g spaghetti, 2 tbsp olive oil, salt');
+      await live('[data-rx-go]').click();
+      await live('#rec-rows .rec-row').first().waitFor({ timeout: 15000 });
+      await live('#rec-save').click();
+      const landed = await live('#sf-tab-recipes[aria-selected="true"]').waitFor({ timeout: 4000 }).then(() => true, () => false);
+      assert.ok(landed, 'saving the draft opens «وصفاتي» on its recipes, as the calculator\'s save does — the screen shows ' + JSON.stringify(await page.locator('#modal-root').innerText().catch(() => '')));
+      const id = await page.evaluate((name) => { const r = DB.recipes.list().filter((x) => x.name === name).pop(); return r ? r.id : null; }, RX_STUB.name);
+      assert.ok(id, 'the draft was saved as a recipe');
+      // An EXISTING recipe, opened from «وصفاتي» «تعديل», is not offered it.
+      try {
+        await live(`[data-edit-rec="${id}"]`).click();
+        await live('#rec-rows .rec-row').first().waitFor({ timeout: 4000 });
+        assert.equal((await live('.modal-title').innerText()).trim(), RX_STUB.name, 'setup: the edit sheet is up');
+        assert.equal(await page.locator('#rec-import').count(), 0, 'an edit is not offered «استخراج وصفة»');
+      } finally { await page.evaluate((id) => { closeModal(); DB.recipes.remove(id); }, id); }
+    } finally { await kit.done(); }
+    // Nor is a draft — what the import itself hands the editor.
+    await page.evaluate(() => openRecipeEditor(null, { name: 'QA draft', servings: 1, items: [{ name: 'rice', qty: '100 g', calories: 130, protein: 2.7, carbs: 28, fat: 0.3 }] }, () => {}));
+    await live('#rec-rows .rec-row').first().waitFor({ timeout: 4000 });
+    assert.equal((await live('.modal-title').innerText()).trim(), await tr(page, 'rx_review_title'), 'setup: the draft sheet is up');
+    assert.equal(await page.locator('#rec-import').count(), 0, 'a draft is not offered «استخراج وصفة»');
+    await page.evaluate(() => closeModal());
+  } },
 ];
 module.exports.RECIPE_IMPORT = RECIPE_IMPORT;
 
