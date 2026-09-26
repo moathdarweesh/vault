@@ -113,6 +113,7 @@ module.exports = async function testConvenienceUI(page) {
   await workoutCore(page);
   for (const c of FOOD_BODY) await c.run(page);
   await routerHome(page);
+  await designA11y(page);
   console.log('PASS convenience UI: bilingual meals, half portion, dated log + undo, recipe quantities, shopping save/check, search/date navigation, recent changes, guided-run undo, plan-only restoration, recipe regression, and the workout core (v397): undo names its write, the PR is seen, the suggestion is a target, records judged against history, the trash works unlogged, a half-typed row, the day as logged, the swap survives, the reorder write, the rest-day add, undoable remove, the template asks, sets edited not rebuilt');
 };
 
@@ -1257,4 +1258,406 @@ async function routerHome(page) {
   const { ev } = kit;
   await ev(() => { closeModal(); hideToast(); DB.prefs.setLang('en'); applyLang('en'); DB.prefs.setUnit('kg'); navigate('home'); });
   console.log('PASS router, Home and the notices (v398): Back and Escape close the five .app sheets through their own close, a navigation commits the reorder, the pulled-forward day keeps its Undo, back arrows go back, day names in Arabic, the Arabic fold, the volume and the day view in the user\'s units, one conflict choice, the review on Home over nothing and never over a must-answer dialog, its improvement line, the picked supplement time, the photo off the bucket, onboarding cleared by a pull, the widget url spent once, the permission sheet repaints its own screen');
+}
+
+
+// ---- batches 5 and 8 · DESIGN SYSTEM, ACCESSIBILITY, THE MUSCLE HISTORY ------
+// Every case below FAILED on v398 before its fix, and what it printed there is
+// quoted beside it. Clicks and keys are Playwright's (hit-tested, trusted), so
+// focus moves the way it moves for a keyboard, a switch or TalkBack.
+async function designA11yKit(page) {
+  const ev = (fn, arg) => page.evaluate(fn, arg);
+  await page.waitForFunction(() => !document.getElementById('splash'), null, { timeout: 6000 });
+  await ev(() => {
+    closeModal(); hideToast(); DB.notif.setAsked(); DB.prefs.setUnit('kg'); DB.prefs.setLang('en'); applyLang('en');
+    DB.prefs.setTextLg(false); document.body.classList.remove('text-lg');
+    // Food opens the calculator over itself while no calorie goal is set.
+    if (!(DB.nutrition.get().targets || {}).calories) DB.nutrition.setTargets({ calories: 2000, protein: 120, carbs: 220, fat: 60 });
+  });
+  const reset = (view, ctx) => ev(({ view, ctx }) => {
+    try { closeModal(); } catch (_) {}
+    hideToast();
+    document.querySelectorAll('.app > .sheet-overlay').forEach((s) => s.remove());
+    navStack = [{ view: 'home', context: {} }];
+    navigate('home', {}, { fromPop: true });
+    if (view !== 'home') navigate(view, ctx);
+  }, { view: view || 'home', ctx: ctx || {} });
+  // Where focus is, spelled the way the failure messages print it.
+  const focusAt = (sel) => ev((sel) => {
+    const a = document.activeElement, o = sel && document.querySelector(sel);
+    const at = !a || a === document.body ? 'body' : a.tagName.toLowerCase() + (a.id ? '#' + a.id : '') + (typeof a.className === 'string' && a.className.trim() ? '.' + a.className.trim().split(/\s+/)[0] : '');
+    return { inside: !!o && o.contains(a), at };
+  }, sel);
+  const frame = () => ev(() => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r))));
+  const sheetOpen = () => page.waitForFunction(() => { const s = document.querySelector('.app > .sheet-overlay'); return !!s && s.classList.contains('open'); }, null, { timeout: 2000 });
+  const ids = await ev(() => DB.exercises.list().filter((e) => !e.isCustom).map((e) => e.id));
+  const today = await ev(() => todayISO());
+  await ev(({ ids, today }) => DB.plan.setRotation({ cycle: [{ name: 'QA a11y', exerciseIds: ids.slice(30, 33) }], trainingDays: [0, 1, 2, 3, 4, 5, 6], anchor: today }), { ids, today });
+  return { page, ev, reset, focusAt, frame, sheetOpen, ids, today };
+}
+
+const designA11yCases = [
+  ['an [autofocus] sheet takes focus on every opening', async ({ page, ev, reset, focusAt, frame }) => {
+    // HTML honours [autofocus] once per document, and openModal skipped its own
+    // focus whenever a sheet carried one — so once any sheet had spent the flag,
+    // focus stayed behind every later one. v398: the supplement sheet
+    // ["button#add-supp-btn.btn" x3], the manual-food sheet ["body","body"], and
+    // a forward Tab from outside went to button.nav-btn (only Shift+Tab was
+    // pulled back in).
+    await reset('supplements');
+    const supp = [];
+    for (let i = 0; i < 3; i++) {
+      await page.locator('#add-supp-btn').click();
+      await page.waitForSelector('#modal-root .modal-overlay #supp-name');
+      await frame();
+      supp.push((await focusAt('#modal-root .modal-overlay')).at);
+      await page.keyboard.press('Escape');
+      await page.waitForFunction(() => !document.querySelector('#modal-root .modal-overlay:not(.is-out)'));
+    }
+    assert.deepEqual(supp, ['input#supp-name', 'input#supp-name', 'input#supp-name'], 'every opening of the supplement sheet lands on its name field: ' + JSON.stringify(supp));
+    await reset('food');
+    const mf = [];
+    for (let i = 0; i < 2; i++) {
+      await ev(() => openManualFoodEntry(todayISO(), () => {}));
+      await page.waitForSelector('#modal-root #mf-name');
+      await frame();
+      mf.push((await focusAt('#modal-root .modal-overlay')).at);
+      await ev(() => closeModal());
+    }
+    assert.deepEqual(mf, ['input#mf-name', 'input#mf-name'], 'the manual-food sheet lands on its name field every time: ' + JSON.stringify(mf));
+    // Focus put outside an open sheet: a forward Tab comes back in, as Shift+Tab did.
+    await ev(() => openManualFoodEntry(todayISO(), () => {}));
+    await page.waitForSelector('#modal-root #mf-name');
+    await ev(() => document.querySelector('#bottom-nav .nav-btn').focus());
+    await page.keyboard.press('Tab');
+    const tab = await focusAt('#modal-root .modal-overlay');
+    await ev(() => closeModal());
+    assert.ok(tab.inside, 'a Tab pressed with focus outside the open sheet lands inside it, not on the page behind: ' + tab.at);
+  }],
+
+  ['the five sheets on .app take focus, keep it, and give it back', async ({ page, ev, reset, focusAt, frame, sheetOpen }) => {
+    // Built outside openModal, they had none of its focus handling. v398, all
+    // five: {"opened":false,"out":["Tab → button.nav-btn",…]} — focus left on
+    // the opener and Tab walking the page behind — and after Escape focus was
+    // on body, or wherever the Tabs had left it (rest: button.vault-action).
+    const got = {}, want = {};
+    for (const name of ['add-sheet', 'rest', 'train-anyway', 'reorder', 'notif-perm']) {
+      await reset({ 'add-sheet': 'food', 'notif-perm': 'notifications' }[name] || 'home');
+      let anchor = 'button#food-fab.food-fab';
+      if (name === 'add-sheet') await page.locator('#food-fab').click();
+      else {
+        anchor = await ev((name) => {
+          const a = document.querySelector('#bottom-nav .nav-btn');
+          a.focus();
+          if (name === 'notif-perm') STATE.notif = Object.assign(DB.notif.get(), { asked: false });
+          ({ rest: () => openRestSheet(), 'train-anyway': () => openTrainAnywaySheet(),
+            reorder: () => openReorderSheet(0, () => {}), 'notif-perm': () => openNotifPermSheet() })[name]();
+          return 'button.' + a.className.trim().split(/\s+/)[0];
+        }, name);
+      }
+      await sheetOpen();
+      await frame();
+      const r = { opened: (await focusAt('.app > .sheet-overlay')).inside, out: [] };
+      for (const key of ['Tab', 'Tab', 'Tab', 'Tab', 'Tab', 'Tab', 'Tab', 'Tab', 'Tab', 'Tab', 'Tab', 'Tab', 'Shift+Tab', 'Shift+Tab', 'Shift+Tab']) {
+        await page.keyboard.press(key);
+        const f = await focusAt('.app > .sheet-overlay');
+        if (!f.inside) r.out.push(key + ' → ' + f.at);
+      }
+      await page.keyboard.press('Escape');
+      await page.waitForFunction(() => !document.querySelector('.app > .sheet-overlay'), null, { timeout: 1500 }).catch(() => {});
+      r.gone = await ev(() => !document.querySelector('.app > .sheet-overlay'));
+      r.back = (await focusAt(null)).at;
+      r.out = r.out.slice(0, 3);
+      got[name] = r;
+      want[name] = { opened: true, out: [], gone: true, back: anchor };
+    }
+    assert.deepEqual(got, want, 'each .app sheet moves focus in, keeps Tab and Shift+Tab inside, and hands focus back to its opener on Escape: ' + JSON.stringify(got));
+    // A repaint inside a sheet keeps focus in it: the reorder arrows rebuild the
+    // list, and the rest sheet's second step replaces the first. v398:
+    // {"reorder":{"inside":false,"at":"body"},"rest":false}.
+    const repaint = {};
+    await reset('home');
+    await ev(() => { document.querySelector('#bottom-nav .nav-btn').focus(); openReorderSheet(0, () => {}); });
+    await sheetOpen();
+    await ev(() => document.querySelector('#reorder-sheet-overlay [data-ro="0"][data-dir="1"]').focus());
+    await page.keyboard.press('Enter');
+    repaint.reorder = await focusAt('#reorder-sheet-overlay');
+    await page.keyboard.press('Escape');
+    await reset('home');
+    await ev(() => { document.querySelector('#bottom-nav .nav-btn').focus(); openRestSheet(); });
+    await sheetOpen();
+    await ev(() => document.querySelector('#rest-sheet-overlay [data-rest="minimum"]').focus());
+    await page.keyboard.press('Enter');
+    repaint.rest = (await focusAt('#rest-sheet-overlay')).inside;
+    await page.keyboard.press('Escape');
+    assert.deepEqual(repaint, { reorder: { inside: true, at: 'button' }, rest: true }, 'a sheet that repaints itself keeps focus inside it (the moved row\'s arrow; the new step): ' + JSON.stringify(repaint));
+  }],
+
+  ['every field in a sheet is named by its caption, not its placeholder', async ({ page, ev, reset, ids, today }) => {
+    // The captions are sibling <label class="form-label"> tags with no for= and
+    // no wrapping, so TalkBack read the date field as «edit box» and the calorie
+    // field as «edit box, 165». v398 printed 44 fields, first: session-new
+    // input#session-date "", session-new input[number] "PLACEHOLDER:0",
+    // new-exercise select#ex-category "", food-new input#food-cal
+    // "PLACEHOLDER:165" … change-password input#cpw-confirm, notifications
+    // input[ntfs-time] "".
+    const sheets = [
+      ['session-new', 'openSessionModal', [ids[0]], 'exercise-detail', { exerciseId: ids[0] }],
+      ['new-exercise', 'openNewExerciseModal', [null], 'exercises'],
+      ['cardio-new', 'openCardioModal', [], 'cardio'],
+      ['cardio-type-new', 'openNewCardioTypeModal', ['$noop'], 'cardio'],
+      ['sleep-new', 'openSleepModal', [], 'sleep'],
+      ['supplement-new', 'openSupplementModal', [], 'supplements'],
+      ['food-new', 'openFoodModal', [], 'food'],
+      ['calculator', 'openCalculatorModal', ['$noop'], 'food'],
+      ['manual-food', 'openManualFoodEntry', ['$today', '$noop'], 'food'],
+      ['food-library', 'openFoodLibraryModal', [], 'food'],
+      ['saved-foods', 'openSavedFoodPicker', ['$today', '$noop', 'foods'], 'food'],
+      ['recipe-new', 'openRecipeEditor', ['$today', null, '$noop'], 'food'],
+      ['shopping', 'openShoppingList', [], 'food'],
+      ['slot-editor', 'openSlotEditorModal', [0], 'planner'],
+      ['exercise-picker', 'openSlotEditorModal', [0, '$noop'], 'planner'],
+      ['time-entry-food', 'openTimeEntryModal', [{ kind: 'food' }, '$noop'], 'notifications'],
+      ['feedback', 'showFeedback', [], 'settings'],
+      ['change-password', 'showChangePassword', [false], 'settings'],
+    ];
+    const unnamed = (root) => ev((root) => {
+      const accName = (el) => {
+        const al = el.getAttribute('aria-label'); if (al && al.trim()) return al.trim();
+        const lb = el.getAttribute('aria-labelledby');
+        if (lb) { const x = lb.split(/\s+/).map((id) => (document.getElementById(id) || {}).textContent || '').join(' ').trim(); if (x) return x; }
+        if (el.id) { const l = document.querySelector('label[for="' + CSS.escape(el.id) + '"]'); if (l && l.textContent.trim()) return l.textContent.trim(); }
+        const pl = el.closest('label'); if (pl && pl.textContent.trim()) return pl.textContent.trim();
+        if (el.title) return el.title;
+        return el.placeholder ? 'PLACEHOLDER:' + el.placeholder : '';
+      };
+      // the top-most one: a sheet that is leaving lingers under the next for its exit
+      const ov = [...document.querySelectorAll(root)].filter((o) => !o.classList.contains('is-out')).pop();
+      if (!ov) return ['(nothing open)'];
+      return [...ov.querySelectorAll('input, select, textarea')]
+        .filter((el) => el.type !== 'hidden' && el.getClientRects().length)
+        .map((el) => { const n = accName(el); return !n || n.startsWith('PLACEHOLDER:') ? el.tagName.toLowerCase() + (el.id ? '#' + el.id : '[' + (el.className || el.type) + ']') + ' ' + JSON.stringify(n) : null; })
+        .filter(Boolean);
+    }, root);
+    const bad = [];
+    for (const [id, fn, args, host, ctx] of sheets) {
+      await reset(host, ctx);
+      const threw = await ev(({ fn, args, today }) => {
+        try { window[fn].apply(null, args.map((a) => (a === '$noop' ? () => {} : a === '$today' ? today : a))); return null; } catch (e) { return String(e.message); }
+      }, { fn, args, today });
+      if (threw) { bad.push(id + ' threw ' + threw); continue; }
+      (await unnamed('#modal-root .modal-overlay')).forEach((x) => bad.push(id + ' ' + x));
+      // The calculator has two modes, each with its own fields: read the other one too.
+      if (id === 'calculator' && await page.locator('#modal-root #to-calc, #modal-root #to-manual').count()) {
+        await page.locator('#modal-root #to-calc, #modal-root #to-manual').first().click();
+        (await unnamed('#modal-root .modal-overlay')).forEach((x) => bad.push(id + ' (other mode) ' + x));
+      }
+    }
+    // The fixed reminder time lives on a view, not in a sheet.
+    const mode = await ev(() => { const m = DB.notif.get().channels.train.mode; DB.notif.setChannel('train', { mode: 'fixed' }); return m; });
+    await reset('notifications');
+    (await unnamed('.view.active')).forEach((x) => bad.push('notifications ' + x));
+    await ev((mode) => DB.notif.setChannel('train', { mode }), mode);
+    assert.deepEqual(bad, [], 'every visible field is named by its caption (label[for], a wrapping label or aria-label), never by nothing or its placeholder: ' + JSON.stringify(bad));
+  }],
+
+  ['a chosen option says so to a screen reader', async ({ page, ev, reset }) => {
+    // The option groups marked the choice with a CSS class alone; the theme
+    // picker on the same screen used role=radio + aria-checked. v398:
+    // {"unit":["kg=null","lb=null"],"textlg":["0=null","1=null"],"lang":[…null],
+    // "groups":["null:false" x4],"nav":[],"pills":["All=null",…],
+    // "swatches":["null unnamed" x4],"leak":7,"day":[null,null]} — the last two
+    // are the schedule sheet binding its day toggle to Home's seven week chips.
+    const state = (sel, key) => ev(({ sel, key }) => [...document.querySelectorAll(sel)].map((b) => b.dataset[key] + '=' + (b.getAttribute('aria-checked') || b.getAttribute('aria-pressed'))), { sel, key });
+    const got = {};
+    await reset('settings');
+    await page.locator('.view.active [data-unit="lb"]').click();
+    got.unit = await state('.view.active [data-unit]', 'unit');
+    await page.locator('.view.active [data-unit="kg"]').click();
+    await page.locator('.view.active [data-textlg="1"]').click();
+    got.textlg = await state('.view.active [data-textlg]', 'textlg');
+    await page.locator('.view.active [data-textlg="0"]').click();
+    got.lang = await state('.view.active [data-lang]', 'lang');
+    got.groups = await ev(() => [...document.querySelectorAll('.view.active .lang-toggle, .view.active .unit-toggle')].map((g) => g.getAttribute('role') + ':' + !!g.getAttribute('aria-label')));
+    got.nav = await ev(() => [...document.querySelectorAll('#bottom-nav .nav-btn')].filter((b) => b.getAttribute('aria-current') === 'page').map((b) => b.dataset.view));
+    await reset('exercises');
+    await page.locator('.view.active .filter-pill').nth(1).click();
+    got.pills = (await state('.view.active .filter-pill', 'filter')).slice(0, 3);
+    await reset('supplements');
+    await ev(() => openSupplementModal());
+    await page.locator('#color-swatches [data-color]').nth(2).click();
+    got.swatches = await ev(() => [...document.querySelectorAll('#color-swatches [data-color]')].map((b) => (b.getAttribute('aria-checked') || 'null') + (b.getAttribute('aria-label') ? '' : ' unnamed')).slice(0, 4));
+    await reset('planner');
+    got.leak = await ev(() => {
+      const orig = EventTarget.prototype.addEventListener, bound = [];
+      EventTarget.prototype.addEventListener = function (type) { if (type === 'click' && this instanceof Element) bound.push(this); return orig.apply(this, arguments); };
+      try { openScheduleModal(WORKOUT_TEMPLATES[0]); } finally { EventTarget.prototype.addEventListener = orig; }
+      const ov = document.querySelector('#modal-root .modal-overlay');
+      return bound.filter((el) => !ov.contains(el)).length;
+    });
+    const day = page.locator('#modal-root .schedule-day').first();
+    const before = await day.getAttribute('aria-pressed');
+    await day.click();
+    got.day = [before, await day.getAttribute('aria-pressed')];
+    await ev(() => closeModal());
+    const want = {
+      unit: ['kg=false', 'lb=true'], textlg: ['0=false', '1=true'], lang: ['ar=false', 'en=true'],
+      groups: got.groups.map(() => 'radiogroup:true'), nav: ['home'],
+      pills: got.pills.map((x, i) => x.split('=')[0] + '=' + (i === 1)), swatches: ['false', 'false', 'true', 'false'],
+      leak: 0, day: got.day[0] === 'true' ? ['true', 'false'] : ['false', 'true'],
+    };
+    assert.deepEqual(got, want, 'each option group names its choice (aria-checked in a named radiogroup, aria-pressed for day toggles, aria-current on the lit tab), and the schedule sheet binds only its own days: ' + JSON.stringify(got));
+  }],
+
+  ['a year of one muscle opens on the newest days, the rest on demand', async ({ page, ev, reset, today }) => {
+    // renderMuscleSessions drew every session ever logged for the muscle — 526
+    // at a year of data: 12,838 nodes, ~1 s a render at 4x CPU, again on every
+    // Back. v398: 80 seeded sessions rendered {"first":{"cards":80,"more":false}}.
+    const seed = await ev((today) => {
+      const exById = Object.fromEntries(DB.exercises.list().map((e) => [e.id, e]));
+      const byCat = {};
+      DB.exercises.list().filter((e) => !e.isCustom).forEach((e) => { (byCat[e.category] = byCat[e.category] || []).push(e.id); });
+      const count = {};
+      DB.sessions.listAll().forEach((s) => { const c = exById[s.exerciseId] && exById[s.exerciseId].category; if (c) count[c] = (count[c] || 0) + 1; });
+      const cat = Object.keys(byCat).filter((c) => byCat[c].length >= 2).sort((a, b) => (count[a] || 0) - (count[b] || 0))[0];
+      const made = [];
+      for (let d = 1; d <= 40; d++) for (let k = 0; k < 2; k++) made.push(DB.sessions.add({ exerciseId: byCat[cat][k], date: addDaysISO(today, -d), sets: [{ reps: 8, weight: 40 + d }] }).id);
+      const mine = DB.sessions.listAll().filter((s) => exById[s.exerciseId] && exById[s.exerciseId].category === cat);
+      const perDay = {};
+      mine.forEach((s) => { perDay[s.date] = (perDay[s.date] || 0) + 1; });
+      let first = 0;
+      for (const d of Object.keys(perDay).sort().reverse()) { if (first >= 30) break; first += perDay[d]; }
+      return { cat, made, total: mine.length, first };
+    }, today);
+    await reset('muscle-sessions', { muscleCat: seed.cat });
+    const read = () => ev(() => ({ cards: document.querySelectorAll('.view.active .ms-card').length, more: !!document.querySelector('.view.active #ms-show-more') }));
+    const got = { first: await read() };
+    if (got.first.more) {
+      await page.locator('.view.active #ms-show-more').click();
+      got.all = await read();
+      got.all.focus = await ev(() => !!document.activeElement && document.activeElement.classList.contains('ms-card'));
+      await page.locator('.view.active .ms-card').last().click();
+      await ev(() => goBack());
+      got.back = await read();
+    }
+    await ev((made) => made.forEach((id) => DB.sessions.remove(id)), seed.made);
+    await reset('home');
+    assert.deepEqual(got, {
+      first: { cards: seed.first, more: true },
+      all: { cards: seed.total, more: false, focus: true },
+      back: { cards: seed.total, more: false },
+    }, `a muscle with ${seed.total} sessions opens on its newest days (${seed.first} cards, no day split) with «show more», which appends the rest, focuses the first new card and survives a Back: ` + JSON.stringify(got));
+  }],
+
+  ['every control on the list is at least 44 by 44 where a finger lands', async ({ page, ev, reset, ids, today }) => {
+    // ux-audit's reach scan: from the centre outward (26px each way),
+    // elementFromPoint must still be the control or its ::after halo. v398, 25
+    // entries: .nutri-edit 32x32 reaches 33x33, the water cups 37 tall,
+    // .link-btn 37 tall, .weight-row-del 34x34, .set-remove 38x38, #to-calc 32
+    // tall, the exercise photo buttons 36, .sfp-tab 36, .bundle-main 42,
+    // #rec-servings and #rec-view-servings 52x36, the reorder arrows 40x40,
+    // .ntfs-opt 36 tall (the «6» chip 38x36), #day-prev 44x41,
+    // .sd-add-set-btn 36, .schedule-prev-row 41.
+    const reach = (sel) => ev((sel) => {
+      const vw = innerWidth, vh = innerHeight, out = [];
+      for (const el of document.querySelectorAll(sel)) {
+        if (!el.getClientRects().length || el.disabled) continue;
+        el.scrollIntoView({ block: 'center', inline: 'center' });
+        const r = el.getBoundingClientRect(), cx = r.left + r.width / 2, cy = r.top + r.height / 2;
+        const own = (h) => !!h && (h === el || el.contains(h));
+        const run = (dx, dy) => { let d = 0; for (let k = 1; k <= 26; k++) { const x = cx + dx * k, y = cy + dy * k; if (x < 0 || y < 0 || x >= vw || y >= vh || !own(document.elementFromPoint(x, y))) break; d = k; } return d; };
+        if (!own(document.elementFromPoint(cx, cy))) { out.push(sel + ' unhittable'); continue; }
+        const w = run(-1, 0) + run(1, 0) + 1, h = run(0, -1) + run(0, 1) + 1;
+        if (w < 44 || h < 44) out.push(sel + ' ' + Math.round(r.width) + 'x' + Math.round(r.height) + ' reaches ' + w + 'x' + h);
+      }
+      return out;
+    }, sel);
+    const settle = () => page.waitForTimeout(450);
+    const small = [];
+    const scan = async (sels) => { for (const s of sels) small.push(...await reach(s)); };
+    await ev((today) => {
+      DB.water.add(today, 250);
+      for (let i = 0; i < 4; i++) DB.bodyweight.log(addDaysISO(today, -i), 80 + i);
+      if (!DB.recipes.list().length) DB.recipes.add({ name: 'QA a11y recipe', servings: 2, items: [{ name: 'Rice', qty: '200 g', calories: 260, protein: 5, carbs: 56, fat: 1 }] });
+      if (!DB.mealBundles.list().length) DB.mealBundles.update(null, { name: 'QA a11y meal', items: [{ name: 'Eggs', calories: 140, protein: 12, carbs: 1, fat: 10, servings: 2 }] });
+    }, today);
+    await reset('food'); await settle();
+    await scan(['.view.active .nutri-edit', '.view.active .water-cup', '.view.active .link-btn']);
+    await ev(() => openWeightSheet()); await settle();
+    await scan(['#modal-root .weight-row-del']);
+    await ev((id) => openSessionModal(id), ids[0]); await settle();
+    await scan(['#modal-root .set-remove', '#modal-root [data-modal-unit]']);
+    await ev(() => openCalculatorModal(() => {})); await settle();
+    await scan(['#modal-root #to-calc', '#modal-root #to-manual']);
+    await ev(() => openNewExerciseModal(null)); await settle();
+    await scan(['#modal-root #ex-image-camera', '#modal-root #ex-image-pick']);
+    await ev((today) => openSavedFoodPicker(today, () => {}, 'bundles'), today); await settle();
+    await scan(['#modal-root .sfp-tab', '#modal-root .bundle-main']);
+    await ev((today) => openRecipeEditor(today, null, () => {}), today); await settle();
+    await scan(['#modal-root #rec-servings']);
+    await ev((today) => openRecipeView(today, DB.recipes.list()[0], () => {}), today); await settle();
+    await scan(['#modal-root #rec-view-servings']);
+    await reset('home');
+    await ev(() => openReorderSheet(0, () => {})); await settle();
+    await scan(['#reorder-sheet-overlay .reorder-arrows button']);
+    await reset('notifications'); await settle();
+    await scan(['.view.active .ntfs-opt']);
+    await reset('foodlog', { foodLog: { date: today } }); await settle();
+    await scan(['.view.active #day-prev', '.view.active #day-next']);
+    await reset('session-day', { sdDate: today }); await settle();
+    await scan(['.view.active .sd-add-set-btn']);
+    await reset('workouts'); await settle();
+    await scan(['.view.active .schedule-prev-row']);
+    await reset('home');
+    assert.deepEqual([...new Set(small)], [], 'every listed control reaches 44x44 from its centre (its own box or its ::after halo): ' + JSON.stringify([...new Set(small)]));
+  }],
+
+  ['«Larger text» enlarges the figures, units, calendar and set tables', async ({ page, ev, reset, ids, today }) => {
+    // body.text-lg raised only the --fs-* tokens while 306 font sizes were px
+    // literals, so most of what a user reads kept its size. v398:
+    // [".calendar-cell:not(.empty) 13 → 13", ".section-title 11 → 11",
+    // ".settings-action-title 14 → 14", ".w-unit 11 → 11", ".w-alt 11 → 11",
+    // ".sets-row-num 13 → 13", ".fig-row-num 26 → 26"] (.stat-box-value, already
+    // on a token, is the control that grew).
+    const seeded = await ev(({ id, today }) => {
+      const before = new Set(DB.sleep.list().map((s) => s.id));
+      const s = DB.sessions.add({ exerciseId: id, date: today, sets: [{ reps: 8, weight: 60 }] });
+      DB.sleep.add({ date: today, sleepTime: '23:00', wakeTime: '07:00' });
+      return { session: s && s.id, sleep: DB.sleep.list().map((x) => x.id).filter((x) => !before.has(x)) };
+    }, { id: ids[0], today });
+    const probes = [
+      ['calendar', {}, '.calendar-cell:not(.empty)'],
+      ['settings', {}, '.section-title'],
+      ['settings', {}, '.settings-action-title'],
+      ['exercise-detail', { exerciseId: ids[0] }, '.w-unit'],
+      ['exercise-detail', { exerciseId: ids[0] }, '.w-alt'],
+      ['exercise-detail', { exerciseId: ids[0] }, '.sets-row-num'],
+      ['exercise-detail', { exerciseId: ids[0] }, '.stat-box-value'],
+      ['sleep', {}, '.fig-row-num'],
+    ];
+    const sizes = async () => {
+      const out = {};
+      for (const [view, ctx, sel] of probes) {
+        await reset(view, ctx);
+        out[sel] = await ev((sel) => { const el = [...document.querySelectorAll('.view.active ' + sel)].find((n) => n.getClientRects().length); return el ? parseFloat(getComputedStyle(el).fontSize) : null; }, sel);
+      }
+      return out;
+    };
+    const normal = await sizes();
+    await reset('settings');
+    await page.locator('.view.active [data-textlg="1"]').click();
+    const large = await sizes();
+    await reset('settings');
+    await page.locator('.view.active [data-textlg="0"]').click();
+    await ev((seeded) => { if (seeded.session) DB.sessions.remove(seeded.session); seeded.sleep.forEach((id) => DB.sleep.remove(id)); }, seeded);
+    const same = Object.keys(normal).filter((k) => !(normal[k] && large[k] > normal[k])).map((k) => k + ' ' + normal[k] + ' → ' + large[k]);
+    assert.deepEqual(same, [], '«Larger text» makes each of these strictly larger: ' + JSON.stringify(same));
+  }],
+];
+
+async function designA11y(page) {
+  const kit = await designA11yKit(page);
+  for (const [, run] of designA11yCases) await run(kit);
+  await kit.ev(() => { closeModal(); hideToast(); DB.prefs.setTextLg(false); document.body.classList.remove('text-lg'); navigate('home'); });
+  console.log('PASS design system, accessibility and the muscle history (batches 5, 8): an [autofocus] sheet takes focus every time, the five .app sheets take, keep and return focus, every field is named by its caption, a chosen option says so, a year of one muscle opens on its newest days, the listed controls reach 44x44, «Larger text» reaches the figures');
 }

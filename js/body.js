@@ -363,7 +363,7 @@ function openCardioModal(cardioId = null, presetDate = null) {
       // Icon in a tinted tile, like .tool-pod-icon everywhere else in the app — a
       // bare 20px glyph floating over a card is what made this grid look unfinished.
       return `
-        <button type="button" class="type-option ${tt.id === selectedType ? 'active' : ''}" data-type="${escapeHtml(tt.id)}">
+        <button type="button" class="type-option ${tt.id === selectedType ? 'active' : ''}" role="radio" aria-checked="${tt.id === selectedType}" data-type="${escapeHtml(tt.id)}">
           <span class="type-option-icon" aria-hidden="true">${icon(ic, 22)}</span>
           <div class="type-option-label">${escapeHtml(label)}</div>
         </button>
@@ -387,7 +387,7 @@ function openCardioModal(cardioId = null, presetDate = null) {
 
     <div class="form-group">
       <label class="form-label">${t('type')}</label>
-      <div class="type-selector" id="cardio-type-selector">${buildTypeOptionsHtml()}</div>
+      <div class="type-selector" id="cardio-type-selector" role="radiogroup" aria-label="${escapeHtml(t('type'))}">${buildTypeOptionsHtml()}</div>
     </div>
 
     <div class="form-group">
@@ -444,8 +444,9 @@ function openCardioModal(cardioId = null, presetDate = null) {
     const btn = e.target.closest('[data-type]');
     if (!btn) return;
     selectedType = btn.dataset.type;
-    $('#cardio-type-selector').querySelectorAll('.type-option').forEach((b) =>
-      b.classList.toggle('active', b.dataset.type === selectedType)
+    // [data-type]: the «new type» tile shares the class and is not an option.
+    $('#cardio-type-selector').querySelectorAll('.type-option[data-type]').forEach((b) =>
+      setChosen(b, b.dataset.type === selectedType)
     );
   });
 
@@ -479,7 +480,7 @@ function openCardioScheduleModal(id = null) {
   const days = new Set(existing ? existing.days : []);
 
   const typeOptions = () => DB.cardioTypes.allTypes().map((tt) => `
-    <button type="button" class="type-option ${tt.id === selectedType ? 'active' : ''}" data-type="${escapeHtml(tt.id)}">
+    <button type="button" class="type-option ${tt.id === selectedType ? 'active' : ''}" role="radio" aria-checked="${tt.id === selectedType}" data-type="${escapeHtml(tt.id)}">
       <span class="type-option-icon" aria-hidden="true">${icon(tt.iconName || 'heart', 22)}</span>
       <div class="type-option-label">${escapeHtml(tt.isCustom ? tt.label : t(tt.id))}</div>
     </button>`).join('');
@@ -491,7 +492,7 @@ function openCardioScheduleModal(id = null) {
     </div>
     <div class="form-group">
       <label class="form-label">${t('type')}</label>
-      <div class="type-selector" id="cs-type">${typeOptions()}</div>
+      <div class="type-selector" id="cs-type" role="radiogroup" aria-label="${escapeHtml(t('type'))}">${typeOptions()}</div>
     </div>
     <div class="form-group">
       <label class="form-label">${t('cardio_sched_days')}</label>
@@ -513,7 +514,7 @@ function openCardioScheduleModal(id = null) {
     const b = e.target.closest('[data-type]');
     if (!b) return;
     selectedType = b.dataset.type;
-    overlay.querySelectorAll('#cs-type [data-type]').forEach((x) => x.classList.toggle('active', x === b));
+    overlay.querySelectorAll('#cs-type [data-type]').forEach((x) => setChosen(x, x === b));
   });
   overlay.querySelector('#cs-days').addEventListener('click', (e) => {
     const b = e.target.closest('[data-csd]');
@@ -561,7 +562,7 @@ function openNewCardioTypeModal(onCreated) {
 
   function iconChipsHtml() {
     return CARDIO_ICON_OPTIONS.map((nm) => `
-      <button type="button" class="cardio-icon-chip ${nm === pickedIcon ? 'active' : ''}" data-cardio-icon="${nm}" aria-label="${nm}">
+      <button type="button" class="cardio-icon-chip ${nm === pickedIcon ? 'active' : ''}" role="radio" aria-checked="${nm === pickedIcon}" data-cardio-icon="${nm}" aria-label="${nm}">
         ${icon(nm, 20)}
       </button>
     `).join('');
@@ -581,13 +582,15 @@ function openNewCardioTypeModal(onCreated) {
       </div>
 
       <div class="form-group">
-        <label class="form-label">${t('name')}</label>
+        <!-- for= by hand: this sub-sheet is appended to #modal-root beside the
+             cardio sheet, not through openModal, so labelSheetFields never sees it. -->
+        <label class="form-label" for="cardio-type-name">${t('name')}</label>
         <input type="text" id="cardio-type-name" placeholder="${t('cardio_type_name_ph')}">
       </div>
 
       <div class="form-group">
         <label class="form-label">${t('icon')}</label>
-        <div class="cardio-icon-chips" id="cardio-type-icons">${iconChipsHtml()}</div>
+        <div class="cardio-icon-chips" id="cardio-type-icons" role="radiogroup" aria-label="${escapeHtml(t('icon'))}">${iconChipsHtml()}</div>
       </div>
 
       <div class="form-actions">
@@ -608,7 +611,7 @@ function openNewCardioTypeModal(onCreated) {
     if (!chip) return;
     pickedIcon = chip.dataset.cardioIcon;
     overlay.querySelectorAll('[data-cardio-icon]').forEach((b) =>
-      b.classList.toggle('active', b.dataset.cardioIcon === pickedIcon)
+      setChosen(b, b.dataset.cardioIcon === pickedIcon)
     );
   });
 
@@ -839,7 +842,7 @@ function openSleepModal(sleepId = null, presetDate = null) {
 
     <div id="sleep-duration-preview" class="prev-session" style="margin-bottom:0">
       <div class="prev-session-head"><span>${t('total_sleep')}</span></div>
-      <div class="prev-session-sets num" style="font-size:18px;font-weight:700;letter-spacing:-0.03em"></div>
+      <div class="prev-session-sets num" style="font-size:calc(18px * var(--fs-scale));font-weight:700;letter-spacing:-0.03em"></div>
     </div>
 
     <div class="form-actions">

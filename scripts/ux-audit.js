@@ -4,6 +4,8 @@
 //
 //   node scripts/ux-audit.js --tag pass1                # both contexts, seeded, screenshots
 //   node scripts/ux-audit.js --tag pass1 --contexts one  # ar/dark/375 only
+//   node scripts/ux-audit.js --tag lg --text-lg          # the same, with «Larger text» on
+//   node scripts/ux-audit.js --compare pass1 lg          # coverage + new clips between two tags
 //
 // ⚠️ A TOOL, NOT A SUITE — deliberately not named test-*.js. It writes
 // .uxaudit/<tag>/ (gitignored): one JSON per cell, one viewport screenshot and
@@ -53,6 +55,9 @@ const { openContext, settle, timedRender, FROZEN } = require('./fingerprint-net.
 const OUT = path.join(ROOT, '.uxaudit');
 const args = process.argv.slice(2);
 const flag = (name, def) => { const i = args.indexOf('--' + name); return i === -1 ? def : args[i + 1]; };
+// --text-lg: every cell with «Larger text» (body.text-lg) switched on before any
+// view renders. Paired with --compare, it is how design-system#1 was measured.
+const TEXT_LG = args.includes('--text-lg');
 
 const CONTEXTS = {
   one: [{ lang: 'ar', theme: 'dark', width: 375 }],
@@ -349,6 +354,7 @@ async function auditContext(browser, origin, { lang, theme, width }, dir) {
     for (const f of fx.failed) problems.push('fixture: ' + f);
     const hist = await page.evaluate(seedHistory, fx);
     for (const f of hist.failed) problems.push('history: ' + f);
+    if (TEXT_LG) await page.evaluate(() => { DB.prefs.setTextLg(true); document.body.classList.add('text-lg'); });
 
     for (const v of VIEWS) {
       const cellId = lang + '/' + theme + '/' + width + '/' + v.view;
@@ -403,9 +409,53 @@ async function auditContext(browser, origin, { lang, theme, width }, dir) {
   }
 }
 
+// --compare <tagA> <tagB>: the same cells captured at two settings — normally
+// without and with --text-lg. The DOM is the same, so items are index-aligned
+// (tag and class are checked, and a mismatch is counted, never compared).
+//   COVERAGE  — the share of visible text elements whose font size GREW;
+//   NEW CLIPS — boxes clipped, ellipsised or spilling in B and not in A: v380's
+//               bar, no box may clip at the large size that did not at normal.
+// Exit 1 on any new clip, so the check can be run as a gate.
+function compareTags(tagA, tagB) {
+  const load = (tag, f) => JSON.parse(fs.readFileSync(path.join(OUT, tag, f), 'utf8'));
+  const A = load(tagA, 'index.json'), B = load(tagB, 'index.json');
+  const BAD = ['clipped', 'ellipsis', 'spillsViewport'];
+  let grew = 0, stayed = 0, misaligned = 0;
+  const kept = {}, clips = [];
+  for (const [cellId, ca] of Object.entries(A.cells)) {
+    const cb = B.cells[cellId];
+    if (!cb) { misaligned++; continue; }
+    const xs = load(tagA, ca.file).items, ys = load(tagB, cb.file).items;
+    // A different element at the same index means the two DOMs diverged from
+    // there on: the cell stops being compared (counted, never guessed at). A
+    // class alone may differ — the text-size toggle's own .active does.
+    const cut = xs.findIndex((x, k) => !ys[k] || x.tag !== ys[k].tag);
+    if (cut !== -1 || xs.length !== ys.length) misaligned++;
+    xs.slice(0, cut === -1 ? xs.length : cut).forEach((x, k) => {
+      const y = ys[k];
+      if (x.visible && y.visible && x.text) {
+        if (y.fs > x.fs) grew++;
+        else { stayed++; const key = (x.cls.split(' ')[0] || x.tag) + ' ' + x.fs + 'px'; kept[key] = (kept[key] || 0) + 1; }
+      }
+      const fa = x.flags || [], fb = y.flags || [];
+      for (const f of BAD) if (fb.includes(f) && !fa.includes(f)) clips.push(`${cellId} ${(y.cls.split(' ')[0] || y.tag)} ${f} «${String(y.text || y.allText || '').slice(0, 30)}»`);
+    });
+  }
+  const total = grew + stayed;
+  console.log(`ux-audit compare ${tagA} → ${tagB}: ${Object.keys(A.cells).length} cells`);
+  console.log(`  coverage: ${grew} of ${total} visible text elements grew (${total ? Math.round((grew / total) * 1000) / 10 : 0}%)`);
+  const top = Object.entries(kept).sort((p, q) => q[1] - p[1]).slice(0, 12);
+  if (top.length) console.log('  kept their size: ' + top.map(([k, n]) => `${k} ×${n}`).join(' · '));
+  console.log(`  new clips: ${clips.length}` + (misaligned ? ` · ${misaligned} misaligned items or cells (not compared)` : ''));
+  for (const c of clips.slice(0, 40)) console.log('    ✗ ' + c);
+  if (clips.length) process.exitCode = 1;
+}
+
 (async () => {
+  const cmp = args.indexOf('--compare');
+  if (cmp !== -1) { compareTags(args[cmp + 1], args[cmp + 2]); return; }
   const tag = flag('tag', null);
-  if (!tag) { console.log('usage: node scripts/ux-audit.js --tag <name> [--contexts extremes|one]'); process.exitCode = 1; return; }
+  if (!tag) { console.log('usage: node scripts/ux-audit.js --tag <name> [--contexts extremes|one] [--text-lg]\n       node scripts/ux-audit.js --compare <tagA> <tagB>'); process.exitCode = 1; return; }
   const contexts = CONTEXTS[flag('contexts', 'extremes')];
   if (!contexts) throw new Error('--contexts must be extremes or one');
   let chromium;

@@ -32,7 +32,7 @@ A fitness / workout-tracking **PWA**. Vanilla JS, **no build step**, bilingual *
 - **No automated test framework.** "Tested" = verified in the real running app by driving the DOM with `preview_eval`. **Screenshots time out on this app — do not rely on them.**
 
 ## Non-negotiable rules
-- **Every user-facing string** goes through `t('key')` and has BOTH an EN and an AR entry in `app.js`. A missing language is a bug.
+- **Every user-facing string** goes through `t('key')` and has BOTH an EN and an AR entry in `js/i18n.js`. A missing language is a bug.
 - **Read/write data only through `DB.*`** — never touch `localStorage` directly from view code.
 - **Escape untrusted data** rendered into `innerHTML` with `escapeHtml()` — exercise/food names, and anything from cloud sync / imported backups / AI responses are untrusted.
 - No new dependencies, no build step. Free-first (the maintainer prioritizes free tools/services).
@@ -79,11 +79,11 @@ a faster TTFB — not fewer bytes.
 ## CACHE WORKFLOW — now automated. **Do not bump by hand.**
 
 ```bash
-npm run verify           # 55 contracts + lint + 13 suites — THE GATE
+npm run verify           # 60 contracts + lint + 14 suites — THE GATE
 npm run release          # bump every marker and re-read them; runs NO tests
 ```
 
-**Current version: v398.** APK: build 24 / v3.3.
+**Current version: v399.** APK: build 24 / v3.3.
 
 > ⚠️ **`npm run release` RUNS NO TESTS, AND THIS LINE USED TO READ AS IF IT DID.**
 > It said «bump every marker + verify», where *verify* meant the MARKERS — and
@@ -2734,6 +2734,84 @@ the rows pre-filled from last time as performed sets ("confirmed without a
 throwaway edit" is the recorded intent; whether an untouched row should count
 is the owner's call); a saved food **4 taps**. The day card's Save measures
 **69×40** — under the 44 floor.
+
+## v399 — batches 4, 5 and 8: the Arabic is فصحى, «Larger text» is larger, and the recipe Worker
+
+Batches 4 (Arabic quality + i18n integrity, 18 findings), 5 (design system +
+accessibility, 6) and 8 (performance, 1) of the 2026-09-25 review, plus
+**commit A of «استخراج وصفة»** (the Worker's `recipe` mode — client half in
+v400). Every fix shipped with a check that FAILED first. New suite
+`scripts/test-i18n.js` (120 problems on v398, 0 now); **contracts 60–64** (56–59 are unused numbers).
+
+**The Arabic is formal, and a suite keeps it so.** `test-i18n.js` refuses a
+dialect word list in every ar value (its 17 hits were exactly the reviewer's:
+بتصير، فاضية، بينحذف، شي، صار، نهارك، رز، الغدا، الإيميل، «ما … بعد», «سجّل دخول»
+without its article), pins one term per concept anchored on the EN column
+(«التذكيرات» = Reminders, «الإشعارات» = Notifications, «غ», «محادثة», «طعام»,
+«الجلسة»), checks the count ladders through the REAL code (`daysAgoLocalized`
+now says «منذ يومين / منذ 3 أسابيع / منذ شهرين» and «1 week ago»; `streakUnitLabel`
+and `suppStreakLabel` replace the `.replace('ago','')` hack; water/hours/streak
+reminders have `_1/_2/_n/_many` forms; «1 1 day» is gone), one digit script per
+phrase, the training reminder in the user's unit (`{w} {u}`), `planDayName('Workout')`
+→ «يوم تمرين», the delete-account and coach errors through translated keys, and
+the coach prompt in فصحى under the Worker's cap. Partial by decision: «كارب» stays
+until a box measurement; the Latin g beside figures (v374 rule) and «الأكل» stay.
+Owner decision pending: the streak chip reads «2 يومان» (digit beside the dual)
+vs the flat «2 يوم».
+
+**«Larger text» reaches every size.** It grew 14.8% of on-screen text; now 99.1%
+(the lockup is a mark). 302 px font-size literals became tokens or
+`calc(Npx * var(--fs-scale))` (`--fs-scale` 1 / 1.1) — **contract 62** refuses a
+new literal outside five named exceptions, **63** refuses `body.text-lg` rules
+nested inside `:root` (they were swallowing the `--fw-*`/`--tracking-*` tokens on
+WebViews without CSS nesting). Normal size is byte-identical in the fingerprint
+net (no font-size change in 160 views). `ux-audit.js --text-lg` / `--compare A B`
+measure it (exit 1 on any clipped box).
+- **Every field has a name** (30 unnamed, 57 placeholder-only → 0):
+  `labelSheetFields()` in `openModal` ties captions to fields (a MutationObserver
+  covers fields drawn later); ~10 fields got `aria-label` from existing keys.
+- **Focus lives inside every sheet:** `openModal` focuses the `[autofocus]` field
+  itself (the browser honours the attribute once per page); one `trapTab` pulls a
+  forward Tab from outside back in; the five sheets on `.app` use
+  `holdSheetFocus(overlay)` / `release()` (**contract 64**), focus returns to the
+  opener, and stays inside after a repaint.
+- **A chosen option says so:** `setChosen()` writes class + ARIA state in one call;
+  exclusive groups are named radiogroups, day toggles `aria-pressed`, the bottom
+  nav `aria-current` (**contracts 60/61**: 33 stateless options, 13 bare class
+  flips, 8 unnamed swatches → 0). The schedule sheet binds only its own seven days
+  (it was listening to Home's chips).
+- **Tap targets:** 25 controls under 44 px → 0 (halos or the 36/44 rungs; two
+  sticky bars painted over their halos — 8/4 px more top margin). Reduced motion
+  now holds in dark mode too (the theme classes overrode it: 260/400 ms → 0).
+- **muscle-sessions** renders the newest whole days up to 30 sessions with «show
+  more» (526 sessions: 12,838 nodes / 143 ms → 761 / 18 ms; ×4 CPU 1,157 → 42 ms).
+  `fmtNum` caches one `Intl.NumberFormat`.
+
+**The Worker's `recipe` mode (commit A, NOT deployed yet).** Recipe-only fields
+(`frames[]`, `recipeAudio`, `recipeText`, `link`, `lang` enum) under a fixed
+`RECIPE_SYSTEM` (the source is DATA, never instructions; every ingredient once;
+name without amount; qty as written; figures for the whole amount, never per
+serving; zero rows kept; ≤30 items; EN + AR examples), `clampRecipe`, `readRecipe`
+(audio/stills checked head+tail and for `"`/`\` — a raw splice into the JSON body
+is safe only for pure base64, and the tests plant the injection), the body built
+ONCE per request (`recipeWire`), links: YouTube via `file_data.file_uri` + first
+300 s + low media resolution, TikTok via oEmbed (caption + cover), Instagram
+best-effort (login wall → `LINK_BLOCKED`); a link walks MODELS under ONE shared
+deadline (`LINK_ATTEMPT_MS` 60 s; a 429/404 passes on, anything else ends it, the
+video is never read twice); `LINK_UNSUPPORTED` (400) / `LINK_BLOCKED` (502) as
+literals on both sides (contract 30); the eleven allowed hosts pinned across the
+header, the README and `readLink` (L7). On the OLD Worker every recipe request is
+`400 'no input'` before the budget. Measured on this PC: a typical 60 s clip costs
+~4.7 ms of handler time (~12 ms with the upload encode) — the free plan allows
+10 ms; **read the real CPU in Workers Logs after the deploy**; the recorded next
+step if it is over is a raw-bytes pass-through. Owner: `cd backend/worker && npx
+wrangler deploy` (this also ships the v391/v397 Worker changes).
+
+60 contracts · lint · **14 suites, 0 failed, 0 skipped**. Fingerprint net: no
+element added or removed, no font-size change at normal size; the diffs are ARIA,
+`for=`, halos and the two 8/4 px margins. Still open from these batches: the «new
+cardio type» sub-sheet is a sixth sheet outside the focus handling; the cardio
+icon chips are named with raw English ids in Arabic.
 
 ## v398 — batches 2b and 3: Back knows every sheet, and what the watch brings back
 

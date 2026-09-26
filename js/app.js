@@ -12,7 +12,7 @@
 // build. The literal below is the fallback (file://, or a stripped query) and is
 // still bumped by `npm run release` — see CLAUDE.md "CACHE WORKFLOW".
 const VAULT_BUILD = (() => {
-  const FALLBACK = 'v398';
+  const FALLBACK = 'v399';
   try {
     const src = (document.currentScript && document.currentScript.src) || '';
     const m = src.match(/[?&]v=(\d+)/);
@@ -142,7 +142,7 @@ function openNotifPermSheet() {
   overlay.className = 'sheet-overlay';
   const line = (k) => `<div class="ntfp-line">${icon('check', 20)}<span>${t(k)}</span></div>`;
   overlay.innerHTML = `
-    <div class="add-sheet ntfp-sheet" role="dialog" aria-modal="true"
+    <div class="add-sheet ntfp-sheet" role="dialog" aria-modal="true" tabindex="-1"
          aria-label="${escapeHtml(t('notif_perm_title'))}">
       <div class="sheet-handle"></div>
       <div class="ntfp-icon">${icon('bell', 28)}</div>
@@ -160,9 +160,11 @@ function openNotifPermSheet() {
     </div>`;
   app.appendChild(overlay);
   requestAnimationFrame(() => overlay.classList.add('open'));
+  const release = holdSheetFocus(overlay);
 
   const close = () => {
     overlay.__closed = true;
+    release();
     // Asked, whichever way it went. The sheet never reappears on its own — the
     // "turn on reminders" row on the notifications page is the only way back,
     // and it is shown exactly while the OS prompt is still winnable.
@@ -368,7 +370,13 @@ function renderNotifications(el) {
       case 'supps': return ch.supps.doses.length
         ? t('notif_sum_supps').replace('{n}', fmtNum(ch.supps.doses.length))
         : t('notif_sum_supps_none');
-      case 'water': return t('notif_sum_water').replace('{n}', fmtNum(Math.round(ch.water.everyMin / 60)));
+      // One hour, two hours, then 3–10 — Arabic counts them three ways, and
+      // «كل 1 ساعات» / "Every 1 hours" was the one-form result. The picker
+      // offers 1–3 h; an interval migrated from the old reminders can be more.
+      case 'water': {
+        const h = Math.round(ch.water.everyMin / 60);
+        return (h === 1 ? t('notif_sum_water_1') : h === 2 ? t('notif_sum_water_2') : t('notif_sum_water_n')).replace('{n}', fmtNum(h));
+      }
       // Says out loud why it is silent. This channel had a full settings row, a
       // delay picker and translated text for a notification that no code path
       // could ever produce — it was configurable and mute.
@@ -398,11 +406,11 @@ function renderNotifications(el) {
     </div>`;
 
   const trainBody = `
-    <div class="ntfs-choice">
-      <button type="button" class="ntfs-opt${ch.train.mode === 'auto' ? ' sel' : ''}" data-train-mode="auto">${t('notif_train_mode_auto')}</button>
-      <button type="button" class="ntfs-opt${ch.train.mode === 'fixed' ? ' sel' : ''}" data-train-mode="fixed">${t('notif_train_mode_fixed')}</button>
+    <div class="ntfs-choice" role="radiogroup" aria-label="${escapeHtml(t('notif_ch_train'))}">
+      <button type="button" class="ntfs-opt${ch.train.mode === 'auto' ? ' sel' : ''}" role="radio" aria-checked="${ch.train.mode === 'auto'}" data-train-mode="auto">${t('notif_train_mode_auto')}</button>
+      <button type="button" class="ntfs-opt${ch.train.mode === 'fixed' ? ' sel' : ''}" role="radio" aria-checked="${ch.train.mode === 'fixed'}" data-train-mode="fixed">${t('notif_train_mode_fixed')}</button>
     </div>
-    ${ch.train.mode === 'fixed' ? `<input type="time" class="ntfs-time" value="${escapeHtml(ch.train.at)}" data-train-at>` : ''}`;
+    ${ch.train.mode === 'fixed' ? `<input type="time" class="ntfs-time" value="${escapeHtml(ch.train.at)}" aria-label="${escapeHtml(t('notif_train_mode_fixed'))}" data-train-at>` : ''}`;
 
   // Doses and meal times are the same shape — {id, at, name} — so they get the
   // same editor. A dose can additionally be LINKED to a real supplement, which
@@ -423,15 +431,15 @@ function renderNotifications(el) {
   const suppsBody = timeList(ch.supps.doses, 'data-rm-dose', 'data-add-dose', t('notif_supps_add'));
 
   const waterBody = `
-    <div class="ntfs-choice">
-      ${[1, 2, 3].map((h) => `<button type="button" class="ntfs-opt${Math.round(ch.water.everyMin / 60) === h ? ' sel' : ''}" data-water-h="${h}">${t('notif_every_hours').replace('{n}', fmtNum(h))}</button>`).join('')}
+    <div class="ntfs-choice" role="radiogroup" aria-label="${escapeHtml(t('notif_ch_water'))}">
+      ${[1, 2, 3].map((h) => `<button type="button" class="ntfs-opt${Math.round(ch.water.everyMin / 60) === h ? ' sel' : ''}" role="radio" aria-checked="${Math.round(ch.water.everyMin / 60) === h}" data-water-h="${h}">${(h === 1 ? t('notif_every_hours_1') : h === 2 ? t('notif_every_hours_2') : t('notif_every_hours_n')).replace('{n}', fmtNum(h))}</button>`).join('')}
     </div>`;
 
   const foodBody = hasTargets
     ? timeList(ch.food.meals, 'data-rm-meal', 'data-add-meal', t('notif_food_add'))
     : `<div class="ntfs-hint">${t('notif_sum_food_notarget')}</div>`;
 
-  const capOpt = (val, label) => `<button type="button" class="ntfs-opt${String(cfg.cap) === String(val) ? ' sel' : ''}" data-cap="${val}">${label}</button>`;
+  const capOpt = (val, label) => `<button type="button" class="ntfs-opt${String(cfg.cap) === String(val) ? ' sel' : ''}" role="radio" aria-checked="${String(cfg.cap) === String(val)}" data-cap="${val}">${label}</button>`;
 
   el.innerHTML = `
     <div class="detail-top">
@@ -484,7 +492,7 @@ function renderNotifications(el) {
 
     <div class="card ntfs-window">
       <div class="ntfa-label">${t('notif_cap_title')}</div>
-      <div class="ntfs-choice">
+      <div class="ntfs-choice" role="radiogroup" aria-label="${escapeHtml(t('notif_cap_title'))}">
         ${capOpt('auto', t('notif_cap_auto'))}
         ${capOpt(6, fmtNum(6))}
         ${capOpt(10, fmtNum(10))}
@@ -1182,7 +1190,12 @@ function navigate(view, context = {}, opts = {}) {
     'session-day': 'workouts', 'session-run': 'workouts',   // the run screens belong to Program; without this no tab was lit
   };
   const highlightView = navMap[view] || view;
-  $$('.nav-btn').forEach((b) => b.classList.toggle('active', b.dataset.view === highlightView));
+  // The lit tab is the current page to a screen reader too, not only a colour.
+  $$('.nav-btn').forEach((b) => {
+    const on = b.dataset.view === highlightView;
+    b.classList.toggle('active', on);
+    if (on) b.setAttribute('aria-current', 'page'); else b.removeAttribute('aria-current');
+  });
 
   renderView(view);
   if (mainEl) {
@@ -2042,7 +2055,7 @@ function renderHome(el) {
       </button>`;
   })();
 
-  const streakUnit = streak === 1 ? t('streak_one_day') : t('streak_days');
+  const streakUnit = streakUnitLabel(streak);
   const streakLabel = streak > 0 ? t('streak_active') : t('streak_start');
 
   // Hero "Today" card — the flagship element of the redesigned home.
@@ -2224,7 +2237,7 @@ function renderHome(el) {
   const comingBackHtml = !comingBack ? '' : `
     <div class="home-return">
       <div class="home-return-title">${escapeHtml(t('back_title'))}</div>
-      <div class="home-return-sub">${escapeHtml(t('back_sub').replace('{n}', fmtNum(daysAway)))}</div>
+      <div class="home-return-sub">${escapeHtml((daysAway <= 10 ? t('back_sub_n') : t('back_sub_many')).replace('{n}', fmtNum(daysAway)))}</div>
       <div class="home-return-actions">
         <button type="button" class="btn btn-primary" id="home-back-train">${t('back_continue')}</button>
         <button type="button" class="btn btn-ghost" id="home-back-plan">${t('back_replan')}</button>
@@ -2240,7 +2253,7 @@ function renderHome(el) {
         <div class="hero-eyebrow">${t('rest_day')}</div>
         <div class="hero-title">${t('min_logged')}</div>
         <div class="hero-meta">${escapeHtml(
-          t('min_logged_sub').replace('{what}', what).replace('{n}', fmtNum(mins)))}</div>
+          (mins <= 10 ? t('min_logged_sub_n') : t('min_logged_sub_many')).replace('{what}', what).replace('{n}', fmtNum(mins)))}</div>
       </div>
     `;
   } else if (todayIsOff || scheduledRest) {
@@ -2417,7 +2430,7 @@ function renderHome(el) {
 
     ${recentHtml}
 
-    <div style="text-align:center;opacity:.4;font-size:12px;margin:24px 0 8px;letter-spacing:.5px">VAULT · ${VAULT_BUILD}</div>
+    <div style="text-align:center;opacity:.4;font-size:var(--fs-meta);margin:24px 0 8px;letter-spacing:.5px">VAULT · ${VAULT_BUILD}</div>
   `;
 
   // Count-up the hero/stat numerals (sleep is stored ×10 for one decimal)
@@ -2560,8 +2573,34 @@ function tmplDisplayName(tmpl) {
 // on one screen. v383 asked only «is the UI Arabic?» — the owner caught it.
 function planDayName(name) {
   const raw = String(name == null ? '' : name);
+  // 'Workout' is not a name anyone chose: it is what a BLANK day label is
+  // saved as (the day editor, DB.plan's addSlot/setSlotName, the importers),
+  // so the render sites' `|| t('workout_label')` never fired and an Arabic
+  // plan read «Workout». It reads as the UI's own word, whatever the name
+  // mode — English workout_label IS 'Workout'. The stored value never moves.
+  if (raw === 'Workout') return t('workout_label');
   if ((DB.prefs.get().lang || 'en') !== 'ar' || exNamesMode() === 'en') return raw;
   return PLAN_DAY_AR[raw] || raw;
+}
+
+// A streak's unit BESIDE the figure the chip already prints: «يوم», «يومان»,
+// «أيام», «يوماً»; English «day»/«days». Arabic's dual and its 3–10 / 11+ split
+// are real grammar — the rec_serv_* ladder in food.js, one literal key a form.
+// The widget keeps streak_days: the native side is handed ONE word for any count.
+function streakUnitLabel(n) {
+  if (n === 1) return t('streak_one_day');
+  if (n === 2) return t('streak_days_2');
+  return n <= 10 ? t('streak_days_n') : t('streak_days_many');
+}
+
+// A supplement's run of days as ONE phrase: «سلسلة يومين», «سلسلة 12 يوماً»,
+// «12-day streak». It used to cut a unit out of the relative-date key by
+// deleting the English «ago» — «1 أيام سلسلة» / «1 days streak», tied to an
+// unrelated key's wording.
+function suppStreakLabel(n) {
+  if (n === 1) return t('supp_streak_1');
+  if (n === 2) return t('supp_streak_2');
+  return (n <= 10 ? t('supp_streak_n') : t('supp_streak_many')).replace('{n}', fmtNum(n));
 }
 
 // Search should find an exercise by whichever name the user can see, so match
@@ -3142,7 +3181,7 @@ function renderExercises(el) {
   const searchOpen = !!viewContext.workoutSearchOpen;
 
   const filterPills = ['All', ...EXERCISE_CATEGORIES]
-    .map((f) => `<button class="filter-pill ${f === filter ? 'active' : ''}" data-filter="${f}">${escapeHtml(categoryLabel(f))}</button>`)
+    .map((f) => `<button class="filter-pill ${f === filter ? 'active' : ''}" role="radio" aria-checked="${f === filter}" data-filter="${f}">${escapeHtml(categoryLabel(f))}</button>`)
     .join('');
 
   el.innerHTML = `
@@ -3168,7 +3207,7 @@ function renderExercises(el) {
       `}
     </div>
 
-    <div class="filter-bar">${filterPills}</div>
+    <div class="filter-bar" role="radiogroup" aria-label="${escapeHtml(t('category'))}">${filterPills}</div>
 
     <div id="workout-grid"></div>
   `;
@@ -3237,7 +3276,7 @@ function renderExercises(el) {
   el.querySelectorAll('[data-filter]').forEach((btn) =>
     btn.addEventListener('click', () => {
       viewContext.workoutFilter = btn.dataset.filter;
-      el.querySelectorAll('[data-filter]').forEach((b) => b.classList.toggle('active', b === btn));
+      el.querySelectorAll('[data-filter]').forEach((b) => setChosen(b, b === btn));
       updateWorkoutGrid();
     })
   );
@@ -3526,7 +3565,7 @@ function openReorderSheet(slotIdx, onDone) {
 
   const paint = () => {
     overlay.innerHTML = `
-      <div class="add-sheet reorder-sheet" role="dialog" aria-modal="true"
+      <div class="add-sheet reorder-sheet" role="dialog" aria-modal="true" tabindex="-1"
            aria-label="${escapeHtml(t('reorder_exercises'))}">
         <div class="sheet-handle"></div>
         <div class="add-sheet-title">${t('reorder_exercises')}</div>
@@ -3552,9 +3591,11 @@ function openReorderSheet(slotIdx, onDone) {
   paint();
   app.appendChild(overlay);
   requestAnimationFrame(() => overlay.classList.add('open'));
+  const release = holdSheetFocus(overlay);
 
   const close = () => {
     overlay.__closed = true;
+    release();
     overlay.classList.remove('open');
     setTimeout(() => overlay.remove(), 260);
   };
@@ -3583,6 +3624,11 @@ function openReorderSheet(slotIdx, onDone) {
     if (to < 0 || to >= ids.length) return;
     ids.splice(to, 0, ids.splice(from, 1)[0]);
     paint();
+    // The repaint destroyed the arrow that was pressed, and focus fell to
+    // <body>, behind the sheet. It follows the row: the same arrow on the row's
+    // new place while it can still move that way, else the sheet itself.
+    const again = overlay.querySelector(`[data-ro="${to}"][data-dir="${b.dataset.dir}"]`);
+    (again && !again.disabled ? again : overlay.querySelector('[role="dialog"]'))?.focus({ preventScroll: true });
   });
 }
 
@@ -3595,8 +3641,8 @@ function openAddExerciseChooser(slotIdx, onAdd) {
       <button class="icon-btn icon-btn-tile" data-close>${icon('close', 20)}</button>
     </div>
     <div style="display:flex;flex-direction:column;gap:10px;margin-top:4px">
-      <button type="button" class="btn btn-ghost btn-block" id="ch-from-lib" style="justify-content:center;gap:8px;padding:16px;font-size:15px">${icon('dumbbell', 20)} ${t('add_from_library')}</button>
-      <button type="button" class="btn btn-ghost btn-block" id="ch-new-ex" style="justify-content:center;gap:8px;padding:16px;font-size:15px">${icon('plus', 20)} ${t('new_exercise')}</button>
+      <button type="button" class="btn btn-ghost btn-block" id="ch-from-lib" style="justify-content:center;gap:8px;padding:16px;font-size:var(--fs-body)">${icon('dumbbell', 20)} ${t('add_from_library')}</button>
+      <button type="button" class="btn btn-ghost btn-block" id="ch-new-ex" style="justify-content:center;gap:8px;padding:16px;font-size:var(--fs-body)">${icon('plus', 20)} ${t('new_exercise')}</button>
     </div>
   `);
   // Both replace this chooser via openModal — no explicit close needed.
@@ -3996,9 +4042,11 @@ function openSessionModal(exerciseId, sessionId = null) {
         <!-- numAttr, not the raw value: both fields come from the synced blob or
              an imported backup, and an unquoted-breakout string here would land
              inside an ATTRIBUTE in innerHTML. A number input can only hold a
-             number, so coercing is both stricter and simpler than escaping. -->
-        <input type="number" inputmode="numeric" step="1" min="0" placeholder="0" value="${numAttr(s.reps)}" data-field="reps">
-        <input type="number" inputmode="decimal" step="0.5" min="0" placeholder="0" value="${numAttr(wDisplay)}" data-field="weight">
+             number, so coercing is both stricter and simpler than escaping.
+             Named by the row and its column head, which a reader cannot see:
+             «Set 2 reps», «Set 2 KG» — never by the placeholder «0». -->
+        <input type="number" inputmode="numeric" step="1" min="0" placeholder="0" value="${numAttr(s.reps)}" data-field="reps" aria-label="${escapeHtml(t('set_n') + ' ' + fmtNum(i + 1) + ' ' + t('reps'))}">
+        <input type="number" inputmode="decimal" step="0.5" min="0" placeholder="0" value="${numAttr(wDisplay)}" data-field="weight" aria-label="${escapeHtml(t('set_n') + ' ' + fmtNum(i + 1) + ' ' + modalUnit.toUpperCase())}">
         <button type="button" class="set-remove" data-remove-set="${i}" aria-label="${escapeHtml(t('delete'))}">${icon('close', 16)}</button>
       </div>
       `;
@@ -4029,7 +4077,7 @@ function openSessionModal(exerciseId, sessionId = null) {
     if (u === modalUnit) return;
     modalUnit = u;
     document.querySelectorAll('[data-modal-unit]').forEach((b) => {
-      b.classList.toggle('active', b.dataset.modalUnit === modalUnit);
+      setChosen(b, b.dataset.modalUnit === modalUnit);
     });
     renderSetsEditor();
   }
@@ -4067,8 +4115,9 @@ function openSessionModal(exerciseId, sessionId = null) {
       <div class="sets-label-row">
         <label class="form-label" style="margin:0">${t('sets')}</label>
         <div class="modal-unit-toggle" role="group" aria-label="${escapeHtml(t('unit'))}">
-          <button type="button" data-modal-unit="kg" class="${modalUnit === 'kg' ? 'active' : ''}">KG</button>
-          <button type="button" data-modal-unit="lb" class="${modalUnit === 'lb' ? 'active' : ''}">LB</button>
+          <!-- aria-pressed, the session day's own unit toggle's pattern -->
+          <button type="button" data-modal-unit="kg" aria-pressed="${modalUnit === 'kg'}" class="${modalUnit === 'kg' ? 'active' : ''}">KG</button>
+          <button type="button" data-modal-unit="lb" aria-pressed="${modalUnit === 'lb'}" class="${modalUnit === 'lb' ? 'active' : ''}">LB</button>
         </div>
       </div>
       <div class="sets-editor-head">
@@ -4209,7 +4258,8 @@ function openRestSheet() {
     // bare list right after the user said "I'll do what I can" spends the
     // momentum that sentence just created — they have to decide again. Selected
     // by default, the whole step costs one tap.
-    return effortStep(t('rest_min_title'), t('rest_min_sub'), opts, t('rest_min_go'));
+    // The options are 10, 15 and 20 minutes: «10 دقائق», then «15 دقيقة».
+    return effortStep(t('rest_min_title'), t('rest_min_sub'), opts, opts[0].mins <= 10 ? t('rest_min_go_n') : t('rest_min_go_many'));
   };
 
   // Shared by both sheets: same shape, opposite direction.
@@ -4219,9 +4269,9 @@ function openRestSheet() {
         <div class="rest-sheet-title">${title}</div>
         <div class="rest-sheet-body">${sub}</div>
       </div>
-      <div class="min-options">
+      <div class="min-options" role="radiogroup" aria-label="${escapeHtml(title)}">
         ${opts.map((o, i) => `
-          <button class="min-option${i === 0 ? ' sel' : ''}" data-pick="${o.k}" data-mins="${o.mins}">
+          <button class="min-option${i === 0 ? ' sel' : ''}" role="radio" aria-checked="${i === 0}" data-pick="${o.k}" data-mins="${o.mins}">
             <span class="min-badge num" dir="ltr">${fmtNum(o.mins)}${t('minutes_short')}</span>
             <span class="min-text">
               <span class="min-title">${o.title}</span>
@@ -4237,7 +4287,7 @@ function openRestSheet() {
 
   const paint = (step) => {
     overlay.innerHTML = `
-      <div class="add-sheet rest-sheet" role="dialog" aria-modal="true"
+      <div class="add-sheet rest-sheet" role="dialog" aria-modal="true" tabindex="-1"
            aria-label="${escapeHtml(t('rest_sheet_title_1'))}">
         <div class="sheet-handle"></div>
         ${step === 1 ? stepOne() : stepTwo()}
@@ -4246,10 +4296,12 @@ function openRestSheet() {
   paint(1);
   app.appendChild(overlay);
   requestAnimationFrame(() => overlay.classList.add('open'));
+  const release = holdSheetFocus(overlay);
   DB.plan.markRestPrompted();
 
   const close = (cb) => {
     overlay.__closed = true;
+    release();
     overlay.classList.remove('open');
     setTimeout(() => { overlay.remove(); if (typeof cb === 'function') cb(); }, 260);
   };
@@ -4261,7 +4313,9 @@ function openRestSheet() {
 
     const step1 = e.target.closest('[data-rest]');
     if (step1) {
-      if (step1.dataset.rest === 'minimum') { paint(2); return; }
+      // The second step REPLACES the first, button and all: focus follows onto
+      // the new sheet rather than falling to <body> behind it.
+      if (step1.dataset.rest === 'minimum') { paint(2); overlay.querySelector('[role="dialog"]')?.focus({ preventScroll: true }); return; }
       // Full rest. THIS is the only place the day is actually marked off.
       DB.plan.setRest(new Date(), true);
       close(() => { showToast(t('rest_today_on')); renderView('home'); });
@@ -4273,9 +4327,10 @@ function openRestSheet() {
     // in the same words the user picked.
     const pick = e.target.closest('[data-pick]');
     if (pick) {
-      overlay.querySelectorAll('[data-pick]').forEach((b) => b.classList.toggle('sel', b === pick));
+      overlay.querySelectorAll('[data-pick]').forEach((b) => setChosen(b, b === pick, 'sel'));
       const go = overlay.querySelector('[data-go]');
-      if (go) go.textContent = t('rest_min_go').replace('{n}', fmtNum(Number(pick.dataset.mins) || 10));
+      const mins = Number(pick.dataset.mins) || 10;
+      if (go) go.textContent = (mins <= 10 ? t('rest_min_go_n') : t('rest_min_go_many')).replace('{n}', fmtNum(mins));
       return;
     }
     const go = e.target.closest('[data-go]');
@@ -4334,7 +4389,7 @@ function openTrainAnywaySheet() {
   ];
 
   overlay.innerHTML = `
-    <div class="add-sheet rest-sheet" role="dialog" aria-modal="true"
+    <div class="add-sheet rest-sheet" role="dialog" aria-modal="true" tabindex="-1"
          aria-label="${escapeHtml(t('anyway_title'))}">
       <div class="sheet-handle"></div>
       <div class="rest-sheet-icon go">${icon('zap', 28)}</div>
@@ -4342,9 +4397,9 @@ function openTrainAnywaySheet() {
         <div class="rest-sheet-title">${t('anyway_title')}</div>
         <div class="rest-sheet-body">${t('anyway_body')}</div>
       </div>
-      <div class="min-options">
+      <div class="min-options" role="radiogroup" aria-label="${escapeHtml(t('anyway_title'))}">
         ${opts.map((o, i) => `
-          <button class="min-option${i === 0 ? ' sel' : ''}" data-pick="${o.k}" data-mins="${o.mins}">
+          <button class="min-option${i === 0 ? ' sel' : ''}" role="radio" aria-checked="${i === 0}" data-pick="${o.k}" data-mins="${o.mins}">
             <span class="min-badge num" dir="ltr">${fmtNum(o.mins)}${t('minutes_short')}</span>
             <span class="min-text">
               <span class="min-title">${escapeHtml(o.title)}</span>
@@ -4362,9 +4417,11 @@ function openTrainAnywaySheet() {
 
   app.appendChild(overlay);
   requestAnimationFrame(() => overlay.classList.add('open'));
+  const release = holdSheetFocus(overlay);
 
   const close = (cb) => {
     overlay.__closed = true;
+    release();
     overlay.classList.remove('open');
     setTimeout(() => { overlay.remove(); if (typeof cb === 'function') cb(); }, 260);
   };
@@ -4375,7 +4432,7 @@ function openTrainAnywaySheet() {
     if (e.target === overlay || e.target.closest('[data-keep]')) { close(); return; }
     const pick = e.target.closest('[data-pick]');
     if (pick) {
-      overlay.querySelectorAll('[data-pick]').forEach((b) => b.classList.toggle('sel', b === pick));
+      overlay.querySelectorAll('[data-pick]').forEach((b) => setChosen(b, b === pick, 'sel'));
       const go = overlay.querySelector('[data-go]');
       const nm = pick.querySelector('.min-title');
       if (go && nm) go.textContent = t('anyway_start_named').replace('{name}', nm.textContent.trim());
@@ -4576,7 +4633,7 @@ function progressStreakHtml() {
       <span class="pg-streak-icon">${icon('zap', 22)}</span>
       <span class="pg-streak-main">
         <span class="pg-streak-value num" dir="ltr">${fmtNum(streak)}</span>
-        <span class="pg-streak-label">${streak === 1 ? t('streak_one_day') : t('streak_days')}</span>
+        <span class="pg-streak-label">${streakUnitLabel(streak)}</span>
       </span>
     </div>`;
 }
@@ -4585,10 +4642,10 @@ function renderCompare(el) {
   const tab = viewContext.compareTab || 'workouts';
 
   const tabsHtml = `
-    <div class="compare-tabs">
-      <button class="compare-tab ${tab === 'workouts' ? 'active' : ''}" data-compare-tab="workouts">${t('workouts')}</button>
-      <button class="compare-tab ${tab === 'cardio' ? 'active' : ''}" data-compare-tab="cardio">${t('cardio')}</button>
-      <button class="compare-tab ${tab === 'sleep' ? 'active' : ''}" data-compare-tab="sleep">${t('sleep')}</button>
+    <div class="compare-tabs" role="radiogroup" aria-label="${escapeHtml(t('compare'))}">
+      <button class="compare-tab ${tab === 'workouts' ? 'active' : ''}" role="radio" aria-checked="${tab === 'workouts'}" data-compare-tab="workouts">${t('workouts')}</button>
+      <button class="compare-tab ${tab === 'cardio' ? 'active' : ''}" role="radio" aria-checked="${tab === 'cardio'}" data-compare-tab="cardio">${t('cardio')}</button>
+      <button class="compare-tab ${tab === 'sleep' ? 'active' : ''}" role="radio" aria-checked="${tab === 'sleep'}" data-compare-tab="sleep">${t('sleep')}</button>
     </div>
   `;
 
@@ -4654,12 +4711,12 @@ function renderCompareWorkouts() {
         <div class="compare-weeks">
           <div class="compare-week">
             <div class="compare-week-label">${t('last_week_label')}</div>
-            <div class="compare-week-value num">${lastBest > 0 ? fmtWeight(lastBest) : '—'}<span style="font-size:12px;color:var(--text-mute);font-weight:700;margin-left:3px">${lastBest > 0 ? unitLabel() : ''}</span></div>
+            <div class="compare-week-value num">${lastBest > 0 ? fmtWeight(lastBest) : '—'}<span style="font-size:var(--fs-meta);color:var(--text-mute);font-weight:700;margin-left:3px">${lastBest > 0 ? unitLabel() : ''}</span></div>
             <div class="compare-week-sub">${t('n_sets').replace('{n}', fmtNum(lastW.reduce((s, x) => s + x.sets.length, 0)))}</div>
           </div>
           <div class="compare-week">
             <div class="compare-week-label">${t('this_week_label')}</div>
-            <div class="compare-week-value num">${thisBest > 0 ? fmtWeight(thisBest) : '—'}<span style="font-size:12px;color:var(--text-mute);font-weight:700;margin-left:3px">${thisBest > 0 ? unitLabel() : ''}</span></div>
+            <div class="compare-week-value num">${thisBest > 0 ? fmtWeight(thisBest) : '—'}<span style="font-size:var(--fs-meta);color:var(--text-mute);font-weight:700;margin-left:3px">${thisBest > 0 ? unitLabel() : ''}</span></div>
             <div class="compare-week-sub">${t('n_sets').replace('{n}', fmtNum(thisW.reduce((s, x) => s + x.sets.length, 0)))}</div>
           </div>
         </div>
@@ -5179,9 +5236,9 @@ function renderSettings(el) {
       <h2 class="settings-group-title">${t('set_g_look')}</h2>
       <div class="settings-section">
         <div class="section-title"${(window.Cloud && Cloud.configured()) ? '' : ' style="margin-top:0"'}>${t('language')}</div>
-        <div class="lang-toggle">
-          <button class="lang-option ${currentLang === 'ar' ? 'active' : ''}" data-lang="ar">العربية</button>
-          <button class="lang-option ${currentLang === 'en' ? 'active' : ''}" data-lang="en">English</button>
+        <div class="lang-toggle" role="radiogroup" aria-label="${escapeHtml(t('language'))}">
+          <button class="lang-option ${currentLang === 'ar' ? 'active' : ''}" role="radio" aria-checked="${currentLang === 'ar'}" data-lang="ar">العربية</button>
+          <button class="lang-option ${currentLang === 'en' ? 'active' : ''}" role="radio" aria-checked="${currentLang === 'en'}" data-lang="en">English</button>
         </div>
       </div>
 
@@ -5189,10 +5246,10 @@ function renderSettings(el) {
       <div class="settings-section">
         <div class="section-title">${t('translate_ex_title')}</div>
         <p class="settings-hint">${t('translate_ex_sub')}</p>
-        <div class="lang-toggle">
-          <button class="lang-option ${exNamesMode(prefs) === 'translit' ? 'active' : ''}" data-translate-ex="translit">${t('translate_ex_on')}</button>
-          <button class="lang-option ${exNamesMode(prefs) === 'ar' ? 'active' : ''}" data-translate-ex="ar">${t('translate_ex_full')}</button>
-          <button class="lang-option ${exNamesMode(prefs) === 'en' ? 'active' : ''}" data-translate-ex="en">${t('translate_ex_off')}</button>
+        <div class="lang-toggle" role="radiogroup" aria-label="${escapeHtml(t('translate_ex_title'))}">
+          <button class="lang-option ${exNamesMode(prefs) === 'translit' ? 'active' : ''}" role="radio" aria-checked="${exNamesMode(prefs) === 'translit'}" data-translate-ex="translit">${t('translate_ex_on')}</button>
+          <button class="lang-option ${exNamesMode(prefs) === 'ar' ? 'active' : ''}" role="radio" aria-checked="${exNamesMode(prefs) === 'ar'}" data-translate-ex="ar">${t('translate_ex_full')}</button>
+          <button class="lang-option ${exNamesMode(prefs) === 'en' ? 'active' : ''}" role="radio" aria-checked="${exNamesMode(prefs) === 'en'}" data-translate-ex="en">${t('translate_ex_off')}</button>
         </div>
       </div>` : ''}
 
@@ -5211,25 +5268,25 @@ function renderSettings(el) {
 
       <div class="settings-section">
         <div class="section-title">${t('text_size')}</div>
-        <div class="unit-toggle">
-          <button class="unit-option ${DB.prefs.textLg() ? '' : 'active'}" data-textlg="0">${t('text_size_normal')}</button>
-          <button class="unit-option ${DB.prefs.textLg() ? 'active' : ''}" data-textlg="1">${t('text_size_large')}</button>
+        <div class="unit-toggle" role="radiogroup" aria-label="${escapeHtml(t('text_size'))}">
+          <button class="unit-option ${DB.prefs.textLg() ? '' : 'active'}" role="radio" aria-checked="${!DB.prefs.textLg()}" data-textlg="0">${t('text_size_normal')}</button>
+          <button class="unit-option ${DB.prefs.textLg() ? 'active' : ''}" role="radio" aria-checked="${!!DB.prefs.textLg()}" data-textlg="1">${t('text_size_large')}</button>
         </div>
       </div>
 
       <div class="settings-section">
         <div class="section-title">${t('haptics')}</div>
-        <div class="unit-toggle">
-          <button class="unit-option ${DB.prefs.haptics() ? 'active' : ''}" data-haptics="1">${t('haptics_on')}</button>
-          <button class="unit-option ${DB.prefs.haptics() ? '' : 'active'}" data-haptics="0">${t('haptics_off')}</button>
+        <div class="unit-toggle" role="radiogroup" aria-label="${escapeHtml(t('haptics'))}">
+          <button class="unit-option ${DB.prefs.haptics() ? 'active' : ''}" role="radio" aria-checked="${!!DB.prefs.haptics()}" data-haptics="1">${t('haptics_on')}</button>
+          <button class="unit-option ${DB.prefs.haptics() ? '' : 'active'}" role="radio" aria-checked="${!DB.prefs.haptics()}" data-haptics="0">${t('haptics_off')}</button>
         </div>
       </div>
 
       <div class="settings-section">
         <div class="section-title">${t('unit_label')}</div>
-        <div class="unit-toggle">
-          <button class="unit-option ${(prefs.unit || 'kg') === 'kg' ? 'active' : ''}" data-unit="kg">${t('kg_label')}</button>
-          <button class="unit-option ${prefs.unit === 'lb' ? 'active' : ''}" data-unit="lb">${t('lb_label')}</button>
+        <div class="unit-toggle" role="radiogroup" aria-label="${escapeHtml(t('unit_label'))}">
+          <button class="unit-option ${(prefs.unit || 'kg') === 'kg' ? 'active' : ''}" role="radio" aria-checked="${(prefs.unit || 'kg') === 'kg'}" data-unit="kg">${t('kg_label')}</button>
+          <button class="unit-option ${prefs.unit === 'lb' ? 'active' : ''}" role="radio" aria-checked="${prefs.unit === 'lb'}" data-unit="lb">${t('lb_label')}</button>
         </div>
       </div>
     </section>
@@ -5526,7 +5583,7 @@ function renderPlanner(el) {
 
   // Training-day pills (which weekdays you train; the others are rest).
   const daysHtml = dayOrder.map((d) =>
-    `<button type="button" class="schedule-day ${trainingDays.indexOf(d) !== -1 ? 'active' : ''}" data-td="${d}">${escapeHtml(dayName(d, false))}</button>`
+    `<button type="button" class="schedule-day ${trainingDays.indexOf(d) !== -1 ? 'active' : ''}" aria-pressed="${trainingDays.indexOf(d) !== -1}" data-td="${d}">${escapeHtml(dayName(d, false))}</button>`
   ).join('');
 
   // The ordered CYCLE of workouts (Push → Pull → Legs …), rolled across days.
@@ -5895,7 +5952,7 @@ function openTemplatesModal() {
   const cards = WORKOUT_TEMPLATES.map((tmpl) => `
     <div class="compare-card" style="margin-bottom:8px">
       <div class="compare-card-title">${tmplDisplayName(tmpl)}</div>
-      <div style="font-size:12px;color:var(--text-mute);margin-bottom:10px">${t('tmpl_desc_' + tmpl.id.replace(/-/g, '_'))} · <span class="num">${fmtNum(tmpl.days.length)}</span> ${t('workouts_label')}</div>
+      <div style="font-size:var(--fs-meta);color:var(--text-mute);margin-bottom:10px">${t('tmpl_desc_' + tmpl.id.replace(/-/g, '_'))} · <span class="num">${fmtNum(tmpl.days.length)}</span> ${t('workouts_label')}</div>
       <div style="display:flex;flex-wrap:wrap;gap:5px;margin-bottom:12px">
         ${tmpl.days.map((d) => `<span class="today-plan-chip">${escapeHtml(planDayName(d.name))}</span>`).join('')}
       </div>
@@ -5908,7 +5965,7 @@ function openTemplatesModal() {
   const serverCards = SERVER_PRESET_PLANS.map((tmpl) => `
     <div class="compare-card" style="margin-bottom:8px">
       <div class="compare-card-title">${escapeHtml(tmpl.name)} <span class="today-plan-chip" style="margin-inline-start:6px">${t('preset_badge')}</span></div>
-      <div style="font-size:12px;color:var(--text-mute);margin-bottom:10px">${tmpl.description ? escapeHtml(tmpl.description) + ' · ' : ''}<span class="num">${fmtNum(tmpl.days.length)}</span> ${t('workouts_label')}</div>
+      <div style="font-size:var(--fs-meta);color:var(--text-mute);margin-bottom:10px">${tmpl.description ? escapeHtml(tmpl.description) + ' · ' : ''}<span class="num">${fmtNum(tmpl.days.length)}</span> ${t('workouts_label')}</div>
       <div style="display:flex;flex-wrap:wrap;gap:5px;margin-bottom:12px">
         ${tmpl.days.map((d) => `<span class="today-plan-chip">${escapeHtml(planDayName(d.name))}</span>`).join('')}
       </div>
@@ -5987,7 +6044,7 @@ function openScheduleModal(tmpl) {
     if (applyBtn) applyBtn.disabled = training.size === 0;
   }
 
-  openModal(`
+  const overlay = openModal(`
     <div class="modal-header">
       <div>
         <div class="modal-title">${t('schedule_title')}</div>
@@ -5998,7 +6055,7 @@ function openScheduleModal(tmpl) {
 
     <p class="schedule-hint">${t('schedule_hint')}</p>
     <div class="schedule-days">
-      ${dayOrder.map((d) => `<button type="button" class="schedule-day ${training.has(d) ? 'active' : ''}" data-day="${d}">${escapeHtml(dayName(d, false))}</button>`).join('')}
+      ${dayOrder.map((d) => `<button type="button" class="schedule-day ${training.has(d) ? 'active' : ''}" aria-pressed="${training.has(d)}" data-day="${d}">${escapeHtml(dayName(d, false))}</button>`).join('')}
     </div>
 
     <div class="schedule-preview" id="schedule-preview"></div>
@@ -6009,13 +6066,17 @@ function openScheduleModal(tmpl) {
     </div>
   `);
 
+  if (!overlay) return;   // a dialog that must be answered is up; this one was refused
   renderPreview();
 
-  document.querySelectorAll('[data-day]').forEach((b) =>
+  // THIS sheet's seven days only. A document-wide [data-day] also bound Home's
+  // week-rail chips, which carry an ISO date there: a tap on one with this sheet
+  // open added NaN to the training set and lit the chip behind the sheet.
+  overlay.querySelectorAll('.schedule-day[data-day]').forEach((b) =>
     b.addEventListener('click', () => {
       const d = Number(b.dataset.day);
       if (training.has(d)) training.delete(d); else training.add(d);
-      b.classList.toggle('active');
+      setChosen(b, training.has(d));
       renderPreview();
     })
   );
@@ -6175,7 +6236,7 @@ function openSlotEditorModal(slotIdx, onAdd) {
   // slide-up animation is reused, so it matches every other sheet in the app.
   function openPickerSheet() {
     const catPills = ['All', ...EXERCISE_CATEGORIES]
-      .map((f) => `<button type="button" class="filter-pill ${f === pickerCategory ? 'active' : ''}" data-pick-cat="${escapeHtml(f)}">${escapeHtml(t('cat_' + f, f))}</button>`)
+      .map((f) => `<button type="button" class="filter-pill ${f === pickerCategory ? 'active' : ''}" role="radio" aria-checked="${f === pickerCategory}" data-pick-cat="${escapeHtml(f)}">${escapeHtml(t('cat_' + f, f))}</button>`)
       .join('');
 
     openModal(`
@@ -6188,9 +6249,9 @@ function openSlotEditorModal(slotIdx, onAdd) {
       </div>
       <div class="search-wrap" style="margin-bottom:8px">
         ${icon('search', 20)}
-        <input type="search" id="picker-search" placeholder="${t('search_exercises')}">
+        <input type="search" id="picker-search" placeholder="${t('search_exercises')}" aria-label="${escapeHtml(t('search_exercises'))}">
       </div>
-      <div class="filter-bar" style="margin: 0 0 10px">${catPills}</div>
+      <div class="filter-bar" style="margin: 0 0 10px" role="radiogroup" aria-label="${escapeHtml(t('category'))}">${catPills}</div>
       <div class="picker-list" id="picker-list"></div>
       <div class="form-actions sticky-actions">
         <button type="button" class="btn btn-primary btn-block" id="picker-done">${t('done')}</button>
@@ -6210,7 +6271,7 @@ function openSlotEditorModal(slotIdx, onAdd) {
       b.addEventListener('click', () => {
         pickerCategory = b.dataset.pickCat;
         document.querySelectorAll('[data-pick-cat]').forEach((x) =>
-          x.classList.toggle('active', x.dataset.pickCat === pickerCategory));
+          setChosen(x, x.dataset.pickCat === pickerCategory));
         renderPickerList();
       })
     );
@@ -8201,7 +8262,7 @@ function renderSupplements(el) {
         <div class="supp-main">
           <div class="supp-name">${escapeHtml(s.name)}</div>
           ${s.dose ? `<div class="supp-dose">${escapeHtml(s.dose)}</div>` : ''}
-          ${streak > 0 ? `<div class="supp-streak">${icon('flame', 16)} ${fmtNum(streak)} ${t('days_ago').replace('ago', '').trim() || t('streak_days')} ${t('streak')}</div>` : ''}
+          ${streak > 0 ? `<div class="supp-streak">${icon('flame', 16)} ${suppStreakLabel(streak)}</div>` : ''}
         </div>
         <button class="supp-toggle ${taken ? 'taken' : ''}" data-toggle-supp="${s.id}" aria-label="${escapeHtml(taken ? t('taken') : t('not_taken'))}">
           ${icon(taken ? 'check' : 'plus', 18)}
@@ -8417,8 +8478,11 @@ function openSupplementModal(id = null) {
   const existing = id ? DB.supplements.list().find((x) => x.id === id) : null;
   let pickedColor = existing ? existing.color : SUPP_COLORS[0];
 
-  const swatches = SUPP_COLORS.map((c) => `
-    <button type="button" class="color-swatch ${pickedColor === c ? 'active' : ''}" style="background:${c}" data-color="${c}"></button>
+  // A swatch is a colour and nothing else, so it is named by its place in the
+  // row («Color 3») and says which one is chosen — eight unnamed buttons
+  // before, announced as «button» eight times.
+  const swatches = SUPP_COLORS.map((c, i) => `
+    <button type="button" class="color-swatch ${pickedColor === c ? 'active' : ''}" role="radio" aria-checked="${pickedColor === c}" aria-label="${escapeHtml(t('color') + ' ' + fmtNum(i + 1))}" style="background:${c}" data-color="${c}"></button>
   `).join('');
 
   // Presets only when ADDING. On an edit they would silently overwrite the name
@@ -8457,7 +8521,7 @@ function openSupplementModal(id = null) {
 
     <div class="form-group">
       <label class="form-label">${t('color')}</label>
-      <div class="color-swatches" id="color-swatches">${swatches}</div>
+      <div class="color-swatches" id="color-swatches" role="radiogroup" aria-label="${escapeHtml(t('color'))}">${swatches}</div>
     </div>
 
     <div class="form-group">
@@ -8489,7 +8553,7 @@ function openSupplementModal(id = null) {
   };
 
   const paintSwatches = () => $('#color-swatches').querySelectorAll('[data-color]').forEach((x) =>
-    x.classList.toggle('active', x.dataset.color === pickedColor));
+    setChosen(x, x.dataset.color === pickedColor));
 
   $('#color-swatches').addEventListener('click', (e) => {
     const sw = e.target.closest('[data-color]');
@@ -9285,9 +9349,9 @@ function showChangePassword(recovery) {
       <div class="modal-title">${t('change_password')}</div>
       <button class="icon-btn icon-btn-tile" data-close>${icon('close', 20)}</button>
     </div>
-    ${recovery ? `<div class="confirm-text" style="margin-bottom:12px">${t('change_password_recovery_sub')}</div>` : `<input type="password" id="cpw-current" class="auth-input" placeholder="${t('change_password_current')}" autocomplete="current-password">`}
-    <input type="password" id="cpw-new" class="auth-input" placeholder="${t('change_password_new')}" autocomplete="new-password">
-    <input type="password" id="cpw-confirm" class="auth-input" placeholder="${t('change_password_confirm')}" autocomplete="new-password">
+    ${recovery ? `<div class="confirm-text" style="margin-bottom:12px">${t('change_password_recovery_sub')}</div>` : `<input type="password" id="cpw-current" class="auth-input" placeholder="${t('change_password_current')}" aria-label="${escapeHtml(t('change_password_current'))}" autocomplete="current-password">`}
+    <input type="password" id="cpw-new" class="auth-input" placeholder="${t('change_password_new')}" aria-label="${escapeHtml(t('change_password_new'))}" autocomplete="new-password">
+    <input type="password" id="cpw-confirm" class="auth-input" placeholder="${t('change_password_confirm')}" aria-label="${escapeHtml(t('change_password_confirm'))}" autocomplete="new-password">
     <!-- Only the re-auth path needs a challenge; a recovery session has already
          proved the mailbox and never calls signInWithPassword. The slot reserves
          no height — Turnstile is invisible here as it is on the login card. -->
@@ -9341,7 +9405,7 @@ function showFeedback() {
       <button class="icon-btn icon-btn-tile" data-close>${icon('close', 20)}</button>
     </div>
     <div class="confirm-text" style="margin-bottom:12px">${t('feedback_sub')}</div>
-    <textarea id="fb-msg" class="auth-input" rows="4" style="resize:vertical;min-height:96px" placeholder="${t('feedback_ph')}"></textarea>
+    <textarea id="fb-msg" class="auth-input" rows="4" style="resize:vertical;min-height:96px" placeholder="${t('feedback_ph')}" aria-label="${escapeHtml(t('feedback_ph'))}"></textarea>
     <div class="auth-err" id="fb-err"></div>
     <button class="btn btn-primary btn-block" id="fb-send">${t('feedback_send')}</button>
   `, { variant: 'confirm' });
@@ -9389,6 +9453,21 @@ function showBlockedGate(status, reason) {
       ${reason ? `<div class="uname-rules">${escapeHtml(reason)}</div>` : ''}
     </div>`;
   document.body.appendChild(gate);
+}
+
+// What a failed account deletion SAYS. Cloud.deleteAccount throws two real
+// keys (the image sweep's), two plain English words ('offline', 'not signed
+// in') and whatever Supabase answers — and the toast used to print the message
+// itself as t()'s fallback, so the most destructive action in the app reported
+// failure as «not signed in» or «TypeError: Failed to fetch». Only a key
+// reaches the screen now; anything else is the generic line, logged raw.
+// (No «nothing was deleted» promise: some throws come after the images went.)
+function deleteAccountErrorText(e) {
+  const raw = String((e && e.message) || '');
+  const key = raw === 'offline' ? 'auth_err_network' : raw === 'not signed in' ? 'auth_not_signed' : raw;
+  const text = key ? t(key, '') : '';
+  if (!text) console.warn('[vault] delete account failed:', raw);
+  return text || t('delete_account_failed');
 }
 
 async function populateAccount(el) {
@@ -9468,7 +9547,7 @@ async function populateAccount(el) {
           try {
             await Cloud.deleteAccount();
             location.reload();   // fresh, empty state → auth gate
-          } catch (e) { showToast(e && e.message ? t(e.message, e.message) : t('ai_error')); }
+          } catch (e) { showToast(deleteAccountErrorText(e)); }
         },
       });
     });
@@ -9599,8 +9678,17 @@ function renderCustomExercises(el) {
 // Reached by tapping a cell in the home muscle-focus heatmap: the cell shows a
 // 7-day count, this shows the whole history behind it (the user asked for ALL
 // the sessions, not just the ones inside the heatmap's window).
+//
+// ALL OF THEM, ONE TAP AWAY — NOT ALL AT ONCE. A year of one muscle was 526
+// cards, 12,838 nodes and ~1 s a render at phone speed, paid again on every
+// Back from an exercise (a Back re-renders the view). The newest whole days are
+// drawn until they hold MS_FIRST sessions (a day is never split); «show more»
+// appends the rest in place, and the choice lives on the nav-stack entry, so a
+// Back returns to the list as it was left. exercise-detail caps at 30 the same way.
+const MS_FIRST = 30;
 function renderMuscleSessions(el) {
-  const cat = viewContext.muscleCat || 'Chest';
+  const ctx = viewContext;
+  const cat = ctx.muscleCat || 'Chest';
   const exById = Object.fromEntries(DB.exercises.list().map((e) => [e.id, e]));
   const sessions = DB.sessions.listAll()
     .filter((s) => { const ex = exById[s.exerciseId]; return ex && ex.category === cat; })
@@ -9609,12 +9697,18 @@ function renderMuscleSessions(el) {
   const lang = DB.prefs.get().lang || 'en';
   const byDate = {};
   sessions.forEach((s) => { (byDate[s.date] = byDate[s.date] || []).push(s); });
+  const dates = Object.keys(byDate);
+  let shown = dates.length;
+  if (!ctx.muscleSessionsExpanded) {
+    let n = 0;
+    for (shown = 0; shown < dates.length && n < MS_FIRST; shown++) n += byDate[dates[shown]].length;
+  }
+  // ONE formatter for every day label: toLocaleDateString builds a new one per
+  // call (45 µs against 0.5 µs), same locale, same options, same words.
+  const dayFmt = new Intl.DateTimeFormat(lang === 'ar' ? 'ar-u-nu-latn' : 'en-US', { weekday: 'long', day: 'numeric', month: 'long' });
 
-  const groupsHtml = Object.keys(byDate).map((date) => {
-    const label = new Date(date + 'T00:00:00').toLocaleDateString(
-      lang === 'ar' ? 'ar-u-nu-latn' : 'en-US',
-      { weekday: 'long', day: 'numeric', month: 'long' }
-    );
+  const groupHtml = (date) => {
+    const label = dayFmt.format(new Date(date + 'T00:00:00'));
     const cards = byDate[date].map((s) => {
       const ex = exById[s.exerciseId];
       const sets = (s.sets || []).filter((x) => x && (x.reps || x.weight));
@@ -9638,7 +9732,7 @@ function renderMuscleSessions(el) {
       `;
     }).join('');
     return `<div class="ms-group"><div class="ms-date">${escapeHtml(label)}</div>${cards}</div>`;
-  }).join('');
+  };
 
   el.innerHTML = `
     <div class="detail-top">
@@ -9654,12 +9748,24 @@ function renderMuscleSessions(el) {
 
     ${sessions.length === 0
       ? emptyState({ iconName: 'dumbbell', title: t('ms_empty_title'), text: t('ms_empty_text') })
-      : `<div class="ms-list">${groupsHtml}</div>`}
+      : `<div class="ms-list">${dates.slice(0, shown).map(groupHtml).join('')}</div>
+         ${shown < dates.length ? `<button type="button" class="btn btn-ghost btn-block" id="ms-show-more">${t('show_more')}</button>` : ''}`}
   `;
 
-  el.querySelectorAll('[data-open-ex]').forEach((b) =>
-    b.addEventListener('click', () => navigate('exercise-detail', { exerciseId: b.dataset.openEx }))
-  );
+  // One listener for every card — the ones «show more» appends included.
+  $('.ms-list', el)?.addEventListener('click', (e) => {
+    const b = e.target.closest('[data-open-ex]');
+    if (b) navigate('exercise-detail', { exerciseId: b.dataset.openEx });
+  });
+  $('#ms-show-more', el)?.addEventListener('click', (e) => {
+    const list = $('.ms-list', el);
+    const first = list.children.length;
+    list.insertAdjacentHTML('beforeend', dates.slice(shown).map(groupHtml).join(''));
+    ctx.muscleSessionsExpanded = true;
+    e.currentTarget.remove();
+    // The pressed button is gone: focus goes to the first card it brought.
+    list.children[first]?.querySelector('.ms-card')?.focus({ preventScroll: true });
+  });
 }
 
 function renderPersonalRecords(el) {
@@ -10164,12 +10270,12 @@ function showOnboarding() {
         <div class="onb-logo">${icon('settings', 34)}</div>
         <div class="onb-title">${t('onb_unit_title')}</div>
         <div class="onb-sub">${t('onb_unit_sub')}</div>
-        <div class="onb-units">
+        <div class="onb-units" role="radiogroup" aria-label="${escapeHtml(t('onb_unit_title'))}">
           <!-- Bare unit NAME in the bold line and the (kg)/(lb) code down in the
                sub-line: kg_label carries both, and both together wrap inside a
                ~150px card, stranding "(kg)" on a line of its own. -->
-          <button type="button" class="onb-unit ${unit === 'kg' ? 'active' : ''}" data-unit="kg"><b>${t('unit_kg_name')}</b><span>${t('onb_unit_metric')} (kg)</span></button>
-          <button type="button" class="onb-unit ${unit === 'lb' ? 'active' : ''}" data-unit="lb"><b>${t('unit_lb_name')}</b><span>${t('onb_unit_imperial')} (lb)</span></button>
+          <button type="button" class="onb-unit ${unit === 'kg' ? 'active' : ''}" role="radio" aria-checked="${unit === 'kg'}" data-unit="kg"><b>${t('unit_kg_name')}</b><span>${t('onb_unit_metric')} (kg)</span></button>
+          <button type="button" class="onb-unit ${unit === 'lb' ? 'active' : ''}" role="radio" aria-checked="${unit === 'lb'}" data-unit="lb"><b>${t('unit_lb_name')}</b><span>${t('onb_unit_imperial')} (lb)</span></button>
         </div>
         <button type="button" class="btn btn-primary btn-block" data-next>${t('next')}</button>`;
     } else {

@@ -142,7 +142,11 @@ function t(key, fallback) {
 
 function categoryLabel(cat) { return t('cat_' + cat, cat); }
 
-// Localized days-ago
+// Localized days-ago, as WHOLE phrases chosen by count. It used to paste a
+// number in front of one fixed plural: «2 أيام» with no «منذ» (a length of
+// time, not a time past), «1 أسابيع», «13 أشهر», «1 weeks ago». Arabic's dual
+// and its 11+ form are real grammar — the rec_serv_* ladder in food.js, one
+// literal key a form. Closed ranges: days 2–6, weeks 1–4, months 1+.
 function daysAgoLocalized(iso) {
   if (!iso) return '';
   const today = new Date();
@@ -151,9 +155,13 @@ function daysAgoLocalized(iso) {
   const diff = Math.round((today - d) / 86400000);
   if (diff === 0) return t('today');
   if (diff === 1) return t('yesterday');
-  if (diff < 7) return diff + ' ' + t('days_ago');
-  if (diff < 30) return Math.floor(diff / 7) + ' ' + t('weeks_ago');
-  return Math.floor(diff / 30) + ' ' + t('months_ago');
+  if (diff < 7) return (diff === 2 ? t('days_ago_2') : t('days_ago_n')).replace('{n}', fmtNum(diff));
+  if (diff < 30) {
+    const w = Math.floor(diff / 7);
+    return (w === 1 ? t('weeks_ago_1') : w === 2 ? t('weeks_ago_2') : t('weeks_ago_n')).replace('{n}', fmtNum(w));
+  }
+  const m = Math.floor(diff / 30);
+  return (m === 1 ? t('months_ago_1') : m === 2 ? t('months_ago_2') : m <= 10 ? t('months_ago_n') : t('months_ago_many')).replace('{n}', fmtNum(m));
 }
 
 // ==========================================================================
@@ -284,9 +292,24 @@ function initialsOf(str) {
   return (parts[0][0] + parts[1][0]).toUpperCase();
 }
 
-// Always render numbers using Latin digits (English), regardless of UI language
+// Always render numbers using Latin digits (English), regardless of UI language.
+// ONE formatter, built once: Number.prototype.toLocaleString('en-US') is
+// specified as exactly this, but it builds a new Intl formatter on every call
+// (~25x slower), and a year of one muscle's history made 5,257 calls a render.
+const NUM_FMT = new Intl.NumberFormat('en-US');
 function fmtNum(n) {
-  return Number(n).toLocaleString('en-US');
+  return NUM_FMT.format(Number(n));
+}
+
+// A CHOSEN OPTION SAYS SO TO A SCREEN READER, not only to the eye. The class
+// the stylesheet reads and the state a reader reads are written in one call,
+// so they cannot drift: role=radio → aria-checked, role=tab → aria-selected,
+// anything else (a toggle among several) → aria-pressed. Contract 61.
+function setChosen(el, on, cls = 'active') {
+  if (!el) return;
+  el.classList.toggle(cls, !!on);
+  const role = el.getAttribute('role');
+  el.setAttribute(role === 'radio' ? 'aria-checked' : role === 'tab' ? 'aria-selected' : 'aria-pressed', String(!!on));
 }
 
 // "A", "A and B", "A, B and C" — in whichever language is loaded. The one call
@@ -450,6 +473,13 @@ function openModal(innerHtml, { variant = 'sheet', dismissible = true, hold = !d
     if (!title.id) title.id = 'vlt-modal-title-' + (++__modalTitleSeq);
     dlg.setAttribute('aria-labelledby', title.id);
   }
+  // …and no FIELD had one either (labelSheetFields, below). The sheets that
+  // draw their fields after mounting — the calculator's two forms — are wired
+  // as the fields arrive.
+  labelSheetFields(overlay);
+  if (__modalFieldWatch) __modalFieldWatch.disconnect();
+  __modalFieldWatch = typeof MutationObserver === 'function' ? new MutationObserver(() => labelSheetFields(overlay)) : null;
+  if (__modalFieldWatch) __modalFieldWatch.observe(overlay, { childList: true, subtree: true });
 
   // The sheet RISES on its own — `.modal` has run `sheetUp` since long before
   // the motion spec, and a second mechanism here would fight it. All that is
@@ -474,14 +504,20 @@ function openModal(innerHtml, { variant = 'sheet', dismissible = true, hold = !d
     if (!el.getAttribute('aria-label')) el.setAttribute('aria-label', t('close'));
     el.addEventListener('click', () => closeModal());
   });
-  // Move focus into the dialog so keyboard/SR users start inside it (unless a
-  // field inside will self-focus via autofocus).
-  if (!overlay.querySelector('[autofocus]')) overlay.querySelector('.modal, .confirm-dialog')?.focus();
+  // Move focus into the dialog so keyboard/SR users start inside it: onto the
+  // [autofocus] field when the sheet names one, else onto the dialog itself.
+  // ⚠️ NEVER LEAVE IT TO THE ATTRIBUTE. HTML honours [autofocus] once per
+  // DOCUMENT, so once any sheet had spent the flag every later [autofocus]
+  // sheet opened with focus still behind it — the supplement sheet on the
+  // button that opened it, the manual-food sheet on <body>.
+  // A field that cannot take focus (hidden, disabled) leaves it on the dialog.
+  const af = overlay.querySelector('[autofocus]');
+  if (af) af.focus({ preventScroll: true });
+  if (!af || document.activeElement !== af) overlay.querySelector('.modal, .confirm-dialog')?.focus({ preventScroll: true });
 
   // FOCUS TRAP: keep Tab inside the dialog. Without this, tabbing past the last
   // control walks into the page BEHIND the modal — which is still fully
   // interactive — so a keyboard user can silently operate the obscured screen.
-  const FOCUSABLE = 'a[href],button:not([disabled]),input:not([disabled]),select:not([disabled]),textarea:not([disabled]),[tabindex]:not([tabindex="-1"])';
   // A modal opened over another (chooser → picker) left the previous trap
   // listening; closeModal removes only the current one.
   if (__modalKeydown) { document.removeEventListener('keydown', __modalKeydown, true); __modalKeydown = null; }
@@ -491,15 +527,7 @@ function openModal(innerHtml, { variant = 'sheet', dismissible = true, hold = !d
       if (overlay.dataset.dismissible === '0') { e.preventDefault(); return; }
       e.preventDefault(); closeModal(); return;
     }
-    if (e.key !== 'Tab') return;
-    const items = [...overlay.querySelectorAll(FOCUSABLE)].filter((n) => n.offsetParent !== null);
-    if (!items.length) return;
-    const first = items[0], last = items[items.length - 1];
-    if (e.shiftKey && (document.activeElement === first || !overlay.contains(document.activeElement))) {
-      e.preventDefault(); last.focus();
-    } else if (!e.shiftKey && document.activeElement === last) {
-      e.preventDefault(); first.focus();
-    }
+    if (e.key === 'Tab') trapTab(e, overlay);
   };
   document.addEventListener('keydown', __modalKeydown, true);
   return overlay;
@@ -509,9 +537,97 @@ let __modalReturnFocus = null;
 // One counter, so two sheets open in sequence cannot claim the same id.
 let __modalTitleSeq = 0;
 let __modalKeydown = null;
+let __fieldSeq = 0;
+let __modalFieldWatch = null;
+
+// ⚠️ NO FIELD IN A SHEET HAD AN ACCESSIBLE NAME EITHER. Every caption is a
+// sibling <label class="form-label"> with no for= and no wrapping, so TalkBack
+// read a date field as «edit box» and the calorie field by its placeholder,
+// «edit box, 165». A .form-group holding exactly ONE caption and exactly ONE
+// field is wired here — the title's rule: one place for every sheet, including
+// the ones written after this. A field that already has a name (aria-label,
+// aria-labelledby, a wrapping <label>) keeps it, and a file input is left
+// alone: a caption bound to one would open the picker when tapped.
+function labelSheetFields(root) {
+  root.querySelectorAll('.form-group').forEach((g) => {
+    const caps = g.querySelectorAll('label.form-label');
+    if (caps.length !== 1 || caps[0].htmlFor) return;
+    const fields = [...g.querySelectorAll('input, select, textarea')].filter((f) => f.type !== 'hidden' && f.type !== 'file' && !f.hidden);
+    if (fields.length !== 1) return;
+    const f = fields[0];
+    if (f.hasAttribute('aria-label') || f.hasAttribute('aria-labelledby') || f.closest('label')) return;
+    if (!f.id) f.id = 'vlt-f-' + (++__fieldSeq);
+    caps[0].htmlFor = f.id;
+  });
+}
+
+// THE TAB TRAP both kinds of sheet share: #modal-root's (openModal) and the
+// five that append their own overlay to .app (holdSheetFocus). Tab past the
+// last control wraps to the first, Shift+Tab past the first to the last — and
+// focus that is OUTSIDE the sheet, or on the sheet's own container, is pulled
+// back in by either key. Only Shift+Tab used to recover from outside, so a
+// forward Tab walked the page behind.
+const SHEET_FOCUSABLE = 'a[href],button:not([disabled]),input:not([disabled]),select:not([disabled]),textarea:not([disabled]),[tabindex]:not([tabindex="-1"])';
+function trapTab(e, overlay) {
+  const items = [...overlay.querySelectorAll(SHEET_FOCUSABLE)].filter((n) => n.offsetParent !== null);
+  if (!items.length) return;
+  const first = items[0], last = items[items.length - 1], at = document.activeElement;
+  const outside = !overlay.contains(at);
+  const onBox = !outside && at && at.getAttribute('role') === 'dialog';
+  if (e.shiftKey && (at === first || outside || onBox)) { e.preventDefault(); last.focus(); }
+  else if (!e.shiftKey && (at === last || outside)) { e.preventDefault(); first.focus(); }
+}
+
+// FOCUS FOR THE SHEETS ON .app — rest, train-anyway, reorder, the permission
+// sheet and the food add-sheet. They build their own overlay, so openModal's
+// focus handling never reached them: focus stayed on the control that opened
+// them, Tab walked the page behind, and after Escape focus was on <body>.
+// Call it right after the overlay is mounted and call what it returns FIRST in
+// the sheet's close. Focus moves onto the sheet's [role="dialog"] (tabindex -1:
+// the container, so a reader announces the sheet's name first — openModal's
+// rule), Tab stays inside, and focus goes back to the opener on release — only
+// while focus is still ours (inside the sheet, or on <body>) and the opener is
+// still on screen, and without scrolling, so a navigate() teardown cannot
+// scroll the view it is leaving. Its own keydown listener, in the capture
+// phase: openModal's single slot belongs to #modal-root, and a sheet raised
+// over this one owns the keyboard while it is up.
+function holdSheetFocus(overlay) {
+  const was = document.activeElement;
+  const anchor = was instanceof HTMLElement && was !== document.body && !overlay.contains(was) ? was : null;
+  overlay.querySelector('[role="dialog"]')?.focus({ preventScroll: true });
+  const onKey = (e) => {
+    // Taken off without its close (a test, a stale sheet): the listener leaves
+    // with it instead of outliving it.
+    if (!overlay.isConnected) { document.removeEventListener('keydown', onKey, true); return; }
+    if (e.key !== 'Tab' || document.querySelector('#modal-root .modal-overlay:not(.is-out)')) return;
+    trapTab(e, overlay);
+  };
+  document.addEventListener('keydown', onKey, true);
+  let released = false;
+  return function release() {
+    if (released) return;
+    released = true;
+    document.removeEventListener('keydown', onKey, true);
+    const now = document.activeElement;
+    const ours = !now || now === document.body || overlay.contains(now);
+    if (!ours || !anchor) return;
+    if (anchor.isConnected && anchor.getClientRects().length) {
+      try { anchor.focus({ preventScroll: true }); } catch (_) {}
+    }
+    // A close that repaints the screen straight after (the reorder's onDone,
+    // the rest sheet's Home) replaces the opener with a new node of the same
+    // id: once that has happened, focus lands on the new one, not on <body>.
+    if (anchor.id) setTimeout(() => {
+      if (document.activeElement !== document.body) return;
+      const again = document.getElementById(anchor.id);
+      if (again && again.getClientRects().length) { try { again.focus({ preventScroll: true }); } catch (_) {} }
+    }, 0);
+  };
+}
 
 function closeModal() {
   if (__modalKeydown) { document.removeEventListener('keydown', __modalKeydown, true); __modalKeydown = null; }
+  if (__modalFieldWatch) { __modalFieldWatch.disconnect(); __modalFieldWatch = null; }
   const root = $('#modal-root');
   const leaving = root.querySelector('.modal-overlay.vlt-sheet');
 

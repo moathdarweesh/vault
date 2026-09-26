@@ -53,6 +53,12 @@
     // id we ask for is retired. One sentence for both — the CODE is what tells
     // the owner which, and it never reaches the screen.
     if (data.code === 'UPSTREAM_AUTH' || data.code === 'MODEL_RETIRED') return new Error(tr('ai_err_service'));
+    // A recipe link the Worker will not read (not YouTube, TikTok or Instagram)
+    // or could not (a login wall, a video Google refused). The service sentence
+    // for now; the recipe import gives each its own (rx_link_unsupported,
+    // rx_link_blocked).
+    if (data.code === 'LINK_UNSUPPORTED') return new Error(tr('ai_err_service'));
+    if (data.code === 'LINK_BLOCKED') return new Error(tr('ai_err_service'));
     return new Error(data.error || ('HTTP ' + res.status));
   }
 

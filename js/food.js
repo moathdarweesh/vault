@@ -617,7 +617,7 @@ function openAddSheet(date, onChange) {
       <span class="add-tile-title">${m.title}</span>
     </button>`;
   overlay.innerHTML = `
-    <div class="add-sheet" role="dialog" aria-modal="true">
+    <div class="add-sheet" role="dialog" aria-modal="true" tabindex="-1" aria-label="${escapeHtml(t('add_sheet_title'))}">
       <div class="sheet-handle"></div>
       <div class="add-sheet-title">${t('add_sheet_title')}</div>
       <div class="add-grid">
@@ -641,11 +641,21 @@ function openAddSheet(date, onChange) {
   app.appendChild(overlay);
   // Next frame → add .open so the sheet transitions up smoothly.
   requestAnimationFrame(() => overlay.classList.add('open'));
+  const release = holdSheetFocus(overlay);
 
+  // One close, however many exits race for it (a second tile tapped inside the
+  // exit used to open a second sheet). Focus goes back to the opener first, so
+  // a method's sheet opened from the callback returns there when it closes.
   const close = (cb) => {
+    if (overlay.__closed) return;
+    overlay.__closed = true;
+    release();
     overlay.classList.remove('open');
     setTimeout(() => { overlay.remove(); if (typeof cb === 'function') cb(); }, 260);
   };
+  // Back, Escape and a navigation close it through here, so its focus is let
+  // go too — the router's fallback only removed the node.
+  overlay.__close = () => close();
   overlay.addEventListener('click', (e) => {
     if (e.target === overlay) { close(); return; }
     const btn = e.target.closest('[data-method]');
@@ -693,13 +703,14 @@ function openCalculatorModal(onSave) {
   const body = overlay.querySelector('#calc-body');
 
   function calcFormHtml() {
-    const seg = (name, opts, cur) => `
-      <div class="seg" data-seg="${name}">
-        ${opts.map((o) => `<button type="button" class="seg-btn ${cur === o.v ? 'active' : ''}" data-val="${o.v}">${o.label}</button>`).join('')}
+    // A segment is one choice among a few: a radiogroup named by its caption.
+    const seg = (name, opts, cur, caption) => `
+      <div class="seg" data-seg="${name}" role="radiogroup" aria-label="${escapeHtml(caption)}">
+        ${opts.map((o) => `<button type="button" class="seg-btn ${cur === o.v ? 'active' : ''}" role="radio" aria-checked="${cur === o.v}" data-val="${o.v}">${o.label}</button>`).join('')}
       </div>`;
     return `
       <div class="form-group"><label class="form-label">${t('calc_sex')}</label>
-        ${seg('sex', [{ v: 'male', label: t('calc_male') }, { v: 'female', label: t('calc_female') }], p.sex)}</div>
+        ${seg('sex', [{ v: 'male', label: t('calc_male') }, { v: 'female', label: t('calc_female') }], p.sex, t('calc_sex'))}</div>
       <div class="calc-grid">
         <div class="form-group"><label class="form-label">${t('calc_age')}</label>
           <input type="number" inputmode="numeric" id="c-age" min="10" max="100" value="${numAttr(p.age)}" placeholder="25"></div>
@@ -709,9 +720,9 @@ function openCalculatorModal(onSave) {
           <input type="number" inputmode="decimal" id="c-weight" min="30" max="300" value="${numAttr(p.weightKg)}" placeholder="75"></div>
       </div>
       <div class="form-group"><label class="form-label">${t('calc_activity')}</label>
-        ${seg('activity', activities.map((a) => ({ v: a, label: t('activity_' + a) })), p.activity)}</div>
+        ${seg('activity', activities.map((a) => ({ v: a, label: t('activity_' + a) })), p.activity, t('calc_activity'))}</div>
       <div class="form-group"><label class="form-label">${t('calc_goal')}</label>
-        ${seg('goal', goals.map((g) => ({ v: g, label: t('goal_' + g) })), p.goal)}</div>
+        ${seg('goal', goals.map((g) => ({ v: g, label: t('goal_' + g) })), p.goal, t('calc_goal'))}</div>
       <div class="calc-preview" id="calc-preview"></div>
       <button class="btn btn-primary btn-block" id="calc-save">${t('save')}</button>
       <button type="button" class="calc-switch" id="to-manual">${t('calc_use_manual')}</button>
@@ -758,8 +769,7 @@ function openCalculatorModal(onSave) {
     body.querySelectorAll('[data-seg]').forEach((seg) => {
       seg.addEventListener('click', (e) => {
         const b = e.target.closest('.seg-btn'); if (!b) return;
-        seg.querySelectorAll('.seg-btn').forEach((x) => x.classList.remove('active'));
-        b.classList.add('active');
+        seg.querySelectorAll('.seg-btn').forEach((x) => setChosen(x, x === b));
         p[seg.dataset.seg] = b.dataset.val;
         refresh();
       });
@@ -1109,7 +1119,7 @@ function openRecipeEditor(date, existing, onDone) {
       '<div class="modal-subtitle" id="rec-sub">' + t('rec_sub') + '</div></div>' +
       '<button class="icon-btn icon-btn-tile" data-close>' + icon('close', 20) + '</button>' +
     '</div>' +
-    '<input type="text" id="rec-name" class="input rec-name-top" maxlength="60" enterkeyhint="next" placeholder="' + escapeHtml(t('rec_name_ph')) + '" value="' + escapeHtml(name) + '">' +
+    '<input type="text" id="rec-name" class="input rec-name-top" maxlength="60" enterkeyhint="next" placeholder="' + escapeHtml(t('rec_name_ph')) + '" aria-label="' + escapeHtml(t('rec_name_ph')) + '" value="' + escapeHtml(name) + '">' +
     '<div id="rec-rows" class="rec-list"></div>' +
     '<button type="button" class="ledger-add rec-add" id="rec-add">' + icon('plus', 14) + ' <span>' + t('rec_add_ing') + '</span></button>' +
     '<div class="rec-totals" id="rec-totals">' +
@@ -1754,7 +1764,9 @@ function openSavedFoodPicker(date, onSave, initialTab) {
     const panel = overlay.querySelector('#sf-list');
     if (panel) panel.setAttribute('aria-labelledby', 'sf-tab-' + tab);
     const input = overlay.querySelector('#sf-search');
-    if (input) input.placeholder = tab === 'bundles' ? t('sfp_search_bundles') : tab === 'recipes' ? t('sfp_search_recipes') : t('search_foods');
+    // The field's NAME follows the tab with its placeholder: a placeholder is
+    // not a name, and a search box named by nothing reads as «edit box».
+    if (input) input.setAttribute('aria-label', input.placeholder = tab === 'bundles' ? t('sfp_search_bundles') : tab === 'recipes' ? t('sfp_search_recipes') : t('search_foods'));
     overlay.querySelector('#sf-search-wrap').style.display = '';
     newBtn.innerHTML = icon('plus', 20) + ' ' +
       (tab === 'bundles' ? t('bundle_new') : tab === 'recipes' ? t('rec_new') : t('saved_new'));
@@ -1810,8 +1822,11 @@ function openCoach(date) {
     <div id="coach-body" class="coach-body"><div class="ai-dots">${t('coach_thinking')}</div></div>
   `);
   const body = overlay.querySelector('#coach-body');
+  // The Arabic prompt asks for فصحى in so many words: the Worker's chat prompt
+  // says "Reply in the language of the message", and a model answers in the
+  // register it is addressed in (this one used to say «باقي لي … سناكات … بالعربي»).
   const prompt = (lang === 'ar'
-    ? `أنا أتتبع سعراتي. باقي لي اليوم: ${left.calories} سعرة، ${left.protein}غ بروتين، ${left.carbs}غ كارب، ${left.fat}غ دهون. اقترح ٣ وجبات أو سناكات واقعية تناسب المتبقي تقريباً، كل واحدة بسطر واحد مع سعراتها التقريبية. بالعربي، بدون مقدمة.`
+    ? `أتتبّع سعراتي، والمتبقّي لي اليوم: ${left.calories} سعرة، و${left.protein} غ بروتين، و${left.carbs} غ كربوهيدرات، و${left.fat} غ دهون. اقترح ثلاث وجبات أو وجبات خفيفة واقعية تناسب المتبقّي تقريباً، كلّ منها في سطر مع سعراتها التقريبية. اكتب بالعربية الفصحى، دون مقدمة.`
     : `I track my macros. Remaining today: ${left.calories} kcal, ${left.protein}g protein, ${left.carbs}g carbs, ${left.fat}g fat. Suggest 3 realistic meals or snacks that fit the remainder, each on one line with approx calories. No preamble.`);
   // Already at / over the goal → no point asking the AI for "0 calories" of food.
   if (left.calories <= 50) { body.innerHTML = `<div class="coach-done">${t('coach_goal_met')}</div>`; return; }
@@ -1825,7 +1840,7 @@ function openCoach(date) {
         ? `<div class="coach-text">${escapeHtml(clean).replace(/\n/g, '<br>')}</div>`
         : `<div class="ai-err">${t('coach_unavailable')}</div>`;
     })
-    .catch((e) => { body.innerHTML = `<div class="ai-err">${escapeHtml((e && e.message) || t('ai_error'))}</div>`; });
+    .catch((e) => { body.innerHTML = `<div class="ai-err">${escapeHtml((window.FoodAI && FoodAI.friendlyErr) ? FoodAI.friendlyErr(e) : ((e && e.message) || t('ai_error')))}</div>`; });
 }
 
 // ===========================================================================
@@ -2157,7 +2172,7 @@ function openFoodLibraryModal() {
 
     <div class="search-wrap food-lib-search">
       ${icon('search', 20)}
-      <input type="search" id="food-lib-search" placeholder="${t('search_foods')}">
+      <input type="search" id="food-lib-search" placeholder="${t('search_foods')}" aria-label="${escapeHtml(t('search_foods'))}">
     </div>
 
     <div class="food-lib-body" id="food-lib-body">
@@ -2395,7 +2410,7 @@ function openShoppingList() {
     ${sources.length ? `<div class="sl-sources">${srcGroup('recipe', t('tab_recipes'))}${srcGroup('meal', t('tab_bundles'))}</div>` : ''}
     <ul class="sl-list" id="sl-list"></ul>
     <div class="sl-compose">
-      <input class="input" id="sl-new" maxlength="120" dir="auto" enterkeyhint="done" placeholder="${escapeHtml(t('sl_add_ph'))}">
+      <input class="input" id="sl-new" maxlength="120" dir="auto" enterkeyhint="done" placeholder="${escapeHtml(t('sl_add_ph'))}" aria-label="${escapeHtml(t('sl_add_ph'))}">
       <button type="button" class="btn btn-primary sl-add" id="sl-add" aria-label="${escapeHtml(t('add'))}">${icon('plus', 20)}</button>
     </div>
     <div class="cx-actions sl-foot" hidden>

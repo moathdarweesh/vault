@@ -3145,7 +3145,12 @@ const DB = {
           const ex = ls ? DB.exercises.getById(ls.exerciseId) : null;
           if (!set || !ex) return { title, body: F('notif_train_body_first', {}) };
           const exName = (typeof exDisplayName === 'function') ? exDisplayName(ex) : (ex.name || '');
-          return { title, body: F('notif_train_body', { ex: exName, kg: num(set.weight || 0), reps: num(set.reps || 0) }) };
+          // In the user's unit, as every screen shows it: the stored figure is
+          // kg, and an lb user was handed «100 kg» for the 220 lb they logged.
+          // fmtWeight/unitLabel live in js/ui.js, which loads after this file.
+          const w = (typeof fmtWeight === 'function') ? fmtWeight(set.weight || 0) : num(set.weight || 0);
+          const u = (typeof unitLabel === 'function') ? unitLabel() : 'kg';
+          return { title, body: F('notif_train_body', { ex: exName, w, u, reps: num(set.reps || 0) }) };
         }
 
         case 'supps':
@@ -3157,10 +3162,16 @@ const DB = {
         case 'water': {
           const goal = DB.water.goal();
           const cup = DB.water.CUP_ML || 250;
+          // Cups as Arabic counts them: one, two, then 3–10 («كوب واحد»,
+          // «كوبين», «{cups} أكواب») — «نحو 1 أكواب» was the pasted-number
+          // form. GOAL_ML / CUP_ML is 10, so nothing above ten is reachable;
+          // test-i18n.js fails loudly if the goal ever outgrows that.
           if (!live) {
+            const cups = Math.ceil(goal / cup);
             return {
               title: F('notif_water_title_plan', { goal: num(goal) }),
-              body: F('notif_water_body_plan', { cups: num(Math.ceil(goal / cup)) }),
+              body: cups === 1 ? F('notif_water_body_plan_1', {}) : cups === 2 ? F('notif_water_body_plan_2', {})
+                : F('notif_water_body_plan_n', { cups: num(cups) }),
             };
           }
           const cur = DB.water.get(iso);
@@ -3171,7 +3182,9 @@ const DB = {
           // MORNING; millilitres left is true at any hour, and it is the thing
           // the reminder is actually asking for.
           if (left <= 0) return { title, body: F('notif_water_body_done', {}) };
-          return { title, body: F('notif_water_body', { left: num(left), cups: num(Math.ceil(left / cup)) }) };
+          const cups = Math.ceil(left / cup);
+          return { title, body: cups === 1 ? F('notif_water_body_1', { left: num(left) }) : cups === 2 ? F('notif_water_body_2', { left: num(left) })
+            : F('notif_water_body_n', { left: num(left), cups: num(cups) }) };
         }
 
         case 'food': {
@@ -3193,14 +3206,17 @@ const DB = {
           return { title, body: F('notif_food_body', { p: num(prot) }) };
         }
 
+        // Armed only from a 7-day run (_streakEndingBefore ≥ 7): «سلسلة 7 أيام»
+        // up to ten, «سلسلة 12 يوماً» after — one pasted form read «7 يوماً».
         case 'streak':
           return {
-            title: F('notif_streak_title', { n: num(p.n || 0) }),
+            title: (p.n || 0) <= 10 ? F('notif_streak_title_n', { n: num(p.n || 0) }) : F('notif_streak_title_many', { n: num(p.n) }),
             body: F('notif_streak_body', {}),
           };
 
+        // Only ever one: «تذكير واحد اليوم», not «1 تذكيرات».
         default:
-          return { title: F('notif_summary_title', { n: num(1) }), body: '' };
+          return { title: F('notif_summary_title_1', {}), body: '' };
       }
     },
 

@@ -1433,11 +1433,10 @@ const ownerAt = (text, index) => ([...text.slice(0, index).matchAll(/^(?:async\s
 //       navigate() tears the sheets down through __close.
 {
   const problems = [];
-  const NO_HOOK = {
-    // Its close() is the exit alone — no write, no stamp — which is what
-    // closeAppSheet() does for a sheet that hands it nothing.
-    'js/food.js:add-sheet-overlay': 'its close() is the exit alone, closeAppSheet()\'s own fallback',
-  };
+  // Empty since the add-sheet took a hook too (batch 5): its close lets the
+  // sheet's focus go (holdSheetFocus), which the router's fallback — removing
+  // the node — never did.
+  const NO_HOOK = {};
   let sheets = 0;
   for (const f of VIEWS) {
     const text = src[f];
@@ -1617,6 +1616,191 @@ const ownerAt = (text, index) => ([...text.slice(0, index).matchAll(/^(?:async\s
     if (!/removeExerciseImage/.test(fn)) problems.push('deleteCustomExercise() never asks Cloud.removeExerciseImage()');
   }
   contract(`every custom-exercise delete takes its photo off the server too (${calls} remove call${calls === 1 ? '' : 's'})`, problems);
+}
+
+// Shared by 60–61: every <button …>…</button> a view script emits. The start
+// tag ends at the first '>' OUTSIDE a ${…} — an arrow function inside one
+// (`${xs.map((x) => …)}`) carries a '>' that is not the tag's end.
+const BUTTONS = VIEWS.flatMap((f) => {
+  const text = src[f], out = [];
+  for (const m of text.matchAll(/<button\b/g)) {
+    let depth = 0, end = -1;
+    for (let i = m.index; i < text.length && end < 0; i++) {
+      if (depth === 0 && text[i] === '$' && text[i + 1] === '{') { depth = 1; i++; }
+      else if (depth > 0) { if (text[i] === '{') depth++; else if (text[i] === '}') depth--; }
+      else if (text[i] === '>') end = i;
+    }
+    if (end < 0) continue;
+    const close = text.indexOf('</button>', end);
+    out.push({ f, line: text.slice(0, m.index).split(/\r?\n/).length, tag: text.slice(m.index, end + 1), body: close < 0 ? '' : text.slice(end + 1, close) });
+  }
+  return out;
+});
+const buttonKey = (tag) => (tag.match(/\bid="([\w-]+)"/) || [])[1] || (tag.match(/\bclass="\s*([\w-]+)/) || [])[1] || '(no class)';
+
+// 60 — every icon-only or empty <button> has an accessible name. A button whose
+// body is an icon or nothing is announced as «button» and no more: the
+// supplement sheet's eight colour swatches were eight of them, on a sheet that
+// names every other control. openModal names every [data-close] from one
+// place; a button whose text is written at runtime is named below with the
+// function that writes it.
+{
+  const problems = [];
+  const RUNTIME = {
+    'toast-action': 'showToast() writes the action label into it before the toast shows',
+    'sc-action': 'updateSaveCenter() writes the action label into it on every state',
+    'rec-sum': 'updateSummary() writes the figures and the source word into its spans',
+  };
+  const textOf = (body) => body
+    .replace(/\$\{\s*icon\([^{}]*\)\s*\}/g, '')        // ${icon('x', 20)}
+    .replace(/'\s*\+\s*icon\([^()]*\)\s*\+\s*'/g, '')  // ' + icon('x', 18) + '
+    .replace(/<!--[\s\S]*?-->/g, '').replace(/<[^>]*>/g, '').replace(/['"+\s]/g, '');
+  for (const b of BUTTONS) {
+    if (/\baria-label(?:ledby)?=|\btitle=|\bdata-close\b/.test(b.tag) || textOf(b.body) !== '' || RUNTIME[buttonKey(b.tag)]) continue;
+    problems.push(`${b.f}:${b.line} <button …${buttonKey(b.tag)}…> holds only an icon (or nothing) and carries no aria-label — a screen reader announces «button» and nothing else`);
+  }
+  contract(`every icon-only or empty <button> has an accessible name (${BUTTONS.length} buttons, ${Object.keys(RUNTIME).length} named at runtime)`, problems);
+}
+
+// 61 — a chosen option says so to a screen reader. Eight option groups (and
+// six more a scan found beside them) marked the choice with a CSS class alone
+// — language, unit, text size, the filters, the compare tabs, the colour
+// swatches — while the theme picker on the same screen used role=radio +
+// aria-checked. A reader could not tell which was chosen.
+//   (a) a <button> whose class is conditional on a state word (active, sel, on,
+//       selected) carries aria-pressed, aria-checked or aria-selected;
+//   (b) a handler that flips that class goes through setChosen() (js/ui.js),
+//       which writes the class and the state together, or writes an aria-
+//       state within two lines of the flip.
+{
+  const problems = [];
+  const STATE_WORDS = new Set(['active', 'sel', 'on', 'selected']);
+  let options = 0;
+  for (const b of BUTTONS) {
+    const cls = (b.tag.match(/\bclass="([^"]*)"/) || [])[1] || '';
+    if (!cls.includes('?')) continue;   // a static class states nothing
+    const words = [...cls.matchAll(/'([^']*)'/g)].flatMap((m) => m[1].trim().split(/\s+/));
+    if (!words.some((w) => STATE_WORDS.has(w))) continue;
+    options++;
+    if (!/\baria-(?:pressed|checked|selected)=/.test(b.tag)) problems.push(`${b.f}:${b.line} <button …${buttonKey(b.tag)}…> shows its state only as a class — add aria-checked (role=radio in a named radiogroup) or aria-pressed`);
+  }
+  // The router's own .view toggle is not an option: a view is shown, not chosen.
+  const ROUTER = /\$\$\('\.view'\)/;
+  let flips = 0;
+  for (const f of VIEWS) {
+    const text = src[f], lines = text.split(/\r?\n/);
+    for (const m of text.matchAll(/classList\.(?:toggle|add|remove)\(\s*'(?:active|sel|on|selected)'/g)) {
+      const i = text.slice(0, m.index).split(/\r?\n/).length - 1, ln = lines[i];
+      if (/^\s*\/\//.test(ln)) continue;
+      flips++;
+      if (ROUTER.test(ln) || ownerAt(text, m.index) === 'setChosen') continue;
+      if (/\baria-(?:pressed|checked|selected|current)\b/.test(lines.slice(i, i + 3).join('\n'))) continue;
+      problems.push(`${f}:${i + 1} flips an option's class with no state beside it — use setChosen(el, on) so the class and aria- state cannot drift: ${ln.trim().slice(0, 90)}`);
+    }
+  }
+  contract(`every option carries its state for a screen reader (${options} conditional option buttons, ${flips} class flips)`, problems);
+}
+
+// Shared by 62–63: styles.css with its comments blanked (offsets and lines
+// kept, so a line number printed here is the line in the file), and every
+// { } block with its head, whether that head is an at-rule, and its parent.
+const CSS_CLEAN = read('styles.css').replace(/\/\*[\s\S]*?\*\//g, (m) => m.replace(/[^\n]/g, ' '));
+const CSS_BLOCKS = (() => {
+  const out = [], stack = [];
+  let head = 0;
+  for (let i = 0; i < CSS_CLEAN.length; i++) {
+    const c = CSS_CLEAN[i];
+    if (c === '{') {
+      const h = CSS_CLEAN.slice(head, i).replace(/\s+/g, ' ').trim();
+      const b = { head: h, at: h.startsWith('@'), open: i, close: CSS_CLEAN.length, parent: stack[stack.length - 1] || null };
+      out.push(b); stack.push(b); head = i + 1;
+    } else if (c === '}') { const b = stack.pop(); if (b) b.close = i; head = i + 1; }
+    else if (c === ';') head = i + 1;
+  }
+  return out;
+})();
+const cssLine = (i) => CSS_CLEAN.slice(0, i).split('\n').length;
+// the innermost block a declaration sits in
+const cssOwner = (i) => CSS_BLOCKS.reduce((best, b) => (b.open < i && b.close > i && (!best || b.open > best.open) ? b : best), null);
+
+// 62 — every font size is on the type scale. «Larger text» (body.text-lg,
+// v380) raises the --fs-* tokens, and 306 font sizes were px literals it could
+// not reach: the figures, units, captions, calendar and set tables kept their
+// size for the person who asked for bigger type. A size is a token, a calc()
+// over var(--fs-scale) or a token, a relative value, or an exception named
+// below with its reason. Every --fs-* token is also redeclared under
+// body.text-lg (v385: a token that sits out the large size is invisible), and
+// no view script writes an inline px font size.
+{
+  const problems = [];
+  const EXCEPT = {
+    '.bento-card-bg.fallback': 'the initials are a picture of a fixed tile standing in for a missing photo, not text to read',
+    '.bento-card.wide .bento-card-bg.fallback': 'the same picture on the wide tile',
+    '.sd-thumb.fallback': 'the initials fill a fixed 44px thumbnail in place of the photo',
+    '.run-ex-media.fallback': 'the initials fill the fixed media box in place of the photo',
+    '.vs-word': 'the splash wordmark is sized in its own design unit (--vs-u) so it lands on the native launch PNG; a theme or text setting must never move it',
+  };
+  const literal = [];
+  for (const m of CSS_CLEAN.matchAll(/font-size\s*:\s*([^;}]+)/g)) {
+    const v = m[1].trim();
+    if (/^var\(--fs-[\w-]+(?:\s*,[^)]*)?\)$/.test(v) || (/^calc\(/.test(v) && /var\(--fs-[\w-]+\)/.test(v))) continue;
+    if (/^(?:inherit|initial|unset|revert|smaller|larger|[\d.]+(?:em|%))$/.test(v)) continue;
+    const owner = cssOwner(m.index);
+    if (owner && EXCEPT[owner.head]) continue;
+    literal.push(`styles.css:${cssLine(m.index)} ${owner ? owner.head.slice(0, 48) : '?'} { font-size: ${v} }`);
+  }
+  if (literal.length) problems.push(`${literal.length} font sizes sit outside the type scale, where «Larger text» cannot reach them — first: ${literal.slice(0, 4).join(' · ')}`);
+  const decl = [...CSS_CLEAN.matchAll(/(--fs-[\w-]+)\s*:\s*([^;}]+)/g)].map((m) => ({ name: m[1], v: m[2].trim(), owner: cssOwner(m.index) }));
+  const rootT = decl.filter((d) => d.owner && /(?:^|,)\s*:root\b/.test(d.owner.head) && !d.owner.parent);
+  const lgT = decl.filter((d) => d.owner && d.owner.head === 'body.text-lg' && !d.owner.parent);
+  const lgNames = new Set(lgT.map((d) => d.name));
+  for (const d of rootT) if (!lgNames.has(d.name)) problems.push(`${d.name} is declared in :root and never under a top-level body.text-lg — it sits out the larger size`);
+  const scale = (list) => (list.find((d) => d.name === '--fs-scale') || {}).v;
+  if (scale(rootT) !== '1') problems.push(`--fs-scale must be 1 in :root (found ${scale(rootT)})`);
+  if (!(Number(scale(lgT)) > 1)) problems.push(`--fs-scale must be above 1 under body.text-lg (found ${scale(lgT)})`);
+  for (const f of VIEWS) src[f].split(/\r?\n/).forEach((ln, i) => {
+    if (/font-size\s*:\s*[\d.]+px/.test(ln)) problems.push(`${f}:${i + 1} writes an inline px font size — use a var(--fs-*) token, calc(Npx * var(--fs-scale)), or a class on the type scale`);
+  });
+  contract(`every font size is on the type scale, and «Larger text» reaches all of it (${Object.keys(EXCEPT).length} named exceptions)`, problems);
+}
+
+// 63 — styles.css nests no rule inside a style rule. CSS nesting reached
+// Chrome at 112 (and a rule opening with a type selector, like body.text-lg,
+// only at 120), while capacitor.config.json declares a WebView floor of 80.
+// Below that floor a nested rule is an invalid DECLARATION: the parser skips
+// it to the next ';' — and the text-lg rules sat inside the :root block, so the
+// skip swallowed --fw-display with them. At-rules (@media, @supports,
+// @keyframes) may hold rules; a style rule may hold only declarations.
+{
+  const problems = CSS_BLOCKS.filter((b) => b.parent && !b.parent.at)
+    .map((b) => `styles.css:${cssLine(b.open)} «${b.head.slice(0, 50)}» is nested inside the style rule «${b.parent.head.slice(0, 40)}» (line ${cssLine(b.parent.open)})`);
+  contract(`styles.css nests no rule inside a style rule (${CSS_BLOCKS.length} blocks — the WebView floor cannot parse nesting)`, problems);
+}
+
+// 64 — every sheet on .app holds focus. The five that append their own
+// overlay (rest, train-anyway, reorder, the permission sheet, the add-sheet)
+// were built outside openModal and got none of its focus handling: focus stayed
+// on the opener, Tab walked the page behind, and after Escape it was on <body>.
+// holdSheetFocus() (js/ui.js) is their openModal: each creator calls it after
+// mounting, lets go of it in its close, and gives its dialog tabindex="-1" —
+// without which the focus() it asks for silently does nothing. The same scan
+// contract 49 walks, so a sixth sheet meets both.
+{
+  const problems = [];
+  let sheets = 0;
+  for (const f of VIEWS) {
+    for (const m of src[f].matchAll(/\.className\s*=\s*'sheet-overlay'/g)) {
+      sheets++;
+      const owner = ownerAt(src[f], m.index), body = topFn(f, owner);
+      const miss = [];
+      if (!/holdSheetFocus\(overlay\)/.test(body)) miss.push('never calls holdSheetFocus(overlay)');
+      if (!/\brelease\(\);/.test(body)) miss.push('never lets its focus go (release()) in its close');
+      if (!/role="dialog"[^>]*tabindex="-1"|tabindex="-1"[^>]*role="dialog"/.test(body)) miss.push('its role="dialog" carries no tabindex="-1", so focusing it does nothing');
+      if (miss.length) problems.push(`${f}: ${owner}() ${miss.join('; ')}`);
+    }
+  }
+  if (!/^function holdSheetFocus\(/m.test(src['js/ui.js'])) problems.push('js/ui.js has no top-level holdSheetFocus()');
+  contract(`every sheet on .app takes focus, keeps Tab inside and gives focus back (${sheets} sheets)`, problems);
 }
 
 console.log(failures.length ? `\ncheck-contracts: ${failures.length} broken contract(s)` : '\ncheck-contracts: all contracts hold');
