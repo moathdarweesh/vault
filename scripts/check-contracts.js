@@ -1803,5 +1803,49 @@ const cssOwner = (i) => CSS_BLOCKS.reduce((best, b) => (b.open < i && b.close > 
   contract(`every sheet on .app takes focus, keeps Tab inside and gives focus back (${sheets} sheets)`, problems);
 }
 
+// 65 — the recipe import's client budget fits the Worker's caps («استخراج وصفة»).
+// The phone decides how many stills, how many base64 characters each, how much
+// soundtrack and how much caption to send; the Worker refuses anything over its
+// own MAX_RECIPE_* with a 413 the user reads as «too large». Two files, one
+// agreement, nothing else keeping it — and the Worker's clamp must never hand
+// the editor a name longer than its own field lets a person type. Every number
+// is READ, and one that cannot be read fails by name: a NaN compares false, and
+// a check that compares nothing prints ✓ (the lesson recorded at contract 24).
+{
+  const problems = [];
+  const fa = src['js/foodai.js'], food = src['js/food.js'], store = src['js/storage.js'];
+  const worker = exists('backend/worker/gemini-worker.js') ? read('backend/worker/gemini-worker.js') : '';
+  const num = (text, re, what, file) => {
+    const n = Number((text.match(re) || [])[1]);
+    if (!(n > 0)) problems.push(`could not read ${what} from ${file} — this check has gone silent`);
+    return n;
+  };
+  const rx = (k) => num(fa, new RegExp('const ' + k + ' = (\\d+);'), k, 'js/foodai.js');
+  const max = (k) => num(worker, new RegExp('const ' + k + ' = (\\d+);'), k, 'backend/worker/gemini-worker.js');
+  const [frames, frameB64, imageB64, audioB64, textMax] = ['RX_FRAMES', 'RX_FRAME_B64', 'RX_IMAGE_B64', 'RX_AUDIO_B64', 'RX_TEXT_MAX'].map(rx);
+  const [mFrames, mFrame, mTotal, mAudio, mText, mItems] = ['MAX_RECIPE_FRAMES', 'MAX_RECIPE_FRAME', 'MAX_RECIPE_FRAMES_TOTAL', 'MAX_RECIPE_AUDIO', 'MAX_RECIPE_TEXT', 'MAX_RECIPE_ITEMS'].map(max);
+  const clamp = worker.slice(worker.indexOf('function clampRecipe('), worker.indexOf('function readRecipe('));
+  const cName = num(clamp, /name: text\(it && it\.name, (\d+)\)/, "clampRecipe's ingredient-name cap", 'backend/worker/gemini-worker.js');
+  const cQty = num(clamp, /qty: text\(it && it\.qty, (\d+)\)/, "clampRecipe's qty cap", 'backend/worker/gemini-worker.js');
+  const cRec = num(clamp, /name: text\(raw\.name, (\d+)\)/, "clampRecipe's recipe-name cap", 'backend/worker/gemini-worker.js');
+  const items = num(store, /function cleanMealItems\(items\) \{\s*if \(!Array\.isArray\(items\) \|\| !items\.length \|\| items\.length > (\d+)\)/, "cleanMealItems' item cap", 'js/storage.js');
+  const eName = num(food, /class="rec-name" data-f="name" maxlength="(\d+)"/, 'the ingredient name field\'s maxlength', 'js/food.js');
+  const eQty = num(food, /class="rec-qty" data-f="qty" dir="auto" maxlength="(\d+)"/, 'the amount field\'s maxlength', 'js/food.js');
+  const eRec = num(food, /id="rec-name" class="input rec-name-top" maxlength="(\d+)"/, 'the recipe name field\'s maxlength', 'js/food.js');
+  const eText = num(food, /id="rx-text"[^>]*maxlength="(\d+)"/, '#rx-text\'s maxlength', 'js/food.js');
+  const fits = (ok, msg) => { if (!ok) problems.push(msg); };
+  if (!problems.length) {
+    fits(frames <= mFrames, `the phone sends up to ${frames} stills (RX_FRAMES); the Worker takes ${mFrames}`);
+    fits(frameB64 <= mFrame, `a video still may be ${frameB64} base64 chars (RX_FRAME_B64); the Worker takes ${mFrame} per still`);
+    fits(frames * frameB64 <= mTotal, `${frames} stills × ${frameB64} chars = ${frames * frameB64}; the Worker takes ${mTotal} in all`);
+    fits(imageB64 <= mFrame && imageB64 <= mTotal, `a photo may be ${imageB64} chars (RX_IMAGE_B64); the Worker takes ${mFrame} per still`);
+    fits(audioB64 <= mAudio, `the soundtrack may be ${audioB64} chars (RX_AUDIO_B64); the Worker takes ${mAudio}`);
+    fits(eText <= textMax && textMax <= mText, `#rx-text takes ${eText} chars, the phone sends ${textMax} (RX_TEXT_MAX), the Worker reads ${mText}`);
+    fits(mItems <= items, `the Worker answers up to ${mItems} ingredients; a saved recipe holds ${items} (cleanMealItems)`);
+    fits(cName <= eName && cQty <= eQty && cRec <= eRec, `the Worker clamps names/amounts/recipe names to ${cName}/${cQty}/${cRec}; the editor's fields take ${eName}/${eQty}/${eRec}`);
+  }
+  contract(`the recipe import's client budget fits the Worker's caps (${frames} stills × ${frameB64} + ${audioB64} audio chars, ${mItems} ingredients)`, problems);
+}
+
 console.log(failures.length ? `\ncheck-contracts: ${failures.length} broken contract(s)` : '\ncheck-contracts: all contracts hold');
 process.exit(failures.length ? 1 : 0);

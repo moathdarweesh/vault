@@ -631,14 +631,145 @@ async function clientDeadline() {
   let nullErr = null;
   await c.FoodAI.analyze('a null body', { skipLocal: true }).catch((e) => { nullErr = e; });
   assert.equal(c.FoodAI.friendlyErr(nullErr), 'ai_error', 'a null 200 is not «check your connection» — v397 threw a TypeError there: ' + (nullErr && nullErr.message));
-  // The recipe link codes are named, never flattened into «صار خطأ»: the service
-  // sentence until the recipe import gives each its own (contract 30 pins the literals).
-  for (const [status, error, code] of [[400, 'no input', 'LINK_UNSUPPORTED'], [502, 'service unavailable', 'LINK_BLOCKED']]) {
+  // The recipe link codes are named, never flattened into «صار خطأ», and each has
+  // its OWN sentence (commit B): «not a link we read» and «a link we could not
+  // reach» ask for different things — another link, or the saved clip. The
+  // literals on both sides are what contract 30 reads.
+  for (const [status, error, code, want] of [[400, 'no input', 'LINK_UNSUPPORTED', 'rx_link_unsupported'], [502, 'service unavailable', 'LINK_BLOCKED', 'rx_link_blocked']]) {
     c.fetch = async () => ({ ok: false, status, json: async () => ({ error, code }) });
     let linkErr = null;
     await c.FoodAI.analyze('a link, ' + code, { skipLocal: true }).catch((e) => { linkErr = e; });
-    assert.equal(c.FoodAI.friendlyErr(linkErr), 'ai_err_service', code + ' reaches the user as the service sentence: ' + (linkErr && linkErr.message));
+    assert.equal(c.FoodAI.friendlyErr(linkErr), want, code + ' reaches the user as its own sentence (' + want + '), not the service one: ' + (linkErr && linkErr.message));
   }
   console.log('PASS client deadline: a hung Worker call ends and is named, a caller\'s cancel stays its own, the deadline outlasts every Worker attempt, a null 200 is not a network error, the recipe link codes are named');
 }
-workerTests().then(clientDeadline).catch((e) => { console.error(e); process.exitCode = 1; });
+// ---- «استخراج وصفة» · the client half (commit B) ------------------------------
+// The REAL js/foodai.js in a vm against a fetch that records every request:
+// analyzeRecipe goes through the one door, an OLD Worker is refused by name (its
+// food answer is never passed off as a recipe), the payload carries recipe
+// fields only, the two link codes have their own sentences, and the pure media
+// helpers are exercised BY NAME — pulled out of the file, never copied into it.
+async function clientRecipe() {
+  const fa = read('js/foodai.js');
+  const sent = [];
+  let reply = () => ({ ok: true, status: 200, json: async () => ({}) });
+  const c = { console: { log() {}, warn() {}, error() {} }, AbortController, setTimeout, clearTimeout, URL, cacheWrites: 0,
+    localStorage: { getItem: () => null, setItem() { c.cacheWrites++; }, removeItem() {} },
+    fetch: async (url, opts) => { sent.push({ url, body: JSON.parse(opts.body) }); return reply(); } };
+  c.window = c; vm.createContext(c);
+  vm.runInContext(read('js/cloud.js').split('(function () {')[0], c);
+  vm.runInContext(fa, c);
+  const FA = c.FoodAI;
+  assert.equal(typeof FA.analyzeRecipe, 'function', 'FoodAI.analyzeRecipe is not exported');
+  assert.equal(typeof FA.decomposeVideo, 'function', 'FoodAI.decomposeVideo is not exported');
+  const answer = (status, body) => () => ({ ok: status >= 200 && status < 300, status, json: async () => body });
+  const run = async (input) => { let out = null, err = null; await FA.analyzeRecipe(input).then((v) => { out = v; }, (e) => { err = e; }); return { out, err }; };
+  const keys = () => Object.keys(sent[sent.length - 1].body).join(',');
+  const still = { mimeType: 'image/jpeg', data: 'AAAA' };
+  // PAYLOAD KEYS, EXACT. Recipe-only names are what make an OLD Worker answer
+  // 400 'no input' before its budget; a generic text/prompt/image/audio would
+  // run the food or voice path and spend a unit on the wrong question.
+  const recipe = { name: 'Garlic pasta', servings: 2, items: [{ name: 'spaghetti', qty: '200 g', calories: 742, protein: 26, carbs: 150, fat: 3 }] };
+  reply = answer(200, { recipe });
+  await run({ frames: [still, still], audio: { mimeType: 'audio/wav', data: 'UklG' }, text: ' 200 g pasta ' });
+  assert.equal(keys(), 'mode,lang,frames,recipeAudio,recipeText', 'a clip sends exactly its stills, its soundtrack and its caption: ' + keys());
+  const b0 = sent[sent.length - 1].body;
+  assert.equal(b0.mode + ' ' + b0.lang + ' ' + b0.recipeAudio.mimeType + ' ' + b0.recipeText, 'recipe en audio/wav 200 g pasta');
+  await run({ text: 'eggs' });
+  assert.equal(keys(), 'mode,lang,recipeText', 'text alone sends no empty frames array: ' + keys());
+  await run({ frames: [still] });
+  assert.equal(keys(), 'mode,lang,frames', 'an image alone: ' + keys());
+  await run({ link: 'https://youtu.be/dQw4w9WgXcQ', frames: [still], text: 'ignored' });
+  assert.equal(keys(), 'mode,lang,link', 'a link travels alone — the Worker refuses a link beside stills: ' + keys());
+  c.DB = { prefs: { get: () => ({ lang: 'ar' }) } };
+  await run({ text: 'بيض' });
+  assert.equal(sent[sent.length - 1].body.lang, 'ar', 'lang is the enum the Worker turns into its own sentence');
+  delete c.DB;
+  const cap = Number((fa.match(/const RX_FRAMES = (\d+);/) || [])[1]);
+  await run({ frames: Array(cap + 5).fill(still) });
+  assert.equal(sent[sent.length - 1].body.frames.length, cap, 'never more stills than RX_FRAMES (' + cap + ')');
+  // THE REFUSALS, each by its own sentence. tr() answers the key in this vm.
+  const said = async (status, body, input) => { reply = answer(status, body); const r = await run(input || { text: 'x' }); return r.err ? FA.friendlyErr(r.err) : 'resolved ' + JSON.stringify(r.out); };
+  assert.equal(await said(200, { items: [{ name: 'pasta', calories: 300 }] }), 'rx_unavailable', "an OLD Worker's food answer is refused, not passed off as a recipe");
+  assert.equal(await said(400, { error: 'no input' }), 'rx_unavailable', 'an OLD Worker refuses the recipe fields before its budget: say «not available yet»');
+  assert.equal(await said(200, { recipe: { name: 'x' } }), 'rx_unavailable', 'a reply with no recipe.items is not a recipe');
+  assert.equal(await said(400, { error: 'no input', code: 'LINK_UNSUPPORTED' }, { link: 'https://youtu.be/dQw4w9WgXcQ' }), 'rx_link_unsupported', "the link code wins over 400 'no input' — it is not an old Worker");
+  assert.equal(await said(502, { error: 'service unavailable', code: 'LINK_BLOCKED' }, { link: 'https://youtu.be/dQw4w9WgXcQ' }), 'rx_link_blocked', 'a link the Worker could not reach says so');
+  assert.equal(await said(429, { error: 'daily limit', code: 'DAILY_LIMIT' }), 'ai_daily_limit', 'the daily budget is named, through workerError');
+  const n0 = sent.length;
+  assert.equal(await said(200, { recipe }, {}), 'rx_need_text', 'nothing to read is refused before any request');
+  assert.equal(await said(200, { recipe }, { link: 'https://example.com/recipe' }), 'rx_link_unsupported', 'a host the Worker never reads is refused on the phone');
+  assert.equal(sent.length, n0, 'and neither refusal spent a request');
+  reply = answer(200, { recipe });
+  const ok = await run({ text: 'Garlic pasta for 2' });
+  assert.equal(JSON.stringify(ok.out), JSON.stringify(recipe), 'the recipe comes back as the Worker sent it');
+  assert.equal(c.cacheWrites, 0, 'a recipe is never cached — every source is unique');
+  assert.ok(sent.every((s) => s.url === (fa.match(/const PROXY_URL = '([^']+)'/) || [])[1]), 'every recipe request went to the Worker');
+  assert.equal((fa.match(/fetch\(PROXY_URL/g) || []).length, 1, 'through ONE door, so the deadline covers it too');
+  console.log('PASS client recipe: analyzeRecipe exported, payload keys exact, an old Worker refused by name, the link codes named, the refusals spend nothing, never cached, one door');
+}
+// The pure media helpers, pulled out of js/foodai.js BY NAME (test-run-list.js's
+// method, at the IIFE's two-space indent) and run in a bare context: nothing is
+// copied, so the test cannot drift from what the phone executes.
+function clientRecipeHelpers() {
+  const fa = read('js/foodai.js'), lines = fa.split(/\r?\n/);
+  const NAMES = ['rxFrameTimes', 'rxAudioPlan', 'rxMono', 'rxResample', 'rxPeak', 'rxWav', 'rxLinkKind'];
+  const picked = NAMES.map((name) => {
+    const start = lines.findIndex((l) => l.startsWith('  function ' + name + '('));
+    assert.ok(start !== -1, name + ' is not a function in js/foodai.js — did it move?');
+    const end = lines.findIndex((l, i) => i > start && l === '  }');
+    assert.ok(end !== -1, name + ': no closing brace at the IIFE indent');
+    return lines.slice(start, end + 1).join('\n');
+  });
+  const ctx = vm.createContext({ URL, ArrayBuffer, DataView, Float32Array, Math, Number, String, Array });
+  vm.runInContext(picked.join('\n'), ctx);
+  const h = vm.runInContext('({ ' + NAMES.join(', ') + ' })', ctx);
+  const eq = (got, want, msg) => assert.equal(JSON.stringify(got), JSON.stringify(want), msg);
+  // rxWav: a 44-byte RIFF header, then little-endian PCM16, clamped.
+  const wav = h.rxWav([0, 1, -1, 0.5, 2], 16000, 1), dv = new DataView(wav);
+  const tag = (o) => String.fromCharCode(dv.getUint8(o), dv.getUint8(o + 1), dv.getUint8(o + 2), dv.getUint8(o + 3));
+  eq([wav.byteLength, tag(0), dv.getUint32(4, true), tag(8), tag(12), dv.getUint32(16, true), dv.getUint16(20, true), dv.getUint16(22, true), dv.getUint32(24, true), dv.getUint32(28, true), dv.getUint16(32, true), dv.getUint16(34, true), tag(36), dv.getUint32(40, true)],
+    [54, 'RIFF', 46, 'WAVE', 'fmt ', 16, 1, 1, 16000, 32000, 2, 16, 'data', 10], 'rxWav writes a mono 16-bit PCM WAV header');
+  eq([0, 1, 2, 3, 4].map((i) => dv.getInt16(44 + i * 2, true)), [0, 32767, -32768, 16383, 32767], 'rxWav samples: full scale, clamped');
+  eq(new Int16Array(h.rxWav([0.25], 8000, 2), 44).length, 1, 'one sample in, one out');
+  assert.equal(new DataView(h.rxWav([0.25], 8000, 2)).getInt16(44, true), 16383, 'the gain lifts a quiet track (0.25 × 2)');
+  // rxAudioPlan: the first rate whose whole clip fits the base64 budget; else the lowest, truncated.
+  const rates = [16000, 12000, 8000], B = 1800000;
+  eq([30, 50, 70].map((d) => h.rxAudioPlan(d, B, rates).rate), [16000, 12000, 8000], 'a longer clip steps the rate down to fit 1.8 M chars');
+  eq(h.rxAudioPlan(300, B, rates), { rate: 8000, seconds: 84, truncated: true }, 'a clip too long for 8 kHz sends its first part and says so');
+  eq(h.rxAudioPlan(30, B, rates), { rate: 16000, seconds: 30, truncated: false }, 'a short clip is sent whole');
+  // rxFrameTimes: evenly spaced, the first and the last second included, never more than asked.
+  const ft = h.rxFrameTimes(60, 10);
+  assert.ok(ft.length === 10 && ft.every((x, i) => i === 0 || x > ft[i - 1]), 'rxFrameTimes(60, 10): ten times, strictly increasing: ' + JSON.stringify(ft));
+  assert.ok(ft[0] <= 0.5 && ft[9] >= 59.5, 'the first and the last second are both seen: ' + ft[0] + ' … ' + ft[9]);
+  assert.equal(h.rxFrameTimes(2, 10).length, 3, 'a two-second clip still gives three stills');
+  eq([h.rxFrameTimes(Infinity, 10), h.rxFrameTimes(NaN, 10), h.rxFrameTimes(0.5, 10)], [[], [], [0.25]], 'no duration, no times; under a second, its middle');
+  // rxMono / rxResample / rxPeak
+  eq(Array.from(h.rxMono([Float32Array.from([1, 0]), Float32Array.from([0, 1])])), [0.5, 0.5], 'rxMono averages the channels');
+  const flat = h.rxResample(new Float32Array(48000).fill(0.5), 48000, 16000);
+  assert.ok(flat.length === 16000 && flat.every((v) => Math.abs(v - 0.5) < 1e-6), 'rxResample 48 → 16 kHz keeps a level signal level, at a third of the length');
+  assert.equal(h.rxPeak(Float32Array.from([0.1, -0.7, 0.3])), Math.fround(0.7), 'rxPeak is the largest magnitude');
+  // rxLinkKind mirrors the Worker's hosts EXACTLY, so the phone refuses early only what the Worker would refuse.
+  const kinds = ['https://youtu.be/dQw4w9WgXcQ', 'https://m.youtube.com/watch?v=dQw4w9WgXcQ', 'https://vm.tiktok.com/ZMabc123/', 'https://vt.tiktok.com/ZSabc123/',
+    'https://www.instagram.com/reel/Cabc123/', 'https://example.com/recipe', 'not a url', 'ftp://youtube.com/watch?v=x', 'https://youtube.com.evil.com/x', 'https://notyoutube.com/x'].map((u) => h.rxLinkKind(u));
+  eq(kinds, ['youtube', 'youtube', 'tiktok', 'tiktok', 'instagram', null, null, null, null, null], 'rxLinkKind classifies by exact host');
+  // The working tree is CRLF on this machine and LF on CI: normalise, then cut each
+  // body at its own closing brace (two spaces in the IIFE, column 0 in the Worker).
+  const hostsIn = (src, fn, close) => {
+    const s = src.replace(/\r\n/g, '\n'), at = s.indexOf('function ' + fn + '('), end = s.indexOf(close, at);
+    assert.ok(at > 0 && end > at, fn + ' is declared, with its closing brace');
+    return [...new Set([...s.slice(at, end).matchAll(/'((?:[a-z]+\.)*[a-z]+\.(?:com|be))'/g)].map((m) => m[1]))].sort();
+  };
+  const client = hostsIn(fa, 'rxLinkKind', '\n  }\n'), server = hostsIn(read('backend/worker/gemini-worker.js'), 'readLink', '\n}\n');
+  assert.equal(client.join(' '), server.join(' '), "js/foodai.js rxLinkKind names the Worker's readLink hosts exactly");
+  assert.equal(client.length, 11, 'eleven hosts: ' + client.join(' '));
+  console.log('PASS client recipe helpers: rxWav header and samples, rxAudioPlan steps 16/12/8 kHz and truncates, rxFrameTimes, rxMono, rxResample, rxPeak, rxLinkKind, the eleven hosts mirrored');
+}
+// The two recipe blocks run whatever the other says, so a failure names every
+// block it is in rather than hiding the second behind the first.
+async function clientRecipeBlocks() {
+  const fails = [];
+  for (const f of [clientRecipe, clientRecipeHelpers]) { try { await f(); } catch (e) { fails.push(f.name + ' — ' + ((e && e.message) || e)); } }
+  if (fails.length) throw new Error(fails.length + ' client recipe block(s) failed:\n  ' + fails.join('\n  '));
+}
+workerTests().then(clientDeadline).then(clientRecipeBlocks).catch((e) => { console.error(e); process.exitCode = 1; });

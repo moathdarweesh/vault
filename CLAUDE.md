@@ -79,11 +79,11 @@ a faster TTFB — not fewer bytes.
 ## CACHE WORKFLOW — now automated. **Do not bump by hand.**
 
 ```bash
-npm run verify           # 60 contracts + lint + 14 suites — THE GATE
+npm run verify           # 61 contracts + lint + 14 suites — THE GATE
 npm run release          # bump every marker and re-read them; runs NO tests
 ```
 
-**Current version: v399.** APK: build 24 / v3.3.
+**Current version: v400.** APK: build 24 / v3.3.
 
 > ⚠️ **`npm run release` RUNS NO TESTS, AND THIS LINE USED TO READ AS IF IT DID.**
 > It said «bump every marker + verify», where *verify* meant the MARKERS — and
@@ -2734,6 +2734,89 @@ the rows pre-filled from last time as performed sets ("confirmed without a
 throwaway edit" is the recorded intent; whether an untouched row should count
 is the owner's call); a saved food **4 taps**. The day card's Save measures
 **69×40** — under the 44 floor.
+
+## v400 — «استخراج وصفة»: a recipe from a clip, a link, a photo or text
+
+«اخلي فيه زر معين عند وصفاتي اقدر اعطيه فيديو او صوره او نص وهو يستخرج المكونات
+ويحسب سعراتها». Planned by Fable (`~/.claude/plans/twinkling-forging-pelican.md`),
+built by Opus in two commits (A = the Worker's `recipe` mode, shipped in v399;
+B = this). The owner's decisions: the video is a clip saved in the gallery OR a
+link (YouTube full, TikTok caption + cover, Instagram best-effort); the result
+opens the existing recipe editor PREFILLED for review; clips are short (≤ ~5 min);
+a 0-kcal ingredient (salt, water) is accepted as is.
+
+**Where:** «وصفاتي» (the saved-food picker's recipes tab) — `#sf-import`
+«استخراج وصفة» beside «وصفة جديدة» in `.sfp-actions`, shown on that tab only via
+`style.display` (never `[hidden]`: `.btn` sets its own display — the v332 trap).
+
+**How a clip is read — ON THE DEVICE, never uploaded whole** (`decomposeVideo`,
+js/foodai.js): a hidden `<video>` over a blob URL, ≤ `RX_FRAMES` (10) evenly
+spaced stills drawn to one canvas as JPEG ≤ 768 px (q .6, then .45 to fit
+`RX_FRAME_B64` 150 000), the soundtrack decoded with `OfflineAudioContext` →
+mono → 16/12/8 kHz to fit `RX_AUDIO_B64` 1 800 000 chars of 16-bit WAV (≈84 s at
+most; a longer soundtrack is cut and the editor's subtitle says so; no track /
+silence / a decode failure → stills only, with a note). `Infinity` duration
+(MediaRecorder WebM) falls back through `currentTime = 1e101`; every await races
+the cancel signal; cleanup is in `finally`. A clip over 10 min is refused
+(`rx_video_long`). The sound is decoded after the stills to keep peak memory down.
+
+**The request** (`FoodAI.analyzeRecipe`, through the ONE `workerPost`):
+`{mode:'recipe', lang, frames[], recipeAudio?, recipeText?}` or `{mode:'recipe',
+lang, link}` — recipe-only field names, so the OLD Worker answers `400 'no input'`
+before its budget and the sheet says «غير متاح بعد» (`rx_unavailable`; nothing is
+spent — B3 proves it). A link is refused on the phone when its host is not one of
+the Worker's eleven (`rxLinkKind` mirrors `readLink`; a node case holds the two
+lists equal); `LINK_UNSUPPORTED` / `LINK_BLOCKED` map to `rx_link_unsupported` /
+`rx_link_blocked`, checked BEFORE the old-Worker rule (both arrive as 400). Nothing
+is cached. **Contract 65** holds the client budget under the Worker's caps
+(stills × size, audio, text, 30 ingredients, the editor's maxlengths) and fails
+loudly on any number it cannot read.
+
+**The sheets** (`openRecipeImport(date, onDone)`, js/food.js — one `open*`, one
+`fp/modals.js` entry, placed LAST because openModal numbers sheet titles with a
+page-wide counter): source tiles (video / link / image / text, hidden pickers
+without `capture`, the privacy line) → confirm (clip name+size and an optional
+caption `#rx-text`; `#rx-link`; a photo thumbnail via `recipeImage` 1600 → 1280 px;
+text required) → a HELD processing sheet (cancel, meter `--rx-p`, live step line,
+error slot, «رجوع» / «أعد المحاولة» that re-sends the kept stills and sound only; a
+MutationObserver aborts when the sheet goes; session and owner checked) → the
+draft built FIELD BY FIELD (never spread the Worker's object — `cleanMealItems`
+keeps extras), names ≤ 60, qty ≤ 24, zero rows `_manual:true` and `_src:'ai'` →
+**`closeModal()` FIRST** (a held sheet makes `openModal` return null), then
+`openRecipeEditor(date, draft, onDone)` + `rx_review_toast`.
+
+**The editor learned drafts:** `existing` without an id is a draft — title
+`rx_review_title`, the import's notes in the subtitle, an empty name refused first
+with `rec_need_title` (the old wrong message was «أضف مكوّناً واحداً…»), and
+`existing && existing.id ? update : add` (a draft used to save only because
+`update(undefined)` happened to create). 40 new keys in both dictionaries
+(`test-i18n.js` passes); CSS after `.ai-capture-row`, tokens only, the meter fills
+from the reading edge in both scripts.
+
+**Checks, all failing first:** `test-plan-import.js` clientRecipe/helpers (export,
+old-Worker rule, exact payload keys, the single fetch, `rxWav` header bytes,
+`rxAudioPlan` 60/75/100/300 s, `rxFrameTimes`, `rxLinkKind`, the host mirror);
+contract 65; contract 36's entry; **B1–B7 real-click cases** in
+`test-convenience-ui.js` — B2 generates a 2 s WebM WITH sound in headless Chromium
+(canvas `captureStream` + an oscillator → MediaRecorder) and asserts the stills,
+the 16 kHz mono WAV, the caption, that the WebM header never left the phone, and
+the editor's rows and save shape. 18 planted mutations, 18 caught. Fingerprint:
+views 160/160 identical; sheets differ only in the three saved-food cells (the
+`.sfp-actions` wrapper) and the new `recipe-import` cell. `ux-flows.js` identical
+to v399 line by line.
+
+**⚠️ The Worker is NOT deployed yet** (wrangler's login on this PC expired — the
+owner runs `npx wrangler login` then `npx wrangler deploy` in
+`backend/worker/`). Until then the button answers «غير متاح بعد» and spends
+nothing. **Owner, after the deploy:** a real reel (~60 s), a 3-min clip (sound cut
+at ~84 s), an iPhone `.mov`, a low-end Android, a YouTube and a TikTok link, a
+caption with an injection attempt; read the CPU line in Workers Logs (the free
+plan allows 10 ms; this PC measured ~4.7 ms handler + ~7 ms upload encode for a
+typical clip — the recorded next step if it is over is a raw-bytes pass-through).
+Editing an imported row's amount re-estimates it through the editor's batch path
+(review finding bugs:food-body#9 lives there, not in the import).
+
+61 contracts · lint · **14 suites, 0 failed, 0 skipped**.
 
 ## v399 — batches 4, 5 and 8: the Arabic is فصحى, «Larger text» is larger, and the recipe Worker
 

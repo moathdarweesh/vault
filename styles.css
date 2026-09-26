@@ -4634,6 +4634,45 @@ button.bundle-main {
 .ai-mode-photo .ai-results:not(:empty) + .ai-capture-row .ai-capture { padding: 12px 10px; }
 .ai-mode-photo .ai-results:not(:empty) + .ai-capture-row .ai-capture-sub { display: none; }
 
+/* «استخراج وصفة» (js/food.js openRecipeImport). The four source tiles are the
+   photo mode's .ai-capture in ONE column — four at ~105 px would break «مقطع
+   فيديو» over two lines — laid out as rows: the icon, then title over sub. */
+.rx-tiles { grid-template-columns: 1fr; }
+.rx-tiles .ai-capture { flex-direction: row; justify-content: flex-start; gap: 14px; padding: 16px 18px; }
+.rx-tile-text { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; min-width: 0; text-align: start; }
+.rx-hint { font-size: var(--fs-sub); line-height: 1.65; color: var(--text-mute); margin: 12px 0 0; }
+.rx-body .form-label { display: block; margin: 14px 0 6px; }
+/* The pasted recipe and the link: #mf-quick's field, at 16px so iOS never zooms. */
+.rx-text, .rx-link {
+  inline-size: 100%;
+  font-size: calc(16px * var(--fs-scale));
+  padding: 10px 12px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  background: var(--surface-2);
+  color: var(--text);
+  font-family: inherit;
+}
+.rx-text { resize: vertical; min-block-size: 96px; }
+.rx-text:focus-visible, .rx-link:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.rx-file { display: flex; align-items: center; gap: 10px; padding: 12px 14px; background: var(--surface-2); border-radius: var(--radius-sm); font-size: var(--fs-label); overflow-wrap: anywhere; }
+.rx-size { color: var(--text-mute); flex: none; white-space: nowrap; }
+.rx-preview { display: flex; justify-content: center; margin: 4px 0 12px; }
+.rx-preview:empty { display: none; }
+.rx-preview video, .rx-preview img { display: block; max-inline-size: 100%; max-block-size: 180px; border-radius: var(--radius-sm); object-fit: contain; background: var(--surface-2); }
+/* The meter fills from the reading edge in both scripts: inline-size, not a
+   scaleX with a transform-origin that would have to flip in RTL. */
+.rx-meter { block-size: 4px; background: var(--surface-3); overflow: hidden; }
+.rx-meter-fill { display: block; block-size: 100%; inline-size: calc(var(--rx-p, 0) * 100%); background: var(--accent); transition: inline-size var(--dur-base) var(--ease-out); }
+.rx-step { font-size: var(--fs-label); line-height: 1.6; color: var(--text); margin: 12px 0 0; min-block-size: 1.6em; }
+.rx-error { font-size: var(--fs-label); line-height: 1.65; color: var(--danger); margin: 14px 0 0; overflow-wrap: anywhere; }
+.rx-error[hidden], .rx-actions[hidden] { display: none; }
+.rx-actions { display: flex; gap: 8px; margin-top: 16px; }
+.rx-actions > .btn { flex: 1; }
+/* «وصفة جديدة» and «استخراج وصفة» share a row, and stack under ~300 px. */
+.sfp-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+.sfp-actions > .btn { flex: 1 1 150px; min-width: 0; }
+
 .ai-edit-toggle {
   width: var(--btn-h-s); height: var(--btn-h-s);   /* was 30: off the scale, 30 to a thumb */
   display: inline-flex; align-items: center; justify-content: center;

@@ -18,6 +18,24 @@
   // scripts/test-plan-import.js holds the two against each other.
   const WORKER_DEADLINE_MS = 90000;
 
+  // «استخراج وصفة» — THE CLIENT'S BUDGET for one recipe request. Each is its own
+  // const because contract 65 reads them against the Worker's MAX_RECIPE_* caps
+  // (a still, all stills, the soundtrack, the text). Sized for CPU, not the caps:
+  // the Workers free plan gives a request 10 ms, and parsing and splicing a body
+  // costs time by its length (measured in backend/worker/README.md).
+  const RX_FRAMES = 10;                  // stills from one clip (≤ MAX_RECIPE_FRAMES)
+  const RX_FRAME_EDGE = 768;             // one Gemini tile per still: the most detail per token
+  const RX_FRAME_B64 = 150000;           // base64 chars per still; re-encoded at q .45 when over
+  const RX_IMAGE_B64 = 1400000;          // a photo: one still (≤ MAX_RECIPE_FRAME)
+  const RX_AUDIO_B64 = 1800000;          // the soundtrack as base64 WAV (≤ MAX_RECIPE_AUDIO)
+  const RX_AUDIO_RATES = [16000, 12000, 8000];   // tried in order until the clip fits
+  const RX_AUDIO_FILE_MAX = 100000000;   // decodeAudioData holds the whole file in memory
+  const RX_AUDIO_DECODE_MAX_SEC = 180;   // …and the whole track at its native rate
+  const RX_VIDEO_MAX_SEC = 600;          // a longer clip is refused
+  const RX_TEXT_MAX = 3000;              // a caption or a pasted recipe (≤ MAX_RECIPE_TEXT)
+  const RX_SEEK_MS = 5000;               // one seek, before it counts as stuck
+  const RX_SILENT_PEAK = 0.004;          // below this the soundtrack is silence
+
   const tr = (k) => (typeof t === 'function' ? t(k) : k);
   const ic = (n, s) => (typeof icon === 'function' ? icon(n, s || 20) : '');
   const esc = (s) => (typeof escapeHtml === 'function' ? escapeHtml(s) : String(s));
@@ -54,11 +72,10 @@
     // the owner which, and it never reaches the screen.
     if (data.code === 'UPSTREAM_AUTH' || data.code === 'MODEL_RETIRED') return new Error(tr('ai_err_service'));
     // A recipe link the Worker will not read (not YouTube, TikTok or Instagram)
-    // or could not (a login wall, a video Google refused). The service sentence
-    // for now; the recipe import gives each its own (rx_link_unsupported,
-    // rx_link_blocked).
-    if (data.code === 'LINK_UNSUPPORTED') return new Error(tr('ai_err_service'));
-    if (data.code === 'LINK_BLOCKED') return new Error(tr('ai_err_service'));
+    // or could not (a login wall, a video Google refused). Two sentences, because
+    // they ask for different things: another link, or the saved clip instead.
+    if (data.code === 'LINK_UNSUPPORTED') return new Error(tr('rx_link_unsupported'));
+    if (data.code === 'LINK_BLOCKED') return new Error(tr('rx_link_blocked'));
     return new Error(data.error || ('HTTP ' + res.status));
   }
 
@@ -485,6 +502,311 @@
       img.onerror = () => { URL.revokeObjectURL(url); reject(new Error('image load failed')); };
       img.src = url;
     });
+  }
+
+  // ==========================================================================
+  // «استخراج وصفة» — a recipe from a gallery clip, a link, a photo or text.
+  // The seven rx* helpers below are PURE (no closure, no DOM): the Node suite
+  // pulls each out of this file by name and runs it in a bare context
+  // (scripts/test-plan-import.js clientRecipeHelpers), so keep them that way.
+  // ==========================================================================
+
+  // When to take the stills: evenly spaced from the first half-second to the
+  // last, at least three, at most `max` — about one every five seconds.
+  function rxFrameTimes(d, max) {
+    if (!Number.isFinite(d) || d <= 0 || !(max >= 1)) return [];
+    if (d < 1) return [d / 2];
+    const n = Math.min(max, Math.max(3, Math.ceil(d / 5) + 1));
+    const m = Math.min(0.5, d / 10), span = d - 2 * m, out = [];
+    for (let i = 0; i < n; i++) out.push(Math.round((m + span * i / (n - 1)) * 1000) / 1000);
+    return out;
+  }
+
+  // How much soundtrack fits `b64` base64 characters of 16-bit mono WAV: the
+  // first rate at which the WHOLE clip fits, else the lowest rate and as many
+  // seconds of the start as fit (`truncated`, which the draft says out loud).
+  function rxAudioPlan(d, b64, rates) {
+    const raw = Math.floor(b64 * 3 / 4) - 44;
+    for (const rate of rates) if (d * rate * 2 <= raw) return { rate, seconds: d, truncated: false };
+    const rate = rates[rates.length - 1];
+    return { rate, seconds: Math.floor(raw / (rate * 2)), truncated: true };
+  }
+
+  // Every channel averaged into one.
+  function rxMono(channels) {
+    const n = channels.length, len = n ? channels[0].length : 0, out = new Float32Array(len);
+    for (let c = 0; c < n; c++) { const ch = channels[c]; for (let i = 0; i < len; i++) out[i] += ch[i] / n; }
+    return out;
+  }
+
+  // Down-sampling by averaging each window (only the fallback path needs it:
+  // an OfflineAudioContext that refused the target rate decoded at 44.1 kHz).
+  function rxResample(x, from, to) {
+    if (!(from > to)) return x;
+    const ratio = from / to, len = Math.floor(x.length / ratio), out = new Float32Array(len);
+    for (let i = 0; i < len; i++) {
+      const a = Math.floor(i * ratio), b = Math.min(x.length, Math.floor((i + 1) * ratio));
+      let s = 0;
+      for (let j = a; j < b; j++) s += x[j];
+      out[i] = b > a ? s / (b - a) : (x[a] || 0);
+    }
+    return out;
+  }
+
+  // The loudest sample, as a magnitude.
+  function rxPeak(x) {
+    let p = 0;
+    for (let i = 0; i < x.length; i++) { const v = x[i] < 0 ? -x[i] : x[i]; if (v > p) p = v; }
+    return p;
+  }
+
+  // A mono 16-bit PCM WAV: the 44-byte RIFF header, then little-endian samples
+  // scaled by `gain` and clamped to full scale. PCM16 is the one audio shape the
+  // Worker accepts for a soundtrack (audio/wav), and every browser can write it.
+  function rxWav(samples, rate, gain) {
+    const n = samples.length, buf = new ArrayBuffer(44 + n * 2), v = new DataView(buf), g = gain > 0 ? gain : 1;
+    const put = (o, s) => { for (let i = 0; i < s.length; i++) v.setUint8(o + i, s.charCodeAt(i)); };
+    put(0, 'RIFF'); v.setUint32(4, 36 + n * 2, true); put(8, 'WAVE'); put(12, 'fmt ');
+    v.setUint32(16, 16, true); v.setUint16(20, 1, true); v.setUint16(22, 1, true);
+    v.setUint32(24, rate, true); v.setUint32(28, rate * 2, true); v.setUint16(32, 2, true); v.setUint16(34, 16, true);
+    put(36, 'data'); v.setUint32(40, n * 2, true);
+    for (let i = 0; i < n; i++) {
+      const s = Math.max(-1, Math.min(1, samples[i] * g));
+      v.setInt16(44 + i * 2, s < 0 ? s * 0x8000 : s * 0x7fff, true);
+    }
+    return buf;
+  }
+
+  // Which platform a link is, by EXACT host — the Worker's readLink list, host
+  // for host (scripts/test-plan-import.js holds the two lists equal), so the
+  // phone refuses early exactly what the Worker would refuse, and spends nothing.
+  function rxLinkKind(url) {
+    let u;
+    try { u = new URL(String(url == null ? '' : url).trim()); } catch (_) { return null; }
+    if (u.protocol !== 'https:' && u.protocol !== 'http:') return null;
+    const host = u.hostname.toLowerCase();
+    if (['youtube.com', 'www.youtube.com', 'm.youtube.com', 'youtu.be'].indexOf(host) !== -1) return 'youtube';
+    if (['tiktok.com', 'www.tiktok.com', 'm.tiktok.com', 'vm.tiktok.com', 'vt.tiktok.com'].indexOf(host) !== -1) return 'tiktok';
+    if (host === 'instagram.com' || host === 'www.instagram.com') return 'instagram';
+    return null;
+  }
+
+  // ---- the media plumbing decomposeVideo stands on (not pure: DOM, timers) --
+  const abortError = () => { const e = new Error('aborted'); e.name = 'AbortError'; return e; };
+  // Every await in the decomposition races the caller's cancel: a closed sheet
+  // must stop the work, not merely stop listening to it.
+  function raceSignal(p, signal) {
+    if (!signal) return p;
+    return new Promise((resolve, reject) => {
+      if (signal.aborted) { reject(abortError()); return; }
+      const onAbort = () => reject(abortError());
+      signal.addEventListener('abort', onAbort, { once: true });
+      p.then((v) => { signal.removeEventListener('abort', onAbort); resolve(v); },
+        (e) => { signal.removeEventListener('abort', onAbort); reject(e); });
+    });
+  }
+  // One media event, bounded: resolves on `ev` once `ok()` holds (when given),
+  // rejects on the element's error, and rejects `stuck` when `ms` passes — a clip
+  // that never answers must not hold the sheet for ever. Armed BEFORE the action
+  // that fires it, so the event cannot be missed.
+  function mediaEvent(el, ev, ms, ok) {
+    return new Promise((resolve, reject) => {
+      let timer = null;
+      const done = (fn, v) => { clearTimeout(timer); el.removeEventListener(ev, on); el.removeEventListener('error', bad); fn(v); };
+      const on = () => { if (!ok || ok()) done(resolve); };
+      const bad = () => done(reject, new Error('media error'));
+      timer = setTimeout(() => { const e = new Error('media timeout'); e.stuck = true; done(reject, e); }, ms);
+      el.addEventListener(ev, on); el.addEventListener('error', bad);
+    });
+  }
+  // A seek that timed out while the app was in the background is retried once
+  // it is back: a hidden page does not decode frames.
+  const untilVisible = () => new Promise((resolve) => {
+    if (!document.hidden) { resolve(); return; }
+    const on = () => { if (!document.hidden) { document.removeEventListener('visibilitychange', on); resolve(); } };
+    document.addEventListener('visibilitychange', on);
+  });
+  const blobB64 = (blob) => new Promise((resolve, reject) => {
+    const r = new FileReader();
+    r.onload = () => resolve(String(r.result).slice(String(r.result).indexOf(',') + 1));
+    r.onerror = () => reject(r.error || new Error('read failed'));
+    r.readAsDataURL(blob);
+  });
+
+  // The clip's soundtrack as a base64 WAV that fits RX_AUDIO_B64, or null: no
+  // audio track, a container the browser cannot decode, or silence — each means
+  // «the recipe comes from the picture and the text», never a failed import.
+  async function soundtrack(file, d, signal) {
+    const AC = window.OfflineAudioContext || window.webkitOfflineAudioContext;
+    if (!AC || !(file.size <= RX_AUDIO_FILE_MAX) || !(d <= RX_AUDIO_DECODE_MAX_SEC)) return null;
+    const plan = rxAudioPlan(d, RX_AUDIO_B64, RX_AUDIO_RATES);
+    const bytes = await raceSignal(file.arrayBuffer(), signal);
+    // Decoding into a context at the target rate resamples for free; an older
+    // WebView refuses rates under 22.05 kHz, so it decodes at 44.1 and averages.
+    let rate = plan.rate, ctx;
+    try { ctx = new AC(1, 1, rate); } catch (_) { rate = 44100; ctx = new AC(1, 1, rate); }
+    const buf = await raceSignal(new Promise((resolve, reject) => {
+      const p = ctx.decodeAudioData(bytes, resolve, reject);   // the callbacks for old WebKit, the promise for the rest
+      if (p && typeof p.then === 'function') p.then(resolve, reject);
+    }), signal);
+    const chans = [];
+    for (let c = 0; c < buf.numberOfChannels; c++) chans.push(buf.getChannelData(c));
+    let x = rxMono(chans);
+    if (rate !== plan.rate) x = rxResample(x, rate, plan.rate);
+    x = x.subarray(0, Math.min(x.length, Math.floor(plan.seconds * plan.rate)));
+    const peak = rxPeak(x);
+    if (peak < RX_SILENT_PEAK) return null;
+    const data = await raceSignal(blobB64(new Blob([rxWav(x, plan.rate, Math.min(8, 0.9 / peak))], { type: 'audio/wav' })), signal);
+    return { mimeType: 'audio/wav', data, seconds: plan.seconds, truncated: plan.truncated };
+  }
+
+  // «استخراج وصفة»: a gallery clip, read ON THE PHONE into what the Worker can
+  // take — up to RX_FRAMES JPEG stills of at most RX_FRAME_EDGE px, and the
+  // soundtrack as a WAV. The file itself never leaves the device. `host` holds
+  // the preview that scrubs as each still is taken (aria-hidden: progress, not
+  // content). Resolves { frames, audio, notes, duration }; a note is { key, n }.
+  async function decomposeVideo(file, opts) {
+    const o = opts || {}, signal = o.signal;
+    const progress = typeof o.onProgress === 'function' ? o.onProgress : () => {};
+    const unreadable = () => new Error(tr('rx_video_unreadable'));
+    // Our own cancel stays an AbortError; ANY other failure of the element is
+    // «this clip cannot be read here» — never a TypeError friendlyErr would
+    // turn into «check your connection».
+    const fail = (e) => { throw (e && e.name === 'AbortError') ? e : unreadable(); };
+    if (signal && signal.aborted) throw abortError();
+    const video = document.createElement('video'), canvas = document.createElement('canvas');
+    // muted + playsinline BEFORE the source: iOS decodes nothing inline otherwise.
+    video.muted = true; video.defaultMuted = true; video.playsInline = true;
+    video.setAttribute('muted', ''); video.setAttribute('playsinline', ''); video.setAttribute('aria-hidden', 'true');
+    video.preload = 'auto';
+    const url = URL.createObjectURL(file);
+    try {
+      if (o.host) o.host.appendChild(video);
+      const meta = mediaEvent(video, 'loadedmetadata', 2 * RX_SEEK_MS);
+      video.src = url;
+      await raceSignal(meta, signal).catch(fail);
+      let d = video.duration;
+      if (!Number.isFinite(d) || d <= 0) {
+        // A MediaRecorder or screen-recording WebM carries no cues and reports
+        // Infinity until it has been read to the end: seek far past it, and the
+        // browser learns the real length on the way there.
+        const known = mediaEvent(video, 'durationchange', 2 * RX_SEEK_MS, () => Number.isFinite(video.duration) && video.duration > 0);
+        video.currentTime = 1e101;
+        await raceSignal(known, signal).catch(fail);
+        d = video.duration;
+        if (video.seeking) await raceSignal(mediaEvent(video, 'seeked', RX_SEEK_MS), signal).catch((e) => { if (e && e.name === 'AbortError') throw e; });
+      }
+      if (d > RX_VIDEO_MAX_SEC) throw new Error(tr('rx_video_long'));
+      let kicked = false, g = null;
+      const ready = () => new Promise((resolve, reject) => {   // a frame to draw, not only a position
+        const t0 = Date.now();
+        (function tick() {
+          if (video.readyState >= 2) resolve();
+          else if (Date.now() - t0 > RX_SEEK_MS) { const e = new Error('media timeout'); e.stuck = true; reject(e); }
+          else setTimeout(tick, 50);
+        })();
+      });
+      // One seek, twice at most: a stuck seek in the background waits for the
+      // app to come back; a stuck seek on screen gets iOS's play-then-pause kick
+      // once (muted inline playback needs no gesture). Still stuck: skip that still.
+      const seek = async (t) => {
+        for (let attempt = 0; attempt < 2; attempt++) {
+          try {
+            const done = mediaEvent(video, 'seeked', RX_SEEK_MS);
+            video.currentTime = t;
+            await raceSignal(done, signal);
+            await raceSignal(ready(), signal);
+            return true;
+          } catch (e) {
+            if (e && e.name === 'AbortError') throw e;
+            if (!(e && e.stuck)) throw unreadable();
+            if (document.hidden) await raceSignal(untilVisible(), signal);
+            else if (!kicked) {
+              kicked = true;
+              try { const p = video.play(); if (p && p.then) await Promise.race([p, new Promise((r) => setTimeout(r, 1500))]); video.pause(); } catch (_) {}
+            }
+          }
+        }
+        return false;
+      };
+      const jpeg = (q) => { const u = canvas.toDataURL('image/jpeg', q); return u.slice(u.indexOf(',') + 1); };
+      const times = rxFrameTimes(d, RX_FRAMES), frames = [];
+      for (let i = 0; i < times.length; i++) {
+        progress({ step: 'frames', n: i + 1, total: times.length });
+        if (!(await seek(times[i]))) continue;
+        const vw = video.videoWidth, vh = video.videoHeight;
+        if (!vw || !vh) throw unreadable();   // a soundtrack with no picture
+        if (!g) {   // ONE canvas for every still, sized once
+          const k = Math.min(1, RX_FRAME_EDGE / Math.max(vw, vh));
+          canvas.width = Math.max(1, Math.round(vw * k)); canvas.height = Math.max(1, Math.round(vh * k));
+          g = canvas.getContext('2d');
+        }
+        let data = '';
+        // A DOMException out of drawImage/toDataURL is this clip being unreadable
+        // here, never a raw browser sentence on the screen.
+        try {
+          g.drawImage(video, 0, 0, canvas.width, canvas.height);
+          data = jpeg(0.6);
+          if (data.length > RX_FRAME_B64) data = jpeg(0.45);
+        } catch (_) { throw unreadable(); }
+        if (data.length <= RX_FRAME_B64) frames.push({ mimeType: 'image/jpeg', data });
+      }
+      if (frames.length < Math.min(2, times.length)) throw unreadable();
+      progress({ step: 'audio' });
+      let audio = null;
+      try { audio = await soundtrack(file, d, signal); } catch (e) { if (e && e.name === 'AbortError') throw e; audio = null; }
+      const notes = [];
+      if (!audio) notes.push({ key: 'rx_note_no_audio' });
+      else if (audio.truncated) notes.push({ key: 'rx_note_audio_first', n: audio.seconds });
+      return { frames, audio: audio ? { mimeType: audio.mimeType, data: audio.data } : null, notes, duration: d };
+    } finally {
+      URL.revokeObjectURL(url);
+      try { video.pause(); video.removeAttribute('src'); video.load(); } catch (_) {}
+      video.remove();
+      canvas.width = 0; canvas.height = 0;
+    }
+  }
+
+  // A photo for the recipe reader: ONE still, as detailed as the Worker's
+  // one-still cap allows — 1600 px, then 1280 at a lower quality when over.
+  async function recipeImage(file) {
+    let pic = await processImage(file, 1600, 0.8);
+    if (pic.image.data.length > RX_IMAGE_B64) pic = await processImage(file, 1280, 0.7);
+    if (pic.image.data.length > RX_IMAGE_B64) throw new Error('image too large');
+    return pic;
+  }
+
+  // ONE recipe request, through the one door (workerPost). The fields are
+  // recipe-only on purpose: an OLD Worker finds no text, image or audio in them
+  // and answers 400 'no input' BEFORE its budget, which reads «not available
+  // yet» — never a food answer passed off as a recipe. A link travels alone (the
+  // Worker refuses one beside stills). `lang` is the enum the Worker turns into
+  // a fixed sentence of its own. Nothing is cached: every source is unique.
+  async function analyzeRecipe(input, signal) {
+    const src = input || {};
+    let lang = 'en';
+    try { lang = DB.prefs.get().lang === 'ar' ? 'ar' : 'en'; } catch (_) {}
+    let payload;
+    if (src.link) {
+      const link = String(src.link).trim().slice(0, 2048);
+      if (!rxLinkKind(link)) throw new Error(tr('rx_link_unsupported'));   // refused here, and nothing spent
+      payload = { mode: 'recipe', lang, link };
+    } else {
+      const frames = (Array.isArray(src.frames) ? src.frames : []).filter((f) => f && typeof f.data === 'string' && f.data)
+        .slice(0, RX_FRAMES).map((f) => ({ mimeType: String(f.mimeType || 'image/jpeg'), data: f.data }));
+      const text = String(src.text || '').trim().slice(0, RX_TEXT_MAX);
+      if (!frames.length && !text) throw new Error(tr('rx_need_text'));
+      payload = { mode: 'recipe', lang };
+      if (frames.length) payload.frames = frames;
+      if (src.audio && src.audio.data) payload.recipeAudio = { mimeType: 'audio/wav', data: String(src.audio.data) };
+      if (text) payload.recipeText = text;
+    }
+    const { res, data } = await workerPost(payload, signal);
+    // A link code rides on the same 400 'no input', so the code is asked first.
+    if (res.status === 400 && data.error === 'no input' && !data.code) throw new Error(tr('rx_unavailable'));
+    if (!res.ok) throw workerError(res, data);
+    if (!data.recipe || typeof data.recipe !== 'object' || !Array.isArray(data.recipe.items)) throw new Error(tr('rx_unavailable'));
+    return data.recipe;
   }
 
   // ---------------------------------------------------------------- UI
@@ -986,7 +1308,8 @@
   // parseText is parseMacroText exposed deliberately: the manual entry form
   // fills its boxes with it, and it must be the SAME rules the chat uses or the
   // two drift into disagreeing about the same sentence. Pure local matching —
-  // it sends nothing anywhere.
+  // it sends nothing anywhere. The recipe import (js/food.js openRecipeImport)
+  // takes the four at the end: rxLinkKind so a link is refused on the phone.
   window.FoodAI = { open, openPhoto, analyze, analyzeImage, analyzeAudio, ask, friendlyErr, analyzePlanImage, processImage,
-                    parseText: parseMacroText };
+                    parseText: parseMacroText, analyzeRecipe, decomposeVideo, recipeImage, rxLinkKind };
 })();

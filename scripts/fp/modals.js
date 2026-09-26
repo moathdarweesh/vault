@@ -88,6 +88,13 @@ const ENTRIES = [
   { id: 'change-password', name: 'showChangePassword', args: [{ v: false }], host: 'settings' },
   { id: 'change-password-recovery', name: 'showChangePassword', args: [{ v: true }], host: 'settings' },
   { id: 'feedback', name: 'showFeedback', args: [], host: 'settings' },
+  // A NEW SHEET JOINS AT THE END. openModal names every sheet's title with a
+  // page-wide counter (vlt-modal-title-N), so an entry inserted mid-list
+  // renumbers the title of every sheet after it, and the next diff reports 48
+  // cells that did not change.
+  // «استخراج وصفة» (openRecipeImport): the source sheet — four tiles, two hidden
+  // pickers, the privacy line; its confirm and processing stages share the closure.
+  { id: 'recipe-import', name: 'openRecipeImport', args: ['$today', '$noop'], host: 'food' },
 ];
 
 /* Named, with the reason, so contract 36 can tell "left out on purpose" from

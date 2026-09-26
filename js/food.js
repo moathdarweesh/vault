@@ -1053,6 +1053,11 @@ function openRecipeEditor(date, existing, onDone) {
   var name = (existing && existing.name) || '';
   var servings = (existing && existing.servings) || 1;
   var saveWanted = false;
+  // A DRAFT is `existing` without an id: what «استخراج وصفة» hands over for
+  // review (openRecipeImport). It is titled as a review, its note (what the
+  // import could not use) stays under the title, and its save is an ADD.
+  var isDraft = !!(existing && !existing.id);
+  var draftNote = isDraft && existing.note ? String(existing.note) : '';
 
   // Arabic's dual and its 3-10 / 11+ split are real grammar. Used as the
   // servings input's aria-label — the one place the number is SPOKEN beside a
@@ -1115,8 +1120,8 @@ function openRecipeEditor(date, existing, onDone) {
   };
   var overlay = openModal('' +
     '<div class="modal-header">' +
-      '<div><div class="modal-title">' + (existing ? escapeHtml(existing.name) : t('rec_new')) + '</div>' +
-      '<div class="modal-subtitle" id="rec-sub">' + t('rec_sub') + '</div></div>' +
+      '<div><div class="modal-title">' + (existing && existing.id ? escapeHtml(existing.name) : isDraft ? t('rx_review_title') : t('rec_new')) + '</div>' +
+      '<div class="modal-subtitle" id="rec-sub">' + (draftNote ? escapeHtml(draftNote) : t('rec_sub')) + '</div></div>' +
       '<button class="icon-btn icon-btn-tile" data-close>' + icon('close', 20) + '</button>' +
     '</div>' +
     '<input type="text" id="rec-name" class="input rec-name-top" maxlength="60" enterkeyhint="next" placeholder="' + escapeHtml(t('rec_name_ph')) + '" aria-label="' + escapeHtml(t('rec_name_ph')) + '" value="' + escapeHtml(name) + '">' +
@@ -1202,7 +1207,9 @@ function openRecipeEditor(date, existing, onDone) {
   }
   function syncSubtitle() {
     var el = overlay.querySelector('#rec-sub');
-    if (el) el.hidden = items.some(hasFigures);
+    // A draft's note stays: it says what the import could not use (the sound,
+    // or all but its first seconds), and a 1.8 s toast is too short for that.
+    if (el) el.hidden = !draftNote && items.some(hasFigures);
   }
 
   // ---- rendering: whole rows only at open and on undo ----------------------
@@ -1514,6 +1521,14 @@ function openRecipeEditor(date, existing, onDone) {
   }
   function trySave() {
     var nm = overlay.querySelector('#rec-name').value.trim();
+    // A recipe with no name is refused BY NAME. DB.recipes refuses it anyway,
+    // and the old fall-through said «add at least one ingredient with numbers»
+    // over a sheet full of them — the draft an import hands over often has none.
+    if (!nm) {
+      showToast(t('rec_need_title'));
+      var ne = overlay.querySelector('#rec-name'); if (ne) ne.focus();
+      return;
+    }
     var n = Math.max(1, parseInt(servInput.value, 10) || 1);
     // A row still being worked out must not be saved as zeros. Instead of a bare
     // refusal the intent is REMEMBERED, said out loud on the button, and spent
@@ -1562,7 +1577,9 @@ function openRecipeEditor(date, existing, onDone) {
       delete c._auto; delete c._manual; delete c._id; delete c._src; delete c._why;
       return c;
     }) };
-    var made = existing ? DB.recipes.update(existing.id, payload) : DB.recipes.add(payload);
+    // A draft has no id: it is ADDED. (It used to work only because
+    // update(undefined) happens to create a recipe.)
+    var made = existing && existing.id ? DB.recipes.update(existing.id, payload) : DB.recipes.add(payload);
     if (!made) { showToast(t(DB.saveState().ok ? 'rec_need_ing' : 'sc_failed')); return; }
     closeModal();
     showToast(t('rec_saved'));
@@ -1572,8 +1589,220 @@ function openRecipeEditor(date, existing, onDone) {
 
   drawRows();
   // A new recipe wants the name; an existing one must NOT pop a keyboard over
-  // figures the user came to read.
-  if (!existing) setTimeout(function () { var el = overlay.querySelector('#rec-name'); if (el) el.focus(); }, 60);
+  // figures the user came to read — nor must a draft that already has a name.
+  if (!existing || (isDraft && !name)) setTimeout(function () { var el = overlay.querySelector('#rec-name'); if (el) el.focus(); }, 60);
+}
+// ===========================================================================
+// «استخراج وصفة» — a recipe from a gallery clip, a link, a photo or pasted
+// text, handed to the recipe editor as a DRAFT to review before it is saved.
+// Three stages in ONE closure (contract 36 sees one open*): the source sheet,
+// the confirm stage (the same sheet re-rendered), and a HELD processing sheet
+// that only its own cancel closes. The clip is read on the phone
+// (FoodAI.decomposeVideo) — the file itself never leaves it — and the one
+// Worker call is FoodAI.analyzeRecipe.
+// ===========================================================================
+function openRecipeImport(date, onDone) {
+  const owner = Cloud.getLastUid();
+  const VIDEO_EXT = /\.(mp4|m4v|mov|webm|3gpp?|mkv)$/i;
+  const TILES = [['video', 'play', t('rx_src_video'), t('rx_src_video_sub')], ['link', 'globe', t('rx_src_link'), t('rx_src_link_sub')],
+    ['image', 'gallery', t('rx_src_image'), t('rx_src_image_sub')], ['text', 'edit', t('rx_src_text'), t('rx_src_text_sub')]];
+  const overlay = openModal(`
+    <div class="modal-header"><div class="modal-title">${t('rx_title')}</div>
+      <button class="icon-btn icon-btn-tile" data-close>${icon('close', 20)}</button></div>
+    <div class="rx-body"></div>`);
+  if (!overlay) return;   // a dialog that must be answered is up
+  guardConvenienceModal(overlay);
+  const body = overlay.querySelector('.rx-body');
+  let source = null, pick = null;   // pick: { file } for a clip, { pic } for a prepared photo
+
+  // A re-render replaces the control that had focus, so each stage hands it on
+  // (`refocus`): the sheet's first control, never <body>. The first render
+  // leaves it to openModal, which focuses the dialog itself.
+  function drawSources(refocus) {
+    source = null; pick = null;
+    body.innerHTML = `<div class="ai-capture-row rx-tiles">${TILES.map(([kind, ic, title, sub]) => `
+        <button type="button" class="ai-capture" data-rx-pick="${kind}">
+          <span class="ai-capture-icon">${icon(ic, 28)}</span>
+          <span class="rx-tile-text"><span class="ai-capture-title">${title}</span><span class="ai-capture-sub">${sub}</span></span>
+        </button>`).join('')}</div>
+      <!-- No capture attribute: both go to the system picker, which needs no permission. -->
+      <input type="file" accept="video/*" data-rx-file="video" hidden>
+      <input type="file" accept="image/*" data-rx-file="image" hidden>
+      <p class="rx-hint">${t('rx_privacy')}</p>`;
+    body.querySelectorAll('[data-rx-pick]').forEach((b) => b.addEventListener('click', () => {
+      const kind = b.dataset.rxPick;
+      if (kind === 'video' || kind === 'image') { body.querySelector(`[data-rx-file="${kind}"]`).click(); return; }
+      source = kind; drawConfirm();
+    }));
+    body.querySelectorAll('[data-rx-file]').forEach((input) => input.addEventListener('change', () => {
+      const file = input.files && input.files[0];
+      input.value = '';
+      chosen(input.dataset.rxFile, file);
+    }));
+    if (refocus === true) body.querySelector('[data-rx-pick]').focus();
+  }
+  async function chosen(kind, file) {
+    if (!file || !overlay.isConnected) return;
+    if (kind === 'video') {
+      // Android hands over content:// files with no type at all: the name decides then.
+      if (!/^video\//.test(file.type || '') && !VIDEO_EXT.test(file.name || '')) { showToast(t('rx_bad_file')); return; }
+      source = 'video'; pick = { file }; drawConfirm();
+      return;
+    }
+    // A photo is prepared NOW, so the confirm stage shows exactly what will be read.
+    if (!window.FoodAI) { showToast(t('rx_unavailable')); return; }
+    let pic = null;
+    try { pic = await FoodAI.recipeImage(file); } catch (e) { if (overlay.isConnected) showToast(window.FoodAI ? FoodAI.friendlyErr(e) : t('rx_error')); return; }
+    if (!overlay.isConnected) return;
+    source = 'image'; pick = { pic }; drawConfirm();
+  }
+
+  function drawConfirm() {
+    const field = (label, ph, rows) => `<label class="form-label" for="rx-text">${label}</label>
+      <textarea id="rx-text" class="rx-text" maxlength="3000" dir="auto" rows="${rows}" placeholder="${escapeHtml(ph)}"></textarea>`;
+    const mb = pick && pick.file ? Math.max(0.1, Math.round(pick.file.size / 104857.6) / 10) : 0;   // never «0 MB»
+    body.innerHTML = (source === 'video'
+      // The unit OUTSIDE .num: .num is an ltr island, and «ميغابايت» inside it
+      // would read before its figure in Arabic.
+      ? `<div class="rx-file">${icon('play', 20)}<span dir="auto">${escapeHtml(pick.file.name || '')}</span><span class="rx-size"><span class="num">${fmtNum(mb)}</span> ${t('rx_mb')}</span></div>` + field(t('rx_caption_label'), t('rx_caption_ph'), 3)
+      : source === 'image' ? `<div class="rx-preview"><img src="${pick.pic.dataUrl}" alt=""></div>`
+      : source === 'link' ? `<label class="form-label" for="rx-link">${t('rx_link_label')}</label>
+        <input id="rx-link" class="rx-link" type="url" inputmode="url" dir="ltr" maxlength="2048" autocomplete="off" placeholder="${escapeHtml(t('rx_link_ph'))}">`
+      : field(t('rx_text_label'), t('rx_text_ph'), 8)) + `
+      <div class="rx-actions">
+        <button type="button" class="btn btn-ghost" data-rx-back>${t('back')}</button>
+        <button type="button" class="btn btn-primary" data-rx-go>${t('rx_go')}</button>
+      </div>`;
+    body.querySelector('[data-rx-back]').addEventListener('click', () => drawSources(true));
+    body.querySelector('[data-rx-go]').addEventListener('click', go);
+    // The field a text or a link source is FOR takes the cursor; a clip's caption
+    // is optional (no keyboard for it), so focus goes to «استخرج الوصفة» there.
+    const first = source === 'link' ? body.querySelector('#rx-link') : source === 'text' ? body.querySelector('#rx-text') : body.querySelector('[data-rx-go]');
+    if (first) first.focus();
+  }
+  function go() {
+    const textEl = body.querySelector('#rx-text'), linkEl = body.querySelector('#rx-link');
+    const text = textEl ? textEl.value.trim() : '';
+    if (source === 'text' && !text) { showToast(t('rx_need_text')); textEl.focus(); return; }
+    let link = '';
+    if (source === 'link') {
+      link = linkEl.value.trim();
+      if (!link) { showToast(t('rx_need_link')); linkEl.focus(); return; }
+      // Refused HERE, before anything is spent: a host the Worker never reads.
+      if (!(window.FoodAI && FoodAI.rxLinkKind(link))) { showToast(t('rx_link_unsupported')); linkEl.focus(); return; }
+    }
+    process({ source, file: pick && pick.file, pic: pick && pick.pic, text, link });
+  }
+
+  // The Worker's answer, rebuilt FIELD BY FIELD — never spread: cleanMealItems
+  // copies every extra field of an item into storage. A row whose four figures
+  // are all 0 (salt, water) is seeded as entered by hand (_manual), or the
+  // named-zero guard would refuse almost every imported recipe on its first save.
+  function draftOf(r, notes) {
+    const num = (v, dec) => { const n = Number(v); return Number.isFinite(n) && n > 0 ? (dec ? Math.round(n * 10) / 10 : Math.round(n)) : 0; };
+    const txt = (v, max) => String(v == null ? '' : v).replace(/\s+/g, ' ').trim().slice(0, max);
+    const items = (Array.isArray(r.items) ? r.items : []).slice(0, 30).map((it) => {
+      const row = { name: txt(it && it.name, 60), qty: txt(it && it.qty, 24), calories: num(it && it.calories),
+        protein: num(it && it.protein, true), carbs: num(it && it.carbs, true), fat: num(it && it.fat, true), _src: 'ai', _auto: 'done' };
+      if (!row.calories && !row.protein && !row.carbs && !row.fat) row._manual = true;
+      return row;
+    }).filter((row) => row.name);
+    const s = Math.round(Number(r.servings));
+    return { name: txt(r.name, 60), servings: s >= 1 ? Math.min(99, s) : 1, items,
+      note: (notes || []).map((n) => t(n.key).replace('{n}', fmtNum(n.n || 0))).join(' ') };
+  }
+  // THE HELD SHEET. dismissible:false holds it: the backdrop, Escape and Back do
+  // not close it, and no timer-raised sheet may replace it. Closing it any other
+  // way (a held dialog replacing it, a logout) aborts the work through the
+  // observer; its own cancel aborts it directly.
+  function process(job) {
+    let controller = null, serial = 0, kept = null;   // kept: the clip's stills and sound — «أعد المحاولة» only re-sends them
+    const held = openModal(`
+      <div class="modal-header"><div class="modal-title">${t('rx_working')}</div>
+        <button type="button" class="icon-btn icon-btn-tile" data-rx-cancel aria-label="${escapeHtml(t('cancel'))}">${icon('close', 20)}</button></div>
+      <div class="rx-preview" data-rx-host aria-hidden="true"></div>
+      <div class="rx-meter" aria-hidden="true"><span class="rx-meter-fill"></span></div>
+      <p class="rx-step" data-rx-step role="status" aria-live="polite">${t('rx_step_prep')}</p>
+      <p class="rx-hint">${t('rx_keep_open')}</p>
+      <p class="rx-error" data-rx-error role="alert" tabindex="-1" hidden></p>
+      <div class="rx-actions" data-rx-fail hidden>
+        <button type="button" class="btn btn-ghost" data-rx-back>${t('back')}</button>
+        <button type="button" class="btn btn-primary" data-rx-retry>${t('rec_retry')}</button>
+      </div>`, { dismissible: false });
+    if (!held) return;
+    guardConvenienceModal(held);
+    const $h = (sel) => held.querySelector(sel);
+    const step = (text, p) => { $h('[data-rx-step]').textContent = text; if (p != null) $h('.rx-meter-fill').style.setProperty('--rx-p', String(p)); };
+    const stop = () => { serial++; if (controller) controller.abort(); };
+    const observer = new MutationObserver(() => { if (!held.isConnected) { stop(); observer.disconnect(); } });
+    observer.observe(document.getElementById('modal-root'), { childList: true });
+    const leave = () => { stop(); observer.disconnect(); closeModal(); };
+    $h('[data-rx-cancel]').addEventListener('click', leave);
+    $h('[data-rx-back]').addEventListener('click', () => { leave(); openRecipeImport(date, onDone); });
+    $h('[data-rx-retry]').addEventListener('click', () => run());
+    async function run() {
+      const token = ++serial;
+      controller = new AbortController();
+      const signal = controller.signal;
+      $h('[data-rx-error]').hidden = true; $h('[data-rx-fail]').hidden = true;
+      try {
+        step(t('rx_step_prep'), 0.02);
+        if (!window.FoodAI) throw new Error(t('rx_unavailable'));
+        const session = await Cloud.getSession?.();
+        if (!(session && session.user && session.user.id)) throw new Error(t('ai_err_signin'));
+        if (token !== serial) return;
+        let input;
+        if (job.source === 'video') {
+          const onProgress = (p) => {
+            if (token !== serial) return;
+            if (p.step === 'frames') step(t('rx_step_frames').replace('{n}', fmtNum(p.n)).replace('{total}', fmtNum(p.total)), 0.05 + 0.6 * p.n / p.total);
+            else step(t('rx_step_audio'), 0.7);
+          };
+          if (!window.FoodAI) throw new Error(t('rx_unavailable'));
+          if (!kept) kept = await FoodAI.decomposeVideo(job.file, { host: $h('[data-rx-host]'), signal, onProgress });
+          input = { frames: kept.frames, audio: kept.audio, text: job.text };
+        } else if (job.source === 'image') input = { frames: [job.pic.image] };
+        else if (job.source === 'link') input = { link: job.link };
+        else input = { text: job.text };
+        if (token !== serial) return;
+        step(job.source === 'link' ? t('rx_step_link') : t('rx_step_send'), 0.85);
+        if (!window.FoodAI) throw new Error(t('rx_unavailable'));
+        const recipe = await FoodAI.analyzeRecipe(input, signal);
+        if (token !== serial || !held.isConnected) return;
+        const draft = draftOf(recipe, kept ? kept.notes : []);
+        if (!draft.items.length) throw new Error(t('rx_empty'));
+        // Another account signed in while this was out: hand it nothing.
+        if (owner !== Cloud.getLastUid()) { leave(); return; }
+        observer.disconnect();
+        // closeModal() FIRST: while the held sheet is up, an ordinary openModal is refused.
+        closeModal();
+        openRecipeEditor(date, draft, onDone);
+        showToast(t('rx_review_toast'));
+      } catch (e) { failed(e, token); }
+    }
+    // A failure is said in the sheet (role=alert), with «رجوع» and — only where
+    // asking again could change the answer — «أعد المحاولة».
+    function failed(e, token) {
+      if (token !== serial || !held.isConnected || (e && e.name === 'AbortError')) return;
+      // fetch() fails as a TypeError («Failed to fetch», «Load failed»), which
+      // friendlyErr rightly calls a connection problem; any OTHER TypeError is a
+      // fault of ours, and «check your internet» would send the user off wrong.
+      const ours = e && e.name === 'TypeError' && !/failed to fetch|load failed|networkerror|network request/i.test(e.message || '');
+      const said0 = ours ? t('rx_error') : window.FoodAI ? FoodAI.friendlyErr(e) : ((e && e.message) || t('rx_error'));
+      const said = said0 === t('ai_error') ? t('rx_error') : said0;
+      const final = [t('rx_empty'), t('rx_unavailable'), t('ai_daily_limit'), t('ai_err_signin'),
+        t('rx_video_unreadable'), t('rx_video_long'), t('rx_link_unsupported')].indexOf(said) !== -1;
+      step('', 0);
+      const err = $h('[data-rx-error]');
+      err.textContent = said; err.hidden = false;
+      $h('[data-rx-fail]').hidden = false;
+      // style.display, not [hidden]: .btn sets its own display (the v332 trap).
+      $h('[data-rx-retry]').style.display = final ? 'none' : '';
+      err.focus();
+    }
+    run();
+  }
+  drawSources();
 }
 // ===========================================================================
 // Saved-food picker — the old "reference library" as an add-method. Search
@@ -1597,7 +1826,10 @@ function openSavedFoodPicker(date, onSave, initialTab) {
       <input type="search" id="sf-search" placeholder="${t('search_foods')}">
     </div>
     <div class="picker-list" id="sf-list" role="tabpanel" aria-labelledby="sf-tab-${tab}"></div>
-    <button class="btn btn-ghost btn-block" id="sf-new" style="margin-top:10px">${icon('plus', 20)} ${tab === 'bundles' ? t('bundle_new') : tab === 'recipes' ? t('rec_new') : t('saved_new')}</button>
+    <div class="sfp-actions">
+      <button class="btn btn-ghost btn-block" id="sf-new">${icon('plus', 20)} ${tab === 'bundles' ? t('bundle_new') : tab === 'recipes' ? t('rec_new') : t('saved_new')}</button>
+      <button type="button" class="btn btn-ghost btn-block" id="sf-import">${icon('sparkle', 20)} ${t('rx_title')}</button>
+    </div>
   `);
   guardConvenienceModal(overlay);
   const listEl = overlay.querySelector('#sf-list');
@@ -1751,6 +1983,10 @@ function openSavedFoodPicker(date, onSave, initialTab) {
     if (tab === 'recipes') { openRecipeEditor(date, null, () => openSavedFoodPicker(date, onSave, 'recipes')); return; }
     closeModal(); openFoodLibraryModal();
   });
+  // «استخراج وصفة» — a recipe from a clip, a link, a photo or text, on the
+  // recipes tab only (applyTab). Saving the draft returns here, like «وصفة جديدة».
+  const importBtn = overlay.querySelector('#sf-import');
+  importBtn.addEventListener('click', () => openRecipeImport(date, () => openSavedFoodPicker(date, onSave, 'recipes')));
   // The search box was built once, from the FOODS tab, and never changed — so on
   // Recipes the empty field still read "Search foods…" while the list under it held
   // recipes. Every per-tab surface is set here; the click handler and the first
@@ -1770,6 +2006,9 @@ function openSavedFoodPicker(date, onSave, initialTab) {
     overlay.querySelector('#sf-search-wrap').style.display = '';
     newBtn.innerHTML = icon('plus', 20) + ' ' +
       (tab === 'bundles' ? t('bundle_new') : tab === 'recipes' ? t('rec_new') : t('saved_new'));
+    // style.display, NOT [hidden]: .btn sets its own display, which beats the
+    // UA's [hidden] rule at any specificity (the v332 trap).
+    importBtn.style.display = tab === 'recipes' ? '' : 'none';
   };
   overlay.querySelectorAll('.sfp-tab').forEach((b) => b.addEventListener('click', () => {
     tab = b.dataset.tab;

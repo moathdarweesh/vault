@@ -112,6 +112,7 @@ module.exports = async function testConvenienceUI(page) {
   }
   await workoutCore(page);
   for (const c of FOOD_BODY) await c.run(page);
+  for (const c of RECIPE_IMPORT) await c.run(page);
   await routerHome(page);
   await designA11y(page);
   console.log('PASS convenience UI: bilingual meals, half portion, dated log + undo, recipe quantities, shopping save/check, search/date navigation, recent changes, guided-run undo, plan-only restoration, recipe regression, and the workout core (v397): undo names its write, the PR is seen, the suggestion is a target, records judged against history, the trash works unlogged, a half-typed row, the day as logged, the swap survives, the reorder write, the rest-day add, undoable remove, the template asks, sets edited not rebuilt');
@@ -757,6 +758,283 @@ const FOOD_BODY = [
   } },
 ];
 module.exports.FOOD_BODY = FOOD_BODY;
+
+// ---- «استخراج وصفة» · commit B, driven with real clicks ------------------------
+// The Worker is faked with page.route ONLY (never the real one): every POST is
+// recorded as the Worker would receive it and answered by `reply`. Each case
+// signs in (Cloud.getSession — the harness's Cloud has none) and puts it back.
+const RX_STUB = { name: 'QA pasta', servings: 2, items: [
+  { name: 'spaghetti', qty: '200 g', calories: 742, protein: 26, carbs: 150, fat: 3 },
+  { name: 'olive oil', qty: '2 tbsp', calories: 239, protein: 0, carbs: 0, fat: 27 },
+  { name: 'salt', qty: '~1 tsp', calories: 0, protein: 0, carbs: 0, fat: 0 }] };
+async function rxKit(page) {
+  const kit = { bodies: [], reply: () => ({ status: 200, body: { recipe: RX_STUB } }), hold: null };
+  const cors = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Headers': '*', 'Access-Control-Allow-Methods': 'POST, OPTIONS' };
+  const match = (url) => url.hostname === 'vault-calories.moathdarweesh2000.workers.dev';
+  const handler = async (route) => {
+    if (route.request().method() === 'OPTIONS') return route.fulfill({ status: 204, headers: cors });
+    kit.bodies.push(route.request().postData() || '');
+    if (kit.hold) { kit.held = route; kit.hold(); return; }
+    const r = kit.reply(kit.bodies.length);
+    return route.fulfill({ status: r.status, contentType: 'application/json', headers: cors, body: JSON.stringify(r.body) });
+  };
+  await page.route(match, handler);
+  await page.evaluate(() => { window.qaGetSession = Cloud.getSession; Cloud.getSession = async () => ({ user: { id: 'qa' }, access_token: 'qa-token' }); });
+  kit.last = () => JSON.parse(kit.bodies[kit.bodies.length - 1]);
+  kit.done = async () => {
+    await page.unroute(match, handler);
+    await page.evaluate(() => { if (window.qaGetSession) Cloud.getSession = window.qaGetSession; else delete Cloud.getSession; delete window.qaGetSession; closeModal(); hideToast(); });
+  };
+  return kit;
+}
+// Open the import from «وصفاتي» the way a thumb does, and pick a source tile.
+async function rxOpen(page, source) {
+  await fresh(page);
+  await page.evaluate(() => openSavedFoodPicker(null, null, 'recipes'));
+  await page.locator('#sf-import').click();
+  if (source) await page.locator(`[data-rx-pick="${source}"]`).click();
+}
+const rxError = (page) => page.locator('[data-rx-error]:not([hidden])').waitFor({ timeout: 15000 }).then(() => page.locator('[data-rx-error]').innerText(), () => null);
+// A JPEG's size, read from its SOF marker in Node (fetch('data:') is blocked by connect-src).
+function jpegSize(b64) {
+  const b = Buffer.from(b64, 'base64');
+  if (b[0] !== 0xff || b[1] !== 0xd8) return null;
+  for (let i = 2; i + 9 < b.length;) {
+    if (b[i] !== 0xff) return null;
+    const m = b[i + 1], len = b.readUInt16BE(i + 2);
+    if (m >= 0xc0 && m <= 0xc3) return { h: b.readUInt16BE(i + 5), w: b.readUInt16BE(i + 7) };
+    i += 2 + len;
+  }
+  return null;
+}
+// A WAV's header and its loudest sample, read in Node.
+function wavInfo(b64) {
+  const b = Buffer.from(b64, 'base64');
+  let peak = 0;
+  for (let i = 44; i + 1 < b.length; i += 2) peak = Math.max(peak, Math.abs(b.readInt16LE(i)));
+  return { riff: b.toString('latin1', 0, 4), wave: b.toString('latin1', 8, 12), fmt: b.readUInt16LE(20), ch: b.readUInt16LE(22),
+    rate: b.readUInt32LE(24), bits: b.readUInt16LE(34), data: b.toString('latin1', 36, 40), bytes: b.readUInt32LE(40), peak };
+}
+const NOT_RECIPE_FIELDS = ['text', 'prompt', 'image', 'audio'];
+// A 2-second clip made IN THE PAGE: a canvas whose colour and number change every
+// frame (captureStream) and a 440 Hz tone (an oscillator into a stream
+// destination), recorded by MediaRecorder as WebM. A MediaRecorder WebM carries
+// no cues, so its duration reads Infinity — the fallback path is exercised too.
+async function rxMakeWebm(page) {
+  await page.keyboard.press('Shift');   // user activation, so the AudioContext may run
+  return page.evaluate(async () => {
+    const cv = document.createElement('canvas'); cv.width = 320; cv.height = 240;
+    const g = cv.getContext('2d');
+    const ac = new AudioContext(); await ac.resume();
+    const osc = ac.createOscillator(), amp = ac.createGain(), dst = ac.createMediaStreamDestination();
+    osc.frequency.value = 440; amp.gain.value = 0.4; osc.connect(amp); amp.connect(dst); osc.start();
+    let f = 0;
+    const draw = () => { g.fillStyle = 'hsl(' + ((f * 47) % 360) + ',80%,50%)'; g.fillRect(0, 0, 320, 240); g.fillStyle = '#fff'; g.font = '64px sans-serif'; g.fillText(String(f++), 40, 150); };
+    draw(); const tick = setInterval(draw, 66);
+    const stream = new MediaStream([...cv.captureStream(15).getVideoTracks(), ...dst.stream.getAudioTracks()]);
+    const type = ['video/webm;codecs=vp8,opus', 'video/webm'].find((x) => MediaRecorder.isTypeSupported(x));
+    const rec = new MediaRecorder(stream, { mimeType: type }), chunks = [];
+    rec.ondataavailable = (e) => { if (e.data.size) chunks.push(e.data); };
+    const stopped = new Promise((r) => { rec.onstop = r; });
+    rec.start(250);
+    await new Promise((r) => setTimeout(r, 2000));
+    rec.stop(); await stopped;
+    clearInterval(tick); osc.stop();
+    const state = ac.state; await ac.close();
+    const blob = new Blob(chunks, { type: 'video/webm' });
+    // What a <video> reports for it before anything seeks: Infinity is the case
+    // decomposeVideo's fallback exists for, so the case says whether it ran.
+    const probe = document.createElement('video'), src = URL.createObjectURL(blob);
+    const duration0 = await new Promise((r) => { probe.onloadedmetadata = () => r(String(probe.duration)); probe.onerror = () => r('error'); probe.muted = true; probe.src = src; });
+    URL.revokeObjectURL(src); probe.removeAttribute('src');
+    const bytes = new Uint8Array(await blob.arrayBuffer());
+    let bin = ''; for (let i = 0; i < bytes.length; i += 0x8000) bin += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000));
+    return { state, type, duration0, size: bytes.length, b64: btoa(bin) };
+  });
+}
+// The editor a successful import hands over: RX_STUB, field by field, as a draft
+// to review — and one save writes one recipe holding only the stored fields.
+async function rxEditorChecks(page) {
+  // First, while it is up: a plain toast lasts 1.8 s.
+  assert.equal(await toastText(page), await tr(page, 'rx_review_toast'), 'the toast asks for a review');
+  assert.equal((await page.locator('#modal-root .modal-title').innerText()).trim(), await tr(page, 'rx_review_title'), 'the editor is titled as a review');
+  assert.equal(await page.locator('#rec-name').inputValue(), RX_STUB.name);
+  assert.equal(await page.locator('#rec-servings').inputValue(), String(RX_STUB.servings));
+  const rows = page.locator('#rec-rows .rec-row');
+  assert.equal(await rows.count(), RX_STUB.items.length, 'one row per ingredient');
+  assert.equal(await rows.nth(0).getAttribute('data-src'), 'ai', 'a figure the model gave is marked as its estimate');
+  assert.equal((await rows.nth(0).locator('.rec-sum-tag').innerText()).trim(), await tr(page, 'rec_tag_ai'));
+  assert.equal(await rows.nth(0).locator('[data-f="qty"]').inputValue(), RX_STUB.items[0].qty, 'the amount as the source wrote it');
+  assert.equal(await rows.nth(2).getAttribute('data-state'), 'done', 'a zero row (salt) is settled — seeded as entered, never refused as «no figures»');
+  const kcal = RX_STUB.items.reduce((n, it) => n + it.calories, 0);
+  assert.equal((await page.locator('#rec-totals [data-t="calories"]').innerText()).trim(), await page.evaluate((n) => fmtNum(n), kcal), 'the totals are the stub\'s');
+  const before = await page.evaluate(() => DB.recipes.list().length);
+  await page.locator('#rec-save').click();
+  assert.equal(await toastText(page), await tr(page, 'rec_saved'));
+  const saved = await page.evaluate((name) => DB.recipes.list().filter((r) => r.name === name), RX_STUB.name);
+  assert.equal(await page.evaluate(() => DB.recipes.list().length), before + 1, 'ONE new recipe');
+  const got = saved[saved.length - 1];
+  assert.equal(got.items.length, RX_STUB.items.length);
+  for (const it of got.items) assert.equal(Object.keys(it).sort().join(','), 'calories,carbs,fat,id,name,protein,qty', 'an ingredient stores exactly its fields — no _src/_auto/_manual/note: ' + Object.keys(it).join(','));
+  assert.equal(got.servings, RX_STUB.servings);
+  await page.evaluate((id) => DB.recipes.remove(id), got.id);
+}
+
+const RECIPE_IMPORT = [
+  { name: 'B1 «استخراج وصفة» is offered on the recipes tab only', async run(page) {
+    await fresh(page);
+    await page.evaluate(() => openSavedFoodPicker(null, null, 'foods'));
+    const btn = page.locator('#sf-import');
+    assert.equal(await btn.count(), 1, 'the picker carries #sf-import — v399 has none (' + (await btn.count()) + ')');
+    assert.equal(await btn.isVisible(), false, 'not on the foods tab');
+    await page.locator('.sfp-tab[data-tab="recipes"]').click();
+    assert.equal(await btn.isVisible(), true, 'on the recipes tab');
+    assert.equal((await btn.innerText()).trim(), await tr(page, 'rx_title'));
+    await page.locator('.sfp-tab[data-tab="bundles"]').click();
+    assert.equal(await btn.isVisible(), false, 'not on the meals tab');
+    await page.evaluate(() => closeModal());
+  } },
+  { name: 'B2 a gallery clip: stills + a WAV + the caption go, the file never does; the editor opens prefilled and saves', async run(page) {
+    const kit = await rxKit(page);
+    try {
+      const clip = await rxMakeWebm(page);
+      assert.equal(clip.state, 'running', 'setup: the AudioContext ran, so the clip has a soundtrack (' + clip.type + ', ' + clip.size + ' bytes)');
+      assert.equal(clip.duration0, 'Infinity', 'setup: a MediaRecorder WebM reports no duration, so the Infinity fallback is what reads it');
+      await rxOpen(page);
+      const [chooser] = await Promise.all([page.waitForEvent('filechooser'), page.locator('[data-rx-pick="video"]').click()]);
+      await chooser.setFiles({ name: 'qa-clip.webm', mimeType: 'video/webm', buffer: Buffer.from(clip.b64, 'base64') });
+      const caption = 'QA caption: 200 g spaghetti, 2 tbsp olive oil, salt';
+      await page.locator('#rx-text').fill(caption);
+      await page.locator('[data-rx-go]').click();
+      const opened = await page.locator('#rec-rows .rec-row').first().waitFor({ timeout: 45000 }).then(() => true, () => false);
+      assert.ok(opened, 'the editor opens with the recipe — sheet said ' + JSON.stringify(await page.locator('#modal-root').innerText().catch(() => '')));
+      assert.equal(kit.bodies.length, 1, 'ONE request');
+      const raw = kit.bodies[0], body = JSON.parse(raw);
+      assert.equal(Object.keys(body).join(','), 'mode,lang,frames,recipeAudio,recipeText', 'recipe fields only');
+      for (const k of NOT_RECIPE_FIELDS) assert.ok(!(k in body), 'no generic ' + k);
+      assert.ok(!raw.includes('GkXfo'), 'the WebM itself (its EBML header) was never sent');
+      assert.ok(body.frames.length >= 2 && body.frames.length <= 10, '2–10 stills (RX_FRAMES): ' + body.frames.length);
+      for (const f of body.frames) {
+        const s = jpegSize(f.data);
+        assert.ok(f.mimeType === 'image/jpeg' && s && Math.max(s.w, s.h) <= 768, 'a JPEG still no larger than 768 px: ' + f.mimeType + ' ' + JSON.stringify(s));
+      }
+      const w = wavInfo(body.recipeAudio.data);
+      assert.equal([body.recipeAudio.mimeType, w.riff, w.wave, w.fmt, w.ch, w.rate, w.bits, w.data].join(' '), 'audio/wav RIFF WAVE 1 1 16000 16 data', 'a 16 kHz mono PCM16 WAV');
+      assert.ok(Math.abs(w.bytes - 64000) <= 16000, 'about two seconds of it: ' + w.bytes + ' bytes');
+      assert.ok(w.peak > 1000, 'and the tone is in it (peak ' + w.peak + ')');
+      assert.equal(body.recipeText, caption, 'the caption travels as recipeText');
+      await rxEditorChecks(page, kit);
+    } finally { await kit.done(); }
+  } },
+  { name: 'B3 an OLD Worker is «not available yet», never a recipe', async run(page) {
+    const kit = await rxKit(page);
+    try {
+      const count = await page.evaluate(() => DB.recipes.list().length);
+      for (const [status, body] of [[200, { items: [{ name: 'pasta', calories: 300, protein: 10, carbs: 60, fat: 2 }] }], [400, { error: 'no input' }]]) {
+        kit.reply = () => ({ status, body });
+        await rxOpen(page, 'text');
+        await page.locator('#rx-text').fill('200 g pasta, olive oil');
+        await page.locator('[data-rx-go]').click();
+        assert.equal(await rxError(page), await tr(page, 'rx_unavailable'), 'an old Worker answering ' + status + ' ' + JSON.stringify(body) + ' reads «not available yet»');
+        assert.equal(await page.locator('#rec-rows').count(), 0, 'and no editor opens');
+        assert.equal(await page.locator('[data-rx-retry]').isVisible(), false, 'nor is «try again» offered — it would only ask again');
+      }
+      assert.equal(await page.evaluate(() => DB.recipes.list().length), count, 'nothing is saved');
+    } finally { await kit.done(); }
+  } },
+  { name: 'B4 text alone and an image alone send only their own field', async run(page) {
+    const kit = await rxKit(page);
+    try {
+      await rxOpen(page, 'text');
+      await page.locator('[data-rx-go]').click();
+      assert.equal(await toastText(page), await tr(page, 'rx_need_text'), 'an empty text is refused on the phone');
+      assert.equal(kit.bodies.length, 0, 'with no request');
+      await page.locator('#rx-text').fill('Garlic pasta for 2: 200 g spaghetti, 2 tbsp olive oil, salt');
+      await page.locator('[data-rx-go]').click();
+      await page.locator('#rec-rows .rec-row').first().waitFor({ timeout: 15000 });
+      assert.equal(Object.keys(kit.last()).join(','), 'mode,lang,recipeText', 'text alone: ' + Object.keys(kit.last()).join(','));
+      const png = await page.evaluate(async () => {
+        const cv = document.createElement('canvas'); cv.width = 2000; cv.height = 1000;
+        const g = cv.getContext('2d'); g.fillStyle = '#d94'; g.fillRect(0, 0, 2000, 1000); g.fillStyle = '#fff'; g.font = '120px sans-serif'; g.fillText('200 g rice', 200, 500);
+        const b = await new Promise((r) => cv.toBlob(r, 'image/png'));
+        const u = new Uint8Array(await b.arrayBuffer()); let s = ''; for (let i = 0; i < u.length; i += 0x8000) s += String.fromCharCode.apply(null, u.subarray(i, i + 0x8000));
+        return btoa(s);
+      });
+      await rxOpen(page);
+      const [chooser] = await Promise.all([page.waitForEvent('filechooser'), page.locator('[data-rx-pick="image"]').click()]);
+      await chooser.setFiles({ name: 'qa-card.png', mimeType: 'image/png', buffer: Buffer.from(png, 'base64') });
+      await page.locator('[data-rx-go]').click();
+      await page.locator('#rec-rows .rec-row').first().waitFor({ timeout: 15000 });
+      const b = kit.last(), s = jpegSize(b.frames[0].data);
+      assert.equal(Object.keys(b).join(','), 'mode,lang,frames', 'an image alone: ' + Object.keys(b).join(','));
+      assert.ok(b.frames.length === 1 && b.frames[0].mimeType === 'image/jpeg' && s && Math.max(s.w, s.h) <= 1600, 'one JPEG, 1600 px at most: ' + JSON.stringify(s));
+    } finally { await kit.done(); }
+  } },
+  { name: 'B5 the link tile sends {link} alone; a host the Worker never reads is refused on the phone; LINK_BLOCKED is said', async run(page) {
+    const kit = await rxKit(page);
+    try {
+      await rxOpen(page, 'link');
+      await page.locator('#rx-link').fill('https://example.com/my-recipe');
+      await page.locator('[data-rx-go]').click();
+      assert.equal(await toastText(page), await tr(page, 'rx_link_unsupported'), 'a host outside the eleven is refused before any request');
+      assert.equal(kit.bodies.length, 0, 'with no request spent');
+      kit.reply = () => ({ status: 502, body: { error: 'service unavailable', code: 'LINK_BLOCKED' } });
+      await page.locator('#rx-link').fill('  https://youtu.be/dQw4w9WgXcQ  ');
+      await page.locator('[data-rx-go]').click();
+      assert.equal(await rxError(page), await tr(page, 'rx_link_blocked'), 'a link the Worker could not reach says so, and what to do instead');
+      const b = kit.last();
+      assert.equal(Object.keys(b).join(','), 'mode,lang,link', 'the link travels alone: ' + Object.keys(b).join(','));
+      assert.equal(b.link, 'https://youtu.be/dQw4w9WgXcQ', 'trimmed, otherwise as typed — the Worker rebuilds the URL itself');
+      assert.equal(await page.locator('#rec-rows').count(), 0, 'and no editor opens');
+    } finally { await kit.done(); }
+  } },
+  { name: 'B6 cancel mid-flight aborts the request; no editor, no toast', async run(page) {
+    const kit = await rxKit(page);
+    const failed = [];
+    const onFail = (req) => { if (req.url().includes('workers.dev')) failed.push(req.failure() && req.failure().errorText); };
+    page.on('requestfailed', onFail);
+    try {
+      const arrived = new Promise((r) => { kit.hold = r; });
+      await rxOpen(page, 'text');
+      await page.locator('#rx-text').fill('200 g pasta');
+      await page.locator('[data-rx-go]').click();
+      await arrived;
+      await page.locator('[data-rx-cancel]').click();
+      await page.waitForTimeout(400);
+      try { await kit.held.fulfill({ status: 200, contentType: 'application/json', headers: { 'Access-Control-Allow-Origin': '*' }, body: JSON.stringify({ recipe: RX_STUB }) }); } catch (_) { /* the page already dropped it */ }
+      await page.waitForTimeout(600);
+      assert.ok(failed.length === 1, 'the request was aborted by the page (requestfailed): ' + JSON.stringify(failed));
+      assert.equal(await page.locator('#rec-rows').count(), 0, 'no editor opens after a cancel');
+      assert.notEqual(await toastText(page), await tr(page, 'rx_review_toast'), 'and no review toast');
+      assert.equal(await page.locator('#modal-root .modal-overlay:not(.is-out)').count(), 0, 'the sheet is gone');
+    } finally { page.off('requestfailed', onFail); kit.hold = null; await kit.done(); }
+  } },
+  { name: 'B7 a recipe with no name is refused BY NAME (rec_need_title), a draft\'s cursor goes to it', async run(page) {
+    await fresh(page);
+    await page.evaluate(() => openRecipeEditor(null, null, () => {}));
+    const row = page.locator('#rec-rows .rec-row').first();
+    await row.locator('[data-f="name"]').fill('QA rice');
+    await row.locator('[data-toggle]').click();
+    await row.locator('[data-f="calories"]').fill('300');
+    await page.locator('#rec-save').click();
+    const said = await toastText(page);
+    assert.equal(said, await tr(page, 'rec_need_title'), 'a nameless recipe is refused for its name — v399 said ' + JSON.stringify(said));
+    assert.equal(await page.evaluate(() => document.activeElement && document.activeElement.id), 'rec-name', 'and the cursor goes to the name');
+    const kit = await rxKit(page);
+    try {
+      kit.reply = () => ({ status: 200, body: { recipe: Object.assign({}, RX_STUB, { name: '' }) } });
+      await rxOpen(page, 'text');
+      await page.locator('#rx-text').fill('200 g spaghetti, olive oil, salt');
+      await page.locator('[data-rx-go]').click();
+      await page.locator('#rec-rows .rec-row').first().waitFor({ timeout: 15000 });
+      await page.waitForTimeout(150);
+      assert.equal(await page.evaluate(() => document.activeElement && document.activeElement.id), 'rec-name', 'a draft with no name opens on its name');
+      await page.locator('#rec-save').click();
+      assert.equal(await toastText(page), await tr(page, 'rec_need_title'), 'and saving it asks for one');
+    } finally { await kit.done(); }
+  } },
+];
+module.exports.RECIPE_IMPORT = RECIPE_IMPORT;
 
 
 // ---- v398 · THE ROUTER, HOME AND THE NOTICES (batch 2b) ----------------------
