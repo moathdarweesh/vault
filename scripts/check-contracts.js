@@ -2035,5 +2035,154 @@ const cssOwner = (i) => CSS_BLOCKS.reduce((best, b) => (b.open < i && b.close > 
   contract(`the documents that spell the script order spell the shipped one (${chains} places)`, problems);
 }
 
+// 72 — one glyph on every surface (owner decision, v403: the app's logo is the
+// barbell the splash draws). The master is ICONS.dumbbell: two 3×6 outer plates,
+// two 4×12 inner plates, a 5×3.2 shaft. Five surfaces redraw it in formats that
+// cannot share a line of source — icons/icon.svg, the launcher foreground, the
+// themed icon and the status-bar icon (VectorDrawable path data), and the
+// splash's FIRST PAINTED FRAME (five flex boxes, each overridden by the first
+// keyframe of its phase-A animation, which is what a `both` fill paints at t=0).
+// Each is reduced to its boxes, normalised for scale and position, and held to
+// the master within 0.02 glyph units, corners included; the coloured surfaces
+// must also agree on the three fills. On v402 every one of them failed: they
+// drew the cut V, the slot, and five equal bolts.
+{
+  const problems = [];
+  const TOL = 0.02, ROLE = ['outer', 'inner', 'shaft', 'inner', 'outer'];
+  const attr = (tag, k) => { const m = tag.match(new RegExp('(?:^|\\s)' + k + '="([^"]*)"')); return m ? m[1] : null; };
+  const rectsIn = (svg) => [...svg.matchAll(/<rect\b([^>]*?)\/?>/g)].map(([, a]) => ({ x: +(attr(a, 'x') || 0), y: +(attr(a, 'y') || 0), w: +attr(a, 'width'), h: +attr(a, 'height'), r: +(attr(a, 'rx') || 0), cls: attr(a, 'class'), rect: true }));
+  // Path data → one box per subpath. A diagonal, a curve, an arc that is not a
+  // quarter circle, or a vertex off the subpath's own bounds makes it NOT a
+  // rectangle — which is how the V reports itself.
+  const pathBoxes = (d) => {
+    const tok = String(d || '').match(/[a-zA-Z]|-?(?:\d+\.?\d*|\.\d+)(?:e-?\d+)?/g) || [], out = [];
+    let i = 0, cmd = '', x = 0, y = 0, sx = 0, sy = 0, cur = null;
+    const n = () => +tok[i++];
+    const seg = (nx, ny, arc) => {
+      const dx = Math.abs(nx - x), dy = Math.abs(ny - y);
+      if (arc !== undefined ? !(arc > 0 && Math.abs(dx - arc) < 1e-6 && Math.abs(dy - arc) < 1e-6) : (dx > 1e-6 && dy > 1e-6)) cur.bad = true;
+      if (arc > 0) cur.r = Math.max(cur.r, arc);
+      x = nx; y = ny; cur.pts.push([x, y]);
+    };
+    while (i < tok.length) {
+      const at = i;
+      if (/[a-zA-Z]/.test(tok[i])) cmd = tok[i++];
+      const rel = cmd !== cmd.toUpperCase(), X = (v) => (rel ? x + v : v), Y = (v) => (rel ? y + v : v);
+      const C = cmd.toUpperCase();
+      if (C === 'M') { if (cur) out.push(cur); x = X(n()); y = Y(n()); sx = x; sy = y; cur = { pts: [[x, y]], r: 0, bad: false }; cmd = rel ? 'l' : 'L'; }
+      else if (!cur) { out.push({ pts: [[0, 0]], r: 0, bad: true }); break; }
+      else if (C === 'L') { const a = X(n()), b = Y(n()); seg(a, b); }
+      else if (C === 'H') seg(X(n()), y);
+      else if (C === 'V') seg(x, Y(n()));
+      else if (C === 'A') { const rx = n(), ry = n(); i += 3; const a = X(n()), b = Y(n()); seg(a, b, Math.abs(rx - ry) < 1e-6 ? rx : -1); }
+      else if (C === 'Z') { if (Math.abs(x - sx) > 1e-6 || Math.abs(y - sy) > 1e-6) seg(sx, sy); out.push(cur); cur = null; }
+      else { cur.bad = true; break; }
+      if (i === at) { cur && (cur.bad = true); break; }
+    }
+    if (cur) out.push(cur);
+    return out.map((p) => {
+      const xs = p.pts.map((q) => q[0]), ys = p.pts.map((q) => q[1]);
+      const b = { x: Math.min(...xs), y: Math.min(...ys), w: Math.max(...xs) - Math.min(...xs), h: Math.max(...ys) - Math.min(...ys), r: p.r };
+      const edge = p.pts.every(([px, py]) => [b.x, b.x + b.w].some((e) => Math.abs(px - e) < 1e-6) || [b.y, b.y + b.h].some((e) => Math.abs(py - e) < 1e-6));
+      return Object.assign(b, { rect: !p.bad && edge });
+    });
+  };
+  // x' = (x - pivot) * scale + pivot + translate — VectorDrawable's order; an SVG translate+scale is the same with pivot 0.
+  const place = (b, T) => ({ ...b, x: (b.x - T.px) * T.sx + T.px + T.tx, y: (b.y - T.py) * T.sy + T.py + T.ty, w: b.w * T.sx, h: b.h * T.sy, r: b.r * T.sx });
+  const ID = { sx: 1, sy: 1, tx: 0, ty: 0, px: 0, py: 0 };
+  const dm = src['js/catalog.js'].match(/^\s+dumbbell:\s*'([^']*)'/m);
+  const master = dm ? rectsIn(dm[1]) : [];
+  const inkW = (bs) => Math.max(...bs.map((b) => b.x + b.w)) - Math.min(...bs.map((b) => b.x));
+  const norm = (bs) => {
+    const x0 = Math.min(...bs.map((b) => b.x)), y0 = Math.min(...bs.map((b) => b.y)), k = inkW(master) / inkW(bs);
+    return bs.map((b) => ({ ...b, x: (b.x - x0) * k, y: (b.y - y0) * k, w: b.w * k, h: b.h * k, r: b.r * k })).sort((a, b) => a.x - b.x || a.y - b.y);
+  };
+  const fills = [];                // [surface, role -> fill], only for surfaces whose shape held
+  const compare = (name, bs, fillOf) => {
+    const odd = bs.filter((b) => !b.rect);
+    if (odd.length) return problems.push(`${name}: ${odd.length} of its ${bs.length} shape(s) are not rectangles (a diagonal or a curve) — the mark is the five rectangles of ICONS.dumbbell`);
+    if (bs.length !== master.length) return problems.push(`${name} draws ${bs.length} rectangle(s); ICONS.dumbbell is ${master.length}`);
+    const A = norm(master), B = norm(bs), off = [];
+    A.forEach((a, i) => { for (const k of ['x', 'y', 'w', 'h', 'r']) if (Math.abs(a[k] - B[i][k]) > TOL) off.push(`${ROLE[i]} #${i + 1} ${k} ${+B[i][k].toFixed(3)} ≠ ${a[k]}`); });
+    if (off.length) return problems.push(`${name} is not ICONS.dumbbell's shape (glyph units, after scale/position): ${off.slice(0, 5).join('; ')}${off.length > 5 ? ` (+${off.length - 5} more)` : ''}`);
+    if (fillOf) fills.push([name, B.map(fillOf)]);
+  };
+  if (master.length !== 5) problems.push(`ICONS.dumbbell in js/catalog.js has ${master.length} rects — this check expects the five-rectangle barbell`);
+
+  // icons/icon.svg — the mark group (the <g> with a transform), and nothing drawn outside it but the tile.
+  {
+    const svg = read('icons/icon.svg').replace(/<!--[\s\S]*?-->/g, '').replace(/<defs>[\s\S]*?<\/defs>/g, '');
+    const g = svg.match(/<g\b[^>]*\btransform="([^"]*)"[^>]*>([\s\S]*?)<\/g>/);
+    const vb = (svg.match(/viewBox="0 0 (\d+) (\d+)"/) || []).slice(1).map(Number);
+    const dark = {};
+    for (const m of (svg.match(/<style>([\s\S]*?)(?:@media|<\/style>)/) || ['', ''])[1].matchAll(/\.([\w-]+)\s*\{\s*fill:\s*(#[0-9a-f]{6})/gi)) dark[m[1]] = m[2].toLowerCase();
+    if (!g) problems.push('icons/icon.svg has no transformed <g> holding the mark');
+    else {
+      const t = g[1].match(/translate\(\s*([-\d.]+)[\s,]+([-\d.]+)\s*\)\s*scale\(\s*([-\d.]+)(?:[\s,]+([-\d.]+))?\s*\)/);
+      const T = t ? { ...ID, tx: +t[1], ty: +t[2], sx: +t[3], sy: +(t[4] || t[3]) } : ID;
+      const bs = [...rectsIn(g[2]), ...[...g[2].matchAll(/<path\b([^>]*?)\/?>/g)].flatMap(([, a]) => pathBoxes(attr(a, 'd')))].map((b) => place(b, T));
+      compare('icons/icon.svg', bs, (b) => dark[b.cls] || '?');
+      const rest = svg.replace(g[0], '');
+      const extra = [...rectsIn(rest).filter((r) => !(r.x === 0 && r.y === 0 && r.w === vb[0] && r.h === vb[1])), ...rest.matchAll(/<path\b/g)];
+      if (extra.length) problems.push(`icons/icon.svg draws ${extra.length} shape(s) outside its mark besides the tile — the V's slot and hairline were exactly that`);
+    }
+  }
+
+  // The three VectorDrawables: every <path>, placed through its <group>'s transform.
+  const RES = 'android/app/src/main/res/drawable/';
+  for (const f of ['ic_launcher_foreground.xml', 'ic_launcher_monochrome.xml', 'ic_stat_vault.xml']) {
+    const xml = read(RES + f).replace(/<!--[\s\S]*?-->/g, '');
+    const bs = [];
+    for (const m of xml.matchAll(/<group\b([^>]*)>([\s\S]*?)<\/group>|<path\b([^>]*?)\/>/g)) {
+      const G = m[1] || '', num = (k, d) => { const v = attr(G, 'android:' + k); return v == null ? d : +v; };
+      const T = { sx: num('scaleX', 1), sy: num('scaleY', 1), tx: num('translateX', 0), ty: num('translateY', 0), px: num('pivotX', 0), py: num('pivotY', 0) };
+      for (const [, p] of m[1] != null ? m[2].matchAll(/<path\b([^>]*?)\/>/g) : [[null, m[3]]]) {
+        const fill = String(attr(p, 'android:fillColor') || '').replace(/^#(?:[0-9a-f]{2})?([0-9a-f]{6})$/i, '#$1').toLowerCase();
+        for (const b of pathBoxes(attr(p, 'android:pathData'))) bs.push({ ...place(b, T), fill });
+      }
+    }
+    compare(RES + f, bs, f === 'ic_launcher_foreground.xml' ? (b) => b.fill : null);
+  }
+
+  // The splash's first painted frame: the rest boxes (styles.css, last declaration
+  // wins among the single-class rules), laid out as the flex row .vs-bolts is,
+  // then each phase-A animation's first keyframe on top.
+  {
+    const css = read('styles.css').replace(/\/\*[\s\S]*?\*\//g, ' ');
+    const decls = (body) => Object.fromEntries(body.split(';').map((d) => d.split(/:(.*)/s).map((s) => s.trim())).filter((d) => d[0] && d[1]));
+    const frames = {};
+    for (const m of css.matchAll(/@keyframes\s+([\w-]+)\s*\{((?:[^{}]*\{[^{}]*\})*[^{}]*)\}/g)) {
+      const first = m[2].match(/(?:^|\})\s*(?:from|0%)\s*\{([^{}]*)\}/);
+      frames[m[1]] = first ? decls(first[1]) : {};
+    }
+    const rules = [...css.replace(/@keyframes\s+[\w-]+\s*\{(?:[^{}]*\{[^{}]*\})*[^{}]*\}/g, '').matchAll(/([^{}]+)\{([^{}]*)\}/g)].map((m) => [m[1].split(',').map((s) => s.trim()), decls(m[2])]);
+    const on = (...sels) => Object.assign({}, ...rules.filter(([s]) => s.some((x) => sels.includes(x))).map(([, d]) => d));
+    const U = {};
+    const len = (v) => { const e = String(v).replace(/var\(--vs-([a-z])\)/g, (_, k) => '(' + U[k] + ')').replace(/calc|vmin|px/g, ''); return /^[\d.\s*/+()-]+$/.test(e) ? Function('return (' + e + ')')() : NaN; };
+    const vs = on('.vs');
+    U.u = len(vs['--vs-u']); if (vs['--vs-g']) U.g = len(vs['--vs-g']);
+    const row = on('.vs-bolts'), gap = row.gap ? len(row.gap) : 0, bs = [];
+    let x = 0;
+    for (const c of ['vs-n1', 'vs-n2', 'vs-mid', 'vs-n4', 'vs-n5']) {
+      const d = on('.vs-bolt', '.' + c);
+      for (const [, a] of rules.filter(([s]) => s.includes('.vs-a .' + c))) for (const nm of String(a.animation || '').split(/[\s,]+/)) Object.assign(d, frames[nm] || {});
+      const ms = len(d['margin-inline-start'] || d['margin-left'] || 0), me = len(d['margin-inline-end'] || d['margin-right'] || 0);
+      const w = len(d.width), h = len(d.height), r = d['border-radius'] ? len(d['border-radius']) : 0;
+      if ([ms, me, w, h, r].some(Number.isNaN)) { problems.push(`the splash: .${c}'s resting size does not resolve in --vs-u/--vs-g (${d.width} × ${d.height})`); continue; }
+      x += ms;
+      const op = d.opacity == null ? 1 : +d.opacity;
+      bs.push({ x, y: -h / 2, w, h, r, rect: true, fill: String(d.background || '?').toLowerCase() + (op === 1 ? '' : ` at opacity ${op}`) });
+      x += w + me + gap;
+    }
+    compare('the splash\'s first frame (styles.css .vs-n1….vs-n5)', bs, (b) => b.fill);
+  }
+
+  // The coloured surfaces agree on the fills, role by role, and a role wears one fill.
+  const roles = {};
+  for (const [name, fs] of fills) fs.forEach((f, i) => { (roles[ROLE[i]] = roles[ROLE[i]] || new Map()).set(name + ' #' + (i + 1), f); });
+  for (const [role, m] of Object.entries(roles)) if (new Set(m.values()).size > 1) problems.push(`the ${role} ${role === 'shaft' ? '' : 'plates '}disagree: ${[...m].map(([k, v]) => `${k} ${v}`).join(', ')}`);
+  contract(`one glyph on every surface: icons/icon.svg, the three launcher/status vectors and the splash's first frame are ICONS.dumbbell's five rectangles (±${TOL} glyph units), in one set of fills`, problems);
+}
+
 console.log(failures.length ? `\ncheck-contracts: ${failures.length} broken contract(s)` : '\ncheck-contracts: all contracts hold');
 process.exit(failures.length ? 1 : 0);

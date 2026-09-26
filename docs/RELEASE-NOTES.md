@@ -2,6 +2,56 @@
 
 One section per release since v309, newest first, moved verbatim from `CLAUDE.md` in v401 (batch 6 of the 2026-09-25 review; `docs/REVIEW-2026-09-25.md`). `CLAUDE.md` is the guide and the authority for how the app works now. A section here records what one release changed and why, in the words written at the time, so a later section — or the guide — can supersede what an earlier one says.
 
+## v403 — THE BARBELL is the logo: one glyph on every outside surface
+
+«غيّر لوقو التطبيق إلى نفس اللوقو الذي يظهر في السبلاش … خمسة أعمدة على شكل
+بار فيه أوزان». The owner made the splash's five bolts the app's mark, refined
+into a barbell — and into the barbell the app already owned: `ICONS.dumbbell`
+(outer plates 3×6, inner plates 4×12, a 5×3.2 shaft), the glyph the in-app
+lockup already crops. Colouring B «الجمر», the owner's pick over the lead's A:
+outer plates `#b84a00`, inner plates `#ff6a00`, shaft `#fdfaf7` on black; under
+a light scheme `icons/icon.svg` steps the inner plates to `#e05c00` (3.40:1 on
+the bone tile; the raw accent is 2.65:1 there) — no contrast exception carried.
+
+- **Surfaces.** `icons/icon.svg` (the V, its slot, the hairline and the
+  pinstripe are gone), `res/drawable/ic_launcher_foreground.xml` (three fills,
+  ink 44 dp = 61% of the safe zone), `ic_launcher_monochrome.xml` and
+  `ic_stat_vault.xml` (one white silhouette each; no `evenOdd` — there is
+  nothing to cut), `icons/badge-96.png`, `icons/apple-touch-icon-180.png`, and
+  the splash: `.vs-n1…n5` rest as the glyph in `--vs-g` (one glyph unit = 1 vmin,
+  so the ink is 21% of the short edge, the width the five bolts had), the throw
+  and the rises start from those sizes and end where they always did, and the
+  hand-over parts from gap 0. The word, the door, the bloom and every timing
+  are untouched.
+- **Rasters are rendered, never hand-exported.** New
+  `scripts/build-brand-assets.js` draws `apple-touch-icon-180.png` from
+  `icon.svg` and the eleven `drawable-*/splash.png` from the LIVE stylesheet's
+  frame 0 (measured on the xxxhdpi file: ink 268×154 px centred at 50.0/50.0%,
+  exactly the three fills); `scripts/build-notif-icons.js` now draws the badge
+  from `ICONS.dumbbell` (the six category tiles re-rendered byte-identical).
+- **Checks that failed first.** Contract 72 «one glyph on every surface» reads
+  the rects, the VectorDrawable path data and the resting `.vs-*` boxes (first
+  keyframes included) and holds all five surfaces to the glyph within 0.02
+  units — on v402: «icons/icon.svg: 1 of its 1 shape(s) are not rectangles»,
+  «ic_stat_vault.xml: 3 of its 3 shape(s) are not rectangles», «the splash's
+  first frame … outer #1 h 4.61 ≠ 6 (+17 more)». New suite
+  `scripts/test-brand-icon.js` renders `icon.svg` at 512/192/48 in both
+  schemes: fills by role, every plate ≥ 3:1 and the shaft ≥ 4.5:1, the ink
+  inside the maskable circle (31.3% of the tile from the centre, limit 40%),
+  and the touch icon and badge pixel-checked — on v402: «mark group holds 0
+  rect(s)», «badge-96.png's silhouette spans [11,13,84,82], the barbell at 0.95
+  spans [8,25,87,70]». The gate ticks 68 contracts and 15 suites. Fingerprint
+  net: 160/160 view cells identical (the splash sits outside the views).
+- **Docs.** `docs/BRAND.md` §1 rewritten — 1b the barbell (fills, geometry per
+  surface), 1c the cut on the two public pages only, «the barbell is the mark
+  again», the DON'Ts; the guide's identity section; the stylesheet's identity
+  banner and its frozen-frame note.
+- **Waits for APK 25 (owner builds).** The three Android vectors and the eleven
+  splash PNGs. Until it is installed a phone launches with the v340 bolts for
+  one frame before the barbell paints — accepted.
+- **Unchanged.** The in-app lockup (`brandLockup`), `admin.html`'s plates, the
+  cut wordmark on `get/` and `privacy.html`, the six category tiles.
+
 ## v402 — «استخراج وصفة» from the recipe calculator itself
 
 «خلي مكانها مباشر من عند حاسبة الوصفة». The recipe editor, when it opens for a

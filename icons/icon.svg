@@ -1,66 +1,60 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
   <title>THE VAULT</title>
   <!--
-    THE VAULT app icon, per the Claude Design spec "Vault Logo CUT", section
-    03 APP ICON. The identity is THE CUT: a horizontal slot through the mark,
-    carrying a thin accent hairline. There is no separate symbol; the slot is
-    the whole device, and it detaches from the letter to work on its own.
+    THE VAULT app icon. The identity is THE BARBELL (v403, owner decision): the
+    five rectangles of ICONS.dumbbell in js/catalog.js, the same glyph the
+    splash draws and the launcher, themed and status-bar icons redraw. Contract
+    72 holds all of them to that glyph, so edit the glyph, not a copy.
 
-    Layering, bottom to top:
-      tile, pinstripe field, V letterform, slot (tile colour), hairline (accent).
+    This file used to carry THE CUT: a V letterform with a slot and an accent
+    hairline through it, on a pinstripe of the old five bars. All of that is
+    gone. Do not bring the V back.
 
-    Two variants in one file, following the system appearance:
-      dark  = black tile, orange letter, black slot, orange hairline
-      light = orange tile, black letter, orange slot, black hairline
-    The swap is a prefers-color-scheme media query inside the SVG, which a
-    browser honours when this is loaded as an image. Anything that ignores it
-    keeps the dark variant, which is the primary.
+    Geometry: the 24-unit glyph at scale 15, inset 76, so its centre (12,12)
+    lands on the tile's and the ink spans 315 of 512 px, 61.5%. The farthest
+    ink, an outer plate's corner, sits 181px from the centre: inside the
+    maskable safe circle (the inner 80%, radius 204.8px), which matters because
+    manifest.json declares this icon maskable.
 
-    THE MONOGRAM EXCEPTION. The slot law is 7% of the em, but a lone V is two
-    thin diagonals meeting at a point, so a 7% slot is swallowed between them.
-    The spec cuts the monogram at 11% instead. Here the em is 24 glyph units
-    at scale 13.05, so 313.2px, and 11% of that is 34.5. The hairline holds the
-    spec ratio of 2.4% of the em, so 7.5.
+    Fills, "the embers" (the owner's choice): outer plates ember #b84a00, inner
+    plates the accent #ff6a00, the shaft bone. One variant per system
+    appearance, through a prefers-color-scheme query that a browser honours
+    when this is loaded as an image; anything that ignores it keeps the dark
+    variant, which is the primary.
+      dark  = black tile, inner plates #ff6a00, shaft #fdfaf7
+      light = bone tile #faf5f0, inner plates #e05c00, shaft #1a1512
+    On the bone tile the inner plates step down to the accent's second step
+    (#e05c00, 3.40:1), because the raw accent is 2.65:1 there, the same move
+    the macro bars make on light. Every plate holds 3:1 on its tile and the
+    shaft 4.5:1; scripts/test-brand-icon.js renders both and checks.
 
-    The slot sits on the optical middle of the CAP height, not of the em box.
-    Cap runs y 4.5 to 20.4 in glyph units, so 158.2 to 365.7 here, and its
-    middle is 262. The slot runs wider than the letter at that height, which is
-    intended: the line has to read as crossing the mark, not sitting inside it.
-
-    Below 48px the letter is dropped entirely and the slot alone is the mark.
-    That is a separate asset, not this file. See ic_stat_vault.xml and BRAND.md.
+    No double hyphen may appear in this comment: it makes the whole file fail
+    to parse as an image, and only a render catches that.
   -->
   <style>
     .tile { fill: #000000; }
-    .mark { fill: #ff6a00; }
-    .slot { fill: #000000; }
-    .hair { fill: #ff6a00; }
-    .grain { fill: #ffffff; fill-opacity: .035; }
+    .outer { fill: #b84a00; }
+    .inner { fill: #ff6a00; }
+    .shaft { fill: #fdfaf7; }
     @media (prefers-color-scheme: light) {
-      .tile { fill: #ff6a00; }
-      .mark { fill: #000000; }
-      .slot { fill: #ff6a00; }
-      .hair { fill: #000000; }
-      .grain { fill: #000000; fill-opacity: .06; }
+      .tile { fill: #faf5f0; }
+      .inner { fill: #e05c00; }
+      .shaft { fill: #1a1512; }
     }
   </style>
   <defs>
-    <!-- The bar field survives only as a pinstripe texture: a 2px bar on an
-         11px pitch at 170px, which is 6 on 33 at this scale. -->
-    <pattern id="bars" width="33" height="512" patternUnits="userSpaceOnUse">
-      <rect class="grain" width="6" height="512"/>
-    </pattern>
     <clipPath id="tileClip">
       <rect width="512" height="512" rx="115"/>
     </clipPath>
   </defs>
   <g clip-path="url(#tileClip)">
     <rect class="tile" width="512" height="512"/>
-    <rect width="512" height="512" fill="url(#bars)"/>
-    <g transform="translate(99.5 99.5) scale(13.05)">
-      <path class="mark" d="M4.4 4.5h3.4l4.2 11.4L16.2 4.5h3.4L13.7 20.4h-3.4Z"/>
+    <g transform="translate(76 76) scale(15)">
+      <rect class="outer" x="1.5" y="9" width="3" height="6" rx="1.2"/>
+      <rect class="inner" x="5.5" y="6" width="4" height="12" rx="1.6"/>
+      <rect class="inner" x="14.5" y="6" width="4" height="12" rx="1.6"/>
+      <rect class="outer" x="19.5" y="9" width="3" height="6" rx="1.2"/>
+      <rect class="shaft" x="9.5" y="10.4" width="5" height="3.2"/>
     </g>
-    <rect class="slot" x="172" y="244.75" width="168" height="34.5"/>
-    <rect class="hair" x="172" y="258.25" width="168" height="7.5"/>
   </g>
 </svg>

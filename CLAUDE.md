@@ -91,7 +91,7 @@ npm run verify           # contracts + lint + every suite — THE GATE (it print
 npm run release          # bump every marker and re-read them; runs NO tests
 ```
 
-**Current version: v402.** APK: build 24 / v3.3.
+**Current version: v403.** APK: build 24 / v3.3.
 
 > ⚠️ **`npm run release` RUNS NO TESTS, AND THIS LINE USED TO READ AS IF IT DID.**
 > It said «bump every marker + verify», where *verify* meant the MARKERS — and
@@ -436,10 +436,10 @@ the same identity on two surfaces. `docs/BRAND.md` is the authority.
   border MEANS interactive), the 2:1 corner law, no circles, the bar tick, and the
   duotone icon colour law. It sits **last on purpose**: those rules have the same
   (0,1,0) specificity as the component rules they override, so only source order
-  makes them win. Its own banner lists **seven**, and its seventh — «THE CUT» — is
-  PROSE WITH NO RULE BLOCK behind it: the numbered sections stop at 6, because the
-  cut left the stylesheet at v227. Contracts 41 and 42 now enforce devices 2 and 4
-  directly.
+  makes them win. Its own banner lists **seven**, and its seventh — «THE BARBELL»
+  since v403 (it read «THE CUT» from v216) — is PROSE WITH NO RULE BLOCK behind
+  it: the numbered sections stop at 6; the mark's rules are contract 72 and
+  `docs/BRAND.md` §1. Contracts 41 and 42 now enforce devices 2 and 4 directly.
 - Zeroing `--card-border` drops the outline from **nine** components via the
   "Unified card surface" block. Anything that consumes it must be handed
   `box-shadow: var(--elev-1)` in the same breath or it loses its edge and gains
@@ -481,7 +481,7 @@ One face for text, one for the mark, one for figures. The Google Fonts link in
   `letter-spacing` that tightened Inter's figures was removed — it fought the
   mono metrics.
 
-### TWO MARKS: the LOCKUP inside the app, THE CUT on the outside
+### TWO MARKS: the LOCKUP inside the app, THE BARBELL on the outside (v403; THE CUT on the two public pages)
 
 > ⚠️ **THIS SECTION SAID «the mark is THE CUT» FOR 158 RELEASES WHILE THE TOP BAR
 > DREW SOMETHING ELSE.** `styles.css` has carried `/* --- THE CUT is retired --- */`
@@ -499,19 +499,31 @@ Three call sites, all in `js/app.js`: `vaultBar()` (five screens), the sign-in
 gate, onboarding step 0. `admin.html` hand-inlines the same two plate SVGs twice
 because it cannot reach `js/ui.js`; nothing keeps those copies in step.
 
-**Outside the app, THE CUT survives on four surfaces** — `icons/icon.svg`,
-`res/drawable/ic_launcher_foreground.xml` (and `ic_launcher_monochrome.xml` /
-`ic_stat_vault.xml` with it), `get/index.html`, and `privacy.html`, which paints
-its own and which `docs/BRAND.md` had never listed. A single horizontal line
-shears the name: a **slot** in the surface colour with an **accent hairline**
-inside it. Two layers, never one. `docs/BRAND.md` §1 is the law;
-the short version:
+**Outside the app: THE BARBELL (v403, owner decision).** The app's logo is the
+mark the splash opens with — `ICONS.dumbbell` in `js/catalog.js`, five
+rectangles: outer plates 3×6, inner plates 4×12, a 5×3.2 shaft — and every
+outside surface redraws exactly those five boxes: `icons/icon.svg` (dark tile,
+and a bone tile under `prefers-color-scheme: light`), `icons/apple-touch-icon-180.png`
+(rendered from it), `res/drawable/ic_launcher_foreground.xml`, the themed
+`ic_launcher_monochrome.xml` and the status-bar `ic_stat_vault.xml` (one white
+silhouette each), `icons/badge-96.png` (rendered from the glyph) and the splash's
+frame 0 (`.vs-n1…n5`, and the eleven `res/drawable-*/splash.png` rendered from
+the stylesheet). **Contract 72** holds all of them to the glyph within 0.02
+units; `scripts/test-brand-icon.js` renders the icon and checks fills, contrast
+and the maskable circle. The fills are «الجمر»: outer plates `#b84a00`, inner
+`#ff6a00` (`#e05c00` on the bone tile, for 3:1), shaft `#fdfaf7` (`#1a1512` on
+bone). Regenerate the rasters with `node scripts/build-brand-assets.js` (touch
+icon + splash PNGs) and `node scripts/build-notif-icons.js` (badge); the three
+Android vectors and the splash PNGs ship only with a new APK (25+).
+
+**THE CUT survives on two surfaces** — `get/index.html` and `privacy.html`, which
+paints its own. A single horizontal line shears the name: a **slot** in the
+surface colour with an **accent hairline** inside it. Two layers, never one.
+`docs/BRAND.md` §1 is the law; the short version:
 
 - Slot **7%** of the type size, floor **2px**. Hairline **1.5px** minimum.
-- **11%** for the V monogram — its two diagonals meet at a point and swallow 7%.
 - **50%** on Latin, **52%** on Arabic (the dots carry the mass high).
-- Tracking **.02em**. Wordmark floor **24px**. Below a **48px** tile the letter
-  is dropped and the slot alone is the mark.
+- Tracking **.02em**. Wordmark floor **24px**.
 - Hairline is `#ff6a00` on dark, `#a34400` on light — `--accent-text`, not
   `--accent`, which is only 2.87:1 on the bone ground.
 
@@ -525,23 +537,23 @@ v227; each surviving implementation carries its own, which is why neither broke
 when the class was deleted.
 
 **The Android themed icon needs its own file.** A monochrome layer is flattened
-to alpha and tinted one colour, so the foreground's painted slot would come out
-the same colour as the letter and the cut would vanish.
-`ic_launcher_monochrome.xml` cuts the slot as a **hole** (`fillType="evenOdd"`),
-using two quadrilaterals — one per diagonal — because a single rectangle across
-both would count odd in the gap between them and fill in solid.
+to alpha and tinted one colour, so the foreground's three fills would merge
+anyway; `ic_launcher_monochrome.xml` draws the same five boxes as ONE path of
+five subpaths (the shaft abuts both inner plates, so the union rasterises with
+no seam). No `evenOdd`: the barbell has no hole to cut — the V's slot did.
 
-**The five bars are texture now, not a mark.** They survive as the pinstripe on
-the app icon and as the section tick. They are no longer the in-app logo (the top
-bar is the LOCKUP) and no longer the status-bar icon (that is the slot mark). Do
-not reintroduce them as a logo.
+**The barbell is the mark again (v403).** From v216 to v402 the bars were texture
+(the icon's pinstripe, the section tick) and the icon carried the cut V. The
+owner made the splash's bolts the logo, refined into a barbell; the pinstripe is
+gone from the icon, the section tick stays, the V is retired everywhere.
 
-> ⚠️ **AND THE WEB SPLASH DRAWS THEM ANYWAY** — `index.html`'s `.vs-bolt` field is
-> five bars with the middle one in `#ff6a00`, above `VAULT` in Archivo. It is
-> frame 0 of a sequence whose first frame is a PNG already installed on phones
-> (v340), so it cannot be changed without a new APK and it is not a logo in the
-> sense this rule forbids — it is the launch animation. Stated because a reader
-> comparing the rule against the app will otherwise find it and assume drift.
+> ⚠️ **FRAME 0 OF THE SPLASH IS THE NATIVE SPLASH.** Android shows
+> `drawable-*/splash.png` until the WebView paints, so the resting `.vs-*` frame
+> and those eleven PNGs must agree pixel for pixel — since v403 the PNGs are
+> rendered FROM the stylesheet by `scripts/build-brand-assets.js` and contract 72
+> holds the resting boxes to the glyph. A phone still on APK ≤ 24 holds the v340
+> PNGs (five dim bolts) and shows them for one frame before the barbell paints;
+> the owner accepted that until APK 25.
 
 ### App icon vs LAUNCHER icon — two different files (v212)
 `icons/icon.svg` is the PWA / browser-tab icon **only** — since v314 the
@@ -553,9 +565,11 @@ a completely separate asset baked into the APK.
 Nobody had ever replaced those, so **the app icon on every phone was the stock
 Capacitor placeholder — a blue "X" on white** — for the app's whole life, while
 `icon.svg` had carried the VAULT mark since v202. Updating one does not touch
-the other; when the mark changes, ALL THREE have to move — `icons/icon.svg`, the
-Android launcher vectors, and `icons/apple-touch-icon-180.png`, which is
-re-rendered from icon.svg by hand (see the v314 note).
+the other; when the mark changes, ALL of them have to move — `icons/icon.svg`,
+the three Android vectors, `icons/apple-touch-icon-180.png` and the splash PNGs
+(`node scripts/build-brand-assets.js`, v403; by hand before that) and
+`icons/badge-96.png` (`node scripts/build-notif-icons.js`) — and contract 72
+refuses a commit where any of them drifted from `ICONS.dumbbell`.
 
 - The launcher icon is now a **VectorDrawable**
   (`res/drawable/ic_launcher_foreground.xml`) plus a black
@@ -575,14 +589,16 @@ re-rendered from icon.svg by hand (see the v314 note).
   `ic_launcher_foreground`?" — which matched the stock file. The check that
   caught it:
   `aapt2 dump xmltree <apk> --file res/drawable/ic_launcher_foreground.xml`
-  and reading the actual `pathData`. It must start `M4.4,4.5h3.4l4.2,11.4`.
-- `<monochrome>` points at the same vector, so the app joins the Android 13+
-  themed-icon set instead of showing as a plain shrunken square beside them.
+  and reading the actual `pathData`. It must start `M2.7,9h0.6a1.2,1.2` (the
+  barbell's first outer plate; the cut V's `M4.4,4.5h3.4l4.2,11.4` was v216–v402).
+- `<monochrome>` points at `ic_launcher_monochrome.xml`, its own silhouette, so
+  the app joins the Android 13+ themed-icon set instead of showing as a plain
+  shrunken square beside them.
 - **Adaptive-icon safe zone:** the canvas is 108dp but only the inner 72dp
   (18..90) is guaranteed visible — a launcher masks and parallaxes the rest. The
-  mark spans 52dp, about 72% of that zone. A first pass at 86% rendered visibly
-  oversized against a circular mask next to ordinary icons; check it against a
-  real mask, not against the bare canvas.
+  barbell spans 44dp, about 61% of that zone (the V before it spanned 52dp). A
+  first pass at 86% rendered visibly oversized against a circular mask next to
+  ordinary icons; check it against a real mask, not against the bare canvas.
 - **XML comments may not contain a double hyphen.** `icon.svg` shipped for about
   a minute with `--bg` inside its comment, which makes the whole file fail to
   parse as an image — the HTML parser is lenient, an `image/svg+xml` consumer is

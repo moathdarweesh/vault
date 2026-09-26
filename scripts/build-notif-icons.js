@@ -14,9 +14,14 @@
  * notification's small icon and prints its ALPHA CHANNEL, tinted. So:
  *   - white ink only; any other colour is discarded anyway;
  *   - a fully transparent background, or the tile becomes the white square;
- *   - the slot through the mark must be a GAP, not a black shape. Black is ink
- *     as far as alpha is concerned, so a painted slot fills solid and the cut
- *     disappears. This is the same trap the Android themed icon hit in v212.
+ *   - the gaps in the mark must be GAPS, not black shapes. Black is ink as far
+ *     as alpha is concerned, so a painted gap fills solid. This is the same
+ *     trap the Android themed icon hit in v212.
+ *
+ * THE BADGE IS THE BARBELL (v403, owner decision): ICONS.dumbbell's five
+ * rectangles, scaled .95 about the glyph's centre — the SAME geometry as
+ * android/.../drawable/ic_stat_vault.xml, so a reminder looks the same on the
+ * phone and in a browser. scripts/test-brand-icon.js checks the output.
  *
  * Rendering is Chrome headless: no dependency, and it rasterises the real SVG
  * rather than approximating it.
@@ -31,11 +36,11 @@ const ROOT = path.resolve(__dirname, '..');
 const OUT = path.join(ROOT, 'icons');
 const CHROME = 'C:/Program Files/Google/Chrome/Application/chrome.exe';
 
-// ---- the badge, verbatim from the spec -----------------------------------
-const BADGE = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="96" height="96">
-  <path d="M2.6 3.4H7.2L10.1 10.6H5.5Z" fill="#fff"/>
-  <path d="M16.8 3.4H21.4L18.5 10.6H13.9Z" fill="#fff"/>
-  <path d="M6.7 13.4H11.3L12 15.2L12.7 13.4H17.3L14.4 20.6H9.6Z" fill="#fff"/>
+// ---- the badge: the barbell silhouette, from the live glyph ---------------
+// Read from ICONS.dumbbell at build time (see readIcons) and bound to white:
+// the five rectangles at .95 about (12,12), as ic_stat_vault.xml draws them.
+const badgeSvg = (dumbbell) => `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="96" height="96">
+  <g transform="translate(12 12) scale(0.95) translate(-12 -12)" fill="#fff">${dumbbell.replace(/\s*fill="[^"]*"/g, '')}</g>
 </svg>`;
 
 // ---- the six category tiles ----------------------------------------------
@@ -114,9 +119,10 @@ function main() {
   fs.mkdirSync(OUT, { recursive: true });
   const ICONS = readIcons();
 
+  if (!ICONS.dumbbell) throw new Error('build-notif-icons: ICONS.dumbbell missing — the badge is drawn from it');
   const badgeOut = path.join(OUT, 'badge-96.png');
-  render(BADGE, badgeOut, 96);
-  console.log(`  badge-96.png            ${fs.statSync(badgeOut).size} bytes  (white ink, transparent, slot is a gap)`);
+  render(badgeSvg(ICONS.dumbbell), badgeOut, 96);
+  console.log(`  badge-96.png            ${fs.statSync(badgeOut).size} bytes  (white ink, transparent, the barbell at .95)`);
 
   for (const [name, key] of TILES) {
     if (!ICONS[key]) { console.error(`  MISSING glyph in ICONS: ${key}`); process.exitCode = 1; continue; }

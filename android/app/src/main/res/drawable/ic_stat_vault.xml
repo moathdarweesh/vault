@@ -9,25 +9,24 @@
   which is a fully-opaque multi-colour system asset. Flattened to alpha it is a
   featureless white blob, which is why the reminder never looked like ours.
 
-  THE GLYPH IS THE V-AND-SLOT, and it is the SAME geometry as the web badge in
-  `icons/badge-96.png`: APPLY-notifications.md §1.1 specifies exactly these three
-  subpaths. One glyph on both platforms, so a reminder looks the same on the
-  phone as it does in a desktop browser.
+  THE GLYPH IS THE BARBELL (v403, owner decision): the five rectangles of
+  ICONS.dumbbell, path for path, as one white silhouette, and the SAME geometry
+  as the web badge in `icons/badge-96.png` (scripts/build-notif-icons.js BADGE).
+  One glyph on both platforms, so a reminder looks the same on the phone as it
+  does in a desktop browser. Contract 72 holds this file to the glyph.
 
-  This file has now been three different marks. It was the five bars, then the
-  CUT tile (a rounded square with a slot cut out of it) at v216, and that one
-  was already stale: the wordmark became the AJ lockup at v227 and this did not
-  follow, because it CANNOT follow. It is a native resource — it changes only
-  when someone edits this file and rebuilds.
+  This file has now been four different marks: the five bars, the CUT tile at
+  v216, the V-and-slot, and the barbell. Each time it lagged, because it CANNOT
+  follow on its own: it is a native resource, it changes only when someone
+  edits this file and rebuilds.
 
-  ALPHA-ONLY MEANS THE SLOT MUST BE A HOLE, not a painted bar — anything drawn
-  gets tinted, so a "black" slot comes out the same colour as the ink and the
-  cut disappears. Here that is free rather than fiddly: the gap between the
-  upper arms (ending y 10.6) and the lower chevron (starting y 13.4) is empty
-  canvas, not a shape, so there is nothing to tint and no evenOdd needed.
+  ALPHA-ONLY: the gaps between each outer and inner plate are empty canvas,
+  not painted shapes, so they survive the tint; the shaft is its own mass and
+  needs no evenOdd.
 
-  INK BOX: x 2.6..21.4, y 3.4..20.6 — inside the 2..22 safe area, which leaves
-  the ~1dp margin a status bar wants at its ~18px render size.
+  INK BOX: the glyph scaled 0.95 about its centre (the group's pivot 12,12):
+  x 2.025..21.975, y 6.3..17.7, inside the 2..22 safe area, which leaves the
+  margin a status bar wants at its ~18px render size.
 
   ⚠️ BAKED INTO THE APK. Editing this changes nothing for anyone until a new APK
   is built AND installed; `git push` cannot deliver a native resource. Verify a
@@ -46,16 +45,13 @@
     android:height="24dp"
     android:viewportWidth="24"
     android:viewportHeight="24">
-    <!-- left arm of the V -->
-    <path
-        android:fillColor="#FFFFFFFF"
-        android:pathData="M2.6,3.4H7.2L10.1,10.6H5.5Z" />
-    <!-- right arm -->
-    <path
-        android:fillColor="#FFFFFFFF"
-        android:pathData="M16.8,3.4H21.4L18.5,10.6H13.9Z" />
-    <!-- lower chevron, below the slot -->
-    <path
-        android:fillColor="#FFFFFFFF"
-        android:pathData="M6.7,13.4H11.3L12,15.2L12.7,13.4H17.3L14.4,20.6H9.6Z" />
+    <group
+        android:scaleX="0.95"
+        android:scaleY="0.95"
+        android:pivotX="12"
+        android:pivotY="12">
+        <path
+            android:fillColor="#FFFFFFFF"
+            android:pathData="M2.7,9h0.6a1.2,1.2 0 0 1 1.2,1.2v3.6a1.2,1.2 0 0 1 -1.2,1.2h-0.6a1.2,1.2 0 0 1 -1.2,-1.2v-3.6a1.2,1.2 0 0 1 1.2,-1.2ZM7.1,6h0.8a1.6,1.6 0 0 1 1.6,1.6v8.8a1.6,1.6 0 0 1 -1.6,1.6h-0.8a1.6,1.6 0 0 1 -1.6,-1.6v-8.8a1.6,1.6 0 0 1 1.6,-1.6ZM16.1,6h0.8a1.6,1.6 0 0 1 1.6,1.6v8.8a1.6,1.6 0 0 1 -1.6,1.6h-0.8a1.6,1.6 0 0 1 -1.6,-1.6v-8.8a1.6,1.6 0 0 1 1.6,-1.6ZM20.7,9h0.6a1.2,1.2 0 0 1 1.2,1.2v3.6a1.2,1.2 0 0 1 -1.2,1.2h-0.6a1.2,1.2 0 0 1 -1.2,-1.2v-3.6a1.2,1.2 0 0 1 1.2,-1.2ZM9.5,10.4h5v3.2h-5Z" />
+    </group>
 </vector>

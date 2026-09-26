@@ -2,13 +2,15 @@
 
 > The identity is **flat edges, a strict grid, pure black, and one colour that
 > leads.** It is carried by two marks, and which one you see depends on where you
-> are standing: **the LOCKUP inside the app**, and **THE CUT on everything that
-> represents the app from outside it** — the icons and the download page.
+> are standing: **the LOCKUP inside the app**, and **THE BARBELL on everything that
+> represents the app from outside it** — the app icon, the launcher, the status
+> bar, the notification badge and the splash (owner decision, v403). The cut
+> wordmark survives on the two public pages only.
 > Every rule here is enforceable and was derived by measuring the codebase, not asserted.
 
 ---
 
-## 1. The marks — THE LOCKUP (in the app) and THE CUT (on the outside)
+## 1. The marks — THE LOCKUP (in the app), THE BARBELL (outside), THE CUT (two pages)
 
 > ⚠️ **THIS SECTION DESCRIBED ONE MARK FOR 158 RELEASES WHILE THE APP SHIPPED
 > TWO.** It said the in-app mark was the cut wordmark and pointed at a `.cut`
@@ -17,7 +19,8 @@
 > drawn the LOCKUP ever since. v348 recorded that three documents agreed with
 > each other and disagreed with the app; v367 then designed a whole widget family
 > against this page and had to throw it away. **Measure the app, not the
-> document.**
+> document.** (v403 then changed the OUTSIDE mark from the cut V to the barbell —
+> and wrote contract 72 so the document and the five surfaces cannot part again.)
 
 ### 1a. Inside the app — THE LOCKUP
 
@@ -44,27 +47,67 @@ screens), the sign-in gate, and onboarding step 0.
 > `brandLockup` — it is a standalone page with no access to `js/ui.js`. They are
 > byte-identical to the live ones today and nothing keeps them so.
 
-### 1b. Outside the app — THE CUT
+### 1b. Outside the app — THE BARBELL (v403)
 
-A single horizontal line cuts through the wordmark: it is the door, and it is the
-line only you cross. The line detaches from the name and still works alone, which
-is what makes it survive down to 16px.
+The logo is the mark the splash has always opened with, made the app's own:
+**`ICONS.dumbbell`** in `js/catalog.js` — five rectangles on the 24 grid, two
+**outer plates** 3×6 (r 1.2), two **inner plates** 4×12 (r 1.6) and the **shaft**
+5×3.2 between them. Small plate, large plate, shaft: that rhythm is the mark. It
+is drawn once, there, and every surface redraws exactly those five boxes —
+**contract 72** holds each of them to the glyph within 0.02 units, corners
+included — and the in-app LOCKUP crops the same glyph's two halves, so the whole
+identity is one path set. Nobody draws the barbell by hand.
+
+**The fills — «الجمر», the embers (the owner's choice over the lead's proposal):**
+
+| Surface | Outer plates | Inner plates | Shaft | Ground |
+|---|---|---|---|---|
+| Dark: icon, launcher, splash, touch icon | `#b84a00` | `#ff6a00` | `#fdfaf7` | `#000000` |
+| Light: `icons/icon.svg` under `prefers-color-scheme: light` | `#b84a00` | `#e05c00` | `#1a1512` | `#faf5f0` |
+| Alpha-only: themed icon, status bar, badge | ink | ink | ink | transparent |
+
+Why these: the accent stays the one pure hue, on the two masses that carry the
+weight; the outer plates step down to the ember so the mark reads as depth
+rather than as one orange block; the shaft is bone because it is the part the
+splash throws — light, not heat. On the bone tile the inner plates take the
+accent's second step, `#e05c00` (3.40:1), because the raw accent measures
+2.65:1 there — the same move the macro bars make on light (§2). Every plate holds
+≥ 3:1 on its tile and the shaft ≥ 4.5:1; `scripts/test-brand-icon.js` renders
+both variants at 512/192/48 and checks fills, contrast, the maskable circle and
+the two PNGs. The trade-off the lead recorded and the owner accepted: this
+spends the accent on four blocks instead of one, so inside the app the accent's
+signal is carried by the lockup's plates and the controls, not by the icon.
+
+**Geometry on each surface.** `icons/icon.svg`: the glyph at scale 15, inset 76
+in the 512 tile — ink 61.5% wide, farthest corner 181 px from the centre, inside
+the maskable safe circle (radius 204.8 px; `manifest.json` declares `maskable`).
+Launcher foreground: scale 2.1, moved 28.8 on the 108 dp canvas — ink 44 dp, 61%
+of the 72 dp safe zone, farthest corner 25.4 dp from the centre. Status bar and
+badge: the silhouette at .95 about the centre, inside the 2..22 safe area. Splash:
+one glyph unit is 1 vmin (`--vs-g`), so the ink is 21% of the short edge, exactly
+the width the five bolts had.
+
+### 1c. The two public pages — THE CUT
+
+On `get/index.html` and `privacy.html` the wordmark is cut: a single horizontal
+line through the name — the door, and the line only you cross. The line
+detaches from the name and still works alone, which is what makes it survive
+down to 16px. It ships nowhere else since v403 (the icon carried a cut **V**
+from v216 to v402).
 
 The cut is **two layers, never one**: a **slot** the colour of the surface behind the
 text, and an **accent hairline** sitting inside it. A single orange line is not the
 mark; it is the DON'T at the bottom of this section.
 
-### The law
+### The law of the cut
 
 | Rule | Value | Why |
 |---|---|---|
 | Slot height | **7% of the type size**, floor **2px** | proportional so the mark survives being resized; the floor because a slot is still a slot |
-| Monogram slot | **11%** | a lone V is two thin diagonals meeting at a point, and 7% is swallowed in the join |
 | Hairline | **1.5px minimum** | below this it stops being a line inside a slot |
 | Position | **50%** Latin, **52%** Arabic | optical, not arithmetic: an Arabic line carries its mass high because of the dots and marks |
 | Tracking | **0.02em** | wide tracking turns the cut into a line lying beside some letters |
 | Wordmark floor | **24px** (9mm print) | at 24px the slot is already on its 2px floor with a 1.5px hairline inside it |
-| Tile switch | **48px** | at or above, the cut letterform; below, the slot alone |
 | Clear space | **slot height × 6** | measured in slots, so it scales itself |
 | Hairline colour | **`#ff6a00` in both modes** | one identity, not two — see the exception below |
 
@@ -72,14 +115,22 @@ mark; it is the DON'T at the bottom of this section.
 
 | Use | Form | Source |
 |---|---|---|
-| App icon, PWA + Android launcher | cut **V** on a tile, 11% slot | `icons/icon.svg`, `res/drawable/ic_launcher_foreground.xml` |
-| Android themed icon | the same V with the slot as a **hole** | `res/drawable/ic_launcher_monochrome.xml` |
-| Status-bar notification | **the slot alone** on a tile | `res/drawable/ic_stat_vault.xml` |
+| App icon, PWA / browser tab | the barbell on a black tile; bone tile under a light scheme | `icons/icon.svg` |
+| iOS home screen | the dark tile, opaque and square (iOS rounds it) | `icons/apple-touch-icon-180.png` — **rendered** by `node scripts/build-brand-assets.js` |
+| Android launcher | the barbell, three fills, over the black background layer | `res/drawable/ic_launcher_foreground.xml` + `values/ic_launcher_background.xml` (APK) |
+| Android themed icon | the same five boxes as one white silhouette | `res/drawable/ic_launcher_monochrome.xml` (APK) |
+| Status-bar notification | the silhouette at .95 | `res/drawable/ic_stat_vault.xml` (APK) |
+| Web notification badge | the same silhouette, white on transparent | `icons/badge-96.png` — **rendered** from `ICONS.dumbbell` by `node scripts/build-notif-icons.js` |
+| Web splash, frame 0 | the barbell in the dark fills; then the throw, the rise, the bloom, the door | `index.html` + `styles.css` `.vs-*` |
+| Native splash | frame 0 of the web splash, at each PNG's own size | `res/drawable-*/splash.png` — **rendered** from the live stylesheet by `node scripts/build-brand-assets.js` (APK) |
 | **In-app top bar, login, first run** | **the LOCKUP — plates + VAULT/TRAIN** | **`brandLockup()` in `js/ui.js`** |
 | **Admin console** | the same lockup, hand-inlined | `admin.html` (two copies, not from `js/ui.js`) |
 | Download page | the cut wordmark, masked | `get/index.html` |
-| **Privacy page** | the cut wordmark, painted | **`privacy.html`** — its own `--cut-slot` / `--cut-hair`, undocumented until now |
-| **Web splash** | five bars + VAULT, no cut and no plates | `index.html` + `styles.css` `.vs-*` |
+| **Privacy page** | the cut wordmark, painted | **`privacy.html`** — its own `--cut-slot` / `--cut-hair` |
+
+Three of those are **baked into the APK**: editing the file changes nothing on a
+phone until a new build is installed. When the glyph or its fills change, run the
+two build scripts, run `node scripts/test-brand-icon.js`, and expect APK 25+.
 
 **Two ways to draw the slot, and the surface decides which.** On a flat surface,
 paint it in that surface's own token — `privacy.html` does this with its own
@@ -93,13 +144,17 @@ whatever is behind shows through. `get/index.html` is the masked case, and its
 hairline lives on the parent because a mask also erases the element's own pseudo
 elements.
 
-### The five bars are texture now, not a mark
+### The barbell is the mark again (owner decision, v403)
 
-They survive as the **pinstripe** on the app icon (a 2px bar on an 11px pitch) and as
-the section tick in the identity layer. They are no longer a logo anywhere. Until
-v215 the app shipped the bars in the top bar and the V on the icon — two marks
-competing for one job — and the status-bar icon was the bars as well. Do not
-reintroduce them as a mark.
+Until v215 the app shipped five bars in the top bar and a V on the icon — two
+marks competing for one job. v216 made the cut the identity and reduced the bars
+to texture (the icon's pinstripe, the section tick). v403 reverses that for the
+OUTSIDE surfaces: the splash's five bolts were the one thing every user saw at
+every launch, and the owner asked for them to become the logo — refined from five
+equal bolts into a barbell (small plate, large plate, shaft), and into one glyph
+the app already owned. The pinstripe is gone from the icon; the section tick
+stays as texture. The V is retired everywhere. The cut survives on the two public
+pages, and nowhere else.
 
 ### The hairline's contrast exception (owner decision, v216)
 
@@ -114,15 +169,18 @@ wordmark, and because it is a brand device rather than information — nothing i
 if a reader cannot resolve it.
 
 **This is the only place `--accent` is permitted under 4.5:1 on light.** It is not a
-precedent. Small accent text everywhere else takes `--accent-text`, which is the
-entire reason that token exists (§2).
+precedent — the icon's inner plates step down to `#e05c00` on the bone tile for
+exactly that reason. Small accent text everywhere else takes `--accent-text`, which
+is the entire reason that token exists (§2).
 
 ### DON'T
 
-- A slot thick enough to sever the letters, or a hairline thick enough to fill it.
-- The slot anywhere but the optical middle.
-- Wide tracking under a cut.
-- A gradient wordmark, or a hairline that is not the accent — never white, never gold.
+- All-orange plates, grey plates, or an orange shaft: the three fills ARE the mark.
+- A circle, a rounded blob, or five equal bars — the barbell has a small / large / shaft rhythm.
+- The V, on anything, ever again.
+- Drawing the five boxes by hand: every surface copies `ICONS.dumbbell`, and contract 72 refuses a copy that drifted.
+- A hand-exported PNG: the touch icon, the badge and the native splash are rendered by scripts.
+- On the cut: a slot thick enough to sever the letters, or a hairline thick enough to fill it; the slot anywhere but the optical middle; wide tracking under a cut; a gradient wordmark, or a hairline that is not the accent — never white, never gold.
 
 ## 2. Colour
 

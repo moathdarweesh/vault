@@ -2,9 +2,13 @@
 <!--
   THE VAULT launcher icon, foreground layer.
 
-  The identity is THE CUT, per the Claude Design spec "Vault Logo CUT": a
-  horizontal slot through the mark carrying a thin accent hairline. This layer
-  draws the V, then the slot in the background colour, then the hairline.
+  The identity is THE BARBELL (v403, owner decision): the five rectangles of
+  ICONS.dumbbell in js/catalog.js, path for path in its 24-unit glyph space,
+  in "the embers": outer plates ember #B84A00, inner plates the accent
+  #FF6A00, the shaft bone #FDFAF7, on the black ic_launcher_background.
+  Contract 72 holds this file, the themed and status-bar icons, icons/icon.svg
+  and the splash to that one glyph. It used to draw THE CUT (a V with a slot
+  and a hairline); never bring the V back.
 
   A VECTOR, not five PNG densities: minSdkVersion is 26, so mipmap-anydpi-v26
   always wins and the legacy density PNGs could never be loaded.
@@ -15,16 +19,14 @@
 
   ADAPTIVE-ICON GEOMETRY: the canvas is 108x108dp but a launcher masks and
   parallaxes it, so only the inner 72dp (18..90) is guaranteed visible. The
-  group scales the 24-unit glyph by 2.895 and centres its INK (not its bounding
-  box, since the V is not vertically centred inside its own 24 box) on (54,54).
-  Ink lands at x 32..76 and y 31..77: 44dp across, about 61% of the safe zone.
+  group scales the 24-unit glyph by 2.1 and moves it 28.8, which puts the
+  glyph's centre (12,12) on (54,54). Ink lands at x 31.95..76.05 and
+  y 41.4..66.6: 44.1dp across, about 61% of the safe zone, and the farthest
+  corner (an outer plate's) sits 25.4dp from the centre, inside the 33dp
+  keyline circle a round mask keeps.
 
-  THE MONOGRAM EXCEPTION: the slot law is 7% of the em, but a lone V is two thin
-  diagonals meeting at a point and a 7% slot vanishes between them, so the spec
-  cuts the monogram at 11%. The em here is 24 units at scale 2.895, so 69.5dp;
-  11% of that is 7.64 and the hairline holds the spec ratio of 2.4%, so 1.67.
-  The slot sits on the optical middle of the CAP height, which is y 54, and runs
-  8% inside the ink on each side: x 35.52 to 72.48.
+  BAKED INTO THE APK: nothing here reaches a phone until a new APK (build 25)
+  is built and installed.
 -->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     android:width="108dp"
@@ -32,18 +34,27 @@
     android:viewportWidth="108"
     android:viewportHeight="108">
     <group
-        android:scaleX="2.895"
-        android:scaleY="2.895"
-        android:translateX="19.26"
-        android:translateY="17.96">
+        android:scaleX="2.1"
+        android:scaleY="2.1"
+        android:translateX="28.8"
+        android:translateY="28.8">
+        <!-- outer plates, 3x6 r1.2 -->
         <path
-            android:fillColor="#FF6A00"
-            android:pathData="M4.4,4.5h3.4l4.2,11.4L16.2,4.5h3.4L13.7,20.4h-3.4Z" />
+            android:fillColor="#FFB84A00"
+            android:pathData="M2.7,9h0.6a1.2,1.2 0 0 1 1.2,1.2v3.6a1.2,1.2 0 0 1 -1.2,1.2h-0.6a1.2,1.2 0 0 1 -1.2,-1.2v-3.6a1.2,1.2 0 0 1 1.2,-1.2Z" />
+        <path
+            android:fillColor="#FFB84A00"
+            android:pathData="M20.7,9h0.6a1.2,1.2 0 0 1 1.2,1.2v3.6a1.2,1.2 0 0 1 -1.2,1.2h-0.6a1.2,1.2 0 0 1 -1.2,-1.2v-3.6a1.2,1.2 0 0 1 1.2,-1.2Z" />
+        <!-- inner plates, 4x12 r1.6 -->
+        <path
+            android:fillColor="#FFFF6A00"
+            android:pathData="M7.1,6h0.8a1.6,1.6 0 0 1 1.6,1.6v8.8a1.6,1.6 0 0 1 -1.6,1.6h-0.8a1.6,1.6 0 0 1 -1.6,-1.6v-8.8a1.6,1.6 0 0 1 1.6,-1.6Z" />
+        <path
+            android:fillColor="#FFFF6A00"
+            android:pathData="M16.1,6h0.8a1.6,1.6 0 0 1 1.6,1.6v8.8a1.6,1.6 0 0 1 -1.6,1.6h-0.8a1.6,1.6 0 0 1 -1.6,-1.6v-8.8a1.6,1.6 0 0 1 1.6,-1.6Z" />
+        <!-- the shaft, 5x3.2, square -->
+        <path
+            android:fillColor="#FFFDFAF7"
+            android:pathData="M9.5,10.4h5v3.2h-5Z" />
     </group>
-    <path
-        android:fillColor="#000000"
-        android:pathData="M35.52,50.18h36.96v7.64h-36.96Z" />
-    <path
-        android:fillColor="#FF6A00"
-        android:pathData="M35.52,53.165h36.96v1.67h-36.96Z" />
 </vector>

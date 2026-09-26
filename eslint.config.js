@@ -259,7 +259,10 @@ const CORRECTNESS = {
 };
 
 module.exports = [
-  { ignores: ['node_modules/**', 'www/**', 'android/**', 'ios/**', 'graphify-out/**', 'graphify-out.bak/**', 'js/vendor/**', 'download/**', 'docs/**', '.fpnet/**'] },
+  // `.claude/**` holds the agent worktrees the desktop app checks out INSIDE the
+  // repo (`.claude/worktrees/<agent>/` is a whole second copy of the tree); the
+  // linter walked into one and reported its copies as ours (v403).
+  { ignores: ['node_modules/**', 'www/**', 'android/**', 'ios/**', 'graphify-out/**', 'graphify-out.bak/**', 'js/vendor/**', 'download/**', 'docs/**', '.fpnet/**', '.claude/**'] },
 
   // ── the shipped scripts ───────────────────────────────────────────────
   {

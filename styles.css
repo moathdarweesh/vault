@@ -8505,12 +8505,20 @@ body.ember-on .ember {
    open a little longer, which is the one beat this sequence can afford to
    stretch — it is a STATE, not a transition.
 
-   ⚠️ FRAME 0 IS FROZEN. The resting bolts here must equal the fourteen native
-   launch images pixel for pixel: they are already on users` phones and only a
-   new APK can replace them. Measured out of drawable-port-xxxhdpi/splash.png:
-   rgb(40,35,32) = #6f6259 x .36 and rgb(224,93,0) = #ff6a00 x .88 over black,
-   the group 21% of the short edge. That is why the colours below are literals
-   and the geometry is driven off vmin rather than a fixed 390px stage.
+   ⚠️ FRAME 0 IS THE NATIVE SPLASH. The resting bolts here must equal the
+   eleven native launch images pixel for pixel: Android holds the PNG until
+   the WebView paints, and the handover is seamless only when the two frames
+   agree. Since v403 the PNGs are RENDERED FROM THIS STYLESHEET
+   (scripts/build-brand-assets.js) and the frame is THE BARBELL, the app`s
+   logo (contract 72 holds the resting boxes to ICONS.dumbbell). Measured out
+   of the regenerated drawable-port-xxxhdpi/splash.png: rgb(184,74,0) =
+   #b84a00, rgb(255,106,0) = #ff6a00 and rgb(253,250,247) = #fdfaf7 over
+   black, the ink 21% of the short edge, centred. Until APK 25 is installed a
+   phone still holds the v340 PNGs (five dim bolts: #6f6259 x .36 and
+   #ff6a00 x .88), so its launch shows the OLD bolts for one frame before the
+   barbell paints; the owner accepted that. That is why the colours below are
+   literals and the geometry is driven off vmin rather than a fixed 390px
+   stage: the encoder and this rule must compute the same pixels.
 
    ⚠️ NO FADE-IN ON THE STAGE. The design opens at opacity 0 and lights at
    1.6% — correct for a loop, wrong here: Android holds the PNG until the
@@ -8542,8 +8550,11 @@ body.ember-on .ember {
   /* ONE DESIGN UNIT. The 82-unit group at 21% of the short edge, exactly as
      the PNG encoder computes it: 0.21 / 82 = 0.0025610 of a vmin. */
   --vs-u: 0.2561vmin;
+  /* ONE GLYPH UNIT of ICONS.dumbbell (v403). The barbell's ink is 21 glyph
+     units wide and spans the same 82 design units the five bolts did, so the
+     group stays at 21% of the short edge: one glyph unit is 1vmin. */
+  --vs-g: calc(var(--vs-u) * 82 / 21);
   --vs-throw: 320ms;          /* the lock */
-  --vs-lit: 170ms;
   --vs-rise: 340ms;           /* each pair */
   --vs-glow: 700ms;
   --vs-part: 350ms;           /* the hand-over */
@@ -8583,26 +8594,38 @@ body.ember-on .ember {
   contain: layout size;
 }
 
+/* THE BARBELL (v403, owner decision: the app's logo IS this mark). The five
+   bolts rest as the five rectangles of ICONS.dumbbell, cell for cell in glyph
+   units, in the icon's fills at full opacity: outer plates ember, inner plates
+   the accent, the shaft bone. The row packs them with no gap: each outer plate
+   keeps its one-unit gap as a margin, and the shaft abuts both inner plates.
+   All five are centred on one line (align-items), as the glyph is on y 12.
+   Contract 72 holds this frame, keyframes included, to the glyph. */
 .vs-bolts {
   display: flex;
   align-items: center;
-  gap: calc(var(--vs-u) * 6);
+  gap: 0;
   height: calc(var(--vs-u) * 110);
 }
-.vs-bolt {
-  width: calc(var(--vs-u) * 11);
-  height: calc(var(--vs-u) * 18);
-  border-radius: calc(var(--vs-u) * 5);
-  background: #6f6259;
-  opacity: .36;
+.vs-n1, .vs-n5 {
+  width: calc(var(--vs-g) * 3);
+  height: calc(var(--vs-g) * 6);
+  border-radius: calc(var(--vs-g) * 1.2);
+  background: #b84a00;
 }
-/* the middle bolt is the lock, and it throws before anything else */
-.vs-mid {
-  width: calc(var(--vs-u) * 14);
-  height: calc(var(--vs-u) * 12);
-  border-radius: calc(var(--vs-u) * 7);
+.vs-n1 { margin-inline-end: var(--vs-g); }
+.vs-n5 { margin-inline-start: var(--vs-g); }
+.vs-n2, .vs-n4 {
+  width: calc(var(--vs-g) * 4);
+  height: calc(var(--vs-g) * 12);
+  border-radius: calc(var(--vs-g) * 1.6);
   background: #ff6a00;
-  opacity: .88;
+}
+/* the shaft is the lock, and it throws before anything else */
+.vs-mid {
+  width: calc(var(--vs-g) * 5);
+  height: calc(var(--vs-g) * 3.2);
+  background: #fdfaf7;
 }
 
 .vs-word {
@@ -8643,26 +8666,29 @@ body.ember-on .ember {
 }
 
 /* ── PHASE A: the lock throws, the bolts rise, the light comes up ──────── */
-.vs-a .vs-mid {
-  animation: vs-throw var(--vs-throw) var(--ease-out) both,
-             vs-lit var(--vs-lit) linear both;
-}
+/* Every `from` here IS the resting glyph (contract 72 reads it: a `both` fill
+   paints the first keyframe at t=0, so a `from` that differed from the rest
+   sizes would be the frame the user actually sees). The throw and the rises
+   END where the five bolts always ended — 86u, 58u, 40u — so phase B, the
+   hand-over and the door are untouched. The plates rest at full opacity now
+   (the icon's fills), so nothing dims and nothing "lights": the light is the
+   bloom's job alone. */
+.vs-a .vs-mid { animation: vs-throw var(--vs-throw) var(--ease-out) both; }
 .vs-a .vs-n2, .vs-a .vs-n4 { animation: vs-rise-in var(--vs-rise) var(--ease-back) 260ms both; }
 .vs-a .vs-n1, .vs-a .vs-n5 { animation: vs-rise-out var(--vs-rise) var(--ease-back) 340ms both; }
 .vs-a .vs-bloom { animation: vs-bloom-in var(--vs-glow) linear both; }
 
 @keyframes vs-throw {
-  from { height: calc(var(--vs-u) * 12); }
+  from { height: calc(var(--vs-g) * 3.2); }
   to   { height: calc(var(--vs-u) * 86); }
 }
-@keyframes vs-lit { from { opacity: .88; } to { opacity: 1; } }
 @keyframes vs-rise-in {
-  from { height: calc(var(--vs-u) * 18); opacity: .36; }
-  to   { height: calc(var(--vs-u) * 58); opacity: .78; }
+  from { height: calc(var(--vs-g) * 12); }
+  to   { height: calc(var(--vs-u) * 58); }
 }
 @keyframes vs-rise-out {
-  from { height: calc(var(--vs-u) * 18); opacity: .36; }
-  to   { height: calc(var(--vs-u) * 40); opacity: .58; }
+  from { height: calc(var(--vs-g) * 6); }
+  to   { height: calc(var(--vs-u) * 40); }
 }
 @keyframes vs-bloom-in {
   0%   { opacity: 0; transform: translate(-50%, -50%) scale(.66); animation-timing-function: var(--ease-out); }
@@ -8684,10 +8710,13 @@ body.ember-on .ember {
 .vs-b .vs-leaf-t { animation: vs-swing-up var(--dur-open) var(--ease-inout) 400ms both; }
 .vs-b .vs-leaf-b { animation: vs-swing-dn var(--dur-open) var(--ease-inout) 400ms both; }
 
+/* The row rests with NO gap (the shaft abuts the inner plates; the outer
+   plates keep their one-unit gap as a margin), so the part starts from 0 and
+   opens by the same 7u and 16u the old row did. */
 @keyframes vs-part {
-  0%   { gap: calc(var(--vs-u) * 6); opacity: 1; transform: scale(1); }
-  37%  { gap: calc(var(--vs-u) * 13); opacity: 1; }
-  100% { gap: calc(var(--vs-u) * 22); opacity: 0; transform: scale(1.12); }
+  0%   { gap: 0; opacity: 1; transform: scale(1); }
+  37%  { gap: calc(var(--vs-u) * 7); opacity: 1; }
+  100% { gap: calc(var(--vs-u) * 16); opacity: 0; transform: scale(1.12); }
 }
 /* The name starts only once the bolts have FINISHED leaving. They overlapped
    in an earlier draft and, sitting in the same place at partial opacity, it
@@ -8771,14 +8800,16 @@ body.ember-on .ember {
      4. No circles          — straight edges, butt caps, mitre joins
      5. The bar tick        — one bar of the field, stamped on every section
      6. Duotone icons       — two filled masses, recoloured by state
-     7. THE CUT (v216)      — a slot through the name, and the whole identity
+     7. THE BARBELL (v403)  — the app`s mark: ICONS.dumbbell on every outside surface
 
-   ON DEVICE 7 SUPERSEDING THE OLD MARK. Until v215 the mark was the five bars
-   and the app icon was a V. That is two marks competing for the same job, and
-   the Claude Design spec "Vault Logo CUT" replaced both: there is no symbol at
-   all now, only the name with a slot cut through it. The bars survive as
-   TEXTURE (the pinstripe on the app icon, the tick in device 5) and as nothing
-   else. Do not reintroduce them as a logo. */
+   ON DEVICE 7. From v216 to v402 this slot was THE CUT (the name with a slot
+   through it, no symbol) and the five bars were texture only. At v403 the
+   owner made the splash`s bolts the logo, refined into a barbell: icons/icon.svg,
+   the launcher, themed and status-bar icons, the badge and the splash all draw
+   the five rectangles of ICONS.dumbbell (contract 72), in the embers — outer
+   plates #b84a00, inner plates #ff6a00, a bone shaft. Inside the app the
+   LOCKUP (plates + VAULT/TRAIN, brandLockup in js/ui.js) is unchanged, and
+   the cut wordmark survives only on get/ and privacy.html. docs/BRAND.md §1. */
 
 /* --- 1. THE MACHINED EDGE ------------------------------------------------
    An outline on all four sides of everything is the signature of a UI that was
