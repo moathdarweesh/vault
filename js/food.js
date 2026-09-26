@@ -136,9 +136,9 @@ function renderFood(el) {
     // "left after WHAT", so tapping it opens today's log. It is checked LAST so
     // the controls sitting inside the hero — the edit pencil above, the water
     // steppers — keep their own behaviour and never fall through to a navigate.
-    // renderFoodLog reads viewContext.foodLog, NOT viewContext.date — passing a
-    // bare `date` here would silently land on today whatever day was open.
-    if (e.target.closest('.nutri-hero')) { navigate('foodlog', { foodLog: { date: todayISO() } }); return; }
+    // The food log reads its day from ctx.date, like every dated screen
+    // (contract 67 refuses the old private spellings).
+    if (e.target.closest('.nutri-hero')) { navigate('foodlog', { date: todayISO() }); return; }
   });
 
   // The calorie goal is MANDATORY: if none is set, open the calculator straight
@@ -2769,8 +2769,9 @@ function updateFoodShoppingLink() {
 }
 
 function renderFoodLog(el) {
-  const ctx = viewContext.foodLog || { date: todayISO() };
-  viewContext.foodLog = ctx;
+  // The day arrives on ctx.date (contract 67); the day arrows below move it in place.
+  if (!viewContext.date) viewContext.date = todayISO();
+  const ctx = viewContext;
 
   const entries = DB.foodLogs.listForDate(ctx.date);
   const totals = DB.foodLogs.totalsForDate(ctx.date);

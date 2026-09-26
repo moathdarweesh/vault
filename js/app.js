@@ -12,7 +12,7 @@
 // build. The literal below is the fallback (file://, or a stripped query) and is
 // still bumped by `npm run release` — see CLAUDE.md "CACHE WORKFLOW".
 const VAULT_BUILD = (() => {
-  const FALLBACK = 'v400';
+  const FALLBACK = 'v401';
   try {
     const src = (document.currentScript && document.currentScript.src) || '';
     const m = src.match(/[?&]v=(\d+)/);
@@ -53,55 +53,11 @@ const CATEGORY_FALLBACK_MUSCLES = {
   Other: [],
 };
 
-const MUSCLE_INFO = {
-  chest:        { side: 'anterior',  order: 1 },
-  upper_chest:  { side: 'anterior',  order: 2 },
-  front_delts:  { side: 'anterior',  order: 3 },
-  side_delts:   { side: 'anterior',  order: 4 },
-  biceps:       { side: 'anterior',  order: 5 },
-  forearms:     { side: 'anterior',  order: 6 },
-  abs:          { side: 'anterior',  order: 7 },
-  quads:        { side: 'anterior',  order: 8 },
-  adductors:    { side: 'anterior',  order: 9 },
-  upper_back:   { side: 'posterior', order: 1 },
-  lats:         { side: 'posterior', order: 2 },
-  traps:        { side: 'posterior', order: 3 },
-  rear_delts:   { side: 'posterior', order: 4 },
-  triceps:      { side: 'posterior', order: 5 },
-  lower_back:   { side: 'posterior', order: 6 },
-  glutes:       { side: 'posterior', order: 7 },
-  hamstrings:   { side: 'posterior', order: 8 },
-  calves:       { side: 'posterior', order: 9 },
-};
-
 function getMusclesForExercise(ex) {
   if (!ex) return [];
   const direct = EXERCISE_MUSCLES[ex.name];
   if (direct) return direct;
   return CATEGORY_FALLBACK_MUSCLES[ex.category] || [];
-}
-
-// Given a list of exercise IDs (or a list of exercise objects), return
-// { anterior: [muscleKey, ...], posterior: [muscleKey, ...] } — deduped + sorted.
-function groupMusclesFromExercises(exercises) {
-  const seen = new Set();
-  const ant = [];
-  const post = [];
-  exercises.forEach((ex) => {
-    if (!ex) return;
-    getMusclesForExercise(ex).forEach((m) => {
-      if (seen.has(m)) return;
-      seen.add(m);
-      const info = MUSCLE_INFO[m];
-      if (!info) return;
-      const item = { key: m, order: info.order };
-      if (info.side === 'anterior') ant.push(item);
-      else post.push(item);
-    });
-  });
-  ant.sort((a, b) => a.order - b.order);
-  post.sort((a, b) => a.order - b.order);
-  return { anterior: ant.map((x) => x.key), posterior: post.map((x) => x.key) };
 }
 
 // Switch the UI language and re-render everything that is currently on screen.
@@ -1878,7 +1834,7 @@ function checkPR(exerciseId, prior, newSets, unit) {
   // Cold-start: no toast on the very first session ever
   if (prior.sessionCount === 0) return null;
   const u = (unit === 'lb' || unit === 'kg') ? unit : unitLabel();
-  const fw = (kg) => fmtNum(u === 'lb' ? Math.round(kg * KG_TO_LB * 2) / 2 : Math.round(kg * 100) / 100);
+  const fw = (kg) => fmtNum(toDisplayWeight(kg, u));
 
   // Compute new max weight and best Epley 1RM from the sets just saved
   let newMaxW = 0;
@@ -2106,18 +2062,11 @@ function renderHome(el) {
   // install still sees no empty shelf. It does not duplicate the stat strip's
   // cardio cell — that answers "how many minutes this week", this answers "is
   // today's walk done".
-  // THREE SIZES, ONE FAMILY, and the ladder between them IS the design:
-  //   CARD  — the cardio you owe NEXT. Never more than one, ever.
-  //   ROW   — another one still owed, queued underneath at list weight.
-  //   STRIP — settled. 44px, no accent, no filled bar, but still undoable.
-  // Prime space under the workout hero stays proportional to what is still owed,
-  // so a finished cardio cannot hold hero space for the rest of the day.
-  //
-  // The .section-title is GONE on purpose. A heading reading «كارديو اليوم» above
-  // one row saying «مشي · ٣٠ د» spent 26px to label a single item, and neither
-  // hero on this screen does that — each names itself in its own eyebrow. That
-  // inconsistency is most of why the block read as a lesser, list-shaped thing.
-  // The identical key moved into the card's eyebrow; the string count is unchanged.
+  // ONE BLOCK, ONE ROW SHAPE (v324–v325, the figure row since v395): the block
+  // is the single raised surface and every cardio in it is the same row, owed
+  // first, at most three. The v318 card/row/strip ladder is gone. The heading
+  // is the block's own eyebrow, so ticking the last owed cardio cannot take it
+  // off the screen.
   const cardioSchedHtml = (() => {
     const iso = todayISO();
     const rows = DB.cardioPlan.forDate(iso);
@@ -2375,7 +2324,7 @@ function renderHome(el) {
         <div class="home-hero">${greeting}.</div>
       </div>
       ${streak > 0 ? `<button class="streak-chip" data-goto="calendar" aria-label="${escapeHtml(streakLabel)}">
-        ${icon('flame', 16)}<span class="num">${streak}</span><span class="streak-chip-unit">${streakUnit}</span>
+        ${icon('flame', 16)}${streakFigure(streak) ? `<span class="num">${streakFigure(streak)}</span>` : ''}<span class="streak-chip-unit">${streakUnit}</span>
       </button>` : ''}
     </div>
 
@@ -2510,7 +2459,7 @@ function renderHome(el) {
   // One delegated listener for all seven chips rather than seven bindings.
   $('.wk-rail', el)?.addEventListener('click', (e) => {
     const chip = e.target.closest('[data-day]');
-    if (chip) navigate('day', { dayDate: chip.dataset.day });
+    if (chip) navigate('day', { date: chip.dataset.day });
   });
 
   $('#home-food-hero', el)?.addEventListener('click', () => navigate('food', { openAdd: true }));
@@ -2591,6 +2540,13 @@ function streakUnitLabel(n) {
   if (n === 1) return t('streak_one_day');
   if (n === 2) return t('streak_days_2');
   return n <= 10 ? t('streak_days_n') : t('streak_days_many');
+}
+
+// The figure printed BEFORE that unit. Arabic names one and two with the noun
+// itself — «يوم واحد», «يومان» — and writes a numeral only from three
+// («3 أيام»); «2 يومان» said «two» twice. English always prints it.
+function streakFigure(n) {
+  return (DB.prefs.get().lang === 'ar' && (n === 1 || n === 2)) ? '' : fmtNum(n);
 }
 
 // A supplement's run of days as ONE phrase: «سلسلة يومين», «سلسلة 12 يوماً»,
@@ -2747,10 +2703,6 @@ async function syncExerciseImages() {
   if (healed) { try { renderView(currentView); } catch (_) {} }
 }
 
-// `stats` lets a caller rendering MANY cards hand in a row from one
-// DB.sessions.statsByExercise() pass — without it every card re-scans the whole
-// session list, and this grid rebuilds on every filter tap and every keystroke.
-// Omitted for a one-off card, where a single scan is cheaper than a map.
 // Attach base64 photos to cards already in the document (see bentoCardHtml).
 // exerciseImgSrc() is the single safety guard on the value, as everywhere else.
 function hydrateCardImages(root) {
@@ -2761,6 +2713,10 @@ function hydrateCardImages(root) {
     if (src) node.style.backgroundImage = `url('${src}')`;
   });
 }
+// `stats` lets a caller rendering MANY cards hand in a row from one
+// DB.sessions.statsByExercise() pass — without it every card re-scans the whole
+// session list, and this grid rebuilds on every filter tap and every keystroke.
+// Omitted for a one-off card, where a single scan is cheaper than a map.
 function bentoCardHtml(ex, i, { showPR = true, toggle = null, stats = null } = {}) {
   const isWide = i % 5 === 0;
   if (!stats) stats = DB.sessions.bestStats(ex.id);
@@ -2863,12 +2819,7 @@ function renderProgram(el) {
   // Identity compare is safe: workoutForDate returns the actual cycle element.
   const currentIdx = todayWorkout ? cycle.indexOf(todayWorkout) : -1;
 
-  // ---- Where you are in the cycle ------------------------------------------
-  // Numbered chips, not arrows: an arrow glyph between chips points the wrong
-  // way once the row lays out right-to-left in Arabic.
-  // No exercise count on the chip: "1 Push 3" reads as if the 3 were part of the
-  // workout's name. This strip answers "where am I in the cycle" — counts belong
-  // in the editor, which already shows them per slot.
+  // ---- The cardio schedule -------------------------------------------------
   // One row per scheduled item. weekOrder() so the day list reads in the app's
   // own week order, and '·' as the separator — a directional glyph points the
   // wrong way once the row lays out right-to-left.
@@ -2890,6 +2841,12 @@ function renderProgram(el) {
       </button>`;
   }).join('');
 
+  // ---- Where you are in the cycle ------------------------------------------
+  // Numbered chips, not arrows: an arrow glyph between chips points the wrong
+  // way once the row lays out right-to-left in Arabic.
+  // No exercise count on the chip: "1 Push 3" reads as if the 3 were part of the
+  // workout's name. This strip answers "where am I in the cycle" — counts belong
+  // in the editor, which already shows them per slot.
   const cycleHtml = cycle.map((slot, i) => `
       <div class="cycle-chip ${i === currentIdx ? 'current' : ''}">
         <span class="cycle-chip-num num">${fmtNum(i + 1)}</span>
@@ -3377,7 +3334,7 @@ function weekStrip(activeIso = null, variant = '', sessions, cardio) {
 // per kind of record and this screen can never disagree with them.
 // ===========================================================================
 function renderDay(el) {
-  const iso = viewContext.dayDate || todayISO();
+  const iso = viewContext.date || todayISO();   // every dated screen arrives on ctx.date (contract 67)
   const d = new Date(iso + 'T12:00:00');   // noon: date-only maths, DST-safe
   const isToday = iso === todayISO();
 
@@ -3449,7 +3406,7 @@ function renderDay(el) {
       `<div class="day-stats">
          ${stat(t('exercises'), fmtNum(sessions.length))}
          ${stat(t('sets'), fmtNum(totalSets))}
-         ${stat(t('volume'), fmtNum(Math.round(unitLabel() === 'lb' ? volume * KG_TO_LB : volume)), ' ' + unitLabel())}
+         ${stat(t('volume'), fmtNum(Math.round(kgToUnit(volume, unitLabel()))), ' ' + unitLabel())}
        </div>
        <div class="day-rows">
          ${sessions.map((s) => {
@@ -3511,7 +3468,7 @@ function renderDay(el) {
     const chip = e.target.closest('[data-day]');
     if (!chip || chip.dataset.day === iso) return;
     viewContext.dayAnim = chip.dataset.day > iso ? 'from-next' : 'from-prev';
-    viewContext.dayDate = chip.dataset.day;
+    viewContext.date = chip.dataset.day;
     renderDay(el);
     // Clear so the class only ever describes THIS transition.
     viewContext.dayAnim = '';
@@ -3526,8 +3483,8 @@ function renderDay(el) {
       // past day therefore landed on today's food log instead of that day's.
       e.stopPropagation();
       const v = b.dataset.goto;
-      // The food log owns its own date context; hand it this day, not today.
-      navigate(v, v === 'foodlog' ? { foodLog: { date: iso } } : {});
+      // Hand the food log this day, not today.
+      navigate(v, v === 'foodlog' ? { date: iso } : {});
     })
   );
 }
@@ -4018,14 +3975,9 @@ function openSessionModal(exerciseId, sessionId = null) {
   // Stored weight is always kg internally; this only affects what the user types/sees here.
   let modalUnit = DB.prefs.get().unit === 'lb' ? 'lb' : 'kg';   // printed as modalUnit.toUpperCase(): 'kg' or 'lb' by construction
 
-  function modalConvertForDisplay(kg) {
-    if (modalUnit === 'lb') return Math.round(kg * KG_TO_LB * 2) / 2;
-    return Math.round(kg * 100) / 100;
-  }
-  function modalConvertToKg(value) {
-    if (modalUnit === 'lb') return Math.round((value / KG_TO_LB) * 100) / 100;
-    return Number(value);
-  }
+  // The sheet's own unit through ui.js's one rule (contract 66).
+  function modalConvertForDisplay(kg) { return toDisplayWeight(kg, modalUnit); }
+  function modalConvertToKg(value) { return toStoredKg(value, modalUnit); }
 
   function renderSetsEditor() {
     const editor = $('#sets-editor');
@@ -4596,9 +4548,9 @@ function progressSectionHtml() {
   }));
   const monthCount = new Set(recent.filter((s) => (s.sets || []).length).map((s) => s.date)).size;
   // Sets are STORED in kg; the figure is printed beside unitLabel(), so it is
-  // converted first. Multiplied, not convertWeightForDisplay(): that rounds to a
+  // converted first. kgToUnit(), not convertWeightForDisplay(): that rounds to a
   // plate's 0.5 lb, which means nothing on a month's tonnage.
-  const volumeShown = unitLabel() === 'lb' ? volume * KG_TO_LB : volume;
+  const volumeShown = kgToUnit(volume, unitLabel());
 
   const cardsHtml = `
     <div class="pg-two">
@@ -4632,7 +4584,7 @@ function progressStreakHtml() {
     <div class="card pg-streak">
       <span class="pg-streak-icon">${icon('zap', 22)}</span>
       <span class="pg-streak-main">
-        <span class="pg-streak-value num" dir="ltr">${fmtNum(streak)}</span>
+        ${streakFigure(streak) ? `<span class="pg-streak-value num" dir="ltr">${streakFigure(streak)}</span>` : ''}
         <span class="pg-streak-label">${streakUnitLabel(streak)}</span>
       </span>
     </div>`;
@@ -5115,7 +5067,7 @@ function openUnifiedSearch() {
       if (result.type === 'exercise') navigate('exercise-detail',{exerciseId:result.id});
       else if (result.type === 'session') { const session = DB.sessions.get(result.id); if (session) navigate('exercise-detail',{exerciseId:session.exerciseId}); }
       else if (result.type === 'date') openSearchDay(result.date);
-      else if (result.type === 'log') navigate('foodlog',{foodLog:{date:result.date}});
+      else if (result.type === 'log') navigate('foodlog',{date:result.date});
       else if (result.type === 'meal') { const meal = DB.mealBundles.list().find(x => x.id === result.id); if (meal) openMealEditor(meal); }
       else if (result.type === 'recipe') { const recipe = DB.recipes.list().find(x => x.id === result.id); if (recipe) openRecipeEditor(todayISO(),recipe); }
       else openFoodModal(result.id);
@@ -5132,7 +5084,7 @@ function openSearchDay(date) {
   const modal = convenienceModal(`${cxHeader('cx_date')}<div class="cx-stack"><strong>${escapeHtml(formatDate(date))}</strong>
     <button class="btn btn-ghost" id="cx-day-food">${t('food_history')}</button>
     <button class="btn btn-ghost" id="cx-day-workout">${t('history')}</button></div>`);
-  modal.querySelector('#cx-day-food').onclick = () => {closeModal();navigate('foodlog',{foodLog:{date}});};
+  modal.querySelector('#cx-day-food').onclick = () => {closeModal();navigate('foodlog',{date});};
   modal.querySelector('#cx-day-workout').onclick = () => {closeModal();navigate('session-day',{date});};
 }
 
@@ -6366,9 +6318,10 @@ function openSlotEditorModal(slotIdx, onAdd) {
 // single source of truth for that day's training.
 function renderSessionDay(el) {
   // The DATE drives everything (continuous rotation): resolve the workout for the
-  // selected date + which cycle slot it is (for add/remove edits).
-  if (!viewContext.sdDate) viewContext.sdDate = viewContext.date || todayISO();
-  const sdDateObj = new Date(viewContext.sdDate + 'T12:00:00');
+  // selected date + which cycle slot it is (for add/remove edits). The day
+  // arrives on ctx.date and the date picker writes it back there (contract 67).
+  if (!viewContext.date) viewContext.date = todayISO();
+  const sdDateObj = new Date(viewContext.date + 'T12:00:00');
   const dow = sdDateObj.getDay();   // header label = the selected date's weekday
   const day = DB.plan.workoutForDate(sdDateObj);
   const slotIdx = day ? ((DB.plan.get().cycle || []).indexOf(day)) : -1;
@@ -6395,7 +6348,7 @@ function renderSessionDay(el) {
   // plan's anchor, or on a day the rotation now calls rest, was on no card.
   const sdIds = sdOnly
     ? planIds.filter((id) => sdOnly.includes(id)).concat(sdOnly.filter((id) => !planIds.includes(id)))
-    : dayIds(planIds, loggedOn(viewContext.sdDate));
+    : dayIds(planIds, loggedOn(viewContext.date));
   const exObjs = sdIds.map((id) => exerciseById[id]).filter(Boolean);
 
   // Per-exercise local state for unsaved edits. Persists across re-renders
@@ -6403,23 +6356,18 @@ function renderSessionDay(el) {
   if (!viewContext.sdState) viewContext.sdState = {};
   const sdState = viewContext.sdState;
 
-  // Modal-level unit (defaults to user's prefs unit, switchable per page)
-  if (!viewContext.sdUnit) viewContext.sdUnit = DB.prefs.get().unit === 'lb' ? 'lb' : 'kg';   // printed raw below: 'kg' or 'lb' by construction
+  // The page's own unit: an arriving ctx.unit, else the preference, switchable per page.
+  viewContext.unit = (viewContext.unit || DB.prefs.get().unit) === 'lb' ? 'lb' : 'kg';   // printed raw below: 'kg' or 'lb' by construction
 
-  function modalConvertForDisplay(kg) {
-    if (viewContext.sdUnit === 'lb') return Math.round(kg * KG_TO_LB * 2) / 2;
-    return Math.round(kg * 100) / 100;
-  }
-  function modalConvertToKg(value) {
-    if (viewContext.sdUnit === 'lb') return Math.round((Number(value) / KG_TO_LB) * 100) / 100;
-    return Number(value);
-  }
+  // The page's own unit through ui.js's one rule (contract 66).
+  function modalConvertForDisplay(kg) { return toDisplayWeight(kg, viewContext.unit); }
+  function modalConvertToKg(value) { return toStoredKg(value, viewContext.unit); }
 
   // Find the existing logged session for an exercise on the chosen date (if any)
   function todaySessionFor(exId) {
     return DB.sessions
       .listByExercise(exId)
-      .find((s) => s.date === viewContext.sdDate);
+      .find((s) => s.date === viewContext.date);
   }
 
   // Initialize state for an exercise the first time it's rendered. Pre-fills
@@ -6524,7 +6472,7 @@ function renderSessionDay(el) {
         <div class="sd-set-row" data-ex="${escapeHtml(ex.id)}" data-set="${i}">
           <div class="sd-set-n num">${i + 1}</div>
           <input type="number" inputmode="numeric" step="1" min="0" placeholder="${numAttr(phReps)}" value="${numAttr(s.reps)}" data-field="reps" aria-label="${escapeHtml(t('reps'))}">
-          <input type="number" inputmode="decimal" step="0.5" min="0" placeholder="${numAttr(phW)}" value="${numAttr(wDisplay)}" data-field="weight" aria-label="${escapeHtml(viewContext.sdUnit)}">
+          <input type="number" inputmode="decimal" step="0.5" min="0" placeholder="${numAttr(phW)}" value="${numAttr(wDisplay)}" data-field="weight" aria-label="${escapeHtml(viewContext.unit)}">
           <button type="button" class="sd-set-remove" data-remove-set aria-label="${escapeHtml(t('delete'))}">${icon('close', 16)}</button>
         </div>
       `;
@@ -6544,7 +6492,7 @@ function renderSessionDay(el) {
         <div class="sd-sets-head">
           <div>${t('set_n')}</div>
           <div>${t('reps')}</div>
-          <div>${viewContext.sdUnit.toUpperCase()}</div>
+          <div>${viewContext.unit.toUpperCase()}</div>
           <div></div>
         </div>
         <div class="sd-sets" data-ex-sets="${escapeHtml(ex.id)}">${setsRows}</div>
@@ -6576,11 +6524,11 @@ function renderSessionDay(el) {
     <div class="sd-toolbar">
       <div class="form-group" style="flex:1;margin:0">
         <label class="form-label" for="sd-date">${t('date')}</label>
-        <input type="date" id="sd-date" value="${escapeHtml(viewContext.sdDate)}">
+        <input type="date" id="sd-date" value="${escapeHtml(viewContext.date)}">
       </div>
       <div class="modal-unit-toggle" role="group" aria-label="${escapeHtml(t('unit'))}">
-        <button type="button" data-sd-unit="kg" aria-pressed="${viewContext.sdUnit === 'kg'}" class="${viewContext.sdUnit === 'kg' ? 'active' : ''}">KG</button>
-        <button type="button" data-sd-unit="lb" aria-pressed="${viewContext.sdUnit === 'lb'}" class="${viewContext.sdUnit === 'lb' ? 'active' : ''}">LB</button>
+        <button type="button" data-sd-unit="kg" aria-pressed="${viewContext.unit === 'kg'}" class="${viewContext.unit === 'kg' ? 'active' : ''}">KG</button>
+        <button type="button" data-sd-unit="lb" aria-pressed="${viewContext.unit === 'lb'}" class="${viewContext.unit === 'lb' ? 'active' : ''}">LB</button>
       </div>
     </div>
 
@@ -6612,8 +6560,8 @@ function renderSessionDay(el) {
   // reopened the whole day and logged it as a full one.
   $('#sd-start-run', el)?.addEventListener('click', () =>
     navigate('session-run', {
-      date: viewContext.sdDate,
-      unit: viewContext.sdUnit,
+      date: viewContext.date,
+      unit: viewContext.unit,
       runOnly: sdOnly,
       runMinimum: !!viewContext.sdMinimum,
     })
@@ -6691,14 +6639,14 @@ function renderSessionDay(el) {
   );
 
   $('#sd-date', el)?.addEventListener('change', (e) => {
-    viewContext.sdDate = e.target.value || todayISO();
+    viewContext.date = e.target.value || todayISO();
     viewContext.sdState = {}; // re-init since date changed
     renderSessionDay(el);
   });
 
   el.querySelectorAll('[data-sd-unit]').forEach((b) =>
     b.addEventListener('click', () => {
-      viewContext.sdUnit = b.dataset.sdUnit === 'lb' ? 'lb' : 'kg';
+      viewContext.unit = b.dataset.sdUnit === 'lb' ? 'lb' : 'kg';
       renderSessionDay(el);
     })
   );
@@ -6799,10 +6747,10 @@ function renderSessionDay(el) {
       // a reduced day is still a REAL logged session — it counts in the stats
       // and it keeps the streak — while staying distinguishable from a full one.
       const written = withUndo(() => (updating
-        ? DB.sessions.update(existingId, { date: viewContext.sdDate, sets: cleaned })
-        : DB.sessions.add({ exerciseId: exId, date: viewContext.sdDate, sets: cleaned, kind: viewContext.sdMinimum ? 'minimum' : undefined })));
+        ? DB.sessions.update(existingId, { date: viewContext.date, sets: cleaned })
+        : DB.sessions.add({ exerciseId: exId, date: viewContext.date, sets: cleaned, kind: viewContext.sdMinimum ? 'minimum' : undefined })));
       if (!written.value) { convenienceError(DB.saveState()); return; }
-      const prMsg = checkPR(exId, prior, cleaned, viewContext.sdUnit);
+      const prMsg = checkPR(exId, prior, cleaned, viewContext.unit);
       if (prMsg) buzz('pr');
       // The card is rebuilt from what was SAVED. Kept as it was, a card marked
       // «logged» went on showing the untouched ghost rows under the saved one,
@@ -7178,9 +7126,10 @@ function runSwapAllowed(ids, oldId, newId) {
 }
 
 function renderSessionRun(el) {
-  // Resolve the workout by DATE (continuous rotation), like session-day.
-  if (!viewContext.runDate) viewContext.runDate = viewContext.date || todayISO();
-  const runDateObj = new Date(viewContext.runDate + 'T12:00:00');
+  // Resolve the workout by DATE (continuous rotation), like session-day. The
+  // day arrives on ctx.date and the unit on ctx.unit (contract 67).
+  if (!viewContext.date) viewContext.date = todayISO();
+  const runDateObj = new Date(viewContext.date + 'T12:00:00');
   const dow = runDateObj.getDay();   // header label = the date's weekday
   const day = DB.plan.workoutForDate(runDateObj);
   const exerciseById = Object.fromEntries(DB.exercises.list().map((e) => [e.id, e]));
@@ -7194,12 +7143,12 @@ function renderSessionRun(el) {
   // list of its own the run is the DAY AS LOGGED (dayIds) — the same list
   // session-day shows — so a swap made before the app was closed is back in
   // its place, with its sets.
-  const runIds = runOnly ? runOrder(runPlanIds, runOnly, viewContext.runOrdered) : dayIds(runPlanIds, loggedOn(viewContext.runDate));
+  const runIds = runOnly ? runOrder(runPlanIds, runOnly, viewContext.runOrdered) : dayIds(runPlanIds, loggedOn(viewContext.date));
   const exObjs = runIds.map((id) => exerciseById[id]).filter(Boolean);
   const totalEx = exObjs.length;
 
   // Persist run state across re-renders (until navigation replaces viewContext).
-  if (!viewContext.runUnit) viewContext.runUnit = (viewContext.unit || DB.prefs.get().unit) === 'lb' ? 'lb' : 'kg';   // printed raw below: 'kg' or 'lb' by construction
+  viewContext.unit = (viewContext.unit || DB.prefs.get().unit) === 'lb' ? 'lb' : 'kg';   // printed raw below: 'kg' or 'lb' by construction
   // RESUME, do not restart. viewContext is replaced on every navigate(), so any
   // exit — the back arrow, Android killing the WebView between sets, a reboot —
   // used to bring you back to exercise 1 with every ✓ cleared, although every
@@ -7207,7 +7156,7 @@ function renderSessionRun(el) {
   // last of the run's own with a session on this date (runResumeIdx says why
   // the last, and why only its own).
   if (viewContext.runIdx == null) {
-    const logged = exObjs.filter((ex) => DB.sessions.listByExercise(ex.id).some((s) => s.date === viewContext.runDate)).map((ex) => ex.id);
+    const logged = exObjs.filter((ex) => DB.sessions.listByExercise(ex.id).some((s) => s.date === viewContext.date)).map((ex) => ex.id);
     viewContext.runIdx = runResumeIdx(exObjs.map((ex) => ex.id), logged, runOnly ? runIds : runIds.slice(0, runPlanIds.length));
   }
   if (!viewContext.runState) viewContext.runState = {};
@@ -7221,14 +7170,9 @@ function renderSessionRun(el) {
   // whatever screen is showing by the time they fire.
   const runCtx = viewContext;
 
-  function convDisplay(kg) {
-    if (runCtx.runUnit === 'lb') return Math.round(kg * KG_TO_LB * 2) / 2;
-    return Math.round(kg * 100) / 100;
-  }
-  function convToKg(value) {
-    if (runCtx.runUnit === 'lb') return Math.round((Number(value) / KG_TO_LB) * 100) / 100;
-    return Number(value);
-  }
+  // The run's own unit through ui.js's one rule (contract 66).
+  function convDisplay(kg) { return toDisplayWeight(kg, runCtx.unit); }
+  function convToKg(value) { return toStoredKg(value, runCtx.unit); }
 
   // Lazily init per-exercise sets. A FRESH log starts with EMPTY inputs and last
   // session's numbers as a ghost placeholder (`ph*`) — so there's nothing to
@@ -7237,7 +7181,7 @@ function renderSessionRun(el) {
   // its real values for editing.
   function runInit(exId) {
     if (runCtx.runState[exId]) return runCtx.runState[exId];
-    const today = DB.sessions.listByExercise(exId).find((s) => s.date === runCtx.runDate);
+    const today = DB.sessions.listByExercise(exId).find((s) => s.date === runCtx.date);
     const last = DB.sessions.lastForExercise(exId);
     let sets, savedId = null;
     if (today) {
@@ -7300,7 +7244,7 @@ function renderSessionRun(el) {
       .filter((s) => s.reps > 0 || s.weight > 0);
     let existingId = st.savedSessionId;
     if (!existingId) {
-      const existing = DB.sessions.listByExercise(exId).find((s) => s.date === runCtx.runDate);
+      const existing = DB.sessions.listByExercise(exId).find((s) => s.date === runCtx.date);
       if (existing) existingId = existing.id;
     }
     if (cleaned.length === 0) {
@@ -7330,7 +7274,7 @@ function renderSessionRun(el) {
     // sessionCount, and today's own row was that one session).
     const prior = DB.sessions.prSnapshot(exId, existingId);
     if (existingId) {
-      if (!DB.sessions.update(existingId, { date: runCtx.runDate, sets: cleaned })) { convenienceError(DB.saveState()); return false; }
+      if (!DB.sessions.update(existingId, { date: runCtx.date, sets: cleaned })) { convenienceError(DB.saveState()); return false; }
       st.savedSessionId = existingId;
     } else {
       // Tagged 'minimum' when the run inherited a reduced day from the rest-day
@@ -7338,7 +7282,7 @@ function renderSessionRun(el) {
       // reduced workout counts as a full one purely because it was logged
       // through guided mode instead of the cards.
       const created = DB.sessions.add({
-        exerciseId: exId, date: runCtx.runDate, sets: cleaned,
+        exerciseId: exId, date: runCtx.date, sets: cleaned,
         kind: runCtx.runMinimum ? 'minimum' : undefined,
         // A substitute says what it stands in for, so the day can be rebuilt
         // with it in place once this run's own list is gone (dayIds).
@@ -7353,7 +7297,7 @@ function renderSessionRun(el) {
     // a record whose set was since corrected (a typo of 1000) or deleted goes
     // with it, where it used to stay in the summary.
     try {
-      st.prMsg = checkPR(exId, prior, cleaned, runCtx.runUnit) || undefined;
+      st.prMsg = checkPR(exId, prior, cleaned, runCtx.unit) || undefined;
     } catch (_) {}
     return true;
   }
@@ -7410,7 +7354,7 @@ function renderSessionRun(el) {
     // the first ✓, and without this filter it became hist[0] — so after one
     // set the box read "2-for-2 confirmed, add weight" against today's own
     // numbers, and the advice changed between sets of one workout.
-    const hist = DB.sessions.listByExercise(exId).filter((s) => s.date !== runCtx.runDate);   // sorted date desc
+    const hist = DB.sessions.listByExercise(exId).filter((s) => s.date !== runCtx.date);   // sorted date desc
     if (!hist.length) return null;
     const s1 = topSet(hist[0].sets);
     if (!s1) return null;
@@ -7425,9 +7369,9 @@ function renderSessionRun(el) {
     // WORK IN THE UNIT THE BAR IS LOADED IN. Rounding to 2.5 kg plates and
     // then showing lb produced 143.5 lb — a number no bar can be loaded to.
     // In lb: 5-lb steps (10 for legs from 110 lb), rounded to 5-lb plates.
-    const lb = runCtx.runUnit === 'lb';
-    const toU = (kg) => (lb ? kg * KG_TO_LB : kg);
-    const fromU = (u) => (lb ? Math.round((u / KG_TO_LB) * 100) / 100 : u);
+    const lb = runCtx.unit === 'lb';
+    const toU = (kg) => kgToUnit(kg, runCtx.unit);   // unrounded: the plates round
+    const fromU = (u) => toStoredKg(u, runCtx.unit);
     const plate = lb ? 5 : 2.5;
     const w1 = toU(s1.w);
     const inc = lb ? ((legs && w1 >= 110) ? 10 : 5) : ((legs && s1.w >= 50) ? 5 : 2.5);
@@ -7464,7 +7408,7 @@ function renderSessionRun(el) {
     if (day?.targets?.[exId]) return ''; // the reviewed plan is the instruction for this slot
     const g = runSuggest(exId);
     if (!g) return '';
-    const u = runCtx.runUnit.toUpperCase();
+    const u = runCtx.unit.toUpperCase();
     const reason = Object.entries(g.vars).reduce((txt, [k, v]) => txt.replace('{' + k + '}', fmtNum(v)), t(g.key));
     return `
       <button type="button" class="run-suggest" data-sug-w="${g.w}" data-sug-r="${g.r}">
@@ -7477,7 +7421,7 @@ function renderSessionRun(el) {
   function runStatsHtml(exId) {
     // Same rule as runSuggest: the cells describe the PAST. Today's own row
     // made "Last" flip to today's set 1 after the first ✓.
-    const all = DB.sessions.listByExercise(exId).filter((s) => s.date !== runCtx.runDate);
+    const all = DB.sessions.listByExercise(exId).filter((s) => s.date !== runCtx.date);
     // Rendered ONLY when there is history — on a first-ever exercise two cells
     // reading "—" are noise (this is what the comment below always promised).
     if (!all.length) return '';
@@ -7492,7 +7436,7 @@ function renderSessionRun(el) {
     // regression that never happened.
     const lastSession = all[0] || null;   // listByExercise is sorted date desc
     const last = lastSession ? topSet(lastSession.sets) : null;
-    const u = runCtx.runUnit.toUpperCase();
+    const u = runCtx.unit.toUpperCase();
     // ONE figure, not a stack: weight and reps belong side by side because they
     // describe a single set. This is the SAME shape the Home screen's "last set"
     // card already uses (.last-set-figure at app.js:3716) — "80 KG × 6 reps" —
@@ -7560,7 +7504,7 @@ function renderSessionRun(el) {
       return `
         <div class="run-sum-ex">
           <div class="run-sum-name">${escapeHtml(exDisplayName(ex))}</div>
-          <div class="run-sum-sets num">${setsStr} <span class="run-sum-unit">${runCtx.runUnit.toUpperCase()}</span></div>
+          <div class="run-sum-sets num">${setsStr} <span class="run-sum-unit">${runCtx.unit.toUpperCase()}</span></div>
           ${pr}
         </div>`;
     }).join('');
@@ -7581,7 +7525,7 @@ function renderSessionRun(el) {
              ${rowsHtml}
              <div class="run-sum-totals">
                <div class="run-sum-total"><span class="run-sum-total-n num">${fmtNum(totalSets)}</span><span class="run-sum-total-l">${t('total_sets')}</span></div>
-               <div class="run-sum-total"><span class="run-sum-total-n num">${fmtNum(Math.round(totalVolume))}</span><span class="run-sum-total-l">${t('total_volume')} (${runCtx.runUnit.toUpperCase()})</span></div>
+               <div class="run-sum-total"><span class="run-sum-total-n num">${fmtNum(Math.round(totalVolume))}</span><span class="run-sum-total-l">${t('total_volume')} (${runCtx.unit.toUpperCase()})</span></div>
              </div>
            </div>`
       }
@@ -7605,7 +7549,7 @@ function renderSessionRun(el) {
       navStack.forEach((entry) => {
         if (entry.view === 'session-day' && entry.context) entry.context.sdState = {};
       });
-      if (!goBack()) navigate('session-day', { date: runCtx.runDate });   // session-day reads `date`; `dow` was a key nothing consumed
+      if (!goBack()) navigate('session-day', { date: runCtx.date });   // session-day reads `date`; `dow` was a key nothing consumed
       showToast(t('session_saved'));   // after the navigate, which hides any toast it finds
       try { window.dispatchEvent(new CustomEvent('vault:session-saved')); } catch (_) {}
     });
@@ -7629,7 +7573,7 @@ function renderSessionRun(el) {
   // A session already logged for this exercise today. Swapping or dropping has
   // to say what happens to it rather than silently orphaning it.
   function loggedToday(exId) {
-    return DB.sessions.listByExercise(exId).find((s) => s.date === runCtx.runDate) || null;
+    return DB.sessions.listByExercise(exId).find((s) => s.date === runCtx.date) || null;
   }
   function replaceInRun(oldId, newId) {
     runListNow();                       // materialise + mark the list as ordered
@@ -7803,7 +7747,7 @@ function renderSessionRun(el) {
         <button type="button" class="run-set-del${st.sets.length > 1 ? '' : ' is-hidden'}" data-del-set aria-label="${escapeHtml(t('delete'))}"${st.sets.length > 1 ? '' : ' tabindex="-1" aria-hidden="true"'}>${icon('trash', 16)}</button>
         <div class="run-set-n num">${i + 1}</div>
         <input type="number" inputmode="numeric" step="1" min="0" placeholder="${numAttr(phReps)}" value="${numAttr(repsVal)}" data-field="reps" aria-label="${escapeHtml(t('reps'))}">
-        <input type="number" inputmode="decimal" step="0.5" min="0" placeholder="${numAttr(phW)}" value="${numAttr(wDisplay)}" data-field="weight" aria-label="${escapeHtml(runCtx.runUnit)}">
+        <input type="number" inputmode="decimal" step="0.5" min="0" placeholder="${numAttr(phW)}" value="${numAttr(wDisplay)}" data-field="weight" aria-label="${escapeHtml(runCtx.unit)}">
         <button type="button" class="run-set-done${s.done ? ' done' : ''}" data-done aria-label="${escapeHtml(t('mark_set_done'))}" aria-pressed="${!!s.done}">${icon('check', 20)}</button>
       </div>`;
   }).join('');
@@ -7832,7 +7776,7 @@ function renderSessionRun(el) {
       <div></div>
       <div>${t('set_n')}</div>
       <div>${t('reps')}</div>
-      <div>${runCtx.runUnit.toUpperCase()}</div>
+      <div>${runCtx.unit.toUpperCase()}</div>
       <div class="run-head-done">${t('done_col')}</div>
     </div>
     <div class="run-sets">${setsRows}</div>
@@ -8694,9 +8638,10 @@ function refreshAfterSync() {
   try { syncExerciseImages(); } catch (_) {}
   // The pulled blob carries its own reminder settings and supplement times, and
   // the OS alarms still reflect the ones this device had a moment ago. Nothing
-  // else re-arms them: the boot sync runs on a 1.5s timer that can fire before
-  // the pull lands, so without this a phone can sit on a schedule the user
-  // changed on their other device — or on none at all.
+  // else re-arms them: the boot sync runs once the scripts have loaded
+  // (afterScripts, since v300) and can finish before the pull lands, so without
+  // this a phone can sit on a schedule the user changed on their other device —
+  // or on none at all.
   // The blob just changed under the reminders: re-arm the in-app timers (they
   // were armed from the pre-pull blob) and run the OS sequence in its one order.
   try { armNotifications(); } catch (_) {}
@@ -8722,6 +8667,38 @@ function isDevHost() {
     const h = location.hostname;
     return h === 'localhost' || h === '127.0.0.1' || h === '[::1]' || h === '';
   } catch (_) { return false; }
+}
+
+// THE AUTH SHEETS' ONE KIT (v401). The sign-in gate, the reset sheet, change
+// password and feedback each carried their own error setter, their own busy
+// relabel, and — three of them — their own Turnstile mount/token/reset, with
+// three different guard policies. One kit, one policy: a sheet with no captcha
+// slot (or no Cloud.captcha) gets a null token and resets that do nothing.
+//   err(msg)  writes the sheet's error line ('' clears it)
+//   busy(on)  disables the button and says «please wait», or puts its own label back
+//   token()   the challenge token, or null where the sheet has no challenge
+//   reset()   a token is single-use and expires in ~5 min: reset after a failed
+//             attempt, or the NEXT try fails on the challenge, which reads as a
+//             broken login
+// The widget is mounted here, not in a template: Cloudflare draws into a LIVE node.
+function authSheetKit(root, { errSel, btn, captchaSel } = {}) {
+  const label = btn ? btn.textContent : '';
+  const slot = captchaSel ? root.querySelector(captchaSel) : null;
+  const armed = () => !!(slot && window.Cloud && Cloud.captcha);
+  try {
+    if (armed()) {
+      Cloud.captcha.mount(slot, {
+        theme: normalizeTheme(DB.prefs.get().theme) === 'light' ? 'light' : 'dark',
+        lang: (DB.prefs.get().lang === 'ar') ? 'ar' : 'en',
+      }).catch(() => {});
+    }
+  } catch (_) {}
+  return {
+    err: (msg) => { const e = root.querySelector(errSel); if (e) e.textContent = msg || ''; },
+    busy: (on) => { if (!btn) return; btn.disabled = !!on; btn.textContent = on ? t('auth_signing') : label; },
+    token: async () => (armed() ? Cloud.captcha.token() : null),
+    reset: () => { if (armed()) Cloud.captcha.reset(); },
+  };
 }
 
 function showAuthGate(mode) {
@@ -8783,20 +8760,13 @@ function showAuthGate(mode) {
     })
   );
 
-  const err = (msg) => { const e = document.getElementById('auth-err'); if (e) e.textContent = msg || ''; };
   const submit = document.getElementById('auth-submit');
-
-  // Bot protection. Mounted here rather than in the template because the widget
-  // is drawn by Cloudflare's script into a live node, and this card is rebuilt
-  // on every language switch and sign-in ⇄ sign-up flip.
-  try {
-    if (window.Cloud && Cloud.captcha) {
-      Cloud.captcha.mount(document.getElementById('auth-captcha'), {
-        theme: normalizeTheme(DB.prefs.get().theme) === 'light' ? 'light' : 'dark',
-        lang: lang === 'ar' ? 'ar' : 'en',
-      }).catch(() => {});
-    }
-  } catch (_) {}
+  // Rooted at the DOCUMENT, not the card: mountGoogleButton keeps `err` past a
+  // rebuild (language switch, sign-in ⇄ sign-up), and it must write into the
+  // card that is on screen then. The challenge is mounted here for the same
+  // reason as every sheet's: this card is rebuilt on every flip.
+  const kit = authSheetKit(document, { errSel: '#auth-err', btn: submit, captchaSel: '#auth-captcha' });
+  const err = kit.err;
 
   mountGoogleButton(gate, err);
 
@@ -8809,32 +8779,29 @@ function showAuthGate(mode) {
     if (!email || !pw) { err(t('auth_err_fields')); return; }
     if (up && pw.length < 8) { err(t('auth_pw_short')); return; }   // 8, not 6: Supabase allows ~1,800 sign-in attempts an hour from one IP
     err('');
-    submit.disabled = true;
-    const label = submit.textContent;
-    submit.textContent = t('auth_signing');
+    kit.busy(true);
     try {
-      const tok = await Cloud.captcha.token();
+      const tok = await kit.token();
       const res = up ? await Cloud.signUp(email, pw, tok) : await Cloud.signIn(email, pw, tok);
       if (res.error) {
-        // The token is spent whether or not the attempt succeeded: without this
-        // a mistyped password makes every retry fail on the challenge instead.
-        Cloud.captcha.reset();
+        // The token is spent whether or not the attempt succeeded (kit.reset).
+        kit.reset();
         err(translateAuthError(res.error));
-        submit.disabled = false; submit.textContent = label;
+        kit.busy(false);
         return;
       }
       if (up && !res.session) {
         // Email confirmation is required — no session yet.
-        err(''); submit.disabled = false; submit.textContent = label;
+        err(''); kit.busy(false);
         showToast(t('auth_signup_check_email'));
         showAuthGate('in');
         return;
       }
       await afterLogin();
     } catch (e) {
-      Cloud.captcha.reset();
+      kit.reset();
       err(translateAuthError((e && e.message) || ''));
-      submit.disabled = false; submit.textContent = label;
+      kit.busy(false);
     }
   };
 
@@ -9202,27 +9169,20 @@ function showForgotPassword(prefillEmail) {
     <div class="auth-err" id="reset-err"></div>
     <button class="btn btn-primary btn-block" id="reset-send">${t('auth_reset_send')}</button>
   `, { variant: 'confirm' });
-  const err = (m) => { const e = overlay.querySelector('#reset-err'); if (e) e.textContent = m || ''; };
   const btn = overlay.querySelector('#reset-send');
-  try {
-    if (window.Cloud && Cloud.captcha) {
-      Cloud.captcha.mount(overlay.querySelector('#reset-captcha'), {
-        theme: normalizeTheme(DB.prefs.get().theme) === 'light' ? 'light' : 'dark',
-        lang: (DB.prefs.get().lang === 'ar') ? 'ar' : 'en',
-      }).catch(() => {});
-    }
-  } catch (_) {}
+  const kit = authSheetKit(overlay, { errSel: '#reset-err', btn, captchaSel: '#reset-captcha' });
+  const err = kit.err;
   btn.addEventListener('click', async () => {
     const email = (overlay.querySelector('#reset-email').value || '').trim();
     if (!email) { err(t('auth_err_email')); return; }
-    err(''); btn.disabled = true; btn.textContent = t('auth_signing');
+    err(''); kit.busy(true);
     try {
-      const res = await Cloud.resetPassword(email, await Cloud.captcha.token());
-      if (res.error) { Cloud.captcha.reset(); err(translateAuthError(res.error)); btn.disabled = false; btn.textContent = t('auth_reset_send'); return; }
+      const res = await Cloud.resetPassword(email, await kit.token());
+      if (res.error) { kit.reset(); err(translateAuthError(res.error)); kit.busy(false); return; }
       closeModal();
       showToast(t('auth_reset_sent'));
     } catch (e) {
-      err(translateAuthError((e && e.message) || '')); btn.disabled = false; btn.textContent = t('auth_reset_send');
+      err(translateAuthError((e && e.message) || '')); kit.busy(false);
     }
   });
 }
@@ -9362,17 +9322,11 @@ function showChangePassword(recovery) {
   // A recovery link can land while a dialog that must be answered is up; that
   // dialog stays, and the link can be opened again once it is answered.
   if (!overlay) return;
-  const err = (m) => { const e = overlay.querySelector('#cpw-err'); if (e) e.textContent = m || ''; };
   const btn = overlay.querySelector('#cpw-save');
-  // Mounted from here, not from the template: Cloudflare draws into a LIVE node.
-  try {
-    if (!recovery && window.Cloud && Cloud.captcha) {
-      Cloud.captcha.mount(overlay.querySelector('#cpw-captcha'), {
-        theme: normalizeTheme(DB.prefs.get().theme) === 'light' ? 'light' : 'dark',
-        lang: (DB.prefs.get().lang === 'ar') ? 'ar' : 'en',
-      }).catch(() => {});
-    }
-  } catch (_) {}
+  // The recovery path has no challenge slot, so its token is null and its
+  // resets do nothing — the kit's one policy, not a branch per call.
+  const kit = authSheetKit(overlay, { errSel: '#cpw-err', btn, captchaSel: recovery ? null : '#cpw-captcha' });
+  const err = kit.err;
   btn.addEventListener('click', async () => {
     const curEl = overlay.querySelector('#cpw-current');
     const cur = curEl ? (curEl.value || '') : '';
@@ -9381,19 +9335,16 @@ function showChangePassword(recovery) {
     if (!recovery && !cur) { err(t('change_password_current_req')); return; }
     if (pw.length < 8) { err(t('auth_pw_short')); return; }
     if (pw !== pw2) { err(t('change_password_mismatch')); return; }
-    err(''); btn.disabled = true; btn.textContent = t('auth_signing');
+    err(''); kit.busy(true);
     try {
-      // A token is single-use and expires in about five minutes, so every failed
-      // attempt resets the widget — without that a mistyped password makes the
-      // NEXT try fail on the challenge instead, which reads as a broken app.
-      const tok = recovery ? null : (Cloud.captcha ? await Cloud.captcha.token() : null);
+      const tok = await kit.token();
       const res = await Cloud.changePassword(pw, cur, recovery, tok);
-      if (res.error === 'reauth_failed') { if (!recovery && Cloud.captcha) Cloud.captcha.reset(); err(t('change_password_wrong_current')); btn.disabled = false; btn.textContent = t('save'); return; }
-      if (res.error) { if (!recovery && Cloud.captcha) Cloud.captcha.reset(); err(translateAuthError(res.error)); btn.disabled = false; btn.textContent = t('save'); return; }
+      if (res.error === 'reauth_failed') { kit.reset(); err(t('change_password_wrong_current')); kit.busy(false); return; }
+      if (res.error) { kit.reset(); err(translateAuthError(res.error)); kit.busy(false); return; }
       closeModal();
       showToast(t('change_password_done'));
     } catch (e) {
-      err(translateAuthError((e && e.message) || '')); btn.disabled = false; btn.textContent = t('save');
+      err(translateAuthError((e && e.message) || '')); kit.busy(false);
     }
   });
 }
@@ -9409,14 +9360,15 @@ function showFeedback() {
     <div class="auth-err" id="fb-err"></div>
     <button class="btn btn-primary btn-block" id="fb-send">${t('feedback_send')}</button>
   `, { variant: 'confirm' });
-  const err = (m) => { const e = overlay.querySelector('#fb-err'); if (e) e.textContent = m || ''; };
   const btn = overlay.querySelector('#fb-send');
+  const kit = authSheetKit(overlay, { errSel: '#fb-err', btn });
+  const err = kit.err;
   setTimeout(() => { const ta = overlay.querySelector('#fb-msg'); if (ta) ta.focus(); }, 60);
   btn.addEventListener('click', async () => {
     const msg = (overlay.querySelector('#fb-msg').value || '').trim();
     if (!msg) { err(t('feedback_empty')); return; }
     if (!window.Cloud || !Cloud.configured() || !Cloud.submitFeedback) { err(t('auth_err_network')); return; }
-    err(''); btn.disabled = true; btn.textContent = t('auth_signing');
+    err(''); kit.busy(true);
     try {
       const res = await Cloud.submitFeedback(msg, VAULT_BUILD);
       if (res && res.ok) { closeModal(); showToast(t('feedback_sent')); return; }
@@ -9424,7 +9376,7 @@ function showFeedback() {
         : res && res.error === 'ratelimit' ? t('feedback_too_many')
         : t('auth_err_generic'));
     } catch (_) { err(t('auth_err_generic')); }
-    btn.disabled = false; btn.textContent = t('feedback_send');
+    kit.busy(false);
   });
 }
 
@@ -9675,9 +9627,10 @@ function renderCustomExercises(el) {
 }
 
 // Every logged session for ONE muscle group, newest first, grouped by day.
-// Reached by tapping a cell in the home muscle-focus heatmap: the cell shows a
-// 7-day count, this shows the whole history behind it (the user asked for ALL
-// the sessions, not just the ones inside the heatmap's window).
+// Reached by tapping a cell in the Program tab's muscle heatmap (renderProgram;
+// the heatmap left Home in v368): the cell shows a 7-day count, this shows the
+// whole history behind it (the user asked for ALL the sessions, not just the
+// ones inside the heatmap's window).
 //
 // ALL OF THEM, ONE TAP AWAY — NOT ALL AT ONCE. A year of one muscle was 526
 // cards, 12,838 nodes and ~1 s a render at phone speed, paid again on every

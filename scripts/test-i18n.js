@@ -151,7 +151,16 @@ const ladder = (id, fn, now, want) => {
   }
 };
 ladder('#7', 'streakUnitLabel', 'the Home chip and the progress card pick streak_one_day for 1 and streak_days for any other count («2 يوم», «12 يوم»)',
-  { ar: { 1: 'يوم', 2: 'يومان', 5: 'أيام', 12: 'يوماً' }, en: { 1: 'day', 2: 'days', 5: 'days', 12: 'days' } });
+  { ar: { 1: 'يوم واحد', 2: 'يومان', 5: 'أيام', 12: 'يوماً' }, en: { 1: 'day', 2: 'days', 5: 'days', 12: 'days' } });
+// ONE AND TWO ARE WORDS IN ARABIC (batch 6). v399's chip read «2 يومان» — a
+// numeral before a dual that already says «two». Formal Arabic names one and
+// two with the noun alone («يوم واحد», «يومان») and writes a figure from three.
+// The chip and the progress card print streakFigure(n) before the unit.
+ladder('B6', 'streakFigure', 'the chip and the progress card print the figure at every count («2 يومان», «1 يوم»)',
+  { ar: { 1: '', 2: '', 3: '3', 12: '12' }, en: { 1: '1', 2: '2', 3: '3', 12: '12' } });
+for (const [site, re] of [['the Home streak chip', /<span class="num">\$\{streak\}<\/span><span class="streak-chip-unit">/], ['the progress streak card', /<span class="pg-streak-value num" dir="ltr">\$\{fmtNum\(streak\)\}<\/span>/]]) {
+  if (re.test(app)) bad('B6', `${site} still prints the streak's figure at every count — «2 يومان» / «1 يوم واحد» in Arabic; print streakFigure(streak)`);
+}
 ladder('#6', 'suppStreakLabel', "the supplement card edits t('days_ago') into a unit («1 أيام سلسلة», «1 days streak»)",
   { ar: { 1: 'سلسلة يوم واحد', 2: 'سلسلة يومين', 5: 'سلسلة 5 أيام', 12: 'سلسلة 12 يوماً' }, en: { 1: '1-day streak', 2: '2-day streak', 5: '5-day streak', 12: '12-day streak' } });
 if (/\d/.test(I18N.en.streak_one_day)) bad('#7', `EN streak_one_day «${I18N.en.streak_one_day}» repeats the figure the chip already prints — «1 1 day» on every first day`);
@@ -287,6 +296,41 @@ const min = (admin.match(/pw\.length<(\d+)/) || [])[1];
 if (!ph || !min || digits(ph) !== Number(min)) bad('#17', `admin.html's new-password placeholder promises «${ph} أحرف على الأقل»; its own check refuses anything under ${min}`);
 if (!/has BOTH an EN and an AR entry in `js\/i18n\.js`/.test(read('CLAUDE.md'))) bad('#18', "CLAUDE.md's i18n rule still sends new strings to `app.js` — the dictionaries have lived in js/i18n.js since v333");
 
+// ── M. THE CATALOGUE IS فصحى TOO (batch 6) ──────────────────────────────────
+// A–L read the dictionaries. The food names a user actually logs come from
+// js/catalog.js and nothing read them: seven presets said «رز» where the
+// dictionary already says «أرز» («دجاج وأرز»). Every Arabic string the catalogue
+// can put on screen meets the same dialect list.
+const catalogAr = [];
+for (const p of vm.runInContext('FOOD_PRESETS', c)) catalogAr.push([`FOOD_PRESETS «${p.en}».ar`, p.ar], [`FOOD_PRESETS «${p.en}».sa`, p.sa]);
+for (const table of ['PLAN_DAY_AR', 'EXERCISE_NAME_AR', 'EXERCISE_NAME_AR_FULL']) for (const [k, v] of Object.entries(vm.runInContext(table, c))) catalogAr.push([`${table}[«${k}»]`, v]);
+let catalogStrings = 0;
+for (const [where, v] of catalogAr) {
+  if (typeof v !== 'string') continue;
+  catalogStrings++;
+  for (const hit of dialect(v)) bad('B6', `js/catalog.js ${where}: ${hit} in «${v}»`);
+}
+if (catalogStrings < 400) bad('B6', `read only ${catalogStrings} Arabic strings from js/catalog.js — this check has gone silent`);
+
+// ── N. AN ICON CHIP IS NAMED IN THE READER'S LANGUAGE (batch 6) ─────────────
+// The «new cardio type» sheet named each icon chip with its icon id —
+// «heartPulse», «zap» — so a screen reader said code words, in English, on the
+// Arabic sheet (batch 5 found it). One name per id, in both languages.
+const bodySrc = read('js/body.js');
+const iconNameSrc = fnSrc(bodySrc, 'cardioIconName');
+if (!iconNameSrc) bad('B6', 'js/body.js has no cardioIconName(id) — the cardio icon chips are named by their raw icon ids');
+else {
+  vm.runInContext(iconNameSrc, c);
+  for (const l of ['ar', 'en']) {
+    lang(l);
+    for (const id of vm.runInContext('CARDIO_ICON_OPTIONS', c)) {
+      const name = c.cardioIconName(id);
+      if (!name || name === id || name === c.t('icon') || (l === 'ar' && !/[ء-ي]/.test(name))) bad('B6', `cardioIconName('${id}') (${l}): «${name}» — a chip needs a name a person says, in their language`);
+    }
+  }
+}
+if (/aria-label="\$\{nm\}"/.test(bodySrc)) bad('B6', 'js/body.js still names each cardio icon chip aria-label="${nm}" — the raw icon id');
+
 // ── REPORT ─────────────────────────────────────────────────────────────────
 if (problems.length) {
   const rank = (id) => parseInt(id.slice(1), 10) || 99;
@@ -294,4 +338,4 @@ if (problems.length) {
   for (const p of problems.slice().sort((a, b) => rank(a.id) - rank(b.id))) console.error(`  ${p.id.padEnd(4)} ${p.msg}`);
 }
 assert.equal(problems.length, 0, `${problems.length} i18n problem(s), listed above`);
-console.log(`PASS  i18n: no dialect marker in ${AR.length} Arabic values; one term per concept; the count ladders (relative dates, streaks, reminders) agree in both languages; reminders speak the user's unit; raw errors never reach the screen`);
+console.log(`PASS  i18n: no dialect marker in ${AR.length} Arabic values or ${catalogStrings} catalogue strings; one term per concept; the count ladders (relative dates, streaks, reminders) agree in both languages; reminders speak the user's unit; raw errors never reach the screen`);

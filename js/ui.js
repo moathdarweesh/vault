@@ -56,21 +56,39 @@ function icon(name, size = 20) {
 }
 
 // ==========================================================================
-// Weight unit conversions
+// Weight unit conversions — THE ONE kg↔lb RULE (contract 66)
 // ==========================================================================
+// Weights are stored in kg. A weight SHOWN in lb is rounded to the nearest
+// 0.5 lb; one shown in kg to 0.01 (a third decimal is float noise). A value
+// TYPED in lb is stored as kg to 0.01. The three primitives take the unit as
+// an argument because the session sheet, session-day and the guided run each
+// carry a unit of their own that can be switched away from the preference;
+// the preference converters below are the same rule with the unit filled in.
+// No other file writes KG_TO_LB.
 const KG_TO_LB = 2.20462;
 
-function convertWeightForDisplay(kg) {
-  const unit = (DB.prefs.get().unit) || 'kg';
+function toDisplayWeight(kg, unit) {
   if (unit === 'lb') return Math.round(kg * KG_TO_LB * 2) / 2; // nearest 0.5 lb
-  return kg;
+  return Math.round(kg * 100) / 100;
+}
+
+function toStoredKg(value, unit) {
+  if (unit === 'lb') return Math.round((Number(value) / KG_TO_LB) * 100) / 100;
+  return Number(value);
+}
+
+// Unrounded, for sums and plate maths that round in the unit themselves.
+function kgToUnit(kg, unit) {
+  return unit === 'lb' ? kg * KG_TO_LB : kg;
+}
+
+function convertWeightForDisplay(kg) {
+  return toDisplayWeight(kg, unitLabel());
 }
 
 function convertWeightToStorage(value) {
   // Convert user-entered value (in current unit) back to kg for storage
-  const unit = (DB.prefs.get().unit) || 'kg';
-  if (unit === 'lb') return Math.round((value / KG_TO_LB) * 100) / 100;
-  return Number(value);
+  return toStoredKg(value, unitLabel());
 }
 
 function unitLabel() {
@@ -102,10 +120,12 @@ function figRowFig(value, unit, srLabel, wide) {
 
 // Dual-unit weight: shows primary unit (per user's pref) + the other unit beside it.
 // Returns inline HTML: "<span>60</span><span>kg</span><span class="w-alt">132 lb</span>"
+// This history line keeps its own coarser kg step (0.1), a display choice left
+// as it was; the lb half is the rule's.
 function fmtWeightDual(kg) {
   const primary = (DB.prefs.get().unit) || 'kg';
   const kgVal = Math.round(kg * 10) / 10;
-  const lbVal = Math.round(kg * KG_TO_LB * 2) / 2;
+  const lbVal = toDisplayWeight(kg, 'lb');
   if (primary === 'lb') {
     return `<span class="w-num num">${fmtNum(lbVal)}</span><span class="w-unit">lb</span><span class="w-alt"><span class="num">${fmtNum(kgVal)}</span> kg</span>`;
   }
@@ -116,7 +136,7 @@ function fmtWeightDual(kg) {
 function fmtWeightDualRound(kg) {
   const primary = (DB.prefs.get().unit) || 'kg';
   const kgVal = Math.round(kg);
-  const lbVal = Math.round(kg * KG_TO_LB);
+  const lbVal = Math.round(kgToUnit(kg, 'lb'));
   if (primary === 'lb') {
     return `<span class="w-num num">${fmtNum(lbVal)}</span><span class="w-unit">lb</span><span class="w-alt"><span class="num">${fmtNum(kgVal)}</span> kg</span>`;
   }
@@ -591,23 +611,38 @@ function trapTab(e, overlay) {
 // scroll the view it is leaving. Its own keydown listener, in the capture
 // phase: openModal's single slot belongs to #modal-root, and a sheet raised
 // over this one owns the keyboard while it is up.
-function holdSheetFocus(overlay) {
+// A sheet LAYERED INTO #modal-root (v401: «new cardio type» over the cardio
+// sheet) is the one above openModal's, not below it: while it is on top it owns
+// Tab, and Escape when it hands in its close as onEscape. The listener sits on
+// window, whose capture phase runs before openModal's on document, and stops
+// the key there — openModal's trap would pull every Tab back down into the
+// sheet underneath, and its Escape would close that sheet instead.
+function holdSheetFocus(overlay, { onEscape } = {}) {
   const was = document.activeElement;
   const anchor = was instanceof HTMLElement && was !== document.body && !overlay.contains(was) ? was : null;
+  const root = document.getElementById('modal-root');
+  const layered = !!(root && root.contains(overlay));
   overlay.querySelector('[role="dialog"]')?.focus({ preventScroll: true });
   const onKey = (e) => {
     // Taken off without its close (a test, a stale sheet): the listener leaves
     // with it instead of outliving it.
-    if (!overlay.isConnected) { document.removeEventListener('keydown', onKey, true); return; }
-    if (e.key !== 'Tab' || document.querySelector('#modal-root .modal-overlay:not(.is-out)')) return;
+    if (!overlay.isConnected) { window.removeEventListener('keydown', onKey, true); return; }
+    if (e.key !== 'Tab' && !(e.key === 'Escape' && onEscape)) return;
+    // A sheet ABOVE this one owns the keyboard: for a sheet on .app, any open
+    // #modal-root sheet; for a layered one, a sheet mounted after it.
+    const above = [...document.querySelectorAll('#modal-root .modal-overlay:not(.is-out)')]
+      .some((o) => o !== overlay && (!layered || (overlay.compareDocumentPosition(o) & Node.DOCUMENT_POSITION_FOLLOWING)));
+    if (above) return;
+    if (e.key === 'Escape') { e.preventDefault(); e.stopImmediatePropagation(); onEscape(); return; }
     trapTab(e, overlay);
+    if (layered) e.stopImmediatePropagation();
   };
-  document.addEventListener('keydown', onKey, true);
+  window.addEventListener('keydown', onKey, true);
   let released = false;
   return function release() {
     if (released) return;
     released = true;
-    document.removeEventListener('keydown', onKey, true);
+    window.removeEventListener('keydown', onKey, true);
     const now = document.activeElement;
     const ours = !now || now === document.body || overlay.contains(now);
     if (!ours || !anchor) return;

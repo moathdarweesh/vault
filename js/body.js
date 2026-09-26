@@ -13,11 +13,15 @@
 // together it is INTERNAL to this file. A boundary is better when it turns a
 // shared helper into a private one, and worse when it does the reverse.
 //
-// ⚠️ ONE LATERAL EDGE IN, AND IT IS THE FEATURE, NOT DEBT. renderProgram calls
-// resolveCardioType() and openCardioScheduleModal() — the Program screen is
-// where cardio is SCHEDULED (v315), and resolveCardioType was lifted to module
-// scope in that release precisely because Program and Home both render a cardio
-// row. Inventing an indirection to hide that edge would buy nothing.
+// ⚠️ THE LATERAL EDGES IN — measured (v401), not one as this header said until
+// then. Beside the router's renderCardio/renderSleep, js/app.js reaches three
+// names here from five callers: resolveCardioType() from renderProgram, renderHome
+// and renderDay (every screen that prints a cardio row names it the same way);
+// openCardioScheduleModal() from renderProgram (Program is where cardio is
+// SCHEDULED, v315); weightCardHtml() and openWeightSheet() from renderHome, and
+// openWeightSheet() again from runQuickAction and the unified search (the weight
+// quick actions). Each is this domain's own surface, used where it is shown;
+// inventing an indirection to hide them would buy nothing.
 //
 // Everything it reaches outward is shell, router or a shared primitive:
 // renderView, navigate, currentView, viewContext, weekRanges, offerUndo,
@@ -557,12 +561,30 @@ function openCardioScheduleModal(id = null) {
   });
 }
 
+// An icon chip's accessible name. The ids are code words («heartPulse», «zap»)
+// and the chips used to be named with them — read aloud in English on the
+// Arabic sheet. A literal key per id, so contract 5 sees every one of them.
+function cardioIconName(id) {
+  switch (id) {
+    case 'run': return t('running');
+    case 'walk': return t('walking');
+    case 'bike': return t('cycling');
+    case 'treadmill': return t('treadmill');
+    case 'heart': return t('cardio_icon_heart');
+    case 'heartPulse': return t('cardio_icon_pulse');
+    case 'flame': return t('cardio_icon_flame');
+    case 'zap': return t('cardio_icon_zap');
+    case 'clock': return t('cardio_icon_clock');
+    default: return t('icon');
+  }
+}
+
 function openNewCardioTypeModal(onCreated) {
   let pickedIcon = 'heart';
 
   function iconChipsHtml() {
     return CARDIO_ICON_OPTIONS.map((nm) => `
-      <button type="button" class="cardio-icon-chip ${nm === pickedIcon ? 'active' : ''}" role="radio" aria-checked="${nm === pickedIcon}" data-cardio-icon="${nm}" aria-label="${nm}">
+      <button type="button" class="cardio-icon-chip ${nm === pickedIcon ? 'active' : ''}" role="radio" aria-checked="${nm === pickedIcon}" data-cardio-icon="${nm}" aria-label="${escapeHtml(cardioIconName(nm))}">
         ${icon(nm, 20)}
       </button>
     `).join('');
@@ -573,10 +595,10 @@ function openNewCardioTypeModal(onCreated) {
   const overlay = document.createElement('div');
   overlay.className = 'modal-overlay nested';
   overlay.innerHTML = `
-    <div class="modal-sheet">
+    <div class="modal-sheet" role="dialog" aria-modal="true" tabindex="-1" aria-labelledby="cardio-type-title">
       <div class="modal-header">
         <div>
-          <div class="modal-title">${t('new_cardio_type')}</div>
+          <div class="modal-title" id="cardio-type-title">${t('new_cardio_type')}</div>
         </div>
         <button class="icon-btn icon-btn-tile" data-cardio-type-cancel aria-label="${escapeHtml(t('cancel'))}">${icon('close', 20)}</button>
       </div>
@@ -600,8 +622,12 @@ function openNewCardioTypeModal(onCreated) {
     </div>
   `;
   $('#modal-root').appendChild(overlay);
+  // The sixth sheet built outside openModal (contract 64): focus in, Tab kept
+  // inside, Escape closes THIS sheet (not the cardio sheet under it), and focus
+  // goes back to the «new type» tile — by id if the selector repainted.
+  const release = holdSheetFocus(overlay, { onEscape: () => close() });
 
-  function close() { overlay.remove(); }
+  function close() { release(); overlay.remove(); }
 
   overlay.querySelectorAll('[data-cardio-type-cancel]').forEach((b) => b.addEventListener('click', close));
   overlay.addEventListener('click', (e) => { if (e.target === overlay) close(); });

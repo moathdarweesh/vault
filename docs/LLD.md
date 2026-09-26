@@ -1,8 +1,15 @@
 # THE VAULT — Low-Level Design
 
 **Version of record:** web `v271` · APK `build 18 / v2.7`
-**Status:** living document. Every claim below was read out of the source, not inferred.
-**Audience:** anyone who has to change this system without breaking it.
+**Status:** ⚠️ **HISTORICAL since v401 — it describes the v271 system and is not maintained.** Every claim below was read out of the v271 source.
+**Audience:** anyone who needs the reasoning behind a layer; for the CURRENT structure read `README.md` and `CLAUDE.md` § Stack & key files.
+
+> **Superseded, named so nobody acts on them** (2026-09-25 review, maintain:modules#11): the `js/tables.js` mirror (layer
+> L3b, §5) was **removed in v278** with its 13 projection tables; the load order is now **thirteen** scripts — i18n → catalog →
+> cloud → storage → motion → ui → body → food → app → health → notify → foodai → update (`scripts/shipped.js`, contract 1),
+> not the four in §2, and `window.Tables` no longer exists; `ban-rls-v10.sql` (§8) was **applied** long ago and completed by
+> `15_ban-rls-completion-v11.sql` — `backend/README.md` is the only record of what the live database holds. `docs/LLD.pdf`
+> is a render of this file and carries the same age.
 
 ---
 

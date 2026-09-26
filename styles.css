@@ -2838,8 +2838,8 @@ body.rest-active .toast { bottom: calc(var(--safe-b) + var(--rest-h, 72px) + 28p
    renders brandLockup('splash') now) · .variation-* (the Alternatives feature,
    whose data table, renderer and click handler were all deleted with it) ·
    .mt-8/.mt-16/.mb-8/.mb-20 (only .mb-16 was ever used).
-   Every one was confirmed by matching the exact class token against all of
-   js/*.js, index.html and admin.html — not by prefix, which is what made
+   Every one was confirmed by matching the exact class token against every
+   script in js/, index.html and admin.html — not by prefix, which is what made
    .bento-card-cat separable from the live .bento-card-cat-mini.
    ========================================================================= */
 .today-plan-chip {
@@ -7894,10 +7894,12 @@ body:has(.toast.has-action.show) .modal { padding-bottom: calc(var(--nav-h) + va
    screen reader lands inside, and Chrome carries the keyboard-modality flag through
    programmatic focus — so the rule above painted a 2px accent line the full width of
    the sheet above every keyboard-opened modal. It is a focus TARGET, not a control.
-   The five sheets on .app (.add-sheet) are focused the same way by holdSheetFocus. */
+   The five sheets on .app (.add-sheet) and the layered «new cardio type» sheet
+   (.modal-sheet) are focused the same way by holdSheetFocus. */
 .modal[tabindex="-1"]:focus-visible,
 .confirm-dialog[tabindex="-1"]:focus-visible,
-.add-sheet[tabindex="-1"]:focus-visible { outline: none; }
+.add-sheet[tabindex="-1"]:focus-visible,
+.modal-sheet[tabindex="-1"]:focus-visible { outline: none; }
 
 /* The favourite mark, outside the name it used to truncate. */
 .bundle-star { flex: none; color: var(--accent-text); font-size: var(--fs-sub); line-height: 1; }
@@ -8706,7 +8708,6 @@ body.ember-on .ember {
   .vs { display: none !important; }
 }
 
-/* =========================================================================
 /* Settings groups (v364) — the page carried TWELVE .section-title dividers at
    one weight, in no order, under two unexplained buttons. .section-title is
    11px uppercase with a rule line: it is a LABEL, and the level that was
@@ -8726,7 +8727,15 @@ body.ember-on .ember {
    reads as a gap rather than as a pair, so the first one tightens. The
    save-centre already sets 0 and is left alone. */
 .settings-group > .settings-section:first-of-type > .section-title { margin-top: 12px; }
+
+/* =========================================================================
    ^^^ EVERYTHING ABOVE, THEN THE IDENTITY LAYER BELOW. ^^^
+
+   ⚠️ v364 inserted the Settings block INSIDE this banner — between its opening
+   line and its text — so from v364 to v401 the prose below was raw CSS, parsed
+   as the selector of the first rule after it, and that rule
+   (body { --card-border: 0; }) was dropped as invalid. Contract 69 now refuses
+   a comment opener inside a comment, which is the shape of that accident.
 
    The layer was moved back here in v262. It had drifted into the MIDDLE of the
    file: ~500 lines of v218-v227 component CSS (the rest chip and rest sheet, the

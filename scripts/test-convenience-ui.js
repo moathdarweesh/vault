@@ -82,7 +82,7 @@ module.exports = async function testConvenienceUI(page) {
       DB.sessions.listByExercise(ex.id).filter(s=>s.date===todayISO()).forEach(s=>DB.sessions.remove(s.id));
       window.qaSession = DB.sessions.add({exerciseId:ex.id,date:todayISO(),sets:[{weight:50,reps:10},{weight:60,reps:8}]});
       DB.undo.clear();
-      navigate('session-run',{date:todayISO(),runOnly:[ex.id],runDate:todayISO(),runIdx:0,runState:{},runView:'exercise'});
+      navigate('session-run',{date:todayISO(),runOnly:[ex.id],runIdx:0,runState:{},runView:'exercise'});
     });
     await page.locator('.view.active [data-del-set]').first().click();
     assert.equal(await page.evaluate(()=>DB.sessions.get(qaSession.id).sets.length),1);
@@ -95,7 +95,7 @@ module.exports = async function testConvenienceUI(page) {
     await page.locator('#cx-query').fill('2026-09-09');
     await page.locator('[data-result]').first().click();
     await page.locator('#cx-day-food').click();
-    assert.equal(await page.evaluate(()=>viewContext.foodLog.date),'2026-09-09');
+    assert.equal(await page.evaluate(()=>viewContext.date),'2026-09-09');
     await page.evaluate(()=>{
       Cloud.listPlanHistory=async()=>({ok:true,rows:[{id:1,version:1,replaced_at:'2026-09-09'}]});
       Cloud.readPlanHistory=async()=>({ok:true,owner:'qa',version:1,plan:{cycle:[{name:'QA historical',exerciseIds:[DB.exercises.list()[0].id]}],trainingDays:[1,3]},exercises:DB.exercises.list()});
@@ -1171,9 +1171,9 @@ const routerHomeCases = [
       // its fix: ['food', 4].
       const past = await ev(() => { const d = addDaysISO(todayISO(), -3); DB.foodLogs.add(d, { name: 'QA day food', servings: 1, calories: 100 }); return d; });
       await reset('home');
-      await ev((d) => navigate('day', { dayDate: d }), past);
+      await ev((d) => navigate('day', { date: d }), past);
       await page.locator('.view.active .day-section [data-goto="foodlog"]').click();
-      assert.deepEqual(await ev(() => [currentView, viewContext.foodLog && viewContext.foodLog.date]), ['foodlog', past], 'setup: «Open» on a past day lands on that day\'s food log');
+      assert.deepEqual(await ev(() => [currentView, viewContext.date]), ['foodlog', past], 'setup: «Open» on a past day lands on that day\'s food log');
       depth = await ev(() => navStack.length);
       await page.locator('.view.active .back-btn').first().click();
       at = await ev(() => [currentView, navStack.length]);
@@ -1194,7 +1194,7 @@ const routerHomeCases = [
         const out = { want: PLAN_DAY_AR.Push };
         navigate('home'); out.home = txt('.hero-title');
         navigate('session-day', { date: today }); out.sessionDay = txt('.page-title');
-        navigate('day', { dayDate: today }); out.day = txt('.page-subtitle');
+        navigate('day', { date: today }); out.day = txt('.page-subtitle');
         navigate('session-run', { date: today }); out.run = txt('.detail-top-title');
         navigate('session-run', { date: today, runView: 'summary' }); out.summary = txt('.page-subtitle').split(' · ').pop();
         navigate('planner'); openSlotEditorModal(0);
@@ -1282,12 +1282,12 @@ const routerHomeCases = [
         DB.bodyweight.log(d, 80);
         DB.cardio.list().filter((c) => c.date === d).forEach((c) => DB.cardio.remove(c.id));
         DB.cardio.add({ type: 'walking', date: d, duration: 30, calories: 0 });
-        navigate('day', { dayDate: d });
+        navigate('day', { date: d });
         const stats = Object.fromEntries([...document.querySelectorAll('.view.active .day-stat')].map((s) => [s.querySelector('.day-stat-label').textContent.trim(), s.querySelector('.day-stat-value').textContent.trim()]));
         const out = { sleep: stats[t('sleep')], weight: stats[t('day_weight')], wantWeight: fmtWeight(80) + ' lb' };
         DB.prefs.setUnit('kg');
         DB.prefs.setLang('ar'); applyLang('ar');
-        navigate('day', { dayDate: d });
+        navigate('day', { date: d });
         out.cardio = [...document.querySelectorAll('.view.active .day-row-name')].map((n) => n.textContent.trim()).includes(t('walking'));
         DB.prefs.setLang('en'); applyLang('en');
         return out;
@@ -1671,6 +1671,33 @@ const designA11yCases = [
     assert.deepEqual(repaint, { reorder: { inside: true, at: 'button' }, rest: true }, 'a sheet that repaints itself keeps focus inside it (the moved row\'s arrow; the new step): ' + JSON.stringify(repaint));
   }],
 
+  ['the sixth sheet: «new cardio type» over the cardio sheet takes focus, keeps it, and closes alone (batch 6)', async ({ page, ev, reset, focusAt, frame }) => {
+    // Layered INTO #modal-root beside the cardio sheet, it was outside both focus
+    // systems: openModal's trap belonged to the sheet underneath and pulled every
+    // Tab back down into it, and Escape closed the cardio sheet — the half-filled
+    // log with it — instead of the sub-sheet on top.
+    await reset('cardio');
+    await ev(() => openCardioModal());
+    await page.waitForSelector('#modal-root #cardio-add-type');
+    await page.locator('#cardio-add-type').click();
+    await page.waitForSelector('#modal-root .modal-overlay.nested #cardio-type-name');
+    await frame(); await page.waitForTimeout(80);
+    const r = { opened: (await focusAt('#modal-root .modal-overlay.nested')).inside, out: [] };
+    for (const key of ['Tab', 'Tab', 'Tab', 'Tab', 'Tab', 'Tab', 'Tab', 'Tab', 'Tab', 'Tab', 'Tab', 'Tab', 'Tab', 'Shift+Tab', 'Shift+Tab', 'Shift+Tab']) {
+      await page.keyboard.press(key);
+      const f = await focusAt('#modal-root .modal-overlay.nested');
+      if (!f.inside) r.out.push(key + ' → ' + f.at);
+    }
+    r.out = r.out.slice(0, 3);
+    await page.keyboard.press('Escape');
+    await frame();
+    r.gone = await ev(() => !document.querySelector('#modal-root .modal-overlay.nested'));
+    r.cardioStays = await ev(() => !!document.querySelector('#modal-root .modal-overlay:not(.nested):not(.is-out) #save-cardio-btn'));
+    r.back = (await focusAt(null)).at;
+    await ev(() => closeModal());
+    assert.deepEqual(r, { opened: true, out: [], gone: true, cardioStays: true, back: 'button#cardio-add-type.type-option' }, 'the «new cardio type» sheet moves focus in, keeps Tab inside, closes ALONE on Escape and hands focus back to its tile: ' + JSON.stringify(r));
+  }],
+
   ['every field in a sheet is named by its caption, not its placeholder', async ({ page, ev, reset, ids, today }) => {
     // The captions are sibling <label class="form-label"> tags with no for= and
     // no wrapping, so TalkBack read the date field as «edit box» and the calorie
@@ -1880,9 +1907,9 @@ const designA11yCases = [
     await scan(['#reorder-sheet-overlay .reorder-arrows button']);
     await reset('notifications'); await settle();
     await scan(['.view.active .ntfs-opt']);
-    await reset('foodlog', { foodLog: { date: today } }); await settle();
+    await reset('foodlog', { date: today }); await settle();
     await scan(['.view.active #day-prev', '.view.active #day-next']);
-    await reset('session-day', { sdDate: today }); await settle();
+    await reset('session-day', { date: today }); await settle();
     await scan(['.view.active .sd-add-set-btn']);
     await reset('workouts'); await settle();
     await scan(['.view.active .schedule-prev-row']);
@@ -1937,5 +1964,5 @@ async function designA11y(page) {
   const kit = await designA11yKit(page);
   for (const [, run] of designA11yCases) await run(kit);
   await kit.ev(() => { closeModal(); hideToast(); DB.prefs.setTextLg(false); document.body.classList.remove('text-lg'); navigate('home'); });
-  console.log('PASS design system, accessibility and the muscle history (batches 5, 8): an [autofocus] sheet takes focus every time, the five .app sheets take, keep and return focus, every field is named by its caption, a chosen option says so, a year of one muscle opens on its newest days, the listed controls reach 44x44, «Larger text» reaches the figures');
+  console.log('PASS design system, accessibility and the muscle history (batches 5, 8): an [autofocus] sheet takes focus every time, the six sheets built outside openModal take, keep and return focus (the layered one closes alone), every field is named by its caption, a chosen option says so, a year of one muscle opens on its newest days, the listed controls reach 44x44, «Larger text» reaches the figures');
 }

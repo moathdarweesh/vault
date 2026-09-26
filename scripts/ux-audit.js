@@ -330,11 +330,11 @@ function pageMeasure(opts) {
 function ctxFor(view, fx, hist) {
   switch (view) {
     case 'exercise-detail': return { exerciseId: fx.exerciseId };
-    case 'session-run': return { runDate: fx.today };
-    case 'session-day': return { sdDate: fx.today };
+    case 'session-run': return { date: fx.today };
+    case 'session-day': return { date: fx.today };
     case 'muscle-sessions': return { muscleCat: hist.muscleCat || 'Chest' };
-    case 'foodlog': return { foodLog: { date: fx.today } };
-    case 'day': return { dayDate: fx.yesterday };
+    case 'foodlog': return { date: fx.today };
+    case 'day': return { date: fx.yesterday };
     default: return {};
   }
 }

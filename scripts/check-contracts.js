@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /**
  * check-contracts — the implicit agreements between files, made explicit and
- * enforced. One global scope, seven classic <script>s, one blob, one Worker,
+ * enforced. One global scope, thirteen classic <script>s (contract 1 prints them), one blob, one Worker,
  * one schema history: a lot of this app is "X assumes Y", with nothing but a
  * comment keeping X and Y in step. This script keeps them in step. It runs from
  * .githooks/pre-commit (after check-release) and as `npm run check`.
@@ -1327,6 +1327,7 @@ const contract = (name, problems) => {
 //       comparison, never through `|| 'kg'`.
 {
   const problems = [];
+  let inits = 0;
   for (const f of VIEWS) {
     const text = src[f];
     const line = (i) => text.slice(0, i).split(/\r?\n/).length;
@@ -1336,10 +1337,13 @@ const contract = (name, problems) => {
         problems.push(`${f}:${line(m.index)} prints \${${m[1].trim()}} — a raw preference in markup; compare it (=== 'ar' ? 'ar' : 'en')`);
       }
     }
-    for (const m of text.matchAll(/\b(modalUnit|sdUnit|runUnit)\s*=(?!=)([^;\n]*prefs\.get\(\)[^;\n]*)/g)) {
+    // (since v401 the two screens keep their unit on viewContext.unit — contract 67)
+    for (const m of text.matchAll(/\b(modalUnit|viewContext\.unit)\s*=(?!=)([^;\n]*prefs\.get\(\)[^;\n]*)/g)) {
+      inits++;
       if (!/===/.test(m[2])) problems.push(`${f}:${line(m.index)} ${m[1]} is read from prefs without a comparison — the templates print ${m[1]}.toUpperCase(), so it must be 'kg' or 'lb' by construction`);
     }
   }
+  if (inits < 3) problems.push(`found ${inits} of the 3 unit initialisations (the session sheet, session-day, the guided run) — this check has gone silent`);
   contract('prefs.lang and prefs.unit reach markup only through a comparison (the privacy links and the three printed unit variables)', problems);
 }
 
@@ -1785,22 +1789,28 @@ const cssOwner = (i) => CSS_BLOCKS.reduce((best, b) => (b.open < i && b.close > 
 // mounting, lets go of it in its close, and gives its dialog tabindex="-1" —
 // without which the focus() it asks for silently does nothing. The same scan
 // contract 49 walks, so a sixth sheet meets both.
+// The sixth (v401): «new cardio type», a `modal-overlay` built by hand and
+// layered INTO #modal-root over the cardio sheet. It was outside both focus
+// systems — openModal's trap belonged to the sheet underneath and pulled every
+// Tab back into it, and Escape closed that sheet instead. A layered sheet also
+// hands holdSheetFocus its own close as onEscape, so the key closes IT.
 {
   const problems = [];
   let sheets = 0;
   for (const f of VIEWS) {
-    for (const m of src[f].matchAll(/\.className\s*=\s*'sheet-overlay'/g)) {
+    for (const m of src[f].matchAll(/\.className\s*=\s*'(sheet-overlay|modal-overlay[^']*)'/g)) {
       sheets++;
       const owner = ownerAt(src[f], m.index), body = topFn(f, owner);
       const miss = [];
-      if (!/holdSheetFocus\(overlay\)/.test(body)) miss.push('never calls holdSheetFocus(overlay)');
+      if (!/holdSheetFocus\(overlay[,)]/.test(body)) miss.push('never calls holdSheetFocus(overlay)');
+      if (m[1] !== 'sheet-overlay' && !/holdSheetFocus\(overlay,\s*\{[^}]*\bonEscape\b/.test(body)) miss.push('is layered into #modal-root but hands holdSheetFocus no onEscape — Escape would close the sheet underneath');
       if (!/\brelease\(\);/.test(body)) miss.push('never lets its focus go (release()) in its close');
       if (!/role="dialog"[^>]*tabindex="-1"|tabindex="-1"[^>]*role="dialog"/.test(body)) miss.push('its role="dialog" carries no tabindex="-1", so focusing it does nothing');
       if (miss.length) problems.push(`${f}: ${owner}() ${miss.join('; ')}`);
     }
   }
   if (!/^function holdSheetFocus\(/m.test(src['js/ui.js'])) problems.push('js/ui.js has no top-level holdSheetFocus()');
-  contract(`every sheet on .app takes focus, keeps Tab inside and gives focus back (${sheets} sheets)`, problems);
+  contract(`every sheet built outside openModal takes focus, keeps Tab inside and gives focus back (${sheets} sheets)`, problems);
 }
 
 // 65 — the recipe import's client budget fits the Worker's caps («استخراج وصفة»).
@@ -1845,6 +1855,184 @@ const cssOwner = (i) => CSS_BLOCKS.reduce((best, b) => (b.open < i && b.close > 
     fits(cName <= eName && cQty <= eQty && cRec <= eRec, `the Worker clamps names/amounts/recipe names to ${cName}/${cQty}/${cRec}; the editor's fields take ${eName}/${eQty}/${eRec}`);
   }
   contract(`the recipe import's client budget fits the Worker's caps (${frames} stills × ${frameB64} + ${audioB64} audio chars, ${mItems} ingredients)`, problems);
+}
+
+// 66 — ONE kg↔lb rule. Weights are stored in kg. The rounding a weight gets when
+// it is SHOWN (lb to the nearest 0.5, kg to 0.01) and when a typed value is
+// STORED (kg to 0.01) was written out five times in js/app.js — the session
+// sheet, session-day, the guided run, checkPR's toast and the plate maths — and
+// ui.js's preference converters rounded kg differently from every display copy
+// (a stored 62.3456 kg read 62.3456 on the weight card, 62.35 on the sheet).
+// js/ui.js holds the rule once, the unit as an argument because three screens
+// carry a unit of their own (toDisplayWeight / toStoredKg / kgToUnit), and the
+// preference converters are those primitives with the preference filled in —
+// checked by RUNNING them, not by reading them.
+{
+  const problems = [];
+  for (const f of JS.filter((x) => x !== 'js/ui.js')) {
+    for (const m of src[f].matchAll(/KG_TO_LB/g)) problems.push(`${f}:${src[f].slice(0, m.index).split('\n').length} converts kg↔lb with KG_TO_LB itself — call toDisplayWeight / toStoredKg / kgToUnit (js/ui.js)`);
+  }
+  const ui = src['js/ui.js'];
+  const block = ui.slice(ui.indexOf('const KG_TO_LB'), ui.indexOf('\nfunction fmtWeight('));
+  let pref = 'kg', w = null;
+  try {
+    const box = require('vm').createContext({ DB: { prefs: { get: () => ({ unit: pref }) } } });
+    require('vm').runInContext(block + '\nthis.w = { convertWeightForDisplay, convertWeightToStorage, '
+      + ['toDisplayWeight', 'toStoredKg', 'kgToUnit'].map((n) => `${n}: typeof ${n} === 'function' ? ${n} : null`).join(', ') + ' };', box);
+    w = box.w;
+  } catch (e) { problems.push('could not run js/ui.js\'s weight block: ' + e.message); }
+  if (w) {
+    for (const n of ['toDisplayWeight', 'toStoredKg', 'kgToUnit']) if (!w[n]) problems.push(`js/ui.js has no ${n}(value, unit) — the rule has no one place to live`);
+    if (w.toDisplayWeight && w.toStoredKg && w.kgToUnit) {
+      const RULE = [['toDisplayWeight', 62.3456, 'kg', 62.35], ['toDisplayWeight', 100, 'lb', 220.5], ['toStoredKg', '225', 'lb', 102.06], ['toStoredKg', '62.5', 'kg', 62.5], ['kgToUnit', 10, 'lb', 22.0462], ['kgToUnit', 10, 'kg', 10]];
+      for (const [n, v, u, want] of RULE) if (w[n](v, u) !== want) problems.push(`${n}(${JSON.stringify(v)}, '${u}') is ${w[n](v, u)} — the rule says ${want}`);
+      for (const u of ['kg', 'lb']) {
+        pref = u;
+        for (const v of [0, 2.5, 62.3456, 80.005, 102.0583, 142.5]) if (w.convertWeightForDisplay(v) !== w.toDisplayWeight(v, u)) problems.push(`convertWeightForDisplay(${v}) under '${u}' is ${w.convertWeightForDisplay(v)}; toDisplayWeight gives ${w.toDisplayWeight(v, u)}`);
+        for (const v of ['100', '62.3456', 225]) if (w.convertWeightToStorage(v) !== w.toStoredKg(v, u)) problems.push(`convertWeightToStorage(${JSON.stringify(v)}) under '${u}' is ${w.convertWeightToStorage(v)}; toStoredKg gives ${w.toStoredKg(v, u)}`);
+      }
+    }
+  }
+  contract('one kg↔lb rule: KG_TO_LB is written only in js/ui.js, and the preference converters are its primitives (toDisplayWeight / toStoredKg / kgToUnit)', problems);
+}
+
+// 67 — one context key per concept, through the router. A dated screen reads
+// its day from ctx.date; a screen with a unit of its own reads it from
+// ctx.unit. The same two facts used to arrive under private spellings —
+// dayDate ('day'), date→sdDate ('session-day'), date→runDate ('session-run'),
+// foodLog.date ('foodlog'), sdUnit, runUnit — and a caller that guessed wrong
+// landed on TODAY with no error (the run's Back once passed `dow`, a key
+// nothing read). (a) The old spellings are refused in js/ and in the two tools
+// that drive screens by context. (b) Every key a navigate('<view>', {…})
+// literal or a { view, context } deep link passes is read by the renderer
+// renderView() calls for that view.
+{
+  const problems = [];
+  const lineOf = (text, i) => text.slice(0, i).split('\n').length;
+  for (const f of [...JS, 'scripts/test-convenience-ui.js', 'scripts/ux-audit.js']) {
+    const text = src[f] || (exists(f) ? read(f) : '');
+    // (a DOM attribute read as dataset.sdUnit — data-sd-unit — is markup, not a context key)
+    for (const m of text.matchAll(/(?<!dataset\.)\b(dayDate|sdDate|runDate|sdUnit|runUnit|foodLog)\b/g)) problems.push(`${f}:${lineOf(text, m.index)} uses the old context key «${m[1]}» — a dated screen reads ctx.date, a unit-carrying one ctx.unit`);
+  }
+  const renderer = Object.fromEntries([...topFn('js/app.js', 'renderView').matchAll(/case '([a-z-]+)':\s*(render\w+)\(el(?:,\s*viewContext\.(\w+))?\)/g)].map((m) => [m[1], { fn: m[2], arg: m[3] }]));
+  const bodyOf = (name) => VIEWS.map((f) => topFn(f, name)).find(Boolean) || '';
+  const balanced = (text, open) => { let d = 0; for (let i = open; i < text.length; i++) { if (text[i] === '{') d++; else if (text[i] === '}' && --d === 0) return text.slice(open + 1, i); } return ''; };
+  const keysOf = (lit) => { const out = []; let d = 0, seg = ''; for (const ch of lit + ',') { if (ch === ',' && d === 0) { const k = (seg.match(/^\s*(\w+)\s*(?::|$)/) || [])[1]; if (k) out.push(k); seg = ''; continue; } if ('{[('.includes(ch)) d++; else if ('}])'.includes(ch)) d--; seg += ch; } return out; };
+  let sites = 0;
+  for (const f of JS) {
+    for (const m of src[f].matchAll(/navigate\(\s*'([a-z-]+)'\s*,\s*\{|\{\s*view:\s*'([a-z-]+)',\s*context:\s*\{/g)) {
+      const view = m[1] || m[2], r = renderer[view];
+      sites++;
+      if (!r) { problems.push(`${f}:${lineOf(src[f], m.index)} navigates to «${view}», which renderView() does not render`); continue; }
+      const body = bodyOf(r.fn);
+      for (const k of keysOf(balanced(src[f], m.index + m[0].length - 1))) {
+        if (k !== r.arg && !new RegExp('\\b(?:viewContext|runCtx|ctx)\\.' + k + '\\b').test(body)) problems.push(`${f}:${lineOf(src[f], m.index)} passes «${k}» to «${view}», and ${r.fn}() never reads it — the screen falls back without a word`);
+      }
+    }
+  }
+  if (!sites) problems.push('found no navigate(\'<view>\', {…}) call — this check has gone silent');
+  contract(`one context key per concept: dated screens read ctx.date, unit-carrying screens ctx.unit, and every key a navigation passes is read (${sites} navigations)`, problems);
+}
+
+// 68 — no top-level name in a view script is dead. Contract 39 asks this of
+// js/ui.js alone; the same question over all four view scripts found exactly one
+// (v401): groupMusclesFromExercises, whose only caller left with Home's muscle
+// chips in v368, and the MUSCLE_INFO table only it read. Dead code in a 9,000-line
+// file is not free — every reader has to prove to themselves it is dead before
+// they can ignore it. Same corpus rule as 39: every shipped script and page,
+// with the declaring file's own body minus its declaration lines. A comment that
+// names a function counts as a use (a naive comment strip eats code at the
+// first `accept="image/*"`), so this can under-report; it never accuses.
+{
+  const problems = [];
+  const pages = PAGE_FILES.map(read).join('\n');
+  let names = 0;
+  for (const f of VIEWS) {
+    const declared = [], body = [];
+    src[f].split(/\r?\n/).forEach((line) => {
+      const m = TOP_LEVEL.exec(line);
+      if (m) { declared.push(m[1]); body.push(line.slice(line.indexOf(m[1]) + m[1].length)); } else body.push(line);
+    });
+    const corpus = JS.filter((x) => x !== f).map((x) => src[x]).concat(body.join('\n'), pages).join('\n');
+    for (const n of declared) {
+      if (n.startsWith('__')) continue;
+      names++;
+      if (!new RegExp('(?:^|[^\\w$])' + n.replace(/\$/g, '\\$') + '(?![\\w$])').test(corpus)) problems.push(`${f} declares \`${n}\` and nothing calls it — delete it (and whatever only it read)`);
+    }
+  }
+  contract(`no top-level name in a view script is dead (${names} names across ${VIEWS.length} view scripts)`, problems);
+}
+
+// 69 — no CSS comment opens another inside it. CSS comments do not nest: the
+// first */ closes the comment whatever /* came before it, and the text after
+// that */ is CSS again. v364 inserted a block INSIDE the identity layer's
+// banner — between its opening line and its prose — so for thirty-seven
+// releases that prose was parsed as the selector of the next rule, and the
+// rule was dropped: body { --card-border: 0 }, the first line of device 1.
+// Nothing looked wrong in the file, no page errored, and every contract held.
+{
+  const problems = [];
+  const lineAt = (text, i) => text.slice(0, i).split('\n').length;
+  const sheets = [['styles.css', read('styles.css'), 0]];
+  for (const f of PAGE_FILES) for (const m of read(f).matchAll(/<style[^>]*>([\s\S]*?)<\/style>/g)) sheets.push([f, m[1], lineAt(read(f), m.index) - 1]);
+  let comments = 0;
+  for (const [f, css, base] of sheets) {
+    for (let i = 0; ;) {
+      const a = css.indexOf('/*', i);
+      if (a < 0) break;
+      const b = css.indexOf('*/', a + 2);
+      if (b < 0) { problems.push(`${f}:${base + lineAt(css, a)} opens a comment that never closes — everything after it is gone`); break; }
+      comments++;
+      const k = css.slice(a + 2, b).indexOf('/*');
+      if (k >= 0) problems.push(`${f}:${base + lineAt(css, a + 2 + k)} opens a comment inside the comment that began at line ${base + lineAt(css, a)} — the first */ closes both, and what follows it is parsed as CSS`);
+      i = b + 2;
+    }
+  }
+  contract(`no CSS comment opens another inside it (${comments} comments in styles.css and the pages' <style> blocks)`, problems);
+}
+
+// 70 — the APK link in version.json is one the app will open. js/update.js and
+// get/index.html open apk.url only for an https host in their APK_HOSTS (v349),
+// and CLAUDE.md told the next APK release to write a Google Drive share link
+// there until v401. Followed, that makes every installed shell show the banner
+// and then do nothing on the tap — no error, and contract 11b still green,
+// because the committed binary and its hash never changed.
+{
+  const problems = [];
+  const hostsIn = (text, file) => {
+    const m = text.match(/APK_HOSTS\s*=\s*\[([^\]]*)\]/);
+    if (!m) { problems.push(`${file} has no APK_HOSTS list — this check has gone silent`); return []; }
+    return [...m[1].matchAll(/'([^']+)'/g)].map((x) => x[1]);
+  };
+  const upd = hostsIn(src['js/update.js'], 'js/update.js');
+  const get = hostsIn(read('get/index.html'), 'get/index.html');
+  if (upd.length && get.length && upd.slice().sort().join() !== get.slice().sort().join()) problems.push(`js/update.js allows [${upd}] and get/index.html [${get}] — one release, two allowlists`);
+  let url = null;
+  try { url = new URL(JSON.parse(read('version.json')).apk.url); } catch (e) { problems.push('version.json apk.url is not a URL: ' + e.message); }
+  if (url && url.protocol !== 'https:') problems.push(`version.json apk.url is ${url.protocol} — both openers refuse anything but https`);
+  if (url && upd.length && !upd.includes(url.hostname)) problems.push(`version.json apk.url's host ${url.hostname} is not in APK_HOSTS — the download banner's button would do nothing`);
+  contract(`version.json's apk.url is an https link on a host the app's two openers allow (${url ? url.hostname : '?'})`, problems);
+}
+
+// 71 — a document that spells the script order spells the shipped one. The
+// guide said «cloud → storage → app → health → notify → foodai → update» for
+// six releases after the order had grown to thirteen. scripts/shipped.js is
+// the one spelling; any arrow chain of six or more names in these documents
+// must be it exactly (blockquote markers, backticks and line breaks ignored).
+{
+  const problems = [];
+  const want = JS.map((f) => f.slice(3, -3)).join(' → ');
+  let chains = 0;
+  for (const f of ['CLAUDE.md', 'README.md', 'docs/LLD.md', 'docs/AUTOMATION.md']) {
+    if (!exists(f)) continue;
+    const flat = read(f).replace(/^> ?/gm, '').replace(/`/g, '').replace(/\s+/g, ' ');
+    for (const m of flat.matchAll(/[\w-]+(?: → [\w-]+){5,}/g)) {
+      chains++;
+      if (m[0] !== want) problems.push(`${f} spells the script order «${m[0]}» — shipped: «${want}»`);
+    }
+  }
+  if (!chains) problems.push('found no script order spelled in the documents — this check has gone silent');
+  contract(`the documents that spell the script order spell the shipped one (${chains} places)`, problems);
 }
 
 console.log(failures.length ? `\ncheck-contracts: ${failures.length} broken contract(s)` : '\ncheck-contracts: all contracts hold');

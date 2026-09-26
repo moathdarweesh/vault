@@ -9,7 +9,7 @@
 // ⚠️ THIS FILE MUST LOAD BEFORE js/app.js. A top-level `const` in a classic
 // script lives in the shared global LEXICAL scope, so app.js's t() can read
 // I18N — but only if this script has already executed. index.html loads it
-// first of the eight, and contract 1 enforces that order.
+// first of all the scripts, and contract 1 enforces that order.
 //
 // Every user-facing string in the app is here, and every key must exist in
 // BOTH dictionaries. Contract 5 reads this file and refuses a commit where a
@@ -41,9 +41,11 @@ const I18N = {
     rest_day_muscles: 'No muscles scheduled',
 
     // Home
-    // The unit BESIDE a figure the chip already prints (streakUnitLabel in
-    // app.js) — so no digit inside. streak_days stays the widget's one flat
-    // unit: storage.js hands the native side a single word for any count.
+    // The unit BESIDE a figure the chip prints (streakUnitLabel in app.js) —
+    // so no digit inside. In Arabic one and two carry no figure at all
+    // (streakFigure): the ar _one_day / _2 values are the whole phrase.
+    // streak_days stays the widget's one flat unit: storage.js hands the
+    // native side a single word for any count.
     streak_one_day: 'day', streak_days: 'days', streak_days_2: 'days', streak_days_n: 'days', streak_days_many: 'days',
     streak_active: 'Active streak — keep it going!',
     streak_start: 'Log a session to start your streak',
@@ -163,6 +165,7 @@ const I18N = {
     treadmill: 'Treadmill', walking: 'Walking', running: 'Running', cycling: 'Cycling',
     new_cardio_type: 'New Cardio Type',
     cardio_type_name_ph: 'e.g. Stairs, Rowing',
+    cardio_icon_heart: 'Heart', cardio_icon_pulse: 'Pulse', cardio_icon_flame: 'Flame', cardio_icon_zap: 'Lightning', cardio_icon_clock: 'Clock',
     icon: 'Icon',
 
     // Food
@@ -1079,7 +1082,7 @@ const I18N = {
     muscle_adductors: 'المقربات',
     rest_day_muscles: 'لا توجد عضلات مجدولة',
 
-    streak_one_day: 'يوم',
+    streak_one_day: 'يوم واحد',
     streak_days: 'يوم',
     streak_days_2: 'يومان', streak_days_n: 'أيام', streak_days_many: 'يوماً',
     streak_active: 'سلسلة نشطة — واصل!',
@@ -1196,6 +1199,7 @@ const I18N = {
     treadmill: 'سير', walking: 'مشي', running: 'جري', cycling: 'دراجة',
     new_cardio_type: 'نوع كارديو جديد',
     cardio_type_name_ph: 'مثلاً: درج، تجديف',
+    cardio_icon_heart: 'قلب', cardio_icon_pulse: 'نبض', cardio_icon_flame: 'لهب', cardio_icon_zap: 'برق', cardio_icon_clock: 'ساعة',
     icon: 'الأيقونة',
 
     // لوحة التغذية

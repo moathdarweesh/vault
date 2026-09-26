@@ -1211,8 +1211,10 @@
       // Refresh whichever nutrition screen is behind the chat so the user sees
       // what they added the moment they close it. The Food dashboard is the
       // primary screen now; the per-day foodlog is the secondary history view.
-      if (typeof viewContext !== 'undefined') viewContext.foodLog = { date: dateNow() };
+      // Only the food log's own context is moved to today (ctx.date, contract
+      // 67): written on any other screen, it would change THAT screen's day.
       if (typeof currentView !== 'undefined' && (currentView === 'foodlog' || currentView === 'food') && typeof renderView === 'function') {
+        if (currentView === 'foodlog' && typeof viewContext !== 'undefined') viewContext.date = dateNow();
         renderView(currentView);
       } else if (typeof navigate === 'function') {
         navigate('food');
