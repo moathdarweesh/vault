@@ -2,6 +2,70 @@
 
 One section per release since v309, newest first, moved verbatim from `CLAUDE.md` in v401 (batch 6 of the 2026-09-25 review; `docs/REVIEW-2026-09-25.md`). `CLAUDE.md` is the guide and the authority for how the app works now. A section here records what one release changed and why, in the words written at the time, so a later section — or the guide — can supersede what an earlier one says.
 
+## v405 — the security batch: the session and sync layer close the two doors RLS cannot see
+
+Four audits ran on 2026-09-27 (access control, OWASP + crash paths, secrets,
+the database with 131 cross-tenant probes on a replayed schema) and one
+authorised pentest. The database layer held everywhere; every finding that
+was code is fixed here, each one reproduced first and refused by a check that
+failed before the fix. No Critical anywhere; no secret in the tree or in the
+424-commit history.
+
+- **HIGH — the console could swap the app's session.** `admin.html` created
+  its SDK client with the defaults, so a forged `#access_token…&type=recovery`
+  link written over the app's own storage slot signed the whole device into
+  the attacker's account, and the `type=recovery` branch returned before the
+  non-admin sign-out. Now: its own `storageKey` (`vault-admin-auth`), the
+  app's `urlSessionAllowed` rule, and `judgeRecovery()` asks `is_admin()`
+  before the new-password panel may open. Contract 47 extended to admin.html
+  (six named problems on the old file). Reproduced in
+  scripts/test-multi-window.js: «'mallory' !== 'alice'».
+- **HIGH — a shared phone could upload the previous user's history into the
+  next account.** `pushOnce` checked only «same e-mail»; when the rescue
+  snapshot failed on quota, `resolveOnLogin` returned `pushed()` before the
+  first-link question and INSERTed A's blob under B. Now `deviceHeldFrom(uid)`
+  → `'held'`, `guardForeignBlob` answers `'held'` when it declines to sweep,
+  and every sync entry stops on it like `'duplicate'`, with the same two ways
+  out in the dialog (`held_device_title/text`).
+- **MEDIUM — a reset link now names the account** it resets («Continue as
+  {email}» from the SESSION, never the link; «Not my account» signs out and
+  clears) before the new-password form opens. The fingerprint net's
+  `change-password-recovery` cell changes on purpose.
+- **MEDIUM — the live two-account isolation script could not run**
+  (`Cloud.getClient()` had been removed): rewritten with in-page probe clients
+  and a 15-name probe ledger that fails if any probe never ran — reads,
+  writes and upserts with the other user's id, the bucket, profiles / flags /
+  feedback / errors, five admin RPCs, anon. Still `--live` only, by the owner.
+- **Crash path — a synced or imported blob could re-point an object's
+  prototype** (`Object.assign` from `{"__proto__":…}` at the nutrition
+  profile/targets and the notification channels → later `TypeError`).
+  `pickOwn()` named copies at both sites, `stripProtoKeys()` as the
+  validator's first pass; the pull door now writes the VALIDATED object, not
+  the raw string. Reproduced in scripts/test-sync-status.js.
+- **The console's APK link** takes the same https + host allowlist as
+  `js/update.js` (a `javascript:` URI passed `esc()`); contract 70 extended.
+- **Worker** (not deployed by this commit — `npx wrangler deploy`, no secret
+  change): the budget fails CLOSED on a 401/403; an auth outage admits only a
+  token whose `iss`/`sub`/`exp` are ours, and logs it; food photos and voice
+  clips are base64-checked in every mode (the ledger's backend#7); a Gemini
+  400 is no longer mislabelled as a key problem; post covers are fetched only
+  from the platforms' own CDNs (`STILL_HOSTS`). Cases in
+  scripts/test-plan-import.js.
+- **The previous account's screen no longer shows** before the sign-in guard
+  answers, and every guard answer repaints ('offline' included).
+- `.gitignore`: `.dev.vars`, `.dev.vars.*`, `.wrangler/`.
+- **For the owner, not applied here:** `backend/pending/31` (the cap
+  triggers answer only about the caller — the one-bit oracle), `32` (drop the
+  unused `client_errors_build_idx`, gated on 14 days of zero scans), `33` (the
+  DB audit's repairs: storage rename shape, `username_available` case,
+  the 7-argument food upsert's audit row, founder-only admin changes — the
+  owner's call — and trigger-function EXECUTE hygiene), and the coming `34`
+  (performance: `admin_user_stats` O(n²) → LATERAL, the upload count by name
+  range, policies evaluated once per statement). Also APK 25: a nonce on the
+  widget's quick-action Intents.
+- Gate: 68 contracts, 16 suites; docs: CLAUDE.md line 20, AUTOMATION.md, the
+  30 header's «not applied» drift.
+
 ## v404 — the food log's miniature hero: a closed day reads as a verdict
 
 «بدي صورة مصغّرة نفس الي بالصفحة الرئيسية للأكل الي فيها دائرة … موضّح أنها

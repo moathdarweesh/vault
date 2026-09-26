@@ -465,6 +465,29 @@ function defaultState() {
   };
 }
 
+// A COPY BY NAME, never Object.assign, wherever a default is filled from a
+// parsed blob. JSON.parse makes an OWN key literally called "__proto__";
+// Object.assign copies own keys with [[Set]], which for that name invokes the
+// inherited __proto__ SETTER and re-points the TARGET's prototype — so a synced
+// or imported blob carrying {"__proto__":{"hasOwnProperty":1}} made the next
+// hasOwnProperty on that object throw (OWASP audit 2026-09-27). Only the
+// default's own fields are taken, and only when `src` owns that key.
+function pickOwn(defaults, src) {
+  const out = {};
+  const s = src && typeof src === 'object' && !Array.isArray(src) ? src : {};
+  for (const k of Object.keys(defaults)) out[k] = Object.prototype.hasOwnProperty.call(s, k) ? s[k] : defaults[k];
+  return out;
+}
+// The three keys that can re-point or replace a prototype, dropped from every
+// object in a parsed tree before any reader — the validator's first pass.
+const PROTO_KEYS = ['__proto__', 'constructor', 'prototype'];
+function stripProtoKeys(node, depth) {
+  const d = depth || 0;
+  if (!node || typeof node !== 'object' || d > 64) return;
+  if (Array.isArray(node)) { for (const v of node) stripProtoKeys(v, d + 1); return; }
+  for (const k of PROTO_KEYS) if (Object.prototype.hasOwnProperty.call(node, k)) delete node[k];
+  for (const k of Object.keys(node)) stripProtoKeys(node[k], d + 1);
+}
 function defaultNutrition() {
   return {
     mode: 'off',                 // 'off' | 'calc' | 'manual'
@@ -760,8 +783,10 @@ function loadState() {
     } else {
       const dn = defaultNutrition();
       parsed.nutrition.mode = parsed.nutrition.mode || 'off';
-      parsed.nutrition.profile = Object.assign(dn.profile, parsed.nutrition.profile || {});
-      parsed.nutrition.targets = Object.assign(dn.targets, parsed.nutrition.targets || {});
+      // NAMED fields (pickOwn), never Object.assign: see its comment — a stray
+      // "__proto__" key in the blob re-pointed these objects' prototypes.
+      parsed.nutrition.profile = pickOwn(dn.profile, parsed.nutrition.profile);
+      parsed.nutrition.targets = pickOwn(dn.targets, parsed.nutrition.targets);
     }
     parsed.health = parsed.health || { data: null, syncedAt: 0, hidden: [] };
     if (!Array.isArray(parsed.health.hidden)) parsed.health.hidden = [];
@@ -2083,6 +2108,10 @@ const DB = {
   // them is still valid; a present section of the wrong TYPE is not.
   _validateBlob(data) {
     if (!data || typeof data !== 'object' || Array.isArray(data)) return false;
+    // FIRST, the keys that can re-point a prototype — "__proto__", "constructor",
+    // "prototype" — dropped from every object in the tree (stripProtoKeys), so
+    // no reader after this pass can be handed one. Cheap: one walk.
+    stripProtoKeys(data);
     if (!Array.isArray(data.exercises)) return false;
     for (const k of ['sessions', 'cardio', 'cardioTypes', 'cardioPlan', 'sleep', 'foods', 'supplements', 'mealBundles', 'recipes', 'bodyweight', 'shoppingLists']) {
       if (k in data && data[k] != null && !Array.isArray(data[k])) return false;
@@ -2635,20 +2664,23 @@ const DB = {
           start: this._validHHMM((n.window || {}).start, d.window.start),
           end: this._validHHMM((n.window || {}).end, d.window.end),
         },
+        // The channels too — by NAME (pickOwn), never Object.assign: `c` is the
+        // blob's, and a stray "__proto__" key in it re-pointed the default's
+        // prototype, so the next hasOwnProperty on the channel threw.
         channels: {
-          train: Object.assign(d.channels.train, c.train || {}),
-          supps: Object.assign(d.channels.supps, c.supps || {}, {
+          train: pickOwn(d.channels.train, c.train),
+          supps: Object.assign(pickOwn(d.channels.supps, c.supps), {
             doses: Array.isArray((c.supps || {}).doses) ? c.supps.doses.slice() : [],
           }),
-          water: Object.assign(d.channels.water, c.water || {}),
+          water: pickOwn(d.channels.water, c.water),
           // The old shape was {on, delayMin} — a delay after a "meal window"
           // that never existed in the app. It is dropped rather than migrated:
           // there is no time to derive from it. `on` carries over untouched, so
           // a user who switched the channel off stays switched off.
-          food: Object.assign(d.channels.food, c.food || {}, {
+          food: Object.assign(pickOwn(d.channels.food, c.food), {
             meals: Array.isArray((c.food || {}).meals) ? c.food.meals.slice() : [],
           }),
-          streak: Object.assign(d.channels.streak, c.streak || {}),
+          streak: pickOwn(d.channels.streak, c.streak),
         },
       };
     },

@@ -17,7 +17,7 @@ The release history — one section per version since v309 — is in `docs/RELEA
 - `js/body.js` (v362) — the body domain: sleep, body weight and cardio. Three day-entry screens sharing one `dayLedgerHtml` renderer, which is why they are one file. Its inbound edges (measured v401, listed in its header): `resolveCardioType` from Program, Home and the day view, `openCardioScheduleModal` from Program, `weightCardHtml`/`openWeightSheet` from Home, the weight quick action and the search. None outward.
 - `js/food.js` (v359) — the food domain: the Food and food-log views, the calculator, the recipe ledger, the saved-food picker, the meal bundles, the shopping list, the barcode scanner and the voice/photo capture. **Loads BEFORE app.js** — `bootCatalog()` calls into it inside a bare catch, so loading it later would swallow a ReferenceError and silently never merge the server food catalog.
 - `js/storage.js` — the `DB.*` localStorage API (all persistence). `MACHINE_SEED`, name-match migrations.
-- `js/cloud.js` — Supabase email/password auth + whole-blob sync to a per-user `vault_data` row (RLS-protected). Uses the **publishable** key only (never service-role). Loads before app.js. Also: `getUsername/checkUsername/setUsername` (the mandatory-handle feature) and `getClient` (RLS-scoped client for auxiliary readers).
+- `js/cloud.js` — Supabase email/password auth + whole-blob sync to a per-user `vault_data` row (RLS-protected). Uses the **publishable** key only (never service-role). Loads before app.js. Also: `getUsername/checkUsername/setUsername` (the mandatory-handle feature). `getClient` is NOT exported (removed as dead code in v401; this line advertised it until the 2026-09-27 audit) — `scripts/verify-convenience-live.js` builds its own probe clients in the page from the same URL and publishable key.
 - ~~`js/tables.js`~~ — **the mirror was REMOVED in v278** (owner decision, migration `18_drop-mirror-v14.sql`): the 13 normalized projection tables are dropped, the admin panel reads `vault_data` blobs directly under a `vault_data_admin_read` (is_admin) SELECT policy, and `admin_user_stats`/`admin_activity`/`delete_own_account` were rewritten over the blobs IN THE SAME TRANSACTION as the drops — plpgsql binds table names at call time, so dropping first would have broken every account deletion. The mirror's projection was silently empty for workout_sessions (name-remap failures), which is half of why it went.
   - Still one-way and analytics-only: the app does not read these tables back.
 - `js/foodai.js` — AI calorie chat. Posts `{text}` to a **Cloudflare Worker** (`backend/worker/gemini-worker.js`) that holds the Gemini key server-side. The key never ships to the client.
@@ -91,7 +91,7 @@ npm run verify           # contracts + lint + every suite — THE GATE (it print
 npm run release          # bump every marker and re-read them; runs NO tests
 ```
 
-**Current version: v404.** APK: build 24 / v3.3.
+**Current version: v405.** APK: build 24 / v3.3.
 
 > ⚠️ **`npm run release` RUNS NO TESTS, AND THIS LINE USED TO READ AS IF IT DID.**
 > It said «bump every marker + verify», where *verify* meant the MARKERS — and

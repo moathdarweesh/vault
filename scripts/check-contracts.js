@@ -1368,7 +1368,24 @@ const contract = (name, problems) => {
   try { want = 'sb-' + new URL(url).hostname.split('.')[0] + '-auth-token'; } catch (_) {}
   if (url && key && key !== want) problems.push(`VAULT_KEYS.authToken is '${key}', but the SDK stores the session under '${want}' for ${url}`);
   if (!/detectSessionInUrl:\s*urlSessionAllowed\b/.test(cloud)) problems.push('js/cloud.js no longer hands the SDK urlSessionAllowed as detectSessionInUrl — every #access_token link would sign the device in again');
-  contract("the SDK's session key in VAULT_KEYS is the one it derives from SUPABASE_URL, and the client consults urlSessionAllowed for a URL session", problems);
+  // (b) the CONSOLE's client, since the 2026-09-27 audit: its session slot is
+  //     its own key (the derived one is the app's, on the same origin), a URL
+  //     session goes through the same rule, and a recovery session is judged
+  //     by is_admin() before the new-password panel opens — anyone else is
+  //     signed out. On the SDK's defaults a «reset» link built from someone
+  //     else's tokens, opened on admin.html, signed the APP into their account.
+  const adminKey = (admin.match(/\bADMIN_AUTH_KEY\s*=\s*'([^']+)'/) || [])[1] || '';
+  if (!adminKey) problems.push("admin.html has no ADMIN_AUTH_KEY — its session would share the app's slot");
+  else if (adminKey === key || adminKey === want) problems.push(`admin.html keeps its session under '${adminKey}', the app's own slot — a reset link opened on the console would sign the app in`);
+  if (!/storageKey:\s*ADMIN_AUTH_KEY\b/.test(admin)) problems.push('admin.html does not hand the SDK storageKey: ADMIN_AUTH_KEY');
+  if (!/detectSessionInUrl:\s*urlSessionAllowed\b/.test(admin)) problems.push('admin.html no longer hands the SDK urlSessionAllowed as detectSessionInUrl — any #access_token link would sign the console in');
+  const jAt = admin.indexOf('async function judgeRecovery(');
+  const judge = jAt >= 0 ? admin.slice(jAt, admin.indexOf('sb.auth.onAuthStateChange(', jAt)) : '';
+  if (!judge || !/rpc\('is_admin'\)/.test(judge) || !/auth\.signOut\(\)/.test(judge)) problems.push('admin.html judgeRecovery() must ask is_admin() and sign a non-admin out before the new-password panel');
+  if (!/PASSWORD_RECOVERY'\)\s*judgeRecovery\(\)/.test(admin)) problems.push("admin.html's PASSWORD_RECOVERY handler bypasses judgeRecovery()");
+  const newpw = (admin.match(/showPanel\('panel-newpw'\)/g) || []).length;
+  if (newpw !== 1 || !judge.includes("showPanel('panel-newpw')")) problems.push(`admin.html opens panel-newpw from ${newpw} place(s); only judgeRecovery() may`);
+  contract("the SDK's session key in VAULT_KEYS is the one it derives from SUPABASE_URL, both clients consult urlSessionAllowed for a URL session, and the console keeps its own slot and judges a recovery link by is_admin()", problems);
 }
 
 // 48 — every Undo on a toast names the write it undoes. offerUndo used to fall
@@ -2011,7 +2028,16 @@ const cssOwner = (i) => CSS_BLOCKS.reduce((best, b) => (b.open < i && b.close > 
   try { url = new URL(JSON.parse(read('version.json')).apk.url); } catch (e) { problems.push('version.json apk.url is not a URL: ' + e.message); }
   if (url && url.protocol !== 'https:') problems.push(`version.json apk.url is ${url.protocol} — both openers refuse anything but https`);
   if (url && upd.length && !upd.includes(url.hostname)) problems.push(`version.json apk.url's host ${url.hostname} is not in APK_HOSTS — the download banner's button would do nothing`);
-  contract(`version.json's apk.url is an https link on a host the app's two openers allow (${url ? url.hostname : '?'})`, problems);
+  // (b) the CONSOLE is the third opener (OWASP audit 2026-09-27, security:client#4):
+  //     admin.html rendered apk.url into an <a href> through esc() alone, which
+  //     passes a javascript: URI untouched — and the pages' CSP keeps
+  //     'unsafe-inline' on purpose. It carries a twin of safeDownloadUrl now,
+  //     over the same APK_HOSTS, and the anchor is built from its answer.
+  const adm = hostsIn(admin, 'admin.html');
+  if (upd.length && adm.length && upd.slice().sort().join() !== adm.slice().sort().join()) problems.push(`js/update.js allows [${upd}] and admin.html [${adm}] — the console must open only the link the app would`);
+  if (!/function safeDownloadUrl\(/.test(admin)) problems.push('admin.html has no safeDownloadUrl — a javascript: apk.url would reach an <a href> through esc() alone');
+  if (/href="'\+esc\(apk\.url/.test(admin)) problems.push('admin.html renders apk.url into an href unguarded — esc() passes a javascript: URI; build the anchor from safeDownloadUrl(apk.url)');
+  contract(`version.json's apk.url is an https link on a host the app's three openers allow (${url ? url.hostname : '?'}), and the console guards it like the app`, problems);
 }
 
 // 71 — a document that spells the script order spells the shipped one. The

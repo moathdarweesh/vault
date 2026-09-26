@@ -218,7 +218,11 @@ window.VAULT_KEYS = Object.freeze({
         if (typeof DB !== 'undefined' && DB._idsSafe && !DB._idsSafe(parsed)) return false;
       } catch (_) { return false; }
       const before = (typeof DB !== 'undefined' && DB._storeSnapshot) ? DB._storeSnapshot() : null;
-      localStorage.setItem(STORE_KEY, raw);
+      // The VALIDATED object is what lands, not `raw`: the validator strips the
+      // prototype keys ("__proto__" and its two siblings) from the parsed tree,
+      // and writing the original string would carry them into the store — and
+      // from there into the next export and push (OWASP audit 2026-09-27).
+      localStorage.setItem(STORE_KEY, JSON.stringify(parsed));
       if (typeof DB !== 'undefined' && DB.reload) DB.reload();
       // A reload that lands READ-ONLY is a FAILED pull, whatever the validators
       // said. Reporting true here let applyRemote advance the stamp, the version
@@ -269,10 +273,12 @@ window.VAULT_KEYS = Object.freeze({
   // disclosure by another route. A second copy of that list is how the last one
   // drifted.
   //
-  // Returns true when it acted and false when it did not — including the case
-  // where the rescue could not be written and the device is deliberately left
-  // untouched. Both callers go on to localHasData() in those cases, which is
-  // the same answer read from the store itself.
+  // Returns true when it acted and false when there was nothing to do. When the
+  // rescue could not be written the device is deliberately left untouched — and
+  // the answer is 'held', NOT false: both callers used to go on to
+  // localHasData() there, find the new account's row empty, and INSERT the
+  // previous account's whole history into it (audit 2026-09-27). 'held' stops
+  // the sync exactly as 'duplicate' does, and pushOnce refuses on its own.
   //
   // ⚠️ AND ONE CASE IS NOT A SHARED PHONE AT ALL: returns 'duplicate'. A new
   // uid arriving with the SAME EMAIL the previous uid signed in with is one
@@ -293,7 +299,7 @@ window.VAULT_KEYS = Object.freeze({
       }
       return 'duplicate';
     }
-    return sweepToAccount(uid, email, prev);
+    return sweepToAccount(uid, email, prev) ? true : 'held';
   }
 
   // THE SWEEP ITSELF: rescue the previous account's blob under ITS uid, clear
@@ -379,6 +385,15 @@ window.VAULT_KEYS = Object.freeze({
   function isSecondAccountOfLast(uid, email) {
     const prev = getLastUid(), known = getLastEmail();
     return !!(prev && uid && prev !== uid && known && email && known === String(email).toLowerCase());
+  }
+  // Does this device hold data that belongs to an account other than `uid`?
+  // LAST_UID_KEY names the owner of what is in the store; a session for anyone
+  // else, while the store holds user data, is not that data's to upload.
+  // Stateless for the same reason as isSecondAccountOfLast: a save can fire a
+  // push before the boot sync has run the guard at all.
+  function deviceHeldFrom(uid) {
+    const prev = getLastUid();
+    return !!(prev && uid && prev !== uid && localHasData());
   }
 
   // ---- auth ----------------------------------------------------------------
@@ -1099,6 +1114,12 @@ window.VAULT_KEYS = Object.freeze({
     // (see guardForeignBlob). Checked here as well as at the guard, because a
     // save can fire this push before the boot sync has run the guard at all.
     if (isSecondAccountOfLast(s.user.id, s.user.email)) return 'duplicate';
+    // NOR MAY ANOTHER ACCOUNT'S DATA GO UP. When the guard could not set the
+    // previous account's blob aside (its rescue would not write — a full phone)
+    // it leaves the device as it was, and this push then carried that blob,
+    // whole, into the new account's empty row. Whoever LAST_UID names owns what
+    // is in the store; a different session holding it sends nothing.
+    if (deviceHeldFrom(s.user.id)) return 'held';
     // A blob a NEWER build wrote is not this build's to upload, forced or not:
     // loadState keeps every field it does not know, but this code cannot vouch
     // for what they mean. The save centre shows 'blocked' until the app
@@ -1459,10 +1480,11 @@ window.VAULT_KEYS = Object.freeze({
   async function resolveOnLoginCore() {
     const s = await getSession(); if (!s) return 'offline';
     const uid = s.user.id;
-    // BEFORE localHasData() is consulted anywhere below. 'duplicate' stops the
-    // whole sync: no pull, no push, nothing swept — app.js explains and offers
-    // the one way out (sign out, sign back in the original way).
-    if (guardForeignBlob(uid, s.user.email) === 'duplicate') return 'duplicate';
+    // BEFORE localHasData() is consulted anywhere below. 'duplicate' and 'held'
+    // stop the whole sync: no pull, no push, nothing swept — app.js explains
+    // and offers the way out (sign out, or release the device on purpose).
+    const guard = guardForeignBlob(uid, s.user.email);
+    if (guard === 'duplicate' || guard === 'held') return guard;
     let remote;
     try { remote = await pull(); } catch (_) { return 'offline'; }
     if (remote === undefined) return 'offline';
@@ -1584,7 +1606,8 @@ window.VAULT_KEYS = Object.freeze({
     // and it must run before the fast path's own localHasData() below. This is
     // also where an OAuth return lands: it is a fresh page load, so it arrives
     // HERE, never through resolveOnLogin.
-    if (guardForeignBlob(uid, s.user.email) === 'duplicate') return 'duplicate';
+    const guard = guardForeignBlob(uid, s.user.email);
+    if (guard === 'duplicate' || guard === 'held') return guard;
 
     // FAST PATH — the overwhelmingly common one. A foreground where neither
     // side has moved used to cost a full blob DOWN and a full blob UP; it now

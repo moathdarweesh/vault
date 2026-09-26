@@ -467,13 +467,35 @@
   <div id="detail" class="detail"><div class="detail-inner" id="detail-inner"></div></div>
   <div class="toast" id="toast"></div>
 
-  <script src="js/vendor/supabase.js?v=404"></script>
+  <script src="js/vendor/supabase.js?v=405"></script>
   <script>
   (function(){
     'use strict';
     var SUPABASE_URL='https://ilmusnuchqlpirywonzx.supabase.co';
     var SUPABASE_KEY='sb_publishable_ZBR2VENMP2O_K2YTMePCsw_NfLC9FSI';
-    var sb=window.supabase.createClient(SUPABASE_URL,SUPABASE_KEY,{auth:{persistSession:true,autoRefreshToken:true}});
+    /* THE CONSOLE'S SESSION HAS ITS OWN SLOT AND ITS OWN DOOR. On the SDK's
+       defaults this client kept its session under the DERIVED key — the one
+       js/cloud.js keeps the app's session under, on this same origin — and
+       saved ANY session found in the URL. A «reset» link built from someone
+       else's tokens, opened on this page, therefore signed the APP into their
+       account (audit 2026-09-27). The key is the console's own now, and a URL
+       session is judged by cloud.js's rule: a type=recovery link is taken only
+       where it replaces nobody — no session stored here, or the link's own
+       account. Contract 47 holds the two pages to this. */
+    var ADMIN_AUTH_KEY='vault-admin-auth';
+    var URL_SESSION_KEYS=['access_token','refresh_token','expires_in','expires_at','token_type','provider_token','provider_refresh_token','type'];
+    var urlRefused=false, urlTaken=false;
+    function tokenUid(jwt){ try{ var part=String(jwt||'').split('.')[1]||''; var sub=JSON.parse(atob(part.replace(/-/g,'+').replace(/_/g,'/')+'==='.slice((part.length+3)%4))).sub; return typeof sub==='string'?sub:''; }catch(_){ return ''; } }
+    function storedAdminUid(){ try{ var rec=JSON.parse(localStorage.getItem(ADMIN_AUTH_KEY)||'null'); var s=rec&&(rec.currentSession||rec); return (s&&s.user&&typeof s.user.id==='string'&&s.user.id)||tokenUid(s&&s.access_token); }catch(_){ return ''; } }
+    function stripUrlSession(url){ try{ var u=new URL(String(url||location.href)); URL_SESSION_KEYS.forEach(function(k){ u.searchParams.delete(k); }); var h=new URLSearchParams(u.hash.replace(/^#/,'')); URL_SESSION_KEYS.forEach(function(k){ h.delete(k); }); var rest=h.toString(); history.replaceState(history.state,'',u.pathname+u.search+(rest?'#'+rest:'')); }catch(_){} }
+    function urlSessionAllowed(url,params){
+      if(!params||!params.access_token) return false;
+      var sub=tokenUid(params.access_token), stored=storedAdminUid();
+      var ok=params.type==='recovery'&&!!sub&&(!stored||stored===sub);
+      if(ok) urlTaken=true; else { urlRefused=true; stripUrlSession(url); }
+      return ok;
+    }
+    var sb=window.supabase.createClient(SUPABASE_URL,SUPABASE_KEY,{auth:{persistSession:true,autoRefreshToken:true,storageKey:ADMIN_AUTH_KEY,detectSessionInUrl:urlSessionAllowed}});
     var $=function(s){return document.querySelector(s);};
     function esc(s){return String(s==null?'':s).replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];});}
     function shortId(id){return String(id||'').slice(0,8);}
@@ -485,6 +507,20 @@
     function tile(n,k,cls){return '<div class="tile '+(cls||'')+'"><div class="n num">'+n+'</div><div class="k">'+k+'</div></div>';}
     function sec(title,body){return '<div class="dsec"><div class="sec-head"><h3>'+title+'</h3><span class="rule"></span></div>'+body+'</div>';}
     function toast(m){var t=$('#toast'); t.textContent=m; t.classList.add('show'); clearTimeout(t._t); t._t=setTimeout(function(){t.classList.remove('show');},2200);}
+    /* THE APK LINK IS OPENED ONLY WHERE THE APP WOULD OPEN IT. A twin of
+       js/update.js's safeDownloadUrl (this page cannot import that file): https
+       only, on one of the release hosts. version.json is the owner's, but its
+       apk.url used to reach an <a href> through esc() alone, and esc() passes a
+       javascript: URI untouched — the page's CSP keeps 'unsafe-inline'. Contract
+       70 holds this list to update.js's and the anchor below to this guard. */
+    var APK_HOSTS = ['raw.githubusercontent.com', 'github.com', 'objects.githubusercontent.com'];
+    function safeDownloadUrl(url){
+      if(!url||typeof url!=='string') return '';
+      var u; try{ u=new URL(url,location.href); }catch(_){ return ''; }
+      if(u.protocol!=='https:') return '';
+      if(APK_HOSTS.indexOf(u.hostname)===-1) return '';
+      return u.href;
+    }
     // Supabase caps a bare .select() at 1000 rows — page through with .range() so
     // aggregations stay correct at any scale. builder(from,to) must apply .range(from,to).
     async function fetchAll(builder){
@@ -647,7 +683,27 @@
       if(r.error){ msg.className='msg err'; msg.textContent='تعذّر: '+r.error.message; return; }
       msg.className='msg ok'; msg.textContent='تم ✓ جارٍ الدخول…'; checkAdminAndLoad();
     });
-    sb.auth.onAuthStateChange(function(event){ if(event==='PASSWORD_RECOVERY'){ showLogin(); showPanel('panel-newpw'); } });
+    /* A RECOVERY SESSION IS JUDGED LIKE ANY OTHER. The new-password panel used
+       to open on the mere text «type=recovery» in the URL, before is_admin()
+       — the one check this console has — was asked, and the non-admin sign-out
+       in checkAdminAndLoad never ran. Now the link's session must be the
+       owner's; anyone else is signed out on the spot. Once per page load, from
+       whichever arrives first: the boot below or the SDK's own event. */
+    var recoveryJudged=false;
+    async function judgeRecovery(){
+      if(recoveryJudged) return; recoveryJudged=true;
+      var msg=$('#login-msg');
+      try{
+        var r=await sb.rpc('is_admin');
+        if(r.error) throw r.error;
+        if(r.data!==true){ await sb.auth.signOut(); msg.className='msg err'; msg.textContent='هذا الحساب ليس أدمِن. لوحة التحكّم للمالك فقط.'; showLogin(); showPanel('panel-login'); return; }
+        showLogin(); showPanel('panel-newpw');
+      }catch(e){
+        try{ await sb.auth.signOut(); }catch(_){}
+        msg.className='msg err'; msg.textContent='تعذّر التحقّق: '+(e.message||e); showLogin(); showPanel('panel-login');
+      }
+    }
+    sb.auth.onAuthStateChange(function(event){ if(event==='PASSWORD_RECOVERY') judgeRecovery(); });
     $('#logout').addEventListener('click',async function(){await sb.auth.signOut(); location.reload();});
 
     /* ---------------- navigation shell ------------------------------------- */
@@ -1296,7 +1352,7 @@
         '<div class="rel-row"><span class="k">رقم البناء</span><span class="v num">'+esc(apk.build)+'</span></div>'+
         '<div class="rel-row"><span class="k">الإصدار</span><span class="v">'+esc(apk.version||'—')+'</span></div>'+
         '<div class="rel-row"><span class="k">ملاحظات</span><span class="v">'+esc(apk.notes_ar||apk.notes_en||'—')+'</span></div>'+
-        '<div class="rel-row"><span class="k">رابط التحميل</span><span class="v"><a href="'+esc(apk.url||'#')+'" target="_blank" rel="noopener" style="color:var(--accent)">فتح</a></span></div>'+
+        '<div class="rel-row"><span class="k">رابط التحميل</span><span class="v">'+(safeDownloadUrl(apk.url)?'<a href="'+esc(safeDownloadUrl(apk.url))+'" target="_blank" rel="noopener" style="color:var(--accent)">فتح</a>':'<span class="muted">رابط غير مسموح — ليس https على مضيف الإصدار</span>')+'</span></div>'+
         '</div>' : '<div class="rel-card"><div class="empty-mini">تعذّر جلب version.json.</div></div>';
       var share='<div class="rel-card"><h4 style="margin:0 0 10px">رابط المشاركة العام</h4><div class="rel-row"><span class="v"><code>https://moathdarweesh.github.io/vault/get/</code></span></div></div>';
       var gen='<div class="rel-card"><h4 style="margin:0 0 12px">مولّد version.json لإصدار جديد</h4>'+
@@ -1562,9 +1618,14 @@
 
     /* ---------------- boot -------------------------------------------------- */
     (async function(){
-      if(location.hash.indexOf('type=recovery')!==-1){ showLogin(); showPanel('panel-newpw'); return; }
-      var s=await sb.auth.getSession();
-      if(s&&s.data&&s.data.session) checkAdminAndLoad(); else showLogin();
+      var s=await sb.auth.getSession();   // the SDK has looked at the URL by now (urlSessionAllowed)
+      var signedIn=!!(s&&s.data&&s.data.session);
+      if(urlTaken&&signedIn){ judgeRecovery(); return; }   // a reset link this page accepted: is_admin() decides
+      if(urlRefused){
+        var said='لم يُستخدَم الرابط: لم يكن رابط استعادة صالحًا، أو كان سيحلّ محلّ الحساب المسجَّل دخوله هنا.';
+        if(signedIn) toast(said); else { var m=$('#login-msg'); m.className='msg err'; m.textContent=said; }
+      }
+      if(signedIn) checkAdminAndLoad(); else showLogin();
     })();
   })();
   </script>

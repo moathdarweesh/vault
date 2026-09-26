@@ -12,7 +12,7 @@
 // build. The literal below is the fallback (file://, or a stripped query) and is
 // still bumped by `npm run release` — see CLAUDE.md "CACHE WORKFLOW".
 const VAULT_BUILD = (() => {
-  const FALLBACK = 'v404';
+  const FALLBACK = 'v405';
   try {
     const src = (document.currentScript && document.currentScript.src) || '';
     const m = src.match(/[?&]v=(\d+)/);
@@ -5337,7 +5337,7 @@ function renderSettings(el) {
       const result = await Cloud.resume({ force: true });
       if (result === 'pulled') refreshAfterSync();
       if (result === 'conflict') showConflictDialog();
-      if (result === 'duplicate') showDuplicateAccountDialog();
+      if (result === 'duplicate' || result === 'held') showDuplicateAccountDialog(result);
     } catch (_) { /* Cloud owns the failure state shown below. */ }
     finally { updateSaveCenter(); }
   });
@@ -9013,8 +9013,14 @@ function takeOAuthReturnError() {
 // promised is safe. Shown from both doors — bootCloud (a cold start, which is
 // where an OAuth return lands) and afterLogin (the interactive sign-in) — and
 // from a resume, so no path leaves the person inside the empty second account.
+//
+// `kind` 'held' is the OTHER reason the guard leaves a device untouched: a
+// shared phone whose previous account's data could not be set aside (the rescue
+// would not write — a full phone). Same dialog, same two ways out, different
+// words: nothing here is this account's, and nothing of it was uploaded.
 let __duplicateHeld = false;
-function showDuplicateAccountDialog() {
+function showDuplicateAccountDialog(kind) {
+  const held = kind === 'held';
   __duplicateHeld = true;
   hideAuthGate();
   // The username gate has no close and no sign-out; the second account has no
@@ -9056,8 +9062,8 @@ function showDuplicateAccountDialog() {
   };
   function stage1() {
   const overlay = openModal(`
-    <div class="confirm-title" id="dup-account-title">${t('dup_account_title')}</div>
-    <div class="confirm-text">${t('dup_account_text')}</div>
+    <div class="confirm-title" id="dup-account-title">${t(held ? 'held_device_title' : 'dup_account_title')}</div>
+    <div class="confirm-text">${t(held ? 'held_device_text' : 'dup_account_text')}</div>
     <button type="button" class="btn btn-primary btn-block" id="dup-account-signout">${t('logout')}</button>
     <button type="button" class="btn btn-ghost btn-block" id="dup-account-continue">${t('dup_account_continue')}</button>
   `, { variant: 'confirm', dismissible: false });
@@ -9211,18 +9217,27 @@ async function afterLogin() {
   //     so the user sees their real data appear, NEVER a scary empty home that
   //     could make them panic-sync. (Blocking here is the safe default; the
   //     speed win only applies when it's risk-free.)
+  //   • Device holds ANOTHER account's data (a shared phone — LAST_UID is not
+  //     this session's) → the gate stays up until resolveOnLogin's guard has
+  //     swept or held it, and the screen init() painted from that store is
+  //     painted again whatever the answer. It used to come down at once over
+  //     the previous account's data, and 'offline' never repainted.
   const hasLocal = !!(Cloud.localHasData && Cloud.localHasData());
-  if (hasLocal) { hideAuthGate(); showToast(t('syncing')); }
+  let uid = null;
+  try { const s = await Cloud.getSession(); uid = s && s.user ? s.user.id : null; } catch (_) {}
+  const own = hasLocal && !!uid && !!Cloud.getLastUid && Cloud.getLastUid() === uid;
+  if (own) { hideAuthGate(); showToast(t('syncing')); }
   ensureUsername();                                  // fire-and-forget
   if (Cloud.touchLastSeen) Cloud.touchLastSeen();
   enforceAccountStatus();
   try {
     const r = await Cloud.resolveOnLogin();
     if (r === 'conflict') { hideAuthGate(); showConflictDialog(); return; }
-    if (r === 'duplicate') { showDuplicateAccountDialog(); return; }
+    if (r === 'duplicate' || r === 'held') { showDuplicateAccountDialog(r); return; }
     hideAuthGate();
-    if (r !== 'pushed' && r !== 'pulled') { showToast(t('sc_error')); return; }
-    refreshAfterSync();
+    const synced = r === 'pushed' || r === 'pulled';
+    if (synced || (hasLocal && !own)) refreshAfterSync();   // new data landed, or the store under init()'s paint was not this account's
+    if (!synced) { showToast(t('sc_error')); return; }
     showToast(t('synced'));
     syncExerciseImages(); // back up / heal custom images, best-effort
   } catch (_) {
@@ -9303,7 +9318,50 @@ function showConflictDialog() {
 // already proved they hold the mailbox, so asking for the CURRENT password
 // would be asking for the one thing they came here because they lost. The form
 // drops that field entirely on this path.
-function showChangePassword(recovery) {
+//
+// BUT THE LINK'S ACCOUNT IS NAMED FIRST. A reset link signs a signed-out,
+// data-less device into whatever account the link belongs to (cloud.js
+// recoveryFits), and «type=recovery» is text anyone can put in a URL — so a
+// forged link used to land straight on a new-password form that never said
+// WHOSE. The sheet names the account and asks (audit 2026-09-27); `confirmed`
+// is how the answer comes back, and only confirmRecoveryAccount passes it.
+function confirmRecoveryAccount() {
+  const overlay = openModal(`
+    <div class="confirm-title">${t('recovery_confirm_title')}</div>
+    <div class="confirm-text">${t('recovery_confirm_text')}</div>
+    <button type="button" class="btn btn-primary btn-block" id="cpw-yes" style="white-space:normal;word-break:break-all" disabled>${t('recovery_confirm_yes')}</button>
+    <button type="button" class="btn btn-ghost btn-block" id="cpw-no">${t('recovery_confirm_no')}</button>
+  `, { variant: 'confirm', dismissible: false });
+  if (!overlay) return;
+  const yes = overlay.querySelector('#cpw-yes'), no = overlay.querySelector('#cpw-no');
+  let uid = null, busy = false;
+  // «Not my account»: end the session, and take with it what it left behind —
+  // the device was signed out and held no other account's data when the link
+  // arrived (recoveryFits), so the store now carries at most this session's own
+  // residue (bootSync links the device on the way in). Another account's data
+  // is never cleared here.
+  const refuse = async () => {
+    if (busy) return; busy = true; yes.disabled = true; no.disabled = true;
+    try { await Cloud.signOut(); } catch (_) {}
+    try {
+      const last = Cloud.getLastUid ? Cloud.getLastUid() : '';
+      if (!(last && last !== uid && Cloud.localHasData())) Cloud.clearLocalUserData();
+    } catch (_) {}
+    location.reload();
+  };
+  no.addEventListener('click', refuse);
+  yes.addEventListener('click', () => { if (busy || yes.disabled) return; closeModal(); showChangePassword(true, true); });
+  // The address comes from the SESSION the link opened, never from the link.
+  Cloud.getSession().then((s) => {
+    const email = s && s.user && s.user.email;
+    if (!email) { refuse(); return; }
+    uid = s.user.id;
+    yes.textContent = t('recovery_confirm_yes').replace('{email}', email);
+    yes.disabled = false;
+  }).catch(refuse);
+}
+function showChangePassword(recovery, confirmed) {
+  if (recovery && !confirmed) { confirmRecoveryAccount(); return; }
   const overlay = openModal(`
     <div class="modal-header">
       <div class="modal-title">${t('change_password')}</div>
@@ -9813,7 +9871,7 @@ async function bootCloud() {
     const r = await Cloud.bootSync();
     if (r === 'pulled') refreshAfterSync();
     else if (r === 'conflict') showConflictDialog(); // both sides changed → ask
-    else if (r === 'duplicate') { showDuplicateAccountDialog(); return; }   // nothing below may act as the second account
+    else if (r === 'duplicate' || r === 'held') { showDuplicateAccountDialog(r); return; }   // nothing below may act as the second account
   } catch (_) {}
   ensureUsername(); // enforce a handle for already-logged-in users too
   if (Cloud.touchLastSeen) Cloud.touchLastSeen();  // fire-and-forget activity stamp
@@ -10363,7 +10421,7 @@ function afterScripts(fn) {
     let r; try { r = await Cloud.resume(); } catch (_) { return; }
     if (r === 'pulled') refreshAfterSync();
     else if (r === 'conflict') showConflictDialog();
-    else if (r === 'duplicate') showDuplicateAccountDialog();
+    else if (r === 'duplicate' || r === 'held') showDuplicateAccountDialog(r);
   }
   // "Sync resumes when you reconnect" — app.js has promised this to the user in
   // both languages since the offline grace path was written, and NOTHING

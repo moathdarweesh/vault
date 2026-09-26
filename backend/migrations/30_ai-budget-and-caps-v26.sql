@@ -2,9 +2,11 @@
 -- 30_ai-budget-and-caps-v26.sql — the daily AI budget, working and not the
 -- caller's to set; and hourly caps that a backdated row cannot dodge.
 --
--- NOT APPLIED. It is in backend/pending/ on purpose: a LIVE WRITE to the
--- owner's production database, which only he runs (CLAUDE.md, the list that
--- "still needs the owner"). It SUPERSEDES 29, which now sits in archive/ with a
+-- APPLIED + VERIFIED live 2026-09-26 by the owner from the SQL editor (README
+-- row 30). This header said "NOT APPLIED … in backend/pending/" until the
+-- 2026-09-27 audit: it was written there, as every LIVE WRITE to the owner's
+-- production database is (CLAUDE.md, the list that "still needs the owner"),
+-- and moved here the day it ran. It SUPERSEDES 29, which now sits in archive/ with a
 -- header saying so. 29 only dropped the foreign key; applied on its own it
 -- would have switched the dead budget back on WITH the caller-chosen limits of
 -- item 2 below — the hole the dead budget was hiding.

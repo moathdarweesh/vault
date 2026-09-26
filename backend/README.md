@@ -101,7 +101,11 @@ client would be.
 
 ## 2) Not yet applied — `pending/`
 
-**NONE.** `pending/` is empty since 2026-09-26: 30 was applied that day (row 30 in §1).
+| # | File | What it establishes | State |
+|---|---|---|---|
+| 31 | `caps-answer-only-about-the-caller-v27.sql` | The two SECURITY DEFINER BEFORE-INSERT caps — `feedback_rate_cap()` (27 §A) and `own_row_cap()` (27 §B) — counted rows for the id ON THE INCOMING ROW before RLS WITH CHECK ran, so a caller inserting with someone else's `user_id`/`owner_id` was refused by a different message depending on that other account's count (`feedback rate limit` vs 42501): one bit about another account per request. Both now begin `if new.user_id is distinct from auth.uid() then return new; end if;` (owner_id for the row cap) and let RLS refuse the row. Counts, limits, the string `js/cloud.js` matches and the trigger bindings are unchanged. One transaction; the VERIFY block CALLS — as A five feedback rows land and the sixth raises; as B a row naming A is refused with 42501 and never with `feedback rate limit`; as B an exercise owned by A is refused with 42501 and never with `row limit reached`; B's own exercise lands — and rolls its probes back. | **NOT APPLIED** — written 2026-09-27 (access-control audit LOW-1); the owner pastes it whole into the SQL editor, then moves it to `migrations/` and this row to §1 |
+
+(30 left here on 2026-09-26, the day it was applied — row 30 in §1.)
 
 **How the owner applies the next file** (the path 30 took):
 

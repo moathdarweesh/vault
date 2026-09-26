@@ -165,6 +165,7 @@ async function run() {
   assert.equal(c.saveCenterModel({ ok: true }, { status: 'syncing' }).disabled, true);
   await housekeepingIsNotAnEdit();
   await malformedBlobsAreRefused();
+  await aBlobCannotRepointAPrototype();
   await lostReplyIsStillOurOwn();
   await forceIsNotDowngraded();
   await newerBlobIsKeptWhole();
@@ -403,6 +404,39 @@ async function malformedBlobsAreRefused() {
   assert.equal(sessionsOf(), before, 'the store holds the previous data, again');
   assert.equal(offered, 0, 'and nothing was offered to the cloud');
   assert.ok(c.DB.sessions.get(mine.id), 'the device\'s own data survives both');
+}
+
+// ── A BLOB CANNOT RE-POINT A PROTOTYPE (OWASP/crash audit 2026-09-27) ────────
+// JSON.parse makes an OWN key literally named "__proto__". Object.assign copies
+// own keys with [[Set]], which for that name invokes the inherited __proto__
+// SETTER and re-points the TARGET's prototype — so a synced or imported blob
+// carrying {"__proto__":{"hasOwnProperty":1}} inside nutrition.profile or
+// notif.channels.train made the next hasOwnProperty on that object throw: a
+// crash from untrusted data (not global pollution — the target is one object).
+// Both sites copy NAMED fields now, and the validator strips the three
+// prototype keys everywhere in the tree before any reader.
+async function aBlobCannotRepointAPrototype() {
+  const s = context(), { c } = s;
+  const base = () => JSON.parse(c.DB.exportJSON());
+  const poison = JSON.parse('{"__proto__":{"hasOwnProperty":1}}');   // an OWN key, as a blob carries it
+  const proto = (expr) => Object.getPrototypeOf(vm.runInContext(expr, c));
+  const objectProto = vm.runInContext('Object.prototype', c);
+  for (const door of ['import', 'pull']) {
+    const b = base();
+    b.nutrition = { mode: 'off', profile: poison, targets: JSON.parse('{"__proto__":{"hasOwnProperty":1}}') };
+    b.notif = { channels: { train: JSON.parse('{"__proto__":{"hasOwnProperty":1}}') } };
+    const raw = JSON.stringify(b);
+    assert.ok(raw.includes('"__proto__"'), 'the planted key survives serialisation as an own key');
+    const ok = door === 'import' ? c.DB.importJSON(raw) : c.Cloud.applyRemote({ data: JSON.parse(raw) }, 'alice');
+    assert.equal(ok, true, door + ': a blob whose only fault is a stray key is still readable');
+    assert.doesNotThrow(() => vm.runInContext("STATE.nutrition.profile.hasOwnProperty('x')", c), door + ": nutrition.profile's prototype was re-pointed by the blob");
+    assert.doesNotThrow(() => vm.runInContext("STATE.nutrition.targets.hasOwnProperty('x')", c), door + ": nutrition.targets's prototype was re-pointed by the blob");
+    assert.equal(proto('STATE.nutrition.profile'), objectProto, door + ': nutrition.profile keeps Object.prototype');
+    assert.doesNotThrow(() => c.DB.notif.get().channels.train.hasOwnProperty('x'), door + ": notif.channels.train's prototype was re-pointed by the blob");
+    assert.equal(Object.getPrototypeOf(c.DB.notif.get().channels.train), objectProto, door + ': notif.channels.train keeps Object.prototype');
+    assert.equal(Object.prototype.hasOwnProperty.call(c.DB.notif.get().channels.train, '__proto__'), false, door + ': the stray key is not carried into the shape');
+    assert.equal(Object.prototype.hasOwnProperty.call(JSON.parse(s.values.get(s.keys.store)).nutrition.profile, '__proto__'), false, door + ': the stray key is not written back to the store');
+  }
 }
 
 // ── HOUSEKEEPING IS NOT AN EDIT ──────────────────────────────────────────────

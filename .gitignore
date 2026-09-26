@@ -23,6 +23,12 @@ android/app/release/
 *.keystore
 *.pfx
 *.p12
+# wrangler's local secrets file and its build/state cache (backend/worker) —
+# `.dev.vars` is where GEMINI_KEY would sit for `wrangler dev`, and it must
+# never reach the branch GitHub Pages serves.
+.dev.vars
+.dev.vars.*
+.wrangler/
 
 # Distribution APK hosted on GitHub Pages (Drive-free install)
 !download/THE-VAULT.apk

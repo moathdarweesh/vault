@@ -309,6 +309,36 @@ async function foreignBlobSurvivesARescueFailure() {
   assert.equal(values.has(keys.recovery), false, 'nothing half-written in the rescue slot');
 }
 
+// ── no rescue → no sweep → NO UPLOAD EITHER (access-control audit 2026-09-27) ──
+// The case above proved the blob stays; it never asked where the sync went
+// NEXT. With the device left as it was, both entry points went on as if it
+// were bob's: bob's row is empty, so they reached pushed() and INSERTED
+// alice's whole history into bob's account — pushOnce asked only «same
+// address?», never «whose data?». The guard answers 'held' now, both callers
+// stop on it exactly as on 'duplicate', and a push fired by a save refuses.
+async function rescueFailureNeverUploads(entry) {
+  const s = context(), { c, values, keys } = s;
+  const ex = firstExercise(c);
+  const alice = c.DB.sessions.add({ exerciseId: ex, date: DAY, sets: [{ reps: 5, weight: 100 }] });
+  await bootAs(s, entry, { id: 'alice', email: 'alice@example.invalid' });
+  s.session({ user: { id: 'bob', email: 'bob@example.invalid' } });   // a shared phone: two addresses
+  const requests = [];
+  s.query(async (r) => { requests.push(r); return { data: null, error: null }; });   // bob's row is empty
+  s.fail('QuotaExceededError');                       // the rescue cannot be written
+  const r = await c.Cloud[entry]();
+  s.fail('');
+  const offered = () => JSON.stringify(requests.filter((q) => q.kind !== 'read' && q.table !== 'client_errors').map((q) => q.rows));
+  assert.equal(offered().includes(alice.id), false, "alice's history was offered to bob's row by " + entry + ': ' + offered().slice(0, 120));
+  assert.equal(r, 'held', entry + ' says the device is held, not synced: ' + r);
+  assert.ok((values.get(keys.store) || '').includes(alice.id), 'the blob is untouched');
+  assert.equal(c.Cloud.getLastUid(), 'alice', 'and the device still says whose it is');
+  // A save fires a push BEFORE the next guard runs; it must refuse on its own.
+  c.DB.prefs.setUnit('lb');
+  requests.length = 0;
+  assert.equal(await c.Cloud.push(), 'held', 'a push while the device is held is refused');
+  assert.equal(offered().includes(alice.id), false, 'and it offered nothing');
+}
+
 // ── restoreRecovery reports the upload half honestly ─────────────────────────
 async function restoreSaysWhichHalf() {
   const s = context(), { c, values, keys } = s;
@@ -522,8 +552,162 @@ async function aLinkCannotSwapTheAccount() {
   assert.equal(r.refused, true);
 }
 
+// ── THE CONSOLE SHARES NEITHER THE APP'S SESSION SLOT NOR THE SDK'S DEFAULTS ─
+// admin.html built its client on the defaults: detectSessionInUrl on, and the
+// DERIVED storage key — the same key js/cloud.js keeps the app's session under,
+// on the same origin. A «reset» link built from someone else's tokens, opened
+// on admin.html, replaced the app's signed-in session with theirs, and the
+// app's next launch ran as that account (audit 2026-09-27). The console's own
+// client-creation lines run here, verbatim, under the real vendored SDK.
+const ADMIN_BOOT = (() => {
+  const a = require('node:fs').readFileSync(require('node:path').join(__dirname, '..', 'admin.html'), 'utf8');
+  const start = a.indexOf('var SUPABASE_URL=');
+  const create = a.indexOf('var sb=window.supabase.createClient');
+  return start > 0 && create > start ? a.slice(start, a.indexOf('\n', create)) : '';
+})();
+const ADMIN_KEY = (ADMIN_BOOT.match(/ADMIN_AUTH_KEY\s*=\s*'([^']+)'/) || [])[1] || AUTH_KEY;
+async function adminLinkArrives({ hash, appSignedIn, adminSignedIn }) {
+  const s = context(), { c, values } = s;
+  if (appSignedIn) values.set(AUTH_KEY, storedSession(appSignedIn));       // the APP's session, same origin
+  if (adminSignedIn) values.set(ADMIN_KEY, storedSession(adminSignedIn));  // the console's own
+  let href = 'https://moathdarweesh.github.io/vault/admin.html' + hash;
+  Object.assign(c, {
+    URL, URLSearchParams, Headers, Request, Response, AbortController, TextEncoder, TextDecoder, atob, btoa,
+    WebSocket: class { close() {} }, setInterval: () => 0, clearInterval() {},
+    history: { state: null, replaceState(st, title, u) { href = new URL(u, href).href; } },
+    sessionStorage: { getItem: () => null, setItem() {}, removeItem() {} },
+    fetch: async (url, init) => {
+      if (String(url).includes('/auth/v1/user')) {
+        const h = (init && init.headers) || {};
+        const auth = String((typeof h.get === 'function' ? h.get('Authorization') : (h.Authorization || h.authorization)) || '');
+        const sub = JSON.parse(Buffer.from(auth.replace(/^Bearer /, '').split('.')[1], 'base64url').toString()).sub;
+        return new Response(JSON.stringify({ id: sub, aud: 'authenticated', email: sub + '@example.invalid' }), { status: 200, headers: { 'content-type': 'application/json' } });
+      }
+      return new Response('{}', { status: 200, headers: { 'content-type': 'application/json' } });
+    },
+  });
+  Object.defineProperty(c, 'location', { configurable: true, get: () => { const u = new URL(href); return { href, hash: u.hash, search: u.search, pathname: u.pathname, origin: u.origin }; } });
+  vm.runInContext(SDK, c);
+  assert.ok(ADMIN_BOOT, "admin.html's client-creation lines were not found");
+  vm.runInContext(ADMIN_BOOT, c);                          // the console's client, exactly as the page builds it
+  await vm.runInContext('sb.auth.getSession()', c);
+  await s.advance(0);
+  const uid = (k) => { const r = JSON.parse(values.get(k) || 'null'); return (r && r.user && r.user.id) || null; };
+  return { app: uid(AUTH_KEY), admin: uid(ADMIN_KEY), href };
+}
+async function aLinkCannotSwapTheAppAccountThroughTheConsole() {
+  let r = await adminLinkArrives({ hash: fragment('mallory', 'recovery'), appSignedIn: 'alice' });
+  assert.equal(r.app, 'alice', "a «reset» link opened on admin.html replaced the APP's signed-in session with mallory's");
+  assert.notEqual(ADMIN_KEY, AUTH_KEY, 'the console keeps its session under its own key');
+  r = await adminLinkArrives({ hash: fragment('mallory', 'recovery'), adminSignedIn: 'alice' });
+  assert.equal(r.admin, 'alice', "a reset link for ANOTHER account replaced the console's signed-in session");
+  assert.equal(r.href.includes('access_token'), false, 'and the refused tokens are gone from the address bar');
+  r = await adminLinkArrives({ hash: fragment('alice', 'recovery'), adminSignedIn: 'alice' });
+  assert.equal(r.admin, 'alice', "the owner's own reset link, opened where the owner is signed in, still lands");
+  r = await adminLinkArrives({ hash: fragment('alice', 'recovery') });
+  assert.equal(r.admin, 'alice', 'a reset link in a fresh browser still lands — is_admin() judges it next (contract 47)');
+  r = await adminLinkArrives({ hash: fragment('mallory') });
+  assert.equal(r.admin, null, 'a plain #access_token link is refused by the console');
+}
+
+// ── SIGN-IN REVEALS NOTHING BEFORE THE GUARD HAS ANSWERED (audit 2026-09-27) ─
+// afterLogin took the gate down at once whenever the device held data — ANY
+// data — so on a shared phone bob saw alice's already-painted screen while
+// resolveOnLogin was still deciding; and an 'offline' answer never repainted,
+// so the swept store stayed on screen until he navigated. The real afterLogin
+// runs here over a stub Cloud that answers 'offline' after a tick.
+async function loginRevealsNothingBeforeTheGuardAnswers() {
+  const app = require('node:fs').readFileSync(require('node:path').join(__dirname, '..', 'js/app.js'), 'utf8');
+  const body = app.slice(app.indexOf('async function afterLogin()'), app.indexOf('function showConflictDialog('));
+  const calls = [];
+  let answered = false, lastUid = 'alice';
+  const c = {
+    console, setImmediate,
+    Cloud: { localHasData: () => true, getLastUid: () => lastUid, getSession: async () => ({ user: { id: 'bob' } }), touchLastSeen() {},
+      resolveOnLogin: async () => { await new Promise((r) => setImmediate(r)); answered = true; calls.push('guard'); return 'offline'; } },
+    hideAuthGate: () => calls.push(answered ? 'hideAuthGate' : 'hideAuthGate:before-guard'), showToast() {}, t: (k) => k,
+    ensureUsername() {}, enforceAccountStatus() {}, showConflictDialog() {}, showDuplicateAccountDialog(k) { calls.push('dup:' + k); },
+    refreshAfterSync: () => calls.push('refreshAfterSync'), syncExerciseImages() {},
+  };
+  vm.createContext(c); vm.runInContext(body, c);
+  await c.afterLogin();
+  assert.equal(calls.includes('hideAuthGate:before-guard'), false, "afterLogin revealed the screen before resolveOnLogin's guard answered — bob saw alice's data: " + calls.join(' > '));
+  assert.ok(calls.indexOf('refreshAfterSync') > calls.indexOf('guard'), "an 'offline' answer over another account's data still repaints: " + calls.join(' > '));
+  // …and the account's OWN device is still revealed at once, as before.
+  calls.length = 0; answered = false; lastUid = 'bob';
+  await c.afterLogin();
+  assert.equal(calls[0], 'hideAuthGate:before-guard', "the account's own data is still shown without waiting: " + calls.join(' > '));
+}
+
+// ── A RESET LINK NAMES THE ACCOUNT IT RESETS, AND ASKS (audit 2026-09-27) ────
+// recoveryFits lets a type=recovery link sign a signed-out, data-less device
+// into the link's account — «type=recovery» is text anyone can put in a URL —
+// and showChangePassword(true) then offered a new-password form that never
+// said WHOSE password. The real function runs here over a fake sheet: the
+// first thing it opens must name the account and ask; «not my account» ends
+// the session and clears what it left behind; «continue» reaches the form.
+function sheetOf(html) {
+  const els = new Map();
+  for (const m of html.matchAll(/id="([^"]+)"/g)) {
+    const tag = html.slice(m.index, html.indexOf('>', m.index));
+    els.set(m[1], { id: m[1], value: '', textContent: '', disabled: /\bdisabled\b/.test(tag), on: {},
+      addEventListener(t, fn) { (this.on[t] = this.on[t] || []).push(fn); },
+      click() { return Promise.all((this.on.click || []).map((fn) => fn())); } });
+  }
+  return { html, querySelector: (sel) => els.get(String(sel).replace(/^#/, '')) || null };
+}
+async function recoveryNamesTheAccountAndAsks() {
+  const app = require('node:fs').readFileSync(require('node:path').join(__dirname, '..', 'js/app.js'), 'utf8');
+  const at = app.indexOf('function confirmRecoveryAccount(');   // the question, above the form (absent before the fix)
+  const body = app.slice(at >= 0 ? at : app.indexOf('function showChangePassword('), app.indexOf('function showFeedback('));
+  const tk = () => new Promise((r) => setImmediate(r));
+  const sheets = [], calls = [];
+  let lastUid = 'bob', hasData = false;
+  const c = {
+    console, setImmediate,
+    Cloud: { getSession: async () => ({ user: { id: 'bob', email: 'owner@example.invalid' } }), currentEmail: async () => 'owner@example.invalid',
+      getLastUid: () => lastUid, localHasData: () => hasData, changePassword: async () => ({ ok: true }), captcha: null,
+      signOut: async () => { calls.push('signOut'); }, clearLocalUserData: () => calls.push('clear') },
+    t: (k) => (k === 'recovery_confirm_yes' ? 'Continue as {email}' : k), icon: () => '', escapeHtml: (s) => String(s), showToast() {},
+    closeModal: () => calls.push('close'), translateAuthError: (m) => m, authSheetKit: () => ({ err() {}, busy() {}, token: async () => null, reset() {} }),
+    location: { reload: () => calls.push('reload') },
+    openModal: (html, opts) => { const el = sheetOf(html); sheets.push({ el, opts: opts || {} }); return el; },
+  };
+  vm.createContext(c); vm.runInContext(body, c);
+  c.showChangePassword(true);
+  for (let i = 0; i < 4; i++) await tk();
+  const ask = sheets[0] && sheets[0].el;
+  assert.ok(ask && ask.querySelector('#cpw-yes') && ask.querySelector('#cpw-no') && !ask.querySelector('#cpw-new'),
+    'a reset link opened the new-password form without naming the account it resets, or asking: ' + (ask ? ask.html.replace(/\s+/g, ' ').trim().slice(0, 140) : 'no sheet'));
+  assert.equal(sheets[0].opts.dismissible, false, 'the question must be answered');
+  assert.equal(ask.querySelector('#cpw-yes').textContent, 'Continue as owner@example.invalid', 'the button names the account');
+  assert.equal(ask.querySelector('#cpw-yes').disabled, false, 'and is live once the account is known');
+  await ask.querySelector('#cpw-no').click();
+  for (let i = 0; i < 4; i++) await tk();
+  assert.deepEqual(calls, ['signOut', 'clear', 'reload'], 'refusal signs out, clears what the session left, reloads: ' + calls.join(' > '));
+  assert.equal(sheets.length, 1, 'and no password form opened');
+  // another account's data on the device is NOT cleared by a refusal
+  sheets.length = 0; calls.length = 0; lastUid = 'alice'; hasData = true;
+  c.showChangePassword(true);
+  for (let i = 0; i < 4; i++) await tk();
+  await sheets[0].el.querySelector('#cpw-no').click();
+  for (let i = 0; i < 4; i++) await tk();
+  assert.deepEqual(calls, ['signOut', 'reload'], "a refusal never clears another account's data: " + calls.join(' > '));
+  // «continue as …» reaches the form, which has no current-password field
+  sheets.length = 0; calls.length = 0; lastUid = 'bob'; hasData = false;
+  c.showChangePassword(true);
+  for (let i = 0; i < 4; i++) await tk();
+  await sheets[0].el.querySelector('#cpw-yes').click();
+  for (let i = 0; i < 4; i++) await tk();
+  const form = sheets[1] && sheets[1].el;
+  assert.ok(form && form.querySelector('#cpw-new') && !form.querySelector('#cpw-current'), 'the form opens once the account is confirmed, without a current-password field');
+}
+
 async function run() {
   await aLinkCannotSwapTheAccount();
+  await aLinkCannotSwapTheAppAccountThroughTheConsole();
+  await loginRevealsNothingBeforeTheGuardAnswers();
+  await recoveryNamesTheAccountAndAsks();
   await twoWindowsPushTogether(true);
   await twoWindowsPushTogether(false);
   await siblingLandedWhileThisOneWasOut();
@@ -541,7 +725,8 @@ async function run() {
     await sameAccountIsUntouched(entry);
     await sameEmailSecondAccountIsHeld(entry);
     await releaseSweepsUnderTheOldUid(entry);
+    await rescueFailureNeverUploads(entry);
   }
-  console.log('PASS multi-window: a URL session cannot replace a stored one or take over a signed-out device holding data, while the own-account and fresh-browser reset links and a Google return this tab started still sign in (the real vendored SDK); two windows pushing at once are one upload queue with Web Locks and still no conflict without them (the shared version never wound back), a sibling that answered first is retried once conditionally from a fresh export, another device is still a conflict and the note carries sentVer/remoteStamp; sibling writes adopted not overwritten, STALE recorded, READ-ONLY and garbage refused, photos kept; a foreign blob is rescued under its own uid and never uploaded (login + boot, with and without addresses), and never swept when the rescue cannot be written; a same-address second account is held — nothing swept, pulled or pushed (login + boot + push) — and released on request by the same sweep under the old uid; restore reports its upload half');
+  console.log('PASS multi-window: a URL session cannot replace a stored one or take over a signed-out device holding data, while the own-account and fresh-browser reset links and a Google return this tab started still sign in (the real vendored SDK); two windows pushing at once are one upload queue with Web Locks and still no conflict without them (the shared version never wound back), a sibling that answered first is retried once conditionally from a fresh export, another device is still a conflict and the note carries sentVer/remoteStamp; sibling writes adopted not overwritten, STALE recorded, READ-ONLY and garbage refused, photos kept; a foreign blob is rescued under its own uid and never uploaded (login + boot, with and without addresses), and never swept when the rescue cannot be written; a same-address second account is held — nothing swept, pulled or pushed (login + boot + push) — and released on request by the same sweep under the old uid; a rescue that cannot be written holds the device too — nothing of the previous account is offered to the new row (login + boot + push); the console keeps its own session slot and refuses a reset link for another account; sign-in reveals nothing before the guard has answered and repaints after; a reset link names the account and asks before the form; restore reports its upload half');
 }
 run().catch((error) => { console.error(error); process.exitCode = 1; });

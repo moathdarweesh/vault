@@ -341,12 +341,18 @@ async function pageFetch(url, until) {   // the Response, or null on a network f
   }
 }
 
-// A post's cover as ONE still: https only, at most one still's worth of bytes,
-// and its type read from the bytes — a CDN's Content-Type is not evidence.
+// A post's cover as ONE still: https only, from the platform's OWN CDN only,
+// at most one still's worth of bytes, and its type read from the bytes — a
+// CDN's Content-Type is not evidence. The URL comes from a third-party body
+// (TikTok's oEmbed thumbnail_url, Instagram's og:image) — a host of the post
+// author's choosing until the allowlist (OWASP audit 2026-09-27): a cover on
+// any other host is simply not fetched, and the caption alone goes on.
+const STILL_HOSTS = /(^|\.)(tiktokcdn\.com|tiktokcdn-us\.com|cdninstagram\.com|fbcdn\.net)$/i;
 async function fetchStill(url, until) {
   let u;
   try { u = new URL(String(url)); } catch (_) { return null; }
-  const r = u.protocol === 'https:' ? await pageFetch(u.href, until) : null;
+  if (u.protocol !== 'https:' || !STILL_HOSTS.test(u.hostname)) return null;
+  const r = await pageFetch(u.href, until);
   const max = MAX_RECIPE_FRAME / 4 * 3;   // the bytes whose base64 is MAX_RECIPE_FRAME characters
   if (!r || !r.ok || Number(r.headers.get('Content-Length') || 0) > max) return null;
   let b;
@@ -535,13 +541,17 @@ async function callModel(model, key, req) {
     let msg = 'HTTP ' + res.status;
     try { const e = await res.json(); msg = (e.error && e.error.message) || msg; } catch (_) {}
     console.error('[gemini-worker] upstream error:', res.status, msg);
-    // 400 and 403 are properties of the KEY or its project, never of a model —
-    // so they fail on every model, on every request, for ever, and they are the
-    // one upstream class the owner must act on rather than wait out. The code
-    // travels; the message never does (it can quote the key's own project).
-    // (The status travels too: a 400 for a YouTube link is about the video, not the key.)
-    if (res.status === 400 || res.status === 403) return { error: 'upstream_error', auth: true, status: res.status };
-    return { error: 'upstream_error' };
+    // 403 is a property of the KEY or its project, never of a model — it fails
+    // on every model, on every request, for ever, and it is the one upstream
+    // class the owner must act on rather than wait out. A 400 is a bad REQUEST
+    // (INVALID_ARGUMENT — an unreadable image, a refused clip), and only the
+    // one that names the key ("API key not valid") is the key's: every 400 used
+    // to travel as UPSTREAM_AUTH and tell the owner his key was broken (OWASP
+    // audit 2026-09-27). The code travels; the message never does (it can quote
+    // the key's own project). The status travels too: a 400 for a YouTube link
+    // is about the video, and the caller retries it bare before LINK_BLOCKED.
+    if (res.status === 403 || (res.status === 400 && /api key/i.test(msg))) return { error: 'upstream_error', auth: true, status: res.status };
+    return { error: 'upstream_error', status: res.status };
   }
 
   const data = await res.json();
@@ -593,12 +603,16 @@ const SUPABASE_ANON = 'sb_publishable_ZBR2VENMP2O_K2YTMePCsw_NfLC9FSI';
 //   - a DEFINITIVE 4xx (400/401/403/404/422) → block. Previously only 401/403
 //     blocked and every other status fell through to "allow", so any other 4xx
 //     Supabase returned for a malformed/garbage token silently authorised it.
-//   - 429 (auth endpoint throttled)  → allow. This is NOT a statement about the
-//     token: Supabase is rate-limiting us, and treating it as "invalid" would
-//     lock a legitimate signed-in user out of AI during a traffic spike. Rate
-//     limited by Cloudflare's caller IP below, not by an unverified token.
-//   - 5xx or a network error         → allow. This is the case the fail-open was
-//     written for: a genuine Supabase outage must not take AI down for real users.
+//   - 429 (auth endpoint throttled)  → allow A TOKEN SHAPED LIKE OURS. This is
+//     NOT a statement about the token: Supabase is rate-limiting us, and
+//     treating it as "invalid" would lock a legitimate signed-in user out of AI
+//     during a traffic spike. Rate limited by Cloudflare's caller IP below.
+//   - 5xx or a network error         → the same. This is the case the fail-open
+//     was written for: a genuine Supabase outage must not take AI down for real
+//     users. But it used to admit ANY bearer string (audit 2026-09-27): now only
+//     a JWT with this project's issuer, a sub and a future exp passes — not a
+//     verification (the signature cannot be checked here), a shape — and every
+//     such admission is logged with the status that caused it.
 //   - a 200 with no usable user id   → allow through the same IP bucket. A
 //     malformed success body is not proof that the caller's token is invalid,
 //     but it must never create an unlimited null-key path.
@@ -631,12 +645,28 @@ async function callerAllowed(request) {
       return { allowed: true, userId: userId || outageRateKey(request) };
     }
     // 429/5xx → Supabase is unwell, not the caller. Keep the availability
-    // tradeoff, but share one bucket per edge-observed IP so rotating arbitrary
-    // bearer junk cannot turn the outage into an unlimited Gemini relay.
+    // tradeoff for a token shaped like ours, share one bucket per edge-observed
+    // IP so rotating bearer junk cannot turn the outage into a Gemini relay,
+    // and say so — an unverified admission must never be silent.
+    if (!tokenLooksOurs(token)) return { allowed: false, userId: null };
+    console.warn('[gemini-worker] auth outage: token admitted unverified:', r.status);
     return { allowed: true, userId: outageRateKey(request) };
-  } catch (_) {
+  } catch (e) {
+    if (!tokenLooksOurs(token)) return { allowed: false, userId: null };
+    console.warn('[gemini-worker] auth outage: token admitted unverified: unreachable', (e && e.name) || 'error');
     return { allowed: true, userId: outageRateKey(request) };  // unreachable → capped allow
   }
+}
+// The SHAPE of this project's token, for the outage branches above: issued by
+// this project's GoTrue, naming an account, not yet expired. The signature is
+// not checked and cannot be — the answer only narrows what an outage admits.
+function tokenLooksOurs(token) {
+  try {
+    const part = String(token || '').split('.')[1] || '';
+    const c = JSON.parse(atob(part.replace(/-/g, '+').replace(/_/g, '/') + '==='.slice((part.length + 3) % 4)));
+    return !!(c && c.iss === SUPABASE_URL + '/auth/v1' && typeof c.sub === 'string' && c.sub
+      && typeof c.exp === 'number' && c.exp * 1000 > Date.now());
+  } catch (_) { return false; }
 }
 
 // Per-caller burst limit. ⚠️ MEASURED INEFFECTIVE, kept only because it costs
@@ -716,6 +746,14 @@ async function budgetAllows(request) {
     if (!r.ok) {
       let code = '', message = '';
       try { const e = await r.json(); code = String((e && e.code) || ''); message = String((e && e.message) || '').slice(0, 160); } catch (_) {}
+      // A 401/403 is PostgREST's verdict on the TOKEN — expired between /user
+      // and here, or one Postgres will not bill — not on the budget's health.
+      // A caller whose token cannot be billed cannot honestly be served: this
+      // fails CLOSED (audit 2026-09-27); every other failure stays open below.
+      if (r.status === 401 || r.status === 403) {
+        console.error('[gemini-worker] budget rpc refused the token, failed CLOSED:', r.status, code || '-', message);
+        return { ok: false, reason: 'auth' };
+      }
       console.error('[gemini-worker] budget rpc failed OPEN:', r.status, code || '-', message);
       return { ok: true };
     }
@@ -788,9 +826,16 @@ export default {
         if (recipe.unsupported) return json({ error: 'no input', code: 'LINK_UNSUPPORTED' }, 400, origin);
         if (recipe.error) return json({ error: recipe.error }, recipe.status, origin);
       }
+      // Both payloads are held to base64 BEFORE the budget and the model (OWASP
+      // audit 2026-09-27): only workout-plan mode checked its image; the food
+      // photo and the voice clip were length-capped and forwarded as they came.
+      // The photo is checked whole, the clip head+tail like a recipe frame
+      // (spliceable) — a middle that is not base64 makes Gemini answer 400, and
+      // can never become request structure.
       if (mode !== 'recipe' && body.image && body.image.data) {
         const data = String(body.image.data);
         if (data.length > MAX_IMG) return json({ error: 'image too large' }, 413, origin);
+        if (!/^[A-Za-z0-9+/]+={0,2}$/.test(data)) return json({ error: 'no input' }, 400, origin);
         let mime = String(body.image.mimeType || 'image/jpeg').toLowerCase();
         if (OK_MIME.indexOf(mime) === -1) mime = 'image/jpeg';
         image = { mimeType: mime, data };
@@ -798,6 +843,7 @@ export default {
       if (mode !== 'recipe' && body.audio && body.audio.data) {
         const data = String(body.audio.data);
         if (data.length > MAX_AUDIO) return json({ error: 'audio too large' }, 413, origin);
+        if (!spliceable(data)) return json({ error: 'no input' }, 400, origin);
         let mime = String(body.audio.mimeType || 'audio/webm').toLowerCase();
         // Normalise codec-suffixed types (e.g. "audio/webm;codecs=opus").
         mime = mime.split(';')[0].trim();
@@ -823,6 +869,7 @@ export default {
     // caller who meets 'blocked' here is a script, and it learns nothing it can
     // use; the reason itself goes to the log line in budgetAllows.
     const budget = await budgetAllows(request);
+    if (!budget.ok && budget.reason === 'auth') return json({ error: 'unauthorized' }, 401, origin);   // PostgREST would not bill this token
     if (!budget.ok) return json({ error: 'daily limit', code: 'DAILY_LIMIT' }, 429, origin);
 
     const req = { text, image, audio, prompt, mode, recipe };
