@@ -40,6 +40,7 @@ window.VAULT_KEYS = Object.freeze({
   updateDismissed: 'vault_update_dismissed_build',   // js/update.js — per DEVICE, deliberately not swept on logout
   webReloadGuard: 'vault_wr_',                        // js/update.js — sessionStorage, + target build: one auto-reload per session per target
   oauthStarted: 'vault_oauth_started',     // sessionStorage: THIS TAB left for «Continue with Google» (a timestamp) — the one URL session it accepts unasked
+  quickLaunch: 'vault_quick_launch',       // sessionStorage: the widget launch url this Activity already ran — getLaunchUrl() replays it for the Activity's life (DB.launch)
   authToken: 'sb-ilmusnuchqlpirywonzx-auth-token',   // the SDK's OWN session key, READ only: a URL session may not replace one stored here.
                                                      // The SDK derives it from SUPABASE_URL; contract 47 holds the two equal.
   widget: 'vault_widget_v1',               // DB.widget — the home-screen snapshot. NOT localStorage:

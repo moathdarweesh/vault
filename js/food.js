@@ -328,40 +328,68 @@ function openBarcodeScanner(date, onSave) {
     setTimeout(() => { try { overlay.querySelector('#bc-manual-input').focus(); } catch (_) {} }, 80);
   };
 
-  // Look up ONE code on Open Food Facts. Returns true when a product with
-  // calories was found and shown (scanning then stops); false otherwise.
+  // Look up ONE code on Open Food Facts. It answers what happened, because the
+  // two misses are different facts:
+  //   'found'   a product with calories is shown; scanning stops
+  //   'unknown' the database has no such product — skip it for this sheet
+  //   'failed'  the NETWORK failed (offline, DNS, a 5xx) — nothing is known
+  //             about the code, so it is only POSTPONED. Filed as unknown, the
+  //             same product could never be looked up again, however long the
+  //             camera was held on it once the connection came back.
+  //   'busy'    another lookup is out (the camera's and a typed one can meet);
+  //             nothing was changed
+  //   'gone'    the sheet closed while the request was out
+  let lookingUp = false;
   async function lookup(code) {
+    if (lookingUp) return 'busy';
+    lookingUp = true;
     scanning = false;                 // pause processing while we query
+    // A card is only ever on screen for the code that produced it. Kept, the
+    // last product's card and its Add button stayed live under «not found»,
+    // and one tap logged the wrong food.
+    result.innerHTML = '';
     status.textContent = t('barcode_looking');
     let product = null;
-    let failed = false;   // a DNS failure, offline, a 5xx — none of them is "unknown barcode"
+    let failed = false;
     try {
       const res = await fetch('https://world.openfoodfacts.org/api/v2/product/' +
         encodeURIComponent(code) + '.json?fields=product_name,nutriments,serving_quantity,product_quantity');
       const data = await res.json();
       product = data && data.product;
     } catch (_) { failed = true; }
-    if (!document.body.contains(overlay)) return true;
+    finally { lookingUp = false; }
+    if (!document.body.contains(overlay)) return 'gone';
     const n = product && product.nutriments;
     const kcal100 = n && (n['energy-kcal_100g'] != null ? +n['energy-kcal_100g'] : null);
-    if (!product || !n || kcal100 == null) { status.textContent = t(failed ? 'auth_err_network' : 'barcode_not_found'); return false; }
+    if (!product || !n || kcal100 == null) { status.textContent = t(failed ? 'auth_err_network' : 'barcode_not_found'); return failed ? 'failed' : 'unknown'; }
     stop();                           // got a hit → release the camera
     if (stage) stage.style.display = 'none';
     showResult(product, n);
-    return true;
+    return 'found';
   }
+  // What the camera remembers about a miss, so it does not re-ask on every
+  // frame: an unknown code for the rest of the sheet, a failed one for 2 s.
+  const retryAt = new Map();
+  const skipCode = (code) => triedUnknown.has(code) || (retryAt.get(code) || 0) > Date.now();
+  const noteMiss = (code, outcome) => {
+    if (outcome === 'unknown') triedUnknown.add(code);
+    else if (outcome === 'failed') retryAt.set(code, Date.now() + 2000);
+  };
 
-  // Native BarcodeDetector loop (Android). On an unknown code it's remembered
-  // and scanning continues for a different one.
+  // Native BarcodeDetector loop (Android). `loopAlive` is true while a frame of
+  // it is scheduled or running, so a restart can never start a second loop
+  // beside one that is still going.
+  let loopAlive = false;
+  const startLoop = () => { if (detector && !loopAlive) { loopAlive = true; requestAnimationFrame(scanLoopNative); } };
   async function scanLoopNative() {
-    if (!scanning || !detector || !document.body.contains(overlay)) return;
+    if (!scanning || !detector || !document.body.contains(overlay)) { loopAlive = false; return; }
     try {
       const codes = await detector.detect(video);
       const code = codes && codes.length && codes[0].rawValue ? String(codes[0].rawValue) : '';
-      if (code && !triedUnknown.has(code)) {
-        if (await lookup(code)) return;
-        triedUnknown.add(code);
-        scanning = true;
+      if (code && !skipCode(code)) {
+        const outcome = await lookup(code);
+        if (outcome === 'found' || outcome === 'gone') { loopAlive = false; return; }
+        if (outcome !== 'busy') { noteMiss(code, outcome); scanning = true; }
       }
     } catch (_) {}
     requestAnimationFrame(scanLoopNative);
@@ -373,8 +401,18 @@ function openBarcodeScanner(date, onSave) {
   const manualGo = overlay.querySelector('#bc-manual-go');
   const doManual = () => {
     const code = String(manualInput.value || '').replace(/\D/g, '');
-    if (code.length < 6) { status.textContent = t('barcode_invalid'); manualInput.focus(); return; }
-    lookup(code);
+    if (code.length < 6) { result.innerHTML = ''; status.textContent = t('barcode_invalid'); manualInput.focus(); return; }
+    // A typed miss must not end the camera. lookup() pauses both engines, and
+    // only the camera's own callers used to resume them — so after one typed
+    // «not found» the preview kept running and nothing was decoded again. The
+    // camera is resumed only if it is still live (stop() and failToManual()
+    // null the stream and the reader); ZXing's callback needs only the flag.
+    lookup(code).then((outcome) => {
+      if ((outcome === 'unknown' || outcome === 'failed') && (stream || zxingReader) && document.body.contains(overlay)) {
+        scanning = true;
+        startLoop();
+      }
+    });
   };
   manualGo.addEventListener('click', doManual);
   manualInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); doManual(); } });
@@ -456,7 +494,13 @@ function openBarcodeScanner(date, onSave) {
   }
   if (detector) {
     navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } })
-      .then((s) => { stream = s; video.srcObject = s; video.play().catch(() => {}); scanning = true; requestAnimationFrame(scanLoopNative); })
+      .then((s) => {
+        // The permission prompt can outlast the sheet. Closed while it was up,
+        // the camera arrived to nobody and ran on behind no screen — stop() had
+        // already run and could not see it. It is switched off here instead.
+        if (!document.body.contains(overlay)) { s.getTracks().forEach((tk) => tk.stop()); return; }
+        stream = s; video.srcObject = s; video.play().catch(() => {}); scanning = true; startLoop();
+      })
       .catch(() => failToManual(true));
     return;
   }
@@ -465,16 +509,21 @@ function openBarcodeScanner(date, onSave) {
   status.textContent = t('barcode_loading');
   loadBarcodeLib().then((ZX) => {
     if (!document.body.contains(overlay)) return;
-    zxingReader = new ZX.BrowserMultiFormatReader();
+    const reader = zxingReader = new ZX.BrowserMultiFormatReader();
     scanning = true;
     status.textContent = t('barcode_hint');
-    return zxingReader.decodeFromConstraints({ video: { facingMode: 'environment' } }, video, async (res2) => {
+    return reader.decodeFromConstraints({ video: { facingMode: 'environment' } }, video, async (res2) => {
       if (!scanning || !res2 || typeof res2.getText !== 'function') return;   // no barcode in this frame
       const code = String(res2.getText());
-      if (triedUnknown.has(code)) return;
-      if (await lookup(code)) return;   // found → shown + stopped
-      triedUnknown.add(code);           // unknown → skip it, keep scanning
+      if (skipCode(code)) return;
+      const outcome = await lookup(code);
+      if (outcome === 'found' || outcome === 'gone' || outcome === 'busy') return;
+      noteMiss(code, outcome);          // unknown → skip it; failed → try again shortly
       scanning = true;
+    }).then(() => {
+      // The native path's race, here: a camera granted after the sheet closed
+      // is attached to the reader AFTER stop() reset it, so it is reset again.
+      if (!document.body.contains(overlay)) { try { reader.reset(); } catch (_) {} }
     });
   }).catch(() => failToManual(true));
 }
@@ -826,6 +875,11 @@ function openManualFoodEntry(date, onSave) {
       carbs: Number(F.carb.value) || 0,
       fat: Number(F.fat.value) || 0,
     };
+    // min="0" does not stop a typed minus sign, and -300 kcal logged here was
+    // counted BACK into the day — and, with «keep» ticked by default, kept in My
+    // foods to do it again on every one-tap log. Refused by name before anything
+    // is written: DB.foodLogs.add would clamp it to 0, a different wrong number.
+    if (Object.values(macros).some((v) => v < 0)) { showToast(t('food_negative')); return; }
     DB.foodLogs.add(date || todayISO(), { name, servings: 1, ...macros, source: 'manual' });
     // Keep it for next time, so the same meal is one tap from the saved picker
     // instead of being retyped. Skipped when an identically-named food already
@@ -858,6 +912,40 @@ function openManualFoodEntry(date, onSave) {
 //
 // Totals are never stored; DB.recipes.totals() derives them on read. A stored
 // total silently disagrees with its own ingredients the moment one is edited.
+
+// ONE READING OF A NUMBER IN AN AMOUNT. The editor's weight reader (parseGrams)
+// and the ingredients sheet's scaler (recScaleQty) read the same free-text
+// field, and they read a comma two ways: «0,5 كغ» was half a kilo to the
+// scaler and 5 kg to parseGrams — the comma stopped the number, the weight
+// regex matched «5 كغ» on its own, and a saved food was scaled ten times over
+// with no model call to catch it — while «1,000 g» was 1 g to the scaler. A
+// comma between digits is a THOUSANDS separator when exactly three digits
+// follow it and a DECIMAL mark when one or two do, for both readers; any other
+// comma is not part of a number. (Hoisted out of openRecipeEditor, where both
+// were closure vars, so that one rule has one spelling and can be tested.)
+function latinDigits(s) {
+  return String(s || '').replace(/[\u0660-\u0669]/g, (d) => String(d.charCodeAt(0) - 0x660))
+    .replace(/[\u06F0-\u06F9]/g, (d) => String(d.charCodeAt(0) - 0x6F0)).replace(/\u066B/g, '.')
+    .replace(/(\d),(?=\d{3}(?!\d))/g, '$1')
+    .replace(/(\d),(\d{1,2})(?!\d)/g, '$1.$2');
+}
+// '200 غ' / '200g' / '٢٠٠' / '0.5 كغ' / '0,5 كغ' → grams; anything else (cups,
+// pieces) → null. The LAST weight in the string counts ('١ كوب · ٢٥٠غ',
+// 'سكوب · ٣٠غ', '200 g'). A bare number means grams for a typed quantity ('200'),
+// but NOT for a food's serving — '1' there is one piece, and scaling 100 g by it
+// made a 7,800-calorie egg. The number must START where it is read (the
+// lookbehind): a comma neither rule above reads («1,5000 g») would otherwise
+// leave its tail to match on its own, and part of a number is not a weight —
+// that string goes to the model instead.
+function parseGrams(s, requireUnit) {
+  const str = latinDigits(s).trim().toLowerCase();
+  let m = str.match(/(?<![\d.,])(\d+(?:\.\d+)?)\s*(كغ|كجم|kg|غ|غم|جم|غرام|جرام|g|gr|gram|grams|مل|ml)\.?\s*$/);
+  if (!m && !requireUnit) m = str.match(/^(\d+(?:\.\d+)?)$/);
+  if (!m) return null;
+  const n = parseFloat(m[1]); if (!(n > 0)) return null;
+  return /^(كغ|كجم|kg)$/.test(m[2] || '') ? n * 1000 : n;
+}
+
 // THE INGREDIENTS, TO COOK FROM. The card says what a serving COSTS; this says
 // what goes IN — every ingredient with its amount exactly as it was typed
 // («200 غ», «٣ حبات»), never parsed, never scaled, and no macros: at the
@@ -874,11 +962,14 @@ function openManualFoodEntry(date, onSave) {
 function recScaleQty(qty, factor) {
   const s = String(qty || '');
   if (factor === 1) return s;
-  const m = s.match(/[0-9\u0660-\u0669\u06F0-\u06F9]+(?:[.,\u066B][0-9\u0660-\u0669\u06F0-\u06F9]+)?/);
+  // The whole leading number, read by latinDigits' comma rule: «1,000 g» at
+  // half is «500 g» (every comma used to be a decimal: «0.5 g»), a comma that
+  // rule cannot read leaves the string as written, and «a/b» is ONE value —
+  // «1/2 كوب» at double is «1 كوب», not «2/2 كوب».
+  const m = s.match(/[0-9\u0660-\u0669\u06F0-\u06F9]+(?:[.,\u066B][0-9\u0660-\u0669\u06F0-\u06F9]+)*(?:\/[0-9\u0660-\u0669\u06F0-\u06F9]+)?/);
   if (!m) return s;
-  const latin = m[0].replace(/[\u0660-\u0669]/g, (d) => String(d.charCodeAt(0) - 0x660))
-    .replace(/[\u06F0-\u06F9]/g, (d) => String(d.charCodeAt(0) - 0x6F0)).replace(/[,\u066B]/g, '.');
-  const n = Number(latin);
+  const parts = latinDigits(m[0]).split('/');
+  const n = parts.length === 2 ? Number(parts[0]) / Number(parts[1]) : Number(parts[0]);
   if (!Number.isFinite(n)) return s;
   const v = Math.round(n * factor * 100) / 100;
   return s.slice(0, m.index) + String(v) + s.slice(m.index + m[0].length);
@@ -1145,23 +1236,8 @@ function openRecipeEditor(date, existing, onDone) {
   // eight ingredients must not be eight calls). A hand-typed figure wins forever
   // (_manual). The flags are transient: stripped on save.
   var autoTimer = null;
-  var latinDigits = function (s) {
-    return String(s || '').replace(/[\u0660-\u0669]/g, function (d) { return String(d.charCodeAt(0) - 0x660); })
-      .replace(/[\u06F0-\u06F9]/g, function (d) { return String(d.charCodeAt(0) - 0x6F0); }).replace(/\u066B/g, '.');
-  };
-  // '200 غ' / '200g' / '٢٠٠' / '0.5 كغ' → grams; anything else (cups, pieces) → null.
-  // The LAST weight in the string counts ('١ كوب · ٢٥٠غ', 'سكوب · ٣٠غ', '200 g',
-  // '0.5 كغ'). A bare number means grams for a typed quantity ('200'), but NOT for
-  // a food's serving — '1' there is one piece, and scaling 100 g by it made a
-  // 7,800-calorie egg.
-  var parseGrams = function (s, requireUnit) {
-    var str = latinDigits(s).trim().toLowerCase();
-    var m = str.match(/(\d+(?:\.\d+)?)\s*(كغ|كجم|kg|غ|غم|جم|غرام|جرام|g|gr|gram|grams|مل|ml)\.?\s*$/);
-    if (!m && !requireUnit) m = str.match(/^(\d+(?:\.\d+)?)$/);
-    if (!m) return null;
-    var n = parseFloat(m[1]); if (!(n > 0)) return null;
-    return /^(كغ|كجم|kg)$/.test(m[2] || '') ? n * 1000 : n;
-  };
+  // latinDigits() and parseGrams() live at module scope now, above recScaleQty:
+  // the scaler reads the same field, and the two must agree on what a comma is.
   var normName = function (s) { return String(s || '').trim().toLowerCase().replace(/[\u0640\u064B-\u0652]/g, '').replace(/\s+/g, ' '); };
   var localLookup = function (nameRaw, qtyRaw) {
     var name = normName(nameRaw); if (name.length < 2) return null;
@@ -1267,7 +1343,7 @@ function openRecipeEditor(date, existing, onDone) {
       cur.push({ x: x, line: line }); len += line.length + 1;
     });
     if (cur.length) batches.push(cur);
-    var failed = [], signin = false;
+    var failed = [], signin = false, firstErr = null;
     for (var b = 0; b < batches.length; b++) {
       var batch = batches[b];
       var got = [];
@@ -1276,6 +1352,7 @@ function openRecipeEditor(date, existing, onDone) {
         got = (res && res.items) || [];
       } catch (err) {
         if (/unauthorized|sign/i.test((err && err.message) || '')) signin = true;
+        firstErr = firstErr || err;
         got = null;
       }
       if (!overlay.isConnected) return;   // the editor closed while the request was out
@@ -1293,8 +1370,14 @@ function openRecipeEditor(date, existing, onDone) {
       });
     }
     drawTotals(); syncSubtitle();
+    // A refusal with a REASON says the reason. The daily limit lasts until
+    // midnight, and «could not work out X — type its figures by hand» hid that,
+    // as it hid a timeout or a dropped connection. Anything unspecific keeps
+    // the per-row line, which at least names the rows.
+    var why = firstErr && window.FoodAI && FoodAI.friendlyErr ? FoodAI.friendlyErr(firstErr) : '';
+    var named = why && ['ai_daily_limit', 'ai_rate_limit', 'ai_err_busy', 'ai_err_timeout', 'ai_err_service', 'auth_err_network'].some(function (k) { return why === t(k); });
     if (signin) showToast(t('rec_auto_signin'));
-    else if (failed.length) showToast(t('rec_auto_fail').replace('{name}', failed.join('، ')));
+    else if (failed.length) showToast(named ? why : t('rec_auto_fail').replace('{name}', failed.join('، ')));
     finishSaveIfWanted(!failed.length && !signin);
   }
 
@@ -1437,17 +1520,34 @@ function openRecipeEditor(date, existing, onDone) {
       showToast(t('rec_auto_wait'));
       return;
     }
-    // DB.recipes.add's clean() keeps a row on 'name || calories || …', so a
-    // NAMED row with four zeros saves as zeros and the recipe under-counts
-    // forever — and perServing is what the food log receives. A row the user
-    // deliberately zeroed carries _manual and passes.
-    var blank = items.filter(function (it) { return String(it.name || '').trim() && !hasFigures(it) && !it._manual; });
+    // A row with NEITHER a name NOR a figure is not an ingredient: it is the
+    // empty row that Enter on the last amount, «+ add ingredient» and
+    // removeRow's safety row all create. cleanMealItems refuses the WHOLE list
+    // when one item has no name — that protects the blob, and it stays — so
+    // sending that row made an ordinary recipe unsaveable behind «add at least
+    // one ingredient with numbers». It is dropped from what is SENT, never from
+    // the screen, so a save refused below leaves every row where it was.
+    var kept = items.filter(function (it) { return String(it.name || '').trim() || hasFigures(it); });
+    // A row WITH figures and no name would be refused the same way: it is named
+    // as the problem instead, and the cursor goes to the name it is missing.
+    var nameless = kept.filter(function (it) { return !String(it.name || '').trim(); });
+    if (nameless.length) {
+      showToast(t('rec_need_name'));
+      var nr = rowOf(nameless[0]), ni = nr && nr.querySelector('[data-f="name"]');
+      if (ni) { nr.scrollIntoView({ block: 'center' }); ni.focus(); }
+      return;
+    }
+    // cleanMealItems accepts a NAMED row with four zeros, so such a row would
+    // save as zeros and the recipe under-count forever — and perServing is what
+    // the food log receives. A row the user deliberately zeroed carries _manual
+    // and passes.
+    var blank = kept.filter(function (it) { return !hasFigures(it) && !it._manual; });
     if (blank.length) {
       showToast(t('rec_need_figs').replace('{name}', String(blank[0].name).trim()));
       setOpen(blank[0], true);
       return;
     }
-    var payload = { name: nm, servings: n, items: items.map(function (it) {
+    var payload = { name: nm, servings: n, items: kept.map(function (it) {
       var c = Object.assign({}, it);
       delete c._auto; delete c._manual; delete c._id; delete c._src; delete c._why;
       return c;
@@ -1770,6 +1870,10 @@ function openVoiceCapture(date, onSave) {
         : (isNative ? t('voice_denied') : t('voice_denied_web')));
       return;
     }
+    // The permission prompt can outlast the sheet. Closed while it was up, the
+    // microphone arrived to nobody and a recorder was started on it — stop()
+    // had already run and could not see it. It is released before one exists.
+    if (!document.body.contains(overlay)) { stream.getTracks().forEach((tk) => tk.stop()); stream = null; return; }
     chunks = [];
     const mime = MediaRecorder.isTypeSupported('audio/webm') ? 'audio/webm'
       : (MediaRecorder.isTypeSupported('audio/mp4') ? 'audio/mp4' : '');
@@ -1789,6 +1893,13 @@ function openVoiceCapture(date, onSave) {
   }
 
   async function onStop() {
+    // THE SHEET IS GONE, so the user walked away from this recording: it is not
+    // encoded and it is not sent. Every dismissal (X, backdrop, Escape) removes
+    // the overlay BEFORE the observer's stop() makes the recorder fire this, so
+    // the check needs no state of its own — and it comes before the upload. It
+    // used to come after: speech the user had discarded reached the model and
+    // spent a call of the shared daily budget on an answer thrown away.
+    if (!document.body.contains(overlay)) { chunks = []; return; }
     setStatus(t('voice_processing'));
     const blob = new Blob(chunks, { type: (recorder && recorder.mimeType) || 'audio/webm' });
     if (!blob.size) { setStatus(t('voice_tap')); return; }
@@ -1799,6 +1910,7 @@ function openVoiceCapture(date, onSave) {
       const b64 = String(dataUrl).split(',')[1];
       const mimeType = String(dataUrl).slice(5, String(dataUrl).indexOf(';'));
       if (!window.FoodAI || !FoodAI.analyzeAudio) throw new Error(t('voice_unsupported'));
+      if (!document.body.contains(overlay)) return;   // closed while the recording was being encoded
       const { items, transcript } = await FoodAI.analyzeAudio({ mimeType, data: b64 });
       if (!document.body.contains(overlay)) return; // modal was closed mid-request
       if (transcript) setStatus('“' + transcript + '”'); else setStatus(t('voice_tap'));
@@ -1986,6 +2098,7 @@ function openFoodModal(foodId = null) {
     const carbs = Number($('#food-carb').value);
     const fat = Number($('#food-fat').value);
     if (!name) { showToast(t('enter_name')); return; }
+    if ([calories, protein, carbs, fat].some((v) => v < 0)) { showToast(t('food_negative')); return; }   // as the manual entry: refused, never saved as a credit
     if (existing) {
       DB.foods.update(existing.id, { name, serving, calories, protein, carbs, fat });
       showToast(t('updated'));
@@ -2180,18 +2293,35 @@ function openMealEditor(existing = null, onSave = () => {}) {
 }
 function openMealPortion(bundle, date, onSave) {
   const owner = Cloud.getLastUid(), operationId = uid();
+  // THE CEILING storage holds the portion to (DB.mealBundles.maxPortion): each
+  // item's servings × the portion must stay within 20, so an item ×5 caps it at
+  // 4, not at 20. It is the input's max, and it is SAID in place of the total
+  // once passed — the preview used to price a portion that Add then refused as
+  // «check the name, quantities and limits», which points at nothing on screen.
+  const cap = DB.mealBundles.maxPortion(bundle.id) || 20;
+  const capText = () => t('cx_portion_cap').replace('{n}', fmtNum(cap));
   const modal = convenienceModal(`${cxHeader('cx_meals')}<div class="cx-stack"><strong>${escapeHtml(bundle.name)}</strong>
-    <label>${t('cx_date')}<input class="input" id="cx-log-date" type="date" value="${escapeHtml(date || todayISO())}"></label>
-    <label>${t('cx_portion')}<input class="input" id="cx-log-portion" type="number" min="0.25" max="20" step="0.25" value="1"></label>
+    <label>${t('cx_date')}<input class="input" id="cx-log-date" type="date" max="${todayISO()}" value="${escapeHtml(date || todayISO())}"></label>
+    <label>${t('cx_portion')}<input class="input" id="cx-log-portion" type="number" min="0.25" max="${cap}" step="0.25" value="1"></label>
     <p id="cx-log-total" class="settings-hint"></p><button class="btn btn-primary" id="cx-log-meal">${t('add')}</button></div>`);
   const amount = modal.querySelector('#cx-log-portion');
-  const preview = () => { modal.querySelector('#cx-log-total').textContent = fmtNum(Math.round(bundle.items.reduce((sum,it) => sum + it.calories * (it.servings || 1),0) * Number(amount.value))) + ' ' + t('cal'); };
+  const preview = () => {
+    const out = modal.querySelector('#cx-log-total');
+    if (Number(amount.value) > cap) { out.textContent = capText(); return; }
+    out.textContent = fmtNum(Math.round(bundle.items.reduce((sum,it) => sum + it.calories * (it.servings || 1),0) * Number(amount.value))) + ' ' + t('cal');
+  };
   amount.oninput = preview; preview();
   modal.querySelector('#cx-log-meal').onclick = e => {
     if (owner !== Cloud.getLastUid() || JSON.stringify(bundle) !== JSON.stringify(DB.mealBundles.list().find(b => b.id === bundle.id))) { convenienceError({code:'STALE'}); return; }
+    // The day is read at the TAP, and a day still to come is refused as every
+    // other log sheet refuses it: the food log cannot open a future day, so a
+    // meal logged there was unreachable. `max` alone does not stop a typed date.
+    const day = modal.querySelector('#cx-log-date').value;
+    if (day > todayISO()) { showToast(t('date_future')); return; }
+    if (Number(amount.value) > cap) { showToast(capText()); return; }
     e.currentTarget.disabled = true;
-    const result = DB.mealBundles.log(bundle.id, modal.querySelector('#cx-log-date').value, Number(amount.value), operationId);
-    if (!result.ok) { e.currentTarget.disabled = false; convenienceError(result); return; }
+    const result = DB.mealBundles.log(bundle.id, day, Number(amount.value), operationId);
+    if (!result.ok) { e.currentTarget.disabled = false; if (result.code === 'PORTION') showToast(capText()); else convenienceError(result); return; }
     closeModal(); if (onSave) onSave(); offerUndo(t('cx_meal_logged'), result);
   };
 }
@@ -2435,7 +2565,7 @@ function renderFoodLog(el) {
 
   el.innerHTML = `
     <div class="detail-top">
-      <button class="back-btn" data-goto="food" aria-label="${escapeHtml(t('back'))}">${icon('back', 20)}</button>
+      <button class="back-btn" data-back aria-label="${escapeHtml(t('back'))}">${icon('back', 20)}</button>
       <div class="detail-top-title">${t('food_log_title')}</div>
     </div>
     <h1 class="sr-only">${t('food_log_title')}</h1>

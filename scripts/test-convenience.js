@@ -286,8 +286,85 @@ assert.equal(db.undo.apply(restore.undoToken).ok,true); assert.equal(json(db.pla
   assert.equal(pdb.plan.get().anchor,null,'an empty plan has no anchor to count from');
 }
 
+// ---- ONE READING OF AN AMOUNT (review 2026-09-25) --------------------------
+// bugs:food-body#2 · features:food#7 · bugs:food-body#11. The recipe editor's
+// weight reader and the ingredients sheet's scaler read one free-text field,
+// and read a comma two ways. On v397: parseGrams('0,5 كغ') was 5000 — a saved
+// food scaled ten times over with no model call — '1,000 g' was nothing, and
+// recScaleQty('1,000 g', 0.5) was '0.5 g', '1/2 كوب' at double '2/2 كوب'.
+// The REAL js/food.js runs here; it has no top-level statement but constants.
+{
+  vm.runInContext(fs.readFileSync(path.join(__dirname,'..','js','food.js'),'utf8'), c);
+  const g = (s, unit) => run(`parseGrams(${json(s)}, ${!!unit})`);
+  assert.equal(g('0,5 كغ'), 500, "a decimal comma is half a kilo, not 5 kg");
+  assert.equal(g('1,5 kg'), 1500);
+  assert.equal(g('٠,٥ كغ'), 500, 'with Arabic-Indic digits too');
+  assert.equal(g('٠٫٥ كغ'), 500, 'and the Arabic decimal separator, as before');
+  assert.equal(g('1,000 g'), 1000, 'three digits after a comma are a thousands group');
+  assert.equal(g('1,5000 g'), null, 'a comma neither rule reads is not a weight — the model is asked instead');
+  assert.equal(g('200 غ'), 200);
+  assert.equal(g('٢٠٠'), 200, 'a bare typed number is grams');
+  assert.equal(g('١ كوب · ٢٥٠غ'), 250, 'the LAST weight counts');
+  assert.equal(g('1', true), null, "a food's bare serving of 1 is a piece, not a gram");
+  assert.equal(g('٣ حبات'), null, 'a count is not a weight');
+  const sc = (q, f) => run(`recScaleQty(${json(q)}, ${f})`);
+  assert.equal(sc('1,000 g', 0.5), '500 g', 'the scaler reads the same thousands group');
+  assert.equal(sc('0,5 كغ', 2), '1 كغ', 'and the same decimal comma');
+  assert.equal(sc('1,5000 g', 2), '1,5000 g', 'a comma it cannot read leaves the amount as written');
+  assert.equal(sc('1/2 كوب', 2), '1 كوب', 'a fraction scales as ONE value');
+  assert.equal(sc('٣ حبات', 0.5), '1.5 حبات', 'v392 unchanged: a leading Arabic-Indic number');
+  assert.equal(sc('١ كيلو', 1.25), '1.25 كيلو');
+  assert.equal(sc('رشّة', 2), 'رشّة', 'no number, nothing moves');
+  assert.equal(sc('200 غ', 1), '200 غ', 'at its own count the string is untouched');
+}
+
+// ---- A FIGURE IS NEVER NEGATIVE (features:food#4) ---------------------------
+// Manual entry took Number(field) || 0 with no floor, and a typed minus sign —
+// min="0" does not stop one — logged -300 kcal and kept it in My foods: the
+// ring credited the day back on every one-tap re-log. foodLogs.update and
+// cleanMealItems already held 0–100000; the two add() doors hold it now too.
+{
+  const fd = '2026-09-12';
+  const row = db.foodLogs.add(fd, {name:'QA minus', servings:1, calories:-300, protein:-5, carbs:'x', fat:1e9});
+  assert.equal(row.calories, 0, 'a negative calorie figure is not stored — v397 stored -300');
+  assert.equal(row.protein, 0);
+  assert.equal(row.carbs, 0, 'nor a figure that is not a number');
+  assert.equal(row.fat, 100000, 'nor an absurd one');
+  assert.equal(db.foodLogs.add(fd, {name:'QA minus servings', servings:-2, calories:100}).servings, 1, 'a negative serving count is not a multiplier');
+  assert.ok(db.foodLogs.totalsForDate(fd).calories >= 0, 'so the day can never be credited');
+  const f = db.foods.add({name:'QA minus food', serving:'', calories:-300, protein:-1, carbs:2, fat:3});
+  assert.equal(f.calories, 0, 'nor is one kept in My foods — v397 kept -300');
+  assert.equal(f.protein, 0);
+  assert.equal(f.carbs, 2, 'an honest figure is kept exactly');
+  const u = db.foods.update(f.id, {calories:-50, protein:12});
+  assert.equal(u.calories, 0, 'and an edit cannot put one back');
+  assert.equal(u.protein, 12);
+}
+
+// ---- A MEAL'S PORTION HAS A CEILING, AND IT IS NAMED (features:food#6) ------
+// log() multiplies each item's servings by the portion and cleanMealItems
+// refuses a row above 20 servings — so an item ×5 at portion 5 was refused as
+// VALIDATION, which the sheet shows as «check the limits», after previewing
+// the total as if it were fine. maxPortion() is the ceiling the sheet now
+// shows; log() refuses above it with its own code.
+{
+  const big = db.mealBundles.update(null, {name:'QA big', items:[{...food, servings:5}, {...food, name:'small', servings:1}]}).entity;
+  const d = '2026-09-13';
+  const over = db.mealBundles.log(big.id, d, 5);
+  assert.equal(over.code, 'PORTION', 'above the ceiling the refusal names the portion — v397 said VALIDATION');
+  assert.equal(over.max, 4, 'and carries the ceiling: 20 servings ÷ the largest item (×5)');
+  assert.equal(db.mealBundles.maxPortion(big.id), 4);
+  assert.equal(db.mealBundles.log(big.id, d, 4).ok, true, 'the ceiling itself logs');
+  assert.equal(db.mealBundles.log(big.id, d, 4.25).code, 'PORTION');
+  const odd = db.mealBundles.update(null, {name:'QA odd', items:[{...food, servings:3}]}).entity;
+  assert.equal(db.mealBundles.maxPortion(odd.id), 6.5, "floored to the sheet's 0.25 step (20 ÷ 3 = 6.67)");
+  const tiny = db.mealBundles.update(null, {name:'QA tiny', items:[{...food, servings:0.25}]}).entity;
+  assert.equal(db.mealBundles.maxPortion(tiny.id), 20, "and never above the portion's own limit");
+  assert.equal(db.mealBundles.maxPortion('no-such-meal'), 0);
+}
+
 // Search includes 10k records without a persistent index or query log.
 run(`STATE.foodLogs['${date}']=Array.from({length:10000},(_,i)=>({id:'food_'+i,name:'Test meal '+i,calories:1,servings:1}))`);
 const start = performance.now(); const hits = db.search.query('Test meal 99'); const elapsed = performance.now()-start;
 assert.ok(hits.length>0 && hits.length<=60);
-console.log(`PASS convenience: atomic meals, quota rollback, scoped undo, account/tab isolation, recipes, units, snapshots, Arabic dates, legacy round-trip, plan restoration; 10k search ${elapsed.toFixed(1)}ms`);
+console.log(`PASS convenience: atomic meals, quota rollback, scoped undo, account/tab isolation, recipes, units, snapshots, Arabic dates, legacy round-trip, plan restoration, one reading of an amount (decimal comma, thousands, fraction), no negative figure through either add door, a meal portion's named ceiling; 10k search ${elapsed.toFixed(1)}ms`);

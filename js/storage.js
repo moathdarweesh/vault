@@ -458,6 +458,10 @@ function defaultState() {
     // can re-open and tweak. All computed by DB.nutrition (Mifflin-St Jeor).
     nutrition: defaultNutrition(),
     health: { data: null, syncedAt: 0, hidden: [] },
+    // The watch sessions the user DELETED, by hcKey, per domain — see
+    // refuseHealthKey(). User intent, so it syncs with the blob; deliberately
+    // not in hasUserData(): a list of refusals is not content.
+    healthDeleted: { sleep: [], cardio: [] },
   };
 }
 
@@ -639,6 +643,42 @@ let STATE_LOAD_FAILED = false;
 // Set when the loaded blob was written by a NEWER build (see SCHEMA_VERSION).
 let SCHEMA_TOO_NEW = false;
 
+// ⚠️ A DELETED WATCH SESSION MUST STAY DELETED. Both Health Connect importers
+// dedupe against the hcKeys of rows still STORED, and health.js reads from the
+// newest remaining key minus a day — so deleting a watch night or walk put it
+// straight back inside the next read, and it was imported again (at most ~20 s
+// later: every foreground syncs). The refusal is kept as the session's own
+// key, per domain, and both importers skip it.
+//
+// Pruned to what can still come back: HealthConnectPlugin.kt reads history back
+// 30 days at most (its historyStart), so an older key guards nothing — two days
+// of margin cover a session that began before that edge and still overlaps it.
+// The ceiling is a belt for a blob that arrives stuffed.
+//
+// Declared ABOVE `let STATE = …loadState()` on purpose: loadState() calls
+// cleanHealthDeleted(), and a const declared below that line would still be in
+// its temporal dead zone at boot — a ReferenceError there is caught as "the blob
+// is unreadable" and drops the whole app into READ-ONLY.
+const HC_REFUSED_DAYS = 32;
+const HC_REFUSED_MAX = 200;
+function cleanHealthDeleted(v) {
+  // Unknown keys ride through: a newer build's domain is kept, not erased.
+  const out = v && typeof v === 'object' && !Array.isArray(v) ? { ...v } : {};
+  for (const k of ['sleep', 'cardio']) {
+    const list = Array.isArray(out[k]) ? out[k].filter((x) => typeof x === 'string' && x) : [];
+    out[k] = [...new Set(list)].slice(-HC_REFUSED_MAX);
+  }
+  return out;
+}
+// Called only from DB.sleep.remove / DB.cardio.remove, whose own save() persists it.
+function refuseHealthKey(domain, key) {
+  if (typeof key !== 'string' || !key) return;
+  const hd = STATE.healthDeleted = cleanHealthDeleted(STATE.healthDeleted);
+  const floor = Date.now() - HC_REFUSED_DAYS * 86400000;
+  hd[domain] = hd[domain].filter((k) => k !== key).concat([key])
+    .filter((k) => Date.parse(k) >= floor).slice(-HC_REFUSED_MAX);
+}
+
 
 function loadState() {
   SCHEMA_TOO_NEW = false;
@@ -725,6 +765,13 @@ function loadState() {
     }
     parsed.health = parsed.health || { data: null, syncedAt: 0, hidden: [] };
     if (!Array.isArray(parsed.health.hidden)) parsed.health.hidden = [];
+    // SHAPE only (strings, deduped, capped). The AGE prune runs at the next
+    // delete, never here: a load that rewrote the list by the clock would change
+    // the stored blob on a day nothing changed. An older blob without it is
+    // backfilled silently, like cardioPlan.
+    const refusedBefore = parsed.healthDeleted === undefined ? null : JSON.stringify(parsed.healthDeleted);
+    parsed.healthDeleted = cleanHealthDeleted(parsed.healthDeleted);
+    if (refusedBefore !== null && JSON.stringify(parsed.healthDeleted) !== refusedBefore) normChanged = true;
     // Scheduled-cardio ROWS, normalised like sessions. A row without a usable id
     // is DROPPED rather than repaired: the id is the join key the Home tick writes
     // into the cardio log as planId, and `undefined === undefined` would let one
@@ -1169,6 +1216,21 @@ function validDay(day) {
   // eslint-disable-next-line vault/no-utc-calendar-day -- a VALIDITY round-trip: parse and format are both UTC here, so a real date comes back unchanged and 2026-02-30 does not
   return /^\d{4}-\d{2}-\d{2}$/.test(day) && !isNaN(Date.parse(day)) && new Date(day).toISOString().slice(0, 10) === day;
 }
+// A food figure as the single-row write paths store it: finite and inside the
+// 0–100000 range cleanMealItems and foodLogs.update already hold, anything
+// else 0. CLAMPED, never refused, at these doors: every caller of foodLogs.add
+// (the AI cards, barcode, voice, the library) treats it as a write that cannot
+// fail, and the two entry forms refuse a negative themselves before calling.
+function foodFigure(v) {
+  const n = Number(v);
+  return Number.isFinite(n) ? Math.min(100000, Math.max(0, n)) : 0;
+}
+// A serving count is a multiplier: (0, 20], the range foodLogs.update enforces.
+// Number(-2) || 1 is -2, and a negative multiplier credits the day back.
+function foodServings(v) {
+  const n = Number(v);
+  return Number.isFinite(n) && n > 0 ? Math.min(20, n) : 1;
+}
 function cleanMealItems(items) {
   if (!Array.isArray(items) || !items.length || items.length > 30) return null;
   if (items.some(it => !it || typeof it !== 'object' || Array.isArray(it))) return null;
@@ -1195,9 +1257,18 @@ const DB = {
     // مشوي») and only the word is the synonym. Read at call time through a
     // typeof guard: catalog.js loads before storage.js, but a guard costs
     // nothing and this file already guards every borrowed name that way.
-    normalize(value) {
-      const base = String(value || '').toLowerCase().normalize('NFKC').replace(/[٠-٩۰-۹]/g, c => String('٠١٢٣٤٥٦٧٨٩'.includes(c) ? '٠١٢٣٤٥٦٧٨٩'.indexOf(c) : '۰۱۲۳۴۵۶۷۸۹'.indexOf(c)))
+    // fold() is the CHARACTER half on its own — case, width, digits, diacritics
+    // and tatweel, the hamza/alef forms, ى and ة — and normalize() is fold plus
+    // the food synonyms. Exercise search folds and nothing more: «فراخ» is
+    // «دجاج» in a food search and means nothing in an exercise one. Exercise
+    // search used to only lowercase, so the bare-alef «انكلاين», the way most
+    // people type it, found none of the lifts the catalogue spells «إنكلاين».
+    fold(value) {
+      return String(value || '').toLowerCase().normalize('NFKC').replace(/[٠-٩۰-۹]/g, c => String('٠١٢٣٤٥٦٧٨٩'.includes(c) ? '٠١٢٣٤٥٦٧٨٩'.indexOf(c) : '۰۱۲۳۴۵۶۷۸۹'.indexOf(c)))
         .replace(/[\u064b-\u065f\u0670\u0640]/g, '').replace(/[أإآٱ]/g, 'ا').replace(/ى/g, 'ي').replace(/ة/g, 'ه').trim();
+    },
+    normalize(value) {
+      const base = this.fold(value);
       const syn = typeof FOOD_SYNONYMS !== 'undefined' ? FOOD_SYNONYMS : null;
       if (!syn || !base) return base;
       return base.split(/\s+/).map((w) => syn[w] || w).join(' ');
@@ -1785,15 +1856,18 @@ const DB = {
     add(date, entry) {
       // entry: { foodId, name, servings, calories, protein, carbs, fat, source }
       if (!STATE.foodLogs[date]) STATE.foodLogs[date] = [];
+      // The range update() and cleanMealItems hold (foodFigure/foodServings).
+      // This door took Number(x) || 0 unchecked, so one typed minus sign —
+      // min="0" does not stop it — logged -300 kcal and the ring counted it back.
       const item = {
         id: uid(),
         foodId: entry.foodId || null,
         name: entry.name,
-        servings: Number(entry.servings) || 1,
-        calories: Number(entry.calories) || 0,
-        protein: Number(entry.protein) || 0,
-        carbs: Number(entry.carbs) || 0,
-        fat: Number(entry.fat) || 0,
+        servings: foodServings(entry.servings),
+        calories: foodFigure(entry.calories),
+        protein: foodFigure(entry.protein),
+        carbs: foodFigure(entry.carbs),
+        fat: foodFigure(entry.fat),
         source: entry.source || null,
         addedAt: new Date().toISOString(),
       };
@@ -1990,6 +2064,8 @@ const DB = {
         (b.recipes && b.recipes.length) ||
         (b.mealBundles && b.mealBundles.length) ||
         (b.shoppingLists && b.shoppingLists.length) ||
+        // healthDeleted is deliberately ABSENT: the keys of deleted watch
+        // sessions are not content, and a device holding nothing else is empty.
         // notif counts ONLY for content the user typed (supplement doses, meal
         // times). The object itself is written into every blob at boot by
         // migrateFromReminders(), so counting its mere presence made a fresh
@@ -2011,7 +2087,9 @@ const DB = {
     for (const k of ['sessions', 'cardio', 'cardioTypes', 'cardioPlan', 'sleep', 'foods', 'supplements', 'mealBundles', 'recipes', 'bodyweight', 'shoppingLists']) {
       if (k in data && data[k] != null && !Array.isArray(data[k])) return false;
     }
-    for (const k of ['prefs', 'foodLogs', 'supplementLogs', 'water', 'notif', 'plan', 'nutrition', 'reminders', 'health']) {
+    // healthDeleted's two lists are NORMALISED on load (cleanHealthDeleted), not
+    // refused here: a stray entry in a list of refusals is not worth a pull.
+    for (const k of ['prefs', 'foodLogs', 'supplementLogs', 'water', 'notif', 'plan', 'nutrition', 'reminders', 'health', 'healthDeleted']) {
       if (k in data && data[k] != null && (typeof data[k] !== 'object' || Array.isArray(data[k]))) return false;
     }
     // ELEMENTS, not just sections. A null or a bare value in a record list
@@ -2724,6 +2802,38 @@ const DB = {
       return new Date(Number(p[0]), Number(p[1]) - 1, Number(p[2]), h || 0, m || 0, 0, 0);
     },
 
+    // ⚠️ ONE ANSWER TO «IS THIS REMINDER STILL DUE?», asked when the timers are
+    // ARMED (scheduleForDate) and again when one FIRES (deliver() in app.js).
+    // It used to be asked at arm time only, and ticking a dose, eating to the
+    // target or training does not re-arm — so the reminder arrived for the very
+    // thing the user had just done. Only TODAY can be asked: whether tomorrow's
+    // dose is ticked by 08:00 is not a fact yet, so any other date answers yes.
+    stillDue(item) {
+      const it = item || {};
+      const iso = it.date || todayISO();
+      if (iso !== todayISO()) return true;
+      const p = it.payload || {};
+      switch (it.channel) {
+        // A dose linked to a real supplement goes quiet once it is ticked off —
+        // the permission sheet's promise, «logging something cancels its reminder».
+        case 'supps': return !(p.suppId && DB.supplements.isTaken(p.suppId, iso));
+        // Silent with no calorie target (a «N kcal left» with no N), and once
+        // today's target is met.
+        case 'food': {
+          if (!DB.nutrition.hasTargets()) return false;
+          const goal = Number((DB.nutrition.get().targets || {}).calories) || 0;
+          return (DB.foodLogs.totalsForDate(iso).calories || 0) < goal;
+        }
+        // The streak is at risk only while today has nothing logged on it.
+        case 'streak': return !this._activityOn(iso);
+        case 'water': {
+          const goal = (DB.water && DB.water.goal) ? DB.water.goal() : 0;
+          return !(goal > 0 && DB.water.get(iso) >= goal);
+        }
+        default: return true;
+      }
+    },
+
     // Same definition computeStreak() uses: any session or cardio row on that
     // calendar day.
     _activityOn(iso) {
@@ -2852,10 +2962,7 @@ const DB = {
       if (ch.supps.on) {
         ch.supps.doses.forEach((d, i) => {
           if (!d || !d.at) return;
-          // A dose linked to a real supplement goes quiet once it is ticked off.
-          // This is the promise on the permission sheet — "logging something
-          // cancels its reminder" — finally being true for more than water.
-          if (isToday && d.suppId && DB.supplements.isTaken(d.suppId, iso)) return;
+          // A ticked, linked dose goes quiet — stillDue(), in the guards below.
           push(d.at, 'supps', 'supps:' + (d.id || i) + ':' + iso,
             { name: d.name || '', i: i + 1, n: ch.supps.doses.length, suppId: d.suppId || null });
         });
@@ -2865,16 +2972,13 @@ const DB = {
       // Times the owner sets, exactly like a supplement dose. Silent with no
       // calorie target — a "you have N kcal left" with no N is the defect this
       // whole rebuild exists to remove — and silent once today's target is met.
+      // (Today's met target is stillDue()'s to answer, in the guards below.)
       if (ch.food.on && DB.nutrition.hasTargets()) {
-        const goalKcal = Number((DB.nutrition.get().targets || {}).calories) || 0;
-        const eaten = isToday ? (DB.foodLogs.totalsForDate(iso).calories || 0) : 0;
-        if (!isToday || eaten < goalKcal) {
-          ch.food.meals.forEach((m, i) => {
-            if (!m || !m.at) return;
-            push(m.at, 'food', 'food:' + (m.id || i) + ':' + iso,
-              { name: m.name || '', i: i + 1, n: ch.food.meals.length });
-          });
-        }
+        ch.food.meals.forEach((m, i) => {
+          if (!m || !m.at) return;
+          push(m.at, 'food', 'food:' + (m.id || i) + ':' + iso,
+            { name: m.name || '', i: i + 1, n: ch.food.meals.length });
+        });
       }
 
       // -- streak -------------------------------------------------------------
@@ -2883,13 +2987,15 @@ const DB = {
       // that is actually inside the user's own window. Today only — whether a
       // future day will be "at risk" is unknowable, and arming it would be a
       // guess dressed as a fact.
-      if (ch.streak.on && isToday && !this._activityOn(iso)) {
+      // (Nothing logged today is stillDue()'s to answer, in the guards below.)
+      if (ch.streak.on && isToday) {
         const run = this._streakEndingBefore(iso);
         if (run >= 7) push(this._clampToWindow('19:30'), 'streak', 'streak:' + iso, { n: run });
       }
 
       // §6 guards, applied here so no caller can forget one.
       const kept = out.filter((it) => {
+        if (isToday && !this.stillDue(it)) return false;   // the rule deliver() asks again at fire time
         if (isToday && !o.includeSent && this.alreadySent(it.tag)) return false;
         // Outside the wake window: supps and food defer to window.start (via
         // _setAt, so hour/minute move with it), everything else is dropped.
@@ -2934,7 +3040,7 @@ const DB = {
       // survives still covers the whole day, which is the thing the user asked
       // for when they set the window.
       const goal = (DB.water && DB.water.goal) ? DB.water.goal() : 0;
-      if (ch.water.on && goal > 0 && !(isToday && DB.water.get(iso) >= goal)) {
+      if (ch.water.on && goal > 0 && (!isToday || this.stillDue({ channel: 'water', date: iso }))) {
         const a = this._min(cfg.window.start), b = this._min(cfg.window.end);
         const span = (b >= a) ? (b - a) : (b + 1440 - a);
         const step = Math.max(30, Number(ch.water.everyMin) || 120);
@@ -3023,7 +3129,10 @@ const DB = {
           // "Push" used to be baked into the template, which is simply wrong
           // data on a Legs day — in the one line the user reads at a glance.
           const day = p.name != null ? null : DB.plan.workoutForDate(this._dateOf(iso));
-          const name = p.name || (day && day.name) || tr('notif_ch_train');
+          // Named as every screen names it — «دفع», not the stored «Push».
+          // planDayName lives in app.js, which loads after this file.
+          const stored = p.name || (day && day.name);
+          const name = (stored && typeof planDayName === 'function' ? planDayName(stored) : stored) || tr('notif_ch_train');
           const n = p.n != null ? p.n : ((day && day.exerciseIds) ? day.exerciseIds.length : 0);
           const title = F('notif_train_title', { name, n: num(n) });
           if (!live) return { title, body: F('notif_train_body_plan', { n: num(n) }) };
@@ -3253,22 +3362,42 @@ const DB = {
       return c;
     },
     remove(id) {
+      const gone = STATE.cardio.find((c) => c.id === id);
       STATE.cardio = STATE.cardio.filter((c) => c.id !== id);
+      if (gone && gone.hcKey) refuseHealthKey('cardio', gone.hcKey);   // or the next sync brings it back
       save();
     },
     // Import cardio exercise sessions read from Health Connect. The plugin maps
     // each session's exercise type to one of our cardio type ids. Deduped by the
-    // session start time; manual entries are untouched.
+    // session start time; a session the user deleted is refused (healthDeleted);
+    // manual entries are untouched. Returns how many sessions were taken in.
     importFromHealth(sessions) {
       if (!Array.isArray(sessions) || !sessions.length) return 0;
       const pad = (n) => String(n).padStart(2, '0');
       const seen = new Set(STATE.cardio.map((c) => c.hcKey).filter(Boolean));
+      const refused = new Set(cleanHealthDeleted(STATE.healthDeleted).cardio);
       let added = 0;
       sessions.forEach((s) => {
-        if (!s || !s.start || !s.type || seen.has(s.start)) return;
+        if (!s || !s.start || !s.type || seen.has(s.start) || refused.has(s.start)) return;
         const end = new Date(s.end || s.start);
         if (isNaN(end.getTime())) return;
         const date = `${end.getFullYear()}-${pad(end.getMonth() + 1)}-${pad(end.getDate())}`;
+        // TICKED FIRST, SYNCED SECOND. complete() claims a watch walk that is
+        // already here; in the other order the tick had written its own row
+        // (planAuto, 0 kcal) and this session was pushed beside it — the walk
+        // counted twice in every total. The tick's row is ADOPTED instead: id
+        // and planId kept, the watch's figures taken, and planAuto dropped,
+        // because the row is the watch's walk now — an un-tick only unclaims it,
+        // exactly as it does for a claimed row. Only a planAuto row: a row the
+        // user typed is never the tick's to overwrite.
+        const tick = STATE.cardio.find((c) => c && c.planAuto && !c.hcKey && c.date === date && c.type === s.type);
+        if (tick) {
+          delete tick.planAuto;
+          Object.assign(tick, { duration: Number(s.minutes) || 0, calories: Number(s.calories) || 0, source: 'health', hcKey: s.start });
+          seen.add(s.start);
+          added++;
+          return;
+        }
         STATE.cardio.push({
           id: uid(),
           type: s.type,
@@ -3513,9 +3642,23 @@ const DB = {
         old ? list.map(b => b.id === id ? entity : b) : [...list, entity], 'cx_meal_changed');
       return { ...result, entity: result.ok ? copyData(entity) : null };
     },
+    // THE PORTION'S CEILING. log() multiplies every item's servings by the
+    // portion and cleanMealItems refuses a row above 20 servings, so an item ×5
+    // caps the portion at 4, not at the sheet's 20 — which the sheet used to
+    // learn only as a generic VALIDATION after previewing the total as fine.
+    // Floored to the sheet's 0.25 step; 20 is the portion's own limit. 0 means
+    // no such meal.
+    maxPortion(id) {
+      const bundle = (STATE.mealBundles || []).find(b => b.id === id);
+      if (!bundle || !Array.isArray(bundle.items) || !bundle.items.length) return 0;
+      const most = Math.max(...bundle.items.map(it => Number(it && it.servings) || 1));
+      return Math.min(20, Math.floor(20 / most * 4) / 4);
+    },
     log(id, date, portion = 1, operationId = uid()) {
       const bundle = (STATE.mealBundles || []).find(b => b.id === id);
       if (!bundle || !Number.isFinite(portion) || portion <= 0 || portion > 20) return { ok: false, code: 'VALIDATION' };
+      const max = this.maxPortion(id);
+      if (portion > max) return { ok: false, code: 'PORTION', max };   // named, so a caller can say which limit
       return DB.foodLogs.addMany(date, bundle.items.map(it => ({ ...it, servings: (it.servings || 1) * portion, source: 'bundle', sourceId: id })), operationId);
     },
     remove(id) {
@@ -3622,10 +3765,12 @@ const DB = {
         id: uid(),
         name: name.trim(),
         serving: (serving || '').trim(),
-        calories: Number(calories) || 0,
-        protein: Number(protein) || 0,
-        carbs: Number(carbs) || 0,
-        fat: Number(fat) || 0,
+        // Clamped like DB.foodLogs.add: a saved food is re-logged by one tap, so
+        // a negative figure kept here would credit the day back every time.
+        calories: foodFigure(calories),
+        protein: foodFigure(protein),
+        carbs: foodFigure(carbs),
+        fat: foodFigure(fat),
         createdAt: new Date().toISOString(),
       };
       STATE.foods.push(food);
@@ -3638,10 +3783,10 @@ const DB = {
       Object.assign(f, {
         name: data.name?.trim() ?? f.name,
         serving: data.serving?.trim() ?? f.serving,
-        calories: data.calories != null ? Number(data.calories) : f.calories,
-        protein: data.protein != null ? Number(data.protein) : f.protein,
-        carbs: data.carbs != null ? Number(data.carbs) : f.carbs,
-        fat: data.fat != null ? Number(data.fat) : (f.fat || 0),
+        calories: data.calories != null ? foodFigure(data.calories) : f.calories,
+        protein: data.protein != null ? foodFigure(data.protein) : f.protein,
+        carbs: data.carbs != null ? foodFigure(data.carbs) : f.carbs,
+        fat: data.fat != null ? foodFigure(data.fat) : (f.fat || 0),
       });
       save();
       return f;
@@ -3685,20 +3830,24 @@ const DB = {
       return s;
     },
     remove(id) {
+      const gone = STATE.sleep.find((s) => s.id === id);
       STATE.sleep = STATE.sleep.filter((s) => s.id !== id);
+      if (gone && gone.hcKey) refuseHealthKey('sleep', gone.hcKey);   // or the next sync brings it back
       save();
     },
     // Import sleep sessions read from Health Connect into the log. Deduped by
-    // the session start time (hcKey) so re-syncing never creates duplicates.
-    // Manual entries are left untouched. Returns how many were newly added.
+    // the session start time (hcKey) so re-syncing never creates duplicates; a
+    // night the user deleted is refused (healthDeleted). Returns how many
+    // sessions were taken in.
     importFromHealth(sessions) {
       if (!Array.isArray(sessions) || !sessions.length) return 0;
       const pad = (n) => String(n).padStart(2, '0');
       const byKey = {};
       STATE.sleep.forEach((s) => { if (s.hcKey) byKey[s.hcKey] = s; });
+      const refused = new Set(cleanHealthDeleted(STATE.healthDeleted).sleep);
       let added = 0, changed = false;
       sessions.forEach((s) => {
-        if (!s || !s.start || !s.end) return;
+        if (!s || !s.start || !s.end || refused.has(s.start)) return;
         const existing = byKey[s.start];
         if (existing) {
           // Already imported — but backfill sleep stages onto it if this newer
@@ -3710,22 +3859,54 @@ const DB = {
         const end = new Date(s.end);
         if (isNaN(start.getTime()) || isNaN(end.getTime())) return;
         const date = `${end.getFullYear()}-${pad(end.getMonth() + 1)}-${pad(end.getDate())}`;
-        STATE.sleep.push({
-          id: uid(),
-          date,
+        const night = {
           sleepTime: pad(start.getHours()) + ':' + pad(start.getMinutes()),
           wakeTime: pad(end.getHours()) + ':' + pad(end.getMinutes()),
           durationMinutes: s.minutes != null ? s.minutes : Math.round((end - start) / 60000),
           stages: s.stages || null,   // { deep, light, rem, awake } minutes, or null
           source: 'health',
           hcKey: s.start,
-          createdAt: new Date().toISOString(),
+        };
+        // THE SAME NIGHT, LOGGED BY HAND FIRST. The dedupe above knows only
+        // watch keys, so the watch's copy was pushed beside the user's row: Home
+        // summed the two («14:15») and the hero showed whichever sorted first —
+        // the one without stages. When the two cover the same stretch (the
+        // overlap is more than half of the LONGER of them), the watch's measured
+        // night replaces the typed figures ON THE USER'S ROW, which keeps its id.
+        // A nap beside the night, or a two-hour partial record inside an
+        // eight-hour night, is a different stretch and stays a row of its own.
+        const hand = STATE.sleep.find((x) => {
+          if (!x || x.hcKey || x.date !== date) return false;
+          const iv = sleepInterval(x);
+          if (!iv) return false;
+          const overlap = Math.min(iv.end, end.getTime()) - Math.max(iv.start, start.getTime());
+          return overlap > 0.5 * Math.max(iv.end - iv.start, end - start);
         });
-        byKey[s.start] = true;
+        if (hand) Object.assign(hand, night);
+        else STATE.sleep.push({ id: uid(), date, ...night, createdAt: new Date().toISOString() });
+        byKey[s.start] = hand || true;
         added++;
       });
       if (added || changed) save();
       return added;
+    },
+  },
+
+  // ── the widget's launch url, run once per launch ─────────────────────────
+  // @capacitor/app's getLaunchUrl() answers from the Bridge's intentUri, which
+  // Bridge.java assigns ONCE, in its constructor — onNewIntent never touches it
+  // — so for the whole life of the Activity it hands back the url the app was
+  // LAUNCHED with. A WebView reload keeps the Bridge, so the post-release
+  // reload, the account switch and the resume banner each ran the widget's
+  // action again: +250 ml that nobody poured. sessionStorage lives exactly as
+  // long as that WebView's session — a cold launch starts empty, a reload keeps
+  // it — which is the lifetime this answer needs.
+  launch: {
+    spent(url) {
+      try { return !!url && sessionStorage.getItem(VAULT_KEYS.quickLaunch) === String(url); } catch (_) { return false; }
+    },
+    spend(url) {
+      try { if (url) sessionStorage.setItem(VAULT_KEYS.quickLaunch, String(url)); } catch (_) {}
     },
   },
 
@@ -3958,6 +4139,19 @@ function computeSleepMinutes(sleepTime, wakeTime) {
   let end = wh * 60 + wm;
   if (end <= start) end += 24 * 60;
   return end - start;
+}
+
+// The stretch a logged night covers, in epoch ms, or null. It ENDS on its date
+// at wakeTime (date = the morning you woke, as the import writes it) and began
+// computeSleepMinutes() earlier — the day before when the clock wrapped. Built
+// with the numeric Date constructor: a local wall clock, never a UTC parse.
+function sleepInterval(row) {
+  const d = String((row && row.date) || '').split('-').map(Number);
+  const w = String((row && row.wakeTime) || '').split(':').map(Number);
+  if (d.length !== 3 || w.length < 2 || d.concat(w).some((n) => !Number.isFinite(n))) return null;
+  const end = new Date(d[0], d[1] - 1, d[2], w[0], w[1]).getTime();
+  const mins = computeSleepMinutes(row.sleepTime, row.wakeTime);
+  return Number.isFinite(end) && mins > 0 ? { start: end - mins * 60000, end } : null;
 }
 
 function todayISO() {

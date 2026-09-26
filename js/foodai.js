@@ -1,16 +1,23 @@
 // AI calorie chat for THE VAULT — describe a meal in plain Arabic/English and
-// get calories + macros, then log them. Uses Google's free Gemini API.
-// The API key is the user's own free key, stored only on-device (localStorage),
-// never bundled in the repo.
+// get calories + macros, then log them. Every call goes to the Cloudflare
+// Worker (backend/worker/gemini-worker.js), which holds the Gemini key
+// server-side: no key ships to the client and nobody enters one (the per-user
+// key flow was unreachable by v277 and was deleted then).
 (function () {
   'use strict';
 
-  // Backend proxy (Cloudflare Worker) that holds the Gemini key server-side.
-  // When set, the app calls this instead of Gemini directly — the user never
-  // enters a key and just sees the chat. Leave '' to use the per-user key flow.
+  // The Worker — the only route to the model.
   const PROXY_URL = 'https://vault-calories.moathdarweesh2000.workers.dev';
+  // ⚠️ ONE CLIENT DEADLINE FOR EVERY CALL TO IT. fetch() has none of its own,
+  // and on a stalled mobile connection a request can hang for minutes or for
+  // good: the recipe editor then waited on a row marked 'sent' and could not
+  // save, and the chat sat on «calculating…», with nothing on screen saying why.
+  // It is LONGER than the Worker's own worst case — it tries every id in MODELS
+  // and bounds each attempt at ATTEMPT_MS (3 × 25 s), plus the auth and budget
+  // round trips — so a slow but valid answer is never cut off;
+  // scripts/test-plan-import.js holds the two against each other.
+  const WORKER_DEADLINE_MS = 90000;
 
-  // Free-tier model (direct-key path only; the proxy tries several). Keep the
   const tr = (k) => (typeof t === 'function' ? t(k) : k);
   const ic = (n, s) => (typeof icon === 'function' ? icon(n, s || 20) : '');
   const esc = (s) => (typeof escapeHtml === 'function' ? escapeHtml(s) : String(s));
@@ -58,6 +65,10 @@
     // UNANCHORED /load failed/, for Safari's fetch error. Below it, an
     // undecodable photo told the user to check their internet connection.
     if (/^image load failed/.test(m)) return tr('ai_err_image_read');
+    // workerPost()'s deadline, and only it — a caller's own cancel is an
+    // AbortError, which the plan import reads for itself. Above the network
+    // branch for the same reason as the line above: its tests are unanchored.
+    if (e && e.name === 'TimeoutError') return tr('ai_err_timeout');
     if ((e && e.name === 'TypeError') || /failed to fetch|load failed|networkerror|network request/i.test(m)) {
       return tr('auth_err_network');
     }
@@ -118,6 +129,35 @@
   // Ready to chat = either a backend proxy is configured, or the user saved a key.
   // Call the backend proxy (no key in the app) and return the macros. `image`
   // is an optional { mimeType, data(base64) } for photo-based analysis.
+  // ONE POST TO THE WORKER, under WORKER_DEADLINE_MS. Built on AbortController
+  // and a timer rather than AbortSignal.timeout(): the shell's floor is WebView
+  // 80 and that API arrived in 103. The whole call races the deadline, not the
+  // fetch alone — authHeaders() can refresh a session over the same stalled
+  // network. OUR timeout is a TimeoutError friendlyErr names; a caller's own
+  // cancel (`signal`, the plan import's) stays the AbortError it reads itself.
+  // A 200 whose body is not a JSON object is a parse error, not «not food»: a
+  // null body reached toItems() and threw a TypeError, which friendlyErr reads
+  // as «check your connection».
+  async function workerPost(payload, signal) {
+    const ctl = new AbortController();
+    const onAbort = () => ctl.abort();
+    if (signal) { if (signal.aborted) ctl.abort(); else signal.addEventListener('abort', onAbort); }
+    let timer = null;
+    const work = (async () => {
+      const headers = await authHeaders();
+      const res = await fetch(PROXY_URL, { method: 'POST', headers, body: JSON.stringify(payload), signal: ctl.signal });
+      const data = await res.json().catch(() => null);
+      if (res.ok && (!data || typeof data !== 'object' || Array.isArray(data))) throw new Error('parse error');
+      return { res, data: data || {} };
+    })();
+    const deadline = new Promise((resolve, reject) => {
+      timer = setTimeout(() => { ctl.abort(); const e = new Error('timeout'); e.name = 'TimeoutError'; reject(e); }, WORKER_DEADLINE_MS);
+    });
+    work.catch(() => {});   // after a timeout the aborted fetch rejects too; that is the abort landing, not a new error
+    try { return await Promise.race([work, deadline]); }
+    finally { clearTimeout(timer); if (signal) signal.removeEventListener('abort', onAbort); }
+  }
+
   async function analyzeViaProxy(text, image) {
     // A photo's instruction travels as `prompt`: the Worker keeps 1200 characters
     // of that (`req.prompt || req.text` in the non-chat modes) but only 500 of
@@ -125,12 +165,7 @@
     // `text`, the note — the ground truth that outranks the picture — was the
     // part cut off. check-contracts measures both against the Worker's caps.
     const payload = image ? { text: '', prompt: String(text || ''), image } : { text: String(text || '') };
-    const res = await fetch(PROXY_URL, {
-      method: 'POST',
-      headers: await authHeaders(),
-      body: JSON.stringify(payload),
-    });
-    const data = await res.json().catch(() => ({}));
+    const { res, data } = await workerPost(payload);
     // The DAILY budget and the per-minute burst are both 429, and only the BODY
     // tells them apart: "try again in a minute" when the limit lasts until
     // midnight is a lie someone will act on for hours. workerError knows.
@@ -412,11 +447,7 @@
   // Separate protocol on the existing authenticated proxy. Never use the food
   // parser/cache for a training plan, and never persist the source photograph.
   async function analyzePlanImage(image, signal) {
-    const res = await fetch(PROXY_URL, {
-      method: 'POST', headers: await authHeaders(), signal,
-      body: JSON.stringify({ mode: 'workout-plan', image }),
-    });
-    const data = await res.json().catch(() => ({}));
+    const { res, data } = await workerPost({ mode: 'workout-plan', image }, signal);
     if (!res.ok) throw workerError(res, data, 'pi_daily_limit');
     // A client ahead of the Worker receives {items:[]}. Fail explicitly rather
     // than passing an old food response off as an empty workout image.
@@ -909,12 +940,7 @@
   // Plain text in → plain text out. Used by the nutrition coach to suggest
   // meals that fit the day's remaining macros. Bypasses the JSON food parser.
   async function ask(prompt) {
-    const res = await fetch(PROXY_URL, {
-      method: 'POST',
-      headers: await authHeaders(),
-      body: JSON.stringify({ text: String(prompt || ''), mode: 'chat' }),
-    });
-    const data = await res.json().catch(() => ({}));
+    const { res, data } = await workerPost({ text: String(prompt || ''), mode: 'chat' });
     if (!res.ok) throw workerError(res, data);
     // Worker may answer as {reply} (chat mode) or fall back to the items shape.
     if (data && typeof data.reply === 'string') return data.reply.trim();
@@ -934,8 +960,8 @@
 
   // ---- voice → food --------------------------------------------------------
   // `audio` = { mimeType, data(base64) }. Gemini transcribes AND extracts the
-  // foods in one call. The proxy forwards the audio; the direct-key path sends
-  // it inline. Returns { items, transcript }.
+  // foods in one call; the Worker forwards the audio under its own fixed
+  // instruction. Returns { items, transcript }.
   const VOICE_PROMPT = [
     'The user SPOKE this audio to log what they ate. Transcribe it, then list every food/drink mentioned.',
     'Output JSON only: {"transcript":"<what was said>","items":[{"name","calories","protein","carbs","fat"}]}.',
@@ -946,12 +972,7 @@
 
   async function analyzeAudio(audio) {
     if (!audio || !audio.data) throw new Error(tr('ai_error'));
-    const res = await fetch(PROXY_URL, {
-      method: 'POST',
-      headers: await authHeaders(),
-      body: JSON.stringify({ audio: audio, prompt: VOICE_PROMPT }),
-    });
-    const data = await res.json().catch(() => ({}));
+    const { res, data } = await workerPost({ audio: audio, prompt: VOICE_PROMPT });
     if (!res.ok) throw workerError(res, data);
     return { items: toItems(data).items, transcript: (data && data.transcript) || '' };
   }

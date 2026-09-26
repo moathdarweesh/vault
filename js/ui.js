@@ -393,17 +393,29 @@ function showToast(msg, opts) {
 // ==========================================================================
 // Modal System
 // ==========================================================================
-// dismissible:false is for a dialog that MUST be answered — currently only the
-// sync conflict, where walking away leaves the device in a state whose next
-// launch can silently overwrite real data.
+// dismissible:false is for a dialog that MUST be answered — the sync conflict,
+// where walking away leaves the device in a state whose next launch can
+// silently overwrite real data, and the duplicate-account hold.
 // The timer that removes a sheet AFTER its exit plays. It is cancelled by any
 // new openModal, because that call rewrites #modal-root and the old node is
 // gone already — letting the timer survive would let it wipe the NEW sheet.
 let __modalExit = null;
 
-function openModal(innerHtml, { variant = 'sheet', dismissible = true } = {}) {
-  if (__modalExit) { clearTimeout(__modalExit); __modalExit = null; }
+// `hold` marks a dialog no lesser sheet may REPLACE. It follows dismissible:false
+// by default, and a caller can hold a dialog the user may still dismiss (the
+// unreadable-storage rescue). Returns the overlay, or null when refused.
+function openModal(innerHtml, { variant = 'sheet', dismissible = true, hold = !dismissible } = {}) {
   const root = $('#modal-root');
+  // A DIALOG THAT MUST BE ANSWERED IS NEVER REPLACED BY ONE THAT NEED NOT BE.
+  // There is one #modal-root and the write below destroys whatever is in it, so
+  // a sheet raised by a timer — the weekly review at load + 400 ms, a widget's
+  // weight sheet, a failed write's alert — used to land on a conflict or
+  // duplicate-account hold that had arrived first, leaving the hold set and no
+  // dialog on screen to say so. Refused BEFORE anything is touched: the held
+  // dialog keeps its focus trap and its return anchor. One held dialog may still
+  // replace another — the duplicate hold's two stages are one dialog re-rendered.
+  if (!hold && root.querySelector('.modal-overlay[data-hold="1"]:not(.is-out)')) return null;
+  if (__modalExit) { clearTimeout(__modalExit); __modalExit = null; }
   // BEFORE the rewrite below, and only from OUTSIDE the root. Writing innerHTML
   // destroys the sheet that is currently open, so a capture taken after it is
   // either a detached node or <body> — and closeModal's document.contains()
@@ -423,6 +435,7 @@ function openModal(innerHtml, { variant = 'sheet', dismissible = true } = {}) {
   `;
   const overlay = root.querySelector('.modal-overlay');
   overlay.dataset.dismissible = dismissible ? '1' : '0';
+  if (hold) overlay.dataset.hold = '1';
 
   // ⚠️ NO DIALOG IN THIS APP HAD AN ACCESSIBLE NAME. The element above
   // carries role="dialog" aria-modal="true" and neither aria-labelledby nor
@@ -520,7 +533,9 @@ function closeModal() {
   }, ms);
 }
 
-function confirmDialog({ title, text, onConfirm, confirmLabel, variant = 'danger' }) {
+// Returns the overlay, or null when a dialog that must be answered is up and
+// this one was refused (openModal's `hold`) — the caller then says it another way.
+function confirmDialog({ title, text, onConfirm, confirmLabel, variant = 'danger', hold = false }) {
   if (!confirmLabel) confirmLabel = t('delete');
   const btnClass = variant === 'danger' ? 'btn btn-danger' : 'btn btn-primary';
   const overlay = openModal(`
@@ -530,11 +545,13 @@ function confirmDialog({ title, text, onConfirm, confirmLabel, variant = 'danger
       <button type="button" class="btn btn-ghost" data-close>${t('cancel')}</button>
       <button type="button" class="${btnClass}" data-ok>${escapeHtml(confirmLabel)}</button>
     </div>
-  `, { variant: 'confirm' });
+  `, { variant: 'confirm', hold });
+  if (!overlay) return null;
   overlay.querySelector('[data-ok]').addEventListener('click', () => {
     closeModal();
     onConfirm();
   });
+  return overlay;
 }
 
 // ==========================================================================

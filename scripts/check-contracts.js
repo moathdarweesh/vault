@@ -1413,5 +1413,211 @@ const contract = (name, problems) => {
   contract(`every Undo on a toast names the write it undoes (${calls} offerUndo calls, none reaching for the newest entry)`, problems);
 }
 
+// Shared by 49–55: the source of one top-level function, or '' when it is gone.
+const topFn = (file, name) => (src[file].match(new RegExp('^(?:async\\s+)?function ' + name + '\\([^)]*\\)\\s*\\{[\\s\\S]*?^\\}', 'm')) || [''])[0];
+// The top-level function a match sits inside, by name.
+const ownerAt = (text, index) => ([...text.slice(0, index).matchAll(/^(?:async\s+)?function\s+(\w+)\s*\(/gm)].pop() || [])[1] || '(top level)';
+
+// 49 — every sheet on .app hands Back, Escape and a navigation its OWN close.
+// Five sheets live on .app rather than #modal-root (rest, train-anyway,
+// reorder, the permission sheet, the food add-sheet), and goBack() knew one of
+// them. On Home — the root — Back returned false with the other four open and
+// the APK's listener, `if (!goBack()) App.exitApp()`, quit the app under them;
+// anywhere else it popped the screen and left the sheet over the next one.
+// Removing the node is not a close either: the reorder sheet writes ONCE on
+// close and the permission sheet spends its one ask there. So each creator
+// hands its close to the router as overlay.__close, and the router calls that.
+//   (a) every function in a view script that mounts a .sheet-overlay sets
+//       __close on it, or is named below with the reason it needs none;
+//   (b) goBack() and the global Escape handler reach closeAppSheet(), and
+//       navigate() tears the sheets down through __close.
+{
+  const problems = [];
+  const NO_HOOK = {
+    // Its close() is the exit alone — no write, no stamp — which is what
+    // closeAppSheet() does for a sheet that hands it nothing.
+    'js/food.js:add-sheet-overlay': 'its close() is the exit alone, closeAppSheet()\'s own fallback',
+  };
+  let sheets = 0;
+  for (const f of VIEWS) {
+    const text = src[f];
+    for (const m of text.matchAll(/\.className\s*=\s*'sheet-overlay'/g)) {
+      sheets++;
+      const owner = ownerAt(text, m.index);
+      const body = topFn(f, owner);
+      const id = (body.match(/\.id\s*=\s*'([\w-]+)'/) || [])[1] || '?';
+      if (/\.__close\s*=/.test(body) || NO_HOOK[f + ':' + id]) continue;
+      problems.push(`${f}: ${owner}() mounts #${id} on .app and hands the router no __close — Back, Escape and a navigation would drop it without running its own close`);
+    }
+  }
+  if (!/closeAppSheet\(/.test(topFn('js/app.js', 'goBack'))) problems.push('goBack() does not reach closeAppSheet() — Back walks past the sheets on .app');
+  const esc = (src['js/app.js'].match(/document\.addEventListener\('keydown', \(e\) => \{\s*if \(e\.key !== 'Escape'\) return;[\s\S]*?\n\}\);/) || [''])[0];
+  if (!esc) problems.push('the global Escape handler is not where this contract looks (a document keydown whose first line is `if (e.key !== \'Escape\') return;`)');
+  else if (!/closeAppSheet\(/.test(esc)) problems.push('the global Escape handler does not reach closeAppSheet()');
+  if (!/__close/.test(topFn('js/app.js', 'navigate'))) problems.push('navigate() does not close the sheets on .app through their __close — a navigation leaves them over the next screen, or drops them unsaved');
+  contract(`every sheet on .app hands Back, Escape and a navigation its own close (${sheets} sheets, ${Object.keys(NO_HOOK).length} closing by the fallback)`, problems);
+}
+
+// 50 — a back arrow goes BACK. Child screens carried `data-goto` on their back
+// arrow — a navigate() FORWARD to a fixed view — so from Program the planner's
+// arrow landed on Home, «My exercises» sent the exercise browser's visitor to
+// Program, and each press pushed a history entry that made the hardware Back
+// bounce to the screen just left. A back arrow is data-back (goBack()).
+{
+  const problems = [];
+  // A fixed destination that is genuinely right goes here, with its reason.
+  // Empty since the food log's arrow went too: it is opened from the day view,
+  // a search result and the day summary as well as from Food, and its
+  // data-goto="food" sent all three to the Food tab.
+  const NAMED = {};
+  let arrows = 0;
+  for (const f of VIEWS) {
+    for (const m of src[f].matchAll(/<button\b[^>]*\bclass="back-btn"[^>]*>/g)) {
+      arrows++;
+      const goto = (m[0].match(/\bdata-goto="([\w-]+)"/) || [])[1];
+      if (!goto || NAMED[f + ':' + goto]) continue;
+      problems.push(`${f}:${src[f].slice(0, m.index).split(/\r?\n/).length} a back arrow navigates FORWARD to «${goto}» — data-back returns where the user came from`);
+    }
+  }
+  contract(`every back arrow goes back (${arrows} arrows, ${Object.keys(NAMED).length} named)`, problems);
+}
+
+// 51 — a plan day's name is PRINTED through planDayName(). It translates the
+// built-in names («Push» → «دفع») for display and leaves a renamed day alone.
+// Program and the planner called it; Home's hero, session-day, the run, its
+// summary, the day view and the slot editor printed the stored English — the
+// most prominent words on Home, in English in the Arabic UI. An input's own
+// value="…" keeps the stored name on purpose: it must round-trip on save.
+//
+// It reads the PRINTING idiom — every template prints through escapeHtml() — so
+// `escapeHtml(day.name …` is the defect and `escapeHtml(planDayName(day.name) …`
+// is not. `dayLabel` is the slot editor's copy of the name and is read only
+// there: renderHome has a `dayLabel` of its own, which is a date.
+{
+  const problems = [];
+  const app = src['js/app.js'];
+  let printed = 0;
+  for (const m of app.matchAll(/escapeHtml\(\s*(?:(?:todayPlan|plan|day|slot|w|workout)\??\.name\b|(dayLabel)\b)/g)) {
+    if (app.slice(Math.max(0, m.index - 9), m.index) === 'value="${') continue;   // an input's own value
+    if (m[1] && ownerAt(app, m.index) !== 'openSlotEditorModal') continue;
+    printed++;
+    problems.push(`js/app.js:${app.slice(0, m.index).split(/\r?\n/).length} prints ${app.slice(m.index, m.index + 60).split(/\r?\n/)[0]}… — a plan day's stored name; print planDayName() of it`);
+  }
+  const sites = (app.match(/\bplanDayName\(/g) || []).length - 1;   // less the declaration
+  const train = (src['js/storage.js'].match(/case 'train': \{[\s\S]*?\n {8}\}/) || [''])[0];
+  if (!train) problems.push('js/storage.js DB.notif.text() has no `case \'train\'` block where this contract looks');
+  else if (!/planDayName/.test(train)) problems.push('the training reminder\'s title prints the day\'s stored name — read it through planDayName (typeof-guarded: app.js loads after storage.js)');
+  contract(`a plan day's name is printed through planDayName() (${sites} call sites, ${printed} printing it raw; and the training reminder)`, problems);
+}
+
+// 52 — a dialog that must be answered is never REPLACED by one that need not
+// be, and the boot-time weekly review opens only on Home, over nothing. There is
+// one #modal-root and openModal() rewrites it, so the review (load + 400 ms) used
+// to land on a conflict or duplicate-account hold that had arrived first — the
+// hold set, the dialog gone — and over whatever screen the user had reached.
+//   (a) openModal() defaults `hold` to `!dismissible`, marks a held overlay,
+//       and refuses a lesser sheet over one BEFORE it writes;
+//   (b) the unreadable-storage dialog is held too;
+//   (c) openWeeklyReview() asks bootSheetMayOpen() before it spends its stamp,
+//       and that guard names Home, the modal root, the .app sheets and the gates.
+{
+  const problems = [];
+  const om = topFn('js/ui.js', 'openModal');
+  if (!om) problems.push('js/ui.js has no top-level openModal');
+  else {
+    if (!/\bhold\s*=\s*!dismissible\b/.test(om.split('\n')[0])) problems.push('openModal() does not default `hold` to `!dismissible` — a must-answer dialog would be replaceable unless every caller remembered to say so');
+    const refuse = om.search(/data-hold="1"\]:not\(\.is-out\)/), write = om.indexOf('root.innerHTML');
+    if (refuse < 0) problems.push('openModal() does not look for a held overlay before it writes — a lesser sheet replaces a dialog that must be answered');
+    else if (write >= 0 && refuse > write) problems.push('openModal() looks for a held overlay only AFTER it has rewritten #modal-root');
+    if (!/dataset\.hold\s*=/.test(om)) problems.push('openModal() never marks the overlay it opens as held');
+  }
+  if (!/hold:\s*true/.test(topFn('js/app.js', 'showUnreadableDialog'))) problems.push('the unreadable-storage dialog is not held — a lesser sheet can replace the only rescue offered in READ-ONLY mode');
+  const wr = topFn('js/app.js', 'openWeeklyReview');
+  const guardAt = wr.search(/bootSheetMayOpen\(\)/), stampAt = wr.indexOf('setReviewSeen');
+  if (!wr) problems.push('js/app.js has no top-level openWeeklyReview');
+  else if (guardAt < 0) problems.push('openWeeklyReview() does not ask bootSheetMayOpen() — it opens over another screen, a gate or a dialog');
+  else if (stampAt >= 0 && guardAt > stampAt) problems.push('openWeeklyReview() asks bootSheetMayOpen() only after spending its once-a-week stamp');
+  const guard = topFn('js/app.js', 'bootSheetMayOpen');
+  if (!guard) problems.push('js/app.js has no top-level bootSheetMayOpen()');
+  else for (const [need, what] of [[/currentView !== 'home'/, 'the user being on Home'], [/#modal-root/, 'the modal root'], [/\.app > \.sheet-overlay/, 'the sheets on .app'], [/\.auth-gate/, 'the gates']]) {
+    if (!need.test(guard)) problems.push(`bootSheetMayOpen() does not ask about ${what}`);
+  }
+  contract('a dialog that must be answered is never replaced by one that need not be, and the weekly review opens only on Home over nothing', problems);
+}
+
+// 53 — weekRanges() hands back DATES; addDaysISO() takes an ISO STRING. The
+// weekly review passed it one, got 'NaN-NaN-NaN' back, and its improvement line
+// — half of what the review is for — never rendered, with no error anywhere.
+// isoOf() converts; a Date bound stays a Date for inRangeISO().
+//
+// ⚠️ THE DATE ARRIVED SECOND-HAND, WHICH IS WHY A DESTRUCTURE OF weekRanges()
+// ALONE CANNOT SEE IT: weeklyReviewDue() read weekRanges() and handed lastStart
+// on inside its result, and openWeeklyReview() took it from THAT. So the names
+// are weekRanges()'s own four — thisStart, thisEnd, lastStart, lastEnd — plus
+// whatever a function destructures from it, wherever they are read.
+{
+  const problems = [];
+  const names = new Set(['thisStart', 'thisEnd', 'lastStart', 'lastEnd']);
+  for (const f of VIEWS) for (const d of src[f].matchAll(/(?:const|let)\s*\{([^}]*)\}\s*=\s*weekRanges\(\)/g)) {
+    for (const x of d[1].split(',')) { const n = x.split(':').pop().trim(); if (/^\w+$/.test(n)) names.add(n); }
+  }
+  let reads = 0;
+  for (const f of VIEWS) {
+    const text = src[f];
+    for (const m of text.matchAll(/addDaysISO\(\s*(\w+)\b/g)) {
+      if (!names.has(m[1])) continue;
+      reads++;
+      problems.push(`${f}:${text.slice(0, m.index).split(/\r?\n/).length} ${ownerAt(text, m.index)}() passes ${m[1]} — a Date from weekRanges() — to addDaysISO(), which returns 'NaN-NaN-NaN' for it; isoOf() it, or stay in Date space`);
+    }
+  }
+  contract(`no Date from weekRanges() reaches addDaysISO() (${names.size} names, ${reads} such reads)`, problems);
+}
+
+// 54 — "is this reminder still due?" is ONE predicate. scheduleForDate dropped a
+// ticked dose, a met calorie target and a streak kept today — but only when the
+// timers were ARMED, and ticking, eating or training does not re-arm them.
+// deliver() re-asked about water alone, so the other three arrived for
+// something the user had just done. Both ask DB.notif.stillDue() now, and
+// deliver() carries no channel test of its own that could drift from it.
+{
+  const problems = [];
+  const st = src['js/storage.js'];
+  if (!/^ {4}stillDue\(item\)\s*\{/m.test(st)) problems.push('DB.notif has no stillDue(item)');
+  const sched = (st.match(/^ {4}scheduleForDate\(iso, opts\)\s*\{[\s\S]*?^ {4}\},/m) || [''])[0];
+  if (!/this\.stillDue\(/.test(sched)) problems.push('scheduleForDate() does not ask this.stillDue() — the arming rule and the firing rule can drift apart');
+  const del = topFn('js/app.js', 'deliver');
+  if (!/DB\.notif\.stillDue\(item\)/.test(del)) problems.push('deliver() does not ask DB.notif.stillDue(item) at fire time');
+  if (/DB\.(water|supplements|foodLogs|sessions)\./.test(del)) problems.push('deliver() tests a channel\'s state itself — that rule belongs in stillDue(), where scheduleForDate reads it too');
+  contract('a reminder asks one predicate whether it is still due, when it is armed and again when it fires', problems);
+}
+
+// 55 — deleting a custom exercise takes its photo off the server. Both delete
+// paths called DB.exercises.remove(), which clears only the local side store,
+// and left {uid}/{id}.jpg in the bucket for as long as the account exists.
+// deleteCustomExercise() reads the pointer first, removes, then asks the bucket
+// to let go — best-effort, and never in the way of the delete itself.
+{
+  const problems = [];
+  let calls = 0;
+  for (const f of VIEWS) {
+    const text = src[f];
+    for (const m of text.matchAll(/DB\.exercises\.remove\(/g)) {
+      const lineStart = text.lastIndexOf('\n', m.index) + 1;
+      if (text.slice(lineStart, m.index).includes('//')) continue;   // a comment naming the call
+      calls++;
+      if (ownerAt(text, m.index) === 'deleteCustomExercise') continue;
+      problems.push(`${f}:${text.slice(0, m.index).split(/\r?\n/).length} calls DB.exercises.remove() directly — go through deleteCustomExercise(), or the photo stays in the bucket`);
+    }
+  }
+  const fn = topFn('js/app.js', 'deleteCustomExercise');
+  if (!fn) problems.push('js/app.js has no top-level deleteCustomExercise()');
+  else {
+    const read = fn.indexOf('imagePath'), rm = fn.indexOf('DB.exercises.remove(');
+    if (read < 0 || rm < 0 || read > rm) problems.push('deleteCustomExercise() must read imagePath BEFORE DB.exercises.remove() — the pointer goes with the exercise');
+    if (!/removeExerciseImage/.test(fn)) problems.push('deleteCustomExercise() never asks Cloud.removeExerciseImage()');
+  }
+  contract(`every custom-exercise delete takes its photo off the server too (${calls} remove call${calls === 1 ? '' : 's'})`, problems);
+}
+
 console.log(failures.length ? `\ncheck-contracts: ${failures.length} broken contract(s)` : '\ncheck-contracts: all contracts hold');
 process.exit(failures.length ? 1 : 0);

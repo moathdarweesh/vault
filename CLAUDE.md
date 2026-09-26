@@ -79,11 +79,11 @@ a faster TTFB — not fewer bytes.
 ## CACHE WORKFLOW — now automated. **Do not bump by hand.**
 
 ```bash
-npm run verify           # 48 contracts + lint + 13 suites — THE GATE
+npm run verify           # 55 contracts + lint + 13 suites — THE GATE
 npm run release          # bump every marker and re-read them; runs NO tests
 ```
 
-**Current version: v397.** APK: build 24 / v3.3.
+**Current version: v398.** APK: build 24 / v3.3.
 
 > ⚠️ **`npm run release` RUNS NO TESTS, AND THIS LINE USED TO READ AS IF IT DID.**
 > It said «bump every marker + verify», where *verify* meant the MARKERS — and
@@ -2734,6 +2734,74 @@ the rows pre-filled from last time as performed sets ("confirmed without a
 throwaway edit" is the recorded intent; whether an untouched row should count
 is the owner's call); a saved food **4 taps**. The day card's Save measures
 **69×40** — under the 44 floor.
+
+## v398 — batches 2b and 3: Back knows every sheet, and what the watch brings back
+
+Batches 2b (router, sheets, Home, notifications, dialogs — 21 findings) and 3
+(food and body — 14 findings) of the 2026-09-25 review. Every fix shipped with a
+check that FAILED on v397 first; the finisher re-proved all of them independently
+against a `git archive` of v397 (exactly contracts 49–55 fail there, the other 48
+hold; 27 of 27 new real-click cases fail there, all pass here). Seven new
+contracts: 49–55.
+
+**Back knows the sheets that live on `.app`.** `goBack()` closed the lightbox,
+the food add-sheet and `#modal-root` — not the rest, train-anyway, reorder and
+notification-permission sheets, so Android Back on Home with the rest sheet open
+QUIT THE APP. Every `.app > .sheet-overlay` now carries a `__close` hook the
+router, the Escape handler and `navigate()`'s teardown call (`liveAppSheet` /
+`closeAppSheet`); **contract 49** pins it. Twelve back arrows hard-coded with
+`data-goto` (they navigated FORWARD and grew the stack) are `data-back`
+(**contract 50**, 17 arrows, 0 named) — including the food log's, whose arrow
+sent every entry point to «food». A toast is raised after `navigate()` («train
+tomorrow's session today» kept losing its Undo).
+
+- **Sheets that must be answered are never replaced** — `openModal({hold})`
+  defaults to `!dismissible`, the unreadable-storage dialog is held, and the
+  boot-time weekly review opens only on Home over nothing (`bootSheetMayOpen`;
+  **contract 52**). The conflict dialog runs ONE choice: both cards disable on
+  the first tap. A pull that brings an existing account clears the first-run
+  card. The widget's launch URL is spent once per launch (`DB.launch`), so the
+  post-release reload cannot pour the cup twice.
+- **Plan day names read in Arabic everywhere** — the hero, the day view, the
+  session day, the run title and summary, the slot editor and the training
+  reminder all go through `planDayName()` (**contract 51**). Arabic search folds
+  hamza/alef, taa marbuta, alef maqsura, tatweel and diacritics (`DB.search.fold`,
+  both sides). The 30-day volume and the one-day view print in the user's unit;
+  the day's sleep sums every entry as H:MM.
+- **Notifications:** three reminders due in one minute no longer leave the bar
+  stuck — one queue per channel, no write into a leaving bar; a reminder asks one
+  predicate, `DB.notif.stillDue()`, when it is armed AND when it fires (a ticked
+  supplement, a met calorie target, a kept streak no longer fire; **contract
+  54**); the weekly review's «one comparable improvement» can appear at last —
+  `weekRanges()` hands out Dates, and one reached `addDaysISO()` as
+  `'NaN-NaN-NaN'` (**contract 53** refuses that read). A time picked in the
+  supplement sheet is saved on Save, not only after «أضف وقتًا». Deleting a custom
+  exercise takes its photo off the server (`deleteCustomExercise`, both paths;
+  **contract 55**).
+- **Food:** a recipe with a trailing empty row saves; a row with figures and no
+  name is named as the problem (`rec_need_name`). `parseGrams` reads «0,5 كغ» as
+  500 g and «1,000 g» as 1000 (the comma rule is shared with the servings
+  scaler; the helper is module-scope now). A negative figure is refused by name
+  and clamped in `DB.foodLogs.add` / `foods.add` / `foods.update`. A meal's
+  portion has a ceiling the sheet names (`DB.mealBundles.maxPortion`,
+  `cx_portion_cap`). The barcode lookup answers found / unknown / failed / busy /
+  gone: a miss clears the previous product, a network failure is retried, the
+  camera keeps scanning after a typed miss. Closing the voice sheet mid-recording
+  uploads nothing; a camera or mic granted after the sheet closed is stopped.
+  Every Worker call goes through `workerPost()` with a 90 s deadline
+  (`ai_err_timeout`).
+- **Body:** a deleted watch night or session STAYS deleted — `healthDeleted`
+  keeps the hcKeys for 32 days (cap 200, pruned at delete, validated, not
+  user data), and both importers skip them. A walk ticked on Home and then
+  imported from the watch is ONE row (the import adopts the `planAuto` row: id
+  and planId kept, the watch's figures taken). A hand-logged night and the
+  watch's night that overlaps more than half of the longer stretch merge.
+  «خروج ومسح هذا الجهاز» signs nobody out when the upload failed: it asks first
+  (`logout_unsynced`).
+
+55 contracts · lint · **13 suites, 0 failed, 0 skipped** (`test-sync-status-ui.js`
+~100 s now: 27 more real-click cases). `ux-flows.js` all lanes LANDED, resume
+RESUMED.
 
 ## v397 — batches 2a and 7: the workout core, and the budget nobody could bill
 

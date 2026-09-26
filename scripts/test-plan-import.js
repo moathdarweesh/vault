@@ -229,4 +229,63 @@ async function workerTests() {
   assert.equal((await call({ text: 'Apple' })).status, 502, 'every model answering null ends in a 502 with a body, after trying each model');
   console.log('PASS Worker: auth, input validation, fixed prompt, transcription, empty image result, shared budget, food regression, bounded output, bilingual examples, voice under a fixed instruction, item cap, budget failures logged, no-argument budget, null answer');
 }
-workerTests().catch((e) => { console.error(e); process.exitCode = 1; });
+// ---- review 2026-09-25 · the client gives up before the user does (features:food#2, #8) ----
+// fetch() has no deadline of its own, and a stalled mobile connection can hold a
+// request open for minutes or for good — the recipe editor waited on a row
+// marked 'sent' and could not save, and the chat sat on «calculating…». The
+// REAL js/foodai.js runs here against a fetch that never answers, on a clock the
+// test moves; the deadline must end the request, name it, leave a caller's own
+// cancel alone, and outlast every attempt the Worker itself may make.
+async function clientDeadline() {
+  const fa = read('js/foodai.js'), worker = read('backend/worker/gemini-worker.js');
+  const timers = new Map(); let now = 0, seq = 0;
+  const hung = (url, opts) => new Promise((_, reject) => {
+    const s = opts && opts.signal;
+    if (s) s.addEventListener('abort', () => { const e = new Error('The user aborted a request.'); e.name = 'AbortError'; reject(e); });
+  });
+  const c = { console: { log() {}, warn() {}, error() {} }, AbortController,
+    localStorage: { getItem: () => null, setItem() {}, removeItem() {} },
+    setTimeout: (fn, ms) => { timers.set(++seq, { fn, at: now + (Number(ms) || 0) }); return seq; },
+    clearTimeout: (id) => { timers.delete(id); }, fetch: hung };
+  c.window = c; vm.createContext(c);
+  vm.runInContext(read('js/cloud.js').split('(function () {')[0], c);   // VAULT_KEYS, and nothing else of cloud.js
+  vm.runInContext(fa, c);
+  const tick = () => new Promise((r) => setImmediate(r));
+  const settle = async () => { for (let i = 0; i < 6; i++) await tick(); };
+  const advance = async (ms) => {
+    now += ms;
+    for (const [id, tm] of [...timers].sort((a, b) => a[1].at - b[1].at)) if (tm.at <= now) { timers.delete(id); tm.fn(); }
+    await settle();
+  };
+  let outcome = null;
+  c.FoodAI.analyze('a hung request', { skipLocal: true }).then((v) => { outcome = { ok: v }; }, (e) => { outcome = { err: e }; });
+  await settle();
+  assert.equal(outcome, null, 'setup: the request is out and unanswered');
+  await advance(180001);
+  assert.ok(outcome && outcome.err, 'a request the network never answers is ended — v397 left it pending for ever, three minutes and counting');
+  assert.equal(c.FoodAI.friendlyErr(outcome.err), 'ai_err_timeout', 'and it is named as a timeout: ' + (outcome.err && outcome.err.message));
+  // A caller's own cancel stays the AbortError app.js's plan import reads for itself.
+  const ctl = new AbortController(); let planErr = null;
+  c.FoodAI.analyzePlanImage({ mimeType: 'image/png', data: 'eA==' }, ctl.signal).catch((e) => { planErr = e; });
+  await settle();
+  ctl.abort();
+  await settle();
+  assert.equal(planErr && planErr.name, 'AbortError', "a caller's own cancel is not reported as our timeout");
+  assert.equal(timers.size, 0, 'no deadline timer outlives its request');
+  // ONE constant, and it outlasts the Worker's own worst case.
+  const deadline = Number((fa.match(/const WORKER_DEADLINE_MS = (\d+);/) || [])[1]);
+  const attempt = Number((worker.match(/const ATTEMPT_MS = (\d+);/) || [])[1]);
+  const list = (worker.match(/const MODELS = \[([^\]]*)\]/) || [])[1] || '';
+  const nModels = list.split(',').filter((x) => x.trim()).length;
+  assert.ok(attempt > 0 && nModels > 0, `read the Worker's own bound (${nModels} × ${attempt} ms)`);
+  assert.ok(deadline >= nModels * attempt + 10000, `the client waits longer than the Worker can (${nModels} × ${attempt} ms, plus the auth and budget trips): ${deadline} ms would cut off a slow but valid answer`);
+  assert.equal((fa.match(/const WORKER_DEADLINE_MS =/g) || []).length, 1, 'one constant');
+  assert.equal((fa.match(/fetch\(PROXY_URL/g) || []).length, 1, 'and ONE door to the Worker, so the deadline covers every call — v397 had four fetches, none with a deadline');
+  // A 200 whose body is not an object is «something went wrong» (features:food#8).
+  c.fetch = async () => ({ ok: true, status: 200, json: async () => null });
+  let nullErr = null;
+  await c.FoodAI.analyze('a null body', { skipLocal: true }).catch((e) => { nullErr = e; });
+  assert.equal(c.FoodAI.friendlyErr(nullErr), 'ai_error', 'a null 200 is not «check your connection» — v397 threw a TypeError there: ' + (nullErr && nullErr.message));
+  console.log('PASS client deadline: a hung Worker call ends and is named, a caller\'s cancel stays its own, the deadline outlasts every Worker attempt, a null 200 is not a network error');
+}
+workerTests().then(clientDeadline).catch((e) => { console.error(e); process.exitCode = 1; });

@@ -151,4 +151,151 @@ for (let i = 0; i < 30; i++) DB.cardioPlan.add({ type: 'walking', days: [i % 7],
 assert.equal(DB.cardioPlan.list().length, DB.cardioPlan.MAX, 'the list is capped');
 assert.equal(DB.cardioPlan.add({ type: 'walking', days: [0], duration: 10 }).code, 'LIMIT');
 
-console.log('PASS cardio schedule: validation, local weekday, id-less join refused, claim-not-duplicate, un-tick preserves imported and corrected rows, schedule vs history, blob gates, load normalisation, undo, cap');
+// ---------------------------------------------------------------- Health Connect imports (review 2026-09-25)
+// Two ways a watch import made the cardio log wrong, and the one way a delete
+// did not stick. Each case FAILED on v397 before its fix; the message says
+// what v397 did instead.
+{
+  const h = context(), hdb = h.c.DB, hrun = (code) => vm.runInContext(code, h.c);
+  const dayOf = (n) => hrun(`addDaysISO(todayISO(), ${n})`);
+  // A LOCAL wall-clock time on an ISO day, as the ISO instant Health Connect sends.
+  const at = (iso, hh, mm) => { const [y, m, d] = iso.split('-').map(Number); return new Date(y, m - 1, d, hh, mm).toISOString(); };
+  const rowsOn = (iso) => hdb.cardio.list().filter((x) => x.date === iso);
+
+  // ── TICK FIRST, WATCH SECOND (features:body-home-settings#2). complete() claims
+  // a walk that is already there; the reverse order had no reconciliation, so a
+  // walk ticked on Home and synced from the watch later was two rows.
+  assert.equal(hdb.cardioPlan.add({ type: 'walking', days: [0, 1, 2, 3, 4, 5, 6], duration: 30 }).ok, true);
+  const pid = hdb.cardioPlan.list()[0].id;
+  const D1 = dayOf(-2);
+  assert.equal(hdb.cardioPlan.complete(pid, D1).ok, true);
+  const tick = rowsOn(D1)[0];
+  assert.equal(tick.planAuto, true, 'setup: the tick wrote its own row');
+  const walk = { start: at(D1, 7, 0), end: at(D1, 7, 31), type: 'walking', minutes: 31, calories: 150 };
+  hdb.cardio.importFromHealth([walk]);
+  assert.equal(rowsOn(D1).length, 1, 'a ticked walk and the same walk from the watch are ONE row — v397 kept both, and every total counted the minutes twice');
+  const adopted = rowsOn(D1)[0];
+  assert.equal(adopted.id, tick.id, "the tick's row is adopted, id and all");
+  assert.equal(adopted.planId, pid, 'it is still the tick');
+  assert.equal(adopted.planAuto, undefined, "but no longer the tick's to delete");
+  assert.equal(adopted.duration, 31, "the watch's minutes");
+  assert.equal(adopted.calories, 150, "and its calories replace the tick's 0");
+  assert.equal(adopted.source, 'health');
+  assert.equal(adopted.hcKey, walk.start);
+  assert.equal(hdb.cardioPlan.forDate(D1)[0].doneId, tick.id, 'the box stays ticked');
+  assert.equal(hdb.cardioPlan.forDate(D1)[0].doneAuto, false, 'as a claim — the state complete() leaves in the other order');
+  assert.equal(hdb.cardio.importFromHealth([walk]), 0, 'the next sync does not add it again');
+  assert.equal(hdb.cardioPlan.uncomplete(pid, D1).ok, true);
+  assert.equal(rowsOn(D1).length, 1, "an un-tick afterwards only unclaims: the watch's walk survives");
+  assert.equal(rowsOn(D1)[0].duration, 31);
+  // Only the tick's own row is adopted: never a row the user typed, never another type.
+  const D2 = dayOf(-3);
+  hdb.cardio.add({ type: 'walking', date: D2, duration: 20, calories: 90 });
+  hdb.cardio.importFromHealth([{ start: at(D2, 8, 0), end: at(D2, 8, 25), type: 'walking', minutes: 25, calories: 120 }]);
+  assert.equal(rowsOn(D2).length, 2, "a row the user typed is not the tick's, so it is never overwritten");
+  const D3 = dayOf(-4);
+  hdb.cardioPlan.complete(pid, D3);
+  hdb.cardio.importFromHealth([{ start: at(D3, 9, 0), end: at(D3, 9, 40), type: 'running', minutes: 40, calories: 380 }]);
+  assert.equal(rowsOn(D3).length, 2, 'a run is not the walk that was ticked');
+  assert.equal(rowsOn(D3).find((x) => x.planId === pid).planAuto, true, 'and the tick is left as it was');
+
+  // ── A DELETE STICKS (bugs:food-body#7, features:body-home-settings#4). The
+  // dedupe knew only the rows still stored, and the next read starts at the
+  // newest REMAINING key minus a day — so a deleted newest session was always
+  // inside it, and came back.
+  const run1 = { start: at(dayOf(-1), 18, 0), end: at(dayOf(-1), 18, 40), type: 'running', minutes: 40, calories: 400 };
+  assert.equal(hdb.cardio.importFromHealth([run1]), 1);
+  hdb.cardio.remove(hdb.cardio.list().find((x) => x.hcKey === run1.start).id);
+  assert.equal(hdb.cardio.importFromHealth([run1]), 0, 'a deleted watch session stays deleted on the next sync — v397 imported it again');
+  assert.equal(hdb.cardio.list().some((x) => x.hcKey === run1.start), false);
+  const night = { start: at(dayOf(-2), 23, 10), end: at(dayOf(-1), 6, 40), minutes: 450, stages: { deep: 80, light: 250, rem: 90, awake: 30 } };
+  assert.equal(hdb.sleep.importFromHealth([night]), 1);
+  hdb.sleep.remove(hdb.sleep.list().find((x) => x.hcKey === night.start).id);
+  assert.equal(hdb.sleep.importFromHealth([night]), 0, 'a deleted watch night stays deleted — v397 imported it again');
+  assert.equal(hdb.sleep.list().some((x) => x.hcKey === night.start), false);
+  // The refusal travels in the blob, so a delete on one device sticks on the others.
+  const other = context();
+  assert.equal(other.c.DB.importJSON(hdb.exportJSON()), true);
+  assert.equal(other.c.DB.sleep.importFromHealth([night]), 0, 'a device that receives the blob refuses the night too');
+  assert.equal(other.c.DB.cardio.importFromHealth([run1]), 0, 'and the run');
+  // One domain's refusal is not the other's.
+  const twin = { start: night.start, end: at(dayOf(-2), 23, 50), type: 'walking', minutes: 40, calories: 100 };
+  assert.equal(hdb.cardio.importFromHealth([twin]), 1, "a walk that shares a deleted night's start is still imported");
+
+  // ── KEPT ONLY WHILE IT CAN MATTER. The plugin reads history back 30 days at
+  // most (HealthConnectPlugin.kt, historyStart), so an older key guards nothing:
+  // it is pruned at the next delete, and the list has a ceiling.
+  const oldKey = at(dayOf(-45), 22, 0);
+  hrun(`STATE.healthDeleted.sleep.push(${json(oldKey)}, 'not a time')`);
+  const night2 = { start: at(dayOf(-6), 23, 0), end: at(dayOf(-5), 7, 0), minutes: 480 };
+  hdb.sleep.importFromHealth([night2]);
+  hdb.sleep.remove(hdb.sleep.list().find((x) => x.hcKey === night2.start).id);
+  const kept = JSON.parse(hdb.exportJSON()).healthDeleted.sleep;
+  assert.equal(kept.includes(oldKey), false, 'a refusal older than the read-back window is pruned at the next delete');
+  assert.equal(kept.includes('not a time'), false, 'and so is one that is not a time at all');
+  assert.ok(kept.includes(night.start) && kept.includes(night2.start), 'the recent ones stay: ' + json(kept));
+  hrun('STATE.healthDeleted.cardio = Array.from({ length: 400 }, (_, i) => new Date(Date.now() - i * 60000).toISOString())');
+  hdb.cardio.remove(hdb.cardio.list().find((x) => x.hcKey === twin.start).id);
+  const capped = JSON.parse(hdb.exportJSON()).healthDeleted.cardio;
+  assert.ok(capped.length <= 200 && capped.includes(twin.start), 'the list has a ceiling, and the newest refusal is inside it (' + capped.length + ')');
+
+  // ── THE BLOB GATES. Optional (an older backup has none), an object when
+  // present, normalised on load, and NOT user data: a device whose only content
+  // is a list of deletions is an empty device.
+  const blob = JSON.parse(hdb.exportJSON());
+  assert.equal(hdb._validateBlob(blob), true);
+  assert.equal(hdb._validateBlob({ ...blob, healthDeleted: [] }), false, 'a non-object is refused');
+  assert.equal(hdb._validateBlob({ ...blob, healthDeleted: 'nope' }), false);
+  const older = { ...blob }; delete older.healthDeleted;
+  assert.equal(hdb._validateBlob(older), true, 'a blob without it still validates');
+  assert.equal(hdb.hasUserData({ healthDeleted: { sleep: [night.start] } }), false, 'deletions alone are not user data');
+  const raw = JSON.parse(h.values.get(h.keys.store));
+  raw.healthDeleted = { sleep: 'nope', cardio: [1, night.start, null, night.start, { x: 1 }] };
+  h.values.set(h.keys.store, json(raw));
+  hrun('reloadState()');
+  const norm = JSON.parse(h.values.get(h.keys.store)).healthDeleted;
+  assert.equal(json(norm), json({ sleep: [], cardio: [night.start] }), 'normalised on load and WRITTEN BACK: ' + json(norm));
+}
+
+// ---------------------------------------------------------------- one night is one night (features:body-home-settings#3)
+// A night logged by hand and then read from the watch was two rows: Home
+// summed them («14:15 نوم اليوم») and the hero showed whichever sorted first,
+// the one without stages. The watch night now REPLACES the hand-logged one
+// when the two cover the same stretch — more than half of the longer — and the
+// row keeps its id. A nap beside a night, or a partial watch record inside a
+// long hand-logged night, is not the same stretch.
+{
+  const h = context(), hdb = h.c.DB, hrun = (code) => vm.runInContext(code, h.c);
+  const at = (iso, hh, mm) => { const [y, m, d] = iso.split('-').map(Number); return new Date(y, m - 1, d, hh, mm).toISOString(); };
+  const dayOf = (n) => hrun(`addDaysISO(todayISO(), ${n})`);
+  const onDay = (iso) => hdb.sleep.list().filter((x) => x.date === iso);
+  const D = dayOf(-1), E = dayOf(-2);
+  const mine = hdb.sleep.add({ date: D, sleepTime: '23:30', wakeTime: '06:45' });
+  const stages = { deep: 70, light: 260, rem: 70, awake: 20 };
+  const watch = { start: at(E, 23, 40), end: at(D, 6, 50), minutes: 430, stages };
+  hdb.sleep.importFromHealth([watch]);
+  assert.equal(onDay(D).length, 1, 'a hand-logged night and the same night from the watch are ONE row — v397 kept both, and Home summed them');
+  const one = onDay(D)[0];
+  assert.equal(one.id, mine.id, 'the hand-logged row is kept, id and all');
+  assert.equal(one.durationMinutes, 430, "with the watch's measured minutes");
+  assert.equal(json(one.stages), json(stages), 'and its stages');
+  assert.equal(one.sleepTime + ' ' + one.wakeTime, '23:40 06:50', 'and its times');
+  assert.equal(one.source, 'health');
+  assert.equal(hdb.sleep.importFromHealth([watch]), 0, 'the next sync does not add it again');
+  // A nap is not the night.
+  const F = dayOf(-3), G = dayOf(-4);
+  hdb.sleep.add({ date: F, sleepTime: '14:00', wakeTime: '15:00' });
+  hdb.sleep.importFromHealth([{ start: at(G, 23, 0), end: at(F, 7, 0), minutes: 480 }]);
+  assert.equal(onDay(F).length, 2, 'a nap beside a night stays a nap');
+  // A partial watch record does not swallow a long hand-logged night.
+  const H = dayOf(-5);
+  hdb.sleep.add({ date: H, sleepTime: '23:00', wakeTime: '07:00' });
+  hdb.sleep.importFromHealth([{ start: at(H, 1, 0), end: at(H, 3, 0), minutes: 120 }]);
+  assert.equal(onDay(H).length, 2, 'two hours inside an eight-hour night are not the same stretch');
+  assert.equal(onDay(H).find((x) => x.source !== 'health').durationMinutes, 480, 'and the hand-logged night keeps its eight hours');
+  // Deleting the merged night refuses the watch copy, like any watch night.
+  hdb.sleep.remove(mine.id);
+  assert.equal(hdb.sleep.importFromHealth([watch]), 0, 'deleting the merged night keeps the watch copy out too');
+}
+
+console.log('PASS cardio schedule: validation, local weekday, id-less join refused, claim-not-duplicate, un-tick preserves imported and corrected rows, schedule vs history, blob gates, load normalisation, undo, cap; Health Connect: tick-then-import is one row, a deleted watch session or night stays deleted (and on other devices), refusals pruned past the read-back window and capped, blob gates, a hand-logged night and the watch copy are one night');

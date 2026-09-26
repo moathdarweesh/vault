@@ -12,7 +12,7 @@
 // build. The literal below is the fallback (file://, or a stripped query) and is
 // still bumped by `npm run release` — see CLAUDE.md "CACHE WORKFLOW".
 const VAULT_BUILD = (() => {
-  const FALLBACK = 'v397';
+  const FALLBACK = 'v398';
   try {
     const src = (document.currentScript && document.currentScript.src) || '';
     const m = src.match(/[?&]v=(\d+)/);
@@ -162,6 +162,7 @@ function openNotifPermSheet() {
   requestAnimationFrame(() => overlay.classList.add('open'));
 
   const close = () => {
+    overlay.__closed = true;
     // Asked, whichever way it went. The sheet never reappears on its own — the
     // "turn on reminders" row on the notifications page is the only way back,
     // and it is shown exactly while the OS prompt is still winnable.
@@ -169,6 +170,9 @@ function openNotifPermSheet() {
     overlay.classList.remove('open');
     setTimeout(() => overlay.remove(), 260);
   };
+  // Back, Escape and a navigation close it through here (closeAppSheet), so the
+  // one ask is spent on those exits too — "whichever way it went" includes them.
+  overlay.__close = close;
 
   overlay.addEventListener('click', async (e) => {
     if (e.target === overlay || e.target.closest('[data-later]')) { close(); return; }
@@ -182,7 +186,9 @@ function openNotifPermSheet() {
     // No test notification after enabling, by instruction: the first thing the
     // feature does must be something the user actually wanted.
     armNotifications();
-    renderView('home');
+    // The screen it was opened FROM — the reminders page opens it too, and
+    // repainting Home left that page stale behind the sheet.
+    renderView(currentView);
   });
 }
 
@@ -429,7 +435,7 @@ function renderNotifications(el) {
 
   el.innerHTML = `
     <div class="detail-top">
-      <button class="back-btn" data-goto="settings" aria-label="${escapeHtml(t('back'))}">${icon('back', 20)}</button>
+      <button class="back-btn" data-back aria-label="${escapeHtml(t('back'))}">${icon('back', 20)}</button>
       <div class="detail-top-title">${t('notif_settings_title')}</div>
     </div>
     <h1 class="sr-only">${t('notif_settings_title')}</h1>
@@ -698,10 +704,14 @@ function deliver(item) {
   // the OS alarm that did the real notifying recorded neither. The spend now
   // happens at each actual display site.
   if (DB.notif.alreadySent(item.tag)) return;
-  // The water goal can be met between arming the timer and its firing. Re-check
-  // here so a met goal drops the reminder WITHOUT spending the tag — a later
-  // slot is then unaffected if the user somehow undoes the log.
-  if (item.channel === 'water' && DB.water.get(todayISO()) >= DB.water.goal()) return;
+  // ASKED AGAIN AT FIRE TIME: the timer was armed with the day's state as it
+  // stood then, and ticking a dose, eating to the target or training does not
+  // re-arm it. This asked about water alone, so a dose ticked at 07:58 still
+  // said «take it» at 08:00 and a kept streak was «at risk» at 19:30. The same
+  // predicate scheduleForDate() arms by, so the two cannot drift; a reminder it
+  // drops is dropped WITHOUT spending its tag — a later slot is then unaffected
+  // if the user undoes what they logged.
+  if (!DB.notif.stillDue(item)) return;
 
   const { title, body } = DB.notif.text(item);
   if (!title) return;
@@ -828,10 +838,12 @@ window.addEventListener('vault:reminders-changed', () => {
 // ===========================================================================
 
 // One bar on screen at a time (§9.4). Held in a variable rather than queried
-// from the DOM so a replacement can still read the outgoing bar's identity
-// while it is animating away.
+// from the DOM, so a bar still animating away keeps the next one waiting.
 let ntfCurrent = null;
 let ntfTimer = null;
+// The bars WAITING their turn, oldest first, at most one per channel — a later
+// word for a waiting channel replaces its words, never adds a second bar.
+let ntfQueue = [];
 
 const NTF_ICON = {
   train: 'dumbbell', supps: 'pill', water: 'droplet',
@@ -849,32 +861,55 @@ function showNotifBar(p) {
 
   const kind = p.kind || 'reminder';
   const channel = p.channel || (kind === 'error' ? 'error' : 'ok');
+  // A bar taken off the page by something else is not on screen.
+  if (ntfCurrent && !ntfCurrent.el.isConnected) ntfCurrent = null;
 
-  // Same channel, still on screen → swap the words, do not replay the entrance.
-  // Re-animating for a changed number is motion carrying no information, and it
-  // restarts a countdown the reader may be halfway through.
-  if (ntfCurrent && ntfCurrent.el.isConnected && ntfCurrent.channel === channel) {
-    ntfCurrent.el.querySelector('.ntf-title').textContent = p.title;
-    const b = ntfCurrent.el.querySelector('.ntf-body');
-    if (b) b.textContent = p.body || '';
+  // Same channel, still on screen and NOT on its way out → swap the words, do
+  // not replay the entrance. Re-animating for a changed number is motion
+  // carrying no information, and it restarts a countdown the reader may be
+  // halfway through. A leaving bar is not a place to put words: they vanished
+  // with it, so a reminder arriving in its 200ms exit was never seen.
+  if (ntfCurrent && !ntfCurrent.spent && ntfCurrent.channel === channel) {
+    ntfSetText(ntfCurrent.el, p);
     ntfCurrent.onOpen = p.onOpen;
     ntfArmTimer(ntfCurrent);
     return;
   }
 
-  const spawn = () => ntfMount(host, p, kind, channel);
-  if (ntfCurrent && ntfCurrent.el.isConnected) {
-    const old = ntfCurrent;
-    ntfCurrent = null;
-    old.spent = true;
-    clearTimeout(ntfTimer);
-    old.el.classList.add('is-swap');
-    old.el.style.transform = 'translateY(-24px)';
-    old.el.style.opacity = '0';
-    setTimeout(() => { old.el.remove(); spawn(); }, 120);
-  } else {
-    spawn();
+  // ANOTHER BAR IS UP, OR LEAVING → this one WAITS ITS TURN, and each gets its
+  // own five seconds. It used to REPLACE: null the current bar and mount the new
+  // one 120ms later — so a third reminder inside that window mounted at once,
+  // the delayed mount then cancelled its timer and took the slot, and the third
+  // bar stayed on screen until a swipe. Three channels in one minute is the
+  // ordinary case (out-of-window doses and meals all move to window.start), and
+  // of those the first was shown for 120ms and the second not at all.
+  if (ntfCurrent) {
+    const wait = { p, kind, channel };
+    const i = ntfQueue.findIndex((q) => q.channel === channel);
+    if (i >= 0) ntfQueue[i] = wait; else ntfQueue.push(wait);
+    return;
   }
+  ntfMount(host, p, kind, channel);
+}
+
+// The next waiting bar, once the one on screen has gone.
+function ntfNext() {
+  const host = document.querySelector('.app');
+  const q = ntfQueue.shift();
+  if (host && q) ntfMount(host, q.p, q.kind, q.channel);
+}
+
+// A bar's words. The body span is made when a later update brings a body the
+// first words did not have — `if (b)` alone dropped it.
+function ntfSetText(el, p) {
+  el.querySelector('.ntf-title').textContent = p.title;
+  let b = el.querySelector('.ntf-body');
+  if (!b && p.body) {
+    b = document.createElement('span');
+    b.className = 'ntf-body';
+    el.querySelector('.ntf-text').appendChild(b);
+  }
+  if (b) b.textContent = p.body || '';
 }
 
 function ntfMount(host, p, kind, channel) {
@@ -988,7 +1023,7 @@ function ntfDismiss(state, axis, to) {
   el.style.opacity = '0';
   setTimeout(() => {
     el.remove();
-    if (ntfCurrent === state) ntfCurrent = null;
+    if (ntfCurrent === state) { ntfCurrent = null; ntfNext(); }
   }, axis === 'x' ? 220 : 200);
 }
 
@@ -1071,9 +1106,15 @@ function navigate(view, context = {}, opts = {}) {
   if (window.Cloud && Cloud.pace) Cloud.pace(view === 'session-run' ? 'run' : 'normal');
 
   document.querySelector('.img-lightbox')?.remove();
-  // The food add-sheet lives on `.app` (not #modal-root) — clear it too so it
-  // never lingers over another view after a nav.
-  document.getElementById('add-sheet-overlay')?.remove();
+  // The sheets on `.app` (not #modal-root) must not outlive the screen they were
+  // opened from, and removing one is not a close: each goes through its own
+  // hook — the reorder keeps what was moved, the permission sheet spends its
+  // ask — told it is being LEFT, so nothing repaints the view on its way out,
+  // and is taken off at once rather than slid down over the next screen.
+  document.querySelectorAll('.app > .sheet-overlay').forEach((s) => {
+    if (s.__close && !s.__closed) { try { s.__close({ leaving: true }); } catch (_) {} }
+    s.remove();
+  });
   // A LIVE rest follows you: the bar floats over whatever screen comes next and
   // slots back above Prev/Next when you return (ensureRestBar). An idle bar has
   // nothing to carry and is dropped. It used to be torn down either way — log a
@@ -1171,9 +1212,34 @@ function navigate(view, context = {}, opts = {}) {
   }
 }
 
+// THE SHEETS THAT LIVE ON .app, NOT #modal-root — rest, train-anyway, reorder,
+// the permission sheet and the food add-sheet. goBack() knew the add-sheet
+// alone, so on Home (the root) Back returned false with any of the other four
+// open and the APK's listener — `if (!goBack()) App.exitApp()` — quit the app
+// under the sheet; anywhere else it popped the screen and left the sheet over
+// the next one. Each creator hands its OWN close to the router as
+// overlay.__close and marks overlay.__closed once it is leaving, because
+// removing the node is not a close: the reorder writes once on close and the
+// permission sheet spends its one ask there. A sheet with no hook closes by the
+// exit alone, which is all the add-sheet's close() does.
+function liveAppSheet() {
+  for (const s of document.querySelectorAll('.app > .sheet-overlay')) {
+    // A hooked sheet is live from the moment it mounts — `.open` arrives a
+    // frame later — until its close starts; an unhooked one while it is open.
+    if (s.__close ? !s.__closed : s.classList.contains('open')) return s;
+  }
+  return null;
+}
+function closeAppSheet() {
+  const s = liveAppSheet();
+  if (!s) return false;
+  if (s.__close) { try { s.__close(); } catch (_) {} } else { s.classList.remove('open'); setTimeout(() => s.remove(), 260); }
+  return true;
+}
+
 // Step back one screen inside the app. Returns true if it handled the back,
-// false if we're at the root (caller should exit the app). A modal — or the
-// auth gate — is dismissed first; otherwise we pop the nav history.
+// false if we're at the root (caller should exit the app). A modal, a sheet —
+// or the auth gate — is dismissed first; otherwise we pop the nav history.
 function goBack() {
   // ⚠️ THE VAULT DOOR IS NOT A SCREEN YOU CAN LEAVE. On the APK, Back at the
   // root calls App.exitApp() — so a press during the 2.4s launch sequence QUIT
@@ -1185,10 +1251,6 @@ function goBack() {
   // so dismiss it first — otherwise "back" would navigate underneath it.
   const lb = document.querySelector('.img-lightbox');
   if (lb) { lb.remove(); return true; }
-  // The food add-sheet lives on `.app`, not #modal-root — close it first so
-  // "back" dismisses the sheet instead of popping the view (or exiting the app).
-  const addSheet = document.getElementById('add-sheet-overlay');
-  if (addSheet) { addSheet.remove(); return true; }
   // `:not(.is-out)` — a sheet the user already dismissed lingers in the DOM for
   // its 260ms exit. Reading the root as 'non-empty' there made Back close a
   // corpse instead of popping the view, so one press did nothing.
@@ -1196,6 +1258,9 @@ function goBack() {
   // hold is one): Back is swallowed the way the splash swallows it, never closed.
   if (document.querySelector('#modal-root .modal-overlay[data-dismissible="0"]:not(.is-out)')) return true;
   if (document.querySelector('#modal-root .modal-overlay:not(.is-out)')) { closeModal(); return true; }
+  // A sheet on `.app` sits UNDER #modal-root, so it goes second — Back takes the
+  // top-most layer — and before the view: it closes, the screen stays.
+  if (closeAppSheet()) return true;
   if (document.getElementById('auth-gate')) return true; // don't slip behind login
   if (navStack.length > 1) {
     navStack.pop();
@@ -1375,13 +1440,16 @@ window.addEventListener('vault:save-failed', (e) => {
   const quota = !!(e && e.detail && e.detail.quota);
   const readonly = !!(e && e.detail && e.detail.readonly);
   try {
-    confirmDialog({
+    const shown = confirmDialog({
       title: t('storage_error_title'),
       text: readonly ? t('storage_unreadable_text') : quota ? t('storage_full_text') : t('storage_write_failed_text'),
       confirmLabel: t('export_data'),
       variant: 'danger',
       onConfirm: () => { try { exportBackupFile(); } catch (_) {} },
     });
+    // A dialog that must be answered (a sync conflict, the duplicate hold) is
+    // up and kept this one out: the failure is still said, in a toast.
+    if (!shown) showToast(t('storage_error_title'));
   } catch (_) {
     try { showToast(t('storage_error_title')); } catch (__) {}
   }
@@ -1402,6 +1470,10 @@ function showUnreadableDialog() {
       text: t('storage_unreadable_text'),
       confirmLabel: t('export_data'),
       variant: 'danger',
+      // HELD: the only rescue READ-ONLY mode offers, so no lesser sheet — the
+      // weekly review, a widget's weight sheet — may replace it. The user can
+      // still dismiss it; held is against replacement, not against them.
+      hold: true,
       onConfirm: () => { try { exportBackupFile(); } catch (_) {} },
     });
   } catch (_) {}
@@ -1458,8 +1530,19 @@ function runQuickAction(url) {
   if (!App) return;
   if (App.addListener) App.addListener('appUrlOpen', (e) => runQuickAction(e && e.url));
   if (App.getLaunchUrl) {
-    // after the first render, so navigate() and the sheets exist
-    afterScripts(() => { Promise.resolve(App.getLaunchUrl()).then((r) => runQuickAction(r && r.url)).catch(() => {}); });
+    // After the first render, so navigate() and the sheets exist — and ONCE PER
+    // LAUNCH. getLaunchUrl() keeps answering with the url the Activity was
+    // started by (DB.launch says why), and the guard above is in memory, which
+    // a reload clears: the post-release reload logged the widget's cup twice.
+    // The warm door (appUrlOpen) is a new tap each time and keeps only that guard.
+    afterScripts(() => {
+      Promise.resolve(App.getLaunchUrl()).then((r) => {
+        const url = r && r.url;
+        if (!url || DB.launch.spent(url)) return;
+        DB.launch.spend(url);
+        runQuickAction(url);
+      }).catch(() => {});
+    });
   }
 })();
 
@@ -1543,7 +1626,23 @@ function weeklyReviewDue() {
   return { weekKey, lastStart, lastEnd, sessions, planned, days };
 }
 
+// A sheet the BOOT raises — nobody asked for it this second — may open only on
+// Home with nothing in front of it. The weekly review rose at load + 400 ms over
+// whatever screen the user had already reached (ux-flows.js watched the tap
+// meant for «الوضع الموجّه» close it instead), spent its once-a-week stamp
+// there, and replaced a conflict or duplicate-account hold that had arrived
+// first. When this says no, nothing is spent: the next open asks again.
+function bootSheetMayOpen() {
+  if (currentView !== 'home') return false;
+  if (typeof __duplicateHeld !== 'undefined' && __duplicateHeld) return false;
+  // The launch door is NOT on this list, on purpose: the review opens behind it
+  // and is what the door reveals — which is the "first open after a week" it
+  // was designed to be read on.
+  return !document.querySelector('#modal-root .modal-overlay:not(.is-out), .app > .sheet-overlay, .img-lightbox, .auth-gate');
+}
+
 function openWeeklyReview() {
+  if (!bootSheetMayOpen()) return;
   const due = weeklyReviewDue();
   if (!due) return;
   const { weekKey, lastStart, lastEnd, planned, days } = due;
@@ -1553,8 +1652,15 @@ function openWeeklyReview() {
   // only where BOTH weeks have a figure - the same rule v378 put on the
   // Compare panel, for the same reason. An exercise done last week and not the
   // week before is new, not improved.
+  //
+  // ⚠️ DATES, NOT ISO STRINGS — weekRanges() hands back Date objects (see
+  // weeklyReviewDue), and addDaysISO() of one returned 'NaN-NaN-NaN': the week
+  // before matched nothing and this line never rendered, for anyone. The bounds
+  // stay Dates for inRangeISO(), whose END IS EXCLUSIVE — so the week before
+  // ends AT lastStart; ending at lastStart - 1 would drop its last day.
   const { thisStart, thisEnd } = { thisStart: lastStart, thisEnd: lastEnd };
-  const prevStart = addDaysISO(lastStart, -7), prevEnd = addDaysISO(lastStart, -1);
+  const prevStart = new Date(lastStart); prevStart.setDate(prevStart.getDate() - 7);
+  const prevEnd = new Date(lastStart);
   const bestIn = (list) => list.reduce((m, s) => s.sets.reduce((k, x) => Math.max(k, Number(x.weight) || 0), m), 0);
   let win = null;
   for (const ex of DB.exercises.list()) {
@@ -1585,6 +1691,7 @@ function openWeeklyReview() {
     </div>
     <button type="button" class="link-btn wr-off" id="wr-off">${t('wr_never')}</button>
   `);
+  if (!overlay) return;   // refused by a held dialog — bootSheetMayOpen() rules that out, and this says so
   overlay.querySelector('#wr-done')?.addEventListener('click', () => closeModal());
   overlay.querySelector('#wr-plan')?.addEventListener('click', () => { closeModal(); navigate('planner'); });
   overlay.querySelector('#wr-off')?.addEventListener('click', () => { DB.prefs.setReviewOff(true); closeModal(); showToast(t('wr_off_done')); });
@@ -1740,7 +1847,11 @@ document.addEventListener('keydown', (e) => {
   // Both tests skip a LEAVING sheet: it is already closing, so it must neither
   // veto Escape with its stale data-dismissible nor be closed a second time.
   if (root && root.querySelector('.modal-overlay[data-dismissible="0"]:not(.is-out)')) return;
-  if (root && root.querySelector('.modal-overlay:not(.is-out)')) closeModal();
+  if (root && root.querySelector('.modal-overlay:not(.is-out)')) { closeModal(); return; }
+  // …then a sheet on `.app`, which sits under the modal root. Only when no
+  // modal answered this key: a modal's own trap runs first, in the capture
+  // phase, and spends the event — without this test one Escape closed both.
+  if (!e.defaultPrevented) closeAppSheet();
 });
 
 // ==========================================================================
@@ -2196,7 +2307,7 @@ function renderHome(el) {
           <div class="hero-eyebrow">${workoutDone ? t('home_workout_done') : t('home_workout_open')}</div>
           ${workoutDone ? `<span class="hero-done-mark" aria-hidden="true">${icon('check', 18)}</span>` : restChipHtml}
         </div>
-        <div class="hero-title">${escapeHtml(todayPlan.name || t('start_workout'))}</div>
+        <div class="hero-title">${escapeHtml(planDayName(todayPlan.name) || t('start_workout'))}</div>
         <div class="hero-meta">${workoutDone
           ? `${t('n_sets').replace('{n}', fmtNum(todaySets))}${heaviest > 0 ? ` · ${fmtWeight(heaviest)} ${unitLabel()}` : ''}`
           : t('home_workout_progress').replace('{a}', fmtNum(doneInPlan)).replace('{b}', fmtNum(planIdsToday.length))}</div>
@@ -2214,7 +2325,7 @@ function renderHome(el) {
           <div class="hero-eyebrow">${t('today_plan')}</div>
           ${restChipHtml}
         </div>
-        <div class="hero-title">${escapeHtml(todayPlan.name || t('start_workout'))}</div>
+        <div class="hero-title">${escapeHtml(planDayName(todayPlan.name) || t('start_workout'))}</div>
         <div class="hero-meta">${fmtNum(exObjs.length)} ${exObjs.length === 1 ? t('exercise') : t('exercises')} · ${fmtNum(weekSetsCount)} ${t('sessions_this_week')}</div>
         ${fullCtaHtml}
       </div>
@@ -2454,11 +2565,14 @@ function planDayName(name) {
 }
 
 // Search should find an exercise by whichever name the user can see, so match
-// the raw English name AND the displayed (possibly Arabic) one.
+// the raw English name AND the displayed (possibly Arabic) one — both sides
+// through DB.search.fold(), so «انكلاين» finds what the catalogue spells
+// «إنكلاين». The exercise browser, the planner's picker and the run's swap
+// sheet all ask this one matcher.
 function exMatchesQuery(ex, q) {
-  const s = String(q || '').toLowerCase();
+  const s = DB.search.fold(q);
   if (!s) return true;
-  return (ex.name || '').toLowerCase().includes(s) || exDisplayName(ex).toLowerCase().includes(s);
+  return DB.search.fold(ex.name).includes(s) || DB.search.fold(exDisplayName(ex)).includes(s);
 }
 
 // ==========================================================================
@@ -2505,6 +2619,8 @@ function uploadExerciseImage(id, dataUrl) {
     const ex = DB.exercises.getById(id);
     if (ex && DB.exercises.getImage(id) === dataUrl) DB.exercises.update(id, { imagePath: path });
     else if (ex && ex.imageCleared && Cloud.removeExerciseImage) await Cloud.removeExerciseImage(path);
+    // Deleted while it uploaded: nothing will ever point at this object again.
+    else if (!ex && Cloud.removeExerciseImage) await Cloud.removeExerciseImage(path);
     // Replaced instead: the new photo's own upload is queued behind this one —
     // it overwrites the object and records the pointer.
   });
@@ -2536,6 +2652,29 @@ function backupExerciseImageFor(exerciseId, dataUrl) {
   const ex = DB.exercises.getById(exerciseId);
   if (ex && ex.imagePath && DB.exercises.getImage(exerciseId) === dataUrl) return;
   uploadExerciseImage(exerciseId, dataUrl);
+}
+
+// DELETING A CUSTOM EXERCISE TAKES ITS PHOTO OFF THE SERVER TOO. Both delete
+// paths called DB.exercises.remove(), which clears only the local side store,
+// and left {uid}/{id}.jpg in the bucket for as long as the account exists —
+// nothing else ever walks a deleted exercise. The pointer is read FIRST (it goes
+// with the exercise), and the removal waits behind any upload still running for
+// that id. Best-effort: offline or signed out it does nothing, and it never
+// stands in the way of the delete. `then` is the caller's own navigation.
+function deleteCustomExercise(id, then) {
+  const ex = DB.exercises.getById(id);
+  const path = ex && ex.imagePath;
+  DB.exercises.remove(id);
+  if (typeof then === 'function') then();
+  // AFTER the caller's navigation, so the scroll offset it saves lands on the
+  // entry being dropped. Every screen OF the deleted exercise leaves the back
+  // stack — Back used to return to its «Not found» — and a screen that pruning
+  // leaves twice in a row is kept once, so a Back press always moves.
+  const same = (a, b) => a.view === b.view && JSON.stringify(a.context || {}) === JSON.stringify(b.context || {});
+  navStack = navStack
+    .filter((e, i) => i === 0 || !(e.view === 'exercise-detail' && (e.context || {}).exerciseId === id))
+    .filter((e, i, a) => i === 0 || !same(e, a[i - 1]));
+  if (path && window.Cloud && Cloud.removeExerciseImage) queueExerciseImageJob(id, () => Cloud.removeExerciseImage(path));
 }
 
 // Reconcile custom exercise images against their durable copies. Runs after
@@ -3008,7 +3147,7 @@ function renderExercises(el) {
 
   el.innerHTML = `
     <div class="detail-top">
-      <button class="back-btn" data-goto="workouts" aria-label="${escapeHtml(t('back'))}">${icon('back', 20)}</button>
+      <button class="back-btn" data-back aria-label="${escapeHtml(t('back'))}">${icon('back', 20)}</button>
       <div class="detail-top-title">${t('train')}</div>
     </div>
 
@@ -3210,7 +3349,11 @@ function renderDay(el) {
   const targets = DB.nutrition.get().targets;
   const bw = DB.bodyweight.list().find((b) => b.date === iso);
   const water = DB.water.get(iso);
-  const sleep = DB.sleep.list().find((s) => s.date === iso);
+  // The day's sleep is EVERY entry dated to it — the night and any nap — which
+  // is how Home's stat cell counts it; find() showed the first alone, so a day
+  // with a nap disagreed with Home about itself.
+  const sleeps = DB.sleep.list().filter((s) => s.date === iso);
+  const sleepMin = sleeps.reduce((n, s) => n + (Number(s.durationMinutes) || 0), 0);
   const sups = DB.supplements.list().filter((s) => DB.supplements.isTaken(s.id, iso));
   const plan = DB.plan.workoutForDate(d);
   const wasRest = DB.plan.isRest(d);
@@ -3221,7 +3364,7 @@ function renderDay(el) {
     n + s.sets.reduce((v, x) => v + (Number(x.reps) || 0) * (Number(x.weight) || 0), 0), 0);
   const isMinimum = sessions.length > 0 && sessions.every((s) => s.kind === 'minimum');
 
-  const nothing = !sessions.length && !cardio.length && !foods.length && !bw && !water && !sleep && !sups.length;
+  const nothing = !sessions.length && !cardio.length && !foods.length && !bw && !water && !sleeps.length && !sups.length;
 
   const section = (title, body, goto) => `
     <div class="day-section">
@@ -3252,7 +3395,7 @@ function renderDay(el) {
       <h1 class="page-title">${escapeHtml(formatDate(iso))}</h1>
       <p class="page-subtitle">${
         wasRest ? t('rest_today_title')
-        : plan ? escapeHtml(plan.name || t('start_workout'))
+        : plan ? escapeHtml(planDayName(plan.name) || t('start_workout'))
         : t('rest_day')}</p>
     </div>
 
@@ -3267,7 +3410,7 @@ function renderDay(el) {
       `<div class="day-stats">
          ${stat(t('exercises'), fmtNum(sessions.length))}
          ${stat(t('sets'), fmtNum(totalSets))}
-         ${stat(t('volume'), fmtNum(Math.round(volume)), ' kg')}
+         ${stat(t('volume'), fmtNum(Math.round(unitLabel() === 'lb' ? volume * KG_TO_LB : volume)), ' ' + unitLabel())}
        </div>
        <div class="day-rows">
          ${sessions.map((s) => {
@@ -3276,7 +3419,7 @@ function renderDay(el) {
            return `
              <div class="day-row">
                <span class="day-row-name">${escapeHtml(ex ? exDisplayName(ex) : t('exercise'))}</span>
-               <span class="day-row-meta num">${fmtNum(s.sets.length)}×${best ? ` ${fmtNum(best)}kg` : ''}</span>
+               <span class="day-row-meta num">${fmtNum(s.sets.length)}×${best ? ` ${fmtWeight(best)}${unitLabel()}` : ''}</span>
              </div>`;
          }).join('')}
        </div>`) : ''}
@@ -3284,10 +3427,10 @@ function renderDay(el) {
     ${cardio.length ? section(t('cardio'),
       `<div class="day-rows">
          ${cardio.map((c) => {
-           const ty = DB.cardioTypes.findById(c.type);
+           // resolveCardioType names a built-in in the UI language; `label` is its English.
            return `
              <div class="day-row">
-               <span class="day-row-name">${escapeHtml(ty ? ty.label : c.type)}</span>
+               <span class="day-row-name">${escapeHtml(resolveCardioType(c.type).label)}</span>
                <span class="day-row-meta num">${fmtNum(c.duration)} ${t('unit_min')}${c.calories ? ` · ${fmtNum(c.calories)} ${t('cal')}` : ''}</span>
              </div>`;
          }).join('')}
@@ -3309,11 +3452,11 @@ function renderDay(el) {
          ${foods.length > 8 ? `<div class="day-more">+${fmtNum(foods.length - 8)}</div>` : ''}
        </div>`, 'foodlog') : ''}
 
-    ${(bw || water || sleep || sups.length) ? section(t('day_body'),
+    ${(bw || water || sleeps.length || sups.length) ? section(t('day_body'),
       `<div class="day-stats">
-         ${bw ? stat(t('day_weight'), fmtNum(bw.kg), ' kg') : ''}
-         ${water ? stat(t('day_water'), fmtNum(water), ' ml') : ''}
-         ${sleep ? stat(t('sleep'), fmtNum(Math.round(sleep.durationMinutes / 6) / 10), ' h') : ''}
+         ${bw ? stat(t('day_weight'), fmtWeight(bw.kg), ' ' + unitLabel()) : ''}
+         ${water ? stat(t('day_water'), fmtNum(water), ' ' + t('unit_ml')) : ''}
+         ${sleeps.length ? stat(t('sleep'), formatDuration(sleepMin)) : ''}
          ${sups.length ? stat(t('supplements_title'), fmtNum(sups.length)) : ''}
        </div>`) : ''}
     </div>
@@ -3411,10 +3554,12 @@ function openReorderSheet(slotIdx, onDone) {
   requestAnimationFrame(() => overlay.classList.add('open'));
 
   const close = () => {
+    overlay.__closed = true;
     overlay.classList.remove('open');
     setTimeout(() => overlay.remove(), 260);
   };
-  const commit = () => {
+  const commit = (opts) => {
+    if (overlay.__closed) return;   // one write, however many exits race for it
     // The user's ORDER over the slot as it is NOW, and nothing at all when
     // nothing moved (reorderMerge). This comment used to promise that an
     // exercise deleted elsewhere is not resurrected, above code that wrote the
@@ -3422,8 +3567,11 @@ function openReorderSheet(slotIdx, onDone) {
     const next = reorderMerge(ids, opened, (DB.plan.get().cycle || [])[slotIdx]?.exerciseIds);
     if (next) DB.plan.setSlotExercises(slotIdx, next);
     close();
-    if (typeof onDone === 'function') onDone();
+    // A navigation is closing it: the screen onDone repaints is being left.
+    if (!(opts && opts.leaving) && typeof onDone === 'function') onDone();
   };
+  // Back, Escape and a navigation save it the way tapping away does.
+  overlay.__close = commit;
 
   overlay.addEventListener('click', (e) => {
     if (e.target === overlay) { commit(); return; }          // tapping away saves
@@ -3522,10 +3670,11 @@ function openNewExerciseModal(exerciseId = null, opts = {}) {
       text: t('delete_exercise_text'),
       confirmLabel: t('delete'),
       onConfirm: () => {
-        DB.exercises.remove(existing.id);
+        const onPage = currentView === 'exercise-detail';
+        deleteCustomExercise(existing.id, () => { if (onPage) navigate('workouts'); });
         // navigate() hides any toast it finds, so the confirmation is raised
         // AFTER it (v296) — the page's own delete does exactly this.
-        if (currentView === 'exercise-detail') { navigate('workouts'); showToast(t('exercise_deleted')); return; }
+        if (onPage) { showToast(t('exercise_deleted')); return; }
         renderView(currentView);
         showToast(t('exercise_deleted'));
         // The sheet is also reached from the post-create toast on other views,
@@ -3797,8 +3946,7 @@ function renderExerciseDetail(el, exerciseId) {
         title: t('delete_exercise_q'),
         text: t('delete_exercise_text'),
         onConfirm: () => {
-          DB.exercises.remove(exerciseId);
-          navigate('workouts');
+          deleteCustomExercise(exerciseId, () => navigate('workouts'));
           showToast(t('exercise_deleted'));   // after navigate(), which hides any toast it finds
         },
       });
@@ -4101,9 +4249,12 @@ function openRestSheet() {
   DB.plan.markRestPrompted();
 
   const close = (cb) => {
+    overlay.__closed = true;
     overlay.classList.remove('open');
     setTimeout(() => { overlay.remove(); if (typeof cb === 'function') cb(); }, 260);
   };
+  // Back, Escape and a navigation: the same close as tapping away — nothing chosen.
+  overlay.__close = () => close();
 
   overlay.addEventListener('click', (e) => {
     if (e.target === overlay) { close(); return; }
@@ -4213,9 +4364,12 @@ function openTrainAnywaySheet() {
   requestAnimationFrame(() => overlay.classList.add('open'));
 
   const close = (cb) => {
+    overlay.__closed = true;
     overlay.classList.remove('open');
     setTimeout(() => { overlay.remove(); if (typeof cb === 'function') cb(); }, 260);
   };
+  // Back, Escape and a navigation: the same close as «keep the rest day».
+  overlay.__close = () => close();
 
   overlay.addEventListener('click', (e) => {
     if (e.target === overlay || e.target.closest('[data-keep]')) { close(); return; }
@@ -4242,6 +4396,9 @@ function openTrainAnywaySheet() {
         // restDates to begin with. Nothing moved and the session screen it then
         // opened had no workout on it.
         DB.plan.setExtra(new Date(), true);
+        // The toast AFTER the navigate: navigate() hides any toast it finds, so
+        // raised first, the Undo for moving the whole rotation died unseen.
+        navigate('session-day', { date: todayISO() });
         showToast(t('anyway_moved'), {
           actionLabel: t('rest_undo'),
           onAction: () => {
@@ -4250,7 +4407,6 @@ function openTrainAnywaySheet() {
             showToast(t('anyway_undone'));
           },
         });
-        navigate('session-day', { date: todayISO() });
         return;
       }
       startMinimumSession(kind === 'lag' ? 'muscles' : 'walk', mins, { muscles: lagging });
@@ -4382,12 +4538,16 @@ function progressSectionHtml() {
     volume += (Number(set.weight) || 0) * (Number(set.reps) || 0);
   }));
   const monthCount = new Set(recent.filter((s) => (s.sets || []).length).map((s) => s.date)).size;
+  // Sets are STORED in kg; the figure is printed beside unitLabel(), so it is
+  // converted first. Multiplied, not convertWeightForDisplay(): that rounds to a
+  // plate's 0.5 lb, which means nothing on a month's tonnage.
+  const volumeShown = unitLabel() === 'lb' ? volume * KG_TO_LB : volume;
 
   const cardsHtml = `
     <div class="pg-two">
       <div class="card pg-mini">
         <div class="pg-mini-label">${t('pg_volume_30d')}</div>
-        <div class="pg-mini-value num" dir="ltr">${fmtNum(Math.round(volume))}</div>
+        <div class="pg-mini-value num" dir="ltr">${fmtNum(Math.round(volumeShown))}</div>
         <div class="pg-mini-unit">${unitLabel()}</div>
       </div>
       <div class="card pg-mini">
@@ -4439,7 +4599,7 @@ function renderCompare(el) {
 
   el.innerHTML = `
     <div class="detail-top">
-      <button class="back-btn" data-goto="home" aria-label="${escapeHtml(t('back'))}">${icon('back', 20)}</button>
+      <button class="back-btn" data-back aria-label="${escapeHtml(t('back'))}">${icon('back', 20)}</button>
       <div class="detail-top-title">${t('compare_title')}</div>
     </div>
 
@@ -4978,7 +5138,7 @@ function renderSettings(el) {
 
   el.innerHTML = `
     <div class="detail-top">
-      <button class="back-btn" data-goto="home" aria-label="${escapeHtml(t('back'))}">${icon('back', 20)}</button>
+      <button class="back-btn" data-back aria-label="${escapeHtml(t('back'))}">${icon('back', 20)}</button>
       <div class="detail-top-title">${t('settings_title')}</div>
     </div>
 
@@ -5411,7 +5571,7 @@ function renderPlanner(el) {
 
   el.innerHTML = `
     <div class="detail-top">
-      <button class="back-btn" data-goto="home" aria-label="${escapeHtml(t('back'))}">${icon('back', 20)}</button>
+      <button class="back-btn" data-back aria-label="${escapeHtml(t('back'))}">${icon('back', 20)}</button>
       <div class="detail-top-title">${t('planner_title')}</div>
     </div>
 
@@ -5493,8 +5653,9 @@ function openPlanImageImport() {
   const baseline = JSON.stringify(DB.plan.get());
   const hasPlan = !!DB.plan.get().cycle.length;
   const library = DB.exercises.list();
-  const norm = (v) => String(v || '').toLowerCase().normalize('NFKC')
-    .replace(/[ـ\u064b-\u065f]/g, '').replace(/[أإآ]/g, 'ا').replace(/[^\p{L}\p{N}]/gu, '');
+  // The app's one Arabic fold (DB.search.fold), then exact: punctuation and
+  // spaces do not count. This was a partial copy of the fold — no ى, ة or ٱ.
+  const norm = (v) => DB.search.fold(v).replace(/[^\p{L}\p{N}]/gu, '');
   const match = (name) => {
     const q = norm(name);
     const hits = q ? library.filter((e) => [e.name, EXERCISE_NAME_AR[e.name], EXERCISE_NAME_AR_FULL[e.name]].some((n) => n && norm(n) === q)) : [];
@@ -6064,7 +6225,7 @@ function openSlotEditorModal(slotIdx, onAdd) {
     openModal(`
       <div class="modal-header">
         <div>
-          <div class="modal-title">${escapeHtml(dayLabel || t('add_workout'))}</div>
+          <div class="modal-title">${escapeHtml(planDayName(dayLabel) || t('add_workout'))}</div>
           <!-- On a NEW slot the title already says "Add workout" (the name is
                empty, so the title falls back to the same key) — echoing it here
                printed the identical sentence twice and made the sheet read as
@@ -6347,7 +6508,7 @@ function renderSessionDay(el) {
 
     <div class="page-header">
       <div class="page-eyebrow">${escapeHtml(dayName(dow, true))}</div>
-      <h1 class="page-title">${escapeHtml(day?.name || t('start_workout'))}</h1>
+      <h1 class="page-title">${escapeHtml(planDayName(day?.name) || t('start_workout'))}</h1>
       <p class="page-subtitle">${fmtNum(loggedCount)} / ${fmtNum(totalEx)} ${t('logged_today')}</p>
     </div>
 
@@ -7351,7 +7512,7 @@ function renderSessionRun(el) {
       </div>
       <div class="page-header">
         <h1 class="page-title">${escapeHtml(t('workout_summary'))}</h1>
-        <p class="page-subtitle">${escapeHtml(dayName(dow, true))} · ${escapeHtml(day?.name || '')}</p>
+        <p class="page-subtitle">${escapeHtml(dayName(dow, true))} · ${escapeHtml(planDayName(day?.name))}</p>
       </div>
       ${nothing
         ? emptyState({ iconName: 'dumbbell', title: t('no_sessions'), text: t('no_sets_to_save') })
@@ -7520,10 +7681,8 @@ function renderSessionRun(el) {
     `);
     const list = overlay.querySelector('#swap-list');
     const draw = (q) => {
-      const norm = String(q || '').trim().toLowerCase();
-      const match = (x) => !norm || exDisplayName(x).toLowerCase().includes(norm) || String(x.name || '').toLowerCase().includes(norm);
       const rows = (arr, head) => {
-        const hits = arr.filter(match);
+        const hits = arr.filter((x) => exMatchesQuery(x, q));   // the one matcher, and its Arabic fold
         if (!hits.length) return '';
         return `<div class="rot-section-sub" style="margin:6px 2px">${escapeHtml(head)}</div>` + hits.map((x) =>
           `<button type="button" class="picker-row" data-pick="${escapeHtml(x.id)}">
@@ -7591,7 +7750,7 @@ function renderSessionRun(el) {
   el.innerHTML = `
     <div class="detail-top">
       <button class="back-btn" data-back aria-label="${escapeHtml(t('back'))}">${icon('back', 20)}</button>
-      <div class="detail-top-title">${escapeHtml(day?.name || dayName(dow, true))}</div>
+      <div class="detail-top-title">${escapeHtml(planDayName(day?.name) || dayName(dow, true))}</div>
       <button type="button" class="run-ex-menu" data-ex-menu aria-label="${escapeHtml(t('run_ex_options'))}">${icon('grip', 18)}</button>
     </div>
 
@@ -7916,7 +8075,7 @@ function renderCalendar(el) {
 
   el.innerHTML = `
     <div class="detail-top">
-      <button class="back-btn" data-goto="home" aria-label="${escapeHtml(t('back'))}">${icon('back', 20)}</button>
+      <button class="back-btn" data-back aria-label="${escapeHtml(t('back'))}">${icon('back', 20)}</button>
       <div class="detail-top-title">${t('calendar_title')}</div>
     </div>
 
@@ -8058,7 +8217,7 @@ function renderSupplements(el) {
 
   el.innerHTML = `
     <div class="detail-top">
-      <button class="back-btn" data-goto="home" aria-label="${escapeHtml(t('back'))}">${icon('back', 20)}</button>
+      <button class="back-btn" data-back aria-label="${escapeHtml(t('back'))}">${icon('back', 20)}</button>
       <div class="detail-top-title">${t('supplements_title')}</div>
     </div>
 
@@ -8340,8 +8499,17 @@ function openSupplementModal(id = null) {
   });
 
   paintTimes();
+  // THE FIELD IS A PICK, NOT ONLY A STAGING BOX. times[] was filled by
+  // «أضف وقتاً» alone and Save read times[] alone, so a time picked and saved —
+  // the obvious gesture — made a supplement with no reminder, silently: the
+  // failure class the reminders have already cost five causes of. A time the
+  // user PICKED and never added is added on Save. Only a pick: the field opens
+  // at 08:00, and an untouched default must not become an alarm nobody set.
+  let timePicked = false;
+  $('#supp-time-input')?.addEventListener('input', () => { timePicked = true; });
   $('#supp-time-add')?.addEventListener('click', async () => {
     const v = $('#supp-time-input').value;
+    timePicked = false;                          // this press consumes the pick
     if (!v || times.indexOf(v) !== -1) return;   // ignore blanks and duplicates
     // Setting a time is asking to be reminded — so this is where the OS sheet
     // belongs, not buried in Settings behind a switch the user never found.
@@ -8379,6 +8547,14 @@ function openSupplementModal(id = null) {
     const name = $('#supp-name').value.trim();
     const dose = $('#supp-dose').value.trim();
     if (!name) { showToast(t('enter_name')); return; }
+    const picked = $('#supp-time-input').value;
+    if (timePicked && /^([01]\d|2[0-3]):[0-5]\d$/.test(picked) && times.indexOf(picked) === -1) {
+      times.push(picked);
+      // Setting a time is asking to be reminded, as the add button says: the OS
+      // sheet is raised here too. It does not veto the save (Notify.gate never
+      // does), so it is not waited for.
+      if (window.Notify) Promise.resolve(Notify.gate()).catch(() => {});
+    }
     let suppId = existing ? existing.id : null;
     if (existing) {
       DB.supplements.update(existing.id, { name, dose, color: pickedColor, times });
@@ -8434,6 +8610,18 @@ function refreshAfterSync() {
   const prefs = DB.prefs.get();
   applyTheme(prefs.theme || 'dark');
   applyLang(prefs.lang || 'en');
+  // THE FIRST-RUN CARD IS FOR AN EMPTY INSTALL, and init() decides that from
+  // the local store BEFORE any pull — so on a new or wiped phone it was mounted
+  // under the login card and stayed over the account's own data once sign-in
+  // pulled it. A pull that brings an onboarded account, or any history, clears
+  // it here, where every pull path passes (login, the cold boot, resume, Sync
+  // now, the conflict's «keep the cloud»). setOnboarded is a saveLocal write:
+  // it cannot manufacture a conflict.
+  const onb = document.getElementById('onboard-gate');
+  if (onb && (DB.prefs.onboarded() || DB.hasUserData())) {
+    onb.remove();
+    if (!DB.prefs.onboarded()) DB.prefs.setOnboarded();
+  }
   renderView(currentView || 'home');
   // Photos: a device that pulled through resume / Sync now / the conflict dialog
   // never reconciled its images (only login and boot did), so a fresh device
@@ -9062,17 +9250,29 @@ function showConflictDialog() {
   // account's data" decision UNEXECUTED while a later logout push clobbered the
   // very copy they chose to keep. On failure the dialog stays open so the choice
   // can be made again, and the toast tells the truth.
-  const run = async (fn, btn) => {
-    btn.disabled = true;
-    let r; try { r = await fn(); } catch (_) { r = 'failed'; }
-    btn.disabled = false;
-    if (r === 'ok') finish();
-    else showToast(t('auth_err_network'));
+  //
+  // ONE choice at a time, and both cards know it. Only the tapped card used to
+  // go disabled, so a change of mind inside the round trip started the other
+  // one too: chooseLocal's forced push and chooseCloud's pull + applyRemote
+  // interleaved, both said «Synced», and the device and the server could end up
+  // holding opposite copies. The first tap owns the dialog until it settles; on
+  // failure both cards come back so the choice can be made again.
+  const cards = [...overlay.querySelectorAll('.choice[data-keep]')];
+  let inFlight = null;
+  const run = (fn) => {
+    if (inFlight) return inFlight;
+    cards.forEach((b) => { b.disabled = true; });
+    inFlight = (async () => {
+      let r; try { r = await fn(); } catch (_) { r = 'failed'; }
+      inFlight = null;
+      if (r === 'ok') { finish(); return; }
+      cards.forEach((b) => { b.disabled = false; });
+      showToast(t('auth_err_network'));
+    })();
+    return inFlight;
   };
-  const cloudBtn = overlay.querySelector('[data-keep="cloud"]');
-  const localBtn = overlay.querySelector('[data-keep="local"]');
-  cloudBtn.addEventListener('click', () => run(Cloud.chooseCloud, cloudBtn));
-  localBtn.addEventListener('click', () => run(Cloud.chooseLocal, localBtn));
+  overlay.querySelector('[data-keep="cloud"]').addEventListener('click', () => run(Cloud.chooseCloud));
+  overlay.querySelector('[data-keep="local"]').addEventListener('click', () => run(Cloud.chooseLocal));
 }
 
 // `recovery` = the user arrived from the emailed reset link. Supabase has
@@ -9095,6 +9295,9 @@ function showChangePassword(recovery) {
     <div class="auth-err" id="cpw-err"></div>
     <button class="btn btn-primary btn-block" id="cpw-save">${t('save')}</button>
   `, { variant: 'confirm' });
+  // A recovery link can land while a dialog that must be answered is up; that
+  // dialog stays, and the link can be opened again once it is answered.
+  if (!overlay) return;
   const err = (m) => { const e = overlay.querySelector('#cpw-err'); if (e) e.textContent = m || ''; };
   const btn = overlay.querySelector('#cpw-save');
   // Mounted from here, not from the template: Cloudflare draws into a LIVE node.
@@ -9303,8 +9506,24 @@ async function populateAccount(el) {
           // whose snapshot predates a set logged during the upload — 'ok' with
           // dirty still set. Wiping the device on that 'ok' lost the set.
           try { safe = (await Cloud.flush()) === 'ok'; } catch (_) { safe = false; }
+          // ⚠️ NOT UPLOADED MEANS NOT SIGNED OUT — NOT SILENTLY. The row promises
+          // «sign out and clear this device», and keeping the data is right, but
+          // this used to sign out and reload anyway, without a word: the user
+          // left a borrowed phone believing it was wiped, with their unsynced
+          // sets still on it. It is said now, and nothing happens unless they
+          // choose: Cancel stays signed in (tapping «log out» again retries the
+          // upload), or they sign out KEEPING the data, knowingly — the only way
+          // out for an account whose upload cannot succeed at all (blocked, or a
+          // conflict to resolve first).
+          if (!safe) {
+            confirmDialog({
+              title: t('logout_unsynced_t'), text: t('logout_unsynced'), confirmLabel: t('logout_keep'),
+              onConfirm: async () => { try { await Cloud.signOut(); } catch (_) {} location.reload(); },
+            });
+            return;
+          }
           try { await Cloud.signOut(); } catch (_) {}
-          if (safe) { try { Cloud.clearLocalUserData(); } catch (_) {} }
+          try { Cloud.clearLocalUserData(); } catch (_) {}
           location.reload();
         },
       });
@@ -9352,7 +9571,7 @@ function renderCustomExercises(el) {
 
   el.innerHTML = `
     <div class="detail-top">
-      <button class="back-btn" data-goto="workouts" aria-label="${escapeHtml(t('back'))}">${icon('back', 20)}</button>
+      <button class="back-btn" data-back aria-label="${escapeHtml(t('back'))}">${icon('back', 20)}</button>
       <div class="detail-top-title">${t('my_exercises_short')}</div>
     </div>
 
@@ -9423,7 +9642,7 @@ function renderMuscleSessions(el) {
 
   el.innerHTML = `
     <div class="detail-top">
-      <button class="back-btn" data-goto="home" aria-label="${t('back')}">${icon('back', 20)}</button>
+      <button class="back-btn" data-back aria-label="${t('back')}">${icon('back', 20)}</button>
       <div class="detail-top-title">${escapeHtml(categoryLabel(cat))}</div>
     </div>
 
@@ -9475,7 +9694,7 @@ function renderPersonalRecords(el) {
 
   el.innerHTML = `
     <div class="detail-top">
-      <button class="back-btn" data-goto="home" aria-label="${t('back')}">${icon('back', 20)}</button>
+      <button class="back-btn" data-back aria-label="${t('back')}">${icon('back', 20)}</button>
       <div class="detail-top-title">${t('pr_view_title')}</div>
     </div>
 
