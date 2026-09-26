@@ -66,6 +66,7 @@ it is safe.
 | 26 | `abuse-hardening-v22.sql` | The 2026-09-06 security assessment's ABUSE surface, closed in one file: `anon` loses EXECUTE on `username_available()` and `is_admin()` (05 intended this and the revoke never took, so an unauthenticated handle oracle was live); `authenticated` loses the default TRUNCATE/TRIGGER/REFERENCES on `profiles`/`exercises`/`cardio_types`; `enforce_vault_data_size` and `bump_vault_data_version` get pinned search_paths; `feedback` gets 2,000/200-character limits and a 5-per-hour trigger; `profiles.display_name` gets a 60-character limit; the blob history is bounded by BYTES as well as count (10 versions AND ≤ 8 MB, never fewer than 2 — one account's worst case falls from ~55 MB to ~13 MB of a 500 MB tier); the image bucket gets a leaf-name shape and a 200-object per-user cap via `exercise_image_count()`; and `ai_usage` + `ai_budget_take()` give the shared Gemini key a DURABLE per-user (60) and global (800) daily budget, which the Worker calls with the caller's own token. **No isolation change** — every cross-tenant probe returned zero rows before and after. ⚠️ **Four of its eight sections did not do what the file said — see row 27.** Applied 2026-09-06 through the Supabase MCP `execute_sql`; its VERIFY blocks ran, but several of them read a catalog rather than calling the thing they claimed to prove, which is how a no-op shipped looking green. Two more holes outlived both 26 and 27 — see rows 27 and 30. |
 | 27 | `abuse-hardening-repairs-v23.sql` | What a 42-agent adversarial review of 26 confirmed, repaired: the feedback cap was a NO-OP (SECURITY INVOKER, so its own count ran under RLS and saw zero rows); `ai_budget_take` billed the SHARED global row for calls it REFUSED, so one account could switch the AI off for every user (proved live: 900 calls from one account, 840 of them refused, drove the global row to 900 and the next user's first call was denied); `exercise_image_count(uuid)` answered about ANY user; `exercises`/`cardio_types` were still unbounded in text and row count, which was a larger tier-filling lever than the blob history 26 spent its effort on; and a carve-out added between the two files referenced `storage.objects` from inside its own INSERT policy, so EVERY image upload failed with 42P17 infinite recursion, silently, for about twenty minutes (no user hit it — the last successful upload predates it). Applied 2026-09-06 through the Supabase MCP `execute_sql`. **Every VERIFY here CALLS**: five stored and the sixth raising, a 500-character exercise name refused, three AI calls allowed and the fourth refused with nothing billed, a real `.jpg` upload accepted and a `.svg` refused — all inside blocks that raise at the end, so no probe row survives. ⚠️ **Two of its repairs left a hole, found by the 2026-09-25 review:** B's `ai_budget_take(p_user_limit, p_global_limit)` compared the counts with the CALLER's limits, so a direct PostgREST call with huge values passed every check and still charged the shared row — one account could switch the AI off for everyone, the outcome B says it prevents (its VERIFY called `ai_budget_take(3, 800)` and never tried a bigger number); and A's cap counts a `created_at` the client could backdate. Both repaired by 30. |
 | 28 | `ai-usage-cascade-v24.sql` | `ai_usage` had no foreign key to `auth.users`, so deleting an account left its per-day counter rows orphaned forever — nothing reads them and `admin_prune_ai_usage` only drops rows older than 30 days, so a young orphan survived indefinitely. Found while cleaning up test accounts (two real orphans). Adds `on delete cascade`, declared NOT VALID so the all-zero GLOBAL sentinel row (which is not a user) is not rejected while every future delete still cascades. Applied 2026-09-06 and VERIFIED BY DELETING a throwaway user and watching its counter row go 1 → 0, inside a rolled-back block. ⚠️ **Its NOT VALID premise was wrong.** NOT VALID skips only the rows that already exist; every INSERT is still checked. So from the next UTC day the budget's insert of the all-zero global row failed with 23503, the whole call rolled back, and the Worker failed open — measured live 2026-09-13: nothing billed since 2026-09-06. The VERIFY proved the cascade and never called `ai_budget_take()`, the one function that writes this table. It also could not compile as committed (`pg_catalog.position(x in y)` is grammar, like COALESCE), so the text that ran live differed from this file; it uses `strpos()` since the 2026-09-25 review, so the file replays. Repaired by 30 (§2). |
+| 30 | `ai-budget-and-caps-v26.sql` | Revives the daily AI budget (dead since 2026-09-06 — row 28) and closes three holes the 2026-09-25 review found: the global counter moves out of `ai_usage` into `ai_usage_global`, so 28's foreign key is kept and VALIDATED; `ai_budget_take()` takes **no arguments** (60 per account, 800 in total, per UTC day, as constants), its caller-chosen-limits overload is dropped, and it refuses a banned or disabled account (`blocked`); `feedback` and `client_errors` lose table-level INSERT for `authenticated` — column-level INSERT on exactly what `js/cloud.js` sends — and a trigger stamps `created_at = now()`, so a backdated row can no longer dodge the hourly caps; `admin_prune_ai_usage()` covers the new table. One transaction; four VERIFY blocks CALL every write path and roll their probes back; it commits only if all four pass. No client or Worker change is needed for it to take effect. | **APPLIED + VERIFIED live 2026-09-26** — pasted whole into the SQL editor by the owner (the editor shows no NOTICEs; `Success` after `commit;` is the proof, and a read-only check answered `ai_budget_take` ×1, zero-arg ×1, `ai_usage_global` ×1, `stamp_created_at` triggers ×2) |
 
 > ⚠️ **Keep `image/svg+xml` OUT of the `exercise-images` mime allowlist,
 > permanently.** It is what rejects an active-content SVG arriving from a
@@ -100,33 +101,20 @@ client would be.
 
 ## 2) Not yet applied — `pending/`
 
-| # | File | What it does | State |
-|---|---|---|---|
-| 30 | `ai-budget-and-caps-v26.sql` | Revives the daily AI budget (dead since 2026-09-06 — row 28) and closes three holes the 2026-09-25 review found: the global counter moves out of `ai_usage` into `ai_usage_global`, so 28's foreign key is kept and VALIDATED; `ai_budget_take()` takes **no arguments** (60 per account, 800 in total, per UTC day, as constants), its caller-chosen-limits overload is dropped, and it refuses a banned or disabled account (`blocked`); `feedback` and `client_errors` lose table-level INSERT for `authenticated` — column-level INSERT on exactly what `js/cloud.js` sends — and a trigger stamps `created_at = now()`, so a backdated row can no longer dodge the hourly caps; `admin_prune_ai_usage()` covers the new table. One transaction; four VERIFY blocks CALL every write path and roll their probes back; it commits only if all four pass. No client or Worker change is needed for it to take effect. | **NOT APPLIED** — a live write; the owner runs it |
+**NONE.** `pending/` is empty since 2026-09-26: 30 was applied that day (row 30 in §1).
 
-**How the owner applies 30:**
+**How the owner applies the next file** (the path 30 took):
 
 1. Take a backup first — [`docs/DB-BACKUP-RESTORE.md`](docs/DB-BACKUP-RESTORE.md).
-2. Supabase dashboard → **SQL editor** → New query → paste the **whole** of
-   `backend/pending/30_ai-budget-and-caps-v26.sql` → **Run**. The "destructive
-   operation" dialog is expected and benign here: the drops are `drop constraint if
-   exists` (re-added in the next statement), `drop trigger if exists` guards, and
-   `drop function if exists public.ai_budget_take(integer, integer)` — the overload
-   being removed on purpose. The only DELETEs remove the all-zero sentinel row
-   (after copying it to `ai_usage_global`) and orphan counter rows; the VERIFY blocks
-   delete only their own throwaway rows, and roll those back.
-   Same file through the Supabase MCP `execute_sql` (the path 23–27 took), or with
-   psql: `psql "<direct connection string>" -v ON_ERROR_STOP=1 -f backend/pending/30_ai-budget-and-caps-v26.sql`.
-   If it answers `must be owner of table …`, that table was created by another role:
-   run the file by the path that applied 26–28 (the MCP `execute_sql`). Nothing was
-   applied in the meantime — the transaction aborted whole.
-3. Expect **exactly four NOTICEs**, `VERIFY 1 ok` … `VERIFY 4 ok` (their full text
-   is in the file's header), and no error. Anything else means nothing was applied.
-4. Live check: make one AI call from the app, then
-   `select * from public.ai_usage_global where day = (now() at time zone 'utc')::date;`
-   — `n` went up by one.
-5. `git mv backend/pending/30_ai-budget-and-caps-v26.sql backend/migrations/`, and move
-   this row to §1 with the date and the path it took.
+2. Supabase dashboard → **SQL editor** → New query → paste the **whole** file → **Run**.
+   The "destructive operation" dialog is benign only when the file's drops are
+   `drop … if exists` guards; a real DROP/DELETE/TRUNCATE needs the owner's explicit
+   confirmation. The editor shows NO `raise notice` output: a file's VERIFY blocks must
+   RAISE on failure (so the transaction aborts whole and the editor shows an error) —
+   `Success` after `commit;` is then the proof that every block passed.
+3. Live check with a read-only `select` that counts what the file created.
+4. `git mv backend/pending/<file> backend/migrations/`, and move its row to §1 with the
+   date and the path it took.
 
 **29 is gone from here.** `29_ai-usage-fk-repair-v25.sql` sat in `pending/` from
 2026-09-13 and is now in `archive/`, superseded by 30 and never to be run: it only
