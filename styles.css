@@ -4291,6 +4291,48 @@ body[dir="rtl"] .picker-row { text-align: right; }
 .macro-total.carb .macro-total-value { color: var(--cat-back); }
 .macro-total.fat .macro-total-value { color: var(--cat-shoulders); }
 
+/* THE LOG'S MINIATURE HERO (owner's request, 2026-09-27). The Food tab's ring
+   and tracks, drawn small side by side for the day the log is showing, with
+   the eaten rows under it. The ring/track classes are the hero's, so its stroke
+   and hue rules above apply unchanged; only sizes are scoped here. It is a
+   RECORD, not a live gauge: on a CLOSED day (.closed, before today) the big
+   figure is the day's verdict and wears --text, the label and sub step back to
+   --text-mute, and the ring is a shade thinner. No pencil, no water bar, no
+   cursor — the hero opens the log; the log's own card opens nothing.
+   THE RING IS 144, NOT SMALLER, BY MEASUREMENT — AND THE TYPE STAYS ON THE
+   FLOOR. Nothing in the app renders below 11px (--fs-caption), so the centre
+   lines wear the scale, not a bespoke 9px. The Arabic sub line
+   («1,100 / 2,000 سعرة») is then 104px wide at normal scale: on the stroke of
+   a 136px ring (chord 99px) and clear of 144 (chord 107px). Under «Larger
+   text» only the unit may drop to a second line (max-width), never across
+   the ring. scripts/test-food-log-ui.js measures
+   every centre line against the inner chord, in both languages, at
+   --fs-scale 1.1 — it refuses a ring the text does not fit. */
+.nutri-mini {
+  display: flex; align-items: center; gap: var(--sp-4);
+  background: var(--card-bg); border: var(--card-border);
+  border-radius: var(--radius-lg); padding: var(--sp-3) var(--sp-4);
+  margin-bottom: 18px;
+}
+.nutri-mini-ring { position: relative; width: 144px; height: 144px; flex-shrink: 0; }
+.nutri-mini .cal-ring-bg, .nutri-mini .cal-ring-fg { stroke-width: 9; }
+.nutri-mini .cal-ring-num { font-size: calc(24px * var(--fs-scale)); }
+.nutri-mini .cal-ring-label { font-size: var(--fs-caption); letter-spacing: 0.04em; margin-top: 2px; }
+/* max-width 75% = 108px: the Arabic sub is 104px at normal scale (one line)
+   and 113px under «Larger text» (the unit wraps, the figures stay on one line
+   inside the chord). */
+.nutri-mini .cal-ring-sub { font-size: var(--fs-caption); margin-top: 2px; max-width: 75%; line-height: 1.25; }
+.nutri-mini-tracks { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: var(--sp-2h); }
+.nutri-mini .macro-track-bar { height: 6px; }
+.nutri-mini.closed .cal-ring-bg, .nutri-mini.closed .cal-ring-fg { stroke-width: 7; }
+.nutri-mini.closed .cal-ring-num { color: var(--text); font-weight: 700; }
+.nutri-mini.closed .cal-ring-label, .nutri-mini.closed .cal-ring-sub { color: var(--text-mute); }
+/* The narrowest phones: ring above tracks rather than a squeezed row. */
+@media (max-width: 339px) {
+  .nutri-mini { flex-direction: column; }
+  .nutri-mini-tracks { width: 100%; }
+}
+
 /* ---- AI calorie chat ---- */
 /* ── Recipe editor (v301): a LIST, not a spreadsheet ──────────────────────
    Each ingredient is line 1 (name + amount + remove) and line 2 (a read-only

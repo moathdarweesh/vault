@@ -2,6 +2,46 @@
 
 One section per release since v309, newest first, moved verbatim from `CLAUDE.md` in v401 (batch 6 of the 2026-09-25 review; `docs/REVIEW-2026-09-25.md`). `CLAUDE.md` is the guide and the authority for how the app works now. A section here records what one release changed and why, in the words written at the time, so a later section — or the guide — can supersede what an earlier one says.
 
+## v404 — the food log's miniature hero: a closed day reads as a verdict
+
+«بدي صورة مصغّرة نفس الي بالصفحة الرئيسية للأكل الي فيها دائرة … موضّح أنها
+لأيام فاتت … مع سجل الأكلات تحتها، وبار الماء لا تحطه». The food log's day page
+(`renderFoodLog`) replaces its four macro tiles with a miniature of the Food
+tab's hero when targets are set: the calorie ring (144 px) beside the three
+macro tracks, the eaten rows under it. On a CLOSED day (before today) the big
+figure is the day's verdict — how far under or over the target it ended — with
+`fl_day_under` «دون الهدف» / `fl_day_over` «فوق الهدف»; today keeps the hero's
+own «متبقٍّ» / «زيادة». No water card, no pencil, no third «left» line, no
+click (the hero opens the log; the log's card opens nothing), and nothing
+that names the day — `.day-nav` already does. Without targets the four tiles
+stay exactly as they were.
+
+- **One arithmetic.** `nutritionGauge(date)` in js/food.js is the single
+  source of the ring's dash, the left/over figure and the three macro
+  percentages; `nutritionDashboardHtml` (the hero) and the new
+  `nutritionMiniHtml` both read it, so the two can never disagree — case (h)
+  of the suite navigates to both for the same day and deep-compares them.
+- **The ring is 144 px and the type stays on the floor.** The centre's sub
+  line («1,100 / 2,000 سعرة») wears `--fs-caption`, not a bespoke 9 px
+  (nothing in the app renders under 11 px): 104 px wide in Arabic at normal
+  scale, 113 under «Larger text», where the unit alone wraps (`max-width`
+  75 %). The suite measures every centre line of ink against the ring's inner
+  chord (`Range.getClientRects`), in both languages, at the app's largest
+  `--fs-scale` (1.1), and refuses a ring the text does not fit — it refused
+  132 (EN at 1.1: «93.9px wide, 91.9px chord»), 136 (AR at 1: «103.7px wide,
+  99.4px chord») and a 144 that let the Arabic line stay whole at 1.1
+  («113.1px wide, 103.3px chord») before the wrap was allowed.
+- **Suite `scripts/test-food-log-ui.js`** (real clicks over `scripts/fp/server.js`
+  on port 0; failed first on v402: «a closed day renders the miniature hero
+  (.nutri-mini.closed) — found 0, with 1 .macro-totals»): a closed under-day,
+  today, a closed over-day (danger ring, figure in `--text`), a delete
+  re-rendering `#fl-summary` with the Undo toast, the no-targets tiles, the
+  day arrows, AR/dark and EN/light. Gate: 68 contracts, 16 suites. Fingerprint
+  net 160/160 identical — structurally: the views lane never sets targets, so
+  the tiles path is what it captures; the miniature is proved by the suite.
+- Built by a Fable agent in an isolated worktree; the lead took the one open
+  decision (the type floor over a smaller ring) and merged.
+
 ## v403 — THE BARBELL is the logo: one glyph on every outside surface
 
 «غيّر لوقو التطبيق إلى نفس اللوقو الذي يظهر في السبلاش … خمسة أعمدة على شكل

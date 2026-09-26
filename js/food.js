@@ -153,10 +153,30 @@ function renderFood(el) {
   }
 }
 
+// THE ONE ARITHMETIC behind the calorie ring and the macro tracks. The Food
+// tab's hero and the log's miniature (nutritionMiniHtml) both draw from this,
+// so a percentage, a dash or a rounding can never differ between the two.
+// r=54 → circumference ≈ 339.29; `dash` is the filled arc in those units.
+function nutritionGauge(date) {
+  const tgt = DB.nutrition.get().targets;
+  const consumed = DB.foodLogs.totalsForDate(date);
+  const calLeft = Math.round(tgt.calories - consumed.calories);
+  const calPct = tgt.calories > 0 ? Math.min(100, (consumed.calories / tgt.calories) * 100) : 0;
+  const C = 339.29;
+  const macro = (key) => {
+    const c = Math.round(consumed[key] * 10) / 10;
+    const g = tgt[key] || 0;
+    return { c, g, left: Math.round((g - c) * 10) / 10, pct: g > 0 ? Math.min(100, (c / g) * 100) : 0 };
+  };
+  return {
+    tgt, calEaten: Math.round(consumed.calories), calLeft, over: calLeft < 0, C, dash: C * (calPct / 100),
+    macros: { protein: macro('protein'), carbs: macro('carbs'), fat: macro('fat') },
+  };
+}
+
 // The rings + remaining + today's list. Re-rendered on its own after any change.
 function nutritionDashboardHtml(date) {
   const nut = DB.nutrition;
-  const consumed = DB.foodLogs.totalsForDate(date);
 
   // Not set up yet → invite the user to build a target.
   if (!nut.hasTargets()) {
@@ -187,20 +207,13 @@ function nutritionDashboardHtml(date) {
       </div>
     </div>`;
 
-  const tgt = nut.get().targets;
-  const calLeft = Math.round(tgt.calories - consumed.calories);
-  const calPct = tgt.calories > 0 ? Math.min(100, (consumed.calories / tgt.calories) * 100) : 0;
-  const over = calLeft < 0;
-
-  // Calorie ring (SVG). r=54 → circumference ≈ 339.29.
-  const C = 339.29;
-  const dash = C * (calPct / 100);
+  // The ring and track arithmetic lives in nutritionGauge, shared with the
+  // log's miniature, so the two can never disagree about a figure.
+  const gauge = nutritionGauge(date);
+  const { tgt, calLeft, over, dash, C } = gauge;
 
   const macroBar = (key, label, cls) => {
-    const c = Math.round(consumed[key] * 10) / 10;
-    const g = tgt[key] || 0;
-    const left = Math.round((g - c) * 10) / 10;
-    const pct = g > 0 ? Math.min(100, (c / g) * 100) : 0;
+    const { c, g, left, pct } = gauge.macros[key];
     return `
       <div class="macro-track">
         <div class="macro-track-head">
@@ -224,7 +237,7 @@ function nutritionDashboardHtml(date) {
         <div class="cal-ring-center">
           <div class="cal-ring-num num ${over ? 'over' : ''}">${fmtNum(Math.abs(calLeft))}</div>
           <div class="cal-ring-label">${over ? t('nutri_over') : t('nutri_left')}</div>
-          <div class="cal-ring-sub"><span class="num">${fmtNum(Math.round(consumed.calories))}</span> / <span class="num">${fmtNum(tgt.calories)}</span> ${t('cal')}</div>
+          <div class="cal-ring-sub"><span class="num">${fmtNum(gauge.calEaten)}</span> / <span class="num">${fmtNum(tgt.calories)}</span> ${t('cal')}</div>
         </div>
       </div>
       <div class="macro-tracks">
@@ -236,6 +249,52 @@ function nutritionDashboardHtml(date) {
 
     ${waterCard}
   `;
+}
+
+// THE LOG'S MINIATURE OF THE HERO (owner's request, 2026-09-27): the ring and
+// the three tracks drawn small for the day the log is showing, with the eaten
+// rows under it. On a CLOSED day (before today) the big figure is the day's
+// VERDICT — how far under or over the target it ended — and the label says
+// which; today it is the hero's own left/over. Same arithmetic (nutritionGauge),
+// same ring/track classes, so the stroke and hue rules apply unchanged.
+// No pencil, no water card, no third «left» line, and nothing that names the
+// day: .day-nav already shows it. Not a target — the hero opens the log; the
+// log's own card opens nothing.
+function nutritionMiniHtml(date, opts) {
+  const closed = !!(opts && opts.closed);
+  const g = nutritionGauge(date);
+  const label = closed ? t(g.over ? 'fl_day_over' : 'fl_day_under') : t(g.over ? 'nutri_over' : 'nutri_left');
+  const track = (key, name, cls) => {
+    const m = g.macros[key];
+    return `
+      <div class="macro-track">
+        <div class="macro-track-head">
+          <span class="macro-track-name ${cls}">${name}</span>
+          <span class="macro-track-nums"><span class="num">${fmtNum(m.c)}</span> / <span class="num">${fmtNum(m.g)}</span>g</span>
+        </div>
+        <div class="macro-track-bar"><span class="macro-track-fill ${cls}" style="width:${m.pct}%"></span></div>
+      </div>`;
+  };
+  return `
+    <div class="nutri-mini${closed ? ' closed' : ''}">
+      <div class="nutri-mini-ring">
+        <svg class="cal-ring" viewBox="0 0 120 120">
+          <circle class="cal-ring-bg" cx="60" cy="60" r="54"/>
+          <circle class="cal-ring-fg${g.over ? ' over' : ''}" cx="60" cy="60" r="54"
+            stroke-dasharray="${g.dash.toFixed(1)} ${g.C.toFixed(1)}" transform="rotate(-90 60 60)"/>
+        </svg>
+        <div class="cal-ring-center">
+          <div class="cal-ring-num num${g.over ? ' over' : ''}">${fmtNum(Math.abs(g.calLeft))}</div>
+          <div class="cal-ring-label">${label}</div>
+          <div class="cal-ring-sub"><span class="num">${fmtNum(g.calEaten)}</span> / <span class="num">${fmtNum(g.tgt.calories)}</span> ${t('cal')}</div>
+        </div>
+      </div>
+      <div class="nutri-mini-tracks">
+        ${track('protein', t('protein_label'), 'pro')}
+        ${track('carbs', t('carbs_label'), 'carb')}
+        ${track('fat', t('fat_label'), 'fat')}
+      </div>
+    </div>`;
 }
 
 // Shared: log AI/voice/photo items to today and refresh the dashboard.
@@ -2783,6 +2842,9 @@ function renderFoodLog(el) {
   const entries = DB.foodLogs.listForDate(ctx.date);
   const totals = DB.foodLogs.totalsForDate(ctx.date);
   const isToday = ctx.date === todayISO();
+  // A day before today is CLOSED: its card reads as a record (the verdict),
+  // not a live gauge. Today, and any later day, reads as the hero does.
+  const closed = ctx.date < todayISO();
 
   const dayLabel = isToday ? t('today_totals') : formatDate(ctx.date);
 
@@ -2841,6 +2903,7 @@ function renderFoodLog(el) {
       <button class="calendar-nav-btn" id="day-next" aria-label="${t('next_day')}" ${isToday ? 'disabled style="opacity:0.4"' : ''}>${icon('chevronRight', 20)}</button>
     </div>
 
+    ${DB.nutrition.hasTargets() ? `<div id="fl-summary">${nutritionMiniHtml(ctx.date, { closed })}</div>` : `
     <div class="macro-totals">
       <div class="macro-total cal">
         <div class="macro-total-label">${t('calories')}</div>
@@ -2858,7 +2921,7 @@ function renderFoodLog(el) {
         <div class="macro-total-label">${t('fat_label')}</div>
         <div class="macro-total-value num">${fmtNum(Math.round((totals.fat || 0) * 10) / 10)}<span class="macro-total-unit">g</span></div>
       </div>
-    </div>
+    </div>`}
 
     <div class="row-between mb-16">
       <div class="section-title" style="margin:0">${t('logged_items')}</div>
@@ -2887,8 +2950,15 @@ function renderFoodLog(el) {
   // logging to the day shown here (unifies the old separate 'AI' + 'Add Food').
   $('#add-foodlog-btn', el).addEventListener('click', () => openAddSheet(ctx.date, () => renderFoodLog(el)));
 
-  // Refresh only the macro-totals block from current DB state.
+  // Refresh only the summary from current DB state: with targets the
+  // miniature is redrawn whole (one string, no partial patching); without,
+  // the four tiles keep their text-node patching.
   function refreshTotals() {
+    if (DB.nutrition.hasTargets()) {
+      const host = $('#fl-summary', el);
+      if (host) host.innerHTML = nutritionMiniHtml(ctx.date, { closed });
+      return;
+    }
     const tt = DB.foodLogs.totalsForDate(ctx.date);
     const set = (sel, v) => { const n = $(sel, el); if (n) n.childNodes[0].nodeValue = v; };
     set('.macro-total.cal .macro-total-value', fmtNum(Math.round(tt.calories)));

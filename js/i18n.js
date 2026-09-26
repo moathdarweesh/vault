@@ -895,6 +895,8 @@ const I18N = {
 
     // Food log
     food_log_title: 'Daily Food', logged_items: 'Items',
+    // A closed day's verdict under the miniature ring — how it ENDED, not what is left.
+    fl_day_under: 'under target', fl_day_over: 'over target',
     food_history: 'Food log',
     today_totals: 'Today',
     add_food_log: 'Add Food',
@@ -1913,6 +1915,7 @@ const I18N = {
     delete_supplement_text: 'سيُحذف المكمّل وسجلّه كاملاً.',
 
     food_log_title: 'الأكل اليومي', logged_items: 'الأصناف',
+    fl_day_under: 'دون الهدف', fl_day_over: 'فوق الهدف',
     food_history: 'سجل الأكل',
     today_totals: 'اليوم',
     add_food_log: 'أضف طعاماً',
