@@ -2,6 +2,53 @@
 
 One section per release since v309, newest first, moved verbatim from `CLAUDE.md` in v401 (batch 6 of the 2026-09-25 review; `docs/REVIEW-2026-09-25.md`). `CLAUDE.md` is the guide and the authority for how the app works now. A section here records what one release changed and why, in the words written at the time, so a later section — or the guide — can supersede what an earlier one says.
 
+## v408 — the console gets a test (and two broken screens back), sync stops downloading for nothing
+
+The performance review of 2026-09-27 and the pentest's hardening notes, each
+confirmed by a check that failed first.
+
+- **Two console screens were broken live.** `dayOf()` lived inside
+  `renderUsers`, but the feedback and roles screens call it: both threw
+  «dayOf is not defined» on their first row. Moved to script level, body
+  unchanged. Nothing had ever loaded `admin.html` in a test.
+- **New suite `scripts/test-admin-console.js`** (the 17th): drives the console
+  over a stubbed SDK that records every request, fenced to 127.0.0.1 — login
+  shell, every centre with no page error, ordered ranges, keyset paging, one-table
+  reloads, framing. Against v407's console it fails 11 of 14.
+- **Console paging.** Every `.range()` read is ordered by its primary key
+  (stable pages); `client_errors` is read by keyset (`.lt('id')`, 1000 a page,
+  stops on a short page) instead of offset; feedback and the audit log load their
+  newest 500 with «عرض الأقدم» — feedback pages on (created_at, id) so a tie at
+  the page edge loses no row. The export orders every table and pages the blobs
+  50 at a time.
+- **A console write re-reads one table**, not everything: a food save was 17
+  requests (both admin RPCs, every blob decompressed); it is now the RPC plus one
+  `food_catalog` read.
+- **The console cannot be framed.** GitHub Pages sends no `X-Frame-Options` and a
+  meta CSP cannot carry `frame-ancestors`, so the page hides first, tries to
+  leave the frame, and builds no client if it cannot (measured: the one-liner
+  still let a framed console send 17 requests). Contract 74 holds the buster,
+  the ordered ranges, the keyset and the one-table reloads.
+- **Sync: a dirty resume at equal versions downloaded the whole blob for
+  nothing** — every path after it ended in a push. It now adopts the stamp from
+  the meta read and pushes; clean and version-behind resumes pull exactly as
+  before, and the v405 held/duplicate guards run first.
+- `pullCatalog` reads the six columns its mapper uses instead of `*`; AI replies
+  are capped at the Worker's own 40 items (`AI_MAX_ITEMS`, contract 65 holds the
+  two equal).
+- **For the owner (not applied):** `backend/pending/32` (drop the unused
+  `client_errors_build_idx`, gated on 14 days of zero scans), `33` (the DB audit's
+  repairs; §4 founder-only admin changes is the owner's call) and `34`
+  (performance): dry-run on a replayed schema — `admin_user_stats` identical row
+  for row (1,491 rows over 7 week windows, malformed blobs included) and ×6 to
+  ×41 faster as accounts grow; the upload's image count ×42 faster with identical
+  counts for 407 callers; policies evaluated once per statement (a 50k-row admin
+  count ×59). 19 of 19 planted defects caught by its VERIFY blocks; idempotent;
+  composes with 31–33; the 131-probe isolation suite shows 0 regressions.
+  `backend/README.md` carries rows 32–34 (PENDING) and the bootstrap order for a
+  from-scratch replay (migration 14 fails in plain number order).
+- Gate: 69 contracts, 17 suites.
+
 ## v407 — the splash stays the barbell
 
 «تصميم السبلاش الابتدائي ليس الجمرة الذي اتفقنا عليه». It was not, after the

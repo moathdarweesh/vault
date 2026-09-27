@@ -1851,6 +1851,12 @@ const cssOwner = (i) => CSS_BLOCKS.reduce((best, b) => (b.open < i && b.close > 
   const max = (k) => num(worker, new RegExp('const ' + k + ' = (\\d+);'), k, 'backend/worker/gemini-worker.js');
   const [frames, frameB64, imageB64, audioB64, textMax] = ['RX_FRAMES', 'RX_FRAME_B64', 'RX_IMAGE_B64', 'RX_AUDIO_B64', 'RX_TEXT_MAX'].map(rx);
   const [mFrames, mFrame, mTotal, mAudio, mText, mItems] = ['MAX_RECIPE_FRAMES', 'MAX_RECIPE_FRAME', 'MAX_RECIPE_FRAMES_TOTAL', 'MAX_RECIPE_AUDIO', 'MAX_RECIPE_TEXT', 'MAX_RECIPE_ITEMS'].map(max);
+  // (perf batch 2026-09-27) the chat/photo/voice list: toItems() keeps at most
+  // AI_MAX_ITEMS, which is the Worker's clampItems cap — no more cards than the
+  // Worker would ever send, and no fewer than it may.
+  const aiItems = rx('AI_MAX_ITEMS'), wItems = max('MAX_ITEMS');
+  const toItems = fa.slice(fa.indexOf('function toItems('), fa.indexOf('\n  }', fa.indexOf('function toItems(')));
+  if (!/\.slice\(0, AI_MAX_ITEMS\)/.test(toItems)) problems.push('js/foodai.js toItems() does not cap its list at AI_MAX_ITEMS — a reply of any length becomes that many cards');
   const clamp = worker.slice(worker.indexOf('function clampRecipe('), worker.indexOf('function readRecipe('));
   const cName = num(clamp, /name: text\(it && it\.name, (\d+)\)/, "clampRecipe's ingredient-name cap", 'backend/worker/gemini-worker.js');
   const cQty = num(clamp, /qty: text\(it && it\.qty, (\d+)\)/, "clampRecipe's qty cap", 'backend/worker/gemini-worker.js');
@@ -1869,9 +1875,10 @@ const cssOwner = (i) => CSS_BLOCKS.reduce((best, b) => (b.open < i && b.close > 
     fits(audioB64 <= mAudio, `the soundtrack may be ${audioB64} chars (RX_AUDIO_B64); the Worker takes ${mAudio}`);
     fits(eText <= textMax && textMax <= mText, `#rx-text takes ${eText} chars, the phone sends ${textMax} (RX_TEXT_MAX), the Worker reads ${mText}`);
     fits(mItems <= items, `the Worker answers up to ${mItems} ingredients; a saved recipe holds ${items} (cleanMealItems)`);
+    fits(aiItems === wItems, `the client keeps ${aiItems} AI items (AI_MAX_ITEMS); the Worker's clampItems keeps ${wItems} (MAX_ITEMS)`);
     fits(cName <= eName && cQty <= eQty && cRec <= eRec, `the Worker clamps names/amounts/recipe names to ${cName}/${cQty}/${cRec}; the editor's fields take ${eName}/${eQty}/${eRec}`);
   }
-  contract(`the recipe import's client budget fits the Worker's caps (${frames} stills × ${frameB64} + ${audioB64} audio chars, ${mItems} ingredients)`, problems);
+  contract(`the recipe import's client budget fits the Worker's caps (${frames} stills × ${frameB64} + ${audioB64} audio chars, ${mItems} ingredients), and the AI list stops where the Worker's does (${aiItems} items)`, problems);
 }
 
 // 66 — ONE kg↔lb rule. Weights are stored in kg. The rounding a weight gets when
@@ -2268,6 +2275,80 @@ const cssOwner = (i) => CSS_BLOCKS.reduce((best, b) => (b.open < i && b.close > 
   for (const [name, fs] of fills) fs.forEach((f, i) => { (roles[ROLE[i]] = roles[ROLE[i]] || new Map()).set(name + ' #' + (i + 1), f); });
   for (const [role, m] of Object.entries(roles)) if (new Set(m.values()).size > 1) problems.push(`the ${role} ${role === 'shaft' ? '' : 'plates '}disagree: ${[...m].map(([k, v]) => `${k} ${v}`).join(', ')}`);
   contract(`one glyph on every surface: icons/icon.svg, the three launcher/status vectors and the splash's first frame are ICONS.dumbbell's five rectangles (±${TOL} glyph units, every arc a convex corner), in one set of fills, each centred on its canvas and inside its safe zone`, problems);
+}
+
+// 74 — the console cannot be framed, and it reads its tables in stable pages
+// (perf/security batch 2026-09-27; the review's database#13). Four agreements
+// inside admin.html that nothing else keeps:
+//   (a) A FRAME-BUSTER opens its script. GitHub Pages cannot send
+//       X-Frame-Options or a frame-ancestors header, and a <meta> CSP cannot
+//       carry frame-ancestors (contract 29 refuses one there) — so the page
+//       itself refuses to run inside a frame, before it builds a client.
+//   (b) Every .range( sits in a chain with an .order(. An offset window over an
+//       unordered read is whatever order the planner chose that time: two
+//       pages can repeat one row and skip another.
+//   (c) client_errors, which every device writes while the console pages it,
+//       is read by KEYSET (strictly below the last id seen), never by offset;
+//       feedback and audit_log read their newest page by keyset too, and an
+//       «older» control fetches the next one.
+//   (d) A catalog, preset or settings write re-reads the ONE table it wrote
+//       (reload), not the whole console (loadAll: both admin RPCs and every
+//       user's blob); the backup pages vault_data small, in user_id order.
+{
+  const problems = [];
+  const js = [...admin.matchAll(/<script>([\s\S]*?)<\/script>/g)].map((m) => m[1]).find((s) => s.includes('createClient')) || '';
+  // Comments only where they OPEN a line: a string can hold '/*' (the backup's
+  // own note names backend/*.sql), and a global strip ate the export with it.
+  const code = js.replace(/^[ \t]*\/\*[\s\S]*?\*\//gm, '').replace(/^[ \t]*\/\/.*$/gm, '');
+  if (!code) problems.push('admin.html: could not find the inline script that builds the client — this check has gone silent');
+  // (a)
+  const bust = code.search(/if\s*\(\s*(?:window\.)?top\s*!==\s*(?:window\.)?self\s*\)/);
+  if (bust < 0 || !/(?:window\.)?top\.location\s*=\s*(?:window\.)?self\.location/.test(code) || !/documentElement\.hidden\s*=\s*true/.test(code)) problems.push("admin.html's script carries no frame-buster (top !== self → top.location = self.location, else documentElement.hidden = true) — the console can be framed and its buttons clicked through");
+  else if (bust > code.indexOf('SUPABASE_URL')) problems.push("admin.html's frame-buster runs after the script has started building the client — it must open the script");
+  // (b)
+  let ranges = 0;
+  for (const m of code.matchAll(/\.range\(/g)) {
+    ranges++;
+    const from = code.lastIndexOf('sb.from(', m.index);
+    const chain = from < 0 ? '' : code.slice(from, m.index);
+    if (!chain || chain.includes(';') || !chain.includes('.order(')) problems.push(`admin.html pages with .range() over an unordered read: «${code.slice(Math.max(0, from), m.index + 11).replace(/\s+/g, ' ').slice(-120)}»`);
+  }
+  if (!ranges) problems.push('admin.html has no .range() at all — this check has gone silent');
+  // (c)
+  const lineOf = (needle) => { const i = code.indexOf(needle); return i < 0 ? '' : code.slice(code.lastIndexOf('\n', i) + 1, code.indexOf('\n', i)); };
+  const body = (name) => { const i = code.search(new RegExp('function ' + name + '\\(')); return i < 0 ? '' : code.slice(i, code.indexOf('\n    }', i)); };
+  const ce = lineOf("sb.from('client_errors').select(");
+  if (!ce) problems.push("admin.html no longer reads client_errors with sb.from('client_errors').select( — this check has gone silent");
+  else if (ce.includes('.range(') || !ce.includes('fetchKeyset(')) problems.push(`admin.html reads client_errors by offset, not by keyset: «${ce.trim().slice(0, 140)}»`);
+  const kp = body('keysetPage'), fk = body('fetchKeyset');
+  if (!/\.lt\(/.test(kp) || !/\.order\(/.test(kp) || !/\.limit\(/.test(kp)) problems.push('admin.html keysetPage() must cut below the last key (.lt), order by it and .limit the page');
+  if (!/chunk\.length\s*<\s*size/.test(fk)) problems.push('admin.html fetchKeyset() must stop when a page comes back short');
+  for (const t of ['feedback', 'audit_log']) {
+    const l = lineOf(`sb.from('${t}').select(`);
+    if (!l) problems.push(`admin.html no longer reads ${t} with sb.from('${t}').select( — this check has gone silent`);
+    else if (l.includes('.range(') || l.includes('fetchAll(')) problems.push(`admin.html reads every ${t} row in one go: «${l.trim().slice(0, 120)}» — read the newest page by keyset (keysetPage) and page older rows on request`);
+  }
+  const olderPage = Number((code.match(/\bOLDER_PAGE\s*=\s*(\d+)/) || [])[1]);
+  if (!(olderPage > 0 && olderPage <= 500)) problems.push(`admin.html's feedback/audit page (OLDER_PAGE) is ${olderPage || 'missing'}; at most 500`);
+  if (!/data-older=/.test(code) || !/loadOlder\(/.test(code)) problems.push('admin.html offers no «older» control for feedback and audit_log (data-older → loadOlder)');
+  // (d)
+  const WRITES = ['admin_upsert_exercise', 'admin_delete_exercise', 'admin_upsert_food', 'admin_delete_food', 'admin_upsert_cardio', 'admin_upsert_preset', 'admin_delete_preset', 'admin_set_config'];
+  for (const w of WRITES) {
+    const i = code.indexOf(`sb.rpc('${w}'`);
+    if (i < 0) { problems.push(`admin.html no longer calls ${w} — this check has gone silent`); continue; }
+    const next = code.slice(i).search(/\n {4}(?:async )?function /);
+    const rest = code.slice(i, next < 0 ? undefined : i + next);
+    if (/\bloadAll\(/.test(rest)) problems.push(`after ${w} the console re-runs loadAll() — both admin RPCs and every blob — to refresh one table; reload(<that table>) instead`);
+    else if (!/\breload\('/.test(rest)) problems.push(`after ${w} the console refreshes nothing — reload(<that table>)`);
+  }
+  const tables = (code.match(/BACKUP_TABLES\s*=\s*\[([^\]]*)\]/) || [])[1];
+  const keys = (code.match(/BACKUP_KEY\s*=\s*\{([^}]*)\}/) || [])[1] || '';
+  if (!tables) problems.push('admin.html has no BACKUP_TABLES — this check has gone silent');
+  else for (const t of [...tables.matchAll(/'(\w+)'/g)].map((m) => m[1])) if (!new RegExp('\\b' + t + ":'\\w+'").test(keys)) problems.push(`the backup pages ${t} with no primary key to order it by (BACKUP_KEY)`);
+  if (!/\bvault_data:'user_id'/.test(keys)) problems.push("the backup must page vault_data in user_id order (BACKUP_KEY.vault_data = 'user_id')");
+  const blobPage = Number((code.match(/BACKUP_PAGE\s*=\s*\{[^}]*\bvault_data:(\d+)/) || [])[1]);
+  if (!(blobPage > 0 && blobPage <= 50)) problems.push(`the backup pages vault_data ${blobPage ? blobPage + ' rows' : '1000 rows'} at a time — every row is a whole blob; 50 at most (BACKUP_PAGE)`);
+  contract(`the console cannot be framed and reads in stable pages: a frame-buster opens admin.html's script, ${ranges} .range() read${ranges === 1 ? '' : 's'} all ordered, client_errors/feedback/audit_log by keyset, a write reloads only its table, vault_data backed up ${blobPage || '?'} at a time`, problems);
 }
 
 console.log(failures.length ? `\ncheck-contracts: ${failures.length} broken contract(s)` : '\ncheck-contracts: all contracts hold');

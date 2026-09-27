@@ -35,6 +35,11 @@
   const RX_TEXT_MAX = 3000;              // a caption or a pasted recipe (≤ MAX_RECIPE_TEXT)
   const RX_SEEK_MS = 5000;               // one seek, before it counts as stuck
   const RX_SILENT_PEAK = 0.004;          // below this the soundtrack is silence
+  // The chat, photo and voice answers: at most as many items as the Worker's own
+  // clampItems keeps (MAX_ITEMS). toItems() used to map any array it was handed,
+  // so a stale or foreign reply of 5000 rows became 5000 cards. Contract 65
+  // holds the two numbers equal.
+  const AI_MAX_ITEMS = 40;               // = MAX_ITEMS in backend/worker/gemini-worker.js
 
   const tr = (k) => (typeof t === 'function' ? t(k) : k);
   const ic = (n, s) => (typeof icon === 'function' ? icon(n, s || 20) : '');
@@ -229,7 +234,9 @@
     // as the second argument, which normalizeItem now reads as `keepDecimals` —
     // so a bare reference would round item 0 and keep decimals on every item
     // after it. A model estimate is never precise enough to deserve a decimal.
-    return { items: raw.map((d) => normalizeItem(d)).filter(isRealFood) };
+    // Capped AFTER the filter, as the Worker caps: a dropped row never costs a
+    // real one its place.
+    return { items: raw.map((d) => normalizeItem(d)).filter(isRealFood).slice(0, AI_MAX_ITEMS) };
   }
 
   // ==========================================================================

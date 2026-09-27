@@ -866,4 +866,31 @@ async function clientRecipeBlocks() {
   for (const f of [clientRecipe, clientRecipeHelpers]) { try { await f(); } catch (e) { fails.push(f.name + ' — ' + ((e && e.message) || e)); } }
   if (fails.length) throw new Error(fails.length + ' client recipe block(s) failed:\n  ' + fails.join('\n  '));
 }
-workerTests().then(clientDeadline).then(clientRecipeBlocks).catch((e) => { console.error(e); process.exitCode = 1; });
+// ---- perf batch 2026-09-27 · the client caps the AI's item list where the Worker does ----
+// toItems() mapped whatever array arrived: a reply of 5000 rows became 5000
+// cards, each with its own stepper and edit well. The Worker's clampItems stops
+// at MAX_ITEMS, and the recipe path is capped lower still; a stale or foreign
+// reply must not be able to hand the chat more than the Worker itself would.
+// The REAL js/foodai.js, the three doors toItems() serves.
+async function clientItemCap() {
+  const fa = read('js/foodai.js'), worker = read('backend/worker/gemini-worker.js');
+  const cap = Number((worker.match(/const MAX_ITEMS = (\d+);/) || [])[1]);
+  assert.ok(cap > 0, `read the Worker's clampItems cap, MAX_ITEMS (got ${cap})`);
+  const many = Array.from({ length: 500 }, (_, i) => ({ name: 'food ' + i, calories: 100 + i, protein: 1, carbs: 1, fat: 1 }));
+  const c = { console: { log() {}, warn() {}, error() {} }, AbortController, setTimeout, clearTimeout, URL,
+    localStorage: { getItem: () => null, setItem() {}, removeItem() {} },
+    fetch: async () => ({ ok: true, status: 200, json: async () => ({ items: many, transcript: 'x' }) }) };
+  c.window = c; vm.createContext(c);
+  vm.runInContext(read('js/cloud.js').split('(function () {')[0], c);
+  vm.runInContext(fa, c);
+  const FA = c.FoodAI;
+  const text = await FA.analyze('five hundred things', { skipLocal: true });
+  assert.ok(text.items.length <= cap, `a 500-item reply yielded ${text.items.length} items on the chat path; the Worker's clampItems stops at ${cap}`);
+  assert.equal(text.items[0].name, 'food 0', 'the cap keeps the FIRST rows, as the Worker does');
+  const photo = await FA.analyzeImage({ mimeType: 'image/jpeg', data: 'AAAA' }, '');
+  assert.ok(photo.items.length <= cap, `a 500-item reply yielded ${photo.items.length} items on the photo path (cap ${cap})`);
+  const voice = await FA.analyzeAudio({ mimeType: 'audio/webm', data: 'AAAA' });
+  assert.ok(voice.items.length <= cap, `a 500-item reply yielded ${voice.items.length} items on the voice path (cap ${cap})`);
+  console.log(`PASS client item cap: a 500-item reply yields at most ${cap} items on the chat, photo and voice paths (the Worker's MAX_ITEMS)`);
+}
+workerTests().then(clientDeadline).then(clientRecipeBlocks).then(clientItemCap).catch((e) => { console.error(e); process.exitCode = 1; });

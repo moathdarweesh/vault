@@ -1609,6 +1609,15 @@ window.VAULT_KEYS = Object.freeze({
     const guard = guardForeignBlob(uid, s.user.email);
     if (guard === 'duplicate' || guard === 'held') return guard;
 
+    // Report the REAL push outcome: this used to swallow every failure and return
+    // 'pushed' regardless, so the UI said "Synced" after a push that was blocked,
+    // conflicted, or never ran. 'offline' is an already-handled honest status.
+    const pushed = async () => {
+      let r; try { r = await push(); } catch (_) { r = 'error'; }
+      if (r !== 'ok') return 'offline';
+      markLinked(uid); return 'pushed';
+    };
+
     // FAST PATH — the overwhelmingly common one. A foreground where neither
     // side has moved used to cost a full blob DOWN and a full blob UP; it now
     // costs one two-column row. Every condition below has to hold, and each
@@ -1619,28 +1628,38 @@ window.VAULT_KEYS = Object.freeze({
     //   local has data → not the empty-device recovery case, which must pull
     //   not pushing    → no push of ours is unaccounted for, which must adopt
     // Any failure here falls through to the full path rather than guessing.
+    let sameVersion = null;   // the row's metadata, when it stands at the version this device holds
     try {
       const meta = await pullMeta();
       const localVer0 = getVersion(uid);
       if (meta && typeof meta.version === 'number' && typeof localVer0 === 'number'
-          && meta.version === localVer0
-          && !isDirty(uid) && isLinked(uid) && localHasData() && !getPushing(uid) && !pushedEarlier(uid).length) {
-        setStamp(uid, meta.updatedAt);
-        return 'synced';
+          && meta.version === localVer0 && localHasData()) {
+        if (!isDirty(uid) && isLinked(uid) && !getPushing(uid) && !pushedEarlier(uid).length) {
+          setStamp(uid, meta.updatedAt);
+          return 'synced';
+        }
+        sameVersion = meta;
       }
     } catch (_) { return 'offline'; }
+    // SAME VERSION, SOMETHING OF OURS WAITING (dirty, or a push stamp standing).
+    // This used to fall through to pull() — the whole blob down — and at equal
+    // versions every branch below ends in pushed(): nothing of theirs is newer,
+    // so the download bought nothing. The two columns already read answer the
+    // one question the full row was fetched for — is this row our own lost
+    // push? — and it is adopted exactly as below, from the metadata. The held
+    // and duplicate guards above have already run; pushOnce re-checks both.
+    if (sameVersion) {
+      if (ownPush(uid, sameVersion.updatedAt)) {
+        setStamp(uid, sameVersion.updatedAt);
+        setVersion(uid, sameVersion.version);
+        clearPushing(uid); clearEarlier(uid);
+      }
+      return pushed();
+    }
 
     let remote;
     try { remote = await pull(); } catch (_) { return 'offline'; }
     if (remote === undefined) return 'offline';
-    // Report the REAL push outcome: this used to swallow every failure and return
-    // 'pushed' regardless, so the UI said "Synced" after a push that was blocked,
-    // conflicted, or never ran. 'offline' is an already-handled honest status.
-    const pushed = async () => {
-      let r; try { r = await push(); } catch (_) { r = 'error'; }
-      if (r !== 'ok') return 'offline';
-      markLinked(uid); return 'pushed';
-    };
     if (remote === null || !remoteHasData(remote)) return pushed();
     // OUR OWN PUSH, whose answer never arrived (app killed mid-upload). The row
     // carries a stamp this device wrote — the last attempt's, or an EARLIER
@@ -1807,10 +1826,12 @@ window.VAULT_KEYS = Object.freeze({
       try {
         const { data, error } = await c
           .from('food_catalog')
-          // `*`, not a column list: `fat` arrives with 21_food-catalog-fat and
-          // naming it before that migration is applied would fail the whole
-          // pull. The mapper reads what is there.
-          .select('*')
+          // Exactly what setServerFoodCatalog (js/food.js) reads, and no more:
+          // `*` was the workaround while `fat` could still be missing, and
+          // 21_food-catalog-fat has been applied since 2026-09-02. The id and
+          // the timestamps never reached a consumer, only the wire and the
+          // cache. scripts/test-sync-status.js holds this list to the mapper.
+          .select('name,serving,calories,protein,carbs,fat')
           .is('deleted_at', null);
         if (!error && Array.isArray(data)) result.foods = data;
       } catch (_) {}

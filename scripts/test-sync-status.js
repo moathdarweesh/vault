@@ -26,6 +26,7 @@ function context(opts = {}) {
         update(rows) { request.kind = 'update'; request.rows = rows; return this; },
         upsert(rows) { request.kind = 'upsert'; request.rows = rows; return this; },
         select(fields) { request.fields = fields; return this; }, eq(key,value) { request.filters.push([key,value]); return this; },
+        is(key, value) { request.filters.push([key, value]); return this; },
         order() { return this; }, limit(count) { request.limit=count; return this; },
         maybeSingle() { return query(request); }, then(ok, no) { return query(request).then(ok, no); } };
       return chain;
@@ -170,7 +171,9 @@ async function run() {
   await forceIsNotDowngraded();
   await newerBlobIsKeptWhole();
   await aWorkoutIsNotTenUploads();
-  console.log('PASS save/sync: write outcomes, read-only/quota recovery, account isolation, in-flight edits, offline, auth, errors, conflicts, status presentation; boot-time housekeeping writes flag nothing dirty and cannot manufacture a conflict; five crashing shapes refused at the door, and a reload that lands READ-ONLY restores the previous bytes and reports failure; a push whose reply was lost is recognised as our own by the next push and by the boot, through a second lost attempt; a force push never shares a plain one');
+  await equalVersionsNeedNoDownload();
+  await theCatalogNamesItsColumns();
+  console.log('PASS save/sync: write outcomes, read-only/quota recovery, account isolation, in-flight edits, offline, auth, errors, conflicts, status presentation; boot-time housekeeping writes flag nothing dirty and cannot manufacture a conflict; five crashing shapes refused at the door, and a reload that lands READ-ONLY restores the previous bytes and reports failure; a push whose reply was lost is recognised as our own by the next push and by the boot, through a second lost attempt; a force push never shares a plain one; a dirty resume at equal versions downloads nothing while the clean and version-behind resumes keep their requests; the food catalog names its columns');
 }
 
 // A ROW PostgREST-shaped enough for pushOnce: a conditional UPDATE matches only
@@ -476,6 +479,103 @@ async function housekeepingIsNotAnEdit() {
     for (let i = 0; i < 6 && answer; i++) { const a = answer; answer = null; a(); await tick(); await tick(); }
     assert.equal(await boot, 'pulled', `${name} during the boot pull turned it into a false 'conflict'`);
   }
+}
+// ── EQUAL VERSIONS NEED NO DOWNLOAD (perf batch, 2026-09-27) ──────────────────
+// The fast path answers a CLEAN resume with one two-column row. A DIRTY resume —
+// a set logged since the last push, or a push stamp still standing — at the SAME
+// version fell through to pull(), the whole blob down, and at equal versions
+// every branch after that ends in pushed(): the download bought nothing. The
+// metadata answers it now. The clean resume and the version-behind resume are
+// held to exactly what they did before, request for request.
+async function equalVersionsNeedNoDownload() {
+  const blobReads = (log) => log.filter((q) => q.table === 'vault_data' && q.kind === 'read' && q.fields === '*').length;
+  const writes = (log) => log.filter((q) => q.table === 'vault_data' && q.kind !== 'read').length;
+  const logSet = async (c) => { c.DB.sessions.add({ exerciseId: c.DB.exercises.list()[0].id, date: '2026-09-27', sets: [{ reps: 8, weight: 60 }] }); await tick(); await tick(); };
+  // A device that holds data, in step with its row at version 1, nothing waiting.
+  const harness = async () => {
+    const s = context(), { c } = s;
+    await logSet(c);
+    s.values.delete(s.keys.dirty + 'alice');              // that edit reached the cloud long ago
+    const row = server(JSON.parse(c.DB.exportJSON()));   // version 1: the account's own
+    const log = [];
+    s.query((q) => { log.push(q); return row.serve(q); });
+    return { s, c, row, log };
+  };
+  // (a) dirty, versions equal: the metadata and one conditional write, nothing down
+  {
+    const { c, row, log } = await harness();
+    await logSet(c);
+    assert.equal(c.Cloud.syncState().dirty, true, '(setup: an edit is waiting)');
+    log.length = 0;
+    assert.equal(await c.Cloud.bootSync(), 'pushed', 'the dirty resume still uploads');
+    assert.equal(blobReads(log), 0, 'a dirty resume with equal versions calls pull() 0 times');
+    assert.equal(writes(log), 1, 'and sends its edit once');
+    assert.equal(row.version, 2, 'as a conditional write on the version both sides hold');
+    assert.equal(c.Cloud.syncState().dirty, false, 'and the device knows it');
+  }
+  // (b) a push stamp still standing (the attempt never reached the server), equal versions
+  {
+    const { s, c, row, log } = await harness();
+    s.values.set(s.keys.pushing + 'alice', '2026-09-27T09:00:00.000Z');
+    log.length = 0;
+    assert.equal(await c.Cloud.bootSync(), 'pushed');
+    assert.equal(blobReads(log), 0, 'a pending push stamp at equal versions calls pull() 0 times');
+    assert.equal(row.version, 2);
+    assert.equal(s.values.has(s.keys.pushing + 'alice'), false, 'and the stamp is answered');
+  }
+  // (b′) the standing stamp IS the row's own (committed, reply lost): adopted from the metadata
+  {
+    const { s, c, row, log } = await harness();
+    await logSet(c);
+    s.values.set(s.keys.pushEarlier + 'alice', JSON.stringify([row.updated_at]));
+    log.length = 0;
+    assert.equal(await c.Cloud.bootSync(), 'pushed');
+    assert.equal(blobReads(log), 0, 'an own-row stamp at equal versions calls pull() 0 times');
+    assert.equal(row.errors.filter((e) => e.kind === 'sync-conflict').length, 0, 'and nothing is reported as a conflict');
+    assert.equal(s.values.has(s.keys.pushEarlier + 'alice'), false, 'and the earlier stamp is spent');
+  }
+  // (c) clean resume, versions equal: ONE two-column read, as before
+  {
+    const { c, log } = await harness();
+    log.length = 0;
+    assert.equal(await c.Cloud.bootSync(), 'synced');
+    assert.equal(log.length, 1, 'the clean resume is still one request');
+    assert.equal(log[0].fields, 'updated_at,version');
+    assert.equal(blobReads(log) + writes(log), 0);
+  }
+  // (d) the row is AHEAD (another device pushed): still exactly one pull, as before
+  for (const dirty of [false, true]) {
+    const { c, row, log } = await harness();
+    if (dirty) await logSet(c);
+    const theirs = JSON.parse(c.DB.exportJSON());
+    theirs.sessions.push({ id: 'tablet1', exerciseId: theirs.exercises[0].id, date: '2026-09-26', sets: [{ reps: 5, weight: 80 }], createdAt: '2026-09-26T10:00:00.000Z' });
+    row.data = theirs; row.version = 2; row.updated_at = '2026-09-26T10:00:00.000Z';
+    log.length = 0;
+    assert.equal(await c.Cloud.bootSync(), dirty ? 'conflict' : 'pulled', 'the version-behind resume decides as before');
+    assert.equal(blobReads(log), 1, `a ${dirty ? 'dirty' : 'clean'} version-behind resume pulls exactly once`);
+    assert.equal(writes(log), 0, 'and writes nothing');
+  }
+}
+
+// ── THE CATALOG NAMES ITS COLUMNS (perf batch, 2026-09-27) ────────────────────
+// food_catalog was read with select('*') so that `fat` could be absent before
+// migration 21. 21 is applied (2026-09-02); the read names what the one
+// consumer, setServerFoodCatalog in js/food.js, actually reads — every column
+// it reads, and no `*`.
+async function theCatalogNamesItsColumns() {
+  const s = context(), { c } = s;
+  const asked = [];
+  s.query(async (q) => { asked.push(q); return { data: q.table === 'app_config' ? null : [], error: null }; });
+  await c.Cloud.pullCatalog();
+  const food = asked.find((q) => q.table === 'food_catalog');
+  assert.ok(food, 'pullCatalog read food_catalog');
+  assert.equal(food.fields.includes('*'), false, `food_catalog is still read with select('${food.fields}') — every column, for a mapper that reads six`);
+  const src = read('js/food.js');
+  const mapper = src.slice(src.indexOf('function setServerFoodCatalog('), src.indexOf('function allFoodPresets('));
+  const reads = [...new Set([...mapper.matchAll(/\bf\.(\w+)/g)].map((m) => m[1]))];
+  assert.ok(reads.length >= 4, 'read the mapper\'s fields out of js/food.js (' + reads + ')');
+  const cols = food.fields.split(',').map((x) => x.trim());
+  for (const k of reads) assert.ok(cols.includes(k), `setServerFoodCatalog reads f.${k}, but pullCatalog does not select it (${food.fields})`);
 }
 module.exports = { context };
 if (require.main === module) run().catch(error => { console.error(error); process.exitCode = 1; });

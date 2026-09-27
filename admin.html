@@ -293,6 +293,8 @@
 
   /* feedback inbox */
   .fb-list{display:flex; flex-direction:column; gap:12px}
+  /* «عرض الأقدم» under the feedback inbox and the audit log: the next page. */
+  .more-row{display:flex; justify-content:center; padding:16px 0 4px}
   .fb-item{background:var(--surface); border:1px solid var(--line); border-radius:var(--radius); padding:15px 17px}
   .fb-item.resolved{opacity:.55}
   .fb-msg{font-size:14.5px; line-height:1.6; white-space:pre-wrap; word-break:break-word}
@@ -467,10 +469,22 @@
   <div id="detail" class="detail"><div class="detail-inner" id="detail-inner"></div></div>
   <div class="toast" id="toast"></div>
 
-  <script src="js/vendor/supabase.js?v=407"></script>
+  <script src="js/vendor/supabase.js?v=408"></script>
   <script>
   (function(){
     'use strict';
+    /* THE CONSOLE REFUSES TO RUN INSIDE A FRAME. Framed by another site, its
+       buttons (role, ban, delete) could be clicked through a decoy laid over
+       them. The right answer is a header — X-Frame-Options or CSP
+       frame-ancestors — and neither is available: GitHub Pages cannot send
+       headers, and a <meta> CSP cannot carry frame-ancestors (browsers ignore it
+       there; contract 29 refuses one). So the page busts out itself, before any
+       client exists; framed, it is hidden first and nothing below runs — no
+       client, no session, no reads — so a bust the browser refuses leaves an
+       empty frame, never a working console. Contract 74 holds this at the top. */
+    try { if (window.top !== window.self) { document.documentElement.hidden = true; window.top.location = window.self.location; } }
+    catch (_) { document.documentElement.hidden = true; }
+    if (document.documentElement.hidden) return;
     var SUPABASE_URL='https://ilmusnuchqlpirywonzx.supabase.co';
     var SUPABASE_KEY='sb_publishable_ZBR2VENMP2O_K2YTMePCsw_NfLC9FSI';
     /* THE CONSOLE'S SESSION HAS ITS OWN SLOT AND ITS OWN DOOR. On the SDK's
@@ -521,10 +535,14 @@
       if(APK_HOSTS.indexOf(u.hostname)===-1) return '';
       return u.href;
     }
-    // Supabase caps a bare .select() at 1000 rows — page through with .range() so
-    // aggregations stay correct at any scale. builder(from,to) must apply .range(from,to).
-    async function fetchAll(builder){
-      var all=[], from=0, size=1000, err=null;
+    // Supabase caps a bare .select() at 1000 rows — page through so aggregations
+    // stay correct at any scale. builder(from,to) orders by the table's PRIMARY
+    // KEY and then takes the window from..to: an offset window over an unordered
+    // read is whatever order the planner chose that time, so two pages could
+    // repeat one row and skip another (contract 74). `size` defaults to 1000;
+    // the backup asks for less where one row is a whole blob.
+    async function fetchAll(builder, size){
+      var all=[], from=0, err=null; size=size||1000;
       for(;;){
         var r=await builder(from, from+size-1);
         if(r.error){ err=r.error; break; }
@@ -534,6 +552,57 @@
       }
       return {data:all, error:err};
     }
+    // KEYSET PAGES, NEWEST FIRST. A page starts strictly below the last row of
+    // the page before, never at an offset, so a row written while the console
+    // pages (every device writes client_errors) can neither shift a page nor be
+    // read twice. `key` orders the page; `tie`, the primary key, breaks equal
+    // keys, so a row sharing its key with the last one seen is neither skipped
+    // nor repeated. `after` is that last row — null for the first page. A value
+    // is quoted inside or(): a timestamp carries '.' and ':', which PostgREST
+    // reserves there.
+    function keysetPage(build, key, tie, size, after){
+      var q=build();
+      if(after){
+        if(key===tie) q=q.lt(key, after[key]);
+        else q=q.or(key+'.lt."'+after[key]+'",and('+key+'.eq."'+after[key]+'",'+tie+'.lt."'+after[tie]+'")');
+      }
+      q=q.order(key,{ascending:false});
+      if(tie!==key) q=q.order(tie,{ascending:false});
+      return q.limit(size);
+    }
+    // Every page, by keyset, until one comes back short.
+    async function fetchKeyset(build, key, size){
+      var all=[], after=null, err=null;
+      for(;;){
+        var r=await keysetPage(build, key, key, size, after);
+        if(r.error){ err=r.error; break; }
+        var chunk=r.data||[]; all=all.concat(chunk);
+        if(chunk.length<size) break;
+        after=chunk[chunk.length-1];
+        if(all.length>500000) break; // hard safety stop
+      }
+      return {data:all, error:err};
+    }
+    // feedback and audit_log: the newest OLDER_PAGE rows, then «عرض الأقدم» for
+    // the next page (loadOlder). Both grow for ever; neither is ever needed whole.
+    var OLDER_PAGE=500;
+    var PAGED={
+      feedback:{ field:'feedback', center:'feedback', key:'created_at', tie:'id',
+        build:function(){return sb.from('feedback').select('id,user_id,username,message,context,status,created_at');} },
+      audit_log:{ field:'auditLog', center:'audit', key:'id', tie:'id',
+        build:function(){return sb.from('audit_log').select('id,actor,action,target,detail,created_at');} }
+    };
+    function pageOf(name, after){ var p=PAGED[name]; return keysetPage(p.build, p.key, p.tie, OLDER_PAGE, after); }
+    // The tables a catalog, preset or settings write can change — ONE spelling
+    // each, shared by loadAll() and reload(name) — and the section that shows it.
+    var READS={
+      exercises:function(a,b){return sb.from('exercises').select('id,name,category,owner_id,deleted_at').order('id').range(a,b);},
+      cardio_types:function(a,b){return sb.from('cardio_types').select('id,label,owner_id,deleted_at').order('id').range(a,b);},
+      food_catalog:function(a,b){return sb.from('food_catalog').select('*').order('id').range(a,b);},
+      preset_plans:function(a,b){return sb.from('preset_plans').select('id,name,description,data,position').order('id').range(a,b);},
+      app_config:function(a,b){return sb.from('app_config').select('default_unit,announcement_ar,announcement_en,announcement_active').order('id').range(a,b);}
+    };
+    var SECTION={exercises:'catalog', cardio_types:'catalog', food_catalog:'catalog', preset_plans:'presets', app_config:'settings'};
     var renderToken=0;   // bumped on every showCenter → guards stale async renders
 
     var exMap={}, meId=null, DATA=null, curCenter='dashboard';
@@ -749,17 +818,17 @@
     async function loadAll(){
       $('#center').innerHTML='<div class="center">جارٍ التحميل…</div>';
       var res=await Promise.all([
-        fetchAll(function(a,b){return sb.from('exercises').select('id,name,category,owner_id,deleted_at').range(a,b);}),
-        fetchAll(function(a,b){return sb.from('profiles').select('user_id,username,created_at,last_seen').range(a,b);}),
+        fetchAll(READS.exercises),
+        fetchAll(function(a,b){return sb.from('profiles').select('user_id,username,created_at,last_seen').order('user_id').range(a,b);}),
         // unit lives in the blob now — the user_prefs mirror table was dropped (migration 18)
-        fetchAll(function(a,b){return sb.from('vault_data').select('user_id,data->prefs->>unit').range(a,b);}),
-        fetchAll(function(a,b){return sb.from('user_flags').select('user_id,role,status,reason').range(a,b);}),
-        fetchAll(function(a,b){return sb.from('cardio_types').select('id,label,owner_id,deleted_at').range(a,b);}),
-        fetchAll(function(a,b){return sb.from('feedback').select('id,user_id,username,message,context,status,created_at').range(a,b);}),
-        fetchAll(function(a,b){return sb.from('food_catalog').select('*').range(a,b);}),
-        fetchAll(function(a,b){return sb.from('preset_plans').select('id,name,description,data,position').range(a,b);}),
-        fetchAll(function(a,b){return sb.from('app_config').select('default_unit,announcement_ar,announcement_en,announcement_active').range(a,b);}),
-        fetchAll(function(a,b){return sb.from('audit_log').select('id,actor,action,target,detail,created_at').order('id',{ascending:false}).range(a,b);}),
+        fetchAll(function(a,b){return sb.from('vault_data').select('user_id,data->prefs->>unit').order('user_id').range(a,b);}),
+        fetchAll(function(a,b){return sb.from('user_flags').select('user_id,role,status,reason').order('user_id').range(a,b);}),
+        fetchAll(READS.cardio_types),
+        pageOf('feedback', null),
+        fetchAll(READS.food_catalog),
+        fetchAll(READS.preset_plans),
+        fetchAll(READS.app_config),
+        pageOf('audit_log', null),
         // The heavy per-user activity aggregation runs in Postgres (is_admin RPCs)
         // instead of downloading millions of rows into the browser — see backend/
         // admin-scale-rpc.sql. These return a per-user rollup + a small analytics JSON.
@@ -771,16 +840,15 @@
         sb.rpc('admin_activity'),
         // The design's "سجلّ الأخطاء" screen. client_errors already existed and
         // nothing had ever read it — the table the app writes to on every
-        // unhandled rejection had no viewer.
-        fetchAll(function(a,b){return sb.from('client_errors').select('id,user_id,build,kind,msg,src,line,created_at').order('id',{ascending:false}).range(a,b);})
+        // unhandled rejection had no viewer. Read by KEYSET: every device writes
+        // it while this pages, and an offset under a moving head repeats rows.
+        fetchKeyset(function(){return sb.from('client_errors').select('id,user_id,build,kind,msg,src,line,created_at');}, 'id', 1000)
       ]);
       var d=res.map(function(r){return r.error?[]:(r.data||[]);});
       var exercises=d[0], profiles=d[1], prefs=d[2], flags=d[3], cardioTypes=d[4], feedback=d[5];
-      var foodCatalog=d[6], presets=d[7], appConfig=(d[8]&&d[8][0])||null, auditLog=d[9];
+      var foodCatalog=d[6], presets=d[7], auditLog=d[9];
       var userStats=d[10]||[], activity=(res[11]&&!res[11].error&&res[11].data)||{};
       var clientErrors=d[12]||[];
-
-      exMap={}; exercises.forEach(function(e){exMap[e.id]={name:e.name,category:e.category,owner_id:e.owner_id};});
 
       var U={};
       function ensure(id){ if(!id) return null; if(!U[id]) U[id]={id:id,username:null,joined:null,last_seen:null,unit:'kg',
@@ -831,11 +899,10 @@
       var recent=(activity.recent||[]).map(function(r){ var u=U[r.user_id]||{id:r.user_id}; return {u:u, ex:r.ex, cat:r.cat, date:r.date}; });
 
       DATA={
-        usersById:U, usersList:list, cardioTypes:cardioTypes, clientErrors:clientErrors,
-        globalEx:exercises.filter(function(e){return !e.owner_id && !e.deleted_at;}),
-        foodCatalog:foodCatalog, appConfig:appConfig, auditLog:auditLog,
-        presets:presets.slice().sort(function(a,b){return (a.position-b.position)||(a.name||'').localeCompare(b.name||'');}),
+        usersById:U, usersList:list, clientErrors:clientErrors, auditLog:auditLog,
         feedback:feedback.sort(function(a,b){return (b.created_at||'').localeCompare(a.created_at||'');}),
+        // a full page means there may be older rows: «عرض الأقدم» fetches the next
+        more:{ feedback:feedback.length===OLDER_PAGE, audit_log:auditLog.length===OLDER_PAGE },
         totals:{ users:list.length,
           sessions:list.reduce(function(a,u){return a+u.sessions;},0),
           sets:list.reduce(function(a,u){return a+u.sets;},0),
@@ -849,8 +916,49 @@
         analytics:{ active7:active7, new7:new7, sessToday:sessToday, sessWeek:sessWeek, churn:churn,
           topEx:topEx, catDist:catDist, unitSplit:unitSplit, recent:recent }
       };
+      adopt('exercises', exercises); adopt('cardio_types', cardioTypes); adopt('food_catalog', foodCatalog);
+      adopt('preset_plans', presets); adopt('app_config', d[8]);
       setBadge('feedback', DATA.feedback.filter(function(f){return f.status==='open';}).length);
     }
+    // A table from READS into DATA — the one place loadAll() and reload() agree on.
+    function adopt(name, rows){
+      if(name==='exercises'){
+        exMap={}; rows.forEach(function(e){exMap[e.id]={name:e.name,category:e.category,owner_id:e.owner_id};});
+        DATA.globalEx=rows.filter(function(e){return !e.owner_id && !e.deleted_at;});
+      }
+      else if(name==='cardio_types') DATA.cardioTypes=rows;
+      else if(name==='food_catalog') DATA.foodCatalog=rows;
+      else if(name==='preset_plans') DATA.presets=rows.slice().sort(function(a,b){return (a.position-b.position)||(a.name||'').localeCompare(b.name||'');});
+      else if(name==='app_config') DATA.appConfig=(rows&&rows[0])||null;
+    }
+    // ONE TABLE, AFTER A WRITE TO IT. A catalog, preset or settings save used to
+    // re-run loadAll() — both admin RPCs, every table, every user's unit out of
+    // vault_data — to show one changed row. The written table is re-read and its
+    // section redrawn; the rest stays as the last load left it (↻ still reloads
+    // the whole console).
+    async function reload(name){
+      var r=await fetchAll(READS[name]);
+      if(r.error){ toast('تعذّر التحديث: '+r.error.message); return false; }
+      adopt(name, r.data||[]);
+      if(curCenter===SECTION[name]) showCenter(curCenter);
+      return true;
+    }
+    // «عرض الأقدم»: the next page of feedback or audit_log, below the last row shown.
+    async function loadOlder(name, btn){
+      var p=PAGED[name], rows=DATA[p.field]||[];
+      if(!rows.length) return;
+      if(btn){ btn.disabled=true; btn.textContent='جارٍ التحميل…'; }
+      var r=await pageOf(name, rows[rows.length-1]);
+      if(r.error){ if(btn){ btn.disabled=false; btn.textContent='عرض الأقدم'; } toast('تعذّر: '+r.error.message); return; }
+      var chunk=r.data||[];
+      DATA[p.field]=rows.concat(chunk); DATA.more[name]=(chunk.length===OLDER_PAGE);
+      if(name==='feedback') setBadge('feedback', DATA.feedback.filter(function(f){return f.status==='open';}).length);
+      if(curCenter!==p.center) return;
+      if(name==='feedback') renderFeedback($('#center')); else renderAudit($('#center'));
+      var nb=$('#center').querySelector('[data-older]'); if(nb){ try{ nb.focus({preventScroll:true}); }catch(_){} }
+    }
+    function olderHtml(name){ return DATA.more&&DATA.more[name] ? '<div class="more-row"><button class="abtn" data-older="'+name+'">عرض الأقدم</button></div>' : ''; }
+    function wireOlder(box){ Array.prototype.forEach.call(box.querySelectorAll('[data-older]'),function(b){ b.addEventListener('click',function(){ loadOlder(b.getAttribute('data-older'), b); }); }); }
 
     /* ---------------- centers ---------------------------------------------- */
     function renderDashboard(box){
@@ -934,6 +1042,11 @@
     // and the argument admin_user_stats() counts by (migration 25), so the figures
     // and the caption can no longer name different weeks.
     function isoDate(d){ return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); }
+    // The LOCAL calendar day of a timestamp. `String(ts).slice(0,10)` reads the
+    // UTC day - yesterday for every UTC+ user before 03:00; four sites had it.
+    // Script-level: it lived inside renderUsers, so the feedback inbox and the
+    // roles screen — which call it too — threw a ReferenceError on any row.
+    function dayOf(ts){ var d=new Date(ts); if(isNaN(d)) return ''; return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); }
     function weekStartDate(){
       var d=new Date(); d.setHours(0,0,0,0);
       d.setDate(d.getDate()-d.getDay());
@@ -1033,9 +1146,6 @@
             f[1]+' <span class="num">'+counts[f[0]]+'</span></span>';
         }).join('');
 
-      // The LOCAL calendar day of a timestamp. `String(ts).slice(0,10)` reads the
-      // UTC day - yesterday for every UTC+ user before 03:00; four sites had it.
-      function dayOf(ts){ var d=new Date(ts); if(isNaN(d)) return ''; return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); }
       function seen(u){
         var d=u.last_seen||u.last;
         if(!d) return '—';
@@ -1193,10 +1303,10 @@
         var name=(ov.querySelector('#ex-name').value||'').trim(); if(!name){ toast('الاسم مطلوب'); return; }
         var r=await sb.rpc('admin_upsert_exercise',{p_id:id||null,p_name:name,p_category:ov.querySelector('#ex-cat').value,p_image_slug:(ov.querySelector('#ex-img').value||'').trim()||null,p_machine_type:ex.machine_type||null});
         if(r.error){ toast('تعذّر: '+r.error.message); return; }
-        close(); await loadAll(); showCenter('catalog'); toast('تم الحفظ');
+        close(); await reload('exercises'); toast('تم الحفظ');
       });
     }
-    async function delExercise(id){ if(!confirm('حذف هذا التمرين من الكتالوج العام؟'))return; var r=await sb.rpc('admin_delete_exercise',{p_id:id}); if(r.error){toast('تعذّر: '+r.error.message);return;} await loadAll(); showCenter('catalog'); toast('تم الحذف'); }
+    async function delExercise(id){ if(!confirm('حذف هذا التمرين من الكتالوج العام؟'))return; var r=await sb.rpc('admin_delete_exercise',{p_id:id}); if(r.error){toast('تعذّر: '+r.error.message);return;} await reload('exercises'); toast('تم الحذف'); }
 
     function openFoodForm(id){
       var f=id?((DATA.foodCatalog||[]).filter(function(x){return x.id===id;})[0]||{}):{};
@@ -1216,10 +1326,10 @@
         var r=await sb.rpc('admin_upsert_food',Object.assign({p_fat:num('#fd-fat')},args));
         if(r.error&&/function|p_fat|PGRST202/i.test(r.error.message||'')){ r=await sb.rpc('admin_upsert_food',args); if(!r.error) toast('حُفظ بلا دهون — طبّق ترحيل 21 لتفعيل حقل الدهون'); }
         if(r.error){ toast('تعذّر: '+r.error.message); return; }
-        close(); await loadAll(); showCenter('catalog'); toast('تم الحفظ');
+        close(); await reload('food_catalog'); toast('تم الحفظ');
       });
     }
-    async function delFood(id){ if(!confirm('حذف هذا الطعام؟'))return; var r=await sb.rpc('admin_delete_food',{p_id:id}); if(r.error){toast('تعذّر: '+r.error.message);return;} await loadAll(); showCenter('catalog'); toast('تم الحذف'); }
+    async function delFood(id){ if(!confirm('حذف هذا الطعام؟'))return; var r=await sb.rpc('admin_delete_food',{p_id:id}); if(r.error){toast('تعذّر: '+r.error.message);return;} await reload('food_catalog'); toast('تم الحذف'); }
 
     function openCardioForm(id){
       var c=id?((DATA.cardioTypes||[]).filter(function(x){return x.id===id;})[0]||{}):{};
@@ -1228,7 +1338,7 @@
         var label=(ov.querySelector('#cd-label').value||'').trim(); if(!label){ toast('الاسم مطلوب'); return; }
         var r=await sb.rpc('admin_upsert_cardio',{p_id:id||null,p_label:label,p_icon:'heart'});
         if(r.error){ toast('تعذّر: '+r.error.message); return; }
-        close(); await loadAll(); showCenter('catalog'); toast('تم الحفظ');
+        close(); await reload('cardio_types'); toast('تم الحفظ');
       });
     }
 
@@ -1261,10 +1371,10 @@
         var days=lines.map(function(l){ var i=l.indexOf(':'); var nm=(i>=0?l.slice(0,i):l).trim(); var exs=(i>=0?l.slice(i+1).split(/[,،]/):[]).map(function(s){return s.trim();}).filter(Boolean); return {name:nm, exercises:exs}; });
         var r=await sb.rpc('admin_upsert_preset',{p_id:id||null,p_name:name,p_desc:(ov.querySelector('#pr-desc').value||'').trim()||null,p_data:{days:days}});
         if(r.error){ toast('تعذّر: '+r.error.message); return; }
-        close(); await loadAll(); showCenter('presets'); toast('تم الحفظ');
+        close(); await reload('preset_plans'); toast('تم الحفظ');
       });
     }
-    async function delPreset(id){ if(!confirm('حذف هذه الخطة؟'))return; var r=await sb.rpc('admin_delete_preset',{p_id:id}); if(r.error){toast('تعذّر: '+r.error.message);return;} await loadAll(); showCenter('presets'); toast('تم الحذف'); }
+    async function delPreset(id){ if(!confirm('حذف هذه الخطة؟'))return; var r=await sb.rpc('admin_delete_preset',{p_id:id}); if(r.error){toast('تعذّر: '+r.error.message);return;} await reload('preset_plans'); toast('تم الحذف'); }
 
     function renderAudit(box){
       $('#head-actions').innerHTML='';
@@ -1274,7 +1384,8 @@
       var L={'role.set':'تغيير دور','status.set':'تغيير حالة','exercise.upsert':'حفظ تمرين','exercise.delete':'حذف تمرين','food.upsert':'حفظ طعام','food.delete':'حذف طعام','preset.upsert':'حفظ خطة','preset.delete':'حذف خطة','cardio.upsert':'حفظ كارديو','config.update':'تحديث الإعدادات'};
       box.innerHTML='<div class="table-wrap"><div class="scroll-x"><table class="tbl"><thead><tr><th class="no-sort">العملية</th><th class="no-sort">التفاصيل</th><th class="no-sort">التاريخ</th></tr></thead><tbody>'+
         log.map(function(e){ return '<tr style="cursor:default"><td>'+esc(L[e.action]||e.action)+'</td><td class="muted" style="direction:ltr;text-align:start">'+(e.detail?esc(JSON.stringify(e.detail)):'—')+'</td><td class="num muted">'+esc(String(e.created_at||'').replace('T',' ').slice(0,16))+'</td></tr>'; }).join('')+
-        '</tbody></table></div></div>';
+        '</tbody></table></div></div>'+olderHtml('audit_log');
+      wireOlder(box);
     }
 
     function renderSettings(box){
@@ -1292,7 +1403,7 @@
       box.querySelector('#cfg-save').addEventListener('click',async function(){
         var r=await sb.rpc('admin_set_config',{p_unit:unit,p_ar:(box.querySelector('#cfg-ar').value||'').trim()||null,p_en:(box.querySelector('#cfg-en').value||'').trim()||null,p_active:box.querySelector('#cfg-active').checked});
         if(r.error){ toast('تعذّر: '+r.error.message); return; }
-        await loadAll(); showCenter('settings'); toast('تم حفظ الإعدادات');
+        await reload('app_config'); toast('تم حفظ الإعدادات');
       });
     }
 
@@ -1309,7 +1420,8 @@
           (f.context?'<span>· '+esc(f.context)+'</span>':'')+
           (f.status==='resolved'?'<span class="pill st-active" style="margin-inline-start:auto">تمّت المعالجة</span>':'<button class="fb-resolve" data-resolve="'+esc(f.id)+'">وضع كمُعالَج</button>')+
           '</div></div>';
-      }).join('')+'</div>';
+      }).join('')+'</div>'+olderHtml('feedback');
+      wireOlder(box);
       Array.prototype.forEach.call(box.querySelectorAll('[data-resolve]'),function(b){
         b.addEventListener('click',async function(){
           var id=b.getAttribute('data-resolve'); b.disabled=true; b.textContent='…';
@@ -1596,6 +1708,13 @@
     // MORE complete, not less: it now includes every user's actual blob.
     var BACKUP_TABLES=['profiles','exercises','cardio_types','user_flags','feedback',
       'audit_log','admins','food_catalog','preset_plans','app_config','vault_data'];
+    // Each table is paged in its PRIMARY KEY's order (an unordered offset page can
+    // repeat one row and drop another from the backup), and vault_data 50 rows at
+    // a time: every row there is a user's WHOLE blob, and a 1000-row page of them
+    // is one response carrying every user's history at once.
+    var BACKUP_KEY={profiles:'user_id',exercises:'id',cardio_types:'id',user_flags:'user_id',feedback:'id',
+      audit_log:'id',admins:'user_id',food_catalog:'id',preset_plans:'id',app_config:'id',vault_data:'user_id'};
+    var BACKUP_PAGE={vault_data:50};
     async function exportBackup(){
       toast('جارٍ إنشاء النسخة الاحتياطية…');
       var out={ backup:'VAULT full backup', schema:'v4', exported_at:new Date().toISOString(),
@@ -1603,7 +1722,7 @@
         counts:{}, tables:{} }, errs=[];
       for(var i=0;i<BACKUP_TABLES.length;i++){
         var t=BACKUP_TABLES[i];
-        var r=await fetchAll((function(tbl){return function(a,b){return sb.from(tbl).select('*').range(a,b);};})(t));
+        var r=await fetchAll((function(tbl){return function(a,b){return sb.from(tbl).select('*').order(BACKUP_KEY[tbl]).range(a,b);};})(t), BACKUP_PAGE[t]);
         if(r.error){ errs.push(t+': '+r.error.message); out.tables[t]=[]; out.counts[t]='error'; }
         else { out.tables[t]=r.data||[]; out.counts[t]=(r.data||[]).length; }
       }
