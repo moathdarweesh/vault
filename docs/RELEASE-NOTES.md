@@ -2,6 +2,37 @@
 
 One section per release since v309, newest first, moved verbatim from `CLAUDE.md` in v401 (batch 6 of the 2026-09-25 review; `docs/REVIEW-2026-09-25.md`). `CLAUDE.md` is the guide and the authority for how the app works now. A section here records what one release changed and why, in the words written at the time, so a later section — or the guide — can supersede what an earlier one says.
 
+## v409 — the door: no word, it opens from the vertical middle, the page drops in
+
+«ما تطلع كلمة VAULT فيه، ما لها داعي … الشعار والأنميشن من النصف الطولي يفتح،
+مش بالعرض، وينزل بعدها مكونات الصفحة».
+
+- **No word.** The splash carries the barbell alone: `.vs-word` and its markup
+  are gone, and so is phase B's hand-over to it (`vs-part` pulled the bolts
+  apart and faded them to make room for the name; `vs-name` brought it in).
+- **The door opens from the vertical middle.** The leaves were a top and a
+  bottom half swinging up and down; they are a LEFT and a RIGHT leaf now
+  (`.vs-leaf-l` / `.vs-leaf-r`), each carrying its copy of the mark cut at the
+  seam, so the barbell splits through its shaft and each half leaves with its
+  leaf. The half-pixel overlap and the 1px face correction moved to the new
+  axis. Physical left/right on purpose: a door opens the same way in both
+  languages.
+- **The page drops in.** `VltMotion.stagger(el, dir, drop)` gained the drop:
+  the door's clock asks for it (`stagger(host, 0, true)`) and the first view's
+  cards come DOWN 24px into place instead of rising; every other arrival is
+  unchanged.
+- **Faster.** Without the hand-over the leaves start 80ms after phase B (was
+  400ms) and the node leaves at 830ms (was 1150ms); the cards drop at 260ms.
+- **Measured on the real app** (375×812, motion on): no text anywhere in
+  `#splash`; the bolts rest at 11×23 / 15×45 / 19×12 px; in phase B the left
+  leaf goes 0 → −188px and the right 188 → 375px with the vertical position
+  fixed at 0; the node is removed as the slide ends; the first view's `--ey` is
+  −24px; no page error. Frame 0 is unchanged — the eleven native launch PNGs
+  re-render byte-identical.
+- **Contract 72 holds the door**: no text in `#splash`, no `.vs-word` rule, a
+  left and a right leaf that open with `translateX` only, and the clock asking
+  for the drop — all failing first on v408.
+
 ## v408 — the console gets a test (and two broken screens back), sync stops downloading for nothing
 
 The performance review of 2026-09-27 and the pentest's hardening notes, each

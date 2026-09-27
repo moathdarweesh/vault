@@ -1759,7 +1759,6 @@ const cssOwner = (i) => CSS_BLOCKS.reduce((best, b) => (b.open < i && b.close > 
     '.bento-card.wide .bento-card-bg.fallback': 'the same picture on the wide tile',
     '.sd-thumb.fallback': 'the initials fill a fixed 44px thumbnail in place of the photo',
     '.run-ex-media.fallback': 'the initials fill the fixed media box in place of the photo',
-    '.vs-word': 'the splash wordmark is sized in its own design unit (--vs-u) so it lands on the native launch PNG; a theme or text setting must never move it',
   };
   const literal = [];
   for (const m of CSS_CLEAN.matchAll(/font-size\s*:\s*([^;}]+)/g)) {
@@ -2268,6 +2267,37 @@ const cssOwner = (i) => CSS_BLOCKS.reduce((best, b) => (b.open < i && b.close > 
         if (norm(start) !== norm(end)) problems.push(`the splash: @keyframes ${nm} ends somewhere other than where it starts (${norm(start)} → ${norm(end)}) — phase B must take over the resting logo`);
       }
     }
+
+    // THE DOOR (owner, 2026-09-27: «ما تطلع كلمة VAULT فيه، ما لها داعي … الشعار
+    // والأنميشن من النصف الطولي يفتح، مش بالعرض، وينزل بعدها مكونات الصفحة»):
+    // the splash carries NO word — the barbell is the whole mark; the door is two
+    // leaves meeting on the VERTICAL centre line, each opening sideways (translateX
+    // only), so the barbell splits through its shaft; and the page it reveals
+    // arrives from ABOVE (the clock asks VltMotion.stagger for the drop).
+    const html = read('index.html');
+    const s0 = html.indexOf('<div class="vs" id="splash"');
+    let splash = '';
+    if (s0 < 0) problems.push('index.html has no <div class="vs" id="splash">');
+    else {
+      const tagRe = /<div\b|<\/div>/g; tagRe.lastIndex = s0; let depth = 0, t;
+      while ((t = tagRe.exec(html))) { depth += t[0] === '</div>' ? -1 : 1; if (!depth) { splash = html.slice(s0, t.index + t[0].length); break; } }
+    }
+    const words = splash.replace(/<!--[\s\S]*?-->/g, '').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
+    if (words) problems.push(`the splash carries text («${words.slice(0, 40)}») — the barbell is the whole mark, no word under it`);
+    if (/\bvs-word\b/.test(css)) problems.push('styles.css still styles .vs-word — the splash has no word');
+    const leaves = [...splash.matchAll(/class="vs-leaf (vs-leaf-[a-z]+)"/g)].map((x) => x[1]);
+    if (leaves.join() !== 'vs-leaf-l,vs-leaf-r') problems.push(`the splash's leaves are ${leaves.join(', ') || 'missing'} — the door is a LEFT and a RIGHT leaf meeting on the vertical centre line`);
+    for (const lf of ['vs-leaf-l', 'vs-leaf-r']) {
+      const ph = rules.filter(([s]) => s.includes('.vs-b .' + lf));
+      const anims = ph.flatMap(([, a]) => String(a.animation || '').split(',').map((p) => p.trim().split(/\s+/)[0]).filter(Boolean));
+      if (!anims.length) { problems.push(`the splash: .${lf} has no phase-B animation — the door must open`); continue; }
+      for (const nm of anims) for (const [, d] of kf[nm] || []) {
+        const tr = String(d.transform || '');
+        if (!/^translateX\(/.test(tr)) problems.push(`the splash: .${lf} opens with «${tr || 'no transform'}» (@keyframes ${nm}) — the door opens sideways from the vertical middle (translateX), not up and down`);
+      }
+    }
+    if (!/VltMotion\.stagger\(\s*host\s*,\s*0\s*,\s*true\s*\)/.test(html)) problems.push("the door's clock does not ask VltMotion.stagger(host, 0, true) — the page it reveals must drop in from above");
+    if (!/drop\s*\?\s*'-24px'/.test(read('js/motion.js'))) problems.push("js/motion.js stagger() has no drop offset (--ey '-24px') for the door's reveal");
   }
 
   // The coloured surfaces agree on the fills, role by role, and a role wears one fill.

@@ -39,12 +39,18 @@ window.VltMotion = (function () {
      The cap is expressed in CSS as calc(min(var(--i), 5) * 140ms): past the
      sixth child everything lands together. Without a cap a twenty-row list
      makes the reader wait three seconds for a list that is already there. */
-  function stagger(el, dir) {
+  function stagger(el, dir, drop) {
     if (!el || el.dataset.entered) return;
     el.dataset.entered = '1';
     if (reduced()) return;            // nothing to animate; the guard is still set
 
-    /* A TAB SWITCH ARRIVES FROM THE SIDE; EVERY OTHER ARRIVAL RISES.
+    /* A TAB SWITCH ARRIVES FROM THE SIDE; THE DOOR'S REVEAL DROPS; EVERY OTHER
+       ARRIVAL RISES.
+
+       `drop` is the splash's hand-off only (index.html's clock, v409 owner:
+       «وينزل بعدها مكونات الصفحة»): the page the door uncovers comes DOWN
+       into place, as if it had been waiting behind the lintel — the same
+       24px, from above.
 
        `dir` is the tab ORDER (+1 later, -1 earlier) and carries no writing
        direction of its own, so the RTL flip is applied here — the last place
@@ -62,7 +68,7 @@ window.VltMotion = (function () {
        replayed a direction it had not moved in. */
     const d = dir ? (dir < 0 ? -1 : 1) * (document.body.dir === 'rtl' ? -1 : 1) : 0;
     el.style.setProperty('--ex', d * 26 + 'px');
-    el.style.setProperty('--ey', d ? '6px' : '24px');
+    el.style.setProperty('--ey', d ? '6px' : (drop ? '-24px' : '24px'));
     el.style.setProperty('--step', d ? 'var(--stagger-fast)' : 'var(--stagger)');
 
     /* PERSISTENT CHROME IS SKIPPED, NOT JUST EXEMPTED. The CSS above refuses to

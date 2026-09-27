@@ -33,18 +33,18 @@
   <!-- Critical inline paint: black background from the very first frame so a
        slow styles.css load never flashes unstyled white content (FOUC). -->
   <style>html,body{margin:0;background:#000;color:#fff}</style>
-  <link rel="manifest" href="manifest.json?v=408">
+  <link rel="manifest" href="manifest.json?v=409">
   <!-- These carry ?v=N like every other asset: without it a browser that has
        already cached the favicon keeps serving the OLD mark forever, so an icon
        redesign reaches nobody. `npm run release` rewrites every ?v= in this
        file, so these stay in step automatically. -->
-  <link rel="icon" type="image/svg+xml" href="icons/icon.svg?v=408">
+  <link rel="icon" type="image/svg+xml" href="icons/icon.svg?v=409">
   <!-- iOS does NOT support SVG for apple-touch-icon: Safari ignores it and puts a
        SCREENSHOT of the page on the Home Screen instead of the mark. This PNG is
        rendered from icons/icon.svg on an opaque black tile (iOS applies its own
        squircle mask and does not expect alpha). rel=icon below stays SVG for
        desktop browsers, which do support it. -->
-  <link rel="apple-touch-icon" sizes="180x180" href="icons/apple-touch-icon-180.png?v=408">
+  <link rel="apple-touch-icon" sizes="180x180" href="icons/apple-touch-icon-180.png?v=409">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <!-- Warm the Supabase connection (DNS + TLS) during page load so the first
@@ -56,34 +56,34 @@
   <!-- Must carry the SAME ?v=N that cloud.js appends when it injects this script,
        or the preload warms a different URL and is wasted. `npm run release` bumps
        both (this one by regex, cloud.js by deriving from its own marker). -->
-  <link rel="preload" href="js/vendor/supabase.js?v=408" as="script">
+  <link rel="preload" href="js/vendor/supabase.js?v=409" as="script">
   <!-- Discover startup files before the first inline body script waits for CSS.
        Download together; defer preserves dependency order and waits for the DOM. -->
-  <script src="js/i18n.js?v=408" defer></script>
-  <script src="js/catalog.js?v=408" defer></script>
-  <script src="js/cloud.js?v=408" defer></script>
-  <script src="js/storage.js?v=408" defer></script>
+  <script src="js/i18n.js?v=409" defer></script>
+  <script src="js/catalog.js?v=409" defer></script>
+  <script src="js/cloud.js?v=409" defer></script>
+  <script src="js/storage.js?v=409" defer></script>
   <!-- Motion primitives. No dependencies of its own; it only has to be here
        before app.js, which calls VltMotion from its render paths. -->
-  <script src="js/motion.js?v=408" defer></script>
+  <script src="js/motion.js?v=409" defer></script>
   <!-- The presentation vocabulary: format, escape, select, and the shared
        surfaces (toast, modal, confirm, lightbox). The floor of the call
        graph — the two view scripts below are written in it. -->
-  <script src="js/ui.js?v=408" defer></script>
+  <script src="js/ui.js?v=409" defer></script>
   <!-- The body domain: sleep, body weight and cardio. Three day-entry screens
        that share one day-ledger renderer. No top-level statement and no edge
        into another domain, so its place in the order is free. -->
-  <script src="js/body.js?v=408" defer></script>
+  <script src="js/body.js?v=409" defer></script>
   <!-- The food domain. BEFORE app.js, not after: bootCatalog() calls
        setServerFoodCatalog() inside a bare catch, so loading it later means a
        swallowed ReferenceError and a server food catalog that silently never
        merges. It has no top-level dependency of its own. -->
-  <script src="js/food.js?v=408" defer></script>
-  <script src="js/app.js?v=408" defer></script>
-  <script src="js/health.js?v=408" defer></script>
-  <script src="js/notify.js?v=408" defer></script>
-  <script src="js/foodai.js?v=408" defer></script>
-  <script src="js/update.js?v=408" defer></script>
+  <script src="js/food.js?v=409" defer></script>
+  <script src="js/app.js?v=409" defer></script>
+  <script src="js/health.js?v=409" defer></script>
+  <script src="js/notify.js?v=409" defer></script>
+  <script src="js/foodai.js?v=409" defer></script>
+  <script src="js/update.js?v=409" defer></script>
   <!-- The brand kit's three faces, and only three:
          IBM Plex Sans Arabic — the body face, for BOTH scripts (it carries a
            full Latin set, so this replaces the old Inter + Tajawal pair and one
@@ -114,7 +114,7 @@
        roughly one launch in four. One reflow beats no brand font. -->
   <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@400;500;600;700&family=Archivo:wght@800&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet" media="print" onload="this.media='all'">
   <noscript><link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@400;500;600;700&family=Archivo:wght@800&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet"></noscript>
-  <link rel="stylesheet" href="styles.css?v=408">
+  <link rel="stylesheet" href="styles.css?v=409">
 </head>
 <body class="theme-dark">
   <script>
@@ -150,9 +150,12 @@
        paint arrive together and there is never an unpainted shell behind it.
 
        The mark is duplicated once per leaf on purpose — the light sits BEHIND
-       the door, so it has to be cut at the same seam. See styles.css section 8. -->
+       the door, so it has to be cut at the same seam. The seam is VERTICAL
+       (v409, owner): a left and a right leaf, so the barbell splits through its
+       shaft and each half leaves with its own leaf. There is no word: the
+       barbell is the whole mark. See styles.css section 8. -->
   <div class="vs" id="splash" aria-hidden="true">
-    <div class="vs-leaf vs-leaf-t"><div class="vs-face">
+    <div class="vs-leaf vs-leaf-l"><div class="vs-face">
       <div class="vs-bloom"></div>
       <div class="vs-mark">
         <div class="vs-bolts">
@@ -160,10 +163,9 @@
           <span class="vs-bolt vs-mid"></span>
           <span class="vs-bolt vs-n4"></span><span class="vs-bolt vs-n5"></span>
         </div>
-        <div class="vs-word">VAULT</div>
       </div>
     </div></div>
-    <div class="vs-leaf vs-leaf-b"><div class="vs-face">
+    <div class="vs-leaf vs-leaf-r"><div class="vs-face">
       <div class="vs-bloom"></div>
       <div class="vs-mark">
         <div class="vs-bolts">
@@ -171,7 +173,6 @@
           <span class="vs-bolt vs-mid"></span>
           <span class="vs-bolt vs-n4"></span><span class="vs-bolt vs-n5"></span>
         </div>
-        <div class="vs-word">VAULT</div>
       </div>
     </div></div>
   </div>
@@ -210,19 +211,18 @@
       } catch (_) {}
       // Start Archivo as early as it can be started. Left alone the face is
       // discovered only when the non-blocking font stylesheet is promoted — two
-      // sequential round trips AFTER first paint — and the wordmark is due at
-      // 1650ms.
+      // sequential round trips AFTER first paint — and the top bar's lockup
+      // (VAULT / TRAIN, Archivo 800) is the first thing the door reveals. The
+      // splash itself carries no word since v409.
       //
       // ⚠️ AND BE HONEST ABOUT WHAT THIS BUYS. The call at parse time fetches
       // NOTHING: the Google Fonts sheet is still media="print" then, its
       // @font-face rules are not in the screen font source, and fonts.load()
       // resolves against an empty match list without requesting anything. It is
-      // re-armed when that sheet lands and once more on a timer — but `.vs-word`
-      // is rendered (opacity 0, not display:none), so the browser asks for
-      // Archivo at the first style recalc after the promotion anyway. This is a
+      // re-armed when that sheet lands and once more on a timer. This is a
       // belt, not a shortcut: the only thing that would actually beat the two
-      // round trips is self-hosting a five-glyph subset, which the CSP already
-      // permits. On a cold cache the wordmark can still draw in the fallback.
+      // round trips is self-hosting a small subset, which the CSP already
+      // permits. On a cold cache the lockup can still draw in the fallback.
       function warmFont() {
         try { if (document.fonts && document.fonts.load) document.fonts.load('800 38px Archivo', 'VAULT'); } catch (_) {}
       }
@@ -247,26 +247,28 @@
       function open() {
         el.classList.add('vs-b');
         // ⚠️ THE DOOR KEEPS EATING TAPS UNTIL IT IS GONE. An earlier draft went
-        // pointer-transparent here, at the START of phase B — but the leaves do
-        // not begin to move for another 400ms and are not clear of the screen
-        // for 1100ms, so for most of a second a tap passed THROUGH a closed
-        // door onto controls the user could not see. The node is removed 50ms
-        // after the swing ends, which is the moment the app really is reachable.
+        // pointer-transparent here, at the START of phase B — but the leaves
+        // are not clear of the screen until the slide ends, so for most of a
+        // second a tap passed THROUGH a closed door onto controls the user
+        // could not see. The node is removed 50ms after the slide ends
+        // (80ms start + --dur-open 700ms), the moment the app is reachable.
         setTimeout(function () {
           window.__vltSplash = 0;
           try {
             var host = window.__vltSplashHost;
-            if (host && host.isConnected && window.VltMotion) VltMotion.stagger(host);
+            // `true` = DROP (v409, owner): the page the door reveals comes down
+            // from above, as if it had been waiting behind the lintel.
+            if (host && host.isConnected && window.VltMotion) VltMotion.stagger(host, 0, true);
           } catch (_) {}
           window.__vltSplashHost = null;
-        }, 400);                            // the leaves start; the cards rise with them
+        }, 260);                            // the leaves are a third open; the cards drop in behind them
         setTimeout(function () {
           el.remove();
           // Hand the status bar back. applyTheme is idempotent and is the only
           // writer of both surfaces, so re-running it is the whole restore —
           // and it now sees no #splash, so it writes the user's real theme.
           try { if (window.applyTheme && window.DB) applyTheme(DB.prefs.get().theme); } catch (_) {}
-        }, 1150);
+        }, 830);                            // 80ms + 700ms slide + 50ms
       }
       // The dwell is where a slow launch waits. Never on animationend — it does
       // not fire in a hidden document, and a door that never opens is worse
@@ -354,8 +356,8 @@
           await Promise.all(regs.map((r) => r.unregister()));
           const keys = await caches.keys();
           await Promise.all(keys.map((k) => caches.delete(k)));
-          if (!sessionStorage.getItem('__cleaned_v408')) {
-            sessionStorage.setItem('__cleaned_v408', '1');
+          if (!sessionStorage.getItem('__cleaned_v409')) {
+            sessionStorage.setItem('__cleaned_v409', '1');
             location.reload();
           }
         }

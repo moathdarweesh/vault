@@ -8567,9 +8567,10 @@ body.ember-on .ember {
    percentages re-multiplied.
 
    TWO PHASES, because the app behind the door does not arrive on a fixed
-   clock. Phase A is self-contained — the lock throws, the bolts rise, the
+   clock. Phase A is self-contained — the barbell does one rep while the
    light blooms, and then the design`s deliberate 622ms DWELL. Phase B is the
-   part that reveals the app, and JS holds it until the first view has
+   door opening from the vertical middle (v409: no word, the barbell splits
+   with the leaves, the page drops in), and JS holds it until the first view has
    actually rendered (capped). A slow launch therefore stands with the lock
    open a little longer, which is the one beat this sequence can afford to
    stretch — it is a STATE, not a transition.
@@ -8625,8 +8626,6 @@ body.ember-on .ember {
   --vs-g: calc(var(--vs-u) * 82 / 21);
   --vs-lift: 560ms;           /* the rep: up and back, 120ms in — ends at 680ms as the old rise did */
   --vs-glow: 700ms;
-  --vs-part: 350ms;           /* the hand-over */
-  --vs-name: 410ms;
   --vs-fade: 484ms;
 }
 
@@ -8634,20 +8633,26 @@ body.ember-on .ember {
    Half a pixel of OVERLAP on the top leaf: flush 50/50 is exact only when the
    viewport is an even number of device pixels, and at any other DPR the join
    renders as a hairline across the middle of the light. */
-.vs-leaf { position: absolute; left: 0; width: 100%; overflow: hidden; background: #000000; }
-.vs-leaf-t { top: 0; height: calc(50% + 0.5px); }
-.vs-leaf-b { top: 50%; height: 50%; }
-.vs-face { position: absolute; left: 0; width: 100%; height: 200%; display: grid; place-items: center; }
-/* ⚠️ THE OVERLAP MUST NOT REACH THE FACE. The top leaf is 50% + 0.5px, so a
-   face at a plain 200% of it is ONE PIXEL taller than the stage — which puts
-   its centred copy of the mark half a pixel BELOW the bottom leaf's copy. The
-   two halves of the bloom then meet out of step, and the join paints as a
-   bright hairline straight across the light. Caught in a SCREENSHOT; every
-   computed-style check passed. Subtracting the overlap here puts both faces
-   on exactly the stage, so both copies land on the same pixel — and the
-   overlap still hides the sub-pixel gap it exists for. */
-.vs-leaf-t .vs-face { top: 0; height: calc(200% - 1px); }
-.vs-leaf-b .vs-face { top: -100%; }
+/* THE SEAM IS VERTICAL (v409, owner: «من النصف الطولي يفتح، مش بالعرض»): a
+   LEFT and a RIGHT leaf, so the barbell is cut through the middle of its
+   shaft and each half leaves with its own leaf. Physical left/right on
+   purpose: this is a door, not text, and it opens the same way in both
+   languages. */
+.vs-leaf { position: absolute; top: 0; height: 100%; overflow: hidden; background: #000000; }
+.vs-leaf-l { left: 0; width: calc(50% + 0.5px); }
+.vs-leaf-r { left: 50%; width: 50%; }
+.vs-face { position: absolute; top: 0; height: 100%; width: 200%; display: grid; place-items: center; }
+/* ⚠️ THE OVERLAP MUST NOT REACH THE FACE. The left leaf is 50% + 0.5px, so a
+   face at a plain 200% of it is ONE PIXEL wider than the stage — which puts
+   its centred copy of the mark half a pixel off the right leaf's copy. The
+   two halves of the shaft and of the bloom then meet out of step, and the
+   join paints as a bright hairline down the light. (Caught in a SCREENSHOT
+   when the seam was horizontal; every computed-style check passed.)
+   Subtracting the overlap puts both faces on exactly the stage, so both
+   copies land on the same pixel — and the overlap still hides the sub-pixel
+   gap it exists for. */
+.vs-leaf-l .vs-face { left: 0; width: calc(200% - 1px); }
+.vs-leaf-r .vs-face { left: -100%; }
 
 /* A FIXED box, so the parting bolts cannot reflow anything above them. The
    hand-over's gap animation below is a layout property and it runs during the
@@ -8696,26 +8701,6 @@ body.ember-on .ember {
   background: #fdfaf7;
 }
 
-.vs-word {
-  position: absolute;
-  /* A Latin brand mark in a document that may be dir=rtl. letter-spacing adds
-     its space AFTER each glyph and text-indent compensates from the INLINE
-     START edge — which is the right-hand side in Arabic, so the two scripts
-     would place the glyphs differently inside an identically centred box.
-     The wordmark is the same object in both languages; pin its direction. */
-  direction: ltr;
-  font-family: Archivo, sans-serif;
-  font-weight: 800;
-  letter-spacing: .2em;
-  text-indent: .2em;           /* .2em of tracking hangs off the last letter */
-  font-size: calc(var(--vs-u) * 38);
-  line-height: 1;
-  color: #fdfaf7;
-  white-space: nowrap;
-  opacity: 0;
-  transform: scale(.94);
-}
-
 /* The light is BEHIND the door, so it travels with the door and is cut at the
    same seam as the mark. 720x460 units — wider than the screen on purpose. */
 .vs-bloom {
@@ -8758,37 +8743,26 @@ body.ember-on .ember {
   100% { opacity: 1; transform: translate(-50%, -50%) scale(1); }
 }
 
-/* ── PHASE B: the bolts hand over to the name, and the door opens ──────── */
-/* ⚠️ vs-bloom-in is RESTATED here, first in the list and byte-identical, so
+/* ── PHASE B: the door opens from the vertical middle ─────────────────── */
+/* v409 (owner): no word, no hand-over — the barbell IS the mark and stays on
+   the door. The two leaves slide apart sideways, each carrying its half of the
+   barbell (the cut runs through the shaft), while the light behind fades; the
+   page drops in from above as they part (the clock calls VltMotion.stagger with
+   the drop flag at 260ms). Contract 72 holds all of it: no text in #splash, a
+   left and a right leaf, translateX only.
+   ⚠️ vs-bloom-in is RESTATED here, first in the list and byte-identical, so
    the running animation is kept rather than restarted. Declaring only the
    out-animation would drop phase A`s `both` fill and the light would blink
    back to opacity 0 before the fade even began. */
 .vs-b .vs-bloom {
   animation: vs-bloom-in var(--vs-glow) linear both,
-             vs-bloom-out var(--vs-fade) var(--ease-inout) 400ms both;
+             vs-bloom-out var(--vs-fade) var(--ease-inout) 80ms both;
 }
-.vs-b .vs-bolts { animation: vs-part var(--vs-part) var(--ease-inout) both; }
-.vs-b .vs-word  { animation: vs-name var(--vs-name) var(--ease-out) 350ms both; }
-.vs-b .vs-leaf-t { animation: vs-swing-up var(--dur-open) var(--ease-inout) 400ms both; }
-.vs-b .vs-leaf-b { animation: vs-swing-dn var(--dur-open) var(--ease-inout) 400ms both; }
+.vs-b .vs-leaf-l { animation: vs-open-l var(--dur-open) var(--ease-inout) 80ms both; }
+.vs-b .vs-leaf-r { animation: vs-open-r var(--dur-open) var(--ease-inout) 80ms both; }
 
-/* The row rests with NO gap (the shaft abuts the inner plates; the outer
-   plates keep their one-unit gap as a margin), so the part starts from 0 and
-   opens by the same 7u and 16u the old row did. */
-@keyframes vs-part {
-  0%   { gap: 0; opacity: 1; transform: scale(1); }
-  37%  { gap: calc(var(--vs-u) * 7); opacity: 1; }
-  100% { gap: calc(var(--vs-u) * 16); opacity: 0; transform: scale(1.12); }
-}
-/* The name starts only once the bolts have FINISHED leaving. They overlapped
-   in an earlier draft and, sitting in the same place at partial opacity, it
-   read as a double exposure rather than a hand-over. */
-@keyframes vs-name {
-  from { opacity: 0; transform: scale(.94); }
-  to   { opacity: 1; transform: scale(1); }
-}
-@keyframes vs-swing-up { to { transform: translateY(-100%); } }
-@keyframes vs-swing-dn { to { transform: translateY(100%); } }
+@keyframes vs-open-l { from { transform: translateX(0); } to { transform: translateX(-100%); } }
+@keyframes vs-open-r { from { transform: translateX(0); } to { transform: translateX(100%); } }
 @keyframes vs-bloom-out {
   from { opacity: 1; transform: translate(-50%, -50%) scale(1); }
   to   { opacity: 0; transform: translate(-50%, -50%) scale(1.05); }
