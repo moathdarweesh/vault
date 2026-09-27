@@ -91,7 +91,7 @@ npm run verify           # contracts + lint + every suite — THE GATE (it print
 npm run release          # bump every marker and re-read them; runs NO tests
 ```
 
-**Current version: v414.** APK: build 25 / v3.4.
+**Current version: v415.** APK: build 25 / v3.4.
 
 > ⚠️ **`npm run release` RUNS NO TESTS, AND THIS LINE USED TO READ AS IF IT DID.**
 > It said «bump every marker + verify», where *verify* meant the MARKERS — and
@@ -467,14 +467,17 @@ the same identity on two surfaces. `docs/BRAND.md` is the authority.
   another (contracts 62/63, v399); `body.text-lg` is declared on body and the
   pre-paint script writes it in the same `className =` as the theme (v380).
 
-### Typography — three faces, from the brand kit (v213)
-One face for text, one for the mark, one for figures. The Google Fonts link in
-`index.html` loads these and nothing else.
+### Typography — two faces in the app (v213; the third left with the wordmark, v415)
+One face for text, one for figures. The Google Fonts link in `index.html` loads
+these and nothing else.
 - **IBM Plex Sans Arabic** — the body face, for **both scripts**. It carries a
   full Latin set, so it replaced the old Inter + Tajawal pair. The
   `body[dir="rtl"]` font override is **gone**: the app used to change typeface
   when you changed language.
-- **Archivo** 800, `.2em` tracking — the `VAULT` wordmark and nothing else.
+- **Archivo** — NOT loaded by the app since v415. It set the `VAULT` wordmark
+  and nothing else, and the in-app logo is the barbell alone now; `get/`,
+  `privacy.html` and `admin.html` load it for their own wordmarks. Contract 72
+  refuses it coming back to `index.html` with nothing in `styles.css` setting it.
 - **JetBrains Mono** — `.num`, i.e. every figure in the app. They are all
   measurements (reps, kg, kcal, 7:12, −0.6), and a mono face makes a column of
   them line up as data. It is tabular by construction, so the old negative
@@ -490,13 +493,15 @@ One face for text, one for the mark, one for figures. The Google Fonts link in
 > with each other and disagreed with the app; v367 designed a widget family
 > against this page and had to throw it away. Corrected here, from the code.
 
-**Inside the app: `brandLockup(size)` in `js/ui.js`.** Since v413 the whole ember
-barbell (`barbellMark()`, the glyph's five rectangles in `--mark-outer` /
-`--mark-inner` / `--text` — the icon's fills in both themes) followed by
-`VAULT` (Archivo 800, `.2em`, `--text`) over `TRAIN` (JetBrains Mono, `.3em`,
-`--accent`); until v412 it was two cropped all-orange plate halves flanking the
-name, and v403 had left it behind. **Exactly two sizes**,
-`header` (VAULT 11px) and `splash` (32px), and a caller cannot invent a third.
+**Inside the app: `brandLockup(size)` in `js/ui.js`.** Since v415 the ember
+barbell ALONE (`barbellMark()`, the glyph's five rectangles in `--mark-outer` /
+`--mark-inner` / `--text` — the icon's fills in both themes), named for a
+screen reader by `role="img"` + `aria-label`. v413–v414 followed it with
+`VAULT` over `TRAIN`; the owner removed the words («شيلهم خلص», as the splash
+had since v409), and contract 72 refuses them coming back. Until v412 it was two
+cropped all-orange plate halves flanking the name. **Exactly two sizes**,
+`header` (18.5px tall) and `splash` (52px), each the old lockup's height, and a
+caller cannot invent a third.
 Three call sites, all in `js/app.js`: `vaultBar()` (five screens), the sign-in
 gate, onboarding step 0. `admin.html` hand-inlines the barbell twice because it
 cannot reach `js/ui.js`; contract 72 refuses a cropped plate half there.

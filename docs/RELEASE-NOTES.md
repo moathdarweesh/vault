@@ -2,6 +2,33 @@
 
 One section per release since v309, newest first, moved verbatim from `CLAUDE.md` in v401 (batch 6 of the 2026-09-25 review; `docs/REVIEW-2026-09-25.md`). `CLAUDE.md` is the guide and the authority for how the app works now. A section here records what one release changed and why, in the words written at the time, so a later section — or the guide — can supersede what an earlier one says.
 
+## v415 — the logo is the barbell alone: VAULT / TRAIN removed
+
+«شيلهم خلص», on the sign-in card's VAULT and TRAIN. The splash dropped its word
+in v409; now the in-app logo does too, on the top bar of five screens, the
+sign-in card and onboarding.
+
+- `brandLockup()` draws `barbellMark()` and nothing else, at the old lockup's
+  full HEIGHT so the rows around it keep their place: 18.5px in the top bar
+  (32.4px wide), 52px on the sign-in card and onboarding (91px wide). With no
+  word left to read it names itself: `role="img"`, `aria-label="VAULT"`.
+- The wordmark's four CSS rules are gone. An inline box with no text sat on the
+  title's baseline and kept a descender under it (the sign-in title measured
+  63px around the 52px mark), so the lockup is top-aligned, and on the sign-in
+  card it is a centred block: 20px under the language toggle, 16px above the
+  subtitle (the old words rode 8px into the toggle and hung 38px above the
+  subtitle; the fields now sit 5.5px lower). Onboarding's spacing is unchanged.
+- **Archivo is no longer downloaded by the app.** It existed for the VAULT word
+  alone; the font link and its `noscript` twin drop it, and the warm-up script
+  that pre-loaded it for the door goes. Measured: zero Archivo faces in
+  `document.fonts`. `get/`, `privacy.html` and the console keep their own.
+- **Contract 72 holds it**: no `.bl-name` / `.bl-sub` / `.bl-text` and no
+  VAULT/TRAIN text in the lockup, a `role="img"` + `aria-label`, no CSS rule for
+  the retired classes, and no Archivo in `index.html` while nothing in
+  `styles.css` sets it (or a warm-up for it). Seen to fail first: four problems
+  on v414, the fifth once the CSS went.
+- Web only: no APK change (the widgets' mark, APK 25, never had the words).
+
 ## v414 — APK 25: the barbell on the phone's home screen
 
 «الوقو الي بتكلم عنه هو الي بيكون برا التطبيق», then «مربع مدور رائع» and

@@ -2357,6 +2357,20 @@ const cssOwner = (i) => CSS_BLOCKS.reduce((best, b) => (b.open < i && b.close > 
     }
     const adm = read('admin.html');
     if (/viewBox="1\.5 6 8 12"|viewBox="14\.5 6 8 12"/.test(adm)) problems.push("admin.html still hand-inlines the two cropped plate halves — the console's logo is the whole barbell too");
+
+    // …AND THE BARBELL IS THE WHOLE LOGO (owner, 2026-09-27, on the sign-in
+    // card's VAULT / TRAIN: «شيلهم خلص»), as the splash has been since v409.
+    // The lockup draws no word, so it names itself for a screen reader instead;
+    // no rule styles the retired wordmark; and the face that existed only for
+    // it (Archivo) is not downloaded by the app when nothing sets it.
+    if (/\bbl-(?:name|sub|text)\b|>\s*(?:VAULT|TRAIN)\s*</.test(body)) problems.push('brandLockup() still draws the VAULT / TRAIN wordmark — the barbell is the whole logo, no word beside it');
+    if (!/role="img"/.test(body) || !/aria-label="[^"]+"/.test(body)) problems.push('brandLockup() draws no word, so it must name itself: role="img" and an aria-label on the lockup');
+    const cssLive = css.replace(/\/\*[\s\S]*?\*\//g, ' ');
+    const deadRules = [...cssLive.matchAll(/([^{}]*\.bl-(?:name|sub|text)\b[^{}]*)\{/g)].map((m) => m[1].trim());
+    if (deadRules.length) problems.push(`styles.css still styles the retired wordmark: ${deadRules.join(' | ')}`);
+    const idx = read('index.html');
+    if (/family=Archivo\b/.test(idx) && !/font-family:[^;{}]*\bArchivo\b/.test(cssLive)) problems.push("index.html downloads Archivo, and nothing in styles.css sets it any more — the wordmark was its only consumer");
+    if (/fonts\.load\([^)]*Archivo/.test(idx)) problems.push('index.html still warms Archivo for a wordmark the app no longer draws');
   }
 
   // The coloured surfaces agree on the fills, role by role, and a role wears one fill.

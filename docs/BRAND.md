@@ -25,22 +25,24 @@
 ### 1a. Inside the app — THE LOCKUP
 
 `brandLockup(size)` in **`js/ui.js`** is the mark, and the only mark, on every
-in-app surface. Since v413 (owner: «ليش ما تم تغيير اللوقو») it is **the whole
-ember barbell** — `barbellMark()`, the five rectangles of `ICONS.dumbbell` in
-the icon's three role fills — followed by `VAULT` in Archivo 800 at `.2em` over
-`TRAIN` in JetBrains Mono at `.3em`. Until v412 it was two cropped, all-orange
+in-app surface. Since v415 it is **the ember barbell alone** — `barbellMark()`,
+the five rectangles of `ICONS.dumbbell` in the icon's three role fills, with no
+word beside it (owner, on the sign-in card's VAULT / TRAIN: «شيلهم خلص»; the
+splash had dropped its word in v409). It names itself for a screen reader with
+`role="img"` and `aria-label="VAULT"`. v413–v414 followed it with `VAULT`
+(Archivo 800) over `TRAIN` (JetBrains Mono); Archivo left the app's font
+download with them. Until v412 it was two cropped, all-orange
 plate halves flanking the name: v403 changed every outside surface and left this
 one, so the top bar still wore the old look. Contract 72 now holds its
 rectangles and fills to the glyph like every other surface.
 
 | Rule | Value |
 |---|---|
-| Sizes | **exactly two** — `header` (VAULT 11px) and `splash` (32px). A caller cannot invent a third; anything that is not `'splash'` is the header. |
-| Mark height | `round(v × 1.35)` — 14.9px at header, 43.2px at splash |
-| Mark width | `markH × 21/12` (the glyph's ink box) — 26.1px / 75.6px: as wide as the two old plates and their second gap, so the lockup's footprint did not move |
-| Sub-line | `round(v × 0.5)`, drawn only at `v ≥ 10` |
-| Gap | `round(v × 0.57)` |
-| Colour | the mark: outer plates `--mark-outer` (#b84a00), inner plates `--mark-inner` (the accent; `--accent-2` on bone), the shaft `--text` — exactly icons/icon.svg's two variants; `TRAIN` in `--accent`; `VAULT` in `--text` |
+| Sizes | **exactly two** — `header` and `splash`. A caller cannot invent a third; anything that is not `'splash'` is the header. |
+| Mark height | 18.5px at header, 52px at splash — the old lockup's full height (VAULT + gap + TRAIN), so the rows around it did not move |
+| Mark width | `markH × 21/12` (the glyph's ink box) — 32.4px / 91px |
+| Placement | inline, top-aligned (no descender under it); on the sign-in card a centred block, 20px under the language toggle and 16px above the subtitle |
+| Colour | outer plates `--mark-outer` (#b84a00), inner plates `--mark-inner` (the accent; `--accent-2` on bone), the shaft `--text` — exactly icons/icon.svg's two variants |
 **Three call sites**, all in `js/app.js`: the top bar (`vaultBar`, on five
 screens), the sign-in gate, and onboarding step 0.
 
@@ -126,7 +128,7 @@ mark; it is the DON'T at the bottom of this section.
 | Web splash | the barbell alone — NO word (v409): one rep (the row lifts and settles as one object), the bloom, then the door opens from the VERTICAL middle — a left and a right leaf, the barbell split through its shaft, each half leaving with its leaf — and the page drops in from above; no keyframe may resize a bolt (contract 72) | `index.html` + `styles.css` `.vs-*` |
 | **Home-screen widgets** | the whole barbell in the dark icon's fills, one image at the glyph's 21:12 box (APK 25; until build 24 the old two plate halves) | `res/drawable/widget_mark.xml`, used once by each `res/layout/widget_*.xml` holder (contract 72) |
 | Native splash | frame 0 of the web splash, at each PNG's own size | `res/drawable-*/splash.png` — **rendered** from the live stylesheet by `node scripts/build-brand-assets.js` (APK) |
-| **In-app top bar, login, first run** | **the LOCKUP — the ember barbell + VAULT/TRAIN (v413)** | **`brandLockup()` / `barbellMark()` in `js/ui.js`** |
+| **In-app top bar, login, first run** | **the ember barbell alone (v415; v413–v414 with VAULT/TRAIN)** | **`brandLockup()` / `barbellMark()` in `js/ui.js`** |
 | **Admin console** | the same lockup, hand-inlined | `admin.html` (two copies, not from `js/ui.js`) |
 | Download page | the cut wordmark, masked | `get/index.html` |
 | **Privacy page** | the cut wordmark, painted | **`privacy.html`** — its own `--cut-slot` / `--cut-hair` |
@@ -274,12 +276,13 @@ which described nothing that has shipped since v211. Tracked in §8.
 
 ## 4. Type
 
-Three faces, one job each (brand kit):
+Two faces in the app, one job each (the brand kit's third, Archivo, set only
+the `VAULT` wordmark and left the app with it in v415; `get/`, `privacy.html` and
+the console still load it for their own wordmarks):
 
 | Face | Role |
 |---|---|
 | **IBM Plex Sans Arabic** | body text, **both scripts** — one face for an EN/AR app |
-| **Archivo** 800, `.2em` | the `VAULT` wordmark, and nothing else |
 | **JetBrains Mono** | `.num` — every figure, because every figure is a measurement |
 
 This replaced Inter + Tajawal at v213. There is no longer an RTL font override:

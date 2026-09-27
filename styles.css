@@ -723,9 +723,8 @@ img { display: block; max-width: 100%; }
 .main.bar-hidden .vault-bar { transform: translateY(-100%); }
 
 /* The mark's slot in the top bar. The mark itself is .brand-lockup, defined at
-   the end of this file — this rule only positions it. It carries no type of its
-   own any more: the lockup sizes VAULT and TRAIN from locked ratios, and a
-   font-size here would fight them. */
+   the end of this file — this rule only positions it. It carries no type: the
+   mark is the barbell alone since v415, sized by brandLockup(). */
 .vault-logo { display: flex; align-items: center; }
 
 /* (.vault-logo-mark is gone with the symbol. The Claude Design spec "Vault Logo
@@ -7748,43 +7747,34 @@ body.theme-light {
   --icon-accent: var(--accent-text);
 }
 
-/* --- THE MARK: the "AJ" lockup (v227) -------------------------------------
-   From handoff/00-START-HERE.md §1, verbatim. This supersedes THE CUT, whose
-   component and per-context overrides are removed below.
-
-   text-indent IS NOT OPTIONAL. letter-spacing adds its space AFTER the last
-   letter too, so a centred word drifts left by exactly one space unless the
-   same value is given back as text-indent. The spec calls this "the most common
-   mistake in tracked-out logos", and it is invisible until you measure it.
-
-   dir="ltr" is on the container in the markup, in BOTH languages: the mark is
-   Latin and does not mirror. */
+/* --- THE MARK: the ember barbell, alone (v415) ---------------------------
+   The in-app logo is brandLockup() in js/ui.js: the whole barbell and nothing
+   beside it (owner, on the sign-in card's VAULT / TRAIN: «شيلهم خلص»). From
+   v227 to v414 a wordmark followed it — VAULT in Archivo 800 over TRAIN in
+   JetBrains Mono — and its rules lived here; they went with it, and so did
+   Archivo from index.html's font download. Contract 72 refuses a rule for the
+   retired .bl-name / .bl-sub / .bl-text coming back. */
 .brand-lockup {
   display: inline-flex;
   align-items: center;
+  /* An inline box with no text sits ON the parent's baseline and keeps the
+     font's descender under it: the sign-in title measured 63px around a 52px
+     mark. Top-aligned, the line box is the mark's own height. */
+  vertical-align: top;
 }
+/* On the sign-in card the old lockup's words hung 38px above the subtitle and
+   rode 8px into the language toggle. The barbell alone is a BLOCK here (no line
+   box, so the title's 39px line height cannot shift it), centred: 20px under
+   the toggle (the toggle's own margin), 16px above the subtitle (these 12 + the
+   subtitle's 4). Toggle to subtitle is 88px against v414's 82.5px, so the
+   fields sit 5.5px lower than before. */
+.auth-title .brand-lockup { display: flex; width: max-content; margin: 0 auto 12px; }
 /* The barbell's three roles (v413): the same fills as icons/icon.svg in both
    themes. Contract 72 holds these three rules and the rectangles to the glyph. */
 .brand-lockup .bl-mark { display: block; flex: none; }
 .bm-o { fill: var(--mark-outer); }
 .bm-i { fill: var(--mark-inner); }
 .bm-s { fill: var(--text); }
-.brand-lockup .bl-text {
-  display: flex; flex-direction: column; align-items: center; gap: 2px;
-}
-.brand-lockup .bl-name {
-  font-family: Archivo, sans-serif; font-weight: 800;   /* Archivo IS loaded at 800 — the one real weight above 700 in the app */
-  letter-spacing: .2em; text-indent: .2em;
-  line-height: 1; color: var(--text);
-  white-space: nowrap;
-}
-.brand-lockup .bl-sub {
-  font-family: 'JetBrains Mono', monospace;
-  letter-spacing: .3em; text-indent: .3em;
-  line-height: 1; color: var(--accent);
-  white-space: nowrap;
-}
-.brand-splash .bl-text { gap: 4px; }
 
 /* The top bar hosts the mark at header size. It is deliberately SMALLER than
    the 36px settings button opposite it — stated in the spec, not an accident. */

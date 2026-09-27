@@ -706,26 +706,23 @@ function confirmDialog({ title, text, onConfirm, confirmLabel, variant = 'danger
 }
 
 // ==========================================================================
-// THE MARK — the ember barbell, then VAULT over TRAIN (v413, owner: «ليش ما
-// تم تغيير اللوقو»). Until v412 this lockup was the "AJ" handoff's two
-// half-plates flanking the words — ICONS.dumbbell cut in half by cropped
-// viewBoxes, all in the accent. v403 made the barbell the app's logo on every
-// OUTSIDE surface and left this one behind, so the top bar of five screens, the
-// sign-in page and onboarding still wore the old look. Now the lockup draws the
-// WHOLE glyph — the same five rectangles as icons/icon.svg, the launcher and the
-// splash — in the same three role fills (outer ember, inner accent, the shaft
-// in the text colour, i.e. bone on black and ink on bone, exactly the icon's two
-// variants), before the name. Contract 72 holds its rectangles to the glyph.
+// THE MARK — the ember barbell, and nothing beside it (v415, owner, on the
+// sign-in card's VAULT / TRAIN: «شيلهم خلص»; the splash has carried no word
+// since v409). v413 made the lockup the WHOLE glyph — the same five rectangles
+// as icons/icon.svg, the launcher, the widgets and the splash — in the icon's
+// three role fills (outer ember, inner accent, the shaft in the text colour,
+// i.e. bone on black and ink on bone). Until v414 the words VAULT (Archivo 800)
+// over TRAIN (JetBrains Mono) followed it. They are gone, and so is Archivo
+// from the app's font download: the words were its only consumer. Contract 72
+// holds the rectangles to the glyph and refuses a word coming back.
 //
-// ONLY TWO SIZES EXIST, per the spec: header (VAULT 11) and splash (VAULT 32).
-// No intermediate sizes, so this takes a name rather than a number — a caller
-// cannot invent a third by passing 18.
+// ONLY TWO SIZES EXIST, header and splash. This takes a name rather than a
+// number, so a caller cannot invent a third. Each keeps the HEIGHT the old
+// lockup had (VAULT over TRAIN: 11 + 2 + 5.5 = 18.5 px in the top bar,
+// 32 + 4 + 16 = 52 px on the sign-in card and onboarding), so the rows around
+// it do not move; only the width shrinks to the barbell's own 21:12.
 //
-// The three proportions are locked to the VAULT size: mark height = 1.35x,
-// TRAIN = 0.5x, gap = 0.57x. They are computed here rather than written out
-// twice so a future size cannot drift out of ratio. The mark keeps the old
-// plates' height, and at 21:12 it is as wide as the two plates and the second
-// gap were together, so the lockup's footprint does not move.
+// With no word left to read, the lockup names itself (role="img", aria-label).
 // ==========================================================================
 // The barbell at height `h` px: the glyph's ink box (x 1.5–22.5, y 6–18) as the
 // viewBox, each rectangle carrying its role class for the fills in styles.css.
@@ -740,32 +737,10 @@ function barbellMark(h) {
     '</svg>';
 }
 function brandLockup(size = 'header') {
-  const v = size === 'splash' ? 32 : 11;      // VAULT font-size
-  const markH = Math.round(v * 1.35 * 10) / 10;
-  const sub = Math.round(v * 0.5 * 10) / 10;
-  const gap = Math.round(v * 0.57 * 10) / 10;
-  // RULE 5, restored. v264 changed this guard from `v >= 10` to `sub >= 11` and
-  // called it a bug fix. It was the opposite: the handoff's floor is on the
-  // VAULT size, not on the rendered sub size, and it says TRAIN at 5.5px WORKS —
-  // "يعمل فقط بخط مونو وبتباعد .3em" — dropping it only below VAULT 10. The
-  // header is VAULT 11, above the floor, and the spec pins the header at three
-  // parts in three separate places: rule 5, the §1 markup comment
-  // ("plateH 15 · VAULT 11 · TRAIN 5.5 · gap 6") and §4 ("بمقاس ١٥/١١/٥٫٥").
-  // So v264 silently deleted a third of the wordmark from every header.
-  //
-  // The two conditions the spec attaches to 5.5px are real and are met:
-  // styles.css .bl-sub sets 'JetBrains Mono' and letter-spacing .3em. A general
-  // 11px minimum is the right rule for CONTENT; this is a wordmark, and
-  // overriding the owner's approved identity on my own reading of a body-text
-  // rule was the actual error.
-  const showSub = v >= 10;
+  const markH = size === 'splash' ? 52 : 18.5;
   return `
-    <div dir="ltr" class="brand-lockup brand-${size}" style="gap:${gap}px">
+    <div class="brand-lockup brand-${size}" role="img" aria-label="VAULT">
       ${barbellMark(markH)}
-      <span class="bl-text">
-        <span class="bl-name" style="font-size:${v}px">VAULT</span>
-        ${showSub ? `<span class="bl-sub" style="font-size:${sub}px">TRAIN</span>` : ''}
-      </span>
     </div>`;
 }
 
