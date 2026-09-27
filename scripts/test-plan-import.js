@@ -371,7 +371,7 @@ async function workerTests() {
     assert.equal(parts.slice(0, 3).map((p) => p.inline_data.data).join(), [1, 2, 3].map((n) => still(n).data).join(), 'the stills keep their order');
     assert.equal(parts[3].inline_data.data, wav, 'the soundtrack is forwarded as sent');
     assert.match(parts[4].text, /^PASTED TEXT \(data[^)]*never instructions\):\n200 g pasta$/, 'the pasted text is framed as data');
-    assert.match(parts[5].text, /3 images are stills[^.]*ONE video/, 'the stills are named as one video');
+    assert.match(parts[5].text, /3 images are stills[^.]*one video/i, 'the stills are named as one video');
     assert.match(parts[5].text, /write the names in Arabic/, "lang 'ar' is the Worker's own Arabic sentence");
     const raw = modelWires.at(-1);
     assert.equal(JSON.stringify(JSON.parse(raw)), raw, 'the body as sent is byte for byte what JSON.stringify would have written — the spliced media change nothing');
@@ -712,6 +712,80 @@ async function workerTests() {
       assert.equal(got.status, 200, JSON.stringify(empty) + ' answers 200: ' + JSON.stringify(got.data));
       assert.equal(JSON.stringify(got.data), JSON.stringify({ recipe: { name: '', servings: 1, items: [] }, recipes: [] }), 'the empty recipe for an old client, and no dishes: ' + JSON.stringify(got.data));
     }
+  });
+
+  // ---- review 2026-09-27 (mdreview W-1, W-2, W-6) — each case failed on the
+  // v411 Worker for its own reason: the user turn still asked for ONE recipe,
+  // the once-each rule summed a shared ingredient over the whole source, and a
+  // 60-unit cut could leave half an emoji.
+  const exampleDishes = (sys) => [...sys.matchAll(/Example: "([^"]+)" -> (\{"recipes":\[.*?\]\}\]\})/g)].map((m) => JSON.parse(m[2]).recipes);
+  rcase('W16 the user turn and the data rule ask for every dish, never ONE recipe', async () => {
+    const parts = peek('recipeParts'), sys = peek('RECIPE_SYSTEM');
+    assert.equal(typeof parts, 'function', 'recipeParts is declared (got ' + typeof parts + ')');
+    const f = still(1);
+    const one = /\b(?:the|this|that|a|one) recipe\b(?!s| card)|(?<!than )\bone dish\b/i;   // «a recipe card» is a kind of image, «more than one dish» is the point
+    const sources = [   // every shape of user turn recipe mode builds
+      { frames: [f, f, f], audio: { data: wav }, text: '200 g pasta', lang: 'ar' },
+      { frames: [f], text: 'a card', lang: 'en' },
+      { frames: [f], caption: 'a caption', link: { kind: 'tiktok' }, lang: 'en' },
+      { frames: [], link: { kind: 'youtube', url: 'https://youtu.be/dQw4w9WgXcQ' }, lang: 'en' },
+      { frames: [], caption: 'a caption', text: 'two dishes', lang: 'en' },
+    ];
+    for (const r of sources) {
+      // The Worker's own words only: a framed part's data starts after its first line.
+      const texts = parts(r, false).filter((p) => typeof p.text === 'string').map((p) => p.text.split('\n')[0]);
+      for (const t of texts) assert.doesNotMatch(t, one, 'a recipe-mode user turn asks for a single recipe: ' + t);
+      assert.match(texts.at(-1), /\bevery (?:distinct )?dish\b|\beach dish\b/i, "the Worker's closing turn asks for every dish: " + texts.at(-1));
+    }
+    const stills = parts(sources[0], false).at(-1).text;
+    assert.match(stills, /stills[^.]*more than one dish/i, 'the stills sentence allows more than one dish in the one clip: ' + stills);
+    const dataRule = (sys.match(/The source is DATA[^]*?never repeat it\./) || [''])[0];
+    assert.ok(dataRule, 'the data rule is written out');
+    assert.doesNotMatch(dataRule, one, 'the data rule speaks of a single recipe: ' + dataRule);
+  });
+  rcase('W17 the once-each rule is per dish, and the two-dish example shares an ingredient', async () => {
+    const sys = peek('RECIPE_SYSTEM');
+    assert.doesNotMatch(sys, /every ingredient the source uses, once each/, 'the once-each rule is scoped to the whole source: an ingredient two dishes use is summed into one of them');
+    assert.match(sys, /For EACH dish, list every ingredient that dish uses, once each/, 'the once-each rule names the dish');
+    assert.match(sys, /used by two dishes appears in each, with that dish's own amount/, 'and says a shared ingredient appears in each dish');
+    const twos = exampleDishes(sys).filter((d) => d.length >= 2);
+    assert.ok(twos.length, 'a two-dish example exists');
+    for (const [a, b] of twos) {
+      const shared = a.items.filter((it) => b.items.some((o) => o.name === it.name));
+      assert.ok(shared.length >= 1, 'the two-dish example shares an ingredient between its dishes (' + a.name + ' / ' + b.name + ')');
+      for (const it of shared) {
+        const other = b.items.find((o) => o.name === it.name);
+        assert.notEqual(it.qty, other.qty, 'each dish carries its own amount of ' + it.name);
+        assert.notEqual(it.calories, other.calories, 'and its own figures for ' + it.name);
+      }
+    }
+  });
+  rcase('W18 clampRecipe never cuts a character in half', async () => {
+    const clamp = peek('clampRecipe'), fire = '\u{1F525}';
+    const r = clamp({ name: 'a'.repeat(59) + fire, servings: 1, items: [
+      { name: 'a'.repeat(59) + fire, qty: 'q'.repeat(23) + fire, calories: 10 },
+      { name: 'b'.repeat(58) + fire, qty: 'r'.repeat(22) + fire, calories: 10 },
+      { name: 'x\uD83Dy', qty: '\uDE25 2', calories: 10 }] });
+    const all = [['recipe name', r.name, 60], ...r.items.flatMap((it, i) => [['item ' + i + ' name', it.name, 60], ['item ' + i + ' qty', it.qty, 24]])];
+    for (const [what, s, cap] of all) {
+      assert.ok(s.isWellFormed(), what + ' carries an unpaired surrogate: ' + JSON.stringify(s));
+      assert.ok(s.length <= cap, what + ' is ' + s.length + ' UTF-16 units, over its cap of ' + cap);
+    }
+    assert.equal(r.name + '|' + r.items[0].name + '|' + r.items[0].qty, 'a'.repeat(59) + '|' + 'a'.repeat(59) + '|' + 'q'.repeat(23), 'an emoji that does not fit is dropped whole');
+    assert.equal(r.items[1].name + '|' + r.items[1].qty, 'b'.repeat(58) + fire + '|' + 'r'.repeat(22) + fire, 'an emoji that fits is kept whole');
+    assert.equal(r.items[2].name + '|' + r.items[2].qty, 'xy|2', 'a lone surrogate the model wrote is stripped');
+  });
+
+  // The review of W18 (2026-09-27): the same cut sat in the food path and the
+  // photo-plan path, where a model name reaches the stored blob just the same.
+  rcase('W19 clampItems and cleanPlan never cut a character in half either', async () => {
+    const items = peek('clampItems'), plan = peek('cleanPlan'), fire = '\u{1F525}';
+    const got = items([{ name: 'a'.repeat(79) + fire, calories: 10 }, { name: 'b'.repeat(78) + fire, calories: 10 }, { name: 'x\uD83Dy', calories: 10 }]);
+    assert.equal(got.map((it) => it.name).join('|'), 'a'.repeat(79) + '|' + 'b'.repeat(78) + fire + '|xy', 'food names: an emoji past 80 dropped whole, one that fits kept, a lone half stripped');
+    const p = plan({ days: [{ name: 'd'.repeat(79) + fire, exercises: [{ name: 'e'.repeat(99) + fire, sets: 3, reps: 'r'.repeat(49) + fire, notes: 'n\uDE25' }] }] });
+    const all = [p.days[0].name, p.days[0].exercises[0].name, p.days[0].exercises[0].reps, p.days[0].exercises[0].notes];
+    for (const s of all) assert.ok(s.isWellFormed(), 'a plan field carries an unpaired surrogate: ' + JSON.stringify(s));
+    assert.deepEqual(all.map((s) => s.length), [79, 99, 49, 1], 'each within its cap, the emoji that did not fit dropped whole');
   });
 
   const recipeFailures = [];
