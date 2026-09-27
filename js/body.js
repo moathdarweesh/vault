@@ -4,17 +4,23 @@
 // The third file out of js/app.js. js/food.js was a domain with no lateral
 // edges; js/ui.js was the floor. This is the rest of what the body DID, as
 // opposed to what was planned (the program) or eaten (food): a night of sleep,
-// a morning weight, a cardio session. All three are day entries — one row per
-// calendar day — which is why they share a renderer.
+// a morning weight, a cardio session. All three are day entries — rows dated
+// to a calendar day — which is why they share a file.
 //
-// ⚠️ THE THREE GO TOGETHER BECAUSE dayLedgerHtml HAS EXACTLY TWO CALLERS, and
-// they are renderSleep and renderCardio. Split sleep from cardio and that
-// renderer has to stay behind in app.js as a shared helper forever; kept
-// together it is INTERNAL to this file. A boundary is better when it turns a
-// shared helper into a private one, and worse when it does the reverse.
+// ⚠️ SLEEP AND CARDIO GO TOGETHER BECAUSE THEIR TWO DATED LOGS SHARE ONE FRAME.
+// The day ledger (dayLedgerHtml) that hung under both pages is gone: each page
+// now opens a dated log from its header, the food log's model — the bar with
+// Back, the day arrows, that day's card, that day's rows — and
+// renderSleepLog/renderCardioLog draw that frame through logTopHtml,
+// logDayNavHtml, bindLogDayNav and logFutureHtml. Split sleep from cardio and
+// those four have to live in app.js as shared helpers forever; kept together
+// they are INTERNAL to this file. A boundary is better when it turns a shared
+// helper into a private one, and worse when it does the reverse. (The food
+// log keeps its own arrows in js/food.js; they predate these.)
 //
 // ⚠️ THE LATERAL EDGES IN — measured (v401), not one as this header said until
-// then. Beside the router's renderCardio/renderSleep, js/app.js reaches three
+// then. Beside the router's renderCardio/renderSleep (and, since the logs,
+// renderCardioLog/renderSleepLog), js/app.js reaches three
 // names here from five callers: resolveCardioType() from renderProgram, renderHome
 // and renderDay (every screen that prints a cardio row names it the same way);
 // openCardioScheduleModal() from renderProgram (Program is where cardio is
@@ -194,59 +200,86 @@ function openWeightSheet() {
 // ==========================================================================
 // CARDIO
 // ==========================================================================
-// DAY LEDGER — the sleep and cardio histories, one row per DAY, newest first.
-// The owner's ask: the days themselves must be visible, and a day with nothing
-// logged must say so in words — not vanish from a list that shows only entries.
-// Each empty day carries a + that opens the log modal ON that date.
-function ledgerDayIso(daysBack) {
-  const d = new Date(); d.setHours(12, 0, 0, 0); d.setDate(d.getDate() - daysBack);
-  const z = (n) => String(n).padStart(2, '0');
-  return d.getFullYear() + '-' + z(d.getMonth() + 1) + '-' + z(d.getDate());
+// THE LOG FRAME — the sleep and cardio logs, one DAY at a time (the owner,
+// 2026-09-27, on the Sleep page: the sleep log should follow the food log's
+// idea — in where it lives, in the day, and in the details of that day's
+// sleep; then on the Cardio page: the same for the cardio log). The day
+// ledger that hung under both pages is gone. Each page carries its log's link
+// in the header, exactly as Food does, and the log is a dated screen: the bar
+// with Back and the log's name, the day arrows (next stops at today), that
+// day's card, one add that logs to THAT day, that day's rows. The day arrives
+// on ctx.date (contract 67) and the arrows move it in place.
+//
+// show-title in the template: a log has no .page-title (its h1 is sr-only,
+// written by each renderer so contract 43 sees it), so the bar title is never
+// redundant — and the arrows and the sheets re-render here without
+// renderView's syncDetailTopTitle.
+function logTopHtml(title) {
+  return `
+    <div class="detail-top show-title">
+      <button class="back-btn" data-back aria-label="${escapeHtml(t('back'))}">${icon('back', 20)}</button>
+      <div class="detail-top-title">${escapeHtml(title)}</div>
+    </div>`;
 }
-function ledgerDayLabel(iso, daysBack) {
-  if (daysBack === 0) return t('today');
-  if (daysBack === 1) return t('yesterday');
-  const keys = ['dow_sun_full', 'dow_mon_full', 'dow_tue_full', 'dow_wed_full', 'dow_thu_full', 'dow_fri_full', 'dow_sat_full'];
-  return t(keys[new Date(iso + 'T12:00:00').getDay()]);
+// The day between the arrows: «Today», or the date. prev = back(◀), next =
+// chevronRight(▶); RTL mirrors both in CSS (body[dir="rtl"] .calendar-nav-btn
+// svg), never by swapping icons. data-day-step, not ids: the food log's arrows
+// are #day-prev/#day-next, and three hidden sections holding one id is three
+// nodes answering one getElementById.
+function logDayNavHtml(date) {
+  const isToday = date >= todayISO();
+  return `
+    <div class="day-nav">
+      <button type="button" class="calendar-nav-btn" data-day-step="-1" aria-label="${escapeHtml(t('prev_day'))}">${icon('back', 20)}</button>
+      <div class="day-nav-label">${escapeHtml(isToday ? t('today') : formatDate(date))}</div>
+      <button type="button" class="calendar-nav-btn" data-day-step="1" aria-label="${escapeHtml(t('next_day'))}"${isToday ? ' disabled' : ''}>${icon('chevronRight', 20)}</button>
+    </div>`;
 }
-function dayLedgerHtml({ entries, days, renderEntry, emptyText, addAttr }) {
-  const byDate = {};
-  entries.forEach((x) => { (byDate[x.date] = byDate[x.date] || []).push(x); });
-  const rows = [];
-  // Anything dated AFTER today (a mistyped year, a picker slip) is still shown —
-  // above today — so it can be edited or deleted; it used to be unreachable.
-  const todayIso = ledgerDayIso(0);
-  [...new Set(entries.filter((x) => x.date > todayIso).map((x) => x.date))].sort().reverse().forEach((iso) => {
-    rows.push(`
-      <div class="ledger-day is-future">
-        <div class="ledger-date"><span class="ledger-dow">${escapeHtml(formatDate(iso))}</span><span class="ledger-num">${escapeHtml(t('date_future_tag'))}</span></div>
-        <div class="data-list">${byDate[iso].map(renderEntry).join('')}</div>
-      </div>`);
-  });
-  for (let d = 0; d < days; d++) {
-    const iso = ledgerDayIso(d);
-    const list = byDate[iso] || [];
-    rows.push(`
-      <div class="ledger-day${list.length ? '' : ' is-empty'}">
-        <div class="ledger-date">
-          <span class="ledger-dow">${escapeHtml(ledgerDayLabel(iso, d))}</span>
-          <span class="ledger-num">${escapeHtml(formatDate(iso))}</span>
-        </div>
-        ${list.length
-          ? `<div class="data-list">${list.map(renderEntry).join('')}</div>`
-          : `<button type="button" class="ledger-add" ${addAttr}="${iso}">${icon('plus', 14)} <span>${escapeHtml(emptyText)}</span></button>`}
-      </div>`);
-  }
-  const windowStart = ledgerDayIso(days - 1);
-  const older = entries.filter((x) => x.date < windowStart).length;
-  // ⚠️ AN EMPTY DAY IS INFORMATION ONLY AS A GAP. Between days that have
-  // something, "nothing on the 17th" is a fact worth a row and a + to fill it.
-  // With nothing in the window at all it is one sentence repeated `days` times,
-  // under a heading that says «all sessions» and over three stat boxes already
-  // reading 0 — which is what the owner saw and called illogical. The caller
-  // shows one empty state instead. Nothing about the populated case changes.
-  const empty = !entries.some((x) => x.date >= windowStart);
-  return { html: rows.join(''), more: older > 0 || days < 28, empty };
+function bindLogDayNav(el, render) {
+  el.querySelectorAll('[data-day-step]').forEach((b) => b.addEventListener('click', () => {
+    const step = Number(b.dataset.dayStep);
+    // todayISO() at CLICK time: a log left open across midnight gains a day.
+    if (step > 0 && viewContext.date >= todayISO()) return;
+    viewContext.date = addDaysISO(viewContext.date, step);
+    render(el);
+    // The render replaced the arrow that had focus: put it back on the same
+    // arrow, or on «previous» once «next» has stopped at today — never <body>,
+    // which sent a keyboard or screen-reader user back through the top bar
+    // for every day stepped (the review of the logs).
+    const again = el.querySelector('[data-day-step="' + step + '"]');
+    const to = again && !again.disabled ? again : el.querySelector('[data-day-step="-1"]');
+    if (to) to.focus({ preventScroll: true });
+  }));
+}
+// After a sheet or a tick repaints a page or a log, the control closeModal()
+// handed focus back to has just been detached: land on the view's add or —
+// a logged night's log has none — on its first row, never on <body>. Reached
+// through currentView, not `.view.active` (the lint rule on renders).
+function focusLogHome() {
+  const v = document.querySelector('.view[data-view="' + currentView + '"]');
+  const to = v && (v.querySelector('.log-add') || v.querySelector('[data-edit-sleep], [data-edit-cardio]'));
+  if (to) to.focus({ preventScroll: true });
+}
+// A day the arrows can reach is never after today — so a row DATED after
+// today (a mistyped year, a picker slip; the sheets refuse one now, an old
+// blob or a backup may still hold it) would be unreachable. Today's log lists
+// them under their own date, where they can still be opened and corrected or
+// deleted — what the ledger did above «today» since v299.
+function logFutureHtml(date, entries, renderEntry) {
+  const now = todayISO();
+  if (date !== now) return '';
+  const later = entries.filter((x) => x.date > now);
+  return [...new Set(later.map((x) => x.date))].sort().map((iso) => `
+    <div class="ledger-day is-future">
+      <div class="ledger-date"><span class="ledger-dow">${escapeHtml(formatDate(iso))}</span><span class="ledger-num">${escapeHtml(t('date_future_tag'))}</span></div>
+      <div class="data-list">${later.filter((x) => x.date === iso).map(renderEntry).join('')}</div>
+    </div>`).join('');
+}
+// The log's day, clamped: a missing day is today, and so is one after it (a
+// deep link naming tomorrow would draw a day the arrows then refuse to leave).
+function logDay() {
+  if (!viewContext.date || viewContext.date > todayISO()) viewContext.date = todayISO();
+  return viewContext.date;
 }
 // Module scope, not nested in renderCardio: the Program tab and Home both render
 // a cardio row now, and a second copy of this mapping would be an agreement
@@ -292,11 +325,14 @@ function newestRecord(list) {
 // as two segments with a seam in the well's own colour, so «two walks» shows
 // without a label. Every bar carries --k, its
 // column, for the arrival stagger; --v and --b are its height and its base.
-// Nothing here is tappable — no border, no control; the exact figures live in
-// the ledger under it. The goal line comes first in the DOM (z-index lifts it
-// over the bars) so the seven wells stay :nth-child-addressable. A day past the
-// scale (the caller caps it) fills its well to the top and stops there — the
-// figure above and the ledger below still say the whole of it.
+// No border and no control: a well is not a button. A column with an `iso`
+// carries it as data-trk-day, and a TAP on a day that has happened opens that
+// day's cardio log (renderCardio listens) — a pointer shortcut to the exact
+// figures, which the header link and the log's arrows reach by keyboard too.
+// The goal line comes first in the DOM (z-index lifts it over the bars) so
+// the seven wells stay :nth-child-addressable. A day past the scale (the
+// caller caps it) fills its well to the top and stops there — the figure
+// above and the day's log still say the whole of it.
 function trackHtml({ cols, scale, line, met, ariaLabel }) {
   const pct = (v) => Math.round(v / scale * 1000) / 10;
   const wells = cols.map((c, k) => {
@@ -308,9 +344,9 @@ function trackHtml({ cols, scale, line, met, ariaLabel }) {
       base += seg;
       return h;
     }).join('');
-    return `<span class="trk-col${c.future ? ' is-future' : ''}">${segs}</span>`;
+    return `<span class="trk-col${c.future ? ' is-future' : ''}"${c.iso ? ` data-trk-day="${escapeHtml(c.iso)}"` : ''}>${segs}</span>`;
   }).join('');
-  const days = cols.map((c) => `<span class="trk-day${c.today ? ' is-today' : ''}${c.future ? ' is-future' : ''}">${escapeHtml(c.label)}</span>`).join('');
+  const days = cols.map((c) => `<span class="trk-day${c.today ? ' is-today' : ''}${c.future ? ' is-future' : ''}"${c.iso ? ` data-trk-day="${escapeHtml(c.iso)}"` : ''}>${escapeHtml(c.label)}</span>`).join('');
   return `
     <div class="trk-bars${met ? ' is-met' : ''}" role="img" aria-label="${escapeHtml(ariaLabel)}"><span class="trk-goal" style="bottom:${pct(line)}%"></span>${wells}</div>
     <div class="trk-days" aria-hidden="true">${days}</div>`;
@@ -410,7 +446,7 @@ function renderCardio(el) {
     const iso = isoOf(d);
     const segs = byDay[iso] || [];
     const sum = segs.reduce((a, b) => a + b, 0);
-    cols.push({ label: trackDayLabel(iso), segs, sum, hit: sum >= pace, today: iso === todayIso, future: iso > todayIso });
+    cols.push({ iso, label: trackDayLabel(iso), segs, sum, hit: sum >= pace, today: iso === todayIso, future: iso > todayIso });
   }
   const scale = Math.min(Math.max(2 * pace, ...cols.map((c) => c.sum)), 4 * pace);
   const met = weekMin >= goal;
@@ -418,51 +454,21 @@ function renderCardio(el) {
   // A day still to come is not «nothing»: the label reads only the days that
   // have happened (the future wells are dimmed for the eye).
   const trackAria = t('trk_aria_cardio') + ': ' + cols.filter((c) => !c.future).map((c) => `${c.label} ${c.sum ? spokenMinutes(c.sum) : t('trk_none')}`).join(t('list_sep'));
-  // The sheet opens on the type of the newest session; «سجّل» wears its glyph
-  // so the door says what it will preselect.
-  const lastUsed = (newestRecord(list) || {}).type;
-  const lastType = resolveCardioType(DB.cardioTypes.findById(lastUsed) ? lastUsed : 'treadmill');
-  const latinUnit = !/[\u0600-\u06FF]/.test(t('unit_min'));
-
-  const cardioDays = viewContext.cardioDays || 7;
-  // THE FIGURE ROW (v395), the sleep row's shape: the minutes first, the type
-  // and its calories beside them, the type's own tile at the end. The row is
-  // the door to the session's sheet and delete lives inside it (v394).
-  //
-  // Coerced, not interpolated raw: duration and calories arrive from the synced
-  // blob and from imported backups, both untrusted, and land in innerHTML — a
-  // number field can only ever be a number, which is stricter than escaping.
-  // unit_min («د»), never t('minutes') — that is the COLUMN LABEL «الدقائق», and
-  // after a numeral the definite article is not Arabic (the v383 trap). A zero
-  // calorie figure (a manual walk logged without one) is not drawn: «0 سعرة»
-  // is not a fact about the walk.
-  const renderCardioEntry = (c) => {
-    const tm = resolveCardioType(c.type);
-    const min = Math.round(Number(c.duration) || 0);
-    const cal = Math.round(Number(c.calories) || 0);
-    const watch = c.source === 'health';
-    // The name reads the way the row reads: the figure, then the type.
-    const label = `${formatDate(c.date)} — ${fmtNum(min)} ${t('unit_min')} — ${tm.label}${cal > 0 ? ` — ${fmtNum(cal)} ${t('cal')}` : ''}${watch ? ` — ${t('from_watch')}` : ''}`;
-    return `
-      <button type="button" class="data-row fig-row" data-edit-cardio="${escapeHtml(c.id)}" aria-label="${escapeHtml(label)}">
-        <div class="fig-row-main">
-          ${figRowFig(fmtNum(min), t('unit_min'))}
-          <div class="fig-row-text">
-            <div class="fig-row-title">${escapeHtml(tm.label)}</div>
-            ${cal > 0 || watch ? `<div class="fig-row-sub">${cal > 0 ? `<span class="num">${fmtNum(cal)}</span> ${t('cal')}` : ''}${cal > 0 && watch ? ' · ' : ''}${watch ? escapeHtml(t('from_watch')) : ''}</div>` : ''}
-          </div>
-          <div class="data-icon ${tm.cls} fig-row-tile" aria-hidden="true">${icon(tm.iconName, 18)}</div>
-        </div>
-      </button>
-    `;
-  };
-  const cardioLedger = dayLedgerHtml({ entries: list, days: cardioDays, renderEntry: renderCardioEntry, emptyText: t('ledger_no_cardio'), addAttr: 'data-ledger-cardio' });
+  const latinUnit = !/[؀-ۿ]/.test(t('unit_min'));
 
   el.innerHTML = `
     ${vaultBar()}
 
+    <!-- The log's link sits where Food's does: a text link at the header's end,
+         with the mirrored chevron. The day ledger that hung under the card
+         lives in the cardio log now, one day at a time. -->
     <div class="page-header">
-      <h1 class="page-title">${t('cardio')}</h1>
+      <div class="row-between">
+        <h1 class="page-title">${t('cardio')}</h1>
+        <div class="header-links">
+          <button type="button" class="link-btn" id="cardio-log-link">${t('cardio_log')} <span class="icon-mirror">${icon('chevronRight', 16)}</span></button>
+        </div>
+      </div>
     </div>
 
     <div class="card trk-hero">
@@ -483,28 +489,23 @@ function renderCardio(el) {
       ${trackHtml({ cols, scale, line: pace, met, ariaLabel: trackAria })}
     </div>
 
-    <!-- With no session at all, the hero at zero and «سجّل» already say it:
-         no «all sessions» header over nothing, no sentence, no door to older
-         days that are just as empty. -->
-    <div class="row-between mb-16">
-      ${list.length ? `<div class="section-title" style="margin:0">${t('all_sessions')}</div>` : ''}
-      <button class="btn btn-primary" id="add-cardio-btn" aria-label="${escapeHtml(t('log') + ' — ' + lastType.label)}">${icon(lastType.iconName, 18)} ${t('log')}</button>
-    </div>
-
-    ${!list.length ? '' : cardioLedger.empty
-      ? emptyState({ title: t('ledger_empty_cardio') })
-      : `<div class="ledger">${cardioLedger.html}</div>`}
-    ${list.length && cardioLedger.more ? `<button type="button" class="btn btn-ghost btn-block" id="more-cardio-days">${t('ledger_older')}</button>` : ''}
+    <!-- ONE add, under the card, on every state of the page: logging stays one
+         tap from Cardio now that the ledger's own add slots are gone. -->
+    ${cardioLogBtnHtml(list, 'add-cardio-btn')}
   `;
-  $('#more-cardio-days', el)?.addEventListener('click', () => { viewContext.cardioDays = cardioDays + 7; renderCardio(el); });
-  el.querySelectorAll('[data-ledger-cardio]').forEach((b) => b.addEventListener('click', () => openCardioModal(null, b.dataset.ledgerCardio)));
 
-  // Single add button: the labeled "Log" button (the top-bar + was a duplicate).
+  $('#cardio-log-link', el).addEventListener('click', () => navigate('cardiolog', { date: todayISO() }));
+  // A day's well (or its label) opens that day's log. A day still to come has
+  // no log to open — the arrows stop at today — so its well stays inert, and
+  // the goal button inside the card keeps its own sheet.
+  $('.trk-hero', el).addEventListener('click', (e) => {
+    if (e.target.closest('button')) return;
+    const day = e.target.closest('[data-trk-day]');
+    if (!day || day.classList.contains('is-future')) return;
+    navigate('cardiolog', { date: day.dataset.trkDay });
+  });
   $('#add-cardio-btn', el).addEventListener('click', () => openCardioModal());
   $('#cardio-goal-btn', el).addEventListener('click', () => openGoalModal('cardio'));
-  el.querySelectorAll('[data-edit-cardio]').forEach((b) =>
-    b.addEventListener('click', () => openCardioModal(b.dataset.editCardio))
-  );
 
   // Pull the watch's newest exercise sessions on open. Health Connect sessions
   // already import into this very list (DB.cardio.importFromHealth, badged
@@ -512,6 +513,149 @@ function renderCardio(el) {
   // so opening Cardio directly showed whatever was cached last time. No-op on
   // web, no-op without permission, throttled to once per 20s; when it does bring
   // something new, Health re-renders this view itself.
+  if (typeof Health !== 'undefined' && Health.autoSync) Health.autoSync();
+}
+
+// «سجّل» — the page's and the log's one add. The sheet opens on the type of
+// the newest session, and the button wears that type's glyph so the door says
+// what it will preselect.
+function cardioLogBtnHtml(list, id) {
+  const lastUsed = (newestRecord(list) || {}).type;
+  const lastType = resolveCardioType(DB.cardioTypes.findById(lastUsed) ? lastUsed : 'treadmill');
+  return `<button type="button" class="btn btn-primary btn-block log-add" id="${id}" aria-label="${escapeHtml(t('log') + ' — ' + lastType.label)}">${icon(lastType.iconName, 18)} ${t('log')}</button>`;
+}
+
+// THE FIGURE ROW (v395), the sleep row's shape: the minutes first, the type
+// and its calories beside them, the type's own tile at the end. The row is
+// the door to the session's sheet and delete lives inside it (v394).
+//
+// Coerced, not interpolated raw: duration and calories arrive from the synced
+// blob and from imported backups, both untrusted, and land in innerHTML — a
+// number field can only ever be a number, which is stricter than escaping.
+// unit_min («د»), never t('minutes') — that is the COLUMN LABEL «الدقائق», and
+// after a numeral the definite article is not Arabic (the v383 trap). A zero
+// calorie figure (a manual walk logged without one) is not drawn: «0 سعرة»
+// is not a fact about the walk.
+function renderCardioEntry(c) {
+  const tm = resolveCardioType(c.type);
+  const min = Math.round(Number(c.duration) || 0);
+  const cal = Math.round(Number(c.calories) || 0);
+  const watch = c.source === 'health';
+  // The name reads the way the row reads: the figure, then the type.
+  const label = `${formatDate(c.date)} — ${fmtNum(min)} ${t('unit_min')} — ${tm.label}${cal > 0 ? ` — ${fmtNum(cal)} ${t('cal')}` : ''}${watch ? ` — ${t('from_watch')}` : ''}`;
+  return `
+    <button type="button" class="data-row fig-row" data-edit-cardio="${escapeHtml(c.id)}" aria-label="${escapeHtml(label)}">
+      <div class="fig-row-main">
+        ${figRowFig(fmtNum(min), t('unit_min'))}
+        <div class="fig-row-text">
+          <div class="fig-row-title">${escapeHtml(tm.label)}</div>
+          ${cal > 0 || watch ? `<div class="fig-row-sub">${cal > 0 ? `<span class="num">${fmtNum(cal)}</span> ${t('cal')}` : ''}${cal > 0 && watch ? ' · ' : ''}${watch ? escapeHtml(t('from_watch')) : ''}</div>` : ''}
+        </div>
+        <div class="data-icon ${tm.cls} fig-row-tile" aria-hidden="true">${icon(tm.iconName, 18)}</div>
+      </div>
+    </button>
+  `;
+}
+
+// THE DAY'S CARD in the instrument's language (.trk-fig, .trk-readouts): the
+// day's minutes as the figure, its calories as a labelled readout when there
+// are any, and the day's share of the weekly goal — the one figure here that
+// is not a sum of the rows under it. No count of sessions: the rows under the
+// card ARE the count. No distance: no cardio row carries one (DB.cardio keeps
+// type, date, duration and calories). The share is measured against the
+// CURRENT goal, as the food log's closed days are against the current
+// targets — none is stored per day.
+function cardioDayCardHtml(day) {
+  const min = Math.round(day.reduce((s, c) => s + (Number(c.duration) || 0), 0));
+  const cal = Math.round(day.reduce((s, c) => s + (Number(c.calories) || 0), 0));
+  const share = Math.round(min / DB.prefs.cardioGoal() * 100);
+  const latinUnit = !/[؀-ۿ]/.test(t('unit_min'));
+  return `
+    <div class="card trk-hero cl-day">
+      <div class="trk-fig">
+        <span class="trk-val"${latinUnit ? ' dir="ltr"' : ''}><span class="num trk-num">${fmtNum(min)}</span><span class="trk-unit">${escapeHtml(t('unit_min'))}</span></span>
+        ${share > 0 ? `<span class="trk-deltas"><span class="trk-delta">${escapeHtml(t('cardio_goal_share').replace('{p}', fmtNum(share)))}</span></span>` : ''}
+      </div>
+      ${cal > 0 ? `
+      <div class="trk-readouts">
+        <span class="trk-ro"><span class="trk-ro-lab">${t('calories')}</span><span class="num trk-ro-val">${fmtNum(cal)}</span></span>
+      </div>` : ''}
+    </div>`;
+}
+
+// The day's scheduled sessions still OWED — DB.cardioPlan.forDate, the join
+// Home's card reads. A DONE one is a real DB.cardio row carrying planId, so it
+// is already among the day's sessions and is not drawn twice. ONLY TODAY owes
+// a tick, as on Home: on a past day a tick back-wrote a session into a month
+// ago (every weekday of an old schedule, or of one with no createdAt from an
+// older blob), and once its toast had gone it could not be un-ticked — the
+// row's own delete would then remove a watch session the tick had only
+// claimed (the review of the logs). A schedule made later today owes nothing.
+function cardioOwedOn(iso) {
+  if (iso !== todayISO()) return [];
+  return DB.cardioPlan.forDate(iso).filter((r) => {
+    if (r.doneId) return false;
+    const made = r.createdAt ? new Date(r.createdAt) : null;
+    return !(made && !isNaN(made.getTime()) && isoOf(made) > iso);
+  });
+}
+// Home's owed row, one to one: the minutes, the type, the schedule named as
+// the row's source, and the TICK as the row's one square — the same control,
+// the same name, the same write (DB.cardioPlan.complete).
+function cardioOwedRowHtml(r) {
+  const tm = resolveCardioType(r.type);
+  return `
+    <div class="data-row fig-row">
+      <div class="fig-row-main">
+        ${figRowFig(fmtNum(r.duration), t('unit_min'))}
+        <div class="fig-row-text"><div class="fig-row-title">${escapeHtml(tm.label)}</div><div class="fig-row-sub">${t('cardio_sched')}</div></div>
+        <button type="button" class="cardio-do" data-cardio-done="${escapeHtml(r.id)}"
+                aria-label="${escapeHtml(t('cardio_mark_done_a11y').replace('{x}', tm.label))}">${icon('check', 20)}</button>
+      </div>
+    </div>`;
+}
+
+// THE CARDIO LOG — one day: the arrows, that day's card, the add that logs to
+// THAT day, then the day's sessions and anything its schedule still owes.
+function renderCardioLog(el) {
+  logDay();
+  const ctx = viewContext;
+  const all = DB.cardio.list();
+  const day = all.filter((c) => c.date === ctx.date);
+  const owed = cardioOwedOn(ctx.date);
+
+  el.innerHTML = `
+    ${logTopHtml(t('cardio_log'))}
+    <h1 class="sr-only">${t('cardio_log')}</h1>
+    ${logDayNavHtml(ctx.date)}
+    ${day.length ? cardioDayCardHtml(day) : owed.length ? '' : emptyState({ title: t('ledger_no_cardio') })}
+    ${cardioLogBtnHtml(all, 'add-cardiolog-btn')}
+    <div class="ledger" id="cardiolog-list">
+      ${day.length || owed.length ? `<div class="data-list">${day.map(renderCardioEntry).join('')}${owed.map(cardioOwedRowHtml).join('')}</div>` : ''}
+      ${logFutureHtml(ctx.date, all, renderCardioEntry)}
+    </div>
+  `;
+
+  bindLogDayNav(el, renderCardioLog);
+  $('#add-cardiolog-btn', el).addEventListener('click', () => openCardioModal(null, ctx.date));
+  el.querySelectorAll('[data-edit-cardio]').forEach((b) =>
+    b.addEventListener('click', () => openCardioModal(b.dataset.editCardio))
+  );
+  // The tick, as Home's: the row is re-read at CLICK time (a sync or another
+  // tab may have ticked it since this render), the write is the store's own
+  // complete() — which CLAIMS an unclaimed same-type session of the day rather
+  // than doubling it — and the toast offers the Undo that write returned.
+  $('#cardiolog-list', el).addEventListener('click', (e) => {
+    const btn = e.target.closest('[data-cardio-done]');
+    if (!btn) return;
+    const row = DB.cardioPlan.forDate(ctx.date).find((r) => r.id === btn.dataset.cardioDone);
+    if (!row || row.doneId) { renderCardioLog(el); return; }
+    const result = DB.cardioPlan.complete(row.id, ctx.date);
+    if (!result.ok) { convenienceError(result); return; }
+    offerUndo(t('cardio_sched_done'), result);
+    renderCardioLog(el);
+    focusLogHome();
+  });
   if (typeof Health !== 'undefined' && Health.autoSync) Health.autoSync();
 }
 
@@ -580,10 +724,10 @@ function openCardioModal(cardioId = null, presetDate = null) {
     </div>
   `);
 
-  // Delete lives here since v395 (the ledger row carries no controls) — the
-  // sleep sheet's shape exactly: confirmDialog replaces #modal-root, the
-  // ledger repaints through the router, and focus lands on «سجّل» because the
-  // repaint detached the row closeModal() had just focused.
+  // Delete lives here since v395 (the log row carries no controls) — the
+  // sleep sheet's shape exactly: confirmDialog replaces #modal-root, the log
+  // repaints through the router on the day it shows, and focus lands on
+  // «سجّل» because the repaint detached the row closeModal() had just focused.
   $('#delete-cardio-btn')?.addEventListener('click', () => {
     if (!existing) return;
     confirmDialog({
@@ -593,8 +737,7 @@ function openCardioModal(cardioId = null, presetDate = null) {
         DB.cardio.remove(existing.id);
         showToast(t('deleted'));
         renderView(currentView);
-        const home = document.getElementById('add-cardio-btn');
-        if (home) home.focus({ preventScroll: true });
+        focusLogHome();
       },
     });
   });
@@ -638,6 +781,7 @@ function openCardioModal(cardioId = null, presetDate = null) {
     }
     closeModal();
     renderView(currentView);
+    focusLogHome();
   });
 }
 
@@ -843,7 +987,7 @@ function sleepQuality(stages) {
   return { key, efficiency: Math.round(efficiency * 100) };
 }
 
-// The stage bar as the bottom EDGE of a ledger row — no radius, no wrap, 4px
+// The stage bar as the bottom EDGE of a sleep log row — no radius, no wrap, 4px
 // (v394). Renders nothing when the entry has no stage data (a manual entry, or
 // a source app that doesn't record stages); the caller then draws the empty
 // track, so every row keeps one shape and an empty edge honestly says «no stage
@@ -860,103 +1004,79 @@ function sleepStagesHtml(entry) {
   return `<div class="sl-bar sl-edge">${seg(deep, 'deep')}${seg(rem, 'rem')}${seg(light, 'light')}${seg(awake, 'awake')}</div>`;
 }
 
-function renderSleep(el) {
-  const list = DB.sleep.list();
-  const sleepDays = viewContext.sleepDays || 7;
-  // One night per date: the row written LAST (newestRecord's rule — createdAt,
-  // then store order). list[0] was the date's FIRST row, so a night corrected
-  // by adding a second row kept the ring, the verdict and the average on the
-  // older one.
+// One night per date: the row written LAST (newestRecord's rule — createdAt,
+// then store order). list[0] was the date's FIRST row, so a night corrected by
+// adding a second row kept the ring, the verdict and the average on the older
+// one.
+function sleepByNight(list) {
   const byNight = {};
   list.forEach((s) => { const cur = byNight[s.date]; if (!cur || String(s.createdAt || '') >= String(cur.createdAt || '')) byNight[s.date] = s; });
-  const latest = list.length ? byNight[list[0].date] : null;
+  return byNight;
+}
 
-  // THE RING (v410 — the owner, mid-build: «أريد نفس التغيير الذي حصل بصفحة
-  // الأكل يحصل هنا من ناحية التصميم»). The food log's miniature, for last
-  // night: ONE card, a 144px ring drawn with the calorie ring's own classes
-  // (r=54, C=339.29) and filled by last night against the sleep goal, the
-  // duration in its centre with the verdict under it as ONE line (the gap in
-  // the same line: «دون الهدف بـ0:30»). Beside it, compact rows in the
-  // .macro-track idiom: the bed → wake range (one ltr run), the 7-night
-  // average with its delta, and — when the watch sent stages — deep and
-  // efficiency as two short bars. No 7-night track: the ledger under the card
-  // already lists the nights, and the owner reads extra boxes as crowding.
-  // Less sleep is information and more is not a fault: nothing here is ever
-  // --danger, the ring carries no .over and its fill stops at the goal.
+// THE RING (v410 — the owner, mid-build: «أريد نفس التغيير الذي حصل بصفحة
+// الأكل يحصل هنا من ناحية التصميم»). The food log's miniature, for ONE night:
+// a 144px ring drawn with the calorie ring's own classes (r=54, C=339.29) and
+// filled by the night against the sleep goal, the duration in its centre with
+// the verdict under it as ONE line (the gap in the same line: «دون الهدف
+// بـ0:30»). Beside it, compact rows in the .macro-track idiom: the 7-night
+// average with its delta, and — when the watch sent stages — deep and
+// efficiency as two short bars. Less sleep is information and more is not a
+// fault: nothing here is ever --danger, the ring carries no .over and its fill
+// stops at the goal.
+//
+// ⚠️ ONE FUNCTION DRAWS IT FOR THE PAGE AND FOR THE LOG, so the two cannot
+// drift. The Sleep page (`page`) shows the NEWEST night under «last night»
+// with the goal control, and — its ledger gone — the night's bed → wake range
+// and its source as the first row. The log shows the night of the day it is
+// on, with no goal control (the food log's miniature has no pencil either)
+// and no range: the night's own row sits right under the card and prints both
+// (no redundant text). A night before today reads as a CLOSED record, the
+// closed food day's treatment: thinner stroke, the figure in --text, the
+// verdict muted.
+function sleepCardHtml(date, opts) {
+  const page = !!(opts && opts.page);
+  const byNight = sleepByNight(DB.sleep.list());
+  const night = date ? byNight[date] || null : null;
+  const closed = !page && !!night && date < todayISO();
   const goal = DB.prefs.sleepGoal();
   const C = 339.29;
-  const latestMin = latest ? Math.max(0, Math.round(Number(latest.durationMinutes) || 0)) : 0;
-  const dash = C * Math.min(1, latestMin / goal);
-  const gap = latestMin - goal;
-  const verdict = !latest ? '' : gap === 0 ? t('sleep_on_goal')
+  const nightMin = night ? Math.max(0, Math.round(Number(night.durationMinutes) || 0)) : 0;
+  const dash = C * Math.min(1, nightMin / goal);
+  const gap = nightMin - goal;
+  const verdict = !night ? '' : gap === 0 ? t('sleep_on_goal')
     : (gap < 0 ? t('sleep_short_by') : t('sleep_over_by')).replace('{v}', formatDuration(Math.abs(gap)));
   // The average: the recorded nights among the seven calendar nights BEFORE
-  // the ring's night (one per date, byNight). Last night is left out, so «0:30
+  // this night (one per date, byNight). The night itself is left out, so «0:30
   // over your average» compares it with the nights it is measured against, not
   // with an average that already holds it. An average needs two nights: one
-  // would only repeat a ledger row, and with none the row is not drawn.
+  // would only repeat a night of the log, and with none the row is not drawn.
   const prior = [];
-  if (latest) {
+  if (night) {
     for (let i = 1; i <= 7; i++) {
-      const n = byNight[addDaysISO(latest.date, -i)];
+      const n = byNight[addDaysISO(night.date, -i)];
       const m = n ? Math.max(0, Math.round(Number(n.durationMinutes) || 0)) : 0;
       if (m > 0) prior.push(m);
     }
   }
   const avgMin = prior.length >= 2 ? Math.round(prior.reduce((a, b) => a + b, 0) / prior.length) : 0;
-  const vsAvg = avgMin && latestMin !== avgMin
-    ? t(latestMin > avgMin ? 'avg_up' : 'avg_down').replace('{v}', formatDuration(Math.abs(latestMin - avgMin)))
+  const vsAvg = avgMin && nightMin !== avgMin
+    ? t(nightMin > avgMin ? 'avg_up' : 'avg_down').replace('{v}', formatDuration(Math.abs(nightMin - avgMin)))
     : '';
-  const st = latest && latest.stages ? latest.stages : null;
+  const st = night && night.stages ? night.stages : null;
   const q = st ? sleepQuality(st) : null;
   const asleep = st ? (Number(st.deep) || 0) + (Number(st.light) || 0) + (Number(st.rem) || 0) : 0;
   const deepMin = st ? Math.max(0, Number(st.deep) || 0) : 0;
   const deepPct = asleep > 0 ? Math.round(deepMin / asleep * 1000) / 10 : 0;
 
-  // One row per night, under its day header (the header carries the date).
-  //
-  // THE NUMBER FIRST (v394, the owner's pick of three on a design canvas). The
-  // v389 row put five things in one line — a range that wrapped, a caption, a
-  // bar, the figure, two buttons — and measured 128px. This is 76: the
-  // duration is the row's identity at title size in the first column, the
-  // range sits beside it on ONE line (still one ltr run — v374/v389: a range
-  // has an order, and each time is a word that must not break), «من الساعة»
-  // under it only when the night came from the watch, the tile shrinks to the
-  // end of the row, and the stage bar is the card's own bottom EDGE.
-  //
-  // The row holds NO controls: it IS the control. The whole row opens the
-  // night's sheet, and delete lives inside that sheet — the meal card's
-  // precedent (v314), the recipe view's (v391). A per-row pencil and bin were
-  // what made two rows of the same kind not line up, and 44px halos on 32px
-  // controls were half of the row's height.
-  const sleepEdgeHtml = (s) => sleepStagesHtml(s) || '<div class="sl-bar sl-edge"></div>';
-  // THE NAME SAYS WHAT THE NUMERALS ARE. The row's text is three unlabelled
-  // figures — «7:30 11:10 PM 7:05 AM» — and a screen reader cannot tell the
-  // duration from a third clock time, nor which time is which; two nights with
-  // the same times on different dates would read identically. The label
-  // carries every visible string (label-in-name, v324) plus the words the eye
-  // gets from position: the date, «مدة النوم», «وقت النوم», «وقت الاستيقاظ».
-  const sleepRowLabel = (s) => `${formatDate(s.date)} — ${t('total_sleep')} ${formatDuration(s.durationMinutes)} — ${t('sleep_time')} ${formatTime12(s.sleepTime)} — ${t('wake_time')} ${formatTime12(s.wakeTime)}${s.source === 'health' ? ` — ${t('from_watch')}` : ''}`;
-  const renderSleepEntry = (s) => `
-    <button type="button" class="data-row fig-row" data-edit-sleep="${escapeHtml(s.id)}" aria-label="${escapeHtml(sleepRowLabel(s))}">
-      <div class="fig-row-main">
-        ${figRowFig(formatDuration(s.durationMinutes))}
-        <div class="fig-row-text">
-          <div class="num time-range fig-row-range" dir="ltr"><span class="time-word">${formatTime12(s.sleepTime)}</span> <span aria-hidden="true">→</span> <span class="time-word">${formatTime12(s.wakeTime)}</span></div>
-          ${s.source === 'health' ? `<div class="fig-row-sub">${escapeHtml(t('from_watch'))}</div>` : ''}
-        </div>
-        <div class="data-icon sleep fig-row-tile">${icon('bed', 18)}</div>
-      </div>
-      ${sleepEdgeHtml(s)}
-    </button>
-  `;
-  const sleepLedger = dayLedgerHtml({ entries: list, days: sleepDays, renderEntry: renderSleepEntry, emptyText: t('ledger_no_sleep'), addAttr: 'data-ledger-sleep' });
-
-  // The rows beside the ring. The bed → wake range and «من الساعة» are NOT
-  // here: the ledger's first row, right under the card, reads that very night
-  // with both (no redundant text). With no row to show — no night, or one
-  // manual night with nothing to average — the log button takes the column.
-  const rowsHtml = !latest ? '' : `${avgMin ? `
+  // The range is ONE ltr run (v374/v389: a range has an order, and each time
+  // is a word that must not break), printed as the log's row prints it.
+  const rangeHtml = page && night ? `
+          <div class="slp-range">
+            <div class="num time-range" dir="ltr"><span class="time-word">${escapeHtml(formatTime12(night.sleepTime))}</span> <span aria-hidden="true">→</span> <span class="time-word">${escapeHtml(formatTime12(night.wakeTime))}</span></div>
+            ${night.source === 'health' ? `<div class="slp-src">${escapeHtml(t('from_watch'))}</div>` : ''}
+          </div>` : '';
+  const rowsHtml = !night ? '' : `${rangeHtml}${avgMin ? `
           <div class="macro-track">
             <div class="macro-track-head"><span class="macro-track-name">${t('avg_7n')}</span><span class="macro-track-nums num">${formatDuration(avgMin)}</span></div>
             ${vsAvg ? `<div class="macro-track-left">${vsAvg}</div>` : ''}
@@ -969,27 +1089,23 @@ function renderSleep(el) {
             <div class="macro-track-head"><span class="macro-track-name">${t('sleep_efficiency')}</span><span class="macro-track-nums num">${q.efficiency}%</span></div>
             <div class="macro-track-bar"><span class="macro-track-fill" style="width:${q.efficiency}%"></span></div>
           </div>` : ''}`;
-  const logBtn = `<button class="btn btn-primary" id="add-sleep-btn">${icon('plus', 20)} ${t('log')}</button>`;
 
-  el.innerHTML = `
-    ${vaultBar()}
-
-    <div class="page-header">
-      <h1 class="page-title">${t('sleep')}</h1>
-    </div>
-
-    <!-- ONE card (v410): the caption row (the one word of context, the
-         night's quality word beside it, and the goal control — the night's
-         date is NOT repeated, the first ledger row under it already says
-         «اليوم» and the date), then the ring beside its rows. With no night at
-         all the ring is empty, the verdict is absent and the log button takes
-         the rows' place — no sentence repeating what the page already says. -->
-    <div class="card slp-mini">
+  // The caption row: on the page the one word of context, the night's quality
+  // word beside it, and the goal control (the night's date is not printed —
+  // the log the card opens says it); in the log only the quality word, when
+  // the watch sent stages — the arrows above already name the day.
+  const cap = page ? `
       <div class="trk-cap">
         <span class="trk-cap-lab">${t('last_night')}${q ? `<span class="slp-q"> · ${t('sleep_q_' + q.key)}</span>` : ''}</span>
         <button type="button" class="trk-goal-btn" id="sleep-goal-btn" aria-label="${escapeHtml(t('sleep_goal') + ' ' + formatDuration(goal))}">${t('sleep_goal')} <span class="num">${formatDuration(goal)}</span></button>
-      </div>
-      <div class="slp-body">
+      </div>` : q ? `
+      <div class="trk-cap"><span class="trk-cap-lab slp-q">${t('sleep_q_' + q.key)}</span></div>` : '';
+
+  // With no row beside it (no night at all) the ring stands alone, centred:
+  // an empty column is a box that does not fit what is in it.
+  return `
+    <div class="card slp-mini${closed ? ' closed' : ''}">${cap}
+      <div class="slp-body${rowsHtml ? '' : ' is-solo'}">
         <div class="slp-ring">
           <svg class="cal-ring" viewBox="0 0 120 120" aria-hidden="true">
             <circle class="cal-ring-bg" cx="60" cy="60" r="54"/>
@@ -997,35 +1113,128 @@ function renderSleep(el) {
               stroke-dasharray="${dash.toFixed(1)} ${C.toFixed(1)}" transform="rotate(-90 60 60)"/>
           </svg>
           <div class="cal-ring-center">
-            <div class="cal-ring-num num${latest ? '' : ' is-none'}">${latest ? formatDuration(latestMin) : '—'}</div>
-            ${latest ? `<div class="cal-ring-label slp-verdict${gap === 0 ? ' is-met' : ''}">${escapeHtml(verdict)}</div>` : ''}
+            <div class="cal-ring-num num${night ? '' : ' is-none'}">${night ? formatDuration(nightMin) : '—'}</div>
+            ${night ? `<div class="cal-ring-label slp-verdict${gap === 0 ? ' is-met' : ''}">${escapeHtml(verdict)}</div>` : ''}
           </div>
         </div>
-        <div class="slp-rows">${rowsHtml || logBtn}</div>
+        ${rowsHtml ? `<div class="slp-rows">${rowsHtml}</div>` : ''}
+      </div>
+    </div>`;
+}
+
+// One row per night, the log's row.
+//
+// THE NUMBER FIRST (v394, the owner's pick of three on a design canvas). The
+// v389 row put five things in one line — a range that wrapped, a caption, a
+// bar, the figure, two buttons — and measured 128px. This is 76: the
+// duration is the row's identity at title size in the first column, the
+// range sits beside it on ONE line (still one ltr run — v374/v389: a range
+// has an order, and each time is a word that must not break), «من الساعة»
+// under it only when the night came from the watch, the tile shrinks to the
+// end of the row, and the stage bar is the card's own bottom EDGE — the empty
+// track when the night has no stages, so every row keeps one shape.
+//
+// The row holds NO controls: it IS the control. The whole row opens the
+// night's sheet, and delete lives inside that sheet — the meal card's
+// precedent (v314), the recipe view's (v391).
+//
+// THE NAME SAYS WHAT THE NUMERALS ARE. The row's text is three unlabelled
+// figures — «7:30 11:10 PM 7:05 AM» — and a screen reader cannot tell the
+// duration from a third clock time, nor which time is which; two nights with
+// the same times on different dates would read identically. The label
+// carries every visible string (label-in-name, v324) plus the words the eye
+// gets from position: the date, «مدة النوم», «وقت النوم», «وقت الاستيقاظ».
+function renderSleepEntry(s) {
+  const label = `${formatDate(s.date)} — ${t('total_sleep')} ${formatDuration(s.durationMinutes)} — ${t('sleep_time')} ${formatTime12(s.sleepTime)} — ${t('wake_time')} ${formatTime12(s.wakeTime)}${s.source === 'health' ? ` — ${t('from_watch')}` : ''}`;
+  return `
+    <button type="button" class="data-row fig-row" data-edit-sleep="${escapeHtml(s.id)}" aria-label="${escapeHtml(label)}">
+      <div class="fig-row-main">
+        ${figRowFig(formatDuration(s.durationMinutes))}
+        <div class="fig-row-text">
+          <div class="num time-range fig-row-range" dir="ltr"><span class="time-word">${formatTime12(s.sleepTime)}</span> <span aria-hidden="true">→</span> <span class="time-word">${formatTime12(s.wakeTime)}</span></div>
+          ${s.source === 'health' ? `<div class="fig-row-sub">${escapeHtml(t('from_watch'))}</div>` : ''}
+        </div>
+        <div class="data-icon sleep fig-row-tile">${icon('bed', 18)}</div>
+      </div>
+      ${sleepStagesHtml(s) || '<div class="sl-bar sl-edge"></div>'}
+    </button>
+  `;
+}
+
+function renderSleep(el) {
+  const list = DB.sleep.list();
+  // The ring's night: the newest DATE logged (the card picks that date's
+  // newest row). The ring opens the log on it; the header link is the Food and
+  // Cardio links' twin and opens TODAY (the review of the logs: it dropped the
+  // one keyboard route onto a night weeks old).
+  const newest = list.length ? list[0].date : null;
+  const openLog = () => navigate('sleeplog', { date: newest || todayISO() });
+
+  el.innerHTML = `
+    ${vaultBar()}
+
+    <!-- The log's link sits where Food's does: a text link at the header's end,
+         with the mirrored chevron. The day ledger that hung under the card
+         lives in the sleep log now, one day at a time. -->
+    <div class="page-header">
+      <div class="row-between">
+        <h1 class="page-title">${t('sleep')}</h1>
+        <div class="header-links">
+          <button type="button" class="link-btn" id="sleep-log-link">${t('sleep_log')} <span class="icon-mirror">${icon('chevronRight', 16)}</span></button>
+        </div>
       </div>
     </div>
 
-    <!-- With no night at all the empty ring and «سجّل» say it once: no
-         «السجل» header over nothing, no sentence, no door to older days. -->
-    ${list.length ? `
-    <div class="row-between mb-16">
-      <div class="section-title" style="margin:0">${t('history')}</div>
-      ${rowsHtml ? logBtn : ''}
-    </div>
+    ${sleepCardHtml(newest, { page: true })}
 
-    ${sleepLedger.empty
-      ? emptyState({ title: t('ledger_empty_sleep') })
-      : `<div class="ledger">${sleepLedger.html}</div>`}
-    ${sleepLedger.more ? `<button type="button" class="btn btn-ghost btn-block" id="more-sleep-days">${t('ledger_older')}</button>` : ''}` : ''}
+    <!-- ONE add, under the card, on every state of the page: logging stays one
+         tap from Sleep now that the ledger's own add slots are gone. -->
+    <button type="button" class="btn btn-primary btn-block log-add" id="add-sleep-btn">${icon('plus', 20)} ${t('log')}</button>
   `;
 
+  $('#sleep-log-link', el).addEventListener('click', () => navigate('sleeplog', { date: todayISO() }));
+  // The card opens the log on the night it shows — checked after its one
+  // control, the goal button, which keeps its own sheet.
+  $('.slp-mini', el).addEventListener('click', (e) => {
+    if (e.target.closest('button')) return;
+    openLog();
+  });
   $('#add-sleep-btn', el).addEventListener('click', () => openSleepModal());
   $('#sleep-goal-btn', el).addEventListener('click', () => openGoalModal('sleep'));
-  $('#more-sleep-days', el)?.addEventListener('click', () => { viewContext.sleepDays = sleepDays + 7; renderSleep(el); });
-  el.querySelectorAll('[data-ledger-sleep]').forEach((b) => b.addEventListener('click', () => openSleepModal(null, b.dataset.ledgerSleep)));
+}
+
+// THE SLEEP LOG — one day: the arrows, that night's ring, the add that logs
+// to THAT day, then the day's rows (a night and any nap dated to it).
+function renderSleepLog(el) {
+  logDay();
+  const ctx = viewContext;
+  const all = DB.sleep.list();
+  const day = all.filter((s) => s.date === ctx.date);
+
+  el.innerHTML = `
+    ${logTopHtml(t('sleep_log'))}
+    <h1 class="sr-only">${t('sleep_log')}</h1>
+    ${logDayNavHtml(ctx.date)}
+    ${day.length ? sleepCardHtml(ctx.date) : emptyState({ title: t('ledger_no_sleep') })}
+    <!-- An add only on a day with no night. On a logged night it opened the
+         sheet preset to that very night, and one tap on Save wrote a copy
+         (DB.sleep.add keeps every row): the night's row is the door to its
+         sheet there, as the page's add skips a logged date. -->
+    ${day.length ? '' : `<button type="button" class="btn btn-primary btn-block log-add" id="add-sleeplog-btn">${icon('plus', 20)} ${t('log')}</button>`}
+    <div class="ledger">
+      ${day.length ? `<div class="data-list">${day.map(renderSleepEntry).join('')}</div>` : ''}
+      ${logFutureHtml(ctx.date, all, renderSleepEntry)}
+    </div>
+  `;
+
+  bindLogDayNav(el, renderSleepLog);
+  $('#add-sleeplog-btn', el)?.addEventListener('click', () => openSleepModal(null, ctx.date));
   el.querySelectorAll('[data-edit-sleep]').forEach((b) =>
     b.addEventListener('click', () => openSleepModal(b.dataset.editSleep))
   );
+  // The watch's night lands here too: ask for the sync the Sleep page's
+  // ledger used to be where it was seen (health.js repaints this view after).
+  if (typeof Health !== 'undefined' && Health.autoSync) Health.autoSync();
 }
 
 function openSleepModal(sleepId = null, presetDate = null) {
@@ -1036,14 +1245,13 @@ function openSleepModal(sleepId = null, presetDate = null) {
   const latest = existing || newestRecord(all);
   // …and on the newest DATE with no night yet. It used to open on today even
   // when today was logged, preset to that very night's times, so one tap on
-  // Save wrote the same night twice (DB.sleep.add keeps every row). A ledger
-  // day's own + passes its empty date.
+  // Save wrote the same night twice (DB.sleep.add keeps every row). The
+  // sleep log's add passes the day it shows.
   let newDate = presetDate;
   if (!existing && !newDate) {
     const have = new Set(all.map((s) => s.date));
-    let i = 0;
-    while (i < 366 && have.has(ledgerDayIso(i))) i++;
-    newDate = ledgerDayIso(i);
+    newDate = todayISO();
+    for (let i = 0; i < 366 && have.has(newDate); i++) newDate = addDaysISO(newDate, -1);
   }
   const defStart = latest && latest.sleepTime ? latest.sleepTime : '23:00';
   const defEnd = latest && latest.wakeTime ? latest.wakeTime : '07:00';
@@ -1086,8 +1294,8 @@ function openSleepModal(sleepId = null, presetDate = null) {
 
   // Delete lives here since v394 (the row carries no controls). confirmDialog
   // REPLACES #modal-root, so this sheet is gone either way — the meal editor's
-  // precedent — and the ledger is repainted through the router, not a captured
-  // element.
+  // precedent — and the log is repainted through the router on the day it
+  // shows, not a captured element.
   $('#delete-sleep-btn')?.addEventListener('click', () => {
     if (!existing) return;
     confirmDialog({
@@ -1098,10 +1306,8 @@ function openSleepModal(sleepId = null, presetDate = null) {
         showToast(t('deleted'));
         renderView(currentView);
         // closeModal() handed focus back to the row this sheet was opened from,
-        // and the repaint just detached it — land on the ledger's one stable
-        // control instead of <body>.
-        const home = document.getElementById('add-sleep-btn');
-        if (home) home.focus({ preventScroll: true });
+        // and the repaint just detached it (focusLogHome).
+        focusLogHome();
       },
     });
   });
@@ -1137,5 +1343,6 @@ function openSleepModal(sleepId = null, presetDate = null) {
     }
     closeModal();
     renderView(currentView);
+    focusLogHome();
   });
 }

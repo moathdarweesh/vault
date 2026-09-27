@@ -1258,11 +1258,34 @@ function foodServings(v) {
   const n = Number(v);
   return Number.isFinite(n) && n > 0 ? Math.min(20, n) : 1;
 }
+// A LONE UTF-16 SURROGATE NEVER REACHES THE BLOB. Postgres jsonb refuses an
+// unpaired \ud83d escape, so one such name would fail the whole sync push; a
+// slice by code unit (ours at 80/24, the Worker's at 60) cuts an emoji in half
+// and leaves exactly that. Applied AFTER any slice; a whole pair is kept.
+// A loop, not a lookbehind regex: WebKit before 16.4 refuses `(?<!` at PARSE
+// time, which would stop this whole file — and every DB.* with it — rather
+// than one feature (the review of the fixes).
+function wellFormedText(s) {
+  s = String(s);
+  if (!/[\uD800-\uDFFF]/.test(s)) return s;
+  let out = '';
+  for (let i = 0; i < s.length; i++) {
+    const c = s.charCodeAt(i);
+    if (c >= 0xD800 && c <= 0xDBFF) {
+      const n = s.charCodeAt(i + 1);
+      if (n >= 0xDC00 && n <= 0xDFFF) { out += s[i] + s[i + 1]; i++; }
+      continue;
+    }
+    if (c >= 0xDC00 && c <= 0xDFFF) continue;
+    out += s[i];
+  }
+  return out;
+}
 function cleanMealItems(items) {
   if (!Array.isArray(items) || !items.length || items.length > 30) return null;
   if (items.some(it => !it || typeof it !== 'object' || Array.isArray(it))) return null;
   const clean = items.map(it => ({ ...copyData(it), id: entityIdSafe(it.id) ? it.id : uid(),
-    name: String(it.name || '').trim().slice(0, 80), servings: Number(it.servings ?? 1),
+    name: wellFormedText(String(it.name || '').trim().slice(0, 80)).trim(), servings: Number(it.servings ?? 1),
     calories: Number(it.calories || 0), protein: Number(it.protein || 0), carbs: Number(it.carbs || 0), fat: Number(it.fat || 0) }));
   return clean.every(it => it.name && it.servings > 0 && it.servings <= 20 && (!it.purchase ||
     Number.isFinite(it.purchase.quantity) && it.purchase.quantity > 0 && it.purchase.quantity <= 10000000 &&
@@ -3678,12 +3701,12 @@ const DB = {
     update(id, patch) {
       const list = STATE.recipes || [], old = list.find(x => x.id === id);
       if (id && !old) return null;
-      const data = { ...old, ...patch }, name = String(data.name || '').trim();
+      const data = { ...old, ...patch }, name = wellFormedText(String(data.name || '')).trim();
       const clean = cleanMealItems((data.items || []).map(it => ({ ...it, servings: 1 })));
       const servings = Number(data.servings || 1);
       if (!clean || !name || name.length > 80 || !Number.isFinite(servings) || servings < 1 || servings > 99) return null;
       const entity = { ...old, id: old?.id || uid(), name, servings,
-        items: clean.map(it => { const {servings, ...rest} = it; return {...rest, qty:String(it.qty || '').slice(0,24)}; }),
+        items: clean.map(it => { const {servings, ...rest} = it; return {...rest, qty:wellFormedText(String(it.qty || '').slice(0,24))}; }),
         createdAt: old?.createdAt || new Date().toISOString(), updatedAt: new Date().toISOString() };
       const result = changeSlice(() => STATE.recipes || [], next => { STATE.recipes = next; },
         old ? list.map(x => x.id === id ? entity : x) : [...list,entity], 'cx_meal_changed');

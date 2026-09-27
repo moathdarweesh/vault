@@ -12,7 +12,7 @@
 // build. The literal below is the fallback (file://, or a stripped query) and is
 // still bumped by `npm run release` — see CLAUDE.md "CACHE WORKFLOW".
 const VAULT_BUILD = (() => {
-  const FALLBACK = 'v415';
+  const FALLBACK = 'v416';
   try {
     const src = (document.currentScript && document.currentScript.src) || '';
     const m = src.match(/[?&]v=(\d+)/);
@@ -1142,6 +1142,7 @@ function navigate(view, context = {}, opts = {}) {
     planner: 'workouts', 'personal-records': 'workouts', 'muscle-sessions': 'workouts',
     cardio: 'cardio', food: 'food', sleep: 'sleep',
     compare: 'home', settings: 'home', calendar: 'home', supplements: 'home', foodlog: 'food',
+    sleeplog: 'sleep', cardiolog: 'cardio',   // each log is a step INTO its tab, like the food log
     day: 'home', notifications: 'home',
     'session-day': 'workouts', 'session-run': 'workouts',   // the run screens belong to Program; without this no tab was lit
   };
@@ -1731,6 +1732,8 @@ function renderView(view) {
     case 'supplements': renderSupplements(el); break;
     case 'notifications': renderNotifications(el); break;
     case 'foodlog': renderFoodLog(el); break;
+    case 'sleeplog': renderSleepLog(el); break;
+    case 'cardiolog': renderCardioLog(el); break;
     case 'session-day': renderSessionDay(el); break;
     case 'session-run': renderSessionRun(el); break;
     case 'personal-records': renderPersonalRecords(el); break;
@@ -1810,6 +1813,11 @@ document.addEventListener('keydown', (e) => {
   if (e.key !== 'Escape') return;
   const lb = document.querySelector('.img-lightbox');
   if (lb) { lb.remove(); return; }
+  // ONE ESCAPE CLOSES ONE SHEET. A sheet's own trap (openModal's, capture phase)
+  // has already closed it and spent the key; its close can bring the sheet
+  // underneath back (the dish chooser, «وصفاتي») before this bubble handler
+  // runs, and closing THAT too lost the other dishes (the v416 review, MD-1/2).
+  if (e.defaultPrevented) return;
   const root = $('#modal-root');
   // The GLOBAL Escape handler is a second door into closeModal() and would have
   // walked straight past the modal's own guard.
@@ -3430,7 +3438,7 @@ function renderDay(el) {
                <span class="day-row-meta num">${fmtNum(c.duration)} ${t('unit_min')}${c.calories ? ` · ${fmtNum(c.calories)} ${t('cal')}` : ''}</span>
              </div>`;
          }).join('')}
-       </div>`) : ''}
+       </div>`, 'cardiolog') : ''}
 
     ${(foods.length || totals.calories) ? section(t('food'),
       `<div class="day-stats">
@@ -3483,8 +3491,8 @@ function renderDay(el) {
       // past day therefore landed on today's food log instead of that day's.
       e.stopPropagation();
       const v = b.dataset.goto;
-      // Hand the food log this day, not today.
-      navigate(v, v === 'foodlog' ? { date: iso } : {});
+      // Hand the food and cardio logs this day, not today.
+      navigate(v, v === 'foodlog' || v === 'cardiolog' ? { date: iso } : {});
     })
   );
 }
@@ -10457,7 +10465,7 @@ function afterScripts(fn) {
   // is, so the sentence is true.
   window.addEventListener('online', () => { try { syncResume(); } catch (_) {} });
 
-  const DATE_DERIVED_VIEWS = ['home', 'food', 'foodlog', 'supplements', 'notifications'];
+  const DATE_DERIVED_VIEWS = ['home', 'food', 'foodlog', 'sleeplog', 'cardiolog', 'supplements', 'notifications'];
   let __lastActiveDay = todayISO();
 
   // GOING AWAY is the other half of the guided-run auto-save. Android can kill a

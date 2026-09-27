@@ -149,7 +149,7 @@ const I18N = {
 
     // Cardio
     close: 'Close',
-    all_sessions: 'All Sessions',
+    cardio_log: 'Cardio log', cardio_goal_share: '{p}% of the weekly goal',
     log: 'Log',
     log_cardio: 'Log Cardio', edit_cardio: 'Edit Cardio',
     type: 'Type',
@@ -408,9 +408,8 @@ const I18N = {
     conflict_local: "Keep this device's data",
 
     // Sleep
-    ledger_no_sleep: 'No sleep logged', ledger_no_cardio: 'No cardio', ledger_older: 'Earlier days',
-    ledger_empty_cardio: 'No cardio in these days',
-    ledger_empty_sleep: 'No sleep in these days',
+    ledger_no_sleep: 'No sleep logged', ledger_no_cardio: 'No cardio',
+    sleep_log: 'Sleep log',
     sleep_deep: 'Deep',
     sleep_efficiency: 'Sleep efficiency',
     sleep_q_excellent: 'Excellent', sleep_q_good: 'Good', sleep_q_fair: 'Fair',
@@ -657,6 +656,7 @@ const I18N = {
     rec_st_signin: 'Sign in for automatic figures, or type them',
     rec_tag_local: 'saved food', rec_tag_ai: 'estimate', rec_tag_manual: 'typed', rec_tag_saved: 'saved',
     rec_retry: 'Try again', rec_recompute: 'Compute again', rec_del_ing: 'Remove ingredient',
+    rec_retry_ai: 'Analyse with AI', rec_ai_pending: 'AI is analysing…', rec_ai_done: 'AI estimate',
     rec_removed: '{name} removed',
     rec_need_figs: '{name} has no figures — type them or remove it',
     rec_need_name: 'This ingredient has figures but no name — name it or remove it',
@@ -698,6 +698,7 @@ const I18N = {
     rx_privacy: 'Only what you choose is sent to our AI service, and none of it is added to your backup. A video is read on your phone: a few stills and part of its sound are sent, never the file itself.',
     rx_caption_label: 'Text with it (optional)', rx_caption_ph: 'Paste the post’s caption if it lists the ingredients',
     rx_link_label: 'The link', rx_link_ph: 'https://youtu.be/…',
+    rx_link_yt_note: 'Only the first five minutes of a YouTube video are read.',
     rx_text_label: 'The recipe', rx_text_ph: 'Paste the recipe or the post’s caption here',
     rx_need_text: 'Paste the recipe text first', rx_need_link: 'Paste the link first',
     rx_go: 'Extract recipe', rx_bad_file: 'Choose a video file', rx_mb: 'MB',
@@ -1206,7 +1207,7 @@ const I18N = {
     not_found: 'غير موجود', not_found_text: 'هذا التمرين لم يعد موجوداً.',
 
     close: 'إغلاق',
-    all_sessions: 'كل الجلسات',
+    cardio_log: 'سجل الكارديو', cardio_goal_share: '{p}% من الهدف الأسبوعي',
     log: 'سجّل',
     log_cardio: 'سجّل كارديو', edit_cardio: 'تعديل الكارديو',
     type: 'النوع',
@@ -1464,9 +1465,8 @@ const I18N = {
     conflict_cloud: 'إبقاء بيانات الحساب (السحابة)',
     conflict_local: 'إبقاء بيانات هذا الجهاز',
 
-    ledger_no_sleep: 'لم يُسجَّل نوم', ledger_no_cardio: 'لا كارديو', ledger_older: 'الأيام السابقة',
-    ledger_empty_cardio: 'لا كارديو في هذه الأيام',
-    ledger_empty_sleep: 'لم يُسجَّل نومٌ في هذه الأيام',
+    ledger_no_sleep: 'لم يُسجَّل نوم', ledger_no_cardio: 'لا كارديو',
+    sleep_log: 'سجل النوم',
     sleep_deep: 'عميق',
     sleep_efficiency: 'كفاءة النوم',
     sleep_q_excellent: 'ممتاز', sleep_q_good: 'جيد', sleep_q_fair: 'متوسط',
@@ -1704,6 +1704,7 @@ const I18N = {
     rec_st_signin: 'سجّل الدخول للحساب التلقائي، أو اكتب الأرقام',
     rec_tag_local: 'من أطعمتك', rec_tag_ai: 'تقدير', rec_tag_manual: 'يدوي', rec_tag_saved: 'محفوظ',
     rec_retry: 'أعد المحاولة', rec_recompute: 'أعد الحساب', rec_del_ing: 'حذف المكوّن',
+    rec_retry_ai: 'حلّل بالذكاء الاصطناعي', rec_ai_pending: 'يحلّل الذكاء الاصطناعي…', rec_ai_done: 'تقدير الذكاء الاصطناعي',
     rec_removed: 'حُذف {name}',
     rec_need_figs: '{name}: لا أرقام له — اكتبها أو احذفه',
     rec_need_name: 'لهذا المكوّن أرقامٌ بلا اسم — اكتب اسمه أو احذفه',
@@ -1745,6 +1746,7 @@ const I18N = {
     rx_privacy: 'لا يُرسَل إلى خدمة الذكاء الاصطناعي إلا ما تختاره، ولا يُضاف منه شيء إلى نسختك الاحتياطية. يُقرأ المقطع على هاتفك، فتُرسَل منه لقطاتٌ قليلة وجزءٌ من صوته، لا الملف نفسه.',
     rx_caption_label: 'نصٌّ مرافق (اختياري)', rx_caption_ph: 'ألصق وصف المنشور إن ذُكرت فيه المقادير',
     rx_link_label: 'الرابط', rx_link_ph: 'https://youtu.be/…',
+    rx_link_yt_note: 'لا يُقرأ من مقطع يوتيوب إلا أول خمس دقائق.',
     rx_text_label: 'نص الوصفة', rx_text_ph: 'ألصق الوصفة أو وصف المنشور هنا',
     rx_need_text: 'ألصق نص الوصفة أولًا', rx_need_link: 'ألصق الرابط أولًا',
     rx_go: 'استخرج الوصفة', rx_bad_file: 'اختر ملف فيديو', rx_mb: 'ميغابايت',

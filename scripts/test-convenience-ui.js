@@ -1229,7 +1229,8 @@ const RECIPE_IMPORT = [
       const strip = page.locator('#rec-rows .rec-row .rec-strip');
       assert.equal(await strip.count(), 1, '«أضف مكوّنًا» opens a row straight into its strip — v405 has no strip');
       const arrived = new Promise((r) => { kit.hold = r; });
-      await strip.locator('[data-f="name"]').fill('QA oats');
+      // Unique per run: a repeat is answered from FoodAI's cache with no request.
+      await strip.locator('[data-f="name"]').fill('QA oats ' + Date.now().toString(36));
       await strip.locator('[data-f="qty"]').fill('80 g');
       await arrived;   // the one batched request is out, held
       await page.evaluate(() => { window.qaStrip = document.querySelector('#rec-rows .rec-strip'); const q = document.activeElement; q.setSelectionRange(2, 2); });
@@ -1367,7 +1368,307 @@ const RECIPE_IMPORT = [
       await page.setViewportSize(vp);
     }
   } },
+  // v416, the owner on a failed row's bare «أعد المحاولة»: «خلّي فيه شي يدل على
+  // التحليل بالذكاء الاصطناعي». The open strip names the AI where it acts: a
+  // pulsing sparkle and «يحلّل الذكاء الاصطناعي…» while the figures are out,
+  // «تقدير الذكاء الاصطناعي» when they land, and a retry that says what it retries.
+  { name: 'B17 the open strip says the AI is at work: analysing while the figures are out, its estimate when they land, and a failed row\'s retry names the AI — fitting a 340px phone', async run(page) {
+    const kit = await rxKit(page);
+    const vp = page.viewportSize();
+    try {
+      await fresh(page);
+      await page.evaluate(() => openRecipeEditor(null, null, () => {}));
+      await page.locator('#rec-add-first').click();
+      const strip = page.locator('#rec-rows .rec-row .rec-strip');
+      const ai = strip.locator('[data-ai-status]');
+      assert.equal(await ai.count(), 1, 'the strip carries an AI status — v415 has none (' + (await ai.count()) + ')');
+      assert.equal(await ai.isVisible(), false, 'nothing to say before a name and an amount');
+      const arrived = new Promise((r) => { kit.hold = r; });
+      // A name B12 has not already estimated: FoodAI.analyze answers a repeat from
+      // its cache with no request, and `arrived` would then wait for ever.
+      await strip.locator('[data-f="name"]').fill('QA oats ' + Date.now().toString(36));
+      await strip.locator('[data-f="qty"]').fill('80 g');
+      await arrived;   // the estimate is out, held
+      assert.equal(await ai.isVisible(), true, 'while the figures are out the strip says the AI is at work');
+      assert.equal((await ai.innerText()).trim(), await tr(page, 'rec_ai_pending'));
+      assert.equal(await ai.evaluate((el) => el.classList.contains('is-busy')), true, 'and its sparkle pulses');
+      const sparkle = await page.evaluate(() => { const d = document.createElement('div'); d.innerHTML = icon('sparkle', 16); return d.firstElementChild.outerHTML; });
+      assert.equal(await ai.locator('svg').evaluate((s) => s.outerHTML), sparkle, 'the AI sparkle, the icon «استخراج وصفة» wears');
+      await kit.held.fulfill({ status: 200, contentType: 'application/json', headers: { 'Access-Control-Allow-Origin': '*' }, body: JSON.stringify({ items: [{ name: 'oats', calories: 300, protein: 10, carbs: 54, fat: 5 }] }) });
+      kit.hold = null;
+      await page.waitForFunction(() => document.querySelector('#rec-rows .rec-row').dataset.state === 'done', null, { timeout: 6000 });
+      assert.equal((await ai.innerText()).trim(), await tr(page, 'rec_ai_done'), 'landed figures are named as the AI\'s estimate');
+      assert.equal(await ai.evaluate((el) => el.classList.contains('is-busy')), false, 'and the pulse stops');
+      // A failed estimate: the retry says what it retries, with the same sparkle.
+      kit.reply = () => ({ status: 502, body: { error: 'service unavailable' } });
+      await page.setViewportSize({ width: 340, height: 740 });
+      await strip.locator('[data-f="name"]').fill('QA rye');
+      await page.waitForFunction(() => document.querySelector('#rec-rows .rec-row').dataset.state === 'fail', null, { timeout: 8000 });
+      const retry = strip.locator('[data-retry]');
+      assert.equal(await retry.isVisible(), true, 'a failed row offers the retry');
+      assert.equal((await retry.innerText()).trim(), await tr(page, 'rec_retry_ai'), 'the retry names the AI');
+      assert.equal(await retry.locator('svg').evaluate((s) => s.outerHTML), sparkle, 'with the AI sparkle, not a bare refresh arrow');
+      assert.equal(await ai.isVisible(), false, 'the retry speaks for the row; the status is not said twice beside it');
+      const foot = await strip.locator('.rec-strip-foot').evaluate((f) => ({ sw: f.scrollWidth, cw: f.clientWidth, h: Math.round(f.getBoundingClientRect().height),
+        clipped: [...f.querySelectorAll('.rec-act:not([hidden]), .rec-ai:not([hidden])')].some((b) => b.scrollWidth > b.clientWidth + 1) }));
+      assert.ok(foot.sw <= foot.cw + 1 && !foot.clipped && foot.h <= 44, 'the foot keeps one line at 340px with nothing clipped: ' + JSON.stringify(foot));
+    } finally { kit.hold = null; await page.setViewportSize(vp); await kit.done(); }
+  } },
+  { name: 'B18 Escape in a dish\'s editor returns to the chooser: one Escape closes ONE sheet, and the other dish is still there', async run(page) {
+    const kit = await rxKit(page);
+    const live = (sel) => page.locator('#modal-root .modal-overlay:not(.is-out) ' + sel);
+    try {
+      const before = await page.evaluate(() => DB.recipes.list().length);
+      await rxChooser(page, kit, [RX_STUB, RX_SOUP]);
+      await live('.rx-dish').nth(0).click();
+      await live('#rec-rows .rec-row').first().waitFor({ timeout: 4000 });
+      await page.keyboard.press('Escape');
+      await page.waitForTimeout(400);
+      const got = await page.evaluate(() => {
+        const o = document.querySelector('#modal-root .modal-overlay:not(.is-out)');
+        return { rows: o ? o.querySelectorAll('.rx-dish').length : 0, inside: !!(o && o.contains(document.activeElement)), at: document.activeElement && document.activeElement.tagName };
+      });
+      assert.deepEqual({ rows: got.rows, inside: got.inside }, { rows: 2, inside: true }, 'Escape in the editor lands on the chooser, both dishes, focus inside it: ' + JSON.stringify(got));
+      assert.equal(await page.evaluate(() => DB.recipes.list().length), before, 'nothing was saved by Escape');
+    } finally { await rxCleanup(page); await kit.done(); }
+  } },
+  { name: 'B19 Escape on the chooser with a dish saved lands on «وصفاتي», as its close button does', async run(page) {
+    const kit = await rxKit(page);
+    const live = (sel) => page.locator('#modal-root .modal-overlay:not(.is-out) ' + sel);
+    try {
+      await rxChooser(page, kit, [RX_STUB, RX_SOUP]);
+      await live('.rx-dish').nth(0).click();
+      await live('#rec-rows .rec-row').first().waitFor({ timeout: 4000 });
+      await live('#rec-save').click();
+      await live('.rx-dish.is-done').waitFor({ timeout: 4000 });
+      await page.keyboard.press('Escape');
+      await page.waitForTimeout(400);
+      const got = await page.evaluate(() => ({ landed: !!document.querySelector('#modal-root .modal-overlay:not(.is-out) #sf-tab-recipes[aria-selected="true"]'),
+        titles: [...document.querySelectorAll('#modal-root .modal-overlay:not(.is-out) .modal-title')].map((x) => x.textContent.trim()) }));
+      assert.equal(got.landed, true, 'Escape on the chooser hands over to «وصفاتي»: ' + JSON.stringify(got));
+    } finally { await rxCleanup(page); await kit.done(); }
+  } },
+  { name: 'B20 a double tap on «احفظ الكل» saves each dish once and leaves «وصفاتي» open — the second tap never closes the sheet still rising', async run(page) {
+    const kit = await rxKit(page);
+    const live = (sel) => page.locator('#modal-root .modal-overlay:not(.is-out) ' + sel);
+    try {
+      const before = await page.evaluate(() => DB.recipes.list().length);
+      await rxChooser(page, kit, [RX_STUB, RX_SOUP, RX_SALAD]);
+      const all = live('#rx-pick-all');
+      await all.scrollIntoViewIfNeeded();
+      const b = await all.boundingBox();
+      const x = b.x + b.width / 2, y = b.y + b.height / 2;
+      await page.mouse.click(x, y);
+      await page.mouse.click(x, y);
+      await page.waitForTimeout(700);
+      assert.equal(await page.evaluate(() => DB.recipes.list().length), before + 3, 'three recipes, none twice');
+      const got = await page.evaluate(() => ({ landed: !!document.querySelector('#modal-root .modal-overlay:not(.is-out) #sf-tab-recipes[aria-selected="true"]'),
+        titles: [...document.querySelectorAll('#modal-root .modal-overlay:not(.is-out) .modal-title')].map((x) => x.textContent.trim()) }));
+      assert.equal(got.landed, true, 'the second tap leaves «وصفاتي» open: ' + JSON.stringify(got));
+    } finally { await rxCleanup(page); await kit.done(); }
+  } },
+  { name: 'B21 a saved recipe with a zero row (salt) saves again unchanged: no model call, no refusal', async run(page) {
+    const kit = await rxKit(page);
+    try {
+      await fresh(page);
+      const id = await page.evaluate((d) => DB.recipes.add({ name: 'QA salted', servings: d.servings, items: d.items }).id, RX_STUB);
+      const sent = kit.bodies.length;
+      await page.evaluate((id) => openRecipeEditor(null, DB.recipes.list().find((r) => r.id === id), () => {}), id);
+      await page.locator('#rec-rows .rec-row').first().waitFor({ timeout: 4000 });
+      await page.locator('#rec-save').click();
+      assert.equal(await toastText(page), await tr(page, 'rec_saved'), 'the unchanged recipe saves at once');
+      await page.waitForTimeout(1300);
+      assert.equal(kit.bodies.length, sent, 'and no request reached the Worker: ' + kit.bodies.slice(sent).join(' | '));
+      const saved = await page.evaluate(() => DB.recipes.list().filter((r) => r.name === 'QA salted'));
+      assert.equal(saved.length, 1, 'ONE recipe, updated in place');
+      for (const it of saved[0].items) assert.equal(Object.keys(it).sort().join(','), 'calories,carbs,fat,id,name,protein,qty', 'a stored row holds exactly its fields: ' + Object.keys(it).join(','));
+      // Reopened again, the salt row reads as a settled zero.
+      await page.evaluate((id) => openRecipeEditor(null, DB.recipes.list().find((r) => r.id === id), () => {}), id);
+      await page.locator('#modal-root .modal-overlay:not(.is-out) #rec-rows .rec-row').first().waitFor({ timeout: 4000 });
+      assert.equal(await page.locator('#modal-root .modal-overlay:not(.is-out) #rec-rows .rec-row').nth(2).getAttribute('data-state'), 'done', 'a stored zero row reopens settled');
+    } finally {
+      await page.evaluate(() => { DB.recipes.list().filter((r) => r.name === 'QA salted').forEach((r) => DB.recipes.remove(r.id)); });
+      await kit.done();
+    }
+  } },
+  { name: 'B22 an imported zero row renamed to a real food is estimated (one request); a row the user priced by hand stays his', async run(page) {
+    const kit = await rxKit(page);
+    const waitSent = async (n, ms) => { const end = Date.now() + ms; while (Date.now() < end && kit.bodies.length < n) await page.waitForTimeout(50); return kit.bodies.length; };
+    try {
+      await rxOpen(page, 'text');
+      await page.locator('#rx-text').fill('Garlic pasta for 2');
+      await page.locator('[data-rx-go]').click();
+      const rows = page.locator('#modal-root .modal-overlay:not(.is-out) #rec-rows .rec-row');
+      await rows.first().waitFor({ timeout: 15000 });
+      kit.reply = () => ({ status: 200, body: { items: [{ name: 'butter', calories: 360, protein: 0.4, carbs: 0, fat: 40 }] } });
+      const sent = kit.bodies.length;
+      await rows.nth(2).locator('[data-open]').click();
+      // A name no earlier run has estimated: FoodAI.analyze answers a repeat from its cache, with no request.
+      await rows.nth(2).locator('[data-f="name"]').fill('butter ' + Date.now().toString(36));
+      assert.equal(await waitSent(sent + 1, 3000), sent + 1, 'renaming the zero row sends ONE estimate request: ' + JSON.stringify(await page.evaluate(() => {
+        const r = document.querySelectorAll('#modal-root .modal-overlay:not(.is-out) #rec-rows .rec-row')[2];
+        return r && { state: r.dataset.state, src: r.dataset.src, name: (r.querySelector('[data-f="name"]') || {}).value, kcal: (r.querySelector('[data-f="calories"]') || {}).value, foods: DB.foods.list().map((f) => f.name).filter((n) => /butt|salt/i.test(n)) };
+      })));
+      await page.waitForFunction(() => { const r = document.querySelectorAll('#rec-rows .rec-row')[2]; return r && r.dataset.state === 'done' && r.querySelector('[data-f="calories"]').value === '360'; }, null, { timeout: 6000 });
+      // A figure typed by hand is the user's: a rename afterwards costs nothing.
+      await rows.nth(1).locator('[data-open]').click();
+      await rows.nth(1).locator('[data-f="calories"]').fill('240');
+      await rows.nth(1).locator('[data-f="name"]').fill('olive oil, extra virgin');
+      await page.waitForTimeout(1300);
+      assert.equal(kit.bodies.length, sent + 1, 'a row priced by hand is never re-estimated');
+    } finally { await kit.done(); }
+  } },
+  { name: 'B23 a dish editor closed while its Save waits for a figure saves nothing, and the chooser stays', async run(page) {
+    const kit = await rxKit(page);
+    const live = (sel) => page.locator('#modal-root .modal-overlay:not(.is-out) ' + sel);
+    try {
+      await page.evaluate(() => DB.foods.add({ name: 'QA milk', serving: '1 cup', calories: 120, protein: 8, carbs: 12, fat: 5 }));
+      const before = await page.evaluate(() => DB.recipes.list().length);
+      await rxChooser(page, kit, [RX_STUB, RX_SOUP]);
+      await live('.rx-dish').nth(1).click();
+      await live('#rec-rows .rec-row').first().waitFor({ timeout: 4000 });
+      await live('#rec-add').click();
+      await live('#rec-rows .rec-strip [data-f="name"]').fill('QA milk');
+      await live('#rec-save').click();
+      await live('.modal-header [data-close]').click();
+      await page.waitForTimeout(1500);
+      const got = await page.evaluate(() => { const o = document.querySelector('#modal-root .modal-overlay:not(.is-out)');
+        return { rows: o ? o.querySelectorAll('.rx-dish').length : 0, done: o ? o.querySelectorAll('.rx-dish.is-done').length : -1 }; });
+      assert.equal(await page.evaluate(() => DB.recipes.list().length), before, 'the dish closed without its save is not saved ~0.9 s later');
+      assert.deepEqual(got, { rows: 2, done: 0 }, 'the chooser is still up, no card marked');
+    } finally {
+      await page.evaluate(() => { DB.foods.list().filter((f) => f.name === 'QA milk').forEach((f) => DB.foods.remove(f.id)); });
+      await rxCleanup(page); await kit.done();
+    }
+  } },
+  { name: 'B24 «أعد المحاولة» keeps focus in the sheet when it hides itself', async run(page) {
+    const kit = await rxKit(page);
+    try {
+      kit.reply = () => ({ status: 502, body: { error: 'service unavailable' } });
+      await rxOpen(page, 'text');
+      await page.locator('#rx-text').fill('Garlic pasta for 2');
+      await page.locator('[data-rx-go]').click();
+      assert.ok(await rxError(page), 'setup: the first attempt fails');
+      const retry = page.locator('[data-rx-retry]');
+      assert.equal(await retry.isVisible(), true, 'setup: the retry is offered');
+      const arrived = new Promise((r) => { kit.hold = r; });
+      await retry.focus();
+      await page.keyboard.press('Enter');
+      await arrived;
+      const at = await page.evaluate(() => { const a = document.activeElement; const o = document.querySelector('#modal-root .modal-overlay:not(.is-out)');
+        return { tag: a && a.tagName, inside: !!(o && a && o.contains(a)), visible: !!(a && a.offsetParent !== null) }; });
+      assert.deepEqual(at.inside && at.visible, true, 'focus stays on a visible control inside the sheet: ' + JSON.stringify(at));
+    } finally { try { if (kit.held) await kit.held.abort(); } catch (_) { /* already dropped */ } kit.hold = null; await kit.done(); }
+  } },
+  { name: 'B25 a slow photo never replaces a newer choice: typed text survives it, and a later photo is the one sent', async run(page) {
+    const kit = await rxKit(page);
+    try {
+      await rxOpen(page);
+      await page.evaluate(() => {
+        window.qaRecipeImage = FoodAI.recipeImage;
+        // a.png and slow.png take 0.9 s to prepare, fast.png 50 ms.
+        FoodAI.recipeImage = (f) => new Promise((r) => setTimeout(() => r({ dataUrl: 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7', image: { mimeType: 'image/jpeg', data: 'qa-' + f.name } }), f.name === 'fast.png' ? 50 : 900));
+      });
+      const png = (name) => ({ name, mimeType: 'image/png', buffer: Buffer.from('qa') });
+      // (1) A slow photo, then the text tile: the typed text stays.
+      await page.locator('[data-rx-file="image"]').setInputFiles(png('a.png'));
+      await page.locator('[data-rx-pick="text"]').click();
+      await page.locator('#rx-text').fill('typed while the photo was prepared');
+      await page.waitForTimeout(1200);
+      assert.equal(await page.locator('#rx-text').count() ? await page.locator('#rx-text').inputValue() : null, 'typed while the photo was prepared', 'the typed text survives the late photo');
+      // (2) A slow photo, then a quick one: the quick one is what is sent.
+      await page.locator('[data-rx-back]').click();
+      await page.locator('[data-rx-file="image"]').setInputFiles(png('slow.png'));
+      await page.locator('[data-rx-file="image"]').setInputFiles(png('fast.png'));
+      await page.waitForTimeout(1200);
+      await page.locator('[data-rx-go]').click();
+      await page.locator('#rec-rows .rec-row').first().waitFor({ timeout: 15000 });
+      assert.equal(kit.last().frames && kit.last().frames[0].data, 'qa-fast.png', 'the newer photo is the one read');
+    } finally {
+      await page.evaluate(() => { if (window.qaRecipeImage) FoodAI.recipeImage = window.qaRecipeImage; delete window.qaRecipeImage; });
+      await kit.done();
+    }
+  } },
+  { name: 'B26 a YouTube link says, on the link stage, that only its first five minutes are read', async run(page) {
+    try {
+      await rxOpen(page, 'link');
+      const note = page.locator('#modal-root .modal-overlay:not(.is-out) [data-rx-yt]');
+      assert.equal(await note.count(), 1, 'the link stage carries the five-minute line');
+      assert.equal(await note.isVisible(), false, 'not before a link');
+      await page.locator('#rx-link').fill('https://www.tiktok.com/@qa/video/1');
+      assert.equal(await note.isVisible(), false, 'not for a TikTok link');
+      // aria-describedby names a hidden node's text too: the field must not
+      // point at the note while it is hidden (the review of the fixes).
+      assert.equal(await page.locator('#rx-link').getAttribute('aria-describedby'), null, 'a TikTok link\'s field is not described by the YouTube note');
+      await page.locator('#rx-link').fill('https://youtu.be/qa');
+      assert.equal(await note.isVisible(), true, 'said for a YouTube link');
+      assert.equal((await note.innerText()).trim(), await tr(page, 'rx_link_yt_note'));
+      assert.equal(await page.locator('#rx-link').getAttribute('aria-describedby'), 'rx-link-yt', 'and the field is described by it then');
+    } finally { await page.evaluate(() => closeModal()); }
+  } },
+  { name: 'B28 an imported zero row keeps its zero through an amount change (no request, Save works), and a rename the AI prices at zero settles as a zero, not a refusal', async run(page) {
+    const kit = await rxKit(page);
+    const live = (sel) => page.locator('#modal-root .modal-overlay:not(.is-out) ' + sel);
+    try {
+      await rxOpen(page, 'text');
+      await page.locator('#rx-text').fill('Garlic pasta for 2');
+      await page.locator('[data-rx-go]').click();
+      const rows = live('#rec-rows .rec-row');
+      await rows.first().waitFor({ timeout: 15000 });
+      const sent = kit.bodies.length;
+      // The salt row (RX_STUB's zero): its amount changes, it stays a zero.
+      await rows.nth(2).locator('[data-open]').click();
+      await rows.nth(2).locator('[data-f="qty"]').fill('~2 tsp');
+      await page.waitForTimeout(1300);
+      assert.equal(kit.bodies.length, sent, 'a changed amount of salt sends no estimate: it is still a zero');
+      assert.equal(await rows.nth(2).getAttribute('data-state'), 'done', 'and the row stays settled');
+      // A rename to another zero food: the AI answers nothing for it (the
+      // Worker's clampItems drops an all-zero row) and the row settles as a zero.
+      kit.reply = () => ({ status: 200, body: { items: [] } });
+      await rows.nth(2).locator('[data-f="name"]').fill('sea salt ' + Date.now().toString(36));
+      await page.waitForFunction(() => { const r = document.querySelectorAll('#modal-root .modal-overlay:not(.is-out) #rec-rows .rec-row')[2]; return r && r.dataset.state !== 'pending'; }, null, { timeout: 8000 });
+      assert.equal(kit.bodies.length, sent + 1, 'the rename is asked once');
+      assert.equal(await rows.nth(2).getAttribute('data-state'), 'done', 'an answered zero settles the row as a zero, never «could not work it out»');
+      const before = await page.evaluate(() => DB.recipes.list().length);
+      await live('#rec-save').click();
+      await page.waitForTimeout(600);
+      assert.equal(await page.evaluate(() => DB.recipes.list().length), before + 1, 'and Save goes through: no refusal for the zero row');
+      const got = await page.evaluate(() => { const l = DB.recipes.list(); return l[l.length - 1]; });
+      for (const it of got.items) assert.equal(Object.keys(it).sort().join(','), 'calories,carbs,fat,id,name,protein,qty', 'no marker reaches storage: ' + Object.keys(it).join(','));
+      await page.evaluate((id) => DB.recipes.remove(id), got.id);
+    } finally { await kit.done(); }
+  } },
+  { name: 'B27 no lone surrogate reaches the blob: recipe, ingredient, amount and food-log names; a whole emoji is kept', async run(page) {
+    const got = await page.evaluate(() => {
+      const ok = (s) => typeof s === 'string' && s.isWellFormed();
+      const r = DB.recipes.add({ name: 'QA surrogate a\uD83D', servings: 1, items: [
+        { name: 'chili 🔥', qty: 'a'.repeat(23) + '🔥', calories: 10, protein: 0, carbs: 0, fat: 0 },
+        { name: 'b'.repeat(79) + '🔥', qty: '\uDC00x', calories: 5, protein: 0, carbs: 0, fat: 0 }] });
+      const logged = DB.foodLogs.addMany('2020-01-01', [{ name: 'QA log \uD83D', calories: 1, protein: 0, carbs: 0, fat: 0 }]);
+      const rows = DB.foodLogs.listForDate('2020-01-01').slice();
+      rows.forEach((x) => DB.foodLogs.remove('2020-01-01', x.id));
+      const out = { saved: !!r, name: r && r.name, items: r && r.items.map((it) => [it.name, it.qty]), log: rows.map((x) => x.name), logged: !!(logged && logged.ok) };
+      if (r) DB.recipes.remove(r.id);
+      out.wellFormed = !!r && ok(r.name) && r.items.every((it) => ok(it.name) && ok(it.qty)) && rows.every((x) => ok(x.name));
+      return out;
+    });
+    assert.equal(got.saved && got.logged, true, 'both writes go through: ' + JSON.stringify(got));
+    assert.equal(got.wellFormed, true, 'every stored string is well-formed: ' + JSON.stringify(got));
+    assert.equal(got.items[0][0], 'chili 🔥', 'a whole emoji is kept');
+    assert.equal(got.name, 'QA surrogate a', 'the lone half is dropped, nothing else');
+  } },
 ];
+// The dish chooser the two-dish cases start from.
+const RX_SALAD = { name: 'QA salad', servings: 1, items: [{ name: 'cucumber', qty: '200 g', calories: 30, protein: 1, carbs: 7, fat: 0 }] };
+async function rxChooser(page, kit, dishes) {
+  kit.reply = () => ({ status: 200, body: { recipe: dishes[0], recipes: dishes } });
+  await rxOpen(page, 'text');
+  await page.locator('#rx-text').fill('Several dishes');
+  await page.locator('[data-rx-go]').click();
+  await page.locator('#modal-root .modal-overlay:not(.is-out) .rx-dish').first().waitFor({ timeout: 15000 });
+}
+const rxCleanup = (page) => page.evaluate((names) => { DB.recipes.list().filter((r) => names.includes(r.name)).forEach((r) => DB.recipes.remove(r.id)); },
+  [RX_STUB.name, RX_SOUP.name, RX_SOUP_EDITED, RX_SALAD.name]);
 module.exports.RECIPE_IMPORT = RECIPE_IMPORT;
 
 
@@ -2277,7 +2578,8 @@ const designA11yCases = [
       ['exercise-detail', { exerciseId: ids[0] }, '.w-alt'],
       ['exercise-detail', { exerciseId: ids[0] }, '.sets-row-num'],
       ['exercise-detail', { exerciseId: ids[0] }, '.stat-box-value'],
-      ['sleep', {}, '.fig-row-num'],
+      // The night's row lives in the sleep log since v416, one day at a time.
+      ['sleeplog', { date: today }, '.fig-row-num'],
     ];
     const sizes = async () => {
       const out = {};

@@ -2506,5 +2506,27 @@ const cssOwner = (i) => CSS_BLOCKS.reduce((best, b) => (b.open < i && b.close > 
   contract(`the instrument's bars and figure, and the sleep ring's draw, bars and centre, settle inside motion.js's cleanup window (--stagger-bar ${bar}ms, --dur-fast ${fast}ms, window --dur-base ${base}ms + ${Number.isFinite(slack) ? slack : '?'}ms), and the clamp zeroes the new token`, problems);
 }
 
+// ---------------------------------------------------------------- 75. the fingerprint net's views are the app's views
+// scripts/fp/views.js has said since v355 that «Contract 32 compares this file
+// against the <section data-view> list in index.html» — and no contract did:
+// 32 is the APK fingerprint. A view left out of that list is outside the net,
+// and "the net is green" becomes true and meaningless (its own header). This
+// is the check the header promised: the list and the sections are one set,
+// each view once, so the next view either joins the net or fails the commit.
+// Written when the sleep and cardio logs arrived (2026-09-27) and seen failing
+// on them before scripts/fp/views.js named them.
+{
+  const problems = [];
+  const sections = [...html.matchAll(/<section class="view[^"]*" data-view="([\w-]+)"/g)].map((m) => m[1]);
+  let listed = [];
+  try { listed = require('./fp/views.js').map((v) => v && v.view); } catch (e) { problems.push('scripts/fp/views.js does not load: ' + e.message); }
+  if (!sections.length) problems.push('read no <section data-view> from index.html — this check has gone silent');
+  for (const v of sections) if (!listed.includes(v)) problems.push(`<section data-view="${v}"> is not in scripts/fp/views.js — the fingerprint net never renders it`);
+  for (const v of listed) if (!sections.includes(v)) problems.push(`scripts/fp/views.js names '${v}', which index.html has no <section> for`);
+  const twice = listed.filter((v, i) => listed.indexOf(v) !== i);
+  if (twice.length) problems.push(`scripts/fp/views.js names ${[...new Set(twice)].join(', ')} more than once`);
+  contract(`the fingerprint net renders every view (${listed.length} in scripts/fp/views.js, ${sections.length} <section>s in index.html)`, problems);
+}
+
 console.log(failures.length ? `\ncheck-contracts: ${failures.length} broken contract(s)` : '\ncheck-contracts: all contracts hold');
 process.exit(failures.length ? 1 : 0);

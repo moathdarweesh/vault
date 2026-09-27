@@ -228,7 +228,9 @@
   // until you navigated away and back.
   function refreshActive() {
     if (typeof renderView !== 'function') return;
-    ['home', 'cardio', 'sleep'].forEach((name) => {
+    // The two logs too (v416): renderView keeps viewContext.date, so an open
+    // log repaints on its own day when the watch's night or session lands.
+    ['home', 'cardio', 'sleep', 'cardiolog', 'sleeplog'].forEach((name) => {
       const v = document.querySelector(`.view[data-view="${name}"]`);
       if (v && v.classList.contains('active')) renderView(name);
     });

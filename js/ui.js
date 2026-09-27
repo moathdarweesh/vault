@@ -515,9 +515,15 @@ function openModal(innerHtml, { variant = 'sheet', dismissible = true, hold = !d
       VltMotion.dragToDismiss(sheet, closeModal);
     }
   }
+  // A BACKDROP TAP IN THE SHEET'S FIRST 350 ms IS THE TAP BEFORE IT, LANDING
+  // LATE. A sheet that hands over to another (Save all → «وصفاتي») puts the new
+  // sheet's backdrop under a thumb still on the old button, and the second tap of
+  // a double tap closed it while it rose (the v416 review, MD-3). Only the
+  // backdrop waits: the close button, Escape, Back and the drag close at once.
+  const openedAt = performance.now();
   overlay.addEventListener('click', (e) => {
     if (!dismissible) return;
-    if (e.target === overlay) closeModal();
+    if (e.target === overlay && performance.now() - openedAt >= 350) closeModal();
   });
   overlay.querySelectorAll('[data-close]').forEach((el) => {
     // Every icon-only close button gets a screen-reader name in one place.

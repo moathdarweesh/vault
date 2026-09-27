@@ -28,6 +28,18 @@
 // track. The ring cases below were seen failing on the built tree before the
 // ring existed — «the sleep page has no .slp-mini ring card» in every sleep
 // case, AR and EN — and pass only against the ring.
+//
+// THE TWO LOGS (2026-09-27, the owner on the Sleep page: the sleep log should
+// follow the food log's idea — where it lives, in the day, and in the details
+// of that day's sleep; then on the Cardio page: the same for cardio). The day
+// ledger left both pages for a dated screen each (sleeplog, cardiolog). The
+// five log cases at the end, and the ledger cases rewritten for the new
+// design, were seen failing on the tree before the logs existed, AR and EN:
+// «no ledger rows on the Sleep page — 15 !== 0», «no ledger rows on the
+// Cardio page — 16 !== 0», «['home', undefined] !== ['sleeplog', <today>]»
+// (navigate('sleeplog') fell back to Home), «the log link stays in the
+// header», «ONE night: the range alone …», «locator.click: Timeout» on the
+// log rows — 24 of 44 cases, exit 1.
 'use strict';
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
@@ -201,15 +213,16 @@ const CASES = [
     await ev(() => DB.prefs.setCardioGoal(150));
   }],
 
-  ['a ledger row still opens its sheet (focus stays put), and a new log opens on the last-used type with focus in the minutes', async ({ page, ev, reset, settled }) => {
-    await ev(seedCardio);
-    await reset('cardio'); await settled();
+  ['a log row still opens its sheet (focus stays put), and a new log opens on the last-used type with focus in the minutes', async ({ page, ev, reset, settled }) => {
+    const seeded = await ev(seedCardio);
+    await reset('cardiolog', { date: seeded.today }); await settled();
     await page.locator('.view.active [data-edit-cardio]').first().click();
     await page.waitForSelector('#modal-root .modal-overlay #cardio-duration');
     assert.ok(['35', '20', '50'].includes(await page.locator('#cardio-duration').inputValue()));
     await page.waitForTimeout(120);
     assert.notEqual(await ev(() => document.activeElement && document.activeElement.id), 'cardio-duration', 'opening a session to read or delete it does not raise the keyboard');
     await ev(() => closeModal());
+    await reset('cardio'); await settled();
     await page.locator('.view.active #add-cardio-btn').click();
     await page.waitForSelector('#modal-root .modal-overlay #cardio-type-selector');
     await page.waitForTimeout(120);
@@ -304,6 +317,7 @@ const CASES = [
     const fig = await ev(() => document.querySelector('.view.active .trk-num')?.textContent.trim());
     const s = await ev(() => DB.cardio.list().reduce((a, c) => a + (inRangeISO(c.date, weekRanges().thisStart, weekRanges().thisEnd) ? c.duration : 0), 0));
     assert.equal(fig, String(s), 'a save through the sheet re-renders the figure');
+    await reset('cardiolog', { date: await ev(() => todayISO()) }); await settled();
     const tiles = await ev(() => { const bg = (el) => el && getComputedStyle(el).backgroundColor; const rows = [...document.querySelectorAll('.view.active .fig-row-tile')]; const custom = rows.find((r) => /cardio-custom|\bcustom\b/.test(r.className)); const walk = rows.find((r) => r.classList.contains('walking')); return { custom: bg(custom), walk: bg(walk) }; });
     assert.ok(tiles.custom && tiles.walk, 'both tiles render: ' + JSON.stringify(tiles));
     assert.equal(tiles.custom, tiles.walk, 'a user-made type sits in the same neutral well as the built-ins — the one tinted tile drew the eye to the generic glyph');
@@ -330,8 +344,9 @@ const CASES = [
     await ev(() => DB.cardio.list().forEach((c) => DB.cardio.remove(c.id)));
     await reset('cardio'); await settled();
     const got = await ev(() => ({ fig: document.querySelector('.view.active .trk-num')?.textContent.trim(), log: !!document.querySelector('.view.active #add-cardio-btn'),
-      title: !!document.querySelector('.view.active .row-between .section-title'), empty: !!document.querySelector('.view.active .empty'), older: !!document.querySelector('.view.active #more-cardio-days') }));
-    assert.equal(got.fig, '0'); assert.equal(got.log, true, '«log» stays');
+      title: !!document.querySelector('.view.active .row-between .section-title'), empty: !!document.querySelector('.view.active .empty'), older: !!document.querySelector('.view.active #more-cardio-days'),
+      link: !!document.querySelector('.view.active .header-links .link-btn') }));
+    assert.equal(got.fig, '0'); assert.equal(got.log, true, '«log» stays'); assert.equal(got.link, true, 'the log link stays in the header');
     assert.equal(got.title, false, 'no «all sessions» header over nothing'); assert.equal(got.empty, false, 'no empty sentence'); assert.equal(got.older, false, 'no older-days door');
   }],
 
@@ -371,7 +386,8 @@ const CASES = [
         dash: fg ? parseFloat(fg.getAttribute('stroke-dasharray')) : null, empty: fg ? fg.classList.contains('is-empty') : null,
         num: txt(h.querySelector('.cal-ring-num')), verdict: txt(h.querySelector('.slp-verdict')), centreEls: h.querySelectorAll('.cal-ring-center > *').length,
         short: t('sleep_short_by').replace('{v}', formatDuration(45)),
-        ranges: h.querySelectorAll('.time-range').length, src: !!h.querySelector('.slp-src'), ledgerRange: txt(view.querySelector('.ledger .time-range')),
+        ranges: h.querySelectorAll('.time-range').length, src: txt(h.querySelector('.slp-src')), watch: t('from_watch'), cardRange: txt(h.querySelector('.slp-rows .time-range')),
+        ledger: view.querySelectorAll('.ledger, [data-edit-sleep], [data-ledger-sleep]').length,
         tracks: tracks.map((tr) => ({ name: txt(tr.querySelector('.macro-track-name')), nums: txt(tr.querySelector('.macro-track-nums')), bar: !!tr.querySelector('.macro-track-bar'), left: txt(tr.querySelector('.macro-track-left')) })),
         deepW: bar(1) ? parseFloat(bar(1).style.width) : null, effW: bar(2) ? parseFloat(bar(2).style.width) : null,
         bar: bar(1) ? (({ borderTopLeftRadius: r, height: hh }) => [r, hh])(getComputedStyle(bar(1).parentElement)) : null,
@@ -389,9 +405,12 @@ const CASES = [
     assert.equal(got.empty, false);
     assert.equal(got.num, '7:15', 'the centre is the duration'); assert.equal(got.verdict, got.short, 'under it, the verdict with the gap');
     assert.equal(got.centreEls, 2, 'two centre lines: the duration and the verdict');
-    assert.equal(got.ranges, 0, 'the bed → wake range is not repeated on the card — the first ledger row, right under it, carries it');
-    assert.equal(got.src, false, 'nor the source line');
-    assert.equal(got.ledgerRange, '11:30 PM → 6:45 AM', 'the ledger\'s first row still reads the range as one run');
+    // The ledger left the page for the sleep log, so the page's card carries
+    // the night's bed → wake range itself (one ltr run) and its source.
+    assert.equal(got.ledger, 0, 'no ledger rows on the page');
+    assert.equal(got.ranges, 1, 'the card reads the bed → wake range once');
+    assert.equal(got.cardRange, '11:30 PM → 6:45 AM', 'as one run, the way a row prints it');
+    assert.equal(got.src, got.watch, 'with the watch named as the source');
     assert.equal(got.tracks.length, 3, 'three tracks: the average, deep, efficiency');
     assert.deepEqual([got.tracks[0].name, got.tracks[0].nums, got.tracks[0].bar], [got.labels.avg, formatDurationNode(s.avg), false], 'the average of the seven nights BEFORE the ring\'s night, as a figure');
     assert.equal(got.tracks[0].left, got.labels.up, 'with its delta against last night — 7:15 against 6:45, not against an average that already holds 7:15');
@@ -403,7 +422,7 @@ const CASES = [
     assert.ok(got.cap.includes(got.quality), 'the quality word sits in the caption row'); assert.equal(got.goalBtn, true, 'the goal button stays in the caption row');
     assert.equal(got.track, 0, 'no 7-night track on the sleep hero — the ledger lists the nights'); assert.equal(got.oldHero, false); assert.equal(got.stageBar, false);
     assert.equal(got.capsule, false); assert.equal(got.stat, false); assert.equal(got.eyebrow, false);
-    assert.equal(got.logBtns, 1); assert.equal(got.logInCard, false, 'with a night logged, «سجّل» stays on the ledger row');
+    assert.equal(got.logBtns, 1); assert.equal(got.logInCard, false, '«سجّل» sits under the card, not in it');
   }],
 
   ['the verdict reads by case — on target, short by the gap, over by the gap — and no night leaves the ring empty', async ({ ev, reset, settled }) => {
@@ -428,8 +447,8 @@ const CASES = [
     await night('23:00', '07:00'); await reset('sleep'); await settled();
     let g = await read();
     assert.equal(g.verdict, g.s.on, 'exactly the goal: on target'); assert.equal(g.met, true); near(g.dash, 339.29, 0.5, 'a met night closes the ring');
-    assert.equal(g.rows, 0, 'ONE night: no average row (it would repeat the ring\'s own figure)');
-    assert.equal(g.logInCard, true, 'so the log button takes the rows\' place'); assert.equal(g.logBtns, 1, 'and it is the page\'s only one');
+    assert.equal(g.rows, 1, 'ONE night: the range alone, no average row (it would repeat the ring\'s own figure)');
+    assert.equal(g.logInCard, false, 'the log button sits under the card'); assert.equal(g.logBtns, 1, 'and it is the page\'s only one');
     await night('23:30', '07:00'); await reset('sleep'); await settled();
     g = await read();
     assert.equal(g.verdict, g.s.short, 'half an hour under: short by 0:30'); near(g.dash, 339.29 * 450 / 480, 0.5, 'the ring fills 450 of 480');
@@ -442,7 +461,7 @@ const CASES = [
     assert.equal(g.empty, true, 'no night: the ring carries .is-empty'); assert.equal(g.dash, 0, 'and a zero fill'); assert.notEqual(g.linecap, 'round', 'so no round-cap dot is drawn');
     assert.equal(g.verdict, null, 'the verdict is hidden'); assert.equal(g.num, '—');
     assert.equal(g.rows, 0, 'no rows describe a night that does not exist');
-    assert.equal(g.logInCard, true, 'the log button takes the rows\' place'); assert.equal(g.logBtns, 1, 'and it is the page\'s only one');
+    assert.equal(g.logInCard, false, 'the log button stays under the card'); assert.equal(g.logBtns, 1, 'and it is the page\'s only one');
     assert.equal(g.text.includes(g.emptyLine), false, 'no empty-state sentence inside the card');
     assert.equal(g.history, false, 'no «السجل» header over nothing'); assert.equal(g.emptySentence, false, 'no empty-state sentence under it'); assert.equal(g.older, false, 'no «older days» door into more emptiness');
   }],
@@ -539,11 +558,15 @@ const CASES = [
     const inline = await ev(() => (document.querySelector('#sleep-duration-preview .prev-session-sets')?.getAttribute('style') || '').includes('font-size'));
     assert.equal(inline, false, 'the live total carries no inline font size');
     await ev(() => closeModal());
+    // The night's row lives in the sleep log now; the page's ring is the same
+    // card, so the edit made there is read back on the page.
+    await reset('sleeplog', { date: await ev(() => todayISO()) }); await settled();
     await page.locator('.view.active [data-edit-sleep]').first().click();
     await page.waitForSelector('#modal-root .modal-overlay #sleep-end');
     await page.locator('#sleep-end').fill('07:45');
     await page.locator('#save-sleep-btn').click();
     await page.waitForFunction(() => !document.querySelector('#modal-root .modal-overlay:not(.is-out)'));
+    await reset('sleep'); await settled();
     const got = await ev(() => ({ fig: document.querySelector('.view.active .slp-mini .cal-ring-num')?.textContent.trim(), verdict: document.querySelector('.view.active .slp-verdict')?.textContent.trim(), over: t('sleep_over_by').replace('{v}', '0:15'), dash: parseFloat(document.querySelector('.view.active .slp-mini .cal-ring-fg')?.getAttribute('stroke-dasharray')) }));
     assert.equal(got.fig, '8:15'); assert.equal(got.verdict, got.over, 'a quarter hour past the goal'); near(got.dash, 339.29, 0.5, 'the ring closes');
   }],
@@ -601,7 +624,7 @@ const CASES = [
       const host = document.querySelector(root);
       if (!host) return ['missing ' + root];
       for (const el of [host, ...host.querySelectorAll('*')]) {
-        if (!el.getClientRects().length || el.tagName === 'SVG') continue;
+        if (!el.getClientRects().length || el.tagName === 'SVG' || el.classList.contains('sr-only')) continue;   // .sr-only is a 1px clip by design
         if (el.scrollWidth > el.clientWidth + 1 && getComputedStyle(el).overflowX !== 'visible') out.push(root + ' ' + el.className + ' ' + el.scrollWidth + '>' + el.clientWidth);
       }
       const view = document.querySelector('.view.active');
@@ -614,6 +637,14 @@ const CASES = [
       await reset(view); await settled();
       clipped.push(...await scan(view === 'sleep' ? '.view.active .slp-mini' : '.view.active .trk-hero'));
       if (SHOT_DIR) await page.screenshot({ path: path.join(SHOT_DIR, `${view}-${lang}-${theme}.png`), animations: 'disabled', timeout: 15000 }).catch(() => {});
+    }
+    // The two logs, whole, on a day with rows (today) and on a closed day.
+    for (const view of ['cardiolog', 'sleeplog']) {
+      for (const back of [0, -1]) {
+        await reset(view, { date: await ev((n) => addDaysISO(todayISO(), n), back) }); await settled();
+        clipped.push(...await scan('.view.active'));
+        if (SHOT_DIR) await page.screenshot({ path: path.join(SHOT_DIR, `${view}${back}-${lang}-${theme}.png`), animations: 'disabled', timeout: 15000 }).catch(() => {});
+      }
     }
     await reset('cardio'); await settled();
     await page.locator('.view.active #add-cardio-btn').click();
@@ -672,9 +703,348 @@ const CASES = [
       assert.deepEqual(r.errors, []);
     } finally { await r.ctx.close(); }
   }],
+
+  // ── THE TWO LOGS (the owner, on the Sleep page: the sleep log should follow
+  // the food log's idea — where it lives, in the day, and in the details of
+  // that day's sleep; then on the Cardio page: the same for the cardio log).
+  // The day ledger left both pages for a dated screen each, reached from the
+  // page header exactly as Food reaches its log.
+  ['the sleep page carries no ledger: the header link and the ring open the log on the ring\'s night, Back returns, one add under the card', async ({ page, ev, reset, settled }) => {
+    const s = await ev(seedSleep);
+    await reset('sleep'); await settled();
+    const got = await ev(() => {
+      const v = document.querySelector('.view.active');
+      const card = v.querySelector('.slp-mini');
+      const link = v.querySelector('.page-header .header-links .link-btn');
+      const adds = [...v.querySelectorAll('#add-sleep-btn')];
+      return {
+        rows: v.querySelectorAll('[data-edit-sleep], .ledger, .ledger-day, [data-ledger-sleep]').length,
+        title: !!v.querySelector('.section-title'), older: !!v.querySelector('#more-sleep-days'),
+        link: link ? link.textContent.replace(/\s+/g, ' ').trim() : null, want: t('sleep_log'), chevron: !!(link && link.querySelector('.icon-mirror svg')),
+        adds: adds.length, inCard: !!(card && card.querySelector('#add-sleep-btn')),
+        below: !!(adds[0] && card) && adds[0].getBoundingClientRect().top >= card.getBoundingClientRect().bottom - 0.5,
+        sideways: v.scrollWidth > v.clientWidth + 1,
+      };
+    });
+    assert.equal(got.rows, 0, 'no ledger rows on the Sleep page');
+    assert.equal(got.title, false, 'no history header'); assert.equal(got.older, false, 'no older-days door');
+    assert.equal(got.link, got.want, 'the header carries the log link, as Food\'s does'); assert.equal(got.chevron, true, 'with its mirrored chevron');
+    assert.equal(got.adds, 1, 'ONE add'); assert.equal(got.inCard, false); assert.equal(got.below, true, 'under the card');
+    assert.equal(got.sideways, false, 'the page does not scroll sideways');
+    await page.locator('.view.active .header-links .link-btn').click();
+    assert.deepEqual(await ev(() => [currentView, viewContext.date]), ['sleeplog', s.today], 'the link opens the log on the ring\'s night');
+    await page.locator('.view.active [data-back]').click();
+    assert.equal(await ev(() => currentView), 'sleep', 'Back returns to the Sleep page');
+    await settled();
+    await page.locator('.view.active .slp-mini .slp-ring').click();
+    assert.deepEqual(await ev(() => [currentView, viewContext.date]), ['sleeplog', s.today], 'tapping the ring card opens the log on the night it shows');
+    await page.locator('.view.active [data-back]').click();
+    await settled();
+    await page.locator('.view.active #sleep-goal-btn').click();
+    await page.waitForSelector('#modal-root .modal-overlay #goal-input');
+    assert.equal(await ev(() => currentView), 'sleep', 'the goal button inside the card opens its sheet, not the log');
+    await ev(() => closeModal());
+    // The ring's night when it is not today: the link follows it.
+    const d3 = await ev(() => { const k = addDaysISO(todayISO(), -3); DB.sleep.list().filter((x) => x.date !== k).forEach((x) => DB.sleep.remove(x.id)); return k; });
+    await reset('sleep'); await settled();
+    // The review of the logs (2026-09-27): the header link is the Food and
+    // Cardio links' twin, so it opens TODAY; only the ring opens its own night.
+    await page.locator('.view.active .header-links .link-btn').click();
+    assert.deepEqual(await ev(() => [currentView, viewContext.date]), ['sleeplog', s.today], 'the header link opens today\'s log, as Food\'s and Cardio\'s do — never an old night');
+    await page.locator('.view.active [data-back]').click();
+    await settled();
+    await page.locator('.view.active .slp-mini .slp-ring').click();
+    assert.deepEqual(await ev(() => [currentView, viewContext.date]), ['sleeplog', d3], 'the ring opens the log on the night it shows');
+  }],
+
+  ['a logged night\'s log has no add: its row is the door, so no copy of the night is one tap away; an empty day keeps its add; focus never falls to <body>', async ({ page, ev, reset, settled }) => {
+    const s = await ev(seedSleep);
+    await reset('sleeplog', { date: s.today }); await settled();
+    const count = () => ev(() => DB.sleep.list().filter((x) => x.date === todayISO()).length);
+    const before = await count();
+    assert.equal(await page.locator('.view.active #add-sleeplog-btn').count(), 0, 'a logged night\'s log offers no add (it opened preset to that very night, and one Save wrote a copy)');
+    await page.locator('.view.active [data-edit-sleep]').first().click();
+    await page.waitForSelector('#modal-root #save-sleep-btn');
+    await page.locator('#modal-root #save-sleep-btn').click();
+    await settled();
+    assert.equal(await count(), before, 'saving through the row edits the night, never adds one');
+    const inView = () => ev(() => { const a = document.activeElement; return !!a && a !== document.body && !!a.closest('.view.active'); });
+    assert.equal(await inView(), true, 'after the save, focus lands inside the log, not on <body>');
+    // An empty day keeps its add, and the add writes THAT day.
+    await reset('sleeplog', { date: addDaysISOnode(s.today, -2) }); await settled();
+    assert.equal(await page.locator('.view.active #add-sleeplog-btn').count(), 1, 'an empty day keeps its add');
+  }],
+
+  ['the day arrows keep keyboard focus on the arrow pressed, and hand it to «previous» when «next» stops at today', async ({ page, ev, reset, settled }) => {
+    await ev(seedSleep);
+    for (const view of ['sleeplog', 'cardiolog']) {
+      await reset(view, { date: await ev(() => addDaysISO(todayISO(), -2)) }); await settled();
+      await page.locator('.view.active [data-day-step="-1"]').focus();
+      await page.keyboard.press('Enter');
+      await settled();
+      assert.equal(await ev(() => document.activeElement && document.activeElement.dataset.dayStep), '-1', view + ': «previous» keeps focus after it moves the day');
+      await page.locator('.view.active [data-day-step="1"]').focus();
+      for (let i = 0; i < 3; i++) { await page.keyboard.press('Enter'); await settled(); }
+      assert.deepEqual(await ev(() => [viewContext.date === todayISO(), document.activeElement && document.activeElement.dataset.dayStep]), [true, '-1'], view + ': at today «next» is disabled, and focus moves to «previous», not <body>');
+    }
+  }],
+
+  ['a watch sync repaints an open log: health.js refreshes sleeplog and cardiolog, and the sleep log asks for a sync as the cardio log does', async () => {
+    const health = fs.readFileSync(path.join(__dirname, '..', 'js', 'health.js'), 'utf8');
+    const list = (health.match(/function refreshActive\(\)[\s\S]*?\[([^\]]*)\]/) || [])[1] || '';
+    for (const v of ['home', 'cardio', 'sleep', 'cardiolog', 'sleeplog']) assert.ok(new RegExp("'" + v + "'").test(list), 'health.js refreshActive() repaints ' + v + ' after an import (its list: ' + list.trim() + ')');
+    const body = fs.readFileSync(path.join(__dirname, '..', 'js', 'body.js'), 'utf8');
+    const log = body.slice(body.indexOf('function renderSleepLog('), body.indexOf('\n}\n', body.indexOf('function renderSleepLog(')));
+    assert.ok(/Health\.autoSync\(\)/.test(log), 'renderSleepLog asks for a watch sync, as renderCardioLog does');
+  }],
+
+  ['the sleep log walks the days: the arrows move it and next stops at today; a night shows its ring, details and row; an empty day says so and its add saves to THAT date; an edit keeps the day', async ({ page, ev, reset, settled }) => {
+    const s = await ev(seedSleep);
+    await reset('sleeplog', { date: s.today }); await settled();
+    const read = () => ev(() => {
+      const v = document.querySelector('.view.active');
+      const card = v.querySelector('.slp-mini');
+      const txt = (el) => (el ? el.textContent.replace(/\s+/g, ' ').trim() : null);
+      return {
+        view: currentView, date: viewContext.date, label: txt(v.querySelector('.day-nav-label')),
+        next: v.querySelector('[data-day-step="1"]') ? v.querySelector('[data-day-step="1"]').disabled : 'no next button',
+        h1: txt(v.querySelector('h1.sr-only')), top: txt(v.querySelector('.detail-top-title')),
+        ring: txt(card && card.querySelector('.cal-ring-num')), verdict: txt(card && card.querySelector('.slp-verdict')), closed: !!(card && card.classList.contains('closed')),
+        goalBtn: !!(card && card.querySelector('.trk-goal-btn')),
+        tracks: card ? [...card.querySelectorAll('.macro-track-name')].map(txt) : [],
+        rows: [...v.querySelectorAll('[data-edit-sleep]')].map((r) => ({ range: txt(r.querySelector('.time-range')), sub: txt(r.querySelector('.fig-row-sub')), edge: !!r.querySelector('.sl-bar .sl-seg') })),
+        empty: txt(v.querySelector('.empty-title')), adds: v.querySelectorAll('#add-sleeplog-btn').length,
+        sideways: v.scrollWidth > v.clientWidth + 1,
+        w: { today: t('today'), title: t('sleep_log'), watch: t('from_watch'), deep: t('sleep_deep'), eff: t('sleep_efficiency'), none: t('ledger_no_sleep'), on: t('sleep_on_goal') },
+      };
+    });
+    let g = await read();
+    assert.deepEqual([g.view, g.date], ['sleeplog', s.today]);
+    assert.equal(g.top, g.w.title, 'the bar names the log'); assert.equal(g.h1, g.w.title, 'and an sr-only h1 names the screen');
+    assert.equal(g.label, g.w.today); assert.equal(g.next, true, 'next is disabled on today');
+    assert.equal(g.ring, '7:15', 'the day\'s card is the night\'s ring'); assert.equal(g.closed, false); assert.equal(g.goalBtn, false, 'the log card carries no goal control — the page does');
+    assert.ok(g.tracks.includes(g.w.deep) && g.tracks.includes(g.w.eff), 'the stages as the deep and efficiency bars: ' + g.tracks);
+    assert.equal(g.rows.length, 1, 'the night\'s row');
+    assert.equal(g.rows[0].range, '11:30 PM → 6:45 AM', 'bed → wake, 12-hour, as one ltr run'); assert.equal(g.rows[0].sub, g.w.watch, 'the watch as its source'); assert.equal(g.rows[0].edge, true, 'and its stage edge');
+    assert.equal(g.adds, 0, 'a logged night has no add: its row is the door (a second add wrote a copy of the night)'); assert.equal(g.empty, null); assert.equal(g.sideways, false, 'no sideways scroll');
+    await page.locator('.view.active [data-day-step="-1"]').click();
+    g = await read();
+    assert.equal(g.date, s.d1, 'prev moves one day back'); assert.equal(g.label, await ev((d) => formatDate(d), s.d1)); assert.equal(g.next, false, 'next is live on a past day');
+    assert.equal(g.ring, '8:00'); assert.equal(g.verdict, g.w.on); assert.equal(g.closed, true, 'a past night reads as a closed record'); assert.equal(g.rows.length, 1);
+    await page.locator('.view.active [data-day-step="-1"]').click();
+    g = await read();
+    const d2 = await ev(() => addDaysISO(todayISO(), -2));
+    assert.equal(g.date, d2); assert.equal(g.ring, null, 'an empty day draws no card'); assert.equal(g.rows.length, 0);
+    assert.equal(g.empty, g.w.none, 'it says so once'); assert.equal(g.adds, 1, 'and keeps its one add');
+    await page.locator('.view.active #add-sleeplog-btn').click();
+    await page.waitForSelector('#modal-root .modal-overlay #sleep-date');
+    assert.equal(await page.locator('#sleep-date').inputValue(), d2, 'the add opens on THAT date');
+    await page.locator('#sleep-start').fill('23:00'); await page.locator('#sleep-end').fill('06:00');
+    await page.locator('#save-sleep-btn').click();
+    await page.waitForFunction(() => !document.querySelector('#modal-root .modal-overlay:not(.is-out)'));
+    g = await read();
+    assert.deepEqual([g.view, g.date], ['sleeplog', d2], 'the save re-renders the log on the same day');
+    assert.equal(g.ring, '7:00'); assert.equal(g.rows.length, 1);
+    assert.equal(await ev((d) => DB.sleep.list().filter((x) => x.date === d).length, d2), 1, 'the night was written to that date');
+    await page.locator('.view.active [data-day-step="1"]').click();
+    await page.locator('.view.active [data-edit-sleep]').first().click();
+    await page.waitForSelector('#modal-root .modal-overlay #sleep-end');
+    await page.locator('#sleep-end').fill('07:30');
+    await page.locator('#save-sleep-btn').click();
+    await page.waitForFunction(() => !document.querySelector('#modal-root .modal-overlay:not(.is-out)'));
+    g = await read();
+    assert.deepEqual([g.view, g.date, g.ring], ['sleeplog', s.d1, '8:30'], 'an edit re-renders the log on the same day');
+    await page.locator('.view.active [data-day-step="1"]').click();
+    g = await read();
+    assert.equal(g.date, s.today); assert.equal(g.next, true, 'next stops at today again');
+  }],
+
+  ['the cardio page carries no ledger: the header link opens today\'s log, a day well opens that day, Back returns, one add under the card', async ({ page, ev, reset, settled }) => {
+    const s = await ev(seedCardio);
+    await reset('cardio'); await settled();
+    const got = await ev(() => {
+      const v = document.querySelector('.view.active');
+      const card = v.querySelector('.trk-hero');
+      const link = v.querySelector('.page-header .header-links .link-btn');
+      const adds = [...v.querySelectorAll('#add-cardio-btn')];
+      return {
+        rows: v.querySelectorAll('[data-edit-cardio], .ledger, .ledger-day, [data-ledger-cardio]').length,
+        title: !!v.querySelector('.section-title'), older: !!v.querySelector('#more-cardio-days'),
+        link: link ? link.textContent.replace(/\s+/g, ' ').trim() : null, want: t('cardio_log'), chevron: !!(link && link.querySelector('.icon-mirror svg')),
+        adds: adds.length, inCard: !!(card && card.querySelector('#add-cardio-btn')),
+        below: !!(adds[0] && card) && adds[0].getBoundingClientRect().top >= card.getBoundingClientRect().bottom - 0.5,
+        future: (v.querySelector('.trk-col.is-future') || {}).dataset?.trkDay || null,
+        sideways: v.scrollWidth > v.clientWidth + 1,
+      };
+    });
+    assert.equal(got.rows, 0, 'no ledger rows on the Cardio page');
+    assert.equal(got.title, false, 'no «all sessions» header'); assert.equal(got.older, false, 'no older-days door');
+    assert.equal(got.link, got.want, 'the header carries the log link, as Food\'s does'); assert.equal(got.chevron, true, 'with its mirrored chevron');
+    assert.equal(got.adds, 1, 'ONE add'); assert.equal(got.inCard, false); assert.equal(got.below, true, 'under the card');
+    assert.equal(got.sideways, false, 'the page does not scroll sideways');
+    await page.locator('.view.active .header-links .link-btn').click();
+    assert.deepEqual(await ev(() => [currentView, viewContext.date]), ['cardiolog', s.today], 'the link opens the log on today');
+    await page.locator('.view.active [data-back]').click();
+    assert.equal(await ev(() => currentView), 'cardio', 'Back returns to the Cardio page');
+    await settled();
+    const day = s.prev || s.today;
+    await page.locator(`.view.active .trk-col[data-trk-day="${day}"]`).click();
+    assert.deepEqual(await ev(() => [currentView, viewContext.date]), ['cardiolog', day], 'a day\'s well opens the log on that day');
+    await page.locator('.view.active [data-back]').click();
+    await settled();
+    if (got.future) {
+      await page.locator(`.view.active .trk-col[data-trk-day="${got.future}"]`).click();
+      assert.equal(await ev(() => currentView), 'cardio', 'a day still to come opens nothing');
+    }
+    await page.locator('.view.active #cardio-goal-btn').click();
+    await page.waitForSelector('#modal-root .modal-overlay #goal-input');
+    assert.equal(await ev(() => currentView), 'cardio', 'the goal button inside the card opens its sheet, not the log');
+    await ev(() => closeModal());
+  }],
+
+  ['the cardio log walks the days: the day\'s totals and rows, the arrows, an empty day\'s add on THAT date, an edit on the same day', async ({ page, ev, reset, settled }) => {
+    const s = await ev(() => {
+      DB.cardio.list().forEach((c) => DB.cardio.remove(c.id));
+      DB.cardioPlan.list().forEach((r) => DB.cardioPlan.remove(r.id));
+      DB.prefs.setCardioGoal(150);
+      const today = todayISO(), d1 = addDaysISO(today, -1), d2 = addDaysISO(today, -2);
+      DB.cardio.add({ type: 'running', date: d1, duration: 50, calories: 400 });
+      DB.cardio.add({ type: 'walking', date: today, duration: 35, calories: 180 });
+      DB.cardio.add({ type: 'walking', date: today, duration: 20, calories: 0 });
+      return { today, d1, d2 };
+    });
+    await reset('cardiolog', { date: s.today }); await settled();
+    const read = () => ev(() => {
+      const v = document.querySelector('.view.active');
+      const card = v.querySelector('.cl-day');
+      const txt = (el) => (el ? el.textContent.replace(/\s+/g, ' ').trim() : null);
+      return {
+        view: currentView, date: viewContext.date, label: txt(v.querySelector('.day-nav-label')),
+        next: v.querySelector('[data-day-step="1"]') ? v.querySelector('[data-day-step="1"]').disabled : 'no next button',
+        h1: txt(v.querySelector('h1.sr-only')), top: txt(v.querySelector('.detail-top-title')),
+        fig: txt(card && card.querySelector('.trk-num')), unit: txt(card && card.querySelector('.trk-unit')),
+        ro: card ? [...card.querySelectorAll('.trk-ro')].map((r) => [txt(r.querySelector('.trk-ro-lab')), txt(r.querySelector('.trk-ro-val'))]) : [],
+        share: txt(card && card.querySelector('.trk-delta')),
+        rows: v.querySelectorAll('[data-edit-cardio]').length, owed: v.querySelectorAll('[data-cardio-done]').length,
+        empty: txt(v.querySelector('.empty-title')), adds: v.querySelectorAll('#add-cardiolog-btn').length,
+        sideways: v.scrollWidth > v.clientWidth + 1,
+        w: { today: t('today'), title: t('cardio_log'), cal: t('calories'), min: t('unit_min'), none: t('ledger_no_cardio') },
+        share37: t('cardio_goal_share').replace('{p}', fmtNum(37)), share33: t('cardio_goal_share').replace('{p}', fmtNum(33)),
+      };
+    });
+    let g = await read();
+    assert.deepEqual([g.view, g.date], ['cardiolog', s.today]);
+    assert.equal(g.top, g.w.title, 'the bar names the log'); assert.equal(g.h1, g.w.title, 'and an sr-only h1 names the screen');
+    assert.equal(g.label, g.w.today); assert.equal(g.next, true, 'next is disabled on today');
+    assert.equal(g.fig, '55', 'the day\'s minutes'); assert.equal(g.unit, g.w.min);
+    assert.deepEqual(g.ro, [[g.w.cal, '180']], 'the day\'s calories (the count of sessions is the rows under it)');
+    assert.equal(g.share, g.share37, 'the day\'s share of the weekly goal');
+    assert.equal(g.rows, 2); assert.equal(g.adds, 1); assert.equal(g.empty, null); assert.equal(g.sideways, false, 'no sideways scroll');
+    await page.locator('.view.active [data-day-step="-1"]').click();
+    g = await read();
+    assert.equal(g.date, s.d1, 'prev moves one day back'); assert.equal(g.label, await ev((d) => formatDate(d), s.d1)); assert.equal(g.next, false, 'next is live on a past day');
+    assert.equal(g.fig, '50'); assert.deepEqual(g.ro, [[g.w.cal, '400']]); assert.equal(g.share, g.share33); assert.equal(g.rows, 1);
+    await page.locator('.view.active [data-day-step="-1"]').click();
+    g = await read();
+    assert.equal(g.date, s.d2); assert.equal(g.fig, null, 'an empty day draws no card'); assert.equal(g.rows, 0);
+    assert.equal(g.empty, g.w.none, 'it says so once'); assert.equal(g.adds, 1, 'and keeps its one add');
+    await page.locator('.view.active #add-cardiolog-btn').click();
+    await page.waitForSelector('#modal-root .modal-overlay #cardio-date');
+    assert.equal(await page.locator('#cardio-date').inputValue(), s.d2, 'the add opens on THAT date');
+    await page.locator('#cardio-duration').fill('25');
+    await page.locator('#save-cardio-btn').click();
+    await page.waitForFunction(() => !document.querySelector('#modal-root .modal-overlay:not(.is-out)'));
+    g = await read();
+    assert.deepEqual([g.view, g.date, g.fig, g.rows], ['cardiolog', s.d2, '25', 1], 'the save re-renders the log on the same day, with the session');
+    assert.equal(await ev((d) => DB.cardio.list().filter((x) => x.date === d).length, s.d2), 1, 'the session was written to that date');
+    await page.locator('.view.active [data-day-step="1"]').click();
+    await page.locator('.view.active [data-day-step="1"]').click();
+    await page.locator('.view.active [data-edit-cardio]').first().click();
+    await page.waitForSelector('#modal-root .modal-overlay #cardio-duration');
+    await page.locator('#cardio-duration').fill('40');
+    await page.locator('#save-cardio-btn').click();
+    await page.waitForFunction(() => !document.querySelector('#modal-root .modal-overlay:not(.is-out)'));
+    g = await read();
+    const sum = await ev(() => String(DB.cardio.list().filter((x) => x.date === todayISO()).reduce((a, c) => a + c.duration, 0)));
+    assert.deepEqual([g.view, g.date, g.fig], ['cardiolog', s.today, sum], 'an edit re-renders the log on the same day');
+    assert.notEqual(sum, '55', 'and the edit landed');
+  }],
+
+  ['a scheduled session appears on its day in the log, and its tick writes or claims the row exactly as Home\'s does', async ({ page, ev, reset, settled }) => {
+    const s = await ev(() => {
+      DB.cardio.list().forEach((c) => DB.cardio.remove(c.id));
+      DB.cardioPlan.list().forEach((r) => DB.cardioPlan.remove(r.id));
+      const today = todayISO();
+      DB.cardioPlan.add({ type: 'cycling', days: [0, 1, 2, 3, 4, 5, 6], duration: 30 });
+      return { today, id: (DB.cardioPlan.list()[0] || {}).id };
+    });
+    try {
+      await reset('cardiolog', { date: s.today }); await settled();
+      const look = () => ev(() => ({
+        owed: [...document.querySelectorAll('.view.active [data-cardio-done]')].map((b) => b.dataset.cardioDone),
+        named: [...document.querySelectorAll('.view.active [data-cardio-done]')].every((b) => (b.getAttribute('aria-label') || '').includes(t('cycling'))),
+        shown: document.querySelectorAll('.view.active [data-edit-cardio]').length, empty: !!document.querySelector('.view.active .empty'),
+        rows: DB.cardio.list().filter((c) => c.date === todayISO()).map((c) => ({ planId: c.planId || null, auto: !!c.planAuto, dur: c.duration, type: c.type })),
+        at: [currentView, viewContext.date],
+      }));
+      let g = await look();
+      assert.deepEqual(g.owed, [s.id], 'today\'s scheduled ride is on the log, owed'); assert.equal(g.named, true, 'its tick is named by the type');
+      assert.equal(g.shown, 0); assert.equal(g.empty, false, 'a day with a session owed is not «nothing»');
+      await page.locator('.view.active [data-cardio-done]').click();
+      g = await look();
+      assert.deepEqual(g.rows, [{ planId: s.id, auto: true, dur: 30, type: 'cycling' }], 'the tick writes the row Home\'s tick writes');
+      assert.deepEqual(g.owed, [], 'the ride is no longer owed'); assert.equal(g.shown, 1, 'it is a session of the day now'); assert.deepEqual(g.at, ['cardiolog', s.today]);
+      // An unclaimed ride of the same type (a watch import) is CLAIMED, not doubled.
+      await ev(() => { DB.cardio.list().forEach((c) => DB.cardio.remove(c.id)); DB.cardio.add({ type: 'cycling', date: todayISO(), duration: 44, calories: 120 }); renderView(currentView); });
+      await page.locator('.view.active [data-cardio-done]').click();
+      g = await look();
+      assert.deepEqual(g.rows, [{ planId: s.id, auto: false, dur: 44, type: 'cycling' }], 'the tick claims the existing ride');
+      // A PAST day carries no tick, however old the schedule — only today's
+      // log does, as Home (the review: a tick there back-wrote a session
+      // months ago, and after its toast it could not be un-ticked).
+      await ev(() => { STATE.cardioPlan.forEach((r) => { r.createdAt = new Date(Date.now() - 30 * 864e5).toISOString(); }); });
+      await page.locator('.view.active [data-day-step="-1"]').click();
+      g = await look();
+      assert.deepEqual(g.owed, [], 'yesterday owes no tick even to a schedule made a month ago');
+    } finally {
+      await ev(() => { DB.cardioPlan.list().forEach((r) => DB.cardioPlan.remove(r.id)); DB.cardio.list().forEach((c) => DB.cardio.remove(c.id)); });
+    }
+  }],
+
+  ['a row dated after today stays reachable: today\'s log lists it under its own date, outside the day\'s card; a past day does not', async ({ ev, reset, settled }) => {
+    // The arrows stop at today, so a mistyped future date (an old blob, a
+    // backup) would have no day to live on — the ledger showed it above today.
+    const s = await ev(() => {
+      DB.sleep.list().forEach((x) => DB.sleep.remove(x.id));
+      DB.cardio.list().forEach((c) => DB.cardio.remove(c.id));
+      const today = todayISO(), later = addDaysISO(today, 3);
+      DB.sleep.add({ date: later, sleepTime: '23:00', wakeTime: '07:00' });
+      DB.cardio.add({ type: 'walking', date: later, duration: 30, calories: 0 });
+      return { today, d1: addDaysISO(today, -1) };
+    });
+    try {
+      for (const view of ['sleeplog', 'cardiolog']) {
+        const look = () => ev(() => ({
+          n: document.querySelectorAll('.view.active .ledger-day.is-future [data-edit-sleep], .view.active .ledger-day.is-future [data-edit-cardio]').length,
+          tag: document.querySelector('.view.active .ledger-day.is-future .ledger-num')?.textContent.trim() || null, want: t('date_future_tag'),
+          card: !!document.querySelector('.view.active .slp-mini, .view.active .cl-day'), empty: !!document.querySelector('.view.active .empty'),
+        }));
+        await reset(view, { date: s.today }); await settled();
+        let g = await look();
+        assert.equal(g.n, 1, view + ': today\'s log lists the later row'); assert.equal(g.tag, g.want, view + ': under its own date, tagged as still to come');
+        assert.equal(g.card, false, view + ': it is not counted as today\'s'); assert.equal(g.empty, true, view + ': today itself is still empty');
+        await reset(view, { date: s.d1 }); await settled();
+        g = await look();
+        assert.equal(g.n, 0, view + ': a past day does not repeat it');
+      }
+    } finally {
+      await ev(() => { DB.sleep.list().forEach((x) => DB.sleep.remove(x.id)); DB.cardio.list().forEach((c) => DB.cardio.remove(c.id)); });
+    }
+  }],
 ];
 
 // formatDuration, in Node, for the expectations (H:MM — the owner's clock rule).
+function addDaysISOnode(iso, n) { const [y, m, d] = iso.split('-').map(Number); const t = new Date(y, m - 1, d + n); return t.getFullYear() + '-' + String(t.getMonth() + 1).padStart(2, '0') + '-' + String(t.getDate()).padStart(2, '0'); }
 function formatDurationNode(min) { const m = Math.round(min); return Math.floor(m / 60) + ':' + String(m % 60).padStart(2, '0'); }
 
 async function run() {
@@ -698,7 +1068,7 @@ async function run() {
     }
   } finally { await browser.close(); await srv.close(); }
   if (failures.length) { console.error(`FAIL  cardio+sleep UI: ${failures.length} of ${CASES.length * 2} cases failed`); failures.forEach((f) => console.error('  - ' + f)); process.exitCode = 1; return; }
-  console.log(`PASS  cardio+sleep UI (${passed} cases, AR/dark + EN/light, 375px): the instrument hero from seeded rows (figures exact), the goal control and the is-met track, the last-used type and focus in the minutes, the redrawn duotone glyphs on radio tiles kept in place, every cardio glyph inside its 24-unit grid with no transform, the new-type flow and its neutral tile, the empty page said once, the sleep ring (fill = last night ÷ the goal, the duration and a one-line verdict inside the chord at 375/360/340 × normal/larger text, the three rows with the average of the nights BEFORE, no repeated range, no track, the stacked narrow card, the empty ring), the sheet on last night's times and the newest missing date, no second row for a logged date, the newest row of a date in the ring, the Settings goal rows and the backup round-trip, nothing clipped at «larger text», and the reduced-motion end state`);
+  console.log(`PASS  cardio+sleep UI (${passed} cases, AR/dark + EN/light, 375px): the instrument hero from seeded rows (figures exact), the goal control and the is-met track, the last-used type and focus in the minutes, the redrawn duotone glyphs on radio tiles kept in place, every cardio glyph inside its 24-unit grid with no transform, the new-type flow and its neutral tile, the empty page said once, the sleep ring (fill = last night ÷ the goal, the duration and a one-line verdict inside the chord at 375/360/340 × normal/larger text, the night's range and source on the page's card, the three rows with the average of the nights BEFORE, no track, the stacked narrow card, the empty ring), the sheet on last night's times and the newest missing date, no second row for a logged date, the newest row of a date in the ring, the Settings goal rows and the backup round-trip, nothing clipped at «larger text», the reduced-motion end state, and THE TWO LOGS (no ledger on either page, one add under each card, the header link / the ring / a day's well opening the log on the right day, Back, the arrows with next stopped at today, a day's card, details and rows, an empty day's add written to THAT date, an edit kept on its day, a closed night, a scheduled ride owed on its day and ticked or claimed as on Home)`);
 }
 
 if (require.main === module) run().catch((e) => { console.error(e); process.exitCode = 1; });

@@ -2072,15 +2072,17 @@ button.schedule-prev-row { width: 100%; min-height: var(--btn-h-m); font: inheri
 /* =========================================================================
    DATA ROWS (CARDIO / FOOD / SLEEP)
    ========================================================================= */
-/* DAY LEDGER (sleep, cardio): a day header, then the day's rows or one quiet
-   'nothing logged' line with a + that logs that day. Empty days are the point —
-   they must read as days, not as gaps. */
+/* THE LOGS' ROW STACK (sleep, cardio — the day ledger that hung under both
+   pages became a dated log each, js/body.js renderSleepLog/renderCardioLog):
+   the day's rows, then — on today only — any row DATED after today under its
+   own date header (.ledger-day.is-future), so a mistyped date stays reachable
+   when the arrows stop at today. .ledger-add (a dashed slot) outlived the
+   ledger: Home's and Program's scheduled-cardio lists use it. */
 .ledger { display: flex; flex-direction: column; gap: var(--sp-3); }
 .ledger-day { display: flex; flex-direction: column; gap: var(--sp-1h); }
 .ledger-date { display: flex; align-items: baseline; gap: var(--sp-2); padding: 0 var(--sp-1); }
 .ledger-dow { font-size: var(--fs-label); font-weight: 700; color: var(--text); }
 .ledger-num { font-size: var(--fs-meta); color: var(--text-mute); }
-.ledger-day.is-empty .ledger-dow { color: var(--text-mute); font-weight: 600; }
 .ledger-day.is-future .ledger-num { color: var(--cat-arms); }
 .ledger-add {
   position: relative;
@@ -4523,6 +4525,19 @@ body[dir="rtl"] .picker-row { text-align: right; }
 .rec-act::after { content: ''; position: absolute; inset: -4px 0; }
 .rec-act svg { width: 16px; height: 16px; }
 .rec-act:active { background: var(--surface-3); }
+/* The AI at work in this row (v416): the sparkle and one short line in the
+   foot's free space, in the accent text colour of the retry it alternates
+   with, so the foot keeps its one fixed line. It shrinks before anything else
+   and never wraps. The pulse is recPulse, the pending figures' own; the global
+   reduced-motion clamp stills it. */
+.rec-ai {
+  display: inline-flex; align-items: center; gap: 6px; min-width: 0;
+  color: var(--accent-text); font-size: var(--fs-btn-s); font-weight: 600;
+}
+.rec-ai[hidden] { display: none; }
+.rec-ai svg { flex: none; width: 16px; height: 16px; }
+.rec-ai-t { min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.rec-ai.is-busy svg { animation: recPulse 1.2s ease-in-out infinite; }
 
 /* add row — the app's own dashed empty-slot idiom. NOT .btn-ghost: the
    identity layer gives that a solid border, which would beat the dash. */
@@ -9049,6 +9064,41 @@ body[dir="rtl"] .enter .slp-mini .macro-track-fill { transform-origin: 100% 50%;
   animation: vlt-enter var(--dur-fast) var(--ease-out) both;
   animation-delay: calc(min(var(--i, 0), 5) * var(--step, var(--stagger)) + 4 * var(--stagger-bar));
 }
+
+/* =========================================================================
+   THE SLEEP AND CARDIO LOGS (2026-09-27 — the owner: the sleep log should
+   follow the food log's idea, in where it lives, in the day, and in the
+   details of that day; then the same for cardio). Each page carries its log's
+   link in the header (.header-links + .link-btn, Food's own) and ONE add
+   under its card (.log-add, the L rung at full width); the log is a dated
+   screen — the food log's .day-nav, that day's card, the same add, the day's
+   rows (js/body.js renderSleepLog / renderCardioLog).
+   ========================================================================= */
+.log-add { margin-bottom: var(--sp-4); }
+/* Next is disabled on today: the food log's 0.4, as a rule, not inline. */
+.day-nav .calendar-nav-btn:disabled { opacity: 0.4; }
+/* The page's card and its wells are doors to the log (a pointer shortcut —
+   the header link is the keyboard's). A day still to come opens nothing. */
+.view[data-view="sleep"] .slp-mini,
+.view[data-view="cardio"] .trk-hero [data-trk-day]:not(.is-future) { cursor: pointer; }
+/* The ring's night on the PAGE: the bed → wake range as one run and the
+   source under it (in the log the night's own row prints both). */
+.slp-range { display: flex; flex-direction: column; gap: 2px; }
+.slp-range .time-range { font-size: var(--fs-sub); font-weight: 700; color: var(--text); }
+.slp-src { font-size: var(--fs-meta); color: var(--text-mute); }
+/* No row beside the ring (no night at all): the ring stands alone, centred —
+   an empty column is a box that does not fit what is in it. */
+.slp-body.is-solo { justify-content: center; }
+/* The log's card has no caption row when the night has no quality word. */
+.slp-mini > .slp-body:first-child { margin-top: 0; }
+/* A night before today is a CLOSED record — the closed food day's treatment
+   (.nutri-mini.closed): a thinner stroke, the figure in --text, the verdict
+   muted. */
+.slp-mini.closed .cal-ring-bg, .slp-mini.closed .cal-ring-fg { stroke-width: 7; }
+.slp-mini.closed .cal-ring-num { color: var(--text); }
+.slp-mini.closed .slp-verdict { color: var(--text-mute); }
+/* The cardio log's day card has no caption row: the figure opens it. */
+.cl-day .trk-fig { margin-top: 0; }
 
 /* =========================================================================
    ^^^ EVERYTHING ABOVE, THEN THE IDENTITY LAYER BELOW. ^^^

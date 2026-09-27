@@ -2,6 +2,60 @@
 
 One section per release since v309, newest first, moved verbatim from `CLAUDE.md` in v401 (batch 6 of the 2026-09-25 review; `docs/REVIEW-2026-09-25.md`). `CLAUDE.md` is the guide and the authority for how the app works now. A section here records what one release changed and why, in the words written at the time, so a later section — or the guide — can supersede what an earlier one says.
 
+## v416 — sleep and cardio logs like the food log; the AI named in the recipe row; the two-dish import hardened
+
+Three owner requests and the finish of a fourth, in one release.
+
+**«بدي السجل يكون نفس فكرة السجل تبع الأكل» (sleep), then «نفس الشغل … من ناحية
+السجل» (cardio).** Both pages lose the history block under their card (the
+section title, its add, the day ledger, older days). Each header now carries a
+text link where Food's is — «سجل النوم» / «سجل الكارديو» with the mirrored chevron
+— opening a dated log built on the food log's model: back and title, the day
+arrows (next stops at today), THAT day's card, that day's rows, and an add that
+writes to that day. The sleep card on the page and in the log is one function
+(a past night reads as a closed record); tapping the ring opens its night, and
+a day's bar in the cardio week opens that day. One add stays under each page's
+card. `dayLedgerHtml` and its dead keys and CSS are gone; contract 75 now keeps
+the fingerprint net's view list equal to the page's sections.
+- The review of that build, fixed with checks seen failing first: a logged
+  night's log offered an add preset to that very night, and one Save wrote a
+  copy — a logged night has no add now, its row is the door; a watch sync never
+  repainted an open log (health.js refreshes both, and the sleep log asks for
+  a sync); the day arrows, Save and the tick dropped focus to `<body>`; the
+  sleep header link opened an old night instead of today; and a past day's
+  scheduled tick back-wrote a session months ago and could not be un-ticked —
+  only today's log carries a tick now, as Home.
+
+**«خلّي فيه شي يدل على التحليل بالذكاء الاصطناعي» (the recipe ingredient row).**
+The open row names the AI where it acts, in the foot's free space: a pulsing
+sparkle and «يحلّل الذكاء الاصطناعي…» while the figures are out, «تقدير الذكاء
+الاصطناعي» when they land, and a failed row's retry reads «حلّل بالذكاء
+الاصطناعي» with the same sparkle (it read a bare «أعد المحاولة»). One line at
+340 px (B17).
+
+**«كمّلها» — the two-dish import test.** A 12-agent review of the v411 path
+(four code finders, each verified by a skeptic, plus a stubbed-browser prober)
+confirmed nine defects and reproduced three more; all are fixed, each with a
+case seen failing first (B18–B28, W16–W19):
+- One Escape in a dish's editor closed the chooser too, losing the other
+  dishes; Escape on the chooser closed the recipes picker it handed over to; a
+  double tap on «احفظ الكل» closed that picker on its rising backdrop.
+- A saved recipe with a salt row could not be saved again (a model call, then a
+  refusal); an imported zero row could never be re-estimated; changing a salt
+  row's amount now keeps its zero, and a rename the AI prices at zero settles.
+- A dish editor closed while its Save waited still saved ~0.9 s later; a slow
+  photo could replace a newer choice; the retry dropped focus; a YouTube link
+  now says only its first five minutes are read.
+- The Worker (deployed, version 277ae869, commit a1e56d3): the recipe turn
+  asked for ONE recipe although the instruction asked for every dish; the
+  once-each rule could sum an ingredient two dishes share into one; names were
+  cut mid-emoji, leaving a lone surrogate that Postgres jsonb refuses (a failed
+  sync push) — cut by whole characters now, and the app strips any lone
+  half before storage too.
+- Still open: the LIVE two-dish run needs a signed-in session, which only the
+  owner can start (the browser pane is not signed in).
+- Gate: 71 contracts, 18 suites (cardio+sleep 52 cases).
+
 ## v415 — the logo is the barbell alone: VAULT / TRAIN removed
 
 «شيلهم خلص», on the sign-in card's VAULT and TRAIN. The splash dropped its word

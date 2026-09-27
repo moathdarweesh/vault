@@ -1090,7 +1090,7 @@ function recIngLabel(n, html) {
 // storage (cleanMealItems copies every extra field it is handed).
 function recStoredItem(it) {
   const c = Object.assign({}, it);
-  delete c._auto; delete c._manual; delete c._id; delete c._src; delete c._why;
+  delete c._auto; delete c._manual; delete c._zero; delete c._wasZero; delete c._id; delete c._src; delete c._why;
   return c;
 }
 
@@ -1163,7 +1163,22 @@ function openRecipeEditor(date, existing, onDone, opts) {
   var newItem = function () { return { _id: ++seq, name: '', qty: '', calories: 0, protein: 0, carbs: 0, fat: 0 }; };
   var hasFigures = function (it) { return !!(Number(it.calories) || Number(it.protein) || Number(it.carbs) || Number(it.fat)); };
   // A new recipe opens on the two tiles, never on a phantom empty row.
-  var items = existing && existing.items ? existing.items.map(function (i) { return Object.assign({ _id: ++seq }, i); }) : [];
+  // A NAMED ROW WITH FOUR ZEROS (salt, water) is a deliberate zero, however it
+  // arrives: an import's draft marks it so, and a SAVED recipe carries no mark at
+  // all (recStoredItem strips them), so without this a reopened recipe armed the
+  // row on Save, spent a model call the Worker answers with nothing, and was then
+  // refused as «no figures» (the v416 review, F1). _zero says the zero came from
+  // the import or from storage, not from the user: a name or amount edit lifts it
+  // and the row is estimated like any other (F3). A figure typed by hand is
+  // _manual alone and stays the user's. THE TRADE-OFF, named: storage cannot
+  // tell a deliberate zero from a row saved before the named-zero guard (v398)
+  // whose estimate had failed, so such a legacy row now reopens as a settled
+  // zero; its name edit still re-estimates it.
+  var items = existing && existing.items ? existing.items.map(function (i) {
+    var it = Object.assign({ _id: ++seq }, i);
+    if (String(it.name || '').trim() && !hasFigures(it)) { it._manual = true; it._zero = true; }
+    return it;
+  }) : [];
   var name = (existing && existing.name) || '';
   var servings = (existing && existing.servings) || 1;
   var saveWanted = false;
@@ -1264,7 +1279,13 @@ function openRecipeEditor(date, existing, onDone, opts) {
       '<div class="rec-strip-foot">' +
         '<button type="button" class="rec-del" data-del aria-label="' + escapeHtml(t('rec_del_ing')) + '">' + icon('trash', 16) + '</button>' +
         '<span class="rec-strip-gap"></span>' +
-        '<button type="button" class="rec-act" data-retry hidden>' + icon('refresh', 16) + ' ' + t('rec_retry') + '</button>' +
+        // The AI's part in this row, said where it acts (v416, owner: «خلّي فيه
+        // شي يدل على التحليل بالذكاء الاصطناعي»): the sparkle «استخراج وصفة»
+        // wears, pulsing while the figures are out, then naming them as its
+        // estimate. A failed row says it through its retry instead, so the two
+        // never stand side by side. updateSummary is the one writer.
+        '<span class="rec-ai" data-ai-status role="status" hidden>' + icon('sparkle', 16) + '<span class="rec-ai-t"></span></span>' +
+        '<button type="button" class="rec-act" data-retry hidden>' + icon('sparkle', 16) + ' ' + t('rec_retry_ai') + '</button>' +
         '<button type="button" class="rec-act" data-recompute hidden>' + icon('refresh', 16) + ' ' + t('rec_recompute') + '</button>' +
         '<button type="button" class="btn btn-ghost rec-done" data-done>' + t('rec_row_done') + '</button>' +
       '</div>' +
@@ -1347,6 +1368,14 @@ function openRecipeEditor(date, existing, onDone, opts) {
       var canCompute = String(it.name || '').trim().length >= 3;
       if (retry) retry.hidden = st.state !== 'fail';
       if (recompute) recompute.hidden = !(st.state === 'done' && (st.src === 'manual' || st.src === 'saved') && canCompute);
+      var ai = row.querySelector('[data-ai-status]');
+      if (ai) {
+        var aiSays = st.state === 'pending' ? t('rec_ai_pending') : st.state === 'done' && st.src === 'ai' ? t('rec_ai_done') : '';
+        ai.hidden = !aiSays;
+        ai.classList.toggle('is-busy', st.state === 'pending');
+        var aiT = ai.querySelector('.rec-ai-t');
+        if (aiT && aiT.textContent !== aiSays) aiT.textContent = aiSays;   // unchanged text is not re-announced
+      }
       return;
     }
     var door = row.querySelector('.rec-door');
@@ -1634,7 +1663,12 @@ function openRecipeEditor(date, existing, onDone, opts) {
           if (got.length === batch.length) m = got[k];
           else { var n = normName(it.name); m = got.find(function (g) { var gn = normName(g.name); return gn && (gn.indexOf(n) !== -1 || n.indexOf(gn) !== -1); }) || null; }
         }
-        if (m && (m.calories || m.protein || m.carbs || m.fat)) fill(it, m, 'ai');
+        if (m && (m.calories || m.protein || m.carbs || m.fat)) { it._wasZero = false; fill(it, m, 'ai'); }
+        // A row renamed from one zero to another («salt» → «sea salt»): the
+        // service ANSWERED and priced it at nothing (the Worker drops an
+        // all-zero row). That is the AI's zero, settled as a zero — not a
+        // failure the named-zero guard then refuses. An error is still a failure.
+        else if (it._wasZero && got) { it._wasZero = false; it._manual = true; it._zero = true; it._auto = null; it._src = 'ai'; it._why = null; updateSummary(it); }
         else { settle(it, 'fail', signin ? 'signin' : 'ai'); failed.push(it.name); }
       });
     }
@@ -1658,6 +1692,12 @@ function openRecipeEditor(date, existing, onDone, opts) {
     var it = itemOf(inp); if (!it) return;
     if (f === 'name' || f === 'qty') {
       it[f] = inp.value;
+      // A zero the import or storage set (_zero) described the OLD row: once
+      // its NAME changes it is estimated again (F3). An amount alone does not
+      // lift it — two teaspoons of salt are still zero, and lifting it sent a
+      // call the Worker answers with nothing, then refused the Save (the
+      // review of the fixes). _wasZero lets an answered zero settle as one.
+      if (it._zero && f === 'name') { it._zero = false; it._wasZero = true; it._manual = false; it._auto = null; it._src = null; it._why = null; }
       if (f === 'name') { var grp = inp.closest('.rec-strip'); if (grp) grp.setAttribute('aria-label', stripName(it)); }
       scheduleAuto(it);
       updateSummary(it);
@@ -1665,7 +1705,7 @@ function openRecipeEditor(date, existing, onDone, opts) {
       it[f] = parseFloat(inp.value) || 0;
       // A figure typed by hand is the user's number: never overwritten. Only
       // the explicit "compute again" button clears this.
-      it._manual = true; it._auto = null; it._src = 'manual'; it._why = null;
+      it._manual = true; it._zero = false; it._wasZero = false; it._auto = null; it._src = 'manual'; it._why = null;
       updateSummary(it);
     }
     saveWanted = false; setWaiting(false);
@@ -1684,7 +1724,7 @@ function openRecipeEditor(date, existing, onDone, opts) {
     if (el.hasAttribute('data-del')) { removeRow(it); return; }
     if (el.hasAttribute('data-retry')) { it._auto = null; it._why = null; scheduleAuto(it, true); return; }
     if (el.hasAttribute('data-recompute')) {
-      it._manual = false; it._src = null; it._why = null; it._auto = null;
+      it._manual = false; it._zero = false; it._wasZero = false; it._src = null; it._why = null; it._auto = null;
       it.calories = 0; it.protein = 0; it.carbs = 0; it.fat = 0;
       var row = rowOf(it);
       ['calories', 'protein', 'carbs', 'fat'].forEach(function (f) { var i2 = row.querySelector('input[data-f="' + f + '"]'); if (i2) i2.value = ''; });
@@ -1823,7 +1863,10 @@ function openRecipeEditor(date, existing, onDone, opts) {
     b.textContent = on ? t('rec_save_wait') : t('rec_save');
   }
   function finishSaveIfWanted(ok) {
-    if (!saveWanted) return;
+    // A sheet that has left (closed, or on its way out) saves nothing: its
+    // trySave would add a recipe the user walked away from and close whatever
+    // sheet is on top now (the dish chooser).
+    if (!saveWanted || !overlay.isConnected || overlay.classList.contains('is-out')) { saveWanted = false; return; }
     saveWanted = false; setWaiting(false);
     if (ok) trySave();
   }
@@ -1901,6 +1944,9 @@ function openRecipeEditor(date, existing, onDone, opts) {
   var watch = new MutationObserver(function () {
     if (overlay.isConnected && !overlay.classList.contains('is-out')) return;
     watch.disconnect();
+    // A Save still waiting for a figure leaves with the sheet: the timer would
+    // otherwise fire ~0.9 s later and save the dish the user just closed.
+    clearTimeout(autoTimer); autoTimer = null; saveWanted = false;
     window.removeEventListener('keydown', onEscape, true);
     if (window.visualViewport) window.visualViewport.removeEventListener('resize', onViewport);
     if (saved || !(opts && typeof opts.onClose === 'function')) return;
@@ -1936,12 +1982,16 @@ function openRecipeImport(date, onDone) {
   guardConvenienceModal(overlay);
   const body = overlay.querySelector('.rx-body');
   let source = null, pick = null;   // pick: { file } for a clip, { pic } for a prepared photo
+  // Bumped by every stage drawn and every file chosen: a photo still being
+  // prepared when the user has moved on (a newer photo, the text tile) is
+  // dropped when it lands, never drawn over the newer choice.
+  let pickSeq = 0;
 
   // A re-render replaces the control that had focus, so each stage hands it on
   // (`refocus`): the sheet's first control, never <body>. The first render
   // leaves it to openModal, which focuses the dialog itself.
   function drawSources(refocus) {
-    source = null; pick = null;
+    source = null; pick = null; pickSeq++;
     body.innerHTML = `<div class="ai-capture-row rx-tiles">${TILES.map(([kind, ic, title, sub]) => `
         <button type="button" class="ai-capture" data-rx-pick="${kind}">
           <span class="ai-capture-icon">${icon(ic, 28)}</span>
@@ -1973,13 +2023,15 @@ function openRecipeImport(date, onDone) {
     }
     // A photo is prepared NOW, so the confirm stage shows exactly what will be read.
     if (!window.FoodAI) { showToast(t('rx_unavailable')); return; }
+    const mine = ++pickSeq;
     let pic = null;
-    try { pic = await FoodAI.recipeImage(file); } catch (e) { if (overlay.isConnected) showToast(window.FoodAI ? FoodAI.friendlyErr(e) : t('rx_error')); return; }
-    if (!overlay.isConnected) return;
+    try { pic = await FoodAI.recipeImage(file); } catch (e) { if (overlay.isConnected && mine === pickSeq) showToast(window.FoodAI ? FoodAI.friendlyErr(e) : t('rx_error')); return; }
+    if (!overlay.isConnected || mine !== pickSeq) return;
     source = 'image'; pick = { pic }; drawConfirm();
   }
 
   function drawConfirm() {
+    pickSeq++;
     const field = (label, ph, rows) => `<label class="form-label" for="rx-text">${label}</label>
       <textarea id="rx-text" class="rx-text" maxlength="3000" dir="auto" rows="${rows}" placeholder="${escapeHtml(ph)}"></textarea>`;
     const mb = pick && pick.file ? Math.max(0.1, Math.round(pick.file.size / 104857.6) / 10) : 0;   // never «0 MB»
@@ -1989,7 +2041,8 @@ function openRecipeImport(date, onDone) {
       ? `<div class="rx-file">${icon('play', 20)}<span dir="auto">${escapeHtml(pick.file.name || '')}</span><span class="rx-size"><span class="num">${fmtNum(mb)}</span> ${t('rx_mb')}</span></div>` + field(t('rx_caption_label'), t('rx_caption_ph'), 3)
       : source === 'image' ? `<div class="rx-preview"><img src="${pick.pic.dataUrl}" alt=""></div>`
       : source === 'link' ? `<label class="form-label" for="rx-link">${t('rx_link_label')}</label>
-        <input id="rx-link" class="rx-link" type="url" inputmode="url" dir="ltr" maxlength="2048" autocomplete="off" placeholder="${escapeHtml(t('rx_link_ph'))}">`
+        <input id="rx-link" class="rx-link" type="url" inputmode="url" dir="ltr" maxlength="2048" autocomplete="off" placeholder="${escapeHtml(t('rx_link_ph'))}">
+        <p class="rx-hint" id="rx-link-yt" data-rx-yt hidden>${t('rx_link_yt_note')}</p>`
       : field(t('rx_text_label'), t('rx_text_ph'), 8)) + `
       <div class="rx-actions">
         <button type="button" class="btn btn-ghost" data-rx-back>${t('back')}</button>
@@ -1997,6 +2050,18 @@ function openRecipeImport(date, onDone) {
       </div>`;
     body.querySelector('[data-rx-back]').addEventListener('click', () => drawSources(true));
     body.querySelector('[data-rx-go]').addEventListener('click', go);
+    // The Worker reads a YouTube video's first five minutes only (end_offset
+    // 300 s): a dish after that never reaches the chooser, so a YouTube link
+    // says so while it is being pasted (the v416 review, W-5).
+    const linkEl = body.querySelector('#rx-link');
+    // The field is DESCRIBED by the note only while it shows: aria-describedby
+    // reads a hidden node's text too, so a TikTok link was announced with the
+    // YouTube limit (the review of the fixes).
+    if (linkEl) linkEl.addEventListener('input', () => {
+      const yt = !!(window.FoodAI && FoodAI.rxLinkKind(linkEl.value) === 'youtube');
+      body.querySelector('[data-rx-yt]').hidden = !yt;
+      if (yt) linkEl.setAttribute('aria-describedby', 'rx-link-yt'); else linkEl.removeAttribute('aria-describedby');
+    });
     // The field a text or a link source is FOR takes the cursor; a clip's caption
     // is optional (no keyboard for it), so focus goes to «استخرج الوصفة» there.
     const first = source === 'link' ? body.querySelector('#rx-link') : source === 'text' ? body.querySelector('#rx-text') : body.querySelector('[data-rx-go]');
@@ -2026,7 +2091,7 @@ function openRecipeImport(date, onDone) {
     const items = (Array.isArray(r.items) ? r.items : []).slice(0, 30).map((it) => {
       const row = { name: txt(it && it.name, 60), qty: txt(it && it.qty, 24), calories: num(it && it.calories),
         protein: num(it && it.protein, true), carbs: num(it && it.carbs, true), fat: num(it && it.fat, true), _src: 'ai', _auto: 'done' };
-      if (!row.calories && !row.protein && !row.carbs && !row.fat) row._manual = true;
+      if (!row.calories && !row.protein && !row.carbs && !row.fat) { row._manual = true; row._zero = true; }   // _zero: an edit lifts it (openRecipeEditor)
       return row;
     }).filter((row) => row.name);
     const s = Math.round(Number(r.servings));
@@ -2066,7 +2131,12 @@ function openRecipeImport(date, onDone) {
       const token = ++serial;
       controller = new AbortController();
       const signal = controller.signal;
+      // «أعد المحاولة» hides the row it sits in: focus that was there (or on the
+      // alert) goes to the sheet itself, never to <body> outside the held dialog.
+      const was = document.activeElement;
+      const lost = !!was && ($h('[data-rx-fail]').contains(was) || $h('[data-rx-error]').contains(was));
       $h('[data-rx-error]').hidden = true; $h('[data-rx-fail]').hidden = true;
+      if (lost) held.querySelector('[role="dialog"]')?.focus({ preventScroll: true });
       try {
         step(t('rx_step_prep'), 0.02);
         if (!window.FoodAI) throw new Error(t('rx_unavailable'));
