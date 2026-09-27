@@ -39,9 +39,28 @@ const CHROME = 'C:/Program Files/Google/Chrome/Application/chrome.exe';
 // ---- the badge: the barbell silhouette, from the live glyph ---------------
 // Read from ICONS.dumbbell at build time (see readIcons) and bound to white:
 // the five rectangles at .95 about (12,12), as ic_stat_vault.xml draws them.
+//
+// ONE PATH, NOT FIVE RECTS (v405). Five separate <rect>s put the shaft/plate
+// joins (x = 9.5 and 14.5 → 38.5 and 57.5 px at 96) on half pixels, and two
+// antialiased edges compose to alpha ≈ 191: a hairline of background through
+// the tint on every reminder. ic_stat_vault.xml is one path of five subpaths
+// for exactly this reason. The same path data is generated HERE from the
+// glyph's rects (rect → M/h/a/v with the rx corners), so the glyph stays the
+// one source and the badge cannot drift from it — and it is checked against
+// the status-bar icon's pathData, which must be the identical string.
+const rectsOf = (svg) => [...svg.matchAll(/<rect\b([^>]*)\/?>/g)].map(([, a]) => {
+  const n = (k) => { const m = a.match(new RegExp('\\b' + k + '="([^"]*)"')); return m ? Number(m[1]) : 0; };
+  return { x: n('x'), y: n('y'), w: n('width'), h: n('height'), r: n('rx') };
+});
+const num = (v) => String(Math.round(v * 1000) / 1000);
+const rectPath = ({ x, y, w, h, r }) => (r
+  ? `M${num(x + r)},${num(y)}h${num(w - 2 * r)}a${num(r)},${num(r)} 0 0 1 ${num(r)},${num(r)}v${num(h - 2 * r)}a${num(r)},${num(r)} 0 0 1 -${num(r)},${num(r)}h-${num(w - 2 * r)}a${num(r)},${num(r)} 0 0 1 -${num(r)},-${num(r)}v-${num(h - 2 * r)}a${num(r)},${num(r)} 0 0 1 ${num(r)},-${num(r)}Z`
+  : `M${num(x)},${num(y)}h${num(w)}v${num(h)}h-${num(w)}Z`);
+const badgePath = (dumbbell) => rectsOf(dumbbell).map(rectPath).join('');
 const badgeSvg = (dumbbell) => `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="96" height="96">
-  <g transform="translate(12 12) scale(0.95) translate(-12 -12)" fill="#fff">${dumbbell.replace(/\s*fill="[^"]*"/g, '')}</g>
+  <g transform="translate(12 12) scale(0.95) translate(-12 -12)"><path fill="#fff" d="${badgePath(dumbbell)}"/></g>
 </svg>`;
+const STAT_ICON = path.join(ROOT, 'android/app/src/main/res/drawable/ic_stat_vault.xml');
 
 // ---- the six category tiles ----------------------------------------------
 const TILES = [
@@ -120,9 +139,15 @@ function main() {
   const ICONS = readIcons();
 
   if (!ICONS.dumbbell) throw new Error('build-notif-icons: ICONS.dumbbell missing — the badge is drawn from it');
+  // One geometry on both platforms: the path generated from the glyph must be
+  // the status-bar icon's pathData, character for character.
+  const statPath = (fs.readFileSync(STAT_ICON, 'utf8').match(/android:pathData="([^"]*)"/) || [])[1];
+  if (statPath !== badgePath(ICONS.dumbbell)) {
+    throw new Error(`build-notif-icons: the badge path generated from ICONS.dumbbell is not ic_stat_vault.xml's pathData\n  glyph: ${badgePath(ICONS.dumbbell)}\n  stat : ${statPath}`);
+  }
   const badgeOut = path.join(OUT, 'badge-96.png');
   render(badgeSvg(ICONS.dumbbell), badgeOut, 96);
-  console.log(`  badge-96.png            ${fs.statSync(badgeOut).size} bytes  (white ink, transparent, the barbell at .95)`);
+  console.log(`  badge-96.png            ${fs.statSync(badgeOut).size} bytes  (white ink, transparent, the barbell at .95 as ONE path — ic_stat_vault.xml's)`);
 
   for (const [name, key] of TILES) {
     if (!ICONS[key]) { console.error(`  MISSING glyph in ICONS: ${key}`); process.exitCode = 1; continue; }

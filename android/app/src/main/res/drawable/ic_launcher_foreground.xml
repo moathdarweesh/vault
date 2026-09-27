@@ -22,8 +22,10 @@
   group scales the 24-unit glyph by 2.1 and moves it 28.8, which puts the
   glyph's centre (12,12) on (54,54). Ink lands at x 31.95..76.05 and
   y 41.4..66.6: 44.1dp across, about 61% of the safe zone, and the farthest
-  corner (an outer plate's) sits 25.4dp from the centre, inside the 33dp
-  keyline circle a round mask keeps.
+  corner (an outer plate's, at 31.95,47.7) sits 22.9dp from the centre as a
+  sharp corner, 22.4dp with its rounding (this line said 25.4dp until v405,
+  wrong on the safe side), inside the 33dp keyline circle a round mask keeps.
+  Contract 72 measures the centre and the safe zone.
 
   BAKED INTO THE APK: nothing here reaches a phone until a new APK (build 25)
   is built and installed.

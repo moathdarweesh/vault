@@ -4294,20 +4294,23 @@ body[dir="rtl"] .picker-row { text-align: right; }
 /* THE LOG'S MINIATURE HERO (owner's request, 2026-09-27). The Food tab's ring
    and tracks, drawn small side by side for the day the log is showing, with
    the eaten rows under it. The ring/track classes are the hero's, so its stroke
-   and hue rules above apply unchanged; only sizes are scoped here. It is a
-   RECORD, not a live gauge: on a CLOSED day (.closed, before today) the big
+   and hue rules above apply unchanged; only sizes are scoped here. The
+   TREATMENT is a record: on a CLOSED day (.closed, before today) the big
    figure is the day's verdict and wears --text, the label and sub step back to
-   --text-mute, and the ring is a shade thinner. No pencil, no water bar, no
+   --text-mute, and the ring is a shade thinner. The TARGET is not: no target
+   is stored per day, so a closed day's verdict is measured against the target
+   set TODAY, and changing the goal rewrites every past verdict (v405, kept on
+   purpose — a per-day target is a schema change). No pencil, no water bar, no
    cursor — the hero opens the log; the log's own card opens nothing.
    THE RING IS 144, NOT SMALLER, BY MEASUREMENT — AND THE TYPE STAYS ON THE
    FLOOR. Nothing in the app renders below 11px (--fs-caption), so the centre
-   lines wear the scale, not a bespoke 9px. The Arabic sub line
-   («1,100 / 2,000 سعرة») is then 104px wide at normal scale: on the stroke of
-   a 136px ring (chord 99px) and clear of 144 (chord 107px). Under «Larger
-   text» only the unit may drop to a second line (max-width), never across
-   the ring. scripts/test-food-log-ui.js measures
-   every centre line against the inner chord, in both languages, at
-   --fs-scale 1.1 — it refuses a ring the text does not fit. */
+   lines wear the scale, not a bespoke 9px. The Arabic sub line, «1,100 /
+   2,000» without its unit since v405, is 75px wide at normal scale and 82px
+   under «Larger text», clear of the 144px ring's 107px chord (the 136px ring
+   the first draft used has a 99px chord). scripts/test-food-log-ui.js
+   measures every centre line against the inner chord, in both languages, at
+   --fs-scale 1.1, widened ×1.12 when the brand faces are not loaded — it
+   refuses a ring the text does not fit. */
 .nutri-mini {
   display: flex; align-items: center; gap: var(--sp-4);
   background: var(--card-bg); border: var(--card-border);
@@ -4318,19 +4321,37 @@ body[dir="rtl"] .picker-row { text-align: right; }
 .nutri-mini .cal-ring-bg, .nutri-mini .cal-ring-fg { stroke-width: 9; }
 .nutri-mini .cal-ring-num { font-size: calc(24px * var(--fs-scale)); }
 .nutri-mini .cal-ring-label { font-size: var(--fs-caption); letter-spacing: 0.04em; margin-top: 2px; }
-/* max-width 75% = 108px: the Arabic sub is 104px at normal scale (one line)
-   and 113px under «Larger text» (the unit wraps, the figures stay on one line
-   inside the chord). */
+/* The miniature's sub line carries NO unit (v405): «868 / 2,300», where the
+   hero reads «868 / 2,300 سعرة». With the unit the Arabic line measured 104px
+   in the harness's fallback mono and ~110px in JetBrains Mono (its digits are
+   ~0.6em, the fallback's ~0.55em) against a 107px chord: on the stroke on a
+   real phone while the fenced suite read it as clear. Without it the line is
+   ~68px at normal scale and ~75px under «Larger text». max-width 75% = 108px
+   stays as the ceiling, so even a five-figure target cannot cross the ring.
+   scripts/test-food-log-ui.js widens every measured line by 1.12 whenever the
+   brand mono is not loaded, so the check is conservative under the fallback. */
 .nutri-mini .cal-ring-sub { font-size: var(--fs-caption); margin-top: 2px; max-width: 75%; line-height: 1.25; }
 .nutri-mini-tracks { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: var(--sp-2h); }
 .nutri-mini .macro-track-bar { height: 6px; }
 .nutri-mini.closed .cal-ring-bg, .nutri-mini.closed .cal-ring-fg { stroke-width: 7; }
 .nutri-mini.closed .cal-ring-num { color: var(--text); font-weight: 700; }
 .nutri-mini.closed .cal-ring-label, .nutri-mini.closed .cal-ring-sub { color: var(--text-mute); }
-/* The narrowest phones: ring above tracks rather than a squeezed row. */
-@media (max-width: 339px) {
+/* THE NARROW BAND, BY MEASUREMENT (v405). In the row layout the tracks column
+   is 151px at 375, 136 at 360 and 116 at 340. A track head is a name and a
+   figure on one line, and the widest realistic head — «protein» + «125.5 /
+   150g» — measures 117.5px in the brand faces at normal scale (126.9 under
+   «Larger text»; the Arabic «بروتين» head 106.6 / 115.2). So 340 wraps at
+   every scale and 360 keeps only 9px under «Larger text»: below 360 the ring
+   sits ABOVE the tracks at every scale, and below 375 as well when body.text-lg
+   is on. scripts/test-food-log-ui.js plants those figures and refuses a head
+   that is not one line at 375, 360 and 340, at both scales. */
+@media (max-width: 359px) {
   .nutri-mini { flex-direction: column; }
   .nutri-mini-tracks { width: 100%; }
+}
+@media (max-width: 374px) {
+  body.text-lg .nutri-mini { flex-direction: column; }
+  body.text-lg .nutri-mini-tracks { width: 100%; }
 }
 
 /* ---- AI calorie chat ---- */
@@ -4993,6 +5014,12 @@ button.data-row.fig-row {
   transition: stroke-dasharray 0.6s cubic-bezier(0.22, 1, 0.36, 1);
 }
 .cal-ring-fg.over { stroke: var(--danger, #ef4444); }
+/* An EMPTY ring paints nothing (v405): the round linecap turns a dash of 0
+   into a DOT of one stroke-width at 12 o'clock — on the hero's empty today
+   and on an empty closed day in the log. nutritionGauge sets .is-empty when
+   the dash is under 0.5 units; both callers draw it. Opacity, not display,
+   so the dash transition still plays when the first row lands. */
+.cal-ring-fg.is-empty { stroke-opacity: 0; }
 .cal-ring-center {
   position: absolute; inset: 0; display: flex; flex-direction: column;
   align-items: center; justify-content: center; text-align: center;

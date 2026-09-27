@@ -2,6 +2,49 @@
 
 One section per release since v309, newest first, moved verbatim from `CLAUDE.md` in v401 (batch 6 of the 2026-09-25 review; `docs/REVIEW-2026-09-25.md`). `CLAUDE.md` is the guide and the authority for how the app works now. A section here records what one release changed and why, in the words written at the time, so a later section — or the guide — can supersede what an earlier one says.
 
+## v406 — the bug hunt on v403/v404: thirteen findings, each reproduced before it was fixed
+
+A read-only bug hunt on the logo and food-log releases returned no Critical and
+no High, three Medium and nine Low. Every one was reproduced by a check that
+failed first, then fixed; an adversarial code review and a browser QA pass on
+the result added five more (one Medium, four Low), all fixed.
+
+- **The food log refreshes the right shape.** `refreshTotals` decided
+  miniature-or-tiles from `hasTargets()` at refresh while the DOM was built from
+  the value at render: targets set from another tab while a row editor was open
+  left the old totals on screen. It now re-renders when targets flipped, when
+  the day closed at midnight (`closed` and `isToday` recomputed per refresh), and
+  keeps the bar title and the focus on the list after that re-render.
+- **An empty ring is empty.** `stroke-linecap: round` painted a dot at 12
+  o’clock on a zero dash — on the miniature and on the Food tab’s hero; the
+  gauge now marks `.is-empty` (stroke-opacity 0), checked by reading the pixel.
+- **Legacy rows cannot break the ring.** A stored negative or non-numeric row
+  drew a FULL ring (a negative dasharray is invalid SVG) and printed NaN. The
+  totals are coerced once at the source (`DB.foodLogs.totalsForDate`), the gauge
+  clamps every percentage to 0–100, and the row list prints the same coerced
+  figures.
+- **The verdict has three words.** Exactly on target reads «على الهدف»
+  (`fl_day_on`), not «0 دون الهدف»; a past day with nothing logged reads
+  «لم يُسجَّل طعام في هذا اليوم» (`no_food_logged_day`), not «اليوم».
+- **The ring’s text is measured in the real fonts’ worst case.** The suite
+  fenced Google Fonts and so measured the fallback faces; it now multiplies each
+  centre line by 1.12 when the brand mono is not loaded (the real/fallback ratio
+  measured 1.094). The miniature’s sub line drops the unit («868 / 2,300»; the
+  hero keeps it) so it clears the chord with room.
+- **Narrow phones.** The ring stacks above the tracks below 360 px, and below
+  375 px under «Larger text» — measured at 375/360/340 in both scales: at 340
+  the English macro head wrapped in the real fonts.
+- **The web notification badge has no seams.** It was five separate rects whose
+  joins landed on half pixels (alpha ≈191 in two columns); it is now one path of
+  five subpaths, as `ic_stat_vault.xml` is. `test-brand-icon.js` samples the joins.
+- **Contract 72 sees corners and placement.** Arc flags are parsed (a flipped
+  sweep or a large arc fails) and each surface’s glyph must sit on its canvas
+  centre inside its safe zone (a launcher glyph moved off-centre failed nothing
+  before). Two geometry comments corrected (164 px, 22.9 dp).
+- **Kept as is, recorded:** a closed day’s verdict is measured against the
+  CURRENT target — no per-day target is stored; the comments say so.
+- Gate: 68 contracts, 16 suites; fingerprint net: only foodlog/food cells.
+
 ## v405 — the security batch: the session and sync layer close the two doors RLS cannot see
 
 Four audits ran on 2026-09-27 (access control, OWASP + crash paths, secrets,

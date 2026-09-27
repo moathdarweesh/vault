@@ -12,9 +12,11 @@
 
     Geometry: the 24-unit glyph at scale 15, inset 76, so its centre (12,12)
     lands on the tile's and the ink spans 315 of 512 px, 61.5%. The farthest
-    ink, an outer plate's corner, sits 181px from the centre: inside the
-    maskable safe circle (the inner 80%, radius 204.8px), which matters because
-    manifest.json declares this icon maskable.
+    ink is an outer plate's corner at (98.5, 211): 163.8px from the centre as
+    a sharp corner, and about 160px once its 18px rounding is taken off (this
+    line said 181px until v405, wrong on the safe side): inside the maskable
+    safe circle (the inner 80%, radius 204.8px), which matters because
+    manifest.json declares this icon maskable. Contract 72 measures it.
 
     Fills, "the embers" (the owner's choice): outer plates ember #b84a00, inner
     plates the accent #ff6a00, the shaft bone. One variant per system

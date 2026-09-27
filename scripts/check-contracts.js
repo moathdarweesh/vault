@@ -2080,14 +2080,26 @@ const cssOwner = (i) => CSS_BLOCKS.reduce((best, b) => (b.open < i && b.close > 
   // Path data → one box per subpath. A diagonal, a curve, an arc that is not a
   // quarter circle, or a vertex off the subpath's own bounds makes it NOT a
   // rectangle — which is how the V reports itself.
+  // THE ARC FLAGS ARE READ, NOT SKIPPED (v405, L8). An arc's endpoints alone
+  // cannot tell a rounded corner from a bitten one: a flipped sweep-flag draws
+  // the same quarter circle bulging INTO the plate (a concave corner), and a
+  // large-arc flag of 1 draws the other 270°. Each arc's centre is derived from
+  // the sweep the file actually wrote, and once the subpath's box is known the
+  // centre must sit one radius inside it — where a convex corner's centre is.
   const pathBoxes = (d) => {
     const tok = String(d || '').match(/[a-zA-Z]|-?(?:\d+\.?\d*|\.\d+)(?:e-?\d+)?/g) || [], out = [];
     let i = 0, cmd = '', x = 0, y = 0, sx = 0, sy = 0, cur = null;
     const n = () => +tok[i++];
-    const seg = (nx, ny, arc) => {
+    const seg = (nx, ny, arc, flags) => {
       const dx = Math.abs(nx - x), dy = Math.abs(ny - y);
       if (arc !== undefined ? !(arc > 0 && Math.abs(dx - arc) < 1e-6 && Math.abs(dy - arc) < 1e-6) : (dx > 1e-6 && dy > 1e-6)) cur.bad = true;
-      if (arc > 0) cur.r = Math.max(cur.r, arc);
+      if (arc > 0) {
+        cur.r = Math.max(cur.r, arc);
+        // Two candidate centres for a quarter arc; sweep 1 is clockwise on screen,
+        // i.e. a positive cross product of (A−C, B−C) in y-down coordinates.
+        const pick = [[nx, y], [x, ny]].find(([cx, cy]) => (((x - cx) * (ny - cy) - (y - cy) * (nx - cx)) > 0) === (flags.sweep === 1));
+        cur.arcs.push({ cx: pick[0], cy: pick[1], r: arc, large: flags.large });
+      }
       x = nx; y = ny; cur.pts.push([x, y]);
     };
     while (i < tok.length) {
@@ -2095,12 +2107,12 @@ const cssOwner = (i) => CSS_BLOCKS.reduce((best, b) => (b.open < i && b.close > 
       if (/[a-zA-Z]/.test(tok[i])) cmd = tok[i++];
       const rel = cmd !== cmd.toUpperCase(), X = (v) => (rel ? x + v : v), Y = (v) => (rel ? y + v : v);
       const C = cmd.toUpperCase();
-      if (C === 'M') { if (cur) out.push(cur); x = X(n()); y = Y(n()); sx = x; sy = y; cur = { pts: [[x, y]], r: 0, bad: false }; cmd = rel ? 'l' : 'L'; }
-      else if (!cur) { out.push({ pts: [[0, 0]], r: 0, bad: true }); break; }
+      if (C === 'M') { if (cur) out.push(cur); x = X(n()); y = Y(n()); sx = x; sy = y; cur = { pts: [[x, y]], r: 0, bad: false, arcs: [] }; cmd = rel ? 'l' : 'L'; }
+      else if (!cur) { out.push({ pts: [[0, 0]], r: 0, bad: true, arcs: [] }); break; }
       else if (C === 'L') { const a = X(n()), b = Y(n()); seg(a, b); }
       else if (C === 'H') seg(X(n()), y);
       else if (C === 'V') seg(x, Y(n()));
-      else if (C === 'A') { const rx = n(), ry = n(); i += 3; const a = X(n()), b = Y(n()); seg(a, b, Math.abs(rx - ry) < 1e-6 ? rx : -1); }
+      else if (C === 'A') { const rx = n(), ry = n(); n(); const large = n(), sweep = n(); const a = X(n()), b = Y(n()); seg(a, b, Math.abs(rx - ry) < 1e-6 ? rx : -1, { large, sweep }); }
       else if (C === 'Z') { if (Math.abs(x - sx) > 1e-6 || Math.abs(y - sy) > 1e-6) seg(sx, sy); out.push(cur); cur = null; }
       else { cur.bad = true; break; }
       if (i === at) { cur && (cur.bad = true); break; }
@@ -2110,7 +2122,9 @@ const cssOwner = (i) => CSS_BLOCKS.reduce((best, b) => (b.open < i && b.close > 
       const xs = p.pts.map((q) => q[0]), ys = p.pts.map((q) => q[1]);
       const b = { x: Math.min(...xs), y: Math.min(...ys), w: Math.max(...xs) - Math.min(...xs), h: Math.max(...ys) - Math.min(...ys), r: p.r };
       const edge = p.pts.every(([px, py]) => [b.x, b.x + b.w].some((e) => Math.abs(px - e) < 1e-6) || [b.y, b.y + b.h].some((e) => Math.abs(py - e) < 1e-6));
-      return Object.assign(b, { rect: !p.bad && edge });
+      const inside = (v, lo, hi) => v >= lo - 1e-6 && v <= hi + 1e-6;
+      const concave = p.arcs.some((a) => a.large !== 0 || !inside(a.cx, b.x + a.r, b.x + b.w - a.r) || !inside(a.cy, b.y + a.r, b.y + b.h - a.r));
+      return Object.assign(b, { rect: !p.bad && edge && !concave, why: p.bad || !edge ? 'a diagonal or a curve' : concave ? 'an arc bent the wrong way (a flipped sweep or a large arc)' : '' });
     });
   };
   // x' = (x - pivot) * scale + pivot + translate — VectorDrawable's order; an SVG translate+scale is the same with pivot 0.
@@ -2124,9 +2138,29 @@ const cssOwner = (i) => CSS_BLOCKS.reduce((best, b) => (b.open < i && b.close > 
     return bs.map((b) => ({ ...b, x: (b.x - x0) * k, y: (b.y - y0) * k, w: b.w * k, h: b.h * k, r: b.r * k })).sort((a, b) => a.x - b.x || a.y - b.y);
   };
   const fills = [];                // [surface, role -> fill], only for surfaces whose shape held
+  // WHERE the glyph sits on its canvas (v405, L8): norm() strips translation and
+  // scale so the SHAPE can be compared, which also means a glyph slid off-centre
+  // or scaled out past the launcher's safe zone would still match. So, on the
+  // placed boxes: the ink's centre on the canvas centre (±0.05 units), and every
+  // corner inside the surface's safe zone — the maskable circle for icon.svg
+  // (radius 204.8 px), the adaptive icon's inner 72dp (18..90) for the launcher
+  // and monochrome layers, 2..22 for the 24dp status-bar icon.
+  const placed = (name, bs, spec) => {
+    if (!bs.length) return;
+    const x0 = Math.min(...bs.map((b) => b.x)), x1 = Math.max(...bs.map((b) => b.x + b.w));
+    const y0 = Math.min(...bs.map((b) => b.y)), y1 = Math.max(...bs.map((b) => b.y + b.h));
+    const cx = (x0 + x1) / 2, cy = (y0 + y1) / 2, f = (v) => +v.toFixed(3);
+    if (Math.abs(cx - spec.cx) > 0.05 || Math.abs(cy - spec.cy) > 0.05) problems.push(`${name}: the glyph's centre sits on (${f(cx)}, ${f(cy)}), not the canvas centre (${spec.cx}, ${spec.cy})`);
+    if (spec.radius) {
+      const far = Math.max(...bs.flatMap((b) => [[b.x, b.y], [b.x + b.w, b.y], [b.x, b.y + b.h], [b.x + b.w, b.y + b.h]]).map(([px, py]) => Math.hypot(px - spec.cx, py - spec.cy)));
+      if (far > spec.radius + 1e-6) problems.push(`${name}: ink reaches ${f(far)} from the centre, outside the maskable safe circle (radius ${spec.radius})`);
+    } else if (x0 < spec.lo - 1e-6 || y0 < spec.lo - 1e-6 || x1 > spec.hi + 1e-6 || y1 > spec.hi + 1e-6) {
+      problems.push(`${name}: ink spans x ${f(x0)}..${f(x1)}, y ${f(y0)}..${f(y1)} — outside the ${spec.lo}..${spec.hi} safe zone`);
+    }
+  };
   const compare = (name, bs, fillOf) => {
     const odd = bs.filter((b) => !b.rect);
-    if (odd.length) return problems.push(`${name}: ${odd.length} of its ${bs.length} shape(s) are not rectangles (a diagonal or a curve) — the mark is the five rectangles of ICONS.dumbbell`);
+    if (odd.length) return problems.push(`${name}: ${odd.length} of its ${bs.length} shape(s) are not rectangles (${[...new Set(odd.map((b) => b.why))].join('; ')}) — the mark is the five rectangles of ICONS.dumbbell`);
     if (bs.length !== master.length) return problems.push(`${name} draws ${bs.length} rectangle(s); ICONS.dumbbell is ${master.length}`);
     const A = norm(master), B = norm(bs), off = [];
     A.forEach((a, i) => { for (const k of ['x', 'y', 'w', 'h', 'r']) if (Math.abs(a[k] - B[i][k]) > TOL) off.push(`${ROLE[i]} #${i + 1} ${k} ${+B[i][k].toFixed(3)} ≠ ${a[k]}`); });
@@ -2148,6 +2182,7 @@ const cssOwner = (i) => CSS_BLOCKS.reduce((best, b) => (b.open < i && b.close > 
       const T = t ? { ...ID, tx: +t[1], ty: +t[2], sx: +t[3], sy: +(t[4] || t[3]) } : ID;
       const bs = [...rectsIn(g[2]), ...[...g[2].matchAll(/<path\b([^>]*?)\/?>/g)].flatMap(([, a]) => pathBoxes(attr(a, 'd')))].map((b) => place(b, T));
       compare('icons/icon.svg', bs, (b) => dark[b.cls] || '?');
+      placed('icons/icon.svg', bs, { cx: vb[0] / 2, cy: vb[1] / 2, radius: 0.4 * vb[0] });
       const rest = svg.replace(g[0], '');
       const extra = [...rectsIn(rest).filter((r) => !(r.x === 0 && r.y === 0 && r.w === vb[0] && r.h === vb[1])), ...rest.matchAll(/<path\b/g)];
       if (extra.length) problems.push(`icons/icon.svg draws ${extra.length} shape(s) outside its mark besides the tile — the V's slot and hairline were exactly that`);
@@ -2168,6 +2203,7 @@ const cssOwner = (i) => CSS_BLOCKS.reduce((best, b) => (b.open < i && b.close > 
       }
     }
     compare(RES + f, bs, f === 'ic_launcher_foreground.xml' ? (b) => b.fill : null);
+    placed(RES + f, bs, f === 'ic_stat_vault.xml' ? { cx: 12, cy: 12, lo: 2, hi: 22 } : { cx: 54, cy: 54, lo: 18, hi: 90 });
   }
 
   // The splash's first painted frame: the rest boxes (styles.css, last declaration
@@ -2207,7 +2243,7 @@ const cssOwner = (i) => CSS_BLOCKS.reduce((best, b) => (b.open < i && b.close > 
   const roles = {};
   for (const [name, fs] of fills) fs.forEach((f, i) => { (roles[ROLE[i]] = roles[ROLE[i]] || new Map()).set(name + ' #' + (i + 1), f); });
   for (const [role, m] of Object.entries(roles)) if (new Set(m.values()).size > 1) problems.push(`the ${role} ${role === 'shaft' ? '' : 'plates '}disagree: ${[...m].map(([k, v]) => `${k} ${v}`).join(', ')}`);
-  contract(`one glyph on every surface: icons/icon.svg, the three launcher/status vectors and the splash's first frame are ICONS.dumbbell's five rectangles (±${TOL} glyph units), in one set of fills`, problems);
+  contract(`one glyph on every surface: icons/icon.svg, the three launcher/status vectors and the splash's first frame are ICONS.dumbbell's five rectangles (±${TOL} glyph units, every arc a convex corner), in one set of fills, each centred on its canvas and inside its safe zone`, problems);
 }
 
 console.log(failures.length ? `\ncheck-contracts: ${failures.length} broken contract(s)` : '\ncheck-contracts: all contracts hold');

@@ -33,7 +33,7 @@ module.exports = [
   { view: 'calendar' },
   { view: 'supplements' },
   { view: 'notifications' },
-  { view: 'foodlog' },              // falls back to today, which is empty here
+  { view: 'foodlog' },              // today, with no rows and NO TARGETS in the empty state: the four .macro-totals tiles, never the miniature ring (read back from a v405 record); a closed day's miniature is covered by scripts/test-food-log-ui.js
   { view: 'day' },                  // ditto
   { view: 'session-day' },          // ditto
   { view: 'session-run' },          // fallback: no run in context

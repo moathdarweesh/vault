@@ -151,7 +151,12 @@ async function run() {
             if (d[i + 3] > 127) { x0 = Math.min(x0, x); x1 = Math.max(x1, x); y0 = Math.min(y0, y); y1 = Math.max(y1, y); }
           }
           // the gaps between each outer and inner plate, and the solid shaft, at mid-height
-          return { tint, box: [x0, y0, x1, y1], corner: A(0, 0), gaps: [A(21, 48), A(74, 48)], shaft: A(48, 48), inner: A(30, 30) };
+          // — and the two SEAMS where the shaft meets each inner plate (v405, L7):
+          // x = 9.5 and 14.5 of 24, at 0.95 about 12 → 9.625 and 14.375, ×4 =
+          // 38.5 and 57.5 px. Drawn as five separate rectangles those joins land
+          // on half pixels, and two antialiased edges compose to alpha ≈ 191, a
+          // hairline of background through the tint. One path, one union: 255.
+          return { tint, box: [x0, y0, x1, y1], corner: A(0, 0), gaps: [A(21, 48), A(74, 48)], shaft: A(48, 48), inner: A(30, 30), seams: [A(38, 48), A(57, 48)] };
         });
         // the silhouette at 0.95 about the centre, as ic_stat_vault.xml draws it: x 2.025..21.975, y 6.3..17.7 of 24
         const exp = [8, 25, 87, 70];
@@ -159,6 +164,7 @@ async function run() {
         if (b.corner !== 0) fails.push('badge-96.png is not transparent at its corner');
         if (b.box.some((v, i) => Math.abs(v - exp[i]) > 1)) fails.push(`badge-96.png's silhouette spans [${b.box}], the barbell at 0.95 spans [${exp}]`);
         if (b.gaps.some((v) => v > 32) || b.shaft !== 255 || b.inner !== 255) fails.push(`badge-96.png is not the barbell silhouette (gap alpha ${b.gaps}, shaft ${b.shaft}, inner plate ${b.inner})`);
+        if (b.seams.some((v) => v !== 255)) fails.push(`badge-96.png has SEAMS where the shaft meets the inner plates: alpha ${b.seams} at (38,48) and (57,48), not 255 — draw the barbell as ONE path (node scripts/build-notif-icons.js)`);
       }
       await page.close();
     }

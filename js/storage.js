@@ -1923,13 +1923,18 @@ const DB = {
     },
     totalsForDate(date) {
       const list = this.listForDate(date);
+      // Rows written before the v396 clamp can carry a typed minus or a
+      // non-number ('abc' summed to NaN and printed «NaN» on every reader:
+      // the tiles, Home, the calendar, the streak, the reminders). Each figure
+      // counts as a finite number no lower than 0, else 0 — once, here.
+      const n = (v) => { const x = Number(v); return Number.isFinite(x) && x > 0 ? x : 0; };
       return list.reduce(
         (acc, x) => {
-          const m = x.servings || 1;
-          acc.calories += (x.calories || 0) * m;
-          acc.protein += (x.protein || 0) * m;
-          acc.carbs += (x.carbs || 0) * m;
-          acc.fat += (x.fat || 0) * m;
+          const m = n(x.servings) || 1;
+          acc.calories += n(x.calories) * m;
+          acc.protein += n(x.protein) * m;
+          acc.carbs += n(x.carbs) * m;
+          acc.fat += n(x.fat) * m;
           return acc;
         },
         { calories: 0, protein: 0, carbs: 0, fat: 0 }

@@ -159,17 +159,29 @@ function renderFood(el) {
 // r=54 → circumference ≈ 339.29; `dash` is the filled arc in those units.
 function nutritionGauge(date) {
   const tgt = DB.nutrition.get().targets;
-  const consumed = DB.foodLogs.totalsForDate(date);
+  // totalsForDate sums rows AS STORED, and rows written before the v396 clamp
+  // can carry a typed minus or a non-number: -300 made calPct negative, and a
+  // negative stroke-dasharray is INVALID SVG, which paints a FULL ring; 'abc'
+  // summed to NaN and printed «NaN». Every figure is coerced here, once, for
+  // both callers: a finite number no lower than 0, else 0.
+  const raw = DB.foodLogs.totalsForDate(date);
+  const eaten = (v) => { const n = Number(v); return Number.isFinite(n) ? Math.max(0, n) : 0; };
+  const consumed = { calories: eaten(raw.calories), protein: eaten(raw.protein), carbs: eaten(raw.carbs), fat: eaten(raw.fat) };
+  const pct = (c, g) => (g > 0 ? Math.max(0, Math.min(100, (c / g) * 100)) : 0);
   const calLeft = Math.round(tgt.calories - consumed.calories);
-  const calPct = tgt.calories > 0 ? Math.min(100, (consumed.calories / tgt.calories) * 100) : 0;
+  const calPct = pct(consumed.calories, tgt.calories);
   const C = 339.29;
+  const dash = C * (calPct / 100);
   const macro = (key) => {
     const c = Math.round(consumed[key] * 10) / 10;
     const g = tgt[key] || 0;
-    return { c, g, left: Math.round((g - c) * 10) / 10, pct: g > 0 ? Math.min(100, (c / g) * 100) : 0 };
+    return { c, g, left: Math.round((g - c) * 10) / 10, pct: pct(c, g) };
   };
   return {
-    tgt, calEaten: Math.round(consumed.calories), calLeft, over: calLeft < 0, C, dash: C * (calPct / 100),
+    tgt, calEaten: Math.round(consumed.calories), calLeft, over: calLeft < 0, C, dash,
+    // .cal-ring-fg is round-capped, so a dash of 0 still paints a DOT of one
+    // stroke-width at 12 o'clock; `empty` switches that stroke off (.is-empty).
+    empty: dash < 0.5,
     macros: { protein: macro('protein'), carbs: macro('carbs'), fat: macro('fat') },
   };
 }
@@ -231,7 +243,7 @@ function nutritionDashboardHtml(date) {
       <div class="cal-ring-wrap">
         <svg class="cal-ring" viewBox="0 0 120 120">
           <circle class="cal-ring-bg" cx="60" cy="60" r="54"/>
-          <circle class="cal-ring-fg ${over ? 'over' : ''}" cx="60" cy="60" r="54"
+          <circle class="cal-ring-fg ${over ? 'over' : ''}${gauge.empty ? ' is-empty' : ''}" cx="60" cy="60" r="54"
             stroke-dasharray="${dash.toFixed(1)} ${C.toFixed(1)}" transform="rotate(-90 60 60)"/>
         </svg>
         <div class="cal-ring-center">
@@ -257,13 +269,18 @@ function nutritionDashboardHtml(date) {
 // VERDICT — how far under or over the target it ended — and the label says
 // which; today it is the hero's own left/over. Same arithmetic (nutritionGauge),
 // same ring/track classes, so the stroke and hue rules apply unchanged.
+// The verdict is measured against the CURRENT targets, not the target that
+// stood on that day — none is stored per day, so a changed goal rewrites every
+// past verdict (kept on purpose, v405: a per-day target is a schema change).
 // No pencil, no water card, no third «left» line, and nothing that names the
 // day: .day-nav already shows it. Not a target — the hero opens the log; the
 // log's own card opens nothing.
 function nutritionMiniHtml(date, opts) {
   const closed = !!(opts && opts.closed);
   const g = nutritionGauge(date);
-  const label = closed ? t(g.over ? 'fl_day_over' : 'fl_day_under') : t(g.over ? 'nutri_over' : 'nutri_left');
+  // A closed day that ended EXACTLY on its target is «on target», not «0 under».
+  const verdict = g.over ? 'fl_day_over' : g.calLeft === 0 ? 'fl_day_on' : 'fl_day_under';
+  const label = closed ? t(verdict) : t(g.over ? 'nutri_over' : 'nutri_left');
   const track = (key, name, cls) => {
     const m = g.macros[key];
     return `
@@ -280,13 +297,13 @@ function nutritionMiniHtml(date, opts) {
       <div class="nutri-mini-ring">
         <svg class="cal-ring" viewBox="0 0 120 120">
           <circle class="cal-ring-bg" cx="60" cy="60" r="54"/>
-          <circle class="cal-ring-fg${g.over ? ' over' : ''}" cx="60" cy="60" r="54"
+          <circle class="cal-ring-fg${g.over ? ' over' : ''}${g.empty ? ' is-empty' : ''}" cx="60" cy="60" r="54"
             stroke-dasharray="${g.dash.toFixed(1)} ${g.C.toFixed(1)}" transform="rotate(-90 60 60)"/>
         </svg>
         <div class="cal-ring-center">
           <div class="cal-ring-num num${g.over ? ' over' : ''}">${fmtNum(Math.abs(g.calLeft))}</div>
           <div class="cal-ring-label">${label}</div>
-          <div class="cal-ring-sub"><span class="num">${fmtNum(g.calEaten)}</span> / <span class="num">${fmtNum(g.tgt.calories)}</span> ${t('cal')}</div>
+          <div class="cal-ring-sub"><span class="num">${fmtNum(g.calEaten)}</span> / <span class="num">${fmtNum(g.tgt.calories)}</span></div>
         </div>
       </div>
       <div class="nutri-mini-tracks">
@@ -2845,8 +2862,15 @@ function renderFoodLog(el) {
   // A day before today is CLOSED: its card reads as a record (the verdict),
   // not a live gauge. Today, and any later day, reads as the hero does.
   const closed = ctx.date < todayISO();
+  // What SHAPE this render drew: the miniature (targets set) or the four tiles.
+  // refreshTotals asks again and re-renders when either this or `closed` has
+  // moved since — targets set from another tab while the row editor was open
+  // (the store-adopted repaint skips an open sheet), or midnight passing while
+  // the log stayed on screen (the visibilitychange repaint never fires then).
+  const withTargets = DB.nutrition.hasTargets();
 
   const dayLabel = isToday ? t('today_totals') : formatDate(ctx.date);
+  const emptyLine = () => emptyState({ iconName: 'apple', title: t(isToday ? 'no_food_logged' : 'no_food_logged_day') });
 
   // One food-log row (also used when quick-add appends a single row live).
   // WHERE A FIGURE CAME FROM IS PART OF THE FIGURE. Every row has carried a
@@ -2863,7 +2887,10 @@ function renderFoodLog(el) {
   // `source` field is still stored on every row — nothing was lost from the
   // data, only from the screen.
   function foodRowHtml(e) {
-    const m = e.servings || 1;
+    // A legacy unclamped row (a typed minus, a non-number) prints as 0, the
+    // way DB.foodLogs.totalsForDate counts it — never «-300» or «NaN».
+    const fig = (v) => { const x = Number(v); return Number.isFinite(x) && x > 0 ? x : 0; };
+    const m = fig(e.servings) || 1;
     return `
       <div class="food-log-row" data-food-row="${e.id}">
         <div class="food-log-main">
@@ -2872,12 +2899,12 @@ function renderFoodLog(el) {
             ${m !== 1 ? `<span class="food-log-x num">× ${fmtNum(m)}</span>` : ''}
           </div>
           <div class="food-log-meta">
-            <span><span class="num">${fmtNum(Math.round(e.calories * m))}</span> ${t('cal')}</span>
+            <span><span class="num">${fmtNum(Math.round(fig(e.calories) * m))}</span> ${t('cal')}</span>
             <span class="dot-sep"></span>
-            <span><span class="num">${fmtNum(Math.round(e.protein * m * 10) / 10)}</span>g ${t('protein_label')}</span>
+            <span><span class="num">${fmtNum(Math.round(fig(e.protein) * m * 10) / 10)}</span>g ${t('protein_label')}</span>
             <span class="dot-sep"></span>
-            <span><span class="num">${fmtNum(Math.round(e.carbs * m * 10) / 10)}</span>g ${t('carbs_label')}</span>
-            ${e.fat ? `<span class="dot-sep"></span><span><span class="num">${fmtNum(Math.round(e.fat * m * 10) / 10)}</span>g ${t('fat_label')}</span>` : ''}
+            <span><span class="num">${fmtNum(Math.round(fig(e.carbs) * m * 10) / 10)}</span>g ${t('carbs_label')}</span>
+            ${fig(e.fat) ? `<span class="dot-sep"></span><span><span class="num">${fmtNum(Math.round(fig(e.fat) * m * 10) / 10)}</span>g ${t('fat_label')}</span>` : ''}
           </div>
         </div>
         <button class="icon-btn" data-edit-food="${escapeHtml(e.id)}" aria-label="${escapeHtml(t('fl_edit_title'))}">${icon('edit', 20)}</button>
@@ -2887,8 +2914,11 @@ function renderFoodLog(el) {
   }
   const items = entries.map(foodRowHtml).join('');
 
+  // show-title in the template: the log has no .page-title (its h1 is sr-only),
+  // so the bar title is never redundant — and the arrows, the add sheet and
+  // refreshTotals re-render here without renderView's syncDetailTopTitle.
   el.innerHTML = `
-    <div class="detail-top">
+    <div class="detail-top show-title">
       <button class="back-btn" data-back aria-label="${escapeHtml(t('back'))}">${icon('back', 20)}</button>
       <div class="detail-top-title">${t('food_log_title')}</div>
     </div>
@@ -2929,10 +2959,7 @@ function renderFoodLog(el) {
     </div>
 
     <div class="data-list" id="food-log-list" style="gap:6px">
-      ${entries.length === 0
-        ? emptyState({ iconName: 'apple', title: t('no_food_logged') })
-        : items
-      }
+      ${entries.length === 0 ? emptyLine() : items}
     </div>
   `;
 
@@ -2952,9 +2979,14 @@ function renderFoodLog(el) {
 
   // Refresh only the summary from current DB state: with targets the
   // miniature is redrawn whole (one string, no partial patching); without,
-  // the four tiles keep their text-node patching.
+  // the four tiles keep their text-node patching. If the SHAPE has moved since
+  // this render (targets appeared or went; the day closed at midnight), the
+  // summary on screen is the wrong one to patch: render the day again, so the
+  // header, the card and the empty line all follow.
   function refreshTotals() {
-    if (DB.nutrition.hasTargets()) {
+    const now = todayISO();
+    if (DB.nutrition.hasTargets() !== withTargets || (ctx.date < now) !== closed || (ctx.date === now) !== isToday) { renderFoodLog(el); return; }
+    if (withTargets) {
       const host = $('#fl-summary', el);
       if (host) host.innerHTML = nutritionMiniHtml(ctx.date, { closed });
       return;
@@ -3024,7 +3056,9 @@ function renderFoodLog(el) {
       if (row) row.outerHTML = foodRowHtml(updated);
       refreshTotals();
       closeModal();
-      try { list.querySelector(`[data-food-row="${CSS.escape(id)}"] [data-edit-food]`)?.focus(); } catch (_) {}
+      // Re-query: refreshTotals may have re-rendered the whole day (the shape
+      // moved), which detaches `list` — focus the pencil in the LIVE list.
+      try { $('#food-log-list', el).querySelector(`[data-food-row="${CSS.escape(id)}"] [data-edit-food]`)?.focus(); } catch (_) {}
       offerUndo(t('fl_edited'), written);
     });
   }
@@ -3040,7 +3074,7 @@ function renderFoodLog(el) {
     const row = btn.closest('[data-food-row]');
     if (row) row.remove();
     if (!$('#food-log-list', el).querySelector('[data-food-row]')) {
-      $('#food-log-list', el).innerHTML = emptyState({ iconName: 'apple', title: t('no_food_logged') });
+      $('#food-log-list', el).innerHTML = emptyLine();
     }
     refreshTotals();
     offerUndo(t('food_removed'), result);
