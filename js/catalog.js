@@ -66,7 +66,7 @@ const ICONS = {
   send: '<path d="M21.6 2.4 2.4 9.8l7.4 3.8Z" fill="currentColor"/><path d="M21.6 2.4 13.8 21.6l-3.8-7.4Z" fill="var(--icon-accent,#ff6a00)"/>',
 
   // ——— cardio & movement ———
-  // The four cardio glyphs were redrawn at v405 (the owner circled the tiles:
+  // The four cardio glyphs were redrawn at v410 (the owner circled the tiles:
   // «الأيقونات ليش كذا؟»). The stick figures read as smudges at 18px; these
   // are silhouettes he can name at that size. walk and run are ONE family, a
   // side-view trainer (toe forward, heel counter, collar dip) — the first
@@ -74,7 +74,7 @@ const ICONS = {
   // the review asked for a shoe: walk = the trainer planted flat, its sole in
   // accent 2 units under the upper; run = the same trainer, shorter, with
   // three ink speed bars trailing 2 units behind the heel — the bars are the
-  // only difference, so the sole is accent on both (the tipped v405 run was
+  // only difference, so the sole is accent on both (the tipped v410 run was
   // drawn through rotate(-22)/scale(0.76): it left the grid, anti-aliased
   // softer than its neighbours, and its heel painted to y≈25.1, past the
   // viewBox, where the svg's own overflow clipped it). bike = two heavy rings

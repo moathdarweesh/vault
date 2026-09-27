@@ -1670,7 +1670,6 @@ const buttonKey = (tag) => (tag.match(/\bid="([\w-]+)"/) || [])[1] || (tag.match
   const RUNTIME = {
     'toast-action': 'showToast() writes the action label into it before the toast shows',
     'sc-action': 'updateSaveCenter() writes the action label into it on every state',
-    'rec-sum': 'updateSummary() writes the figures and the source word into its spans',
   };
   const textOf = (body) => body
     .replace(/\$\{\s*icon\([^{}]*\)\s*\}/g, '')        // ${icon('x', 20)}
@@ -1848,8 +1847,8 @@ const cssOwner = (i) => CSS_BLOCKS.reduce((best, b) => (b.open < i && b.close > 
   };
   const rx = (k) => num(fa, new RegExp('const ' + k + ' = (\\d+);'), k, 'js/foodai.js');
   const max = (k) => num(worker, new RegExp('const ' + k + ' = (\\d+);'), k, 'backend/worker/gemini-worker.js');
-  const [frames, frameB64, imageB64, audioB64, textMax] = ['RX_FRAMES', 'RX_FRAME_B64', 'RX_IMAGE_B64', 'RX_AUDIO_B64', 'RX_TEXT_MAX'].map(rx);
-  const [mFrames, mFrame, mTotal, mAudio, mText, mItems] = ['MAX_RECIPE_FRAMES', 'MAX_RECIPE_FRAME', 'MAX_RECIPE_FRAMES_TOTAL', 'MAX_RECIPE_AUDIO', 'MAX_RECIPE_TEXT', 'MAX_RECIPE_ITEMS'].map(max);
+  const [frames, frameB64, imageB64, audioB64, textMax, dishes] = ['RX_FRAMES', 'RX_FRAME_B64', 'RX_IMAGE_B64', 'RX_AUDIO_B64', 'RX_TEXT_MAX', 'RX_MAX_DISHES'].map(rx);
+  const [mFrames, mFrame, mTotal, mAudio, mText, mItems, mDishes] = ['MAX_RECIPE_FRAMES', 'MAX_RECIPE_FRAME', 'MAX_RECIPE_FRAMES_TOTAL', 'MAX_RECIPE_AUDIO', 'MAX_RECIPE_TEXT', 'MAX_RECIPE_ITEMS', 'MAX_RECIPE_DISHES'].map(max);
   // (perf batch 2026-09-27) the chat/photo/voice list: toItems() keeps at most
   // AI_MAX_ITEMS, which is the Worker's clampItems cap — no more cards than the
   // Worker would ever send, and no fewer than it may.
@@ -1876,8 +1875,12 @@ const cssOwner = (i) => CSS_BLOCKS.reduce((best, b) => (b.open < i && b.close > 
     fits(mItems <= items, `the Worker answers up to ${mItems} ingredients; a saved recipe holds ${items} (cleanMealItems)`);
     fits(aiItems === wItems, `the client keeps ${aiItems} AI items (AI_MAX_ITEMS); the Worker's clampItems keeps ${wItems} (MAX_ITEMS)`);
     fits(cName <= eName && cQty <= eQty && cRec <= eRec, `the Worker clamps names/amounts/recipe names to ${cName}/${cQty}/${cRec}; the editor's fields take ${eName}/${eQty}/${eRec}`);
+    // v411: the dish chooser. Fewer on the phone drops a dish the Worker found
+    // without a word; more lets a Worker change past the chooser's one screen
+    // and its title ladder, whose plural form stops at ten («أطباق», not «طبقًا»).
+    fits(dishes === mDishes && dishes <= 10, `the phone keeps ${dishes} dishes (RX_MAX_DISHES), the Worker answers up to ${mDishes} (MAX_RECIPE_DISHES) — they must be equal, and at most 10`);
   }
-  contract(`the recipe import's client budget fits the Worker's caps (${frames} stills × ${frameB64} + ${audioB64} audio chars, ${mItems} ingredients), and the AI list stops where the Worker's does (${aiItems} items)`, problems);
+  contract(`the recipe import's client budget fits the Worker's caps (${frames} stills × ${frameB64} + ${audioB64} audio chars, ${mItems} ingredients, ${dishes} dishes), and the AI list stops where the Worker's does (${aiItems} items)`, problems);
 }
 
 // 66 — ONE kg↔lb rule. Weights are stored in kg. The rounding a weight gets when
@@ -2382,7 +2385,7 @@ const cssOwner = (i) => CSS_BLOCKS.reduce((best, b) => (b.open < i && b.close > 
 }
 
 // 73 — the instrument's motion lands inside motion.js's cleanup window. The
-// Cardio and Sleep heroes (v405) grow seven bars and then settle the figure,
+// Cardio and Sleep heroes (v410) grow seven bars and then settle the figure,
 // every delay a token multiple: the last bar starts at 6 × --stagger-bar and
 // the figure at 6 × --stagger-bar + 40ms, each running --dur-fast. motion.js
 // drops `.enter` on a timer — steps × step + --dur-base + 120ms — and with the

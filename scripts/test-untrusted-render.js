@@ -153,7 +153,7 @@ function healthHtml(data) {
   }
   let out = views();
   clean(out.cardio, 'the Cardio tab'); clean(out.compare, 'the Compare panel');
-  assert.ok(/num trk-num">30</.test(out.cardio), 'an honest figure still sums: 30 minutes this week (the .trk-num of the instrument, v405)');
+  assert.ok(/num trk-num">30</.test(out.cardio), 'an honest figure still sums: 30 minutes this week (the .trk-num of the instrument, v410)');
   // The second layer on its own: a row that reached STATE without passing
   // loadState (the shape a future write path could produce) still sums as a
   // number, because the reducers coerce too.

@@ -2,6 +2,48 @@
 
 One section per release since v309, newest first, moved verbatim from `CLAUDE.md` in v401 (batch 6 of the 2026-09-25 review; `docs/REVIEW-2026-09-25.md`). `CLAUDE.md` is the guide and the authority for how the app works now. A section here records what one release changed and why, in the words written at the time, so a later section — or the guide — can supersede what an earlier one says.
 
+## v411 — a clip with two dishes gives two recipes, and the ingredients page is a ledger
+
+«مقطع الفيديو ممكن يكون فيه وصفتين وهو هنا يدمجها بوصفة واحدة — أريد حلًّا جذريًا
+وسلسًا واحترافيًا» and «صفحة المكونات مش منظمة، زحمة، العميل راح يبعد عنها — تغيير
+جذري». Three editor directions were written independently and scored by three
+judges; **THE LEDGER** won (46.7 against 40.7 and 39.7). Built in an isolated
+worktree with failing-first cases, reviewed twice (code + browser QA, 16
+findings), all fixed.
+
+- **More than one dish stays more than one.** The Worker's recipe instruction
+  now reads every distinct dish in the source, in order, never merged (a sauce
+  or side made FOR a dish stays with it), at most 4; it answers
+  `{recipe, recipes}` — `recipe` is the first dish, so an older client still
+  works, and the new client reads either shape (an old Worker's single dish opens
+  the editor as before). `clampRecipes` keeps at most 4 dishes and 60
+  ingredients in all, drops empty dishes, and the request still costs one budget
+  unit.
+- **The chooser.** Two or more dishes open `openRecipeChooser`: one row per dish
+  (kcal per serving in mono, the name, «n مكوّنات · n حصص» with correct Arabic
+  counts), a tap opens that dish in the editor, and saving (or closing) brings
+  the chooser back with that card marked «حُفظت» and focus on the next; «احفظ الكل»
+  saves every unsaved dish as its own recipe and names any that failed. One dish
+  still goes straight to the editor.
+- **The ledger.** Each ingredient at rest is one figure row — kcal first in mono,
+  the name, one muted line «amount · macros», «تقدير» for an AI estimate, no
+  buttons painted on it. A tap turns the row into an edit strip (name and amount,
+  the four figures, trash and «تم»); one strip at a time; Enter moves to the next
+  row; Escape closes the strip, not the sheet; a removed row folds away and can be
+  undone. A new recipe opens on two tiles («أضف مكوّنًا», «استخرج من مقطع أو صورة»)
+  instead of a blank row. Servings and totals are one bar above a Save that stays
+  on screen; a per-serving / whole-recipe reading appears only when servings is
+  more than 1 and never changes the bar's height. The open strip scrolls clear of
+  the sticky footer; the reading toggle fits at 340 px and under Larger text.
+- **Every earlier rule holds**: the length limits, the save guards, exactly
+  `{id,name,qty,calories,protein,carbs,fat}` written, the import hand-off, the
+  recipe view's scaler. Contract 65 now also holds the dish cap equal on both
+  sides (4), and fails on a planted 3.
+- **The Worker is deployed with this release** (no secret change).
+- Also: version labels corrected in the comments two builders wrote from a stale
+  base (the recipe code said v406, the cardio/sleep code v405).
+- Gate: 70 contracts, 18 suites.
+
 ## v410 — cardio and sleep redesigned: one instrument each, a ring for the night, new cardio icons
 
 «إعادة تصميم جذرية … مودرن وأحلى وفخم … عملي وأسهل وأنميشن» for the Cardio

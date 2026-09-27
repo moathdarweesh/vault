@@ -4390,13 +4390,17 @@ body[dir="rtl"] .picker-row { text-align: right; }
 }
 
 /* ---- AI calorie chat ---- */
-/* ── Recipe editor (v301): a LIST, not a spreadsheet ──────────────────────
-   Each ingredient is line 1 (name + amount + remove) and line 2 (a read-only
-   summary that opens a well). Rules obeyed: fill separates and a border MEANS
-   interactive (the two inputs and the pencil well are bordered, the row is
-   not); the 2:1 corner law (r16 well → r8 leaves); the 52/44/36 · r16/12/10 ·
-   15/14/13 scale; inputs ≥16px so iOS does not zoom on focus; --text-faint is
-   never used for text. The sheet is max-width 480, so no breakpoints. */
+/* ── Recipe editor (v411): THE LEDGER (the v301 list before it) ─────────────
+   One ingredient = one FIGURE ROW (.rec-door, the app's .data-row.fig-row
+   idiom) with no control painted on it; a tap swaps it for the EDIT STRIP
+   (.rec-strip: name + amount / the four figures / trash … «تم»). Servings and
+   the totals are ONE bar (.rec-bar) on top of the sticky Save (.rec-foot).
+   Rules obeyed: fill separates and a border MEANS interactive (rows, the strip
+   and the bar carry fill and --elev-1; only the inputs, the reading options,
+   «تم» and the dashed add slot are bordered); the 2:1 corner law (strip and bar
+   r16 → their leaves r8); the 52/44/36 · r16/12/10 · 15/14/13 scale; inputs
+   ≥16px so iOS does not zoom on focus; --text-ghost only in its placeholder
+   role. The sheet is max-width 480, so no breakpoints. */
 
 /* Screen-reader-only. The app had none; the source tag needs it so colour is
    never the ONLY channel carrying meaning. */
@@ -4407,19 +4411,58 @@ body[dir="rtl"] .picker-row { text-align: right; }
 
 .rec-name-top { margin-bottom: var(--sp-3); }
 .rec-list { display: flex; flex-direction: column; }
-.rec-row { padding: 10px 0; border-top: 1px solid var(--border); }
-.rec-row:first-child { border-top: 0; padding-top: var(--sp-1); }
+/* The ledger's rhythm is the hairline between rows (.cx-list's), never a card
+   per row: a row sits on the sheet's own --surface-1. */
+.rec-list > .rec-row { border-top: 1px solid var(--border); }
+.rec-list > .rec-row:first-child { border-top: 0; }
+/* (0,2,0): the unified card surface and the identity layer paint every
+   .data-row with --card-bg and --elev-1 at (0,1,0), later in the file. */
+.rec-list .rec-door { background: transparent; box-shadow: none; }
+.rec-list .fig-row-main { padding-inline: 0; }
+/* ONE column floor for the list, sized to its widest figure («8,888 سعرة»,
+   measured 105px): a floor narrower than that starts every title at a
+   different x down one list (figRowFig's own note). */
+.rec-list .fig-row-fig, .rx-dishes .fig-row-fig { min-width: calc(106px * var(--fs-scale)); }
+.rec-qty-t { white-space: nowrap; }
+/* recJoin's unit: a figure and its label, or «· figure label», never split */
+.rec-nw { white-space: nowrap; }
+.fig-row-title.is-ghost { color: var(--text-ghost); }            /* placeholder role — its sanctioned use */
+/* «تقدير» sits UNDER the kcal, inside the fixed figure column: at the end of the
+   sub line it wrapped alone at 360px and grew the row when its estimate landed.
+   26px figure + 4 + one caption line stays inside the 72px row. */
+.rec-list .fig-row-fig { flex-direction: column; align-items: flex-start; gap: var(--sp-1); }
+.rec-tag { font-size: var(--fs-caption); font-weight: 700; line-height: 1.2; color: var(--accent-text); }
+/* state — text and the figure slot only; a row at rest NEVER changes height */
+.rec-row[data-state="idle"] .fig-row-num, .rec-row[data-state="idle"] .rec-sub-t { color: var(--text-ghost); }
+.rec-row[data-state="pending"] .fig-row-num,
+.rec-row[data-state="pending"] .rec-sub-t { color: var(--text-dim); animation: recPulse 1.2s ease-in-out infinite; }
+@keyframes recPulse { 0%, 100% { opacity: 1; } 50% { opacity: .5; } }
+.rec-row[data-state="fail"] .fig-row-num { color: var(--text-ghost); }
+.rec-row[data-state="fail"] .rec-sub-t { color: var(--red); }
+.rec-row[data-state="fail"][data-why="signin"] .rec-sub-t { color: var(--warn); }
+/* A removed row folds away (js sets max-height from its own height, then 0). */
+.rec-row.is-leaving { overflow: hidden; opacity: 0; transition: max-height 160ms var(--ease), opacity 160ms var(--ease); }
 
-/* line 1 — name + amount + remove */
+/* THE EDIT STRIP — one open at a time. It grows out of the row's 72px. */
+.rec-row.is-edit { padding-block: var(--sp-2); }
+.rec-strip {
+  display: flex; flex-direction: column; gap: var(--sp-2);
+  padding: var(--sp-3); border-radius: var(--radius); background: var(--surface-2); box-shadow: var(--elev-1);
+  overflow: hidden; animation: recStripIn var(--dur) var(--ease);
+}
+.rec-strip:focus { outline: none; }
+@keyframes recStripIn { from { max-height: 72px; opacity: .4; } to { max-height: 320px; opacity: 1; } }
+
+/* line 1 — name + amount */
 .rec-line { display: flex; align-items: center; gap: var(--sp-2); }
 .rec-line input {
   height: var(--btn-h-m); padding: 0 12px;
-  border: 1px solid var(--border-hi); border-radius: var(--radius-btn-m);
-  background: var(--surface-2); color: var(--text);
+  border: 1px solid var(--border-hi); border-radius: var(--radius-sm);   /* r16 strip → r8 leaves */
+  background: var(--surface-3); color: var(--text);
   font-size: calc(16px * var(--fs-scale)); font-weight: 600;             /* 16px: no iOS focus-zoom */
 }
 /* No input:focus override here. The global rule paints border-focus + a 4px
-   --accent-soft halo; the 10px margin under this line is what clears it. */
+   --accent-soft halo; the strip's 12px padding is what clears it. */
 .rec-name { flex: 1; min-width: 0; text-align: start; }
 /* The amount is a free-text LABEL ("200 غ", "٣ حبات"). Do NOT add
    inputmode=decimal: that keypad has no letters, and eggs, spoons and cups
@@ -4439,53 +4482,8 @@ body[dir="rtl"] .picker-row { text-align: right; }
    arrives only under the finger. */
 .rec-del:active { color: var(--red); --icon-accent: var(--red); background: var(--surface-2); }
 
-/* line 2 — the summary. inset -6 on a 10px margin leaves 4px between this
-   halo and the inputs' focus glow, so tapping the bottom of a field can never
-   open the well (the pseudo is positioned and later in DOM order, so it would
-   win the tap). */
-.rec-sum {
-  position: relative; display: flex; align-items: center; gap: var(--sp-2);
-  width: 100%; min-height: 32px; margin-top: 10px; padding: 0;
-  background: transparent; border: 0; color: var(--text-mute);
-  font: inherit; font-size: var(--fs-sub); font-weight: 600; text-align: start; cursor: pointer;
-  appearance: none; -webkit-appearance: none; -webkit-tap-highlight-color: transparent;
-}
-.rec-sum::after { content: ''; position: absolute; inset: -6px 0; }   /* 44px target on a 32px line */
-.rec-sum-t { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-/* Macros are whole numbers on THIS line (the well keeps the decimal): that is
-   what makes the string fit 354px. The ellipsis is a net, not the plan. */
-.rec-sum-t .num { color: var(--text); font-weight: 700; }
-.rec-sum-tag { flex: none; font-size: var(--fs-caption); font-weight: 700; color: var(--accent-text); }
-/* A 28px well inside a 44px halo — deliberately off the button scale, because
-   it is an icon well inside a larger target, not a button. At 36 it would make
-   line 2 as heavy as line 1. */
-.rec-sum-ic {
-  flex: none; width: 28px; height: 28px;
-  display: inline-flex; align-items: center; justify-content: center;
-  border: 1px solid var(--border-hi); border-radius: var(--radius-sm);
-  background: var(--surface-2); color: var(--text-dim);
-}
-.rec-sum-ic svg { width: 14px; height: 14px; }
-.rec-sum:active .rec-sum-ic { background: var(--surface-3); }
-.rec-row[data-src="ai"] .rec-sum-ic,
-.rec-row.is-open .rec-sum-ic { border-color: var(--accent-line); color: var(--accent-text); --icon-accent: var(--accent-text); }
-.rec-row.is-open .rec-sum-t { white-space: normal; }
-.rec-row.is-open .rec-sum-tag { display: none; }
-
-/* state colours — text only; a collapsed row NEVER changes height */
-.rec-row[data-state="idle"] .rec-sum-t { color: var(--text-ghost); }   /* placeholder role — its sanctioned use */
-.rec-row[data-state="pending"] .rec-sum-t { color: var(--text-dim); animation: recPulse 1.2s ease-in-out infinite; }
-@keyframes recPulse { 0%, 100% { opacity: 1; } 50% { opacity: .5; } }
-.rec-row[data-state="fail"] .rec-sum-t { color: var(--red); }
-.rec-row[data-state="fail"][data-why="signin"] .rec-sum-t { color: var(--warn); }
-
-/* the override well: r16 container, r8 leaves */
-.rec-more { display: none; }
-.rec-row.is-open .rec-more {
-  display: grid; grid-template-columns: repeat(4, 1fr); gap: var(--sp-2);
-  margin-top: var(--sp-2); padding: var(--sp-3);
-  border-radius: var(--radius); background: var(--surface-2); box-shadow: var(--elev-1);
-}
+/* line 2 — the four figures, r8 leaves in the r16 strip */
+.rec-figs { display: grid; grid-template-columns: repeat(4, 1fr); gap: var(--sp-2); }
 .rec-f { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
 .rec-cap {
   font-size: var(--fs-caption); font-weight: 700; letter-spacing: .02em; color: var(--text-dim);
@@ -4498,7 +4496,17 @@ body[dir="rtl"] .picker-row { text-align: right; }
   font-size: calc(16px * var(--fs-scale)); font-weight: 700; text-align: center;
 }
 .rec-row[data-state="pending"] .rec-f input { opacity: .45; transition: opacity .2s; }
-.rec-more-foot { grid-column: 1 / -1; display: flex; align-items: center; gap: var(--sp-2); margin-top: var(--sp-1); }
+/* line 3 — the trash at the start, «تم» at the end: ONE fixed-height line in
+   every state, so opening a row or a reply landing never moves line 1. */
+.rec-strip-foot { display: flex; align-items: center; gap: var(--sp-2); min-height: var(--btn-h-s); }
+.rec-strip-gap { flex: 1; }
+.rec-done {
+  position: relative; flex: none; height: var(--btn-h-s); padding: 0 var(--sp-4);
+  border-radius: var(--radius-btn-s); font-size: var(--fs-btn-s);
+}
+.rec-done::after { content: ''; position: absolute; inset: -5px 0; }   /* 44px on a 36px bordered box */
+/* .rec-act sets its own display, so [hidden] needs saying (the v332 trap). */
+.rec-act[hidden] { display: none; }
 .rec-act {
   position: relative; display: inline-flex; align-items: center; gap: 6px;
   height: var(--btn-h-s); padding: 0 10px; border: 0; border-radius: var(--radius-btn-s);
@@ -4513,21 +4521,82 @@ body[dir="rtl"] .picker-row { text-align: right; }
 /* add row — the app's own dashed empty-slot idiom. NOT .btn-ghost: the
    identity layer gives that a solid border, which would beat the dash. */
 .rec-add { margin-top: var(--sp-2); }
+.rec-add[hidden] { display: none; }   /* .ledger-add sets display:flex */
+/* the empty recipe: the import sheet's tiles, one column */
+.rec-empty { margin-top: var(--sp-1); }
 
-/* totals — ONE well, three lines. The per-serving line is what the food log
-   actually receives when the recipe is logged, so it carries the accent. */
-.rec-totals {
-  display: flex; flex-direction: column; gap: var(--sp-2);
-  margin: var(--sp-4) 0 0; padding: var(--sp-3) var(--sp-4);
-  border-radius: var(--radius); background: var(--surface-2); box-shadow: var(--elev-1);
+/* THE FOOT — sticky, so the figure the log receives and Save stay on screen
+   while a 30-row recipe scrolls. It runs to the sheet's edges (its 18px). */
+/* bottom is NEGATIVE the sheet's own bottom padding: a sticky box stops at the
+   scrollport's padding edge, and at 0 the rows scrolled under it showed through
+   the 22px strip beneath Save (measured). */
+.rec-foot {
+  position: sticky; bottom: calc(-22px - var(--safe-b)); z-index: 2;
+  margin: var(--sp-4) -18px 0; padding: var(--sp-3) 18px 0;
+  background: var(--surface-1);
 }
-.rt-line { display: flex; flex-direction: column; gap: 2px; }
-.rt-k { font-size: var(--fs-caption); font-weight: 700; letter-spacing: .03em; color: var(--text-dim); }
-.rt-v { font-size: var(--fs-sub); font-weight: 600; color: var(--text-mute); }
-.rt-v .num { color: var(--text); font-weight: 700; }
-.rt-line.accent .rt-k { color: var(--accent-text); }
-.rt-line.accent .rt-v .num { color: var(--accent-text); }
-.rt-line.accent .rt-cal { font-size: calc(17px * var(--fs-scale)); }
+.rec-foot .sticky-actions { margin: 0 -18px; padding: var(--sp-3) 18px calc(var(--sp-3) + var(--safe-b)); border-top: 0; }
+/* ONE bar: fill and --elev-1, no border (the bar itself is not a control). Its
+   height is the same in every state: the reading options sit beside the
+   stepper, and the macros have a fixed two-line box. */
+.rec-bar {
+  display: flex; flex-direction: column; gap: var(--sp-2);
+  padding: var(--sp-3) var(--sp-4); border-radius: var(--radius); background: var(--surface-2); box-shadow: var(--elev-1);
+}
+.rec-bar-top { display: flex; align-items: center; justify-content: space-between; gap: var(--sp-2); min-height: var(--btn-h-m); }
+.rec-reading { display: flex; gap: var(--sp-1); min-width: 0; }
+.rec-reading[hidden] { display: none; }
+.rec-reading button {
+  position: relative; height: var(--btn-h-s); padding: 0 10px;
+  border: 1px solid var(--border-hi); border-radius: var(--radius-btn-s);
+  background: transparent; color: var(--text-mute);
+  font: inherit; font-size: var(--fs-btn-s); font-weight: 700; white-space: nowrap; cursor: pointer;
+  appearance: none; -webkit-appearance: none; -webkit-tap-highlight-color: transparent;
+  transition: color 0.15s, background 0.15s, border-color 0.15s;
+}
+.rec-reading button::after { content: ''; position: absolute; inset: -5px 0; }   /* 44px on a 36px bordered box */
+.rec-reading button[aria-pressed="true"] { background: var(--surface-3); border-color: var(--accent-line); color: var(--text); }
+.rec-bar-figs { display: flex; align-items: center; gap: var(--sp-3); min-height: calc(36px * var(--fs-scale)); }
+.rec-bar-val { flex: none; display: inline-flex; align-items: baseline; gap: 4px; }
+/* The per-serving kcal carries the accent: it is the number logging writes. */
+.rec-bar-kcal { font-size: calc(26px * var(--fs-scale)); font-weight: 700; line-height: 1; letter-spacing: -0.02em; color: var(--accent-text); }
+.rec-bar-kcal.is-whole { color: var(--text); }
+.rec-bar-kcal.is-bump { animation: recBump 240ms var(--ease); }
+@keyframes recBump { from { color: var(--text); } to { color: var(--accent-text); } }
+.rec-bar-unit { font-size: var(--fs-meta); font-weight: 700; color: var(--text-mute); }
+.rec-bar-macros { flex: 1; min-width: 0; font-size: var(--fs-meta); font-weight: 600; line-height: 1.4; color: var(--text-mute); }
+.rec-bar-macros .num { color: var(--text); font-weight: 700; white-space: nowrap; }
+/* Under 375px line 1 is tight: the stepper (148) and the two readings (~139
+   with «Larger text») measured 281–295px against 250–290px of room, and
+   «Whole» ran 9px out of the bar at 340 (the v411 review). The bar keeps its
+   height; line 1 gives up its slack instead — 12px side padding, a 4px gap, a
+   square 44px servings field, 6px inside each reading. */
+@media (max-width: 374px) {
+  .rec-bar { padding-inline: var(--sp-3); }
+  .rec-bar-top { gap: var(--sp-1); }
+  .rec-bar-top .rt-step input { width: var(--btn-h-m); }
+  .rec-reading button { padding: 0 var(--sp-1h); }
+}
+/* …and at 320 (measured 267px against 258 with «Larger text») the stepper
+   and the two readings close their inner gaps: their borders still part them. */
+@media (max-width: 339px) {
+  .rec-bar-top .rt-step, .rec-reading { gap: 0; }
+}
+/* The keyboard up with a strip open (js: .rec-tight, a viewport under 600px):
+   the bar folds to its figure line, so the field being typed in has the room. */
+.rec-tight .rec-bar-top { display: none; }
+
+/* THE DISH CHOOSER (openRecipeChooser, v411): the ledger's rows as doors, one
+   per dish, divided by the hairline. (0,3,0) beats the identity layer's
+   .data-row border:0 and its --elev-1 at (0,1,0). */
+.rx-dishes { display: flex; flex-direction: column; margin-top: var(--sp-2); }
+.rx-dishes > .rx-dish { background: transparent; box-shadow: none; border-radius: 0; }
+.rx-dishes > .rx-dish + .rx-dish { border-top: 1px solid var(--border); }
+.rx-dishes .fig-row-main { padding-inline: 0; }
+/* The M rung (44 / r12): a ghost block that must not compete with the sheet's
+   primary size. (0,2,0) against .btn's own height and radius. */
+.rx-pick-all.btn { height: var(--btn-h-m); min-height: 0; border-radius: var(--radius-btn-m); font-size: var(--fs-btn-m); margin-top: var(--sp-4); }
+.rx-pick-all.is-waiting { opacity: .72; }
 .rt-serv {
   display: flex; align-items: center; justify-content: space-between; gap: var(--sp-2);
   padding: var(--sp-1) 0; border-top: 1px solid var(--border); border-bottom: 1px solid var(--border);

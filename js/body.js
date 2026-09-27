@@ -21,7 +21,7 @@
 // SCHEDULED, v315); weightCardHtml() and openWeightSheet() from renderHome, and
 // openWeightSheet() again from runQuickAction and the unified search (the weight
 // quick actions). Each is this domain's own surface, used where it is shown;
-// inventing an indirection to hide them would buy nothing. v405 adds one more:
+// inventing an indirection to hide them would buy nothing. v410 adds one more:
 // openGoalModal() from renderSettings — the two goals (cardio minutes a week,
 // sleep minutes a night) are this domain's, and Settings offers the same sheet
 // the heroes' goal buttons open, so a default that feels imposed is found in
@@ -281,7 +281,7 @@ function newestRecord(list) {
   return best;
 }
 
-// THE TRACK (v405) — seven wells under one figure: the Cardio hero's week
+// THE TRACK (v410) — seven wells under one figure: the Cardio hero's week
 // (the Sleep hero took the food log's ring instead). `cols` are the seven days
 // in order, each { label, segs: [minutes…], hit, today, future }; `scale` is
 // the minutes that fill a well and `line` the pace or goal in the same unit.
@@ -327,7 +327,7 @@ function spokenMinutes(n) {
   return t(k).replace('{n}', fmtNum(n));
 }
 
-// ONE sheet for both goals (v405). Cardio is minutes a week (30–1200, the
+// ONE sheet for both goals (v410). Cardio is minutes a week (30–1200, the
 // WHO's 150 by default); sleep is entered in hours (4–12, in halves) and
 // stored as minutes. Opened from each hero's goal button and from the two
 // Settings rows; the view that opened it repaints on save.
@@ -393,7 +393,7 @@ function renderCardio(el) {
   const weekMin = weekItems.reduce((s, c) => s + (Number(c.duration) || 0), 0);
   const weekCal = weekItems.reduce((s, c) => s + (Number(c.calories) || 0), 0);
 
-  // THE INSTRUMENT (v405): the week's minutes as one figure over a seven-column
+  // THE INSTRUMENT (v410): the week's minutes as one figure over a seven-column
   // track, against a weekly goal. The pace line is the goal spread over the
   // week (ceil(goal ÷ 7)); the scale is twice the pace or the biggest day,
   // whichever is larger, so the line sits mid-height on an ordinary week —
@@ -517,7 +517,7 @@ function renderCardio(el) {
 
 function openCardioModal(cardioId = null, presetDate = null) {
   const existing = cardioId ? DB.cardio.list().find((c) => c.id === cardioId) : null;
-  // Fewer taps (v405): a new session opens on the type of the NEWEST session,
+  // Fewer taps (v410): a new session opens on the type of the NEWEST session,
   // not always the treadmill — a walker's log is open → digits → save. A type
   // deleted since falls back to the first built-in.
   const lastUsed = (newestRecord(DB.cardio.list()) || {}).type;
@@ -848,7 +848,7 @@ function sleepQuality(stages) {
 // a source app that doesn't record stages); the caller then draws the empty
 // track, so every row keeps one shape and an empty edge honestly says «no stage
 // data» rather than painting a fill that means nothing. (The v389 compact bar
-// and the legend card went with the v405 hero, which reads deep and efficiency
+// and the legend card went with the v410 hero, which reads deep and efficiency
 // as its own rows.)
 function sleepStagesHtml(entry) {
   const s = entry && entry.stages;
@@ -871,7 +871,7 @@ function renderSleep(el) {
   list.forEach((s) => { const cur = byNight[s.date]; if (!cur || String(s.createdAt || '') >= String(cur.createdAt || '')) byNight[s.date] = s; });
   const latest = list.length ? byNight[list[0].date] : null;
 
-  // THE RING (v405 — the owner, mid-build: «أريد نفس التغيير الذي حصل بصفحة
+  // THE RING (v410 — the owner, mid-build: «أريد نفس التغيير الذي حصل بصفحة
   // الأكل يحصل هنا من ناحية التصميم»). The food log's miniature, for last
   // night: ONE card, a 144px ring drawn with the calorie ring's own classes
   // (r=54, C=339.29) and filled by last night against the sleep goal, the
@@ -978,7 +978,7 @@ function renderSleep(el) {
       <h1 class="page-title">${t('sleep')}</h1>
     </div>
 
-    <!-- ONE card (v405): the caption row (the one word of context, the
+    <!-- ONE card (v410): the caption row (the one word of context, the
          night's quality word beside it, and the goal control — the night's
          date is NOT repeated, the first ledger row under it already says
          «اليوم» and the date), then the ring beside its rows. With no night at
@@ -1030,7 +1030,7 @@ function renderSleep(el) {
 
 function openSleepModal(sleepId = null, presetDate = null) {
   const existing = sleepId ? DB.sleep.list().find((s) => s.id === sleepId) : null;
-  // Fewer taps (v405): a new night opens on LAST night's times, not a fixed
+  // Fewer taps (v410): a new night opens on LAST night's times, not a fixed
   // 23:00 → 07:00 — a regular sleeper logs a night as date → save.
   const all = DB.sleep.list();
   const latest = existing || newestRecord(all);

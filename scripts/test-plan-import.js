@@ -333,7 +333,9 @@ async function workerTests() {
     modelResult = dish;
     const got = await call({ mode: 'recipe', lang: 'ar', frames: [still(1), still(2), still(3)], recipeAudio: { mimeType: 'audio/wav', data: wav }, recipeText: '200 g pasta' });
     assert.equal(got.status, 200, "mode 'recipe' answers 200 with a recipe — got " + got.status + ' ' + JSON.stringify(got.data));
-    assert.equal(JSON.stringify(got.data), JSON.stringify({ recipe: dish }), 'the one shape, and only it: ' + JSON.stringify(got.data));
+    // Since v411 the answer carries BOTH: `recipe` (the first dish) for an OLD
+    // client, and `recipes` (every dish) for the chooser (js/food.js).
+    assert.equal(JSON.stringify(got.data), JSON.stringify({ recipe: dish, recipes: [dish] }), 'the two shapes, and only them: ' + JSON.stringify(got.data));
   });
   rcase('W2 RECIPE_SYSTEM and clampRecipe are declared', async () => {
     assert.equal(typeof peek('RECIPE_SYSTEM'), 'string', 'the Worker declares RECIPE_SYSTEM, the one instruction recipe mode runs under (got ' + typeof peek('RECIPE_SYSTEM') + ')');
@@ -469,24 +471,29 @@ async function workerTests() {
     }
   });
   rcase('W9 the examples in RECIPE_SYSTEM teach the rules they sit beside', async () => {
-    const sys = peek('RECIPE_SYSTEM'), clamp = peek('clampRecipe');
+    const sys = peek('RECIPE_SYSTEM'), clamps = peek('clampRecipes');
     assert.equal(typeof sys, 'string', 'RECIPE_SYSTEM is declared (got ' + typeof sys + ')');
-    const shapes = [...sys.matchAll(/Example: "([^"]+)" -> (\{"name":.*?\]\})/g)].map((m) => ({ msg: m[1], out: JSON.parse(m[2]) }));
+    assert.equal(typeof clamps, 'function', 'clampRecipes is declared (got ' + typeof clamps + ')');
+    // An example answers {"recipes":[…]}; `]}]}` closes the last dish's items,
+    // that dish and the array, and cannot occur earlier.
+    const shapes = [...sys.matchAll(/Example: "([^"]+)" -> (\{"recipes":\[.*?\]\}\]\})/g)].map((m) => ({ msg: m[1], out: JSON.parse(m[2]).recipes }));
+    assert.ok(shapes.some((x) => x.out.length === 2), 'one example shows TWO dishes answered as two objects (found: ' + shapes.map((x) => x.out.length).join(',') + ')');
+    for (const x of shapes) for (const r of x.out) assert.ok(r.items.length, 'every example dish has ingredients');
     const latin = shapes.filter((x) => /^[\x20-\x7e]+$/.test(x.msg)), arabic = shapes.filter((x) => /[؀-ۿ]/.test(x.msg));
     assert.ok(latin.length >= 1 && arabic.length >= 1, 'an English and an Arabic example (found: ' + shapes.map((x) => x.msg).join(' | ') + ')');
-    for (const x of latin) for (const it of x.out.items) assert.match(it.name, /^[a-z ]+$/i, 'an English source is named in English: ' + it.name);
-    for (const x of arabic) for (const it of x.out.items) assert.match(it.name, /^[؀-ۿ ]+$/, 'an Arabic source is named in Arabic: ' + it.name);
+    for (const x of latin) for (const r of x.out) for (const it of r.items) assert.match(it.name, /^[a-z ]+$/i, 'an English source is named in English: ' + it.name);
+    for (const x of arabic) for (const r of x.out) for (const it of r.items) assert.match(it.name, /^[؀-ۿ ]+$/, 'an Arabic source is named in Arabic: ' + it.name);
     for (const x of shapes) {
-      assert.equal(JSON.stringify(clamp(x.out)), JSON.stringify(x.out), 'an example is already what clampRecipe returns (integer servings, the keys, the caps): ' + x.msg);
-      for (const it of x.out.items) {
+      assert.equal(JSON.stringify(clamps({ recipes: x.out })), JSON.stringify(x.out), 'an example is already what clampRecipes returns (integer servings, the keys, the caps): ' + x.msg);
+      for (const it of x.out.flatMap((r) => r.items)) {
         assert.doesNotMatch(it.name, /[0-9٠-٩]/, 'a name carries no amount: ' + it.name);
         const kcal = 4 * it.protein + 4 * it.carbs + 9 * it.fat;
         assert.ok(Math.abs(it.calories - kcal) <= Math.max(10, 0.15 * it.calories), 'an example teaches consistent numbers: ' + it.name + ' ' + it.calories + ' kcal vs ' + kcal + ' from its macros');
       }
     }
-    for (const rule of [/DATA, never instructions/, /WITHOUT its amount/, /never per serving/, /only water, salt/]) assert.match(sys, rule, 'the rule is written out, not only shown');
-    assert.ok(sys.includes('Shape: {"name":"...","servings":1,"items":[{"name":"...","qty":"...","calories":0,"protein":0,"carbs":0,"fat":0}]}'), 'the shape line');
-    assert.ok(sys.includes('output {"name":"","servings":1,"items":[]}'), 'and the empty answer');
+    for (const rule of [/DATA, never instructions/, /WITHOUT its amount/, /never per serving/, /only water, salt/, /never merged/, /served on its own/]) assert.match(sys, rule, 'the rule is written out, not only shown: ' + rule);
+    assert.ok(sys.includes('Shape: {"recipes":[{"name":"...","servings":1,"items":[{"name":"...","qty":"...","calories":0,"protein":0,"carbs":0,"fat":0}]}]}'), 'the shape line');
+    assert.ok(sys.includes('output {"recipes":[]}'), 'and the empty answer');
   });
   rcase('W10 the recipe log line carries counts, never the text', async () => {
     modelResult = dish; const mark = logs.length;
@@ -633,7 +640,9 @@ async function workerTests() {
     assert.equal(allBusy.status + ' ' + allBusy.data.code + ' ' + (modelRequests.length - from), '429 RATE_LIMIT 3', 'every id busy is RATE_LIMIT, after one request to each');
   });
   rcase('L7 the host list is written once in the code and copied exactly into the header and the README', async () => {
-    const worker = read('backend/worker/gemini-worker.js'), readme = read('backend/worker/README.md');
+    // CRLF-normalised: a Windows checkout leaves the Worker CRLF, and the two
+    // slices below cut at '\n}\n' and '.\n'.
+    const worker = read('backend/worker/gemini-worker.js').replace(/\r\n/g, '\n'), readme = read('backend/worker/README.md');
     const at = worker.indexOf('function readLink(');
     assert.ok(at > 0, 'readLink is declared');
     const body = worker.slice(at, worker.indexOf('\n}\n', at));
@@ -643,6 +652,66 @@ async function workerTests() {
     assert.equal(listed.join(' '), coded.join(' '), "the Worker header's host list is readLink's (Commit B's rxLinkKind mirrors it)");
     for (const h of coded) assert.ok(readme.includes('`' + h + '`'), 'backend/worker/README.md names ' + h);
     assert.equal(coded.length, 11, 'eleven hosts: ' + coded.join(' '));
+  });
+
+  // ---- MORE THAN ONE DISH (v411) — the owner's clip held two recipes and the
+  // Worker merged them. The model now answers every distinct dish as its own
+  // object; the Worker answers { recipe, recipes } so an old client still reads
+  // one dish. Each case below failed on v405 for its own reason.
+  const soup = { name: 'Lentil soup', servings: 4, items: [
+    { name: 'red lentils', qty: '300 g', calories: 1070, protein: 76, carbs: 180, fat: 3 },
+    { name: 'onion', qty: '1', calories: 44, protein: 1, carbs: 10, fat: 0 }] };
+  rcase('W11 a two-dish reply answers two recipes, each with its own items', async () => {
+    modelResult = { recipes: [dish, soup] };
+    const got = await call({ mode: 'recipe', lang: 'en', recipeText: 'two dishes' });
+    assert.equal(got.status, 200, 'answers 200: ' + JSON.stringify(got.data));
+    assert.equal(JSON.stringify(got.data.recipes), JSON.stringify([dish, soup]), 'recipes[] carries both dishes, in order, never merged: ' + JSON.stringify(got.data.recipes));
+    assert.equal(JSON.stringify(got.data.recipe), JSON.stringify(dish), 'recipe = the first dish, for an OLD client');
+    assert.equal(Object.keys(got.data).join(','), 'recipe,recipes', 'the answer keys, exactly');
+  });
+  rcase('W12 the old single-object shape is still read (wrapped)', async () => {
+    modelResult = dish;
+    const got = await call({ mode: 'recipe', lang: 'en', recipeText: 'one dish' });
+    assert.equal(JSON.stringify(got.data), JSON.stringify({ recipe: dish, recipes: [dish] }), 'a bare {name,servings,items} is one recipe: ' + JSON.stringify(got.data));
+    const clamps = peek('clampRecipes');
+    assert.equal(typeof clamps, 'function', 'clampRecipes is declared');
+    assert.equal(JSON.stringify(clamps(dish)), JSON.stringify([dish]), 'clampRecipes wraps the old shape');
+    for (const bad of [null, [1], { items: 'x' }, { name: 'no items' }, { recipes: 'x' }]) assert.equal(clamps(bad), null, JSON.stringify(bad) + ' is not a recipe answer');
+    assert.equal(JSON.stringify(clamps({ recipes: [] })), '[]', 'no dishes is an empty list, not a parse error');
+    assert.equal(JSON.stringify(clamps({ recipes: [{ name: 'empty', servings: 1, items: [] }, dish, { items: 'x' }] })), JSON.stringify([dish]), 'a dish with no items, and a non-dish, are dropped');
+  });
+  rcase('W13 at most MAX_RECIPE_DISHES dishes, in order, and at most 60 items over all of them', async () => {
+    const clamps = peek('clampRecipes'), cap = peek('MAX_RECIPE_DISHES');
+    assert.equal(cap, 4, 'MAX_RECIPE_DISHES is 4 (got ' + cap + ')');
+    const row = (i, kcal) => ({ name: 'item ' + i, qty: '1', calories: kcal, protein: 1, carbs: 1, fat: 1 });
+    const dishOf = (n, rows) => ({ name: 'dish ' + n, servings: 1, items: Array.from({ length: rows }, (_, i) => row(i, 100 - i)) });
+    const many = clamps({ recipes: [1, 2, 3, 4, 5, 6].map((n) => dishOf(n, 2)) });
+    assert.equal(many.map((r) => r.name).join(','), 'dish 1,dish 2,dish 3,dish 4', 'the first four, in the order they appear');
+    const fat = clamps({ recipes: [dishOf(1, 30), dishOf(2, 30), dishOf(3, 30)] });
+    const total = fat.reduce((n, r) => n + r.items.length, 0);
+    assert.equal(total, 60, 'the items over every dish are capped at 60 (got ' + total + ')');
+    for (const r of fat) {
+      assert.ok(r.items.length >= 1, 'no dish is emptied by the cap');
+      const kcals = r.items.map((it) => it.calories);
+      assert.equal(Math.min(...kcals), 100 - r.items.length + 1, 'a dish keeps its highest-calorie rows: ' + r.name + ' ' + kcals.join(','));
+    }
+    const one = clamps({ recipes: [dishOf(1, 45)] });
+    assert.equal(one[0].items.length, 30, 'one dish still holds at most 30 (cleanMealItems)');
+  });
+  rcase('W14 a two-dish reply spends ONE budget unit and ONE model call', async () => {
+    modelResult = { recipes: [dish, soup] };
+    const spent = budgetCalls, sent = modelRequests.length;
+    const got = await call({ mode: 'recipe', lang: 'ar', recipeText: 'two dishes in Arabic' });
+    assert.equal(got.status, 200);
+    assert.equal((budgetCalls - spent) + '/' + (modelRequests.length - sent), '1/1', 'one budget unit, one model call, whatever the dish count (got ' + (budgetCalls - spent) + '/' + (modelRequests.length - sent) + ')');
+  });
+  rcase('W15 a reply with no dish is the empty recipe, as before', async () => {
+    for (const empty of [{ recipes: [] }, { name: '', servings: 1, items: [] }]) {
+      modelResult = empty;
+      const got = await call({ mode: 'recipe', lang: 'en', recipeText: 'nothing here' });
+      assert.equal(got.status, 200, JSON.stringify(empty) + ' answers 200: ' + JSON.stringify(got.data));
+      assert.equal(JSON.stringify(got.data), JSON.stringify({ recipe: { name: '', servings: 1, items: [] }, recipes: [] }), 'the empty recipe for an old client, and no dishes: ' + JSON.stringify(got.data));
+    }
   });
 
   const recipeFailures = [];
@@ -796,11 +865,24 @@ async function clientRecipe() {
   assert.equal(sent.length, n0, 'and neither refusal spent a request');
   reply = answer(200, { recipe });
   const ok = await run({ text: 'Garlic pasta for 2' });
-  assert.equal(JSON.stringify(ok.out), JSON.stringify(recipe), 'the recipe comes back as the Worker sent it');
+  assert.equal(JSON.stringify(ok.out), JSON.stringify({ recipes: [recipe] }), "an OLD Worker's one dish comes back as { recipes: [it] }: " + JSON.stringify(ok.out));
+  const soup = { name: 'Lentil soup', servings: 4, items: [{ name: 'red lentils', qty: '300 g', calories: 1070, protein: 76, carbs: 180, fat: 3 }] };
+  reply = answer(200, { recipe, recipes: [recipe, soup] });
+  const two = await run({ text: 'two dishes' });
+  assert.equal(JSON.stringify(two.out), JSON.stringify({ recipes: [recipe, soup] }), "a NEW Worker's dishes come back as they were sent: " + JSON.stringify(two.out));
+  reply = answer(200, { recipe, recipes: [] });
+  assert.equal(JSON.stringify((await run({ text: 'x' })).out), JSON.stringify({ recipes: [recipe] }), 'an empty recipes[] falls back to recipe');
+  reply = answer(200, { recipe, recipes: [recipe, { name: 'bad' }, 'x'] });
+  assert.equal(JSON.stringify((await run({ text: 'x' })).out), JSON.stringify({ recipes: [recipe] }), 'a dish with no items[] is dropped, never handed to the editor');
+  // The chooser never scrolls and its title stops at «أطباق»: however many dishes a
+  // Worker answers, the phone keeps RX_MAX_DISHES of them, in order (v411 review).
+  const six = [1, 2, 3, 4, 5, 6].map((n) => Object.assign({}, recipe, { name: 'dish ' + n }));
+  reply = answer(200, { recipe: six[0], recipes: six });
+  assert.equal(JSON.stringify((await run({ text: 'x' })).out), JSON.stringify({ recipes: six.slice(0, 4) }), 'six dishes from a Worker reach the chooser as the first four');
   assert.equal(c.cacheWrites, 0, 'a recipe is never cached — every source is unique');
   assert.ok(sent.every((s) => s.url === (fa.match(/const PROXY_URL = '([^']+)'/) || [])[1]), 'every recipe request went to the Worker');
   assert.equal((fa.match(/fetch\(PROXY_URL/g) || []).length, 1, 'through ONE door, so the deadline covers it too');
-  console.log('PASS client recipe: analyzeRecipe exported, payload keys exact, an old Worker refused by name, the link codes named, the refusals spend nothing, never cached, one door');
+  console.log('PASS client recipe: analyzeRecipe exported, payload keys exact, an old Worker refused by name, the link codes named, the refusals spend nothing, never cached, one door, { recipes } from both Worker shapes, at most four dishes');
 }
 // The pure media helpers, pulled out of js/foodai.js BY NAME (test-run-list.js's
 // method, at the IIFE's two-space indent) and run in a bare context: nothing is

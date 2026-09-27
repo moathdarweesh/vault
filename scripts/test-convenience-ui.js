@@ -544,9 +544,10 @@ const FOOD_BODY = [
     await page.evaluate(() => openSavedFoodPicker(null, null, 'recipes'));
     await page.locator('#sf-new').click();
     await page.locator('#rec-name').fill('QA stew');
+    // v411: a new recipe opens on its two tiles; «أضف مكوّنًا» opens a row's strip.
+    await page.locator('#rec-add-first').click();
     const row = page.locator('#rec-rows .rec-row').first();
     await row.locator('[data-f="name"]').fill('QA chicken');
-    await row.locator('[data-toggle]').click();
     await row.locator('[data-f="calories"]').fill('330');
     await row.locator('[data-f="qty"]').fill('200 g');
     await row.locator('[data-f="qty"]').press('Enter');
@@ -564,11 +565,10 @@ const FOOD_BODY = [
     await page.locator('#sf-new').click();
     await page.locator('#rec-name').fill('QA nameless');
     const rows = page.locator('#rec-rows .rec-row');
+    await page.locator('#rec-add-first').click();
     await rows.nth(0).locator('[data-f="name"]').fill('QA rice');
-    await rows.nth(0).locator('[data-toggle]').click();
     await rows.nth(0).locator('[data-f="calories"]').fill('200');
     await page.locator('#rec-add').click();
-    await rows.nth(1).locator('[data-toggle]').click();
     await rows.nth(1).locator('[data-f="calories"]').fill('50');
     await page.locator('#rec-save').click();
     const said = await toastText(page);
@@ -721,6 +721,7 @@ const FOOD_BODY = [
       await fresh(page);
       await page.evaluate(() => openSavedFoodPicker(null, null, 'recipes'));
       await page.locator('#sf-new').click();
+      await page.locator('#rec-add-first').click();
       const row = page.locator('#rec-rows .rec-row').first();
       await row.locator('[data-f="name"]').fill('QA lentils');
       await row.locator('[data-f="qty"]').fill('200 g');
@@ -767,6 +768,11 @@ const RX_STUB = { name: 'QA pasta', servings: 2, items: [
   { name: 'spaghetti', qty: '200 g', calories: 742, protein: 26, carbs: 150, fat: 3 },
   { name: 'olive oil', qty: '2 tbsp', calories: 239, protein: 0, carbs: 0, fat: 27 },
   { name: 'salt', qty: '~1 tsp', calories: 0, protein: 0, carbs: 0, fat: 0 }] };
+// The second dish of a two-dish source (v411), and the name B9 saves it under.
+const RX_SOUP_EDITED = 'QA soup, edited';
+const RX_SOUP = { name: 'QA soup', servings: 4, items: [
+  { name: 'red lentils', qty: '300 g', calories: 1070, protein: 76, carbs: 180, fat: 3 },
+  { name: 'onion', qty: '1', calories: 44, protein: 1, carbs: 10, fat: 0 }] };
 async function rxKit(page) {
   const kit = { bodies: [], reply: () => ({ status: 200, body: { recipe: RX_STUB } }), hold: null };
   const cors = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Headers': '*', 'Access-Control-Allow-Methods': 'POST, OPTIONS' };
@@ -863,8 +869,10 @@ async function rxEditorChecks(page) {
   const rows = page.locator('#rec-rows .rec-row');
   assert.equal(await rows.count(), RX_STUB.items.length, 'one row per ingredient');
   assert.equal(await rows.nth(0).getAttribute('data-src'), 'ai', 'a figure the model gave is marked as its estimate');
-  assert.equal((await rows.nth(0).locator('.rec-sum-tag').innerText()).trim(), await tr(page, 'rec_tag_ai'));
-  assert.equal(await rows.nth(0).locator('[data-f="qty"]').inputValue(), RX_STUB.items[0].qty, 'the amount as the source wrote it');
+  assert.equal((await rows.nth(0).locator('.rec-tag').innerText()).trim(), await tr(page, 'rec_tag_ai'));
+  // v411: a row at rest is a figure row — the amount is the first fact of its sub line.
+  assert.equal((await rows.nth(0).locator('.fig-row-sub .rec-qty-t').innerText()).trim(), RX_STUB.items[0].qty, 'the amount as the source wrote it');
+  assert.equal((await rows.nth(0).locator('.fig-row-num').innerText()).trim(), await page.evaluate((n) => fmtNum(n), RX_STUB.items[0].calories), 'the row leads with its kcal');
   assert.equal(await rows.nth(2).getAttribute('data-state'), 'done', 'a zero row (salt) is settled — seeded as entered, never refused as «no figures»');
   const kcal = RX_STUB.items.reduce((n, it) => n + it.calories, 0);
   assert.equal((await page.locator('#rec-totals [data-t="calories"]').innerText()).trim(), await page.evaluate((n) => fmtNum(n), kcal), 'the totals are the stub\'s');
@@ -1012,9 +1020,9 @@ const RECIPE_IMPORT = [
   { name: 'B7 a recipe with no name is refused BY NAME (rec_need_title), a draft\'s cursor goes to it', async run(page) {
     await fresh(page);
     await page.evaluate(() => openRecipeEditor(null, null, () => {}));
+    await page.locator('#rec-add-first').click();
     const row = page.locator('#rec-rows .rec-row').first();
     await row.locator('[data-f="name"]').fill('QA rice');
-    await row.locator('[data-toggle]').click();
     await row.locator('[data-f="calories"]').fill('300');
     await page.locator('#rec-save').click();
     const said = await toastText(page);
@@ -1044,11 +1052,13 @@ const RECIPE_IMPORT = [
     await fresh(page);
     await page.locator('#food-fab').click();
     await page.locator('[data-method="recipe"]').click();
-    await live('#rec-rows .rec-row').first().waitFor({ timeout: 4000 });
+    // v411: a new recipe opens on two tiles, and the import is the second one.
+    await live('#rec-import').waitFor({ timeout: 4000 });
     const btn = live('#rec-import');
     assert.equal(await btn.count(), 1, 'the calculator carries #rec-import — v401 has none (' + (await btn.count()) + ')');
     assert.equal(await btn.isVisible(), true, 'and it is on screen');
-    assert.equal((await btn.innerText()).trim(), await tr(page, 'rx_title'), 'named «استخراج وصفة»');
+    assert.equal((await btn.locator('.ai-capture-title').innerText()).trim(), await tr(page, 'rec_empty_import'), 'named «استخرج من مقطع أو صورة»');
+    assert.equal(await live('#rec-rows .rec-row').count(), 0, 'and no phantom empty row sits above it');
     const kit = await rxKit(page);
     try {
       await btn.click();
@@ -1081,6 +1091,260 @@ const RECIPE_IMPORT = [
     assert.equal((await live('.modal-title').innerText()).trim(), await tr(page, 'rx_review_title'), 'setup: the draft sheet is up');
     assert.equal(await page.locator('#rec-import').count(), 0, 'a draft is not offered «استخراج وصفة»');
     await page.evaluate(() => closeModal());
+  } },
+  // ---- v411 · MORE THAN ONE DISH, and THE LEDGER ---------------------------
+  // «مقطع الفيديو ممكن يكون فيه وصفتين وهو هنا يدمجها بوصفة واحدة». Each case
+  // below failed on v405 for its own reason, named in its first assertion.
+  { name: 'B9 two dishes: a chooser of two cards, never one merged recipe; a close returns to it; a pick saves that dish and the chooser comes back marked', async run(page) {
+    const kit = await rxKit(page);
+    const live = (sel) => page.locator('#modal-root .modal-overlay:not(.is-out) ' + sel);
+    try {
+      kit.reply = () => ({ status: 200, body: { recipe: RX_STUB, recipes: [RX_STUB, RX_SOUP] } });
+      await rxOpen(page, 'text');
+      await page.locator('#rx-text').fill('Garlic pasta, then a lentil soup');
+      await page.locator('[data-rx-go]').click();
+      const cards = live('.rx-dish');
+      const shown = await cards.first().waitFor({ timeout: 15000 }).then(() => true, () => false);
+      assert.ok(shown, 'two dishes open a chooser — v405 showed ' + JSON.stringify(await page.locator('#modal-root').innerText().catch(() => '')));
+      assert.equal(await cards.count(), 2, 'one card per dish');
+      assert.equal((await live('.modal-title').innerText()).trim(), await tr(page, 'rx_pick_title_2'));
+      for (const [i, d] of [RX_STUB, RX_SOUP].entries()) {
+        const want = await page.evaluate((d) => ({ kcal: fmtNum(DB.recipes.perServing(d).calories), ing: recIngLabel(d.items.length) }), d);
+        assert.equal((await cards.nth(i).locator('.fig-row-title').innerText()).trim(), d.name, 'card ' + i + ' is its dish');
+        assert.equal((await cards.nth(i).locator('.fig-row-num').innerText()).trim(), want.kcal, 'card ' + i + ' leads with the kcal a serving logs');
+        assert.ok((await cards.nth(i).locator('.fig-row-sub').innerText()).includes(want.ing), 'card ' + i + ' counts its own ingredients: ' + want.ing);
+      }
+      // A close without a save comes back to the chooser: the other dish is not lost.
+      await cards.nth(0).click();
+      await live('#rec-rows .rec-row').first().waitFor({ timeout: 4000 });
+      await live('.modal-header [data-close]').click();
+      await cards.first().waitFor({ timeout: 4000 });
+      assert.equal(await live('.rx-dish.is-done').count(), 0, 'nothing was saved by a close');
+      // The second dish, reviewed, EDITED (renamed, one more serving) and saved.
+      await cards.nth(1).click();
+      await live('#rec-rows .rec-row').first().waitFor({ timeout: 4000 });
+      assert.equal(await live('#rec-name').inputValue(), RX_SOUP.name, 'the editor holds the dish picked');
+      assert.deepEqual(await live('#rec-rows .rec-row .fig-row-title').allInnerTexts(), RX_SOUP.items.map((it) => it.name), 'and only its rows');
+      await live('#rec-name').fill(RX_SOUP_EDITED);
+      await live('#rec-totals [data-step="1"]').click();
+      await live('#rec-save').click();
+      await live('.rx-dish.is-done').waitFor({ timeout: 4000 });
+      assert.equal(await toastText(page), null, 'no toast over the chooser: the card\'s «حُفظت» is the confirmation, and the toast covered it');
+      const soup = await page.evaluate((n) => DB.recipes.list().filter((r) => r.name === n), RX_SOUP_EDITED);
+      assert.equal(soup.length, 1, 'ONE recipe for the dish');
+      assert.equal(soup[0].servings, RX_SOUP.servings + 1, 'saved with the servings the editor set');
+      assert.deepEqual(soup[0].items.map((it) => it.name), RX_SOUP.items.map((it) => it.name), 'holding its own ingredients, never the other dish\'s');
+      // The card describes the recipe SAVED, never the draft it came from.
+      const want = await page.evaluate((r) => ({ kcal: fmtNum(DB.recipes.perServing(r).calories), serv: recServLabel(r.servings) }), soup[0]);
+      assert.equal((await cards.nth(1).locator('.fig-row-title').innerText()).trim(), RX_SOUP_EDITED, 'the saved card carries the saved name — the unreviewed build kept the draft\'s');
+      assert.equal((await cards.nth(1).locator('.fig-row-num').innerText()).trim(), want.kcal, 'and the saved recipe\'s per-serving kcal');
+      const sub = await cards.nth(1).locator('.fig-row-sub').innerText();
+      assert.ok(sub.includes(want.serv) && sub.includes(await tr(page, 'rx_dish_saved')), 'its servings, and that it was saved: ' + sub);
+      assert.equal(await page.evaluate(() => document.activeElement && document.activeElement.dataset.i), '0', 'and the dish still to review is under the thumb');
+      // One dish left: the button saves that one, and it is the M rung (44 / r12).
+      const all = live('#rx-pick-all');
+      assert.equal((await all.innerText()).trim(), await tr(page, 'rx_pick_left'), 'one dish left: the button names what it saves');
+      assert.deepEqual(await all.evaluate((b) => [Math.round(b.getBoundingClientRect().height), getComputedStyle(b).borderTopLeftRadius]), [44, '12px'], 'a 44 / r12 ghost block, never the primary 52 / r16');
+      assert.equal(await page.evaluate((n) => DB.recipes.list().some((r) => r.name === n), RX_STUB.name), false, 'the dish not picked is not saved');
+      // Leaving the chooser with a dish saved lands where the import's save lands.
+      await live('.modal-header [data-close]').click();
+      const landed = await live('#sf-tab-recipes[aria-selected="true"]').waitFor({ timeout: 4000 }).then(() => true, () => false);
+      assert.ok(landed, 'the chooser, left, hands over to «وصفاتي»');
+    } finally {
+      await page.evaluate((names) => { DB.recipes.list().filter((r) => names.includes(r.name)).forEach((r) => DB.recipes.remove(r.id)); }, [RX_STUB.name, RX_SOUP.name, RX_SOUP_EDITED]);
+      await kit.done();
+    }
+  } },
+  { name: 'B10 one dish — in the new shape or from an OLD Worker — is the editor at once, no chooser', async run(page) {
+    const kit = await rxKit(page);
+    try {
+      for (const body of [{ recipe: RX_STUB, recipes: [RX_STUB] }, { recipe: RX_STUB }]) {
+        kit.reply = () => ({ status: 200, body });
+        await rxOpen(page, 'text');
+        await page.locator('#rx-text').fill('Garlic pasta for 2');
+        await page.locator('[data-rx-go]').click();
+        await page.locator('#rec-rows .rec-row').first().waitFor({ timeout: 15000 });
+        assert.equal(await page.locator('.rx-dish').count(), 0, 'no chooser for ' + Object.keys(body).join('+'));
+        assert.equal(await page.locator('#modal-root .modal-overlay:not(.is-out) #rec-rows .rec-row').count(), RX_STUB.items.length, 'the dish\'s rows');
+        assert.equal(await toastText(page), await tr(page, 'rx_review_toast'));
+      }
+    } finally { await kit.done(); }
+  } },
+  { name: 'B11 «احفظ الكل» saves every dish as its own recipe, with exactly the stored fields', async run(page) {
+    const kit = await rxKit(page);
+    const live = (sel) => page.locator('#modal-root .modal-overlay:not(.is-out) ' + sel);
+    try {
+      kit.reply = () => ({ status: 200, body: { recipe: RX_STUB, recipes: [RX_STUB, RX_SOUP] } });
+      const before = await page.evaluate(() => DB.recipes.list().length);
+      await rxOpen(page, 'text');
+      await page.locator('#rx-text').fill('Garlic pasta, then a lentil soup');
+      await page.locator('[data-rx-go]').click();
+      const all = live('#rx-pick-all');
+      const up = await all.waitFor({ timeout: 15000 }).then(() => true, () => false);
+      assert.ok(up, '«احفظ الكل» is offered — v405 has no chooser at all');
+      await all.click();
+      assert.equal(await toastText(page), await tr(page, 'rx_saved_all_2'), 'the count is said');
+      assert.equal(await page.evaluate(() => DB.recipes.list().length), before + 2, 'TWO recipes');
+      for (const d of [RX_STUB, RX_SOUP]) {
+        const got = await page.evaluate((n) => DB.recipes.list().find((r) => r.name === n), d.name);
+        assert.ok(got, d.name + ' saved under its own name');
+        assert.equal(got.servings, d.servings, d.name + ' keeps its servings');
+        assert.equal(got.items.length, d.items.length, d.name + ' keeps its own rows');
+        for (const it of got.items) assert.equal(Object.keys(it).sort().join(','), 'calories,carbs,fat,id,name,protein,qty', 'a stored row holds exactly its fields: ' + Object.keys(it).join(','));
+      }
+      const landed = await live('#sf-tab-recipes[aria-selected="true"]').waitFor({ timeout: 4000 }).then(() => true, () => false);
+      assert.ok(landed, 'and the screen lands on «وصفاتي»');
+    } finally {
+      await page.evaluate((names) => { DB.recipes.list().filter((r) => names.includes(r.name)).forEach((r) => DB.recipes.remove(r.id)); }, [RX_STUB.name, RX_SOUP.name]);
+      await kit.done();
+    }
+  } },
+  { name: 'B12 a reply that lands while a row is open patches its strip in place: the caret stays, the strip is not rebuilt', async run(page) {
+    const kit = await rxKit(page);
+    try {
+      await fresh(page);
+      await page.evaluate(() => openRecipeEditor(null, null, () => {}));
+      await page.locator('#rec-add-first').click();
+      const strip = page.locator('#rec-rows .rec-row .rec-strip');
+      assert.equal(await strip.count(), 1, '«أضف مكوّنًا» opens a row straight into its strip — v405 has no strip');
+      const arrived = new Promise((r) => { kit.hold = r; });
+      await strip.locator('[data-f="name"]').fill('QA oats');
+      await strip.locator('[data-f="qty"]').fill('80 g');
+      await arrived;   // the one batched request is out, held
+      await page.evaluate(() => { window.qaStrip = document.querySelector('#rec-rows .rec-strip'); const q = document.activeElement; q.setSelectionRange(2, 2); });
+      await kit.held.fulfill({ status: 200, contentType: 'application/json', headers: { 'Access-Control-Allow-Origin': '*' }, body: JSON.stringify({ items: [{ name: 'oats', calories: 300, protein: 10, carbs: 54, fat: 5 }] }) });
+      await page.waitForFunction(() => document.querySelector('#rec-rows .rec-row').dataset.state === 'done', null, { timeout: 6000 });
+      const after = await page.evaluate(() => ({ same: document.querySelector('#rec-rows .rec-strip') === window.qaStrip,
+        f: document.activeElement && document.activeElement.dataset.f, caret: document.activeElement && document.activeElement.selectionStart,
+        kcal: document.querySelector('#rec-rows [data-f="calories"]').value, door: document.querySelectorAll('#rec-rows .rec-door').length }));
+      assert.deepEqual(after, { same: true, f: 'qty', caret: 2, kcal: '300', door: 0 }, 'the figures land in the open strip without moving the caret');
+      // Escape closes the STRIP, not the sheet.
+      await page.keyboard.press('Escape');
+      assert.equal(await page.locator('#modal-root .modal-overlay:not(.is-out) #rec-rows .rec-door').count(), 1, 'Escape folds the strip into its row, and the sheet stays');
+      assert.equal((await page.locator('#rec-rows .rec-door .fig-row-num').innerText()).trim(), await page.evaluate(() => fmtNum(300)), 'the row now leads with its kcal');
+    } finally { kit.hold = null; await kit.done(); }
+  } },
+  { name: 'B13 the bar: the reading appears only past one serving, and its height never moves; the last row removed leaves the tiles, and undo brings it back', async run(page) {
+    await fresh(page);
+    await page.evaluate(() => openRecipeEditor(null, { name: 'QA bar', servings: 1, items: [{ name: 'rice', qty: '100 g', calories: 130, protein: 2.7, carbs: 28, fat: 0.3 }] }, () => {}));
+    const seg = page.locator('#rec-totals .rec-reading');
+    assert.equal(await seg.isVisible(), false, 'one serving: nothing to choose, nothing named — v405 painted two readings of one number');
+    const h1 = await page.locator('#rec-totals').evaluate((el) => el.getBoundingClientRect().height);
+    await page.locator('#rec-totals [data-step="1"]').click();
+    assert.equal(await seg.isVisible(), true, 'two servings: the reading is offered');
+    assert.equal(await page.locator('#rec-totals').evaluate((el) => el.getBoundingClientRect().height), h1, 'and the bar kept its height');
+    assert.equal((await page.locator('.rec-bar-kcal').innerText()).trim(), await page.evaluate(() => fmtNum(65)), 'per serving by default — what logging writes');
+    await seg.locator('[data-reading="total"]').click();
+    assert.equal(await seg.locator('[data-reading="total"]').getAttribute('aria-pressed'), 'true');
+    assert.equal((await page.locator('.rec-bar-kcal').innerText()).trim(), await page.evaluate(() => fmtNum(130)), 'the whole recipe on request');
+    await page.locator('#rec-rows .rec-door').click();
+    await page.locator('#rec-rows [data-del]').click();
+    await page.locator('#rec-add-first').waitFor({ timeout: 2000 });
+    assert.equal(await page.locator('#rec-rows .rec-row').count(), 0, 'no blank row replaces the last one');
+    assert.equal(await page.locator('#rec-import').count(), 0, 'a draft is not offered the import');
+    await page.locator('.toast-action').click();
+    assert.equal((await page.locator('#rec-rows .rec-door .fig-row-title').innerText()).trim(), 'rice', 'undo brings the row back');
+    await page.evaluate(() => { closeModal(); hideToast(); });
+  } },
+  { name: 'B14 the bar\'s first line fits a 340px phone past one serving, in normal and «Larger text»', async run(page) {
+    await fresh(page);
+    const vp = page.viewportSize();
+    const lgBefore = await page.evaluate(() => document.body.classList.contains('text-lg'));
+    try {
+      await page.setViewportSize({ width: 340, height: 740 });
+      await page.evaluate(() => openRecipeEditor(null, { name: 'QA bar', servings: 4, items: [{ name: 'rice', qty: '100 g', calories: 130, protein: 2.7, carbs: 28, fat: 0.3 }] }, () => {}));
+      for (const lg of [false, true]) {
+        await page.evaluate((lg) => document.body.classList.toggle('text-lg', lg), lg);
+        const m = await page.locator('#rec-totals').evaluate((bar) => {
+          const top = bar.querySelector('.rec-bar-top'), b = bar.getBoundingClientRect(), cs = getComputedStyle(bar);
+          const out = [...top.querySelectorAll('button, input')].filter((el) => { const r = el.getBoundingClientRect(); return r.left < b.left + parseFloat(cs.paddingLeft) - 0.5 || r.right > b.right - parseFloat(cs.paddingRight) + 0.5; }).length;
+          return { scroll: top.scrollWidth, client: top.clientWidth, out, shown: !bar.querySelector('.rec-reading').hidden };
+        });
+        assert.ok(m.shown, 'setup: four servings offer the two readings');
+        assert.ok(m.scroll <= m.client && m.out === 0, `line 1 fits inside the bar at 340px${lg ? ' with «Larger text»' : ''} — the unreviewed build ran «Whole» out of it: ${JSON.stringify(m)}`);
+      }
+    } finally {
+      await page.evaluate((lg) => { document.body.classList.toggle('text-lg', lg); closeModal(); }, lgBefore);
+      await page.setViewportSize(vp);
+    }
+  } },
+  { name: 'B15 focus never falls to <body>: a removed row hands it on, Enter at the 30-row cap stays on the row; the strip is a group named by its ingredient; a new row\'s cells start empty', async run(page) {
+    await fresh(page);
+    const items = Array.from({ length: 30 }, (_, i) => ({ name: 'QA ' + (i + 1), qty: '10 g', calories: 10 + i, protein: 1, carbs: 1, fat: 0 }));
+    await page.evaluate((items) => openRecipeEditor(null, { name: 'QA focus', servings: 1, items }, () => {}), items);
+    const doors = page.locator('#rec-rows .rec-door');
+    const focused = () => page.evaluate(() => { const a = document.activeElement; return a && a.classList.contains('rec-door') ? a.closest('.rec-row').querySelector('.fig-row-title').textContent : a ? a.id || a.tagName : null; });
+    try {
+      await doors.nth(29).click();
+      const strip = page.locator('#rec-rows .rec-strip');
+      assert.deepEqual([await strip.getAttribute('role'), await strip.getAttribute('aria-label')], ['group', 'QA 30'], 'the open strip is a group named by its ingredient — the unreviewed build left it unnamed');
+      assert.equal(await page.locator('#rec-rows [aria-expanded]').count(), 0, 'no door claims an expanded state it can never have');
+      // The 30th row: Enter on its amount commits it, and there is no 31st to open.
+      await strip.locator('[data-f="qty"]').focus();
+      await page.keyboard.press('Enter');
+      assert.equal(await focused(), 'QA 30', 'Enter at the cap leaves focus on the committed row — the unreviewed build dropped it to <body>');
+      // Removing the second row: the row that takes its place takes the focus.
+      await doors.nth(1).click();
+      await page.locator('#rec-rows [data-del]').click();
+      assert.equal(await focused(), 'QA 3', 'the next row takes the focus — the unreviewed build dropped it to <body>');
+      await page.evaluate(() => { closeModal(); hideToast(); });
+      // The last row removed: the tile that adds one takes it.
+      await page.evaluate(() => openRecipeEditor(null, { name: 'QA one', servings: 1, items: [{ name: 'rice', qty: '100 g', calories: 130, protein: 2.7, carbs: 28, fat: 0.3 }] }, () => {}));
+      await page.locator('#rec-rows .rec-door').click();
+      await page.locator('#rec-rows [data-del]').click();
+      await page.waitForFunction(() => document.activeElement && document.activeElement.id === 'rec-add-first', null, { timeout: 2000 }).catch(() => {});
+      assert.equal(await focused(), 'rec-add-first', 'the last row removed hands focus to the tile that adds one');
+      // A new row's four figures start empty, never «0 0 0 0».
+      await page.locator('#rec-add-first').click();
+      assert.deepEqual(await page.locator('#rec-rows .rec-strip input[type=number]').evaluateAll((a) => a.map((i) => i.value)), ['', '', '', ''], 'a new row\'s figure cells are empty — the unreviewed build showed four zeros');
+    } finally { await page.evaluate(() => { closeModal(); hideToast(); }); }
+  } },
+  { name: 'B16 at 360px a row keeps its height whatever its source, and an open strip is never under the sticky bar — the last row tapped, or typed into on a short screen', async run(page) {
+    await fresh(page);
+    const vp = page.viewportSize();
+    const items = Array.from({ length: 10 }, (_, i) => ({ name: 'QA ' + (i + 1), qty: '10 g', calories: 10 + i, protein: 1, carbs: 1, fat: 0 }));
+    const room = () => page.evaluate(() => {
+      const foot = document.querySelector('#modal-root .modal-overlay:not(.is-out) .rec-foot').getBoundingClientRect().top;
+      const vv = window.visualViewport, bottom = Math.min(foot, vv ? vv.offsetTop + vv.height : innerHeight);
+      const done = document.querySelector('#rec-rows .rec-row.is-edit [data-done]').getBoundingClientRect(), a = document.activeElement.getBoundingClientRect();
+      return { doneBottom: Math.round(done.bottom), fieldBottom: Math.round(a.bottom), footTop: Math.round(bottom) };
+    });
+    try {
+      await page.setViewportSize({ width: 360, height: 640 });
+      // An estimated row (tagged «تقدير») and a saved one, side by side: one height.
+      const rice = { name: 'rice', qty: '150 g', calories: 410, protein: 8, carbs: 90, fat: 1 };
+      await page.evaluate((r) => openRecipeEditor(null, { name: 'QA rows', servings: 1, items: [Object.assign({ _src: 'ai', _auto: 'done' }, r), r] }, () => {}), rice);
+      const hs = await page.locator('#rec-rows .rec-door').evaluateAll((a) => a.map((d) => Math.round(d.getBoundingClientRect().height)));
+      assert.equal(hs[0], hs[1], 'the estimate\'s tag does not grow its row — the unreviewed build wrapped «تقدير» onto a second line: ' + hs);
+      await page.evaluate(() => closeModal());
+      await page.evaluate((items) => openRecipeEditor(null, { name: 'QA foot', servings: 2, items }, () => {}), items);
+      await page.locator('#rec-rows .rec-door').last().click();
+      await page.waitForTimeout(350);   // the strip's 180 ms open, and the reveal after it
+      const m = await room();
+      assert.ok(m.doneBottom <= m.footTop, `«تم» of the last row sits above the bar — the unreviewed build put it under: ${JSON.stringify(m)}`);
+      await page.evaluate(() => closeModal());
+      // A short screen, as with the keyboard up (the review's 360×360): the amount
+      // and the four figures of the row being typed in clear the bar, and Enter on
+      // the amount opens the next row with its name clear too.
+      await page.setViewportSize({ width: 360, height: 360 });
+      await page.evaluate((items) => openRecipeEditor(null, { name: 'QA foot', servings: 4, items: items.slice(0, 6) }, () => {}), items);
+      await page.locator('#rec-rows .rec-door').nth(3).click();
+      await page.locator('#rec-rows .rec-strip [data-f="qty"]').focus();
+      await page.waitForTimeout(350);
+      const under = await page.evaluate(() => {
+        const top = document.querySelector('#modal-root .modal-overlay:not(.is-out) .rec-foot').getBoundingClientRect().top;
+        return [...document.querySelectorAll('#rec-rows .rec-row.is-edit input')].filter((i) => i.getBoundingClientRect().bottom > top + 0.5).map((i) => i.dataset.f);
+      });
+      assert.deepEqual(under, [], 'every field of the open strip clears the bar — the unreviewed build hid its figures under it');
+      await page.keyboard.press('Enter');
+      await page.waitForTimeout(350);
+      assert.equal(await page.evaluate(() => document.activeElement.dataset.f), 'name', 'setup: the next row is open on its name');
+      const k = await room();
+      assert.ok(k.fieldBottom <= k.footTop, `the field being typed in sits above the bar: ${JSON.stringify(k)}`);
+    } finally {
+      await page.evaluate(() => { closeModal(); hideToast(); });
+      await page.setViewportSize(vp);
+    }
   } },
 ];
 module.exports.RECIPE_IMPORT = RECIPE_IMPORT;

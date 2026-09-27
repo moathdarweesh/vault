@@ -12,7 +12,7 @@
 // build. The literal below is the fallback (file://, or a stripped query) and is
 // still bumped by `npm run release` — see CLAUDE.md "CACHE WORKFLOW".
 const VAULT_BUILD = (() => {
-  const FALLBACK = 'v410';
+  const FALLBACK = 'v411';
   try {
     const src = (document.currentScript && document.currentScript.src) || '';
     const m = src.match(/[?&]v=(\d+)/);
@@ -5279,7 +5279,7 @@ function renderSettings(el) {
       </div>
     </section>
 
-    <!-- THE TWO GOALS (v405): the Cardio and Sleep heroes each carry a goal
+    <!-- THE TWO GOALS (v410): the Cardio and Sleep heroes each carry a goal
          button, and the same sheet (openGoalModal, js/body.js) is reachable
          here so the 150 min / 8 h defaults read as settings, not verdicts. The
          row's sub IS the value — the sheet opens on it. -->

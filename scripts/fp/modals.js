@@ -95,10 +95,20 @@ const ENTRIES = [
   // «استخراج وصفة» (openRecipeImport): the source sheet — four tiles, two hidden
   // pickers, the privacy line; its confirm and processing stages share the closure.
   { id: 'recipe-import', name: 'openRecipeImport', args: ['$today', '$noop'], host: 'food' },
-  // The goal sheet (v405): one opener, two goals — the weekly cardio minutes
+  // The goal sheet (v410): one opener, two goals — the weekly cardio minutes
   // and the sleep hours — reached from each hero's goal button and Settings.
   { id: 'goal-cardio', name: 'openGoalModal', args: [{ v: 'cardio' }], host: 'cardio' },
   { id: 'goal-sleep', name: 'openGoalModal', args: [{ v: 'sleep' }], host: 'sleep' },
+  // More than one dish in one source (v411, openRecipeChooser): two drafts as
+  // the import builds them — a card each, and «احفظ الكل».
+  { id: 'recipe-choose', name: 'openRecipeChooser', args: ['$today', { v: [
+    { name: 'سلطة سيزر', servings: 1, note: '', items: [
+      { name: 'خس', qty: 'خسة', calories: 52, protein: 4, carbs: 9, fat: 0, _src: 'ai', _auto: 'done' },
+      { name: 'جبن بارميزان', qty: '٥٠ غ', calories: 216, protein: 19, carbs: 2, fat: 14, _src: 'ai', _auto: 'done' }] },
+    { name: 'شوربة عدس', servings: 4, note: '', items: [
+      { name: 'عدس أحمر', qty: '٣٠٠ غ', calories: 1070, protein: 76, carbs: 180, fat: 3, _src: 'ai', _auto: 'done' },
+      { name: 'بصل', qty: 'بصلة', calories: 44, protein: 1, carbs: 10, fat: 0, _src: 'ai', _auto: 'done' },
+      { name: 'زيت', qty: 'ملعقة', calories: 120, protein: 0, carbs: 0, fat: 14, _src: 'ai', _auto: 'done' }] }] }, '$noop'], host: 'food' },
 ];
 
 /* Named, with the reason, so contract 36 can tell "left out on purpose" from

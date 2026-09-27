@@ -1061,6 +1061,33 @@ function recScaleQty(qty, factor) {
   return s.slice(0, m.index) + String(v) + s.slice(m.index + m[0].length);
 }
 
+// Arabic's dual and its 3-10 / 11+ split are real grammar: one literal key per
+// form, so «مكوّنان» never reads «2 مكوّنان». `html` wraps the figure in .num
+// (a dictionary string is ours, so only the figure is inserted).
+// The ledger's meta line: each part is ONE unbreakable unit («٢٦ بروتين» never
+// splits), and every part after the first carries its «·» glued to its front.
+// The only break is the plain space BEFORE a dot, so a wrapped line never ends
+// on a bare «·» (the v411 review measured «… ٧ دهون ·» over a lone «تقدير»).
+// Parts are HTML: each caller escapes what it inserts.
+const recJoin = (parts) => parts.filter(Boolean).map((p, i) => '<span class="rec-nw">' + (i ? '·\u00a0' : '') + p + '</span>').join(' ');
+const recCount = (n) => Math.max(1, parseInt(n, 10) || 1);
+const recFig = (s, n, html) => s.replace('{n}', html ? '<span class="num">' + fmtNum(n) + '</span>' : fmtNum(n));
+function recServLabel(n, html) {
+  n = recCount(n);
+  return recFig(n === 1 ? t('rec_serv_1') : n === 2 ? t('rec_serv_2') : n <= 10 ? t('rec_serv_n') : t('rec_serv_many'), n, html);
+}
+function recIngLabel(n, html) {
+  n = recCount(n);
+  return recFig(n === 1 ? t('rec_ing_1') : n === 2 ? t('rec_ing_2') : n <= 10 ? t('rec_ing_n') : t('rec_ing_many'), n, html);
+}
+// What a saved ingredient row holds: the editor's transient flags never reach
+// storage (cleanMealItems copies every extra field it is handed).
+function recStoredItem(it) {
+  const c = Object.assign({}, it);
+  delete c._auto; delete c._manual; delete c._id; delete c._src; delete c._why;
+  return c;
+}
+
 function openRecipeView(date, rec, onSave) {
   // Re-read by id: the picker's copy can be older than an edit made since.
   const r = DB.recipes.list().find((x) => x.id === rec.id) || rec;
@@ -1103,55 +1130,114 @@ function openRecipeView(date, rec, onSave) {
   });
 }
 
-function openRecipeEditor(date, existing, onDone) {
-  // THE INGREDIENT LEDGER (v301). The sheet is a LIST, not a spreadsheet.
+function openRecipeEditor(date, existing, onDone, opts) {
+  // THE LEDGER (v411; the v301 list before it). «مش منظمة، زحمة» — the owner.
   //
-  // One ingredient = one input line (name + amount + remove) and ONE read-only
-  // summary line under it. The four figures are not inputs by default: they
-  // arrive from the auto-fill machinery below and a tap on the summary opens a
-  // well to override them. Per ingredient that is 4 visible controls and 0
-  // captions, against 7 and 5 before — which is the whole point: the owner's
-  // complaint was that the box does not fit what is in it.
+  // One ingredient = ONE FIGURE ROW with no control painted on it: the kcal in
+  // mono at the start, the name, one muted line (amount · macros). The row IS
+  // the control: a tap swaps it, in place, for a compact EDIT STRIP (name and
+  // amount, the four figures, the trash and «تم»), and only one strip is ever
+  // open (openId). Servings and the totals are ONE bar on top of the sticky
+  // Save, so the figure the food log receives is always on screen. An empty
+  // recipe is two tiles, not a blank row.
   //
   // Two rules make it feel calm, and both are load-bearing:
-  //   1. A ROW IS NEVER RE-RENDERED WHILE IT IS BEING USED. drawRows() runs at
-  //      open and on undo-restore, nothing else. Everything after that patches
-  //      the DOM in place through updateSummary()/fill()/drawTotals(), so no
-  //      field loses focus, no caret moves, and no listener is ever re-bound
-  //      (three delegated listeners on #rec-rows, bound once).
-  //   2. THE SUMMARY LINE HAS THE SAME HEIGHT IN EVERY STATE, including empty
-  //      (it holds the ghost hint there). A row above the one you are typing in
-  //      changes its text, never its height, when figures land.
+  //   1. A ROW IS NEVER RE-RENDERED WHILE IT IS BEING USED. A strip is built
+  //      once when it opens and replaced once when it closes; everything in
+  //      between patches it in place (fill() → setFieldValues(), and
+  //      updateSummary() touches only its two action buttons), so no field
+  //      loses focus and no caret moves. The listeners on #rec-rows are
+  //      delegated and bound once.
+  //   2. A ROW AT REST CHANGES TEXT, NOT HEIGHT, when its figures land: the
+  //      figure slot holds «—» or «…» until then, «تقدير» rides under the kcal
+  //      in that fixed column, and the sub line (amount · three whole macros)
+  //      is one line at 360px in both languages (measured). Only «Larger text»
+  //      on a phone under 360px wraps it, and then as whole units (recJoin).
   var seq = 0;
   var newItem = function () { return { _id: ++seq, name: '', qty: '', calories: 0, protein: 0, carbs: 0, fat: 0 }; };
   var hasFigures = function (it) { return !!(Number(it.calories) || Number(it.protein) || Number(it.carbs) || Number(it.fat)); };
-  var items = existing && existing.items ? existing.items.map(function (i) { return Object.assign({ _id: ++seq }, i); }) : [newItem()];
+  // A new recipe opens on the two tiles, never on a phantom empty row.
+  var items = existing && existing.items ? existing.items.map(function (i) { return Object.assign({ _id: ++seq }, i); }) : [];
   var name = (existing && existing.name) || '';
   var servings = (existing && existing.servings) || 1;
   var saveWanted = false;
+  var openId = null;      // the one row whose edit strip is open
+  var view = 'per';       // the bar's reading while servings > 1: 'per' | 'total'
+  var saved = false;      // set before a closeModal that hands the screen on (a save, the import): opts.onClose stays quiet
+  var lastPer = null;     // the per-serving kcal last painted, for the one colour step
+  var reduced = function () { return !!(window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches); };
   // A DRAFT is `existing` without an id: what «استخراج وصفة» hands over for
   // review (openRecipeImport). It is titled as a review, its note (what the
   // import could not use) stays under the title, and its save is an ADD.
   var isDraft = !!(existing && !existing.id);
   var draftNote = isDraft && existing.note ? String(existing.note) : '';
 
-  // Arabic's dual and its 3-10 / 11+ split are real grammar. Used as the
-  // servings input's aria-label — the one place the number is SPOKEN beside a
-  // noun. It is not painted a second time: the digit is already on screen.
-  var servLabel = function (n) {
-    n = Math.max(1, parseInt(n, 10) || 1);
-    if (n === 1) return t('rec_serv_1');
-    if (n === 2) return t('rec_serv_2');
-    return (n <= 10 ? t('rec_serv_n') : t('rec_serv_many')).replace('{n}', fmtNum(n));
-  };
+  // The servings input's aria-label — the one place the number is SPOKEN beside
+  // a noun. It is not painted a second time: the digit is already on screen.
+  var servLabel = function (n) { return recServLabel(n); };
 
+  // state (idle · pending · fail · done) and source (local · ai · manual ·
+  // saved), derived from the transient flags. _manual is a SOURCE, not a state:
+  // a row the user deliberately zeroed reads done/manual.
+  var rowState = function (it) {
+    var pending = it._auto === 'pending' || it._auto === 'sent';
+    var failed = it._auto === 'fail';
+    var done = !pending && !failed && (hasFigures(it) || it._manual);
+    return { state: pending ? 'pending' : failed ? 'fail' : done ? 'done' : 'idle', src: done ? (it._src || 'saved') : '' };
+  };
+  // THE ROW AT REST: the figure first (figRowFig, the app's list idiom), the
+  // name, one muted line. Macros are WHOLE numbers here (the strip keeps the
+  // decimal): that is what keeps the line whole at 354px. «تقدير» sits UNDER
+  // the kcal, in the figure's fixed column: at the end of the sub line it
+  // wrapped alone onto a second line at 360px, so a row grew 72 → 88 the moment
+  // its estimate landed (the v411 review).
+  var doorInner = function (it) {
+    var st = rowState(it);
+    var n = function (v) { return '<span class="num">' + fmtNum(Math.round(Number(v) || 0)) + '</span>'; };
+    var nm = String(it.name || '').trim(), q = String(it.qty == null ? '' : it.qty).trim();
+    var said = function (s) { return ['<span class="rec-sub-t">' + escapeHtml(s) + '</span>']; };
+    var sub = st.state === 'pending' ? said(t('rec_st_pending'))
+      : st.state === 'fail' ? said(it._why === 'signin' ? t('rec_st_signin') : t('rec_st_fail'))
+      : st.state === 'done' ? [n(it.protein) + '\u00a0' + t('protein_label'), n(it.carbs) + '\u00a0' + t('carbs_label'), n(it.fat) + '\u00a0' + t('fat_label')]
+      : said(t('rec_row_hint'));
+    // The source word is ALWAYS in the accessible name; only the estimate is
+    // painted, so colour never carries meaning on its own.
+    var fig = figRowFig(st.state === 'done' ? fmtNum(Math.round(Number(it.calories) || 0)) : st.state === 'pending' ? '…' : '—', st.state === 'done' ? t('cal') : '');
+    if (st.state === 'done' && st.src === 'ai') fig = fig.replace(/<\/div>$/, '<span class="rec-tag">' + t('rec_tag_ai') + '</span></div>');
+    var sr = st.state === 'done' && st.src !== 'ai' ? '<span class="sr-only"> · ' + t('rec_tag_' + st.src) + '</span>' : '';
+    return '<div class="fig-row-main">' + fig +
+      '<div class="fig-row-text"><span class="fig-row-title' + (nm ? '' : ' is-ghost') + '" dir="auto">' + escapeHtml(nm || t('rec_ing_name')) + '</span>' +
+      // The amount is words as often as digits («٣ أكواب»), so it keeps the text
+      // face: .num's mono spaces Arabic letters apart.
+      '<span class="fig-row-sub">' + recJoin([q ? '<span class="rec-qty-t" dir="auto">' + escapeHtml(q) + '</span>' : ''].concat(sub)) + sr + '</span></div></div>';
+  };
+  // No aria-label on the door: the content (figure, name, amounts, the source
+  // word) is exactly what a screen reader must read. No aria-expanded either:
+  // the door never exists open — the strip REPLACES it, and the strip is a
+  // group named by its ingredient, so the reader says which row is being edited.
+  var doorHtml = function (it) {
+    return '<button type="button" class="data-row fig-row rec-door" data-open>' + doorInner(it) + '</button>';
+  };
+  var stripName = function (it) { return String(it.name || '').trim() || t('rec_ing_name'); };
   var rowHtml = function (it) {
+    return '<div class="rec-row" data-id="' + it._id + '" data-state="idle" data-src="">' + doorHtml(it) + '</div>';
+  };
+  // THE EDIT STRIP: line 1 name + amount, line 2 the four figures, line 3 the
+  // trash at the start and «تم» at the end — a fixed-height line whatever the
+  // row's state, so opening and settling never move line 1.
+  var stripHtml = function (it) {
     var fld = function (f, cap, step, mode, hint) {
       return '<label class="rec-f"><span class="rec-cap">' + cap + '</span>' +
         '<input type="number" data-f="' + f + '" inputmode="' + mode + '" min="0" step="' + step + '"' +
-        ' enterkeyhint="' + hint + '" aria-label="' + escapeHtml(cap) + '" value="' + numAttr(it[f]) + '"></label>';
+        // A row with no figures yet shows empty cells, never four literal zeros
+        // (typing after the 0 read «0410»); the caption is the cue. A figure the
+        // user set, zero included, is shown as set.
+        ' enterkeyhint="' + hint + '" aria-label="' + escapeHtml(cap) + '" value="' + (hasFigures(it) || it._manual ? numAttr(it[f]) : '') + '"></label>';
     };
-    return '<div class="rec-row" data-id="' + it._id + '" data-state="idle" data-src="">' +
+    // tabindex -1: a tap on a row moves focus INTO its strip (a screen reader
+    // lands inside it, on a group named by the ingredient) without raising a
+    // keyboard over the figures.
+    return '<div class="rec-strip" tabindex="-1" role="group" aria-label="' + escapeHtml(stripName(it)) + '">' +
       '<div class="rec-line">' +
         '<input type="text" class="rec-name" data-f="name" maxlength="60" enterkeyhint="next"' +
           ' placeholder="' + escapeHtml(t('rec_ing_name')) + '" aria-label="' + escapeHtml(t('rec_ing_name')) + '"' +
@@ -1162,23 +1248,19 @@ function openRecipeEditor(date, existing, onDone) {
         '<input type="text" class="rec-qty" data-f="qty" dir="auto" maxlength="24" enterkeyhint="next"' +
           ' placeholder="' + escapeHtml(t('rec_qty_ph')) + '" aria-label="' + escapeHtml(t('rec_qty')) + '"' +
           ' value="' + escapeHtml(String(it.qty == null ? '' : it.qty)) + '">' +
-        '<button type="button" class="rec-del" data-del aria-label="' + escapeHtml(t('rec_del_ing')) + '">' + icon('trash', 16) + '</button>' +
       '</div>' +
-      // No aria-label: it would REPLACE the content, and the content (the
-      // figures and the source word) is exactly what a screen reader must read.
-      '<button type="button" class="rec-sum" data-toggle aria-expanded="false" aria-controls="rec-more-' + it._id + '">' +
-        '<span class="rec-sum-t"></span><span class="rec-sum-tag"></span>' +
-        '<span class="rec-sum-ic">' + icon('edit', 14) + '</span>' +
-      '</button>' +
-      '<div class="rec-more" id="rec-more-' + it._id + '">' +
+      '<div class="rec-figs">' +
         fld('calories', t('cal'), '1', 'numeric', 'next') +
         fld('protein', t('protein_label'), '0.1', 'decimal', 'next') +
         fld('carbs', t('carbs_label'), '0.1', 'decimal', 'next') +
         fld('fat', t('fat_label'), '0.1', 'decimal', 'done') +
-        '<div class="rec-more-foot" hidden>' +
-          '<button type="button" class="rec-act" data-retry hidden>' + icon('refresh', 16) + ' ' + t('rec_retry') + '</button>' +
-          '<button type="button" class="rec-act" data-recompute hidden>' + icon('refresh', 16) + ' ' + t('rec_recompute') + '</button>' +
-        '</div>' +
+      '</div>' +
+      '<div class="rec-strip-foot">' +
+        '<button type="button" class="rec-del" data-del aria-label="' + escapeHtml(t('rec_del_ing')) + '">' + icon('trash', 16) + '</button>' +
+        '<span class="rec-strip-gap"></span>' +
+        '<button type="button" class="rec-act" data-retry hidden>' + icon('refresh', 16) + ' ' + t('rec_retry') + '</button>' +
+        '<button type="button" class="rec-act" data-recompute hidden>' + icon('refresh', 16) + ' ' + t('rec_recompute') + '</button>' +
+        '<button type="button" class="btn btn-ghost rec-done" data-done>' + t('rec_row_done') + '</button>' +
       '</div>' +
     '</div>';
   };
@@ -1191,39 +1273,48 @@ function openRecipeEditor(date, existing, onDone) {
   // taken anyway when the name happens to be one he has saved; it simply is not
   // advertised as a menu.
 
-  var totalsCell = function (attr, key) {
-    return '<span class="num"' + attr + '>0</span> ' + key;
-  };
+  // The bar's four visible figures follow the chosen reading; the eight
+  // [data-t]/[data-p] cells hold both readings, every one of them in the DOM.
+  var shown = function (f, key) { return '<span class="num" data-show="' + f + '">0</span>\u00a0' + key; };
+  var cells = ['calories', 'protein', 'carbs', 'fat'].map(function (f) { return '<span data-t="' + f + '">0</span><span data-p="' + f + '">0</span>'; }).join('');
   var overlay = openModal('' +
     '<div class="modal-header">' +
       '<div><div class="modal-title">' + (existing && existing.id ? escapeHtml(existing.name) : isDraft ? t('rx_review_title') : t('rec_new')) + '</div>' +
-      '<div class="modal-subtitle" id="rec-sub">' + (draftNote ? escapeHtml(draftNote) : t('rec_sub')) + '</div></div>' +
+      // A draft's note stays: it says what the import could not use (the sound,
+      // or all but its first seconds), and a 1.8 s toast is too short for that.
+      (draftNote ? '<div class="modal-subtitle" id="rec-sub">' + escapeHtml(draftNote) + '</div>' : '') + '</div>' +
       '<button class="icon-btn icon-btn-tile" data-close>' + icon('close', 20) + '</button>' +
     '</div>' +
-    // «استخراج وصفة» straight from the calculator, for a NEW recipe only: an
-    // edit and an imported draft already hold their ingredients.
-    (existing ? '' : '<button type="button" class="btn btn-ghost btn-block" id="rec-import">' + icon('sparkle', 20) + ' ' + t('rx_title') + '</button>') +
     '<input type="text" id="rec-name" class="input rec-name-top" maxlength="60" enterkeyhint="next" placeholder="' + escapeHtml(t('rec_name_ph')) + '" aria-label="' + escapeHtml(t('rec_name_ph')) + '" value="' + escapeHtml(name) + '">' +
     '<div id="rec-rows" class="rec-list"></div>' +
     '<button type="button" class="ledger-add rec-add" id="rec-add">' + icon('plus', 14) + ' <span>' + t('rec_add_ing') + '</span></button>' +
-    '<div class="rec-totals" id="rec-totals">' +
-      '<div class="rt-line"><span class="rt-k">' + t('rec_total') + '</span>' +
-        '<span class="rt-v">' + totalsCell(' data-t="calories"', t('cal')) + ' · ' + totalsCell(' data-t="protein"', t('protein_label')) +
-        ' · ' + totalsCell(' data-t="carbs"', t('carbs_label')) + ' · ' + totalsCell(' data-t="fat"', t('fat_label')) + '</span></div>' +
-      '<div class="rt-serv"><span class="rt-serv-k">' + t('rec_servings') + '</span>' +
-        '<span class="rt-step">' +
-          '<button type="button" data-step="-1" aria-label="' + escapeHtml(t('rec_serv_less')) + '">' + icon('minus', 16) + '</button>' +
-          '<input type="number" id="rec-servings" class="num" inputmode="numeric" min="1" max="99" step="1" value="' + numAttr(servings) + '" aria-label="' + escapeHtml(servLabel(servings)) + '">' +
-          '<button type="button" data-step="1" aria-label="' + escapeHtml(t('rec_serv_more')) + '">' + icon('plus', 16) + '</button>' +
-        '</span></div>' +
-      '<div class="rt-line accent"><span class="rt-k">' + t('rec_per') + '</span>' +
-        '<span class="rt-v"><span class="num rt-cal" data-p="calories">0</span> ' + t('cal') + ' · ' + totalsCell(' data-p="protein"', t('protein_label')) +
-        ' · ' + totalsCell(' data-p="carbs"', t('carbs_label')) + ' · ' + totalsCell(' data-p="fat"', t('fat_label')) + '</span></div>' +
-    '</div>' +
-    '<div class="form-actions sticky-actions">' +
-      '<button type="button" class="btn btn-primary" id="rec-save">' + t('rec_save') + '</button>' +
+    '<div class="rec-foot">' +
+      // ONE bar: the servings stepper, the reading (only when it has two), and
+      // the figure the food log will receive. No border: the bar is not a control.
+      '<div class="rec-bar" id="rec-totals">' +
+        '<div class="rec-bar-top">' +
+          '<span class="rt-step">' +
+            '<button type="button" data-step="-1" aria-label="' + escapeHtml(t('rec_serv_less')) + '">' + icon('minus', 16) + '</button>' +
+            '<input type="number" id="rec-servings" class="num" inputmode="numeric" min="1" max="99" step="1" value="' + numAttr(servings) + '" aria-label="' + escapeHtml(servLabel(servings)) + '">' +
+            '<button type="button" data-step="1" aria-label="' + escapeHtml(t('rec_serv_more')) + '">' + icon('plus', 16) + '</button>' +
+          '</span>' +
+          '<div class="rec-reading" role="group" aria-label="' + escapeHtml(t('rec_view_group')) + '" hidden>' +
+            '<button type="button" data-reading="per" aria-pressed="true">' + t('rec_per') + '</button>' +
+            '<button type="button" data-reading="total" aria-pressed="false">' + t('rec_total') + '</button>' +
+          '</div>' +
+        '</div>' +
+        '<div class="rec-bar-figs">' +
+          '<span class="rec-bar-val"><span class="num rec-bar-kcal" data-show="calories">0</span><span class="rec-bar-unit">' + t('cal') + '</span></span>' +
+          '<span class="rec-bar-macros">' + recJoin([shown('protein', t('protein_label')), shown('carbs', t('carbs_label')), shown('fat', t('fat_label'))]) + '</span>' +
+        '</div>' +
+        '<div class="rec-bar-data" hidden>' + cells + '</div>' +
+      '</div>' +
+      '<div class="form-actions sticky-actions">' +
+        '<button type="button" class="btn btn-primary" id="rec-save">' + t('rec_save') + '</button>' +
+      '</div>' +
     '</div>');
 
+  if (!overlay) return;   // a dialog that must be answered is up
   var host = overlay.querySelector('#rec-rows');
   // Items are addressed by their transient _id, NEVER by index: an index shifts
   // the moment a row above is deleted, and a reply that lands after that would
@@ -1231,84 +1322,142 @@ function openRecipeEditor(date, existing, onDone) {
   var rowOf = function (it) { return it ? host.querySelector('.rec-row[data-id="' + it._id + '"]') : null; };
   var byId = function (id) { for (var i = 0; i < items.length; i++) if (items[i]._id === id) return items[i]; return null; };
   var itemOf = function (el) { var r = el.closest ? el.closest('.rec-row') : null; return r ? byId(Number(r.dataset.id)) : null; };
+  var scroller = function () {
+    for (var el = host.parentElement; el && el !== document.body; el = el.parentElement) { var o = getComputedStyle(el).overflowY; if (o === 'auto' || o === 'scroll') return el; }
+    return null;
+  };
 
-  // ---- ONE writer for the summary line -------------------------------------
-  function figuresHtml(it) {
-    var n = function (v) { return '<span class="num">' + fmtNum(Math.round(Number(v) || 0)) + '</span>'; };
-    // Macros are rounded to WHOLE numbers on this line only (the well keeps the
-    // decimal). That is what makes the string fit 354px without truncating;
-    // the CSS ellipsis is a net, not the plan. Do not restore the decimals.
-    return n(it.calories) + ' ' + t('cal') + ' · ' + n(it.protein) + ' ' + t('protein_label') +
-      ' · ' + n(it.carbs) + ' ' + t('carbs_label') + ' · ' + n(it.fat) + ' ' + t('fat_label');
-  }
+  // ---- ONE writer for a row's state ----------------------------------------
+  // At rest it repaints the door's content. In EDIT it touches only the strip's
+  // two action buttons: the strip holds a caret and is never rebuilt under it.
   function updateSummary(it) {
     var row = rowOf(it); if (!row) return;
-    var pending = it._auto === 'pending' || it._auto === 'sent';
-    var failed = it._auto === 'fail';
-    var done = !pending && !failed && (hasFigures(it) || it._manual);
-    var state = pending ? 'pending' : failed ? 'fail' : done ? 'done' : 'idle';
-    var src = done ? (it._src || 'saved') : '';
-    row.dataset.state = state;
-    row.dataset.src = src;
+    var st = rowState(it);
+    row.dataset.state = st.state;
+    row.dataset.src = st.src;
     if (it._why) row.dataset.why = it._why; else row.removeAttribute('data-why');
-    var open = row.classList.contains('is-open');
-    var txt = row.querySelector('.rec-sum-t');
-    var tag = row.querySelector('.rec-sum-tag');
-    var ic = row.querySelector('.rec-sum-ic');
-    if (pending) txt.textContent = t('rec_st_pending');
-    else if (failed) txt.textContent = it._why === 'signin' ? t('rec_st_signin') : t('rec_st_fail');
-    else if (open) txt.textContent = done ? t('rec_src_' + src) : t('rec_src_empty');
-    else if (done) txt.innerHTML = figuresHtml(it);
-    else txt.textContent = t('rec_row_hint');
-    // The source word is ALWAYS in the accessible name; only the estimate is
-    // painted, so colour never carries meaning on its own.
-    tag.textContent = done ? t('rec_tag_' + src) : '';
-    tag.classList.toggle('sr-only', src !== 'ai');
-    ic.innerHTML = open ? icon('check', 14) : icon('edit', 14);
-    var retry = row.querySelector('[data-retry]');
-    var recompute = row.querySelector('[data-recompute]');
-    var canCompute = String(it.name || '').trim().length >= 3;
-    retry.hidden = !failed;
-    recompute.hidden = !(done && (src === 'manual' || src === 'saved') && canCompute);
-    row.querySelector('.rec-more-foot').hidden = retry.hidden && recompute.hidden;
-  }
-  function setOpen(it, open) {
-    var row = rowOf(it); if (!row) return;
-    row.classList.toggle('is-open', !!open);
-    row.querySelector('.rec-sum').setAttribute('aria-expanded', open ? 'true' : 'false');
-    updateSummary(it);
-    if (open) {
-      var f = row.querySelector('[data-f="calories"]');
-      if (f) f.focus();
-      row.scrollIntoView({ block: 'nearest' });
-      row.querySelector('.rec-more').scrollIntoView({ block: 'nearest' });
+    if (row.classList.contains('is-edit')) {
+      var retry = row.querySelector('[data-retry]'), recompute = row.querySelector('[data-recompute]');
+      var canCompute = String(it.name || '').trim().length >= 3;
+      if (retry) retry.hidden = st.state !== 'fail';
+      if (recompute) recompute.hidden = !(st.state === 'done' && (st.src === 'manual' || st.src === 'saved') && canCompute);
+      return;
     }
+    var door = row.querySelector('.rec-door');
+    if (door) door.innerHTML = doorInner(it);
   }
-  function syncSubtitle() {
-    var el = overlay.querySelector('#rec-sub');
-    // A draft's note stays: it says what the import could not use (the sound,
-    // or all but its first seconds), and a 1.8 s toast is too short for that.
-    if (el) el.hidden = !draftNote && items.some(hasFigures);
+  // Opens ONE row's strip (closing any other). `focusSel` names the field that
+  // takes the caret — the name for a row just added, the kcal cell for a row the
+  // save refused; a plain tap focuses the strip itself and raises no keyboard.
+  function openRow(it, focusSel) {
+    if (!it) return;
+    if (openId !== null && openId !== it._id) closeRow(byId(openId), false);
+    var row = rowOf(it); if (!row) return;
+    if (!row.classList.contains('is-edit')) {
+      openId = it._id;
+      row.classList.add('is-edit');
+      row.innerHTML = stripHtml(it);
+      updateSummary(it);
+    }
+    var target = row.querySelector(focusSel || '.rec-strip');
+    if (target) target.focus({ preventScroll: true });
+    reveal(it);
+    // Again once the strip has grown to its full height (the 180 ms open).
+    if (!reduced()) setTimeout(function () { reveal(it); }, 200);
+  }
+  // THE STICKY FOOT (the bar and Save, ~200px) sits OVER the bottom of the
+  // list, and scrollIntoView ignores it: a strip opened at the end of a long
+  // recipe put «تم» under the bar, and with the keyboard up the field being
+  // typed in too (the v411 review, 360×360). This scrolls the sheet so the open
+  // strip — or, when it is taller than the room left, the field holding the
+  // caret — sits between the sheet's top and the foot (and the keyboard, which
+  // visualViewport reports). On a short viewport (the keyboard up) the bar
+  // folds to its figure line while a strip is open: the stepper is not what is
+  // being typed, and the room is.
+  function fitFoot() {
+    var vv = window.visualViewport;
+    overlay.classList.toggle('rec-tight', openId !== null && (vv ? vv.height : window.innerHeight) < 600);
+    var sc = scroller(), foot = overlay.querySelector('.rec-foot');
+    // The browser's own focus scroll (the keyboard rising) honours this.
+    if (sc && foot) sc.style.scrollPaddingBottom = foot.offsetHeight + 'px';
+  }
+  function reveal(it) {
+    var row = rowOf(it); if (!row || !row.classList.contains('is-edit') || !overlay.isConnected) return;
+    fitFoot();
+    var sc = scroller(); if (!sc) return;
+    var foot = overlay.querySelector('.rec-foot'), vv = window.visualViewport;
+    var top = Math.max(sc.getBoundingClientRect().top, vv ? vv.offsetTop : 0) + 8;
+    var bottom = Math.min(foot ? foot.getBoundingClientRect().top : Infinity, vv ? vv.offsetTop + vv.height : window.innerHeight) - 8;
+    var r = row.getBoundingClientRect(), a = document.activeElement;
+    var f = a && a.tagName === 'INPUT' && row.contains(a) ? a.getBoundingClientRect() : null;
+    var box = r.height <= bottom - top || !f ? r : f;
+    var dy = box.bottom > bottom ? Math.min(box.bottom - bottom, box.top - top) : box.top < top ? box.top - top : 0;
+    if (dy) sc.scrollTop += dy;
+  }
+  // Closes a strip back into its door. A row that holds nothing at all is not
+  // kept: it was an «add» that was not used, and it is dropped without a word.
+  // A committed row is a row LEFT, so a weightless one is armed here (the
+  // settled path of scheduleAuto) instead of waiting for a focusout.
+  function closeRow(it, focusDoor) {
+    if (!it) { openId = null; return; }
+    if (openId === it._id) openId = null;
+    var row = rowOf(it);
+    if (!row || !row.classList.contains('is-edit')) return;
+    if (!String(it.name || '').trim() && !String(it.qty || '').trim() && !hasFigures(it) && !it._manual) {
+      var at = items.indexOf(it); if (at >= 0) items.splice(at, 1);
+      row.remove();
+      if (!items.length) renderEmpty();
+      syncAdd(); drawTotals(); fitFoot();
+      if (focusDoor) { var a = overlay.querySelector(items.length ? '#rec-add' : '#rec-add-first'); if (a) a.focus({ preventScroll: true }); }
+      return;
+    }
+    row.classList.remove('is-edit');
+    row.innerHTML = doorHtml(it);
+    updateSummary(it);
+    scheduleAuto(it, true);
+    fitFoot();
+    if (focusDoor) { var d = row.querySelector('.rec-door'); if (d) d.focus({ preventScroll: true }); }
   }
 
   // ---- rendering: whole rows only at open and on undo ----------------------
+  // THE EMPTY RECIPE: two tiles (the import sheet's own tile shape), not a
+  // blank row. The import is offered for a NEW recipe only: an edit and an
+  // imported draft already hold their ingredients.
+  function renderEmpty() {
+    openId = null;
+    var tile = function (attrs, ic, title, sub) {
+      return '<button type="button" class="ai-capture" ' + attrs + '><span class="ai-capture-icon">' + icon(ic, 28) + '</span>' +
+        '<span class="rx-tile-text"><span class="ai-capture-title">' + title + '</span><span class="ai-capture-sub">' + sub + '</span></span></button>';
+    };
+    host.innerHTML = '<div class="rec-empty ai-capture-row rx-tiles">' +
+      tile('id="rec-add-first" data-add', 'plus', t('rec_add_ing'), t('rec_empty_add_sub')) +
+      (existing ? '' : tile('id="rec-import"', 'sparkle', t('rec_empty_import'), t('rec_empty_import_sub'))) + '</div>';
+  }
+  // «أضف مكوّنًا» under the list: absent in the empty state (the tile is the
+  // add) and at the 30-row cap (a state the user can see needs no toast).
+  function syncAdd() {
+    var add = overlay.querySelector('#rec-add');
+    if (add) add.hidden = !items.length || items.length >= 30;
+  }
   function drawRows() {
-    host.innerHTML = items.map(rowHtml).join('');
-    items.forEach(updateSummary);
-    drawTotals(); syncSubtitle();
+    openId = null;
+    if (!items.length) renderEmpty();
+    else { host.innerHTML = items.map(rowHtml).join(''); items.forEach(updateSummary); }
+    syncAdd(); drawTotals();
   }
   function appendRow(it) { host.insertAdjacentHTML('beforeend', rowHtml(it)); updateSummary(it); }
   function addRow() {
+    if (items.length >= 30) return;
+    if (openId !== null) closeRow(byId(openId), false);
+    if (!items.length) host.innerHTML = '';   // the tiles give way to the list
     var it = newItem();
     items.push(it);
     appendRow(it);
-    var inp = rowOf(it).querySelector('[data-f="name"]');
-    inp.focus();
-    rowOf(it).scrollIntoView({ block: 'nearest' });
-    drawTotals(); syncSubtitle();
+    openRow(it, '[data-f="name"]');
+    syncAdd(); drawTotals();
   }
 
-  function drawTotals() {
+  function drawTotals(fromReply) {
     var n = Math.max(1, parseInt(overlay.querySelector('#rec-servings').value, 10) || 1);
     var rec = { servings: n, items: items };
     var tot = DB.recipes.totals(rec);
@@ -1322,6 +1471,24 @@ function openRecipeEditor(date, existing, onDone) {
     put('[data-p="protein"]', per.protein);
     put('[data-p="carbs"]', per.carbs);
     put('[data-p="fat"]', per.fat);
+    // At one serving the two readings are the same number, so the choice is
+    // not offered and nothing names it. Per serving is the default: it is what
+    // logging the recipe writes.
+    var seg = overlay.querySelector('.rec-reading');
+    seg.hidden = n === 1;
+    if (n === 1) view = 'per';
+    seg.querySelectorAll('[data-reading]').forEach(function (b) { b.setAttribute('aria-pressed', b.dataset.reading === view ? 'true' : 'false'); });
+    var whole = view === 'total';
+    ['calories', 'protein', 'carbs', 'fat'].forEach(function (f) {
+      put('[data-show="' + f + '"]', whole ? (f === 'calories' ? Math.round(tot[f]) : Math.round(tot[f] * 10) / 10) : per[f]);
+    });
+    var kc = overlay.querySelector('.rec-bar-kcal');
+    kc.classList.toggle('is-whole', whole);
+    // One colour step when a reply moves the logged figure — no counting, no bounce.
+    if (fromReply && !whole && lastPer !== null && per.calories !== lastPer && !reduced()) {
+      kc.classList.remove('is-bump'); void kc.offsetWidth; kc.classList.add('is-bump');
+    }
+    lastPer = per.calories;
   }
 
   // ---- AUTOMATIC FIGURES ---------------------------------------------------
@@ -1423,7 +1590,7 @@ function openRecipeEditor(date, existing, onDone) {
       var hit = localLookup(it.name, it.qty);
       if (hit) fill(it, hit, 'local'); else need.push(x);
     });
-    drawTotals(); syncSubtitle();
+    drawTotals(true);
     if (!need.length) { finishSaveIfWanted(true); return; }
     if (!(window.FoodAI && FoodAI.analyze)) { need.forEach(function (x) { settle(byId(x.id), 'fail', 'ai'); }); finishSaveIfWanted(false); return; }
     // Batches under the Worker's 500-character text limit, one line per row.
@@ -1465,7 +1632,7 @@ function openRecipeEditor(date, existing, onDone) {
         else { settle(it, 'fail', signin ? 'signin' : 'ai'); failed.push(it.name); }
       });
     }
-    drawTotals(); syncSubtitle();
+    drawTotals(true);
     // A refusal with a REASON says the reason. The daily limit lasts until
     // midnight, and «could not work out X — type its figures by hand» hid that,
     // as it hid a timeout or a dropped connection. Anything unspecific keeps
@@ -1485,6 +1652,7 @@ function openRecipeEditor(date, existing, onDone) {
     var it = itemOf(inp); if (!it) return;
     if (f === 'name' || f === 'qty') {
       it[f] = inp.value;
+      if (f === 'name') { var grp = inp.closest('.rec-strip'); if (grp) grp.setAttribute('aria-label', stripName(it)); }
       scheduleAuto(it);
       updateSummary(it);
     } else {
@@ -1495,13 +1663,18 @@ function openRecipeEditor(date, existing, onDone) {
       updateSummary(it);
     }
     saveWanted = false; setWaiting(false);
-    drawTotals(); syncSubtitle();
+    drawTotals();
   });
   host.addEventListener('click', function (e) {
-    var el = e.target.closest ? e.target.closest('[data-toggle],[data-del],[data-retry],[data-recompute]') : null;
+    var el = e.target.closest ? e.target.closest('[data-open],[data-done],[data-del],[data-retry],[data-recompute],[data-add],#rec-import') : null;
     if (!el) return;
+    if (el.hasAttribute('data-add')) { addRow(); return; }
+    // The editor closes FIRST, and the import is handed the SAME onDone, so the
+    // draft it brings back saves to where this sheet's own save would have gone.
+    if (el.id === 'rec-import') { saved = true; closeModal(); openRecipeImport(date, onDone); return; }
     var it = itemOf(el); if (!it) return;
-    if (el.hasAttribute('data-toggle')) { setOpen(it, !rowOf(it).classList.contains('is-open')); return; }
+    if (el.hasAttribute('data-open')) { openRow(it); return; }
+    if (el.hasAttribute('data-done')) { closeRow(it, true); return; }
     if (el.hasAttribute('data-del')) { removeRow(it); return; }
     if (el.hasAttribute('data-retry')) { it._auto = null; it._why = null; scheduleAuto(it, true); return; }
     if (el.hasAttribute('data-recompute')) {
@@ -1509,13 +1682,20 @@ function openRecipeEditor(date, existing, onDone) {
       it.calories = 0; it.protein = 0; it.carbs = 0; it.fat = 0;
       var row = rowOf(it);
       ['calories', 'protein', 'carbs', 'fat'].forEach(function (f) { var i2 = row.querySelector('input[data-f="' + f + '"]'); if (i2) i2.value = ''; });
-      scheduleAuto(it, true); drawTotals(); syncSubtitle();
+      scheduleAuto(it, true); drawTotals();
     }
   });
   // Leaving a row is what arms a WEIGHTLESS row's estimate — see scheduleAuto.
   // A null relatedTarget (tapped a non-focusable area, or the window lost focus)
   // counts as leaving: the row is not being worked on either way. Bound once,
   // like the other three; focusout bubbles, blur does not.
+  host.addEventListener('focusin', function (e) {
+    var it = openId !== null ? itemOf(e.target) : null;
+    if (it && it._id === openId) reveal(it);
+  });
+  // The keyboard rising or falling moves the foot's top: the open strip follows.
+  var onViewport = function () { if (openId !== null && overlay.isConnected) reveal(byId(openId)); };
+  if (window.visualViewport) window.visualViewport.addEventListener('resize', onViewport);
   host.addEventListener('focusout', function (e) {
     var row = e.target.closest ? e.target.closest('.rec-row') : null;
     if (!row) return;
@@ -1529,28 +1709,68 @@ function openRecipeEditor(date, existing, onDone) {
     if (!f) return;
     e.preventDefault();   // there is no <form> here; this only moves focus
     var it = itemOf(inp); var row = rowOf(it); if (!it || !row) return;
-    var focus = function (sel, node) { var el = (node || row).querySelector(sel); if (el) el.focus(); };
-    if (f === 'name') { focus('[data-f="qty"]'); return; }
+    var focus = function (sel) { var el = row.querySelector(sel); if (el) el.focus(); };
+    // A blank name goes nowhere, silently: its placeholder already says what is missing.
+    var blankName = !String(it.name || '').trim();
+    if (f === 'name') { if (!blankName) focus('[data-f="qty"]'); return; }
+    // Enter on the amount COMMITS the row and opens the next one on its name,
+    // in one keystroke, so a recipe is typed name ⏎ amount ⏎ name ⏎ … and the
+    // keyboard never drops. The last row grows a fresh one.
     if (f === 'qty') {
-      var next = row.nextElementSibling;
-      if (next) { var n2 = next.querySelector('[data-f="name"]'); if (n2) n2.focus(); }
-      else addRow();
+      if (blankName) { focus('[data-f="name"]'); return; }
+      var next = row.nextElementSibling ? itemOf(row.nextElementSibling) : null;
+      // At the 30-row cap there is no next row to open: the committed row's own
+      // door takes the focus, so it never falls to <body> with the keyboard.
+      var full = !next && items.length >= 30;
+      closeRow(it, full);
+      if (next) openRow(next, '[data-f="name"]'); else if (!full) addRow();
       return;
     }
     var order = ['calories', 'protein', 'carbs', 'fat'];
     var i = order.indexOf(f);
     if (i >= 0 && i < order.length - 1) focus('[data-f="' + order[i + 1] + '"]');
-    else if (i === order.length - 1) { setOpen(it, false); focus('.rec-sum'); }
+    else if (i === order.length - 1) closeRow(it, true);
   });
+  // Escape inside an open strip closes the STRIP, not the sheet. openModal's own
+  // Escape listener is a capture on document; this one is a capture on window,
+  // which runs first. It leaves with the sheet (the observer below).
+  var onEscape = function (e) {
+    if (e.key !== 'Escape' || openId === null || !overlay.isConnected) return;
+    var row = rowOf(byId(openId));
+    if (!row || !row.contains(document.activeElement)) return;
+    e.preventDefault(); e.stopImmediatePropagation();
+    closeRow(byId(openId), true);
+  };
+  window.addEventListener('keydown', onEscape, true);
 
   function removeRow(it) {
     var at = items.indexOf(it); if (at < 0) return;
     items.splice(at, 1);
-    var row = rowOf(it); if (row) row.remove();
-    // Never leave the sheet with zero rows — an empty editor gives the user
-    // nothing to type into and no way back to a row.
-    if (!items.length) { var fresh = newItem(); items.push(fresh); appendRow(fresh); }
-    drawTotals(); syncSubtitle();
+    if (openId === it._id) openId = null;
+    var row = rowOf(it);
+    // Focus must not fall to <body> with the row (the trash is inside it): it
+    // goes to the next row's door, else the one before, else — the last row
+    // gone — the add tile the empty state brings back.
+    var had = !!row && (row.contains(document.activeElement) || document.activeElement === document.body);
+    var near = items[at] || items[at - 1] || null;
+    var nearDoor = near && rowOf(near) ? rowOf(near).querySelector('.rec-door') : null;
+    if (row) row.removeAttribute('data-id');   // no reply (and no focusout) may land on a row that is leaving
+    // The last row leaves the empty state (its two tiles), never a fresh blank row.
+    var gone = function () {
+      if (row) row.remove();
+      if (!items.length && !host.querySelector('.rec-row')) renderEmpty();
+      syncAdd();
+      if (had && !nearDoor) { var a = overlay.querySelector(items.length ? '#rec-add' : '#rec-add-first'); if (a) a.focus({ preventScroll: true }); }
+    };
+    if (had && nearDoor) nearDoor.focus({ preventScroll: true });
+    if (row && !reduced()) {
+      // The row folds away (160 ms) before it is removed; under reduced motion it simply goes.
+      row.style.maxHeight = row.offsetHeight + 'px'; void row.offsetHeight;
+      row.classList.add('is-leaving'); row.style.maxHeight = '0px';
+      setTimeout(gone, 170);
+    } else gone();
+    fitFoot();
+    drawTotals();
     showToast(t('rec_removed').replace('{name}', String(it.name || '').trim() || t('rec_ing_name')), {
       actionLabel: t('undo'),
       onAction: function () {
@@ -1572,6 +1792,8 @@ function openRecipeEditor(date, existing, onDone) {
     drawTotals();
   });
   overlay.querySelector('#rec-totals').addEventListener('click', function (e) {
+    var pick = e.target.closest ? e.target.closest('[data-reading]') : null;
+    if (pick) { view = pick.dataset.reading === 'total' ? 'total' : 'per'; drawTotals(); return; }
     var b = e.target.closest ? e.target.closest('[data-step]') : null;
     if (!b) return;
     var v = Math.min(99, Math.max(1, (parseInt(servInput.value, 10) || 1) + Number(b.dataset.step)));
@@ -1580,11 +1802,12 @@ function openRecipeEditor(date, existing, onDone) {
     drawTotals();
   });
   overlay.querySelector('#rec-add').addEventListener('click', addRow);
+  // Enter on the recipe's name goes on to the first ingredient — a new one
+  // when there is none yet.
   overlay.querySelector('#rec-name').addEventListener('keydown', function (e) {
     if (e.key !== 'Enter') return;
     e.preventDefault();
-    var first = host.querySelector('[data-f="name"]');
-    if (first) first.focus();
+    if (!items.length) addRow(); else openRow(items[0], '[data-f="name"]');
   });
 
   function setWaiting(on) {
@@ -1637,8 +1860,7 @@ function openRecipeEditor(date, existing, onDone) {
     var nameless = kept.filter(function (it) { return !String(it.name || '').trim(); });
     if (nameless.length) {
       showToast(t('rec_need_name'));
-      var nr = rowOf(nameless[0]), ni = nr && nr.querySelector('[data-f="name"]');
-      if (ni) { nr.scrollIntoView({ block: 'center' }); ni.focus(); }
+      openRow(nameless[0], '[data-f="name"]');
       return;
     }
     // cleanMealItems accepts a NAMED row with four zeros, so such a row would
@@ -1648,27 +1870,38 @@ function openRecipeEditor(date, existing, onDone) {
     var blank = kept.filter(function (it) { return !hasFigures(it) && !it._manual; });
     if (blank.length) {
       showToast(t('rec_need_figs').replace('{name}', String(blank[0].name).trim()));
-      setOpen(blank[0], true);
+      openRow(blank[0], '[data-f="calories"]');
       return;
     }
-    var payload = { name: nm, servings: n, items: kept.map(function (it) {
-      var c = Object.assign({}, it);
-      delete c._auto; delete c._manual; delete c._id; delete c._src; delete c._why;
-      return c;
-    }) };
+    var payload = { name: nm, servings: n, items: kept.map(recStoredItem) };
     // A draft has no id: it is ADDED. (It used to work only because
     // update(undefined) happens to create a recipe.)
     var made = existing && existing.id ? DB.recipes.update(existing.id, payload) : DB.recipes.add(payload);
     if (!made) { showToast(t(DB.saveState().ok ? 'rec_need_ing' : 'sc_failed')); return; }
+    saved = true;
     closeModal();
-    showToast(t('rec_saved'));
-    if (typeof onDone === 'function') onDone();
+    // Back in the dish chooser (opts.onClose), the saved card's «حُفظت» is the
+    // confirmation: a toast there covered the very mark it repeats.
+    if (!(opts && typeof opts.onClose === 'function')) showToast(t('rec_saved'));
+    // The saved recipe rides along: the dish chooser marks its card with it.
+    if (typeof onDone === 'function') onDone(made);
   }
   overlay.querySelector('#rec-save').addEventListener('click', trySave);
-  // The editor closes FIRST, and the import is handed the SAME onDone, so the
-  // draft it brings back saves to where this sheet's own save would have gone.
-  var importBtn = overlay.querySelector('#rec-import');
-  if (importBtn) importBtn.addEventListener('click', function () { closeModal(); openRecipeImport(date, onDone); });
+
+  // The sheet leaving (closeModal marks it .is-out, or a new sheet replaces it)
+  // takes the Escape listener with it — and, when the caller asked, says so:
+  // the dish chooser comes back when a dish is closed without being saved.
+  // Only when nothing else took the screen: a sheet that replaced this one keeps it.
+  var watch = new MutationObserver(function () {
+    if (overlay.isConnected && !overlay.classList.contains('is-out')) return;
+    watch.disconnect();
+    window.removeEventListener('keydown', onEscape, true);
+    if (window.visualViewport) window.visualViewport.removeEventListener('resize', onViewport);
+    if (saved || !(opts && typeof opts.onClose === 'function')) return;
+    if (document.querySelector('#modal-root .modal-overlay:not(.is-out)')) return;
+    opts.onClose();
+  });
+  watch.observe(document.getElementById('modal-root'), { childList: true, subtree: true, attributes: true, attributeFilter: ['class'] });
 
   drawRows();
   // A new recipe wants the name; an existing one must NOT pop a keyboard over
@@ -1850,16 +2083,20 @@ function openRecipeImport(date, onDone) {
         if (token !== serial) return;
         step(job.source === 'link' ? t('rx_step_link') : t('rx_step_send'), 0.85);
         if (!window.FoodAI) throw new Error(t('rx_unavailable'));
-        const recipe = await FoodAI.analyzeRecipe(input, signal);
+        const got = await FoodAI.analyzeRecipe(input, signal);
         if (token !== serial || !held.isConnected) return;
-        const draft = draftOf(recipe, kept ? kept.notes : []);
-        if (!draft.items.length) throw new Error(t('rx_empty'));
+        // EVERY dish the source held, each its own draft — never merged (v411).
+        const recipes = got && Array.isArray(got.recipes) ? got.recipes : [];
+        const drafts = recipes.map((r) => draftOf(r || {}, kept ? kept.notes : [])).filter((d) => d.items.length);
+        if (!drafts.length) throw new Error(t('rx_empty'));
         // Another account signed in while this was out: hand it nothing.
         if (owner !== Cloud.getLastUid()) { leave(); return; }
         observer.disconnect();
         // closeModal() FIRST: while the held sheet is up, an ordinary openModal is refused.
         closeModal();
-        openRecipeEditor(date, draft, onDone);
+        // Two or more: the user chooses. One: straight to the editor, as before.
+        if (drafts.length > 1) { openRecipeChooser(date, drafts, onDone); return; }
+        openRecipeEditor(date, drafts[0], onDone);
         showToast(t('rx_review_toast'));
       } catch (e) { failed(e, token); }
     }
@@ -1886,6 +2123,105 @@ function openRecipeImport(date, onDone) {
     run();
   }
   drawSources();
+}
+// ===========================================================================
+// MORE THAN ONE DISH (v411) — «مقطع الفيديو ممكن يكون فيه وصفتين وهو هنا
+// يدمجها بوصفة واحدة». The Worker answers every distinct dish as its own
+// recipe; this sheet lets the user choose. One card = one figure row (the row
+// IS the control): the per-serving kcal, the dish, «n مكوّنات · n حصص». A tap
+// reviews that dish in the editor, and the chooser comes back after the save —
+// the card marked «حُفظت» — or after a close without one. «احفظ الكل» saves
+// every dish still unsaved, each as its own recipe, with trySave's field rules.
+// `onDone` (where the import's save lands) runs once, when the chooser is left
+// with at least one dish saved: it opens a sheet of its own, so running it
+// after every dish would bury the chooser under it.
+// ===========================================================================
+function openRecipeChooser(date, drafts, onDone) {
+  const list = (Array.isArray(drafts) ? drafts : []).filter((d) => d && Array.isArray(d.items) && d.items.length);
+  if (list.length < 2) { if (list.length) openRecipeEditor(date, list[0], onDone); return; }
+  const nameOf = (d, i) => String(d.name || '').trim() || t('rx_dish_unnamed').replace('{n}', fmtNum(i + 1));
+  const title = list.length === 2 ? t('rx_pick_title_2') : t('rx_pick_title_n').replace('{n}', fmtNum(list.length));
+  const card = (d, i) => {
+    // A SAVED dish is read back from storage: its editor may have renamed it,
+    // changed its servings or dropped rows, and the card describes the recipe
+    // that exists, never the draft it came from (the v411 review).
+    const rec = d._savedId ? DB.recipes.list().find((r) => r.id === d._savedId) : null;
+    const src = rec || d;
+    const items = Array.isArray(src.items) ? src.items : [];
+    const per = DB.recipes.perServing({ servings: src.servings, items });
+    const s = Math.max(1, Number(src.servings) || 1);
+    // One serving names nothing the user chose, so the servings half is left out.
+    const sub = recJoin([recIngLabel(items.length, true), s > 1 ? recServLabel(s, true) : '', d._saved ? t('rx_dish_saved') : '']);
+    return `<button type="button" class="data-row fig-row rx-dish${d._saved ? ' is-done' : ''}" data-i="${i}">
+      <div class="fig-row-main">${figRowFig(fmtNum(per.calories), t('cal'))}
+        <div class="fig-row-text"><span class="fig-row-title" dir="auto">${escapeHtml(rec ? rec.name : nameOf(d, i))}</span><span class="fig-row-sub">${sub}</span></div>
+      </div></button>`;
+  };
+  // Each drawing of the sheet has its own flag: set when THAT sheet hands the
+  // screen on (to a dish's editor, to its own redraw, to a finished save-all),
+  // which is not the user leaving it. The observer fires after the swap, so one
+  // shared flag would already have been reset by the new sheet.
+  let cur = null;
+  const draw = () => {
+    if (cur) cur.handoff = true;
+    const me = cur = { handoff: false };
+    // One dish left: the button saves that one, and says so (the list holds two
+    // or more, so one left means another was saved).
+    const left = list.filter((d) => !d._saved).length;
+    const overlay = openModal(`
+      <div class="modal-header"><div><div class="modal-title">${title}</div><div class="modal-subtitle">${t('rx_pick_sub')}</div></div>
+        <button class="icon-btn icon-btn-tile" data-close>${icon('close', 20)}</button></div>
+      <div class="rx-dishes">${list.map(card).join('')}</div>
+      ${left ? `<button type="button" class="btn btn-ghost btn-block rx-pick-all" id="rx-pick-all">${left === 1 ? t('rx_pick_left') : t('rx_pick_all')}</button>` : ''}`);
+    if (!overlay) return;   // a dialog that must be answered is up
+    guardConvenienceModal(overlay);
+    // Leaving the chooser (its close, Back, Escape, the backdrop) with a dish
+    // saved hands over to where the import's save lands — once.
+    const watch = new MutationObserver(() => {
+      if (overlay.isConnected && !overlay.classList.contains('is-out')) return;
+      watch.disconnect();
+      if (me.handoff || !list.some((d) => d._saved) || typeof onDone !== 'function') return;
+      if (document.querySelector('#modal-root .modal-overlay:not(.is-out)')) return;
+      onDone();
+    });
+    watch.observe(document.getElementById('modal-root'), { childList: true, subtree: true, attributes: true, attributeFilter: ['class'] });
+    overlay.querySelectorAll('.rx-dish').forEach((b) => b.addEventListener('click', () => {
+      const d = list[Number(b.dataset.i)]; if (!d) return;
+      me.handoff = true;
+      closeModal();
+      const back = () => draw();
+      const rec = d._saved ? DB.recipes.list().find((r) => r.id === d._savedId) : null;
+      if (rec) { openRecipeEditor(date, rec, back, { onClose: back }); return; }
+      openRecipeEditor(date, d, (made) => { d._saved = true; d._savedId = made && made.id; back(); }, { onClose: back });
+    }));
+    const all = overlay.querySelector('#rx-pick-all');
+    if (all) all.addEventListener('click', () => {
+      if (all.classList.contains('is-waiting')) return;
+      all.classList.add('is-waiting');
+      let ok = 0, bad = 0;
+      // In order, every one attempted: a refused write leaves its card unmarked.
+      list.forEach((d, i) => {
+        if (d._saved) return;
+        const made = DB.recipes.add({ name: nameOf(d, i), servings: Math.max(1, Number(d.servings) || 1), items: d.items.map(recStoredItem) });
+        if (made) { d._saved = true; d._savedId = made.id; ok++; } else bad++;
+      });
+      if (bad) {
+        draw();
+        // Saved + refused ≤ 4 dishes, so a partial save names one, two or three.
+        showToast(!ok ? t(DB.saveState().ok ? 'rec_need_ing' : 'sc_failed')
+          : ok === 1 ? t('rx_saved_some_1') : ok === 2 ? t('rx_saved_some_2') : t('rx_saved_some_n').replace('{n}', fmtNum(ok)));
+        return;
+      }
+      me.handoff = true;
+      closeModal();
+      if (typeof onDone === 'function') onDone();
+      showToast(ok === 1 ? t('rec_saved') : ok === 2 ? t('rx_saved_all_2') : t('rx_saved_all_n').replace('{n}', fmtNum(ok)));
+    });
+    // Back from a save, the next dish still to review is under the thumb.
+    const next = list.some((d) => d._saved) && overlay.querySelector('.rx-dish:not(.is-done)');
+    if (next) next.focus({ preventScroll: true });
+  };
+  draw();
 }
 // ===========================================================================
 // Saved-food picker — the old "reference library" as an add-method. Search
@@ -1931,8 +2267,7 @@ function openSavedFoodPicker(date, onSave, initialTab) {
       <div class="bundle-card">
         <button type="button" class="bundle-main" data-view-rec="${escapeHtml(r.id)}">
           <div class="bundle-name">${escapeHtml(r.name)}</div>
-          <div class="bundle-meta"><span class="num">${fmtNum(r.items.length)}</span> ${t('rec_u_ing')} ·
-            <span class="num">${fmtNum(r.servings)}</span> ${t('rec_u_serv')} ·
+          <div class="bundle-meta">${recIngLabel(r.items.length, true)} · ${recServLabel(r.servings, true)} ·
             <span class="num">${fmtNum(per.calories)}</span> ${t('cal')} ${t('rec_u_per')}</div>
         </button>
         <button type="button" class="btn btn-primary bundle-add" data-log-rec="${escapeHtml(r.id)}" aria-label="${escapeHtml(t('add'))}">${icon('plus', 16)}</button>

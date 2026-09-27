@@ -33,6 +33,7 @@
   const RX_AUDIO_DECODE_MAX_SEC = 180;   // …and the whole track at its native rate
   const RX_VIDEO_MAX_SEC = 600;          // a longer clip is refused
   const RX_TEXT_MAX = 3000;              // a caption or a pasted recipe (≤ MAX_RECIPE_TEXT)
+  const RX_MAX_DISHES = 4;               // dishes one answer may hand the chooser (= MAX_RECIPE_DISHES, contract 65)
   const RX_SEEK_MS = 5000;               // one seek, before it counts as stuck
   const RX_SILENT_PEAK = 0.004;          // below this the soundtrack is silence
   // The chat, photo and voice answers: at most as many items as the Worker's own
@@ -813,7 +814,16 @@
     if (res.status === 400 && data.error === 'no input' && !data.code) throw new Error(tr('rx_unavailable'));
     if (!res.ok) throw workerError(res, data);
     if (!data.recipe || typeof data.recipe !== 'object' || !Array.isArray(data.recipe.items)) throw new Error(tr('rx_unavailable'));
-    return data.recipe;
+    // Since v411 the Worker also answers `recipes`, every distinct dish the
+    // source held; a Worker older than that answers `recipe` alone. Both come
+    // back as { recipes }, so the import has ONE shape to read. A dish that is
+    // not an object with items[] is dropped here, never handed to the editor.
+    const isDish = (r) => !!(r && typeof r === 'object' && Array.isArray(r.items));
+    // Capped HERE too, not only in the Worker: the chooser never scrolls and its
+    // title has no «11 طبقًا» form, so a Worker that one day answers more must
+    // not reach it (contract 65 holds this cap equal to the Worker's).
+    const many = Array.isArray(data.recipes) ? data.recipes.filter(isDish).slice(0, RX_MAX_DISHES) : [];
+    return { recipes: many.length ? many : [data.recipe] };
   }
 
   // ---------------------------------------------------------------- UI

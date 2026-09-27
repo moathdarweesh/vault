@@ -1451,7 +1451,7 @@ const DB = {
     reviewOff() { return STATE.prefs.reviewOff === true; },
     setReviewOff(off) { STATE.prefs.reviewOff = !!off; save(); },
     setRestSec(sec) { const n = Math.round(Number(sec)); STATE.prefs.restSec = Number.isFinite(n) ? Math.min(600, Math.max(15, n)) : 90; save(); },
-    // THE TWO GOALS (v405) — the pace line on the Cardio hero and the line on
+    // THE TWO GOALS (v410) — the pace line on the Cardio hero and the line on
     // the Sleep hero. Whole minutes, clamped where they are READ as well as
     // where they are written: the value arrives from the synced blob and from
     // imported backups, and an older blob has neither field, so absence is the

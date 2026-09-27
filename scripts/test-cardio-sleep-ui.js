@@ -260,7 +260,7 @@ const CASES = [
 
   ['every cardio glyph paints inside its 24-unit grid, the four built-ins drawn with no transform', async ({ ev }) => {
     // icon() emits a bare <svg viewBox="0 0 24 24">, and the UA's
-    // svg:not(:root){overflow:hidden} cuts anything past the grid — the v405
+    // svg:not(:root){overflow:hidden} cuts anything past the grid — the v410
     // run glyph, tipped through rotate(-22)/scale(0.76), painted to y≈25.1 and
     // lost its heel at every size. Measured with overflow visible, so what
     // would be clipped is counted, not hidden.
