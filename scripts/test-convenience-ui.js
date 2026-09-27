@@ -530,7 +530,9 @@ async function fakeOFF(page) {
     const code = (route.request().url().split('/product/')[1] || '').split('.json')[0];
     off.attempts[code] = (off.attempts[code] || 0) + 1;
     if (code === '2222222' && off.attempts[code] === 1) return route.abort('internetdisconnected');
-    const body = code === '1111111' ? product('QA bar', 540) : code === '2222222' ? product('QA crisps', 520) : { status: 0 };
+    // 3333333: a product Open Food Facts knows, whose calorie field is not a number
+    // (the pentest of 2026-09-27: «abc» became NaN and was logged as 0 kcal, silently).
+    const body = code === '1111111' ? product('QA bar', 540) : code === '2222222' ? product('QA crisps', 520) : code === '3333333' ? product('QA mystery', 'abc') : { status: 0 };
     return route.fulfill({ status: 200, contentType: 'application/json', headers: { 'Access-Control-Allow-Origin': '*' }, body: JSON.stringify(body) });
   };
   await page.route(match, handler);
@@ -663,6 +665,25 @@ const FOOD_BODY = [
       await page.locator('#bc-manual-go').click();
       await page.waitForFunction((txt) => document.querySelector('#bc-status').textContent === txt, await tr(page, 'barcode_not_found'));
       assert.equal(await page.locator('#bc-add').count(), 0, "a code that is not found leaves no product on screen — v397 kept the last product's card and its Add button live");
+    } finally { await off.done(); await page.evaluate(() => closeModal()); await restoreMedia(page); }
+  } },
+  { name: 'barcode: a product whose calories are not a number is not offered at 0 kcal (pentest 2026-09-27)', async run(page) {
+    await installMedia(page, 0);
+    const off = await fakeOFF(page);
+    try {
+      await openFrom(page, 'barcode');
+      // The previous case's sheet may still be fading out (320ms) — typing into
+      // it types into a sheet that is about to leave. Wait for the live one.
+      await page.waitForFunction(() => !document.querySelector('.modal-overlay.is-out') && document.querySelectorAll('#bc-manual-input').length === 1);
+      const looking = await tr(page, 'barcode_looking');
+      await page.locator('#bc-manual-input').fill('3333333');
+      await page.locator('#bc-manual-go').click();
+      for (let k = 0; k < 60 && !off.attempts['3333333']; k++) await page.waitForTimeout(50);
+      assert.ok(off.attempts['3333333'] >= 1, 'the typed code was looked up');
+      await page.waitForFunction((l) => { const s = document.querySelector('#bc-status'); return s && s.textContent !== l; }, looking);
+      await page.waitForTimeout(100);
+      assert.equal(await page.locator('#bc-add').count(), 0, 'a product with an unreadable calorie field offers no Add — v411 showed it at 0 kcal with an Add button');
+      assert.equal((await page.locator('#bc-status').innerText()).trim(), await tr(page, 'barcode_unreadable'), 'the status says the product was found but its calories cannot be read');
     } finally { await off.done(); await page.evaluate(() => closeModal()); await restoreMedia(page); }
   } },
   { name: 'barcode: a camera that arrives after the sheet closed is stopped (bugs:food-body#4)', async run(page) {

@@ -2,6 +2,24 @@
 
 One section per release since v309, newest first, moved verbatim from `CLAUDE.md` in v401 (batch 6 of the 2026-09-25 review; `docs/REVIEW-2026-09-25.md`). `CLAUDE.md` is the guide and the authority for how the app works now. A section here records what one release changed and why, in the words written at the time, so a later section — or the guide — can supersede what an earlier one says.
 
+## v412 — a barcode product with unreadable calories is not logged at 0
+
+The last item of the 2026-09-27 pentest. Open Food Facts is crowd data: a
+product whose `energy-kcal_100g` was a string such as «abc» (or negative)
+became NaN, passed the lookup's null check, and the card offered it at 0 kcal
+with a live Add — a wrong figure logged in one tap, with nothing said. The
+lookup now refuses a non-finite or negative figure and says so:
+`barcode_unreadable` «وُجد المنتج، لكن سعراته غير مقروءة — جرّب الصورة أو
+اليدوي.» / «Found, but its calories cannot be read — try Photo or Manual.»; the
+camera keeps scanning, as after a miss.
+
+- New browser case (test-convenience-ui, run by test-sync-status-ui): failed
+  first on v411 with «1 !== 0» (the Add button was there). Writing it found a
+  harness trap worth keeping: the previous case's sheet is still fading out for
+  320ms when the next one opens, and a locator typed into the LEAVING sheet;
+  the case waits for no `.modal-overlay.is-out` first.
+- Gate: 70 contracts, 18 suites.
+
 ## v411 — a clip with two dishes gives two recipes, and the ingredients page is a ledger
 
 «مقطع الفيديو ممكن يكون فيه وصفتين وهو هنا يدمجها بوصفة واحدة — أريد حلًّا جذريًا

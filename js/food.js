@@ -438,6 +438,12 @@ function openBarcodeScanner(date, onSave) {
     const n = product && product.nutriments;
     const kcal100 = n && (n['energy-kcal_100g'] != null ? +n['energy-kcal_100g'] : null);
     if (!product || !n || kcal100 == null) { status.textContent = t(failed ? 'auth_err_network' : 'barcode_not_found'); return failed ? 'failed' : 'unknown'; }
+    // FOUND, BUT NOT A NUMBER (pentest, 2026-09-27). Open Food Facts is crowd
+    // data: a calorie field of «abc» or a negative one became NaN here, passed
+    // the null check above, and the card offered the product at 0 kcal with a
+    // live Add — a wrong figure logged in one tap, with no word said. Say what
+    // happened instead, and leave Photo and Manual as the way on.
+    if (!Number.isFinite(kcal100) || kcal100 < 0) { status.textContent = t('barcode_unreadable'); return 'unknown'; }
     stop();                           // got a hit → release the camera
     if (stage) stage.style.display = 'none';
     showResult(product, n);
