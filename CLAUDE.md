@@ -91,7 +91,7 @@ npm run verify           # contracts + lint + every suite — THE GATE (it print
 npm run release          # bump every marker and re-read them; runs NO tests
 ```
 
-**Current version: v416.** APK: build 25 / v3.4.
+**Current version: v417.** APK: build 25 / v3.4.
 
 > ⚠️ **`npm run release` RUNS NO TESTS, AND THIS LINE USED TO READ AS IF IT DID.**
 > It said «bump every marker + verify», where *verify* meant the MARKERS — and
@@ -157,9 +157,7 @@ Every device loads the same live URL, so a bad push reaches everyone at once.
   **Program / برنامجي**. The exercise browser is its own view, **`exercises`**,
   which took over the router+section slot of the old `library` view — 195 lines
   nothing ever navigated to. `renderWorkouts`/`renderLibrary` no longer exist.
-- **The Program tab owns the plan and progression**: cycle position, next training
-  days, This week (adherence / sets / new records, each vs last week), muscle
-  volume, top records. The rotation editor deliberately stays its own screen
+- **The Program tab owns the plan and progression**, as three plates (2026-09-27, `.prg-*`; every drawn element captioned, the owner's rule): THE WEEK (days trained / `trainingDays.length`, one delta vs last week (none when equal), the days still needed (only while the calendar still allows them), seven wells whose state asks `workoutForDate` — each training or session day a door to `session-day`, past ones too — a legend, sets and new records), THE ROTATION (the cycle ribbon — a display strip, no control — beside the labelled «Edit cycle», the pulled-forward undo, the upcoming day tiles, the scheduled-cardio lane), THE BODY (six muscle wells for 7 days, the top three records by 1RM, each a door to its exercise). `scripts/test-program-ui.js` pins it at a fixed clock. The rotation editor deliberately stays its own screen
   (`renderPlanner`, reached by "Edit cycle"). Home owns *starting* a workout; its
   hero is the only "start today" control — the Train tab used to carry a byte-identical
   copy of that `navigate()` call, which is why it had no job of its own.
@@ -674,7 +672,9 @@ accent in `var(--icon-accent)`. Nothing is stroked.
   larger-text scale.
 - **One section-header system per screen.** `.rot-section-title` (+ optional
   `.rot-section-head` for a trailing action, `.rot-section-sub` for context) is the
-  Program tab's; `.section-title` carries the identity layer's BAR TICK and must
+  planner's (training days, rotation, preview), the Notifications and Settings screens' and
+  the bodyweight block's — Program's plates caption with `.trk-cap-lab` since 2026-09-27,
+  which is not a licence to restyle or drop the class; `.section-title` carries the identity layer's BAR TICK and must
   not be mixed in beside it. (It drew a full-width `::after` rule when this line
   was written; the identity layer sets `content: none` on that and adds a 2px
   `::before` bar instead — the rule is the same, its reason is a different

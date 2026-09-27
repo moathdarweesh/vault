@@ -12,7 +12,7 @@
 // build. The literal below is the fallback (file://, or a stripped query) and is
 // still bumped by `npm run release` — see CLAUDE.md "CACHE WORKFLOW".
 const VAULT_BUILD = (() => {
-  const FALLBACK = 'v416';
+  const FALLBACK = 'v417';
   try {
     const src = (document.currentScript && document.currentScript.src) || '';
     const m = src.match(/[?&]v=(\d+)/);
@@ -2346,14 +2346,14 @@ function renderHome(el) {
 
     ${foodHeroHtml}
 
-    ${hasAnyActivity ? `<div class="stat-strip">
+    ${hasAnyActivity ? `<div class="stat-strip home-stats">
       <button class="stat-cell" data-goto="workouts">
         <div class="stat-cell-value num"><span class="anim" data-count="${weekWorkoutDays}">0</span></div>
-        <div class="stat-cell-label">${t('sessions_label')}</div>
+        <div class="stat-cell-label">${t('home_stat_days')}</div>
       </button>
       <button class="stat-cell" data-goto="cardio">
         <div class="stat-cell-value num"><span class="anim" data-count="${cardioMinutes}">0</span><span class="unit">${t('unit_min')}</span></div>
-        <div class="stat-cell-label">${t('cardio')}</div>
+        <div class="stat-cell-label">${t('home_stat_cardio')}</div>
       </button>
       <button class="stat-cell" data-goto="sleep">
         <div class="stat-cell-value num">${sleepTodayMin > 0 ? escapeHtml(formatDuration(sleepTodayMin)) : '—'}</div>
@@ -2816,63 +2816,59 @@ function bentoCardHtml(ex, i, { showPR = true, toggle = null, stats = null } = {
 // The editor deliberately stays its own screen (renderPlanner) so this page stays
 // scannable and no working code had to be rewritten to move it.
 // ==========================================================================
+// THREE PLATES (2026-09-27, the owner's order — the judge panel's design with
+// his one addition: «مع كلمات توضيحية للأشياء المعمولة», every drawn element
+// carries short words). The page answers three questions, one card each:
+//
+//   THE WEEK      how is my week going — the Cardio instrument's figure,
+//                 readouts and a track of seven wells, with a legend line;
+//   THE ROTATION  what comes next — the cycle ribbon beside its labelled edit
+//                 button, the pulled-forward line, the upcoming day tiles and
+//                 the scheduled cardio lane;
+//   THE BODY      what the training did — six muscle wells for the last 7 days
+//                 and the three best lifts.
+//
+// Every door the six titled sections had survives with the same number of
+// taps: a day (tile or well) → session-day, the planner, the undo, a cardio
+// row and its add, a muscle, all records. Past wells and each record are new
+// doors onto routes that already take them. Starting a workout stays on Home.
+//
+// The rep moment remembers ONE bit between paints: whether today's well was
+// trained the last time this page drew it. Returning from a finished workout
+// flips it, and only that well animates.
+let __prgPaint = null;
+
+// A count said in words: Arabic's one, two, 3–10 and 11+ are four literal
+// keys (the trk_min_* ladder), each spelled out at the call so contract 38
+// sees every one of them referenced.
+function prgCount(n, one, two, few, many) {
+  return t(n === 1 ? one : n === 2 ? two : n <= 10 ? few : many).replace('{n}', fmtNum(n));
+}
+
+// The unit beside the week's figure when it stands alone (no plan): the
+// count's own form, printed after streakFigure(n), which is blank for one and
+// two in Arabic — «يوم واحد», «يومان», «3 أيام». Seven at most, so 11+ never
+// arises. (After a fraction the unit is always prg_days_n.)
+function prgDaysUnit(n) {
+  return t(n === 1 ? 'prg_days_1' : n === 2 ? 'prg_days_2' : 'prg_days_n');
+}
+
 function renderProgram(el) {
   const plan = DB.plan.get() || { cycle: [], trainingDays: [], anchor: null };
   const cycle = Array.isArray(plan.cycle) ? plan.cycle : [];
+  const hasPlan = cycle.length > 0;
+  const reduced = !!(window.VltMotion && VltMotion.reduced());
 
   // Noon anchor: workoutForDate does date-only maths, and midnight ± a DST shift
   // can land on the previous day.
   const now = new Date(); now.setHours(12, 0, 0, 0);
+  const todayIso = todayISO();
   const todayWorkout = DB.plan.workoutForDate(now);
-  // Identity compare is safe: workoutForDate returns the actual cycle element.
-  const currentIdx = todayWorkout ? cycle.indexOf(todayWorkout) : -1;
 
-  // ---- The cardio schedule -------------------------------------------------
-  // One row per scheduled item. weekOrder() so the day list reads in the app's
-  // own week order, and '·' as the separator — a directional glyph points the
-  // wrong way once the row lays out right-to-left.
-  const cardioSchedRowsHtml = DB.cardioPlan.list().map((r) => {
-    const tm = resolveCardioType(r.type);
-    const dayList = weekOrder().filter((d) => r.days.indexOf(d) !== -1).map((d) => dayName(d, true)).join(' · ');
-    // THE FIGURE ROW (v395): the whole row is the door to the schedule's sheet
-    // (which already holds its delete), the pencil is gone.
-    return `
-      <button type="button" class="data-row fig-row" data-cardio-sched-edit="${escapeHtml(r.id)}" aria-label="${escapeHtml(`${fmtNum(r.duration)} ${t('unit_min')} — ${tm.label} — ${dayList}`)}">
-        <div class="fig-row-main">
-          ${figRowFig(fmtNum(r.duration), t('unit_min'))}
-          <div class="fig-row-text">
-            <div class="fig-row-title">${escapeHtml(tm.label)}</div>
-            <div class="fig-row-sub">${escapeHtml(dayList)}</div>
-          </div>
-          <div class="data-icon ${tm.cls} fig-row-tile" aria-hidden="true">${icon(tm.iconName, 18)}</div>
-        </div>
-      </button>`;
-  }).join('');
-
-  // ---- Where you are in the cycle ------------------------------------------
-  // Numbered chips, not arrows: an arrow glyph between chips points the wrong
-  // way once the row lays out right-to-left in Arabic.
-  // No exercise count on the chip: "1 Push 3" reads as if the 3 were part of the
-  // workout's name. This strip answers "where am I in the cycle" — counts belong
-  // in the editor, which already shows them per slot.
-  const cycleHtml = cycle.map((slot, i) => `
-      <div class="cycle-chip ${i === currentIdx ? 'current' : ''}">
-        <span class="cycle-chip-num num">${fmtNum(i + 1)}</span>
-        <span class="cycle-chip-name">${escapeHtml(planDayName(slot.name) || t('workout_label'))}</span>
-      </div>`).join('');
-
-  // ---- Next training days (rest days omitted — the planner's preview shows the
-  // raw 7-day roll including rest; here only the days you actually train). -----
-  //
-  // The row count is YOUR week, not a constant. It was hard-coded to 4, so a
-  // five-day schedule rendered four rows and the fifth weekday switched on in the
-  // planner simply never appeared — this strip contradicted both the toggles two
-  // screens away and the "/ 5" denominator printed directly below it.
-  //
-  // trainingDays.length is the very number "This week" divides by (weekPlanned,
-  // below), so the two can no longer disagree. A cycle with no weekday switched
-  // on falls back to 4, finds nothing — workoutForDate returns null on every
-  // date — and the section drops out instead of printing an empty titled box.
+  // ---- Next training days (rest days omitted) --------------------------------
+  // The count is YOUR week (trainingDays.length), the very number the week's
+  // figure divides by, so the two can never disagree. A cycle with no weekday
+  // switched on falls back to 4, finds nothing and the tiles drop out.
   const wantDays = Math.min(7, (plan.trainingDays || []).length || 4);
   const nextDays = [];
   for (let i = 0; i < 28 && nextDays.length < wantDays; i++) {
@@ -2880,39 +2876,32 @@ function renderProgram(el) {
     const w = DB.plan.workoutForDate(d);
     if (w) nextDays.push({ iso: addDaysISO(todayISO(), i), dow: d.getDay(), w, isToday: i === 0 });
   }
-  const nextHtml = nextDays.map(({ iso, dow, w, isToday }) => `
-    <button type="button" class="schedule-prev-row" data-day-iso="${iso}">
-      <span class="schedule-prev-day">${isToday ? t('today') : escapeHtml(dayName(dow, true))}</span>
-      <span class="schedule-prev-arrow"></span>
-      <span class="schedule-prev-workout">${escapeHtml(planDayName(w.name) || t('workout_label'))}</span>
-    </button>`).join('');
+  // The CURRENT slot: today's, or on a rest day the next one to come.
+  // Identity compare is safe: workoutForDate returns the actual cycle element.
+  const curW = todayWorkout || (nextDays[0] && nextDays[0].w) || null;
+  const currentIdx = curW ? cycle.indexOf(curW) : -1;
+  const slotName = (w) => planDayName(w.name) || t('workout_label');
 
-  // ---- This week vs last week ----------------------------------------------
+  // ---- This week vs last week -------------------------------------------------
   const { thisStart, thisEnd, lastStart, lastEnd } = weekRanges();
   const allSessions = DB.sessions.listAll();
   const wk = allSessions.filter((s) => inRangeISO(s.date, thisStart, thisEnd));
   const lw = allSessions.filter((s) => inRangeISO(s.date, lastStart, lastEnd));
   const daysOf = (list) => new Set(list.map((s) => s.date)).size;
   const setsOf = (list) => list.reduce((n, s) => n + (s.sets || []).length, 0);
-
-  // Adherence — days trained out of days the rotation actually schedules this
-  // week. Replaced weekly tonnage, which was a five-digit number (12,920) that
-  // dominated the row, moved for reasons the user couldn't act on, and answered
-  // no question they were asking. "3 / 5" answers the one this tab exists for.
-  //
-  // The denominator is trainingDays.length — how many days a week you intend to
-  // train — NOT a workoutForDate() sweep of the week. workoutForDate returns null
-  // for any date before the plan's anchor ("before the plan started"), which is
-  // right for the rotation but wrong here: a plan created today would make the
-  // six earlier days of this week unplanned and render "1 / 1".
-  const weekPlanned = cycle.length ? (plan.trainingDays || []).length : 0;
-  const doneNow = daysOf(wk);
-  // Capped: training on a rest day should never render "6 / 5".
-  const adherence = weekPlanned ? Math.min(doneNow, weekPlanned) : doneNow;
+  // The denominator is trainingDays.length — NOT a workoutForDate() sweep, which
+  // answers null before the plan's anchor and would render a plan made today
+  // as «1 / 1». Capped both weeks: training on a rest day never reads «6 / 5».
+  const weekPlanned = hasPlan ? (plan.trainingDays || []).length : 0;
+  const cap = (n) => (weekPlanned ? Math.min(n, weekPlanned) : n);
+  const adherence = cap(daysOf(wk));
+  // A week-over-week delta needs BOTH weeks (v378): last week with no session
+  // has no figure, so nothing is compared with it.
+  const hasLast = lw.length > 0;
 
   // New records — exercises whose best weight this window beat their own best
-  // from BEFORE it. Prior history is required, so a brand-new exercise is not
-  // counted as a "record"; that would make trying something new look like progress.
+  // from BEFORE it. Prior history is required, so a brand-new exercise is not a
+  // "record"; that would make trying something new look like progress.
   const newPrCount = (start, end) => {
     const byEx = {};
     allSessions.forEach((s) => { (byEx[s.exerciseId] = byEx[s.exerciseId] || []).push(s); });
@@ -2928,8 +2917,189 @@ function renderProgram(el) {
   };
   const prsNow = newPrCount(thisStart, thisEnd);
 
-  // ---- Muscle volume, last 7 days (moved here from Home) -------------------
-  const sevenDaysAgo = new Date(now); sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7); sevenDaysAgo.setHours(0, 0, 0, 0);
+  // A signed figure: the sign is the colour, a true minus (−), in an ltr group.
+  const signed = (d) => (d > 0 ? '+' : '−') + formatDelta(Math.abs(d));
+  const roDelta = (a, b) => {
+    if (!hasLast || a === b) return '';
+    return `<span class="num prg-ro-d ${a > b ? 'is-up' : 'is-down'}" dir="ltr">${signed(a - b)}</span>`;
+  };
+  // One delta, and only for a change: an equal week prints nothing (the
+  // approved grafts), as the readouts below already do.
+  let figDelta = '';
+  const figD = hasLast ? adherence - cap(daysOf(lw)) : 0;
+  if (figD) figDelta = `<span class="trk-delta prg-delta"><span class="num prg-dsign ${figD > 0 ? 'is-up' : 'is-down'}" dir="ltr">${signed(figD)}</span> ${t('prg_vs_last')}</span>`;
+  // The figure and its unit. After a fraction the unit is the plural, which
+  // agrees with no single number («2/4 أيام», «2/2 أيام»); standing alone
+  // (no plan) the count takes its own form, and one and two are words in
+  // Arabic with no figure before them (B6: «يومان», never «2 يومين»).
+  const figText = weekPlanned ? fmtNum(adherence) : streakFigure(adherence);
+  const daysUnit = weekPlanned ? t('prg_days_n') : prgDaysUnit(adherence);
+
+  // ---- THE TRACK: seven wells, in the app's week order -------------------------
+  // Each well's state is ASKED of workoutForDate and the sessions, never of
+  // trainingDays.includes (wrong on a pulled-forward day): TRAINED an ember
+  // plate as tall as its sets ÷ (the week's max × 1.25), so one huge day cannot
+  // flatten the rest; TODAY an accent ring; PLANNED a hairline; MISSED an empty
+  // floor, never red; REST a bare recess. Without a plan only sessions draw.
+  const setsByDay = {};
+  wk.forEach((s) => { setsByDay[s.date] = (setsByDay[s.date] || 0) + (s.sets || []).length; });
+  const maxSets = Math.max(0, ...Object.values(setsByDay));
+  const cols = [];
+  for (let i = 0; i < 7; i++) {
+    const d = new Date(thisStart); d.setDate(d.getDate() + i); d.setHours(12, 0, 0, 0);
+    const iso = isoOf(d);
+    const w = hasPlan ? DB.plan.workoutForDate(d) : null;
+    const trained = setsByDay[iso] !== undefined;
+    const isToday = iso === todayIso;
+    const state = trained ? 'trained' : !w ? 'rest' : isToday ? 'today' : iso > todayIso ? 'planned' : 'missed';
+    cols.push({ iso, dow: d.getDay(), w, sets: setsByDay[iso] || 0, state, isToday });
+  }
+  // The days still needed to meet the week, in their count form; «week
+  // complete» in the accent once it is met. No plan, no line. The need is
+  // printed only while the calendar still allows it: a session on ANY day
+  // counts, so what is left is today (untrained) and every day after it this
+  // week. On a Saturday with two still needed there is one day, and the line
+  // stays silent rather than promise «2 days left» (the wells show the misses).
+  let leftLine = '';
+  if (weekPlanned) {
+    const left = weekPlanned - adherence;
+    const daysLeft = cols.filter((c) => c.iso >= todayIso && c.state !== 'trained').length;
+    if (left <= 0) leftLine = `<span class="trk-delta prg-left is-met">${t('prg_week_met')}</span>`;
+    else if (left <= daysLeft) leftLine = `<span class="trk-delta prg-left">${escapeHtml(prgCount(left, 'prg_left_1', 'prg_left_2', 'prg_left_n', 'prg_left_many'))}</span>`;
+  }
+  const stateWord = { trained: t('prg_lg_trained'), today: t('today'), planned: t('prg_lg_planned'), missed: t('prg_lg_missed') };
+  // THE REP MOMENT: today's well turned trained since the last paint (a
+  // workout just finished). Only that well animates; the figure crossfades.
+  const todayCol = cols.find((c) => c.isToday);
+  const todayTrained = !!todayCol && todayCol.state === 'trained';
+  const rep = !reduced && !!__prgPaint && __prgPaint.iso === todayIso && !__prgPaint.trained && todayTrained;
+  const wasFig = rep ? __prgPaint.adherence : null;
+  const wasText = wasFig === null ? '' : weekPlanned ? fmtNum(wasFig) : streakFigure(wasFig);
+  __prgPaint = { iso: todayIso, trained: todayTrained, adherence };
+
+  const WELL_H = 72;   // styles.css .prg-well — the count shows once its plate is 20px tall
+  const wellsHtml = cols.map((c, k) => {
+    let plate = '';
+    if (c.state === 'trained') {
+      const pct = Math.max(8, maxSets ? Math.round(c.sets / (maxSets * 1.25) * 1000) / 10 : 8);
+      plate = `<span class="prg-plate" style="--v:${pct}%;--k:${k}">${c.sets && pct * WELL_H / 100 >= 20 ? `<span class="prg-plate-n num">${fmtNum(c.sets)}</span>` : ''}</span>`;
+    }
+    const inner = `<span class="prg-well">${plate}</span><span class="prg-dlab${c.isToday ? ' is-today' : ''}">${escapeHtml(dayName(c.dow))}</span>`;
+    // «Rest» only where a plan says so: with no plan nothing is planned, and
+    // an empty day is just a day.
+    if (c.state === 'rest') return `<span class="prg-col is-rest">${inner}${hasPlan ? `<span class="sr-only"> — ${t('rest_day')}</span>` : ''}</span>`;
+    const aria = [`${dayName(c.dow, true)} ${formatDateShort(c.iso)}`, c.w ? slotName(c.w) : '', stateWord[c.state] + (c.sets ? t('list_sep') + prgCount(c.sets, 'prg_sets_1', 'prg_sets_2', 'prg_sets_n', 'prg_sets_many') : '')].filter(Boolean).join(' — ');
+    return `<button type="button" class="prg-col is-${c.state}${rep && c.isToday ? ' is-rep' : ''}" data-day-iso="${c.iso}" aria-label="${escapeHtml(aria)}">${inner}</button>`;
+  }).join('');
+  // The legend names only what is drawn: «missed» appears with a missed well,
+  // and the note on the figure inside a plate («the number is sets») with a
+  // plate tall enough to hold one. The note is last, and where the line has
+  // no room for it the legend's one-line box hides it (styles.css); the
+  // track's own label still says what the height means.
+  const legendHtml = ['trained', 'today', 'planned', 'missed']
+    .filter((s) => cols.some((c) => c.state === s))
+    .map((s) => `<span class="prg-lg"><span class="prg-sw is-${s}"></span>${escapeHtml(stateWord[s])}</span>`).join('')
+    + (wellsHtml.includes('prg-plate-n') ? `<span class="prg-lg prg-lg-num">${escapeHtml(t('prg_wells_num'))}</span>` : '');
+
+  const weekEnd = new Date(thisEnd); weekEnd.setDate(weekEnd.getDate() - 1);
+  const weekHtml = `
+    <div class="card trk-hero prg-card prg-week${rep ? ' is-rep' : ''}">
+      <div class="trk-cap">
+        <span class="trk-cap-lab">${t('this_week_label')}</span>
+        <span class="trk-range" dir="auto">${escapeHtml(formatDateShort(isoOf(thisStart)))} – ${escapeHtml(formatDateShort(isoOf(weekEnd)))}</span>
+      </div>
+      <div class="trk-fig">
+        <span class="trk-val">${figText ? `<span class="prg-frac" dir="ltr"><span class="num trk-num">${figText}</span>${wasText && wasFig !== adherence ? `<span class="num trk-num prg-num-was" aria-hidden="true">${wasText}</span>` : ''}${weekPlanned ? `<span class="num prg-of">/${fmtNum(weekPlanned)}</span>` : ''}</span>` : ''}<span class="trk-unit${figText ? '' : ' is-word'}">${escapeHtml(daysUnit)}</span></span>
+        ${figDelta || leftLine ? `<span class="trk-deltas">${figDelta}${leftLine}</span>` : ''}
+      </div>
+      <div class="prg-track" role="group" aria-label="${escapeHtml(t('this_week_label') + ' — ' + t('prg_wells_hint'))}">${wellsHtml}</div>
+      ${legendHtml ? `<div class="prg-legend" aria-hidden="true">${legendHtml}</div>` : ''}
+      <div class="trk-readouts">
+        <span class="trk-ro"><span class="trk-ro-lab">${t('sets')}</span><span class="num trk-ro-val">${fmtNum(setsOf(wk))}</span>${roDelta(setsOf(wk), setsOf(lw))}</span>
+        <span class="trk-ro"><span class="trk-ro-lab">${t('program_new_prs')}</span><span class="num trk-ro-val">${fmtNum(prsNow)}</span>${roDelta(prsNow, newPrCount(lastStart, lastEnd))}</span>
+      </div>
+    </div>`;
+
+  // ---- THE ROTATION -----------------------------------------------------------
+  // The ribbon is a DISPLAY strip: list items, no control inside and no border
+  // (a border means interactive), so neither a finger nor a keyboard can land
+  // on it. Past five slots the segments carry numbers only and the current
+  // slot's name is one line under the ribbon; every name stays for a reader.
+  const compact = cycle.length >= 6;
+  const ribbonHtml = cycle.map((slot, i) => `
+        <li class="prg-seg${i === currentIdx ? ' is-current' : ''}"${i === currentIdx ? ' aria-current="step"' : ''}><span class="prg-seg-n num">${fmtNum(i + 1)}</span><span class="sr-only"> — </span><span class="prg-seg-name${compact ? ' sr-only' : ''}" dir="auto">${escapeHtml(slotName(slot))}</span></li>`).join('');
+  const movedHtml = (leaving) => `
+      <div class="prg-moved${leaving ? ' is-leaving' : ''}"${leaving ? ' inert aria-hidden="true"' : ''}>
+        <div class="prg-moved-in">
+          <span class="prg-moved-icon" aria-hidden="true">${icon('refresh', 18)}</span>
+          <span class="prg-moved-text">${t('program_moved')}</span>
+          <button class="btn btn-ghost prg-btn-s"${leaving ? '' : ' id="program-undo-extra"'} type="button">${t('rest_undo')}</button>
+        </div>
+      </div>`;
+  const tilesHtml = nextDays.map(({ iso, dow, w, isToday }) => `
+        <button type="button" class="prg-tile${isToday ? ' is-today' : ''}" data-day-iso="${iso}" aria-label="${escapeHtml(`${isToday ? t('today') + ' — ' : ''}${dayName(dow, true)} — ${fmtNum(cycle.indexOf(w) + 1)} ${slotName(w)}`)}">
+          <span class="prg-tile-day">${isToday ? t('today') : escapeHtml(dayName(dow))}</span>
+          <span class="prg-tile-n num">${fmtNum(cycle.indexOf(w) + 1)}</span>
+          <span class="prg-tile-name" dir="auto">${escapeHtml(slotName(w))}</span>
+        </button>`).join('');
+
+  // The cardio lane. One row per scheduled item, the duration as a clock
+  // reading (H:MM, the owner's rule) and spoken in words; weekOrder() so the
+  // days read in the app's week, '·' because an arrow points the wrong way in
+  // RTL. The whole row is the door to its sheet (which holds delete).
+  const cardioRowsHtml = DB.cardioPlan.list().map((r) => {
+    const tm = resolveCardioType(r.type);
+    const dayList = weekOrder().filter((d) => r.days.indexOf(d) !== -1).map((d) => dayName(d, true)).join(' · ');
+    return `
+          <button type="button" class="data-row fig-row" data-cardio-sched-edit="${escapeHtml(r.id)}" aria-label="${escapeHtml(`${spokenMinutes(Number(r.duration) || 0)} — ${tm.label} — ${dayList}`)}">
+            <div class="fig-row-main">
+              ${figRowFig(formatDuration(r.duration))}
+              <div class="fig-row-text">
+                <div class="fig-row-title">${escapeHtml(tm.label)}</div>
+                <div class="fig-row-sub">${escapeHtml(dayList)}</div>
+              </div>
+              <div class="data-icon ${tm.cls} fig-row-tile" aria-hidden="true">${icon(tm.iconName, 18)}</div>
+            </div>
+          </button>`;
+  }).join('');
+
+  const planHtml = `
+    <div class="card prg-card prg-plan">
+      ${hasPlan ? `
+      <div class="prg-head">
+        <span class="trk-cap-lab">${t('prg_cycle')}</span>
+        <button type="button" class="btn btn-ghost prg-btn-s prg-edit" data-goto="planner">${icon('edit', 16)}<span>${t('edit_cycle')}</span></button>
+      </div>
+      <ol class="prg-ribbon${compact ? ' is-compact' : ''}" aria-label="${escapeHtml(t('prg_cycle'))}">${ribbonHtml}</ol>
+      ${DB.plan.isExtra(todayISO()) ? movedHtml(false) : ''}
+      ${compact && currentIdx >= 0 ? `<div class="prg-seg-cur" aria-hidden="true"><span dir="auto">${escapeHtml(slotName(cycle[currentIdx]))}</span></div>` : ''}
+      ${nextDays.length ? `
+      <div class="prg-cap prg-cap-next"><span class="trk-cap-lab">${t('prg_next')}</span></div>
+      <div class="prg-tiles${nextDays.length > 5 ? ' is-scroll' : ''}">${tilesHtml}</div>` : ''}
+      ` : `
+      <div class="prg-noplan">
+        <span class="prg-noplan-icon" aria-hidden="true">${icon('calendar', 40)}</span>
+        <div class="prg-noplan-title">${t('program_no_plan_title')}</div>
+        <button type="button" class="btn btn-primary prg-noplan-btn" data-goto="planner">${icon('plus', 20)} ${t('program_build')}</button>
+      </div>`}
+      <!-- OUTSIDE the plan ternary on purpose: cardio can be scheduled by
+           someone who has never built a lifting rotation. -->
+      <div class="prg-lane">
+        <div class="prg-cap"><span class="trk-cap-lab">${t('prg_cardio')}</span></div>
+        <div class="prg-lane-list" id="cardio-sched-list">
+          ${cardioRowsHtml}
+          <button type="button" class="btn btn-ghost prg-btn-s prg-add" data-cardio-sched-add>${icon('plus', 16)}<span>${escapeHtml(t('cardio_sched_add'))}</span></button>
+        </div>
+      </div>
+    </div>`;
+
+  // ---- THE BODY -----------------------------------------------------------------
+  // Muscle volume, last 7 days: sessions per category (Other is counted in the
+  // total, as before, but has no well). The fill is count ÷ max(8, the top
+  // count) at the heat level's strength; a zero is an empty well, so a
+  // neglected muscle reads as a hole.
+  // «آخر ٧ أيام» is today and the six days before it: seven calendar days.
+  const sevenDaysAgo = new Date(now); sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 6); sevenDaysAgo.setHours(0, 0, 0, 0);
   const exIdToCat = Object.fromEntries(DB.exercises.list().map((e) => [e.id, e.category]));
   const catCounts = Object.fromEntries(EXERCISE_CATEGORIES.map((c) => [c, 0]));
   allSessions.forEach((s) => {
@@ -2939,23 +3109,22 @@ function renderProgram(el) {
     }
   });
   const heatTotal = EXERCISE_CATEGORIES.reduce((sum, c) => sum + (catCounts[c] || 0), 0);
-  const heatCells = EXERCISE_CATEGORIES.filter((c) => c !== 'Other').map((cat) => {
+  const wellCats = EXERCISE_CATEGORIES.filter((c) => c !== 'Other');
+  const topCount = Math.max(8, ...wellCats.map((c) => catCounts[c] || 0));
+  const musclesHtml = wellCats.map((cat, k) => {
     const count = catCounts[cat] || 0;
-    let lvl = 0;
-    if (count >= 1) lvl = 1;
-    if (count >= 3) lvl = 2;
-    if (count >= 5) lvl = 3;
-    if (count >= 8) lvl = 4;
+    const lvl = count >= 8 ? 4 : count >= 5 ? 3 : count >= 3 ? 2 : count >= 1 ? 1 : 0;
+    const pct = Math.round(count / topCount * 1000) / 10;
     return `
-      <button class="heat-cell lvl-${lvl}" data-muscle="${escapeHtml(cat)}">
-        <div class="heat-cell-name">${escapeHtml(categoryLabel(cat))}</div>
-        <div class="heat-cell-count num">${count}</div>
-      </button>`;
+          <button type="button" class="prg-mw" data-muscle="${escapeHtml(cat)}" aria-label="${escapeHtml(`${categoryLabel(cat)} — ${count ? prgCount(count, 'prg_sess_1', 'prg_sess_2', 'prg_sess_n', 'prg_sess_many') : t('prg_sess_0')}`)}">
+            <span class="prg-mw-n num${count ? '' : ' is-zero'}">${fmtNum(count)}</span>
+            <span class="prg-mw-well">${count ? `<span class="prg-mw-fill lvl-${lvl}" style="--v:${pct}%;--k:${k}"></span>` : ''}</span>
+            <span class="prg-mw-name">${escapeHtml(categoryLabel(cat))}</span>
+          </button>`;
   }).join('');
 
-  // ---- Top records (same filter as the full PR screen) ---------------------
-  // One grouping pass instead of one full session scan per exercise — see
-  // DB.sessions.statsByExercise(). This screen asks about the whole catalog.
+  // Top records (the full PR screen's filter): one grouping pass, the three
+  // best by estimated 1RM. Each column opens its exercise.
   const prIndex = DB.sessions.statsByExercise();
   const prRows = DB.exercises.list()
     .map((ex) => {
@@ -2967,166 +3136,99 @@ function renderProgram(el) {
     .filter(Boolean)
     .sort((a, b) => b.snap.bestORM - a.snap.bestORM)
     .slice(0, 3);
+  const unit = unitLabel();
+  const latinUnit = !/[؀-ۿ]/.test(unit);
+  const recsHtml = prRows.map(({ ex, snap }) => {
+    const w = fmtWeight(snap.maxWeight), orm = fmtWeight(Math.round(snap.bestORM));
+    return `
+          <button type="button" class="prg-rec" data-exercise-id="${escapeHtml(ex.id)}" aria-label="${escapeHtml(`${exDisplayName(ex)} — ${t('pr_max_weight')} ${w} ${unit} — ${t('pr_est_orm')} ${orm} ${unit}`)}">
+            <span class="prg-rec-name" dir="auto">${escapeHtml(exDisplayName(ex))}</span>
+            <span class="prg-rec-w"${latinUnit ? ' dir="ltr"' : ''}><span class="num">${w}</span><span class="prg-rec-u">${escapeHtml(unit)}</span></span>
+            <span class="num prg-rec-orm" dir="ltr">${escapeHtml(t('prg_orm').replace('{n}', orm))}</span>
+          </button>`;
+  }).join('');
+
+  const bodyHtml = heatTotal > 0 || prRows.length ? `
+    <div class="card prg-card prg-body">
+      ${heatTotal > 0 ? `
+      <div class="prg-cap"><span class="trk-cap-lab">${t('prg_muscles')}</span><span class="prg-hint">${t('prg_muscles_hint')}</span></div>
+      <div class="prg-muscles">${musclesHtml}</div>` : ''}
+      ${prRows.length ? `
+      <div class="prg-rec-head">
+        <span class="trk-cap-lab">${t('prg_records')}</span>
+        <button type="button" class="link-btn prg-all" data-goto="personal-records">${t('prg_all_records')} <span class="icon-mirror">${icon('chevronRight', 16)}</span></button>
+      </div>
+      <div class="prg-recs">${recsHtml}</div>` : ''}
+    </div>` : '';
 
   el.innerHTML = `
-    <!-- NOT a magnifier. This button navigates to the exercise BROWSER
-         (bindVaultAction -> navigate('exercises'), which titles itself t('train')),
-         so a magnifier both lied about what it does and put a SECOND search glyph
-         beside the global one vaultBar now renders for every screen. The old
-         space-between layout hid the collision by parking 90px between them. -->
+    <!-- NOT a magnifier: this navigates to the exercise BROWSER
+         (bindVaultAction -> navigate('exercises')), and vaultBar already draws
+         the global search beside it. -->
     ${vaultBar({ action: icon('dumbbell', 19), actionLabel: t('train') })}
 
     <div class="page-header">
       <h1 class="page-title">${t('program_title')}</h1>
     </div>
-
-    ${cycle.length === 0 ? `
-      ${emptyState({ iconName: 'calendar', title: t('program_no_plan_title') })}
-      <button class="btn btn-primary btn-block" data-goto="planner">${icon('plus', 20)} ${t('program_build')}</button>
-    ` : `
-      <div class="rot-section">
-        <div class="rot-section-head">
-          <div class="rot-section-title">${t('program_where')}</div>
-          <button class="rot-section-action" data-goto="planner">${icon('edit', 16)} ${t('edit_cycle')}</button>
-        </div>
-        <div class="cycle-strip">${cycleHtml}</div>
-        ${DB.plan.isExtra(todayISO()) ? `
-          <!-- A day pulled forward shifted THIS strip by one, so the way back
-               belongs beside it rather than on Home. The toast carries the undo
-               while it is up; this is where it goes afterwards, and it stays
-               until the day is over. --warn, not the accent and not red: the
-               plan was moved, nothing went wrong. -->
-          <div class="rot-moved">
-            <span class="rot-moved-icon">${icon('refresh', 20)}</span>
-            <span class="rot-moved-text">${t('program_moved')}</span>
-            <!-- The short label is right HERE, where the line beside it already
-                 says what happened. On Home it was wrong because the chip stood
-                 alone and "Undo" named a verb with no object. -->
-            <button class="btn btn-ghost rot-moved-undo" id="program-undo-extra" type="button">${t('rest_undo')}</button>
-          </div>` : ''}
-      </div>
-
-      ${nextDays.length ? `
-      <div class="rot-section">
-        <div class="rot-section-title">${t('program_next')}</div>
-        <div class="schedule-preview">${nextHtml}</div>
-      </div>` : ''}
-    `}
-
-    <!-- OUTSIDE the cycle ternary on purpose: cardio can be scheduled by someone
-         who has never built a lifting rotation, and either branch would hide it in
-         the other state. The add control is the LAST ITEM of the list rather than a
-         section action, so with nothing scheduled it is the only row and reads like
-         the day ledger's empty day — no separate empty state to design. -->
-    <div class="rot-section">
-      <div class="rot-section-title">${t('cardio_sched')}</div>
-      <div class="data-list" id="cardio-sched-list">
-        ${cardioSchedRowsHtml}
-        <button type="button" class="ledger-add" data-cardio-sched-add>
-          ${icon('plus', 14)} <span>${escapeHtml(t('cardio_sched_add'))}</span>
-        </button>
-      </div>
-    </div>
-
-    <!-- Every block below is a .rot-section with a .rot-section-title. It used to
-         mix two header systems on one screen — .section-title (700, plus a ::after
-         rule) for "This week" and .rot-section-title (800, no rule) for the rest,
-         so one heading had a horizontal line and the others did not. One system,
-         one spacing rhythm. -->
-    <div class="rot-section">
-      <div class="rot-section-title">${t('this_week')}</div>
-      <div class="stat-strip">
-        <div class="stat-cell">
-          <div class="stat-cell-value num">${fmtNum(adherence)}${weekPlanned ? `<span class="stat-cell-of">/${fmtNum(weekPlanned)}</span>` : ''}</div>
-          <div class="stat-cell-label">${t('program_adherence')}</div>
-          ${deltaBlock(doneNow, daysOf(lw), '')}
-        </div>
-        <div class="stat-cell">
-          <div class="stat-cell-value num">${fmtNum(setsOf(wk))}</div>
-          <div class="stat-cell-label">${t('sets')}</div>
-          ${deltaBlock(setsOf(wk), setsOf(lw), '')}
-        </div>
-        <div class="stat-cell">
-          <div class="stat-cell-value num">${fmtNum(prsNow)}</div>
-          <div class="stat-cell-label">${t('program_new_prs')}</div>
-          ${deltaBlock(prsNow, newPrCount(lastStart, lastEnd), '')}
-        </div>
-      </div>
-    </div>
-
-    ${heatTotal > 0 ? `
-      <div class="rot-section">
-        <div class="rot-section-title">${t('muscle_focus')}</div>
-        <div class="rot-section-sub">${t('muscle_focus_sub')}</div>
-        <div class="muscle-heatmap">
-          <div class="heatmap-grid band">${heatCells}</div>
-        </div>
-      </div>` : ''}
-
-    ${prRows.length ? `
-      <div class="rot-section">
-        <div class="rot-section-head">
-          <div class="rot-section-title">${t('pr_view_title')}</div>
-          <button class="rot-section-action" data-goto="personal-records">${t('view_all')}</button>
-        </div>
-        <div class="data-list">
-          ${prRows.map(({ ex, snap }) => `
-            <div class="data-row fig-row">
-              <div class="fig-row-main">
-                ${figRowFig(fmtWeight(snap.maxWeight), unitLabel(), t('pr_max_weight'), true)}
-                <div class="fig-row-text">
-                  <div class="fig-row-title">${escapeHtml(exDisplayName(ex))}</div>
-                  <div class="fig-row-sub">${escapeHtml(t('pr_est_orm'))}: <span class="num" dir="ltr">${fmtWeight(Math.round(snap.bestORM))} ${unitLabel()}</span></div>
-                </div>
-                <div class="data-icon custom fig-row-tile" aria-hidden="true">${icon('trophy', 18)}</div>
-              </div>
-            </div>
-          `).join('')}
-        </div>
-      </div>
-    ` : ''}
-
+    ${weekHtml}
+    ${planHtml}
+    ${bodyHtml}
   `;
 
-  // (The full-width "Exercises" button that used to close this screen is gone.
-  // Browsing the library is not a goal in itself — it is something you do IN
-  // ORDER to add an exercise to a template, and that path already carries its
-  // own picker with the whole library, a category filter and search
-  // (openAddExerciseChooser → openSlotEditorModal). A second entry point at the
-  // bottom of Program was a button whose answer to "what do I do here" was
-  // "leave". The browser is still reachable — deliberately, since it is a real
-  // screen — from the magnifier in this screen's top bar, bound just below.)
-
-  // Top-bar magnifier → the exercise browser (its own screen since v198).
+  // Top-bar action → the exercise browser (its own screen since v198).
   bindVaultAction(() => navigate('exercises'), el);
 
-  // One delegated listener for add and edit. No data-goto anywhere on these
-  // elements, so the global delegated handler cannot fire a second navigate().
-  $('#cardio-sched-list', el)?.addEventListener('click', (e) => {
+  // One delegated listener per plate (the plates are new on every render;
+  // the view element is not, so nothing is bound to it). No data-goto on these
+  // elements, so the global handler cannot fire a second navigate().
+  const openDay = (e) => {
+    const b = e.target.closest('[data-day-iso]');
+    if (b) navigate('session-day', { date: b.dataset.dayIso });
+  };
+  $('.prg-week', el).addEventListener('click', openDay);
+  $('.prg-tiles', el)?.addEventListener('click', openDay);
+  $('#cardio-sched-list', el).addEventListener('click', (e) => {
     if (e.target.closest('[data-cardio-sched-add]')) { openCardioScheduleModal(null); return; }
     const edit = e.target.closest('[data-cardio-sched-edit]');
     if (edit) openCardioScheduleModal(edit.dataset.cardioSchedEdit);
   });
-
-  // Tap a day in "next training days" → open/log that day's session.
-  el.querySelector('.schedule-preview')?.addEventListener('click', (e) => {
-    const row = e.target.closest('[data-day-iso]');
-    if (row) navigate('session-day', { date: row.dataset.dayIso });
+  el.querySelectorAll('[data-muscle]').forEach((b) =>
+    b.addEventListener('click', () => navigate('muscle-sessions', { muscleCat: b.dataset.muscle })));
+  $('.prg-recs', el)?.addEventListener('click', (e) => {
+    const b = e.target.closest('[data-exercise-id]');
+    if (b) navigate('exercise-detail', { exerciseId: b.dataset.exerciseId });
   });
 
-  // Tap a muscle → its full session history.
-  el.querySelectorAll('[data-muscle]').forEach((b) =>
-    b.addEventListener('click', () => navigate('muscle-sessions', { muscleCat: b.dataset.muscle }))
-  );
-
-  // Undo a pulled-forward day. The whole rotation slides back with it, and
-  // exactly, because the cycle position is DERIVED from the date lists rather
-  // than stored — removing the entry restores the previous schedule byte for
-  // byte. Re-renders Program, not Home, since this is the screen it changed.
+  // Undo a pulled-forward day. The rotation slides back with it, and exactly,
+  // because the position is DERIVED from the date lists — removing the entry
+  // restores the previous schedule byte for byte. What moves is the DATES:
+  // today's pulled-forward workout is the one the next training day carried,
+  // so after undo that day carries it again. The current slot therefore stays
+  // where it is, and so does the sequence of workouts on the tiles; only the
+  // day each tile falls on changes. The repaint plays exactly that: the tiles'
+  // day labels shift back a tile (260ms), the ribbon's tick and the tiles'
+  // numbers and names stay still, then the line collapses (200ms); the toast
+  // follows in its usual place. Under reduced motion the repaint is the whole
+  // of it.
   $('#program-undo-extra', el)?.addEventListener('click', () => {
     DB.plan.setExtra(new Date(), false);
-    showToast(t('anyway_undone'));
     renderView('workouts');
+    showToast(t('anyway_undone'));
+    $('.prg-edit', el)?.focus({ preventScroll: true });
+    if (reduced) return;
+    const ribbon = $('.prg-ribbon', el), tiles = $('.prg-tiles', el);
+    if (!ribbon) return;
+    ribbon.insertAdjacentHTML('afterend', movedHtml(true));
+    if (tiles) {
+      const first = tiles.firstElementChild;
+      tiles.style.setProperty('--prg-step', first ? (first.getBoundingClientRect().width + 6) + 'px' : '0px');
+      tiles.classList.add('is-unshift');
+    }
+    const leaving = $('.prg-moved.is-leaving', el);
+    setTimeout(() => {
+      leaving?.remove();
+      if (tiles) { tiles.classList.remove('is-unshift'); tiles.style.removeProperty('--prg-step'); }
+    }, 520);
   });
 }
 
@@ -5058,7 +5160,17 @@ function openUnifiedSearch() {
     if (b.dataset.ql === 'weight') { openWeightSheet(); return; }
     if (b.dataset.ql === 'meal') { openSavedFoodPicker(todayISO(), refreshCaller, 'bundles'); }
   });
-  const labels = {exercise:'exercises',food:'tab_saved_foods',meal:'cx_meals',recipe:'tab_recipes',session:'history',log:'food_history',date:'cx_date'};
+  const labels = {exercise:'exercises',food:'tab_saved_foods',meal:'cx_meals',recipe:'tab_recipes',session:'history',log:'food_history',date:'cx_date',catalog:'cx_catalog'};
+  // A catalogue row names its dish and its figure (one serving, as a tap logs
+  // it); the group heading already says where it comes from.
+  // The serving is the preset's own Arabic words (Arabic-Indic figures) beside
+  // fmtNum's Latin calories: one digit script per phrase (test-i18n rule 16),
+  // so its figures are read in Latin here.
+  const catalogSub = (p) => `<span class="num">${fmtNum(p.cal)}</span> ${t('cal')}${foodPresetServing(p) ? ' · ' + escapeHtml(latinDigits(foodPresetServing(p))) : ''}`;
+  // Every other result OPENS something; this one logs a serving on one tap, so
+  // it says so — a plus at its end (the picker's rows carry the same) and
+  // «add» in the name a screen reader hears.
+  const catalogAttrs = (r) => ` data-cat-result aria-label="${escapeHtml(t('add') + ' ' + r.name + ' · ' + fmtNum(r.preset.cal) + ' ' + t('cal'))}"`;
   const search = debounce(() => {
     if (!modal.isConnected) return;
     if (owner !== Cloud.getLastUid()) { host.textContent = ''; closeModal(); return; }
@@ -5068,7 +5180,7 @@ function openUnifiedSearch() {
     const aliases = Object.fromEntries(DB.exercises.list().map(ex => [ex.id, [exDisplayName(ex), EXERCISE_NAME_AR_FULL[ex.name] || '', EXERCISE_NAME_AR[ex.name] || '', t('cat_' + ex.category)].join(' ')]));
     const results = DB.search.query(input.value, aliases);
     const groups = [...new Set(results.map(r => r.type))];
-    host.innerHTML = results.length ? groups.map(type => `<h3>${t(labels[type])}</h3>` + results.map((r,i) => ({r,i})).filter(({r}) => r.type === type).map(({r,i}) => `<button class="btn btn-ghost cx-result" data-result="${i}"><strong>${escapeHtml(r.type === 'exercise' ? exDisplayName(DB.exercises.getById(r.id)) : (r.type === 'date' ? formatDate(r.name) : r.name))}</strong><span>${t(labels[r.type])}${r.date ? ' · ' + escapeHtml(formatDate(r.date)) : ''}</span></button>`).join('')).join('') : `<p>${t(/^\d{1,2}\/\d{1,2}$/.test(DB.search.normalize(input.value)) ? 'cx_ambiguous' : 'cx_empty')}</p>`;
+    host.innerHTML = results.length ? groups.map(type => `<h3>${t(labels[type])}</h3>` + results.map((r,i) => ({r,i})).filter(({r}) => r.type === type).map(({r,i}) => `<button class="btn btn-ghost cx-result" data-result="${i}"${r.type === 'catalog' ? catalogAttrs(r) : ''}><strong>${escapeHtml(r.type === 'exercise' ? exDisplayName(DB.exercises.getById(r.id)) : (r.type === 'date' ? formatDate(r.name) : r.name))}</strong><span>${r.type === 'catalog' ? catalogSub(r.preset) : t(labels[r.type]) + (r.date ? ' · ' + escapeHtml(formatDate(r.date)) : '')}</span>${r.type === 'catalog' ? icon('plus', 16) : ''}</button>`).join('')).join('') : `<p>${t(/^\d{1,2}\/\d{1,2}$/.test(DB.search.normalize(input.value)) ? 'cx_ambiguous' : 'cx_empty')}</p>`;
     host.querySelectorAll('[data-result]').forEach(b => b.onclick = () => {
       if (owner !== Cloud.getLastUid()) { closeModal(); return; }
       const result = results[Number(b.dataset.result)]; closeModal();
@@ -5078,6 +5190,7 @@ function openUnifiedSearch() {
       else if (result.type === 'log') navigate('foodlog',{date:result.date});
       else if (result.type === 'meal') { const meal = DB.mealBundles.list().find(x => x.id === result.id); if (meal) openMealEditor(meal); }
       else if (result.type === 'recipe') { const recipe = DB.recipes.list().find(x => x.id === result.id); if (recipe) openRecipeEditor(todayISO(),recipe); }
+      else if (result.type === 'catalog') { const logged = logFoodPreset(todayISO(), result.preset); if (logged.ok) refreshCaller(); offerUndo(t('rec_logged').replace('{name}', result.name), logged); }
       else openFoodModal(result.id);
     });
   },150);
@@ -7862,26 +7975,80 @@ function renderSessionRun(el) {
   if (statsBtn) statsBtn.addEventListener('click', () =>
     navigate('exercise-detail', { exerciseId: statsBtn.dataset.openDetail }));
 
-  // Tapping the suggestion makes it the first open set's TARGET: its GHOST, the
-  // same placeholder last time's numbers use, and it writes nothing. It used to
-  // fill the fields and commit them — a performed set the user never lifted,
-  // counted in the streak, the week and the records (the "add weight" branch
-  // is by definition a new best). The ✓ is what logs it, and says where the
-  // numbers came from, with Undo; typing over it is what changes it. Every set
-  // already has numbers or is done: the target is for a new one.
+  // Tapping the suggestion makes it the TARGET of every open set: their GHOST,
+  // the same placeholder last time's numbers use, and it writes nothing. It
+  // used to fill the fields and commit them — a performed set the user never
+  // lifted, counted in the streak, the week and the records (the "add weight"
+  // branch is by definition a new best). The ✓ is what logs it, and says where
+  // the numbers came from, with Undo; typing over it is what changes it. It
+  // reached only the FIRST open set until the carried hint (below): a
+  // suggestion is one weight for the sets still ahead, and sets 2 and 3 kept
+  // hinting last time's. Every set already has numbers or is done: the target
+  // is for a new one.
   const sugBtn = $('.run-suggest', el);
   if (sugBtn) sugBtn.addEventListener('click', () => {
     const w = parseFloat(sugBtn.dataset.sugW);
     const r = parseInt(sugBtn.dataset.sugR, 10);
     if (!isFinite(w) || !isFinite(r)) return;
-    let at = st.sets.findIndex((x) => !x.done && (x.reps === '' || x.reps == null) && (x.weight === '' || x.weight == null));
-    if (at === -1) { st.sets.push({ reps: '', weight: '', done: false }); at = st.sets.length - 1; }
-    st.sets[at].phReps = r;
-    st.sets[at].phWeight = w > 0 ? w : '';       // kg, like every ghost; 0 = bodyweight, no weight to hint
-    st.sets[at].phSug = true;                    // so the ✓ that takes it names the suggestion
+    let open = st.sets.filter(runSetUntouched);
+    if (!open.length) { st.sets.push({ reps: '', weight: '', done: false }); open = [st.sets[st.sets.length - 1]]; }
+    open.forEach((x) => {
+      x.phReps = r;
+      x.phWeight = w > 0 ? w : '';       // kg, like every ghost; 0 = bodyweight, no weight to hint
+      x.phSug = true;                    // so the ✓ that takes it names the suggestion
+      x.phCarry = {};                    // per field: which ghosts an earlier set handed on
+    });
     renderSessionRun(el);
-    showToast(t('sug_applied'));
+    showToast(t(open.length > 1 ? 'sug_applied_all' : 'sug_applied'));
   });
+
+  // A NEW FIGURE CARRIES TO THE SETS STILL AHEAD. Each row's pale hint is the
+  // same set LAST time, so going from 60 to 62.5 on set 1 of three left sets 2
+  // and 3 hinting 60: the change cost a tap and the keyboard on every set.
+  // When a ✓ lands on figures that differ from the set's own hint, every LATER
+  // row the user has not touched, whose hint was that same old figure, takes
+  // the new one as its hint — the straight-sets case. A pyramid's rows hinted
+  // other figures and keep them. Reps and weight are judged each on its own,
+  // in the unit on screen (a pound user's 140 must not miss a 139.99 in kg).
+  // Only the GHOST moves (last time's numbers stay ghosts, never values —
+  // v375): nothing is written until that row's own ✓, which says where its
+  // numbers came from, with Undo. `carried` remembers what this row handed on,
+  // so an un-tick and a corrected figure move the same rows again.
+  // THE SOURCE IS KEPT PER FIELD (`phCarry.reps` / `.weight`): a row whose reps
+  // were carried may still hint last time's weight, or the suggestion's, and
+  // its ✓ must not say both came from an earlier set. A field whose hint is
+  // already the very figure the ticked set logged counts as carried too — in
+  // straight sets that weight IS the earlier set's number.
+  function runSetUntouched(x) {
+    return !x.done && (x.reps === '' || x.reps == null) && (x.weight === '' || x.weight == null);
+  }
+  const CARRY_FIELDS = [['reps', 'phReps'], ['weight', 'phWeight']];
+  function carryHint(i) {
+    const src = st.sets[i];
+    const shown = (v, field) => (v === '' || v == null) ? '' : String(field === 'weight' ? convDisplay(Number(v)) : Number(v));
+    const took = new Set();
+    for (const [field, ph] of CARRY_FIELDS) {
+      const now = shown(src[field], field);
+      const was = shown(src[ph], field);
+      const handed = (src.carried && src.carried[field]) || null;
+      if (now === '' || (now === was && !handed)) continue;
+      const from = new Set([was, handed].filter((v) => v != null));
+      for (let j = i + 1; j < st.sets.length; j++) {
+        const x = st.sets[j];
+        if (!runSetUntouched(x) || !from.has(shown(x[ph], field)) || shown(x[ph], field) === now) continue;
+        x[ph] = src[field];
+        x.phCarry = { ...(x.phCarry && typeof x.phCarry === 'object' ? x.phCarry : {}), [field]: true };
+        took.add(x);
+        const inp = el.querySelector(`.run-set-row[data-set="${j}"] [data-field="${field}"]`);
+        if (inp) inp.placeholder = now;
+      }
+      src.carried = { ...(src.carried || {}), [field]: now };
+    }
+    took.forEach((x) => CARRY_FIELDS.forEach(([field, ph]) => {
+      const mine = shown(src[field], field);
+      if (!x.phCarry[field] && mine !== '' && shown(x[ph], field) === mine) x.phCarry[field] = true;
+    }));
+  }
 
   // Set inputs → write to state as the user types. Tapping an input selects its
   // content so a new number REPLACES the old one (no manual deleting).
@@ -7939,16 +8106,17 @@ function renderSessionRun(el) {
       // because a toast every ninety seconds mid-workout is noise and that tick
       // is already its own undo.
       let invented = false;
+      const inventedFields = [];
       const hadSession = !!st.savedSessionId;
       if (!set.done) {
         if ((set.reps === '' || set.reps == null) && set.phReps !== '' && set.phReps != null) {
           set.reps = Number(set.phReps);
-          invented = true;
+          invented = true; inventedFields.push('reps');
           const r = row.querySelector('[data-field="reps"]'); if (r) r.value = String(set.reps);
         }
         if ((set.weight === '' || set.weight == null) && set.phWeight !== '' && set.phWeight != null) {
           set.weight = set.phWeight;
-          invented = true;
+          invented = true; inventedFields.push('weight');
           const w = row.querySelector('[data-field="weight"]'); if (w) w.value = String(convDisplay(Number(set.weight)));
         }
         // A set with no numbers cannot be "done". On a first-ever exercise the
@@ -7957,6 +8125,7 @@ function renderSessionRun(el) {
         // Refuse it visibly and leave the row untouched.
         if (!(Number(set.reps) > 0 || Number(set.weight) > 0)) { showToast(t('add_at_least_one')); return; }
         set.done = true;
+        carryHint(i);   // a new figure becomes the hint of the straight sets ahead (ghosts only)
         buzz();
         startRestTimer(restDefaultSec(), i, ex.id, set);
       } else {
@@ -7977,10 +8146,21 @@ function renderSessionRun(el) {
       // commit uses: commitExercise can decline to write, and offering the
       // PREVIOUS entry would undo something the user never asked about — which
       // is worse than offering nothing. Numbers that came from the suggestion
-      // say so; "last time's numbers" would be untrue.
+      // say so, and so do numbers an earlier set of this workout handed on
+      // (carryHint); "last time's numbers" would be untrue for either.
       const written = withUndo(() => commitExercise(ex.id));
       if (invented) {
-        offerUndo(t(set.phSug ? (hadSession ? 'run_sug_updated' : 'run_sug_saved') : (hadSession ? 'run_filled_updated' : 'run_filled_saved')), written);
+        // One source per invented field — carried, suggested or last time's —
+        // and the toast names it only when they agree; a mix is said as a mix.
+        const from = new Set(inventedFields.map((f) => (set.phCarry && set.phCarry[f]) ? 'carry' : set.phSug ? 'sug' : 'filled'));
+        const src = from.size === 1 ? [...from][0] : 'mixed';
+        // Literal keys, never t('run_' + …): a prefix family would count every
+        // run_* key as reachable for contract 38.
+        const said = {
+          carry: ['run_carry_saved', 'run_carry_updated'], sug: ['run_sug_saved', 'run_sug_updated'],
+          filled: ['run_filled_saved', 'run_filled_updated'], mixed: ['run_mixed_saved', 'run_mixed_updated'],
+        }[src];
+        offerUndo(t(said[hadSession ? 1 : 0]), written);
       }
     });
     // Delete this set and persist immediately. A logged one-set exercise can be

@@ -2,6 +2,44 @@
 
 One section per release since v309, newest first, moved verbatim from `CLAUDE.md` in v401 (batch 6 of the 2026-09-25 review; `docs/REVIEW-2026-09-25.md`). `CLAUDE.md` is the guide and the authority for how the app works now. A section here records what one release changed and why, in the words written at the time, so a later section — or the guide — can supersede what an earlier one says.
 
+## v417 — the Program page as three plates; six things made easier; vibration for APK 26
+
+**The Program page (owner: redesign it radically, same function, with explanatory
+words).** A judge panel chose "three plates" from three directions; the owner
+approved it and asked for words on every part. THE WEEK: «2/4 أيام» against last
+week, seven wells (a trained day rises to its sets, today ringed, planned
+outlined, missed with a floor), the legend «تمرّنت · اليوم · مخطّط · الرقم =
+المجموعات», sets and new records. THE ROTATION: «دورتك» with a labelled edit
+button, the ribbon with the current slot, «التمارين القادمة» as tiles (today
+solid), «الكارديو المجدول». THE BODY: «العضلات · آخر ٧ أيام» wells and «أفضل
+أرقامك». Every door kept in one tap; past days and each record now open too. Two
+reviews (17 findings), 16 fixed and one part rejected with its reason; new suite
+`test-program-ui.js` (36 cases).
+
+**Easier to use (owner: are there more things; then: run more agents).** Three
+builders in parallel, two reviews (14 findings, all fixed), three new suites:
+- «كرّر أمس» comes pre-ticked with yesterday's meals near this hour (never when
+  the whole day was logged in one write, never across the day line wrongly).
+- «أطعمة تناولتها مؤخرًا»: up to five recent foods at the top of the add sheet,
+  one tap logs again with Undo, no AI call.
+- Search finds the food catalogue as its last group, with a plus mark saying a
+  tap logs it; the saved-food picker too.
+- A failed AI call keeps what was typed, photographed or recorded, and offers one
+  retry (off for a minute after a rate limit; never where it cannot work).
+- The guided run carries a new weight or reps to the later untouched sets of the
+  same hint; the suggestion fills every open set.
+- Home's cells say their period: «أيام التمرين هذا الأسبوع», «الكارديو هذا الأسبوع».
+
+**Vibration.** The published APK has no android.permission.VIBRATE, so every
+buzz was most likely silent on the phone. The manifest declares it now and
+contract 76 holds it; it reaches phones with APK 26.
+
+**The gate.** A suite passed at 19:00 and failed at 20:55 on the same code: an
+in-app reminder bar due at that hour covered controls (silenced in that suite),
+and two cases raced a timer (a stubbed photo, a fading sheet) — both made
+deterministic. The catalogue search no longer throws when catalog.js is absent.
+Gate: 72 contracts, lint, 22 suites.
+
 ## v416 — sleep and cardio logs like the food log; the AI named in the recipe row; the two-dish import hardened
 
 Three owner requests and the finish of a fourth, in one release.

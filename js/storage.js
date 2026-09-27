@@ -1346,7 +1346,44 @@ const DB = {
       const match = q.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
       if (match) date = `${match[3]}-${match[2].padStart(2,'0')}-${match[1].padStart(2,'0')}`;
       if (validDay(date)) results.unshift({type:'date',id:date,date,name:date,score:-1});
-      return results.sort((a,b) => a.score-b.score || b.date.localeCompare(a.date)).slice(0,60);
+      // THE CATALOGUE IS THE LAST GROUP, whatever its scores: the user's own
+      // foods always rank above it. A new user who searched «رز» used to get
+      // «no results» from an app that ships 219 dishes.
+      return results.sort((a,b) => a.score-b.score || b.date.localeCompare(a.date)).slice(0,60).concat(this.catalog(text));
+    },
+    // The food catalogue (FOOD_PRESETS, plus the server presets once food.js
+    // has merged them) matched by the SAME folding as query(), on both of a
+    // preset's names. A preset the user already saved as a food is left out —
+    // it is already above, under their own name. Read through typeof guards:
+    // catalog.js loads before this file and food.js after, both long before
+    // anyone types. `preset` is a copy of the figures, so a tap logs exactly
+    // the row it showed even if the server catalogue lands in between.
+    catalog(text, limit = 8) {
+      const q = this.normalize(text).slice(0, 160);
+      if (!q) return [];
+      const words = q.split(/\s+/);
+      // The catalogue is an EXTRA group: a search must never fail for want of
+      // it. allFoodPresets() existing does not mean FOOD_PRESETS does (a page
+      // or a test that loads food.js without catalog.js threw a ReferenceError
+      // here and took the user's own results down with it).
+      let presets = [];
+      try { presets = typeof allFoodPresets === 'function' ? allFoodPresets() : typeof FOOD_PRESETS !== 'undefined' ? FOOD_PRESETS : []; } catch (_) { presets = []; }
+      if (!Array.isArray(presets)) presets = [];
+      const ar = (STATE.prefs && STATE.prefs.lang) === 'ar';
+      const seen = new Set((STATE.foods || []).map(f => this.normalize(f.name)));
+      const out = [];
+      presets.forEach((p, i) => {
+        if (!p || !p.en) return;
+        const en = this.normalize(p.en), arName = this.normalize(p.ar);
+        if (seen.has(en) || seen.has(arName)) return;
+        const value = en + ' ' + arName;
+        if (!words.every(word => value.includes(word))) return;
+        seen.add(en); seen.add(arName);
+        const title = ar ? arName : en;
+        out.push({type:'catalog', id:String(i), name:ar ? p.ar : p.en, date:'', score:title === q ? 0 : title.startsWith(q) ? 1 : 2,
+          preset:{en:p.en, ar:p.ar, s:p.s || '', sa:p.sa || '', cal:Number(p.cal) || 0, pro:Number(p.pro) || 0, carb:Number(p.carb) || 0, f:Number(p.f) || 0}});
+      });
+      return out.sort((a,b) => a.score-b.score).slice(0,limit);
     },
   },
   // ── THE ROUTINE, DERIVED ─────────────────────────────────────────────────

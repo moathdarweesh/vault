@@ -32,6 +32,9 @@
 // sleep minutes a night) are this domain's, and Settings offers the same sheet
 // the heroes' goal buttons open, so a default that feels imposed is found in
 // two places and edited through one.
+// The Program page's cardio lane (2026-09-27) says a scheduled duration in
+// words through spokenMinutes() — «0:30» is the eye's reading, «30 دقيقة»
+// the ear's — the one name it reaches beyond openCardioScheduleModal().
 //
 // Everything it reaches outward is shell, router or a shared primitive:
 // renderView, navigate, currentView, viewContext, weekRanges, offerUndo,

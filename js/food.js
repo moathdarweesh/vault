@@ -620,19 +620,42 @@ function openBarcodeScanner(date, onSave) {
 //
 // It is a LIST WITH CHOICES, never a "copy the day" button: nobody eats the
 // same four things every day, and an all-or-nothing repeat would be wrong often
-// enough to stop being used. NOTHING starts ticked (owner decision, v391 —
-// «لا تجعل الديفلت كله مختار»; v376 had ticked everything): the person picks
-// what they ate again, and the add button waits until something is picked.
+// enough to stop being used. The default is never «everything» (owner decision,
+// v391 — «لا تجعل الديفلت كله مختار»; v376 had ticked everything). What IS
+// ticked (the owner's ranked UX list, 2026-09-27) is the meal of THIS time of
+// day: yesterday's rows logged within two hours, either side, of this moment
+// one day earlier. A usual breakfast is then three taps, not seven; anything
+// else is still one tick away, and Add still offers Undo. With nothing near now
+// nothing is ticked, and the add button waits as before — and when EVERY row
+// would be ticked, none is: a whole day logged in one write (a previous repeat,
+// or a day logged at night) shares one stamp, and ticking it all is exactly
+// the «everything» default v391 refused.
 //
 // The portions come across verbatim (`servings`), which is the other half of
 // "as they were" - a repeat that silently logged one serving of a 1.5-serving
 // meal would be a different meal.
+//
+// Whether a stamp, moved ONE CALENDAR DAY forward, lies within `win` minutes of
+// `now` — elapsed time, never clock minutes on a circle. At 00:30 yesterday's
+// 23:30 is the snack eaten an hour ago, not this time yesterday; and a row
+// back-filled onto yesterday this morning is stamped today, a day from any
+// «now» it could match. A missing or unreadable stamp is never near: a row the
+// app cannot place in the day is not guessed into the meal.
+function foodNearNow(stamp, now = new Date(), win = 120) {
+  const at = stamp ? new Date(stamp) : null;
+  if (!at || Number.isNaN(at.getTime())) return false;
+  at.setDate(at.getDate() + 1);          // the same local clock time, a day on
+  return Math.abs(now.getTime() - at.getTime()) <= win * 60000;
+}
 function openRepeatYesterday(date, onChange) {
   // todayISO() HERE, at the moment this opens - never a date captured by a
   // render that may have painted before midnight.
   const day = date || todayISO();
   const prevDay = addDaysISO(day, -1);
   const prev = DB.foodLogs.listForDate(prevDay);
+  const now = new Date();
+  const near = prev.map((e) => foodNearNow(e.addedAt, now));
+  if (near.length && near.every(Boolean)) near.fill(false);   // never «everything» (v391)
   const overlay = openModal(`
     <div class="modal-header">
       <div class="modal-title">${t('fl_repeat_title')}</div>
@@ -646,7 +669,7 @@ function openRepeatYesterday(date, onChange) {
         // list's - rather than a second one that merely resembles it. Its
         // checkbox is the app's own orange square (v330), not the browser's.
         return `<label class="sl-tick" data-ry-row="${i}">
-          <input type="checkbox" data-ry="${i}">
+          <input type="checkbox" data-ry="${i}"${near[i] ? ' checked' : ''}>
           <span class="sl-text">
             <span class="sl-name">${escapeHtml(e.name)}${m !== 1 ? ` <span class="num">\u00d7 ${fmtNum(m)}</span>` : ''}</span>
             <span class="sl-amt"><span class="num">${fmtNum(Math.round(e.calories * m))}</span> ${t('cal')}</span>
@@ -684,10 +707,43 @@ function openRepeatYesterday(date, onChange) {
   });
 }
 
+// RECENTLY EATEN. Food logged from a photo, the chat, the voice or a barcode was
+// never kept for reuse, so eating the same meal again meant the capture again —
+// another AI call from the daily budget and a fresh estimate that could differ.
+// These are the distinct items (same name + calories per serving) of the last
+// `days` days, most eaten first, the most recent breaking a tie, each carried as
+// its NEWEST row so a tap repeats exactly what was logged last time, portion
+// included. Derived from the log on every open: nothing new is stored.
+function recentFoods(limit = 5, days = 14) {
+  const today = todayISO(), seen = new Map();
+  let order = 0;
+  for (let i = 0; i < days; i++) {
+    const rows = DB.foodLogs.listForDate(addDaysISO(today, -i));
+    for (let j = rows.length - 1; j >= 0; j--) {
+      const e = rows[j];
+      if (!e || !e.name) continue;
+      const key = DB.search.fold(e.name) + '|' + (Number(e.calories) || 0);
+      const hit = seen.get(key);
+      if (hit) hit.count++;
+      else seen.set(key, { row: e, count: 1, order: order++ });
+    }
+  }
+  return [...seen.values()].sort((a, b) => b.count - a.count || a.order - b.order).slice(0, limit).map((x) => x.row);
+}
+// One serving of a catalogue dish, in the ONE meal write, fat included (a
+// preset without `f` logs zero fat, never undefined). The search sheet and the
+// saved-food picker both log through here; the caller offers the Undo.
+function logFoodPreset(date, p) {
+  if (!p) return { ok: false, code: 'VALIDATION' };
+  return DB.foodLogs.addMany(date || todayISO(), [{ name: foodPresetName(p), servings: 1, calories: p.cal, protein: p.pro,
+    carbs: p.carb, fat: p.f || 0, source: 'catalog' }]);
+}
+
 function openAddSheet(date, onChange) {
   const app = document.querySelector('.app');
   if (!app) return;
   document.getElementById('add-sheet-overlay')?.remove();
+  const recent = recentFoods();
 
   const overlay = document.createElement('div');
   overlay.id = 'add-sheet-overlay';
@@ -702,6 +758,15 @@ function openAddSheet(date, onChange) {
     <div class="add-sheet" role="dialog" aria-modal="true" tabindex="-1" aria-label="${escapeHtml(t('add_sheet_title'))}">
       <div class="sheet-handle"></div>
       <div class="add-sheet-title">${t('add_sheet_title')}</div>
+      ${recent.length ? `<div class="add-recent">
+        <div class="add-recent-label" id="add-recent-label">${t('fl_recent')}</div>
+        <div class="add-recent-row" role="group" aria-labelledby="add-recent-label">
+          ${recent.map((e, i) => `<button type="button" class="add-recent-chip" data-recent="${i}">
+            <span class="add-recent-name" dir="auto">${escapeHtml(e.name)}</span>
+            <span class="add-recent-cal"><span class="num">${fmtNum(Math.round((Number(e.calories) || 0) * (e.servings || 1)))}</span> ${t('cal')}</span>
+          </button>`).join('')}
+        </div>
+      </div>` : ''}
       <div class="add-grid">
         ${DB.foodLogs.listForDate(addDaysISO(date || todayISO(), -1)).length ? `
         <button class="add-tile wide" data-method="repeat">
@@ -740,6 +805,21 @@ function openAddSheet(date, onChange) {
   overlay.__close = () => close();
   overlay.addEventListener('click', (e) => {
     if (e.target === overlay) { close(); return; }
+    const again = e.target.closest('[data-recent]');
+    if (again) {
+      // One tap = one write, the day resolved NOW (the sheet can stand open
+      // across midnight), the newest row's portion and figures verbatim.
+      if (overlay.__closed) return;
+      const r = recent[Number(again.dataset.recent)];
+      if (!r) return;
+      const result = DB.foodLogs.addMany(date || todayISO(), [{ name: r.name, servings: r.servings || 1, calories: r.calories,
+        protein: r.protein, carbs: r.carbs, fat: r.fat || 0, source: r.source || 'saved' }]);
+      if (!result.ok) { convenienceError(result); return; }
+      close();
+      if (typeof onChange === 'function') onChange();
+      offerUndo(t('fl_recent_logged').replace('{name}', r.name), result);
+      return;
+    }
     const btn = e.target.closest('[data-method]');
     if (!btn) return;
     const method = btn.dataset.method;
@@ -2441,17 +2521,43 @@ function openSavedFoodPicker(date, onSave, initialTab) {
     const q = DB.search.normalize(query);
     const saved = DB.foods.list();
     const list = q ? saved.filter(f => DB.search.normalize(f.name).includes(q)) : saved;
-    if (!list.length) {
+    // While searching, the food catalogue follows as the LAST group, matched
+    // by the same folding as the top-bar search (DB.search.catalog) and never
+    // repeating a food already saved. Without a query the tab is the user's own
+    // list only — the catalogue is 219 dishes, not a list to scroll.
+    const cat = q ? DB.search.catalog(query) : [];
+    if (!list.length && !cat.length) {
       listEl.innerHTML = `<div class="calc-preview-hint" style="text-align:center;padding:18px">${saved.length ? t('no_matches_simple') : t('saved_empty')}</div>`;
       return;
     }
     listEl.innerHTML = list.map((f,i) => `<button type="button" class="picker-row" data-add-saved="${i}">
       <span class="picker-row-cat" style="background:var(--cat-arms)"></span>
       <span class="picker-row-name">${escapeHtml(f.name)} · <span class="num">${fmtNum(f.calories)}</span> ${t('cal')}</span>
-      <span class="picker-row-check">${icon('plus',16)}</span></button>`).join('');
+      <span class="picker-row-check">${icon('plus',16)}</span></button>`).join('')
+      + (cat.length ? `<h3 class="sfp-cat-head">${t('cx_catalog')}</h3>` + cat.map((r,i) => `<button type="button" class="picker-row" data-add-cat="${i}">
+      <span class="picker-row-cat" style="background:var(--cat-legs)"></span>
+      <span class="picker-row-name">${escapeHtml(r.name)} · <span class="num">${fmtNum(r.preset.cal)}</span> ${t('cal')}</span>
+      <span class="picker-row-check">${icon('plus',16)}</span></button>`).join('') : '');
+    // THE DOUBLE-TAP GUARD MUST NOT BLUR THE ROW. `disabled` on the focused
+    // button dropped keyboard focus to <body>; a flag + aria-disabled refuses
+    // the second press for 800 ms and leaves focus where it was.
+    const pressOnce = (button) => {
+      if (button.__busy) return false;
+      button.__busy = true; button.setAttribute('aria-disabled', 'true');
+      setTimeout(() => { button.__busy = false; button.removeAttribute('aria-disabled'); }, 800);
+      return true;
+    };
+    listEl.querySelectorAll('[data-add-cat]').forEach(button => button.onclick = () => {
+      if (!pressOnce(button)) return;
+      const r = cat[Number(button.dataset.addCat)];
+      const result = logFoodPreset(date || todayISO(), r && r.preset);
+      if (!result.ok) { convenienceError(result); return; }
+      button.querySelector('.picker-row-check').innerHTML = icon('check',16);
+      button.classList.add('picked');
+      if (onSave) onSave(); offerUndo(t('rec_logged').replace('{name}', r.name), result);
+    });
     listEl.querySelectorAll('[data-add-saved]').forEach(button => button.onclick = () => {
-      if (button.disabled) return;
-      button.disabled = true; setTimeout(() => { button.disabled = false; }, 800);   // same guard as the bundle button
+      if (!pressOnce(button)) return;   // the bundle button's guard, without the blur
       const f = list[Number(button.dataset.addSaved)];
       const result = DB.foodLogs.addMany(date || todayISO(),[{name:f.name,servings:1,calories:f.calories,protein:f.protein,carbs:f.carbs,fat:f.fat || 0,source:'saved'}]);
       if (!result.ok) { convenienceError(result); return; }
@@ -2589,16 +2695,21 @@ function openVoiceCapture(date, onSave) {
     </div>
     <div class="voice-stage" id="voice-stage">
       <button class="voice-mic" id="voice-mic" aria-label="${escapeHtml(t('voice_tap'))}">${icon('mic', 22)}</button>
-      <div class="voice-status" id="voice-status">${t('voice_tap')}</div>
+      <div class="voice-status" id="voice-status" aria-live="polite">${t('voice_tap')}</div>
+      <div class="voice-retry" id="voice-retry" aria-live="polite"></div>
     </div>
     <div class="ai-results" id="voice-results"></div>
   `);
   const micBtn = overlay.querySelector('#voice-mic');
   const status = overlay.querySelector('#voice-status');
   const results = overlay.querySelector('#voice-results');
-  let recorder = null, chunks = [], stream = null, recording = false;
+  // Under the status: the calm «up to a minute» line while an answer is slow,
+  // or «أعد المحاولة» after a failure a second try can fix. Never both.
+  const retrySlot = overlay.querySelector('#voice-retry');
+  let recorder = null, chunks = [], stream = null, recording = false, retried = false;
 
   const setStatus = (s) => { if (status) status.textContent = s; };
+  const setSlot = (html) => { if (retrySlot) retrySlot.innerHTML = html; };
 
   async function start() {
     if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
@@ -2623,6 +2734,7 @@ function openVoiceCapture(date, onSave) {
     // had already run and could not see it. It is released before one exists.
     if (!document.body.contains(overlay)) { stream.getTracks().forEach((tk) => tk.stop()); stream = null; return; }
     chunks = [];
+    setSlot('');   // a new recording replaces the one kept for a retry
     const mime = MediaRecorder.isTypeSupported('audio/webm') ? 'audio/webm'
       : (MediaRecorder.isTypeSupported('audio/mp4') ? 'audio/mp4' : '');
     recorder = new MediaRecorder(stream, mime ? { mimeType: mime } : undefined);
@@ -2651,6 +2763,7 @@ function openVoiceCapture(date, onSave) {
     setStatus(t('voice_processing'));
     const blob = new Blob(chunks, { type: (recorder && recorder.mimeType) || 'audio/webm' });
     if (!blob.size) { setStatus(t('voice_tap')); return; }
+    let audio;
     try {
       const dataUrl = await new Promise((res, rej) => {
         const r = new FileReader(); r.onload = () => res(r.result); r.onerror = rej; r.readAsDataURL(blob);
@@ -2658,14 +2771,60 @@ function openVoiceCapture(date, onSave) {
       const b64 = String(dataUrl).split(',')[1];
       const mimeType = String(dataUrl).slice(5, String(dataUrl).indexOf(';'));
       if (!window.FoodAI || !FoodAI.analyzeAudio) throw new Error(t('voice_unsupported'));
-      if (!document.body.contains(overlay)) return;   // closed while the recording was being encoded
-      const { items, transcript } = await FoodAI.analyzeAudio({ mimeType, data: b64 });
+      audio = { mimeType, data: b64 };
+    } catch (e) {
+      setStatus((window.FoodAI && FoodAI.friendlyErr) ? FoodAI.friendlyErr(e) : ((e && e.message) || t('ai_error')));
+      return;
+    }
+    if (!document.body.contains(overlay)) return;   // closed while the recording was being encoded
+    await sendAudio(audio);
+  }
+
+  // ONE SEND OF ONE RECORDING. The recording is kept in this closure through a
+  // failure: «أعد المحاولة» resends the same audio instead of asking the user
+  // to say the meal again — when FoodAI.canRetry says a second try can help.
+  async function sendAudio(audio) {
+    setStatus(t('voice_processing'));
+    setSlot('');
+    const slow = setTimeout(() => {
+      // The slot is a live region from the sheet's first paint, so the line
+      // written into it is read; a status node inserted filled often is not.
+      if (document.body.contains(overlay)) setSlot(`<div class="ai-slow">${escapeHtml(t('ai_slow'))}</div>`);
+    }, 8000);
+    try {
+      const { items, transcript } = await FoodAI.analyzeAudio(audio);
+      clearTimeout(slow);
       if (!document.body.contains(overlay)) return; // modal was closed mid-request
+      setSlot('');
       if (transcript) setStatus('“' + transcript + '”'); else setStatus(t('voice_tap'));
       if (!items || !items.length) { results.innerHTML = `<div class="ai-decline">${t('ai_not_food')}</div>`; return; }
       renderVoiceResults(items);
     } catch (e) {
-      setStatus((window.FoodAI && FoodAI.friendlyErr) ? FoodAI.friendlyErr(e) : ((e && e.message) || t('ai_error')));
+      clearTimeout(slow);
+      // foodai.js's rules, not a copy: whether a retry can help, how long it
+      // waits (the busy answers say «in a minute» and the button keeps that),
+      // and the sentence beside it, which carries no «try again» of its own.
+      const ai = window.FoodAI;
+      const again = !!(ai && ai.canRetry && ai.canRetry(e));
+      setStatus(ai && ai.errText ? ai.errText(e, again) : (ai && ai.friendlyErr) ? ai.friendlyErr(e) : ((e && e.message) || t('ai_error')));
+      setSlot('');
+      if (again) {
+        const wait = ai.retryWait ? ai.retryWait(e) : 0;
+        setSlot(`<button type="button" class="btn btn-ghost ai-retry" data-retry${wait ? ' disabled' : ''}>${icon('refresh', 16)} ${escapeHtml(t('ai_retry'))}</button>`);
+        const b = retrySlot.querySelector('[data-retry]');
+        if (wait) setTimeout(() => { if (b.isConnected) b.disabled = false; }, wait);
+        // A keyboard retry keeps its place: the mic holds focus while it asks
+        // (the slot is emptied), and a new failure hands it to the new button.
+        if (retried && document.activeElement === micBtn) b.focus({ preventScroll: true });
+        retried = false;
+        b.addEventListener('click', () => {
+          if (b.disabled) return;
+          const had = document.activeElement === b;
+          b.disabled = true;
+          if (had) { retried = true; micBtn.focus({ preventScroll: true }); }
+          sendAudio(audio);
+        });
+      }
     }
   }
 

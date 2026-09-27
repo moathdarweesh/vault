@@ -658,6 +658,8 @@ const FOOD_BODY = [
     const off = await fakeOFF(page);
     try {
       await openFrom(page, 'barcode');
+      // The previous case's sheet may still be fading out: type into the live one.
+      await page.waitForFunction(() => !document.querySelector('.modal-overlay.is-out') && document.querySelectorAll('#bc-manual-input').length === 1);
       await page.locator('#bc-manual-input').fill('1111111');
       await page.locator('#bc-manual-go').click();
       await page.locator('#bc-add').waitFor();
@@ -1566,26 +1568,41 @@ const RECIPE_IMPORT = [
       await rxOpen(page);
       await page.evaluate(() => {
         window.qaRecipeImage = FoodAI.recipeImage;
-        // a.png and slow.png take 0.9 s to prepare, fast.png 50 ms.
-        FoodAI.recipeImage = (f) => new Promise((r) => setTimeout(() => r({ dataUrl: 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7', image: { mimeType: 'image/jpeg', data: 'qa-' + f.name } }), f.name === 'fast.png' ? 50 : 900));
+        // a.png and slow.png are HELD until the case releases them; fast.png
+        // takes 50 ms. The first version held them for a fixed 0.9 s, and under
+        // load the photo landed before the case reached the text tile — the
+        // sheet then rightly showed the photo, and the case waited 30 s for a
+        // tile that was gone (measured 2026-09-27, in the full suite only).
+        window.qaHeld = [];
+        FoodAI.recipeImage = (f) => new Promise((r) => {
+          const done = () => r({ dataUrl: 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7', image: { mimeType: 'image/jpeg', data: 'qa-' + f.name } });
+          if (f.name === 'fast.png') setTimeout(done, 50); else window.qaHeld.push(done);
+        });
       });
+      const release = () => page.evaluate(() => { window.qaHeld.splice(0).forEach((done) => done()); });
       const png = (name) => ({ name, mimeType: 'image/png', buffer: Buffer.from('qa') });
-      // (1) A slow photo, then the text tile: the typed text stays.
+      // (1) A slow photo, then the text tile: the typed text stays when the photo lands.
       await page.locator('[data-rx-file="image"]').setInputFiles(png('a.png'));
+      await page.waitForFunction(() => window.qaHeld.length === 1);
       await page.locator('[data-rx-pick="text"]').click();
       await page.locator('#rx-text').fill('typed while the photo was prepared');
-      await page.waitForTimeout(1200);
+      await release();
+      await page.waitForTimeout(300);
       assert.equal(await page.locator('#rx-text').count() ? await page.locator('#rx-text').inputValue() : null, 'typed while the photo was prepared', 'the typed text survives the late photo');
-      // (2) A slow photo, then a quick one: the quick one is what is sent.
+      // (2) A slow photo, then a quick one: the quick one is what is sent, and
+      // the slow one landing afterwards changes nothing.
       await page.locator('[data-rx-back]').click();
       await page.locator('[data-rx-file="image"]').setInputFiles(png('slow.png'));
+      await page.waitForFunction(() => window.qaHeld.length === 1);
       await page.locator('[data-rx-file="image"]').setInputFiles(png('fast.png'));
-      await page.waitForTimeout(1200);
+      await page.locator('[data-rx-go]').waitFor();
+      await release();
+      await page.waitForTimeout(300);
       await page.locator('[data-rx-go]').click();
       await page.locator('#rec-rows .rec-row').first().waitFor({ timeout: 15000 });
       assert.equal(kit.last().frames && kit.last().frames[0].data, 'qa-fast.png', 'the newer photo is the one read');
     } finally {
-      await page.evaluate(() => { if (window.qaRecipeImage) FoodAI.recipeImage = window.qaRecipeImage; delete window.qaRecipeImage; });
+      await page.evaluate(() => { (window.qaHeld || []).splice(0).forEach((done) => done()); if (window.qaRecipeImage) FoodAI.recipeImage = window.qaRecipeImage; delete window.qaRecipeImage; delete window.qaHeld; });
       await kit.done();
     }
   } },
@@ -2546,8 +2563,10 @@ const designA11yCases = [
     await scan(['.view.active #day-prev', '.view.active #day-next']);
     await reset('session-day', { date: today }); await settle();
     await scan(['.view.active .sd-add-set-btn']);
+    // The Program page's day tiles, the wells that are doors, and its three S
+    // buttons (the three plates, 2026-09-27; .schedule-prev-row was 41 tall).
     await reset('workouts'); await settle();
-    await scan(['.view.active .schedule-prev-row']);
+    await scan(['.view.active .prg-tile', '.view.active .prg-col[data-day-iso]', '.view.active .prg-edit', '.view.active [data-cardio-sched-add]']);
     // The two goal buttons (v405): S-size, 36px, on the Cardio and Sleep heroes.
     await reset('cardio'); await settle();
     await scan(['.view.active #cardio-goal-btn']);

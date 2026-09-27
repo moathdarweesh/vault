@@ -32,6 +32,13 @@ async function run() {
     await page.route('**/*', route => route.request().url().startsWith('http://127.0.0.1:') ? route.continue() : route.abort());
     await page.goto(`http://127.0.0.1:${server.address().port}/`);
     await page.waitForFunction(() => typeof navigate === 'function');
+    // THE HOUR THE SUITE RUNS MUST NOT MATTER. The in-app reminder catch-up
+    // shows a timed bar for whatever reminder a fresh install has due at that
+    // hour — after 20:00 it was water («0 من 2,500 مل») — and the bar covers
+    // controls and re-renders under a click: this suite passed at 19:00 and
+    // timed out at 20:55 on the same code (measured 2026-09-27). Nothing here
+    // tests reminders, so the bar is silenced for this page.
+    await page.evaluate(() => { window.showNotifBar = () => {}; try { if (ntfCurrent && ntfCurrent.el) ntfCurrent.el.remove(); } catch (_) { /* no bar up */ } });
     for (const [lang, theme] of [['ar', 'dark'], ['en', 'light']]) {
       await page.evaluate(({ lang, theme }) => {
         DB.prefs.setLang(lang); DB.prefs.setTheme(theme); DB.prefs.setOnboarded();

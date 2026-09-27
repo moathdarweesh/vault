@@ -123,7 +123,7 @@ for (const [k, [re, why]] of Object.entries(GRAMMAR)) {
 // ── D. ONE DIGIT SCRIPT PER PHRASE (#16) ────────────────────────────────────
 // Digits inside Arabic prose are Arabic-Indic (last_7_days «آخر ٧ أيام»); a
 // sentence whose {n} arrives from fmtNum is Latin throughout.
-for (const k of ['muscle_focus_sub', 'pg_volume_30d', 'pg_sessions_30d', 'goal_hint_cardio', 'goal_hint_sleep', 'avg_7n']) if (/[0-9]/.test(I18N.ar[k] || '')) bad('#16', `${k}: «${I18N.ar[k]}» — a Latin digit in Arabic prose, beside last_7_days «${I18N.ar.last_7_days}»`);
+for (const k of ['prg_muscles', 'pg_volume_30d', 'pg_sessions_30d', 'goal_hint_cardio', 'goal_hint_sleep', 'avg_7n']) if (/[0-9]/.test(I18N.ar[k] || '')) bad('#16', `${k}: «${I18N.ar[k]}» — a Latin digit in Arabic prose, beside last_7_days «${I18N.ar.last_7_days}»`);
 if (/[٠-٩]/.test(I18N.ar.sug_deload_reason || '')) bad('#16', `sug_deload_reason: «${I18N.ar.sug_deload_reason}» — its {n} is fmtNum's Latin figure, so one sentence shows both scripts`);
 
 // ── E. THE COUNT LADDERS (#4 #6 #7) ─────────────────────────────────────────
@@ -161,6 +161,12 @@ ladder('B6', 'streakFigure', 'the chip and the progress card print the figure at
 for (const [site, re] of [['the Home streak chip', /<span class="num">\$\{streak\}<\/span><span class="streak-chip-unit">/], ['the progress streak card', /<span class="pg-streak-value num" dir="ltr">\$\{fmtNum\(streak\)\}<\/span>/]]) {
   if (re.test(app)) bad('B6', `${site} still prints the streak's figure at every count — «2 يومان» / «1 يوم واحد» in Arabic; print streakFigure(streak)`);
 }
+// The Program week's figure standing alone (no plan) is printed as
+// streakFigure(n) + prgDaysUnit(n), so the same rule holds there: «يومان»,
+// never «2 يومين» (after a fraction it is always prg_days_n, «2/4 أيام»).
+ladder('B6', 'prgDaysUnit', 'the Program week printed «2 يومين» — a numeral before a dual, and the genitive standing alone',
+  { ar: { 1: 'يوم واحد', 2: 'يومان', 3: 'أيام', 7: 'أيام' }, en: { 1: 'day', 2: 'days', 3: 'days', 7: 'days' } });
+if (!/const figText = weekPlanned \? fmtNum\(adherence\) : streakFigure\(adherence\)/.test(app)) bad('B6', 'renderProgram no longer prints the lone week figure through streakFigure — «2 يومان» / «1 يوم واحد» in Arabic');
 ladder('#6', 'suppStreakLabel', "the supplement card edits t('days_ago') into a unit («1 أيام سلسلة», «1 days streak»)",
   { ar: { 1: 'سلسلة يوم واحد', 2: 'سلسلة يومين', 5: 'سلسلة 5 أيام', 12: 'سلسلة 12 يوماً' }, en: { 1: '1-day streak', 2: '2-day streak', 5: '5-day streak', 12: '12-day streak' } });
 if (/\d/.test(I18N.en.streak_one_day)) bad('#7', `EN streak_one_day «${I18N.en.streak_one_day}» repeats the figure the chip already prints — «1 1 day» on every first day`);

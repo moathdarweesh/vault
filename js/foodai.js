@@ -69,14 +69,22 @@
   // Spelled `data.code === '…'` throughout, deliberately: contract 30 reads
   // both sides of this boundary by grepping for exactly that, and a shorter
   // alias makes the agreement invisible to the checker and to the next reader.
+  // The two refusals below arrive already translated, so canRetry() cannot read
+  // them by their words: they carry the verdict on the error instead.
+  const noRetry = (e) => { e.noRetry = true; return e; };
   function workerError(res, data, dailyKey) {
     data = data || {};
-    if (data.code === 'DAILY_LIMIT' || data.error === 'daily limit') return new Error(tr(dailyKey || 'ai_daily_limit'));
-    if (res.status === 429 || data.code === 'RATE_LIMIT' || data.error === 'rate_limited') return new Error(tr('ai_rate_limit'));
+    if (data.code === 'DAILY_LIMIT' || data.error === 'daily limit') return noRetry(new Error(tr(dailyKey || 'ai_daily_limit')));
+    // «Try again in a minute», and the upstream RATE_LIMIT arrives only AFTER
+    // the Worker charged the caller's daily slot: a retry is held off for that
+    // minute (retryWait) instead of spending another slot on the same quota.
+    if (res.status === 429 || data.code === 'RATE_LIMIT' || data.error === 'rate_limited') {
+      const e = new Error(tr('ai_rate_limit')); e.retryAfter = RETRY_COOL_MS; return e;
+    }
     // Ours, not the user's: the key or its project was refused, or every model
     // id we ask for is retired. One sentence for both — the CODE is what tells
     // the owner which, and it never reaches the screen.
-    if (data.code === 'UPSTREAM_AUTH' || data.code === 'MODEL_RETIRED') return new Error(tr('ai_err_service'));
+    if (data.code === 'UPSTREAM_AUTH' || data.code === 'MODEL_RETIRED') return noRetry(new Error(tr('ai_err_service')));
     // A recipe link the Worker will not read (not YouTube, TikTok or Instagram)
     // or could not (a login wall, a video Google refused). Two sentences, because
     // they ask for different things: another link, or the saved clip instead.
@@ -110,6 +118,89 @@
     if (/^daily limit/.test(m)) return tr('ai_daily_limit');
     if (WORKER_ERR_RE.test(m)) return tr('ai_error');
     return raw || tr('ai_error');
+  }
+
+  // CAN PRESSING «أعد المحاولة» HELP? Most failures are passing — a weak signal
+  // in the gym, a busy model, the deadline — and a second try of the SAME input
+  // fixes them. Five cannot be fixed by sending it again, so no button is
+  // offered for them: the daily limit (it lasts until midnight), a signed-out
+  // caller, an image the browser cannot decode, a file too large (the same
+  // bytes are as large the second time), and the Worker's own configuration.
+  // Read on the raw error, beside friendlyErr, never on the translated sentence.
+  function canRetry(e) {
+    if (!e) return true;
+    if (e.noRetry) return false;
+    if (e.name === 'TimeoutError' || e.name === 'TypeError') return true;
+    const m = String(e.message || '').toLowerCase().replace(/_/g, ' ');
+    if (/too large/.test(m)) return false;
+    return !/^(image load failed|unauthorized$|daily limit|server misconfigured|method not allowed|no input)/.test(m);
+  }
+  // HOW LONG BEFORE A RETRY MAY GO. The busy answers say «in a minute», and the
+  // button beside them keeps that promise: drawn OFF, live when the minute is up.
+  const RETRY_COOL_MS = 60000;
+  function retryWait(e) {
+    if (!e) return 0;
+    if (e.retryAfter) return e.retryAfter;
+    return /^rate limited/.test(String(e.message || '').toLowerCase().replace(/_/g, ' ')) ? RETRY_COOL_MS : 0;
+  }
+  // THE SENTENCE BESIDE A RETRY BUTTON CARRIES NO CALL TO ACT OF ITS OWN.
+  // friendlyErr's timeout sentence ends «— أعد المحاولة», which is right where
+  // no button is drawn (the recipe and plan imports) and the same words twice
+  // where one is (v387: nothing names what is already on screen).
+  function errText(e, withButton) {
+    if (withButton && e && e.name === 'TimeoutError') return tr('ai_err_timeout_short');
+    return friendlyErr(e);
+  }
+  const retryHtml = (e) =>
+    `<button type="button" class="btn btn-ghost ai-retry" data-retry${retryWait(e) ? ' disabled' : ''}>${ic('refresh', 16)} ${esc(tr('ai_retry'))}</button>`;
+  // One tap, one resend: the button disables itself before the call, and the
+  // row it sits in is redrawn by the attempt it starts. FOCUS IS KEPT: the
+  // redraw removes the pressed button, so the row (which survives) takes focus
+  // while it asks, and a new failure hands it to the new button — a keyboard or
+  // screen-reader user used to land on <body>, outside the sheet.
+  function bindRetry(row, again, e) {
+    const b = row && row.querySelector('[data-retry]');
+    if (!b) return;
+    const wait = retryWait(e);
+    if (wait) setTimeout(() => { if (b.isConnected) b.disabled = false; }, wait);
+    if (row.__retried && (document.activeElement === row || document.activeElement === document.body)) {
+      row.__retried = false;
+      b.focus({ preventScroll: true });
+    }
+    b.addEventListener('click', () => {
+      if (b.disabled) return;
+      const had = document.activeElement === b;   // read BEFORE `disabled` blurs it
+      b.disabled = true;
+      if (had) {
+        row.__retried = true;
+        row.tabIndex = -1;
+        row.focus({ preventScroll: true });
+      }
+      again();
+    });
+  }
+  // ONE LIVE REGION PER SHEET, present and empty before anything is said
+  // (#ai-live, chatPanelHtml): a status node inserted already filled is often
+  // never read, so failures and the slow line are written INTO this one.
+  function announce(text) {
+    const l = document.getElementById('ai-live');
+    if (!l) return;
+    if (l.textContent === text) { l.textContent = ''; setTimeout(() => { if (l.isConnected) l.textContent = text; }, 60); }
+    else l.textContent = text;
+  }
+  // A long wait said once, calmly: after SLOW_MS the pending row gains one line
+  // (a photo can take up to a minute; WORKER_DEADLINE_MS is 90 s), and the
+  // answer or the error replaces the row and takes the line with it.
+  const SLOW_MS = 8000;
+  function slowHint(rowId, key) {
+    const timer = setTimeout(() => {
+      const p = document.getElementById(rowId);
+      if (p && p.querySelector('.ai-dots') && !p.querySelector('.ai-slow')) {
+        p.insertAdjacentHTML('beforeend', `<span class="ai-slow">${esc(tr(key))}</span>`);
+        announce(tr(key));
+      }
+    }, SLOW_MS);
+    return () => clearTimeout(timer);
   }
 
   // ---- result cache --------------------------------------------------------
@@ -894,8 +985,10 @@
   // same #ai-results, so every result card, portion stepper and macro editor is
   // shared — the split is in the input, not in the machinery.
   function chatPanelHtml(mode) {
+    // #ai-live: see announce() — empty until a failure or the slow line is said.
+    const live = '<p class="sr-only" id="ai-live" role="status" aria-live="polite"></p>';
     if (mode === 'photo') {
-      return `
+      return `${live}
       <div class="ai-results" id="ai-results"></div>
       <div class="ai-capture-row">
         <button type="button" class="ai-capture" id="ai-capture-cam">
@@ -916,7 +1009,7 @@
       <input type="file" id="ai-file-cam" accept="image/*" capture="environment" hidden>
       <input type="file" id="ai-file-gal" accept="image/*" hidden>`;
     }
-    return `
+    return `${live}
       <div class="ai-results" id="ai-results"></div>
       <div class="ai-input-row">
         <input type="text" id="ai-input" placeholder="${tr('ai_chat_placeholder')}" autocomplete="off">
@@ -994,7 +1087,11 @@
                 tr('ai_untracked').replace('{fields}', joinNames ? joinNames(names) : names.join(', ')))}</div>`;
             }
           }
+          // The row is REPLACED here; a row holding focus (a keyboard retry)
+          // hands it to the answer's own next step instead of to <body>.
+          const held = !!(p && p.contains(document.activeElement));
           if (p) p.outerHTML = `<div class="ai-pending">${qHtml}</div>` + note + cards + addAll;
+          if (held) { const next = box.querySelector(`[data-add="${id}-0"]`); if (next) next.focus({ preventScroll: true }); }
           bindAdds();
         }
         box.scrollTop = box.scrollHeight;
@@ -1004,23 +1101,58 @@
       const send = document.getElementById('ai-send');
       const input = document.getElementById('ai-input');
       if (send && input) {
+        // A FAILED MEAL IS NOT RETYPED. The box empties when a message is sent
+        // (it moved into the conversation), and on a failure the text comes
+        // back — unless the user has already started typing another — with ONE
+        // «أعد المحاولة» beside the error when a second try can help. Sending
+        // the restored text again retries THAT row instead of opening a second
+        // one for the same meal (`failed`: text → the row that failed on it).
+        const failed = {};
+        const busy = new Set();   // a row already asking is never asked twice at once (the button, then Enter)
+        const attempt = async (id, text, qHtml) => {
+          if (busy.has(id)) return;
+          busy.add(id);
+          try { await ask1(id, text, qHtml); } finally { busy.delete(id); }
+        };
+        const ask1 = async (id, text, qHtml) => {
+          const box = document.getElementById('ai-results');
+          const p0 = document.getElementById(id + '-p');
+          if (p0) p0.innerHTML = qHtml + `<span class="ai-dots">${tr('ai_analyzing')}</span>`;
+          box.scrollTop = box.scrollHeight;
+          const stopSlow = slowHint(id + '-p', 'ai_slow');
+          try {
+            const res = await window.FoodAI.analyze(text);
+            stopSlow();
+            delete failed[text];
+            if (input.value.trim() === text) input.value = '';
+            showResult(id, qHtml, res.items, box, res);
+          } catch (e) {
+            stopSlow();
+            if (!input.value.trim()) input.value = text;
+            const p = document.getElementById(id + '-p');
+            if (p) {
+              failed[text] = id;
+              const again = canRetry(e);
+              p.innerHTML = qHtml + `<span class="ai-err">${esc(errText(e, again))}</span>` + (again ? retryHtml(e) : '');
+              announce(errText(e, again));
+              bindRetry(p, () => attempt(id, text, qHtml), e);
+            }
+          }
+        };
         const run = async () => {
           const text = input.value.trim();
           if (!text) return;
+          input.value = '';
+          const again = failed[text];
+          if (again && document.getElementById(again + '-p')) {
+            return attempt(again, text, `<span class="ai-q">${esc(text)}</span>`);
+          }
           const id = 'r' + stamp + '_' + (++n);
           queryText[id] = text;
           const box = document.getElementById('ai-results');
-          input.value = '';
           const qHtml = `<span class="ai-q">${esc(text)}</span>`;
-          box.insertAdjacentHTML('beforeend', `<div class="ai-pending" id="${id}-p">${qHtml}<span class="ai-dots">${tr('ai_analyzing')}</span></div>`);
-          box.scrollTop = box.scrollHeight;
-          try {
-            const res = await window.FoodAI.analyze(text);
-            showResult(id, qHtml, res.items, box, res);
-          } catch (e) {
-            const p = document.getElementById(id + '-p');
-            if (p) p.innerHTML = qHtml + `<span class="ai-err">${esc(friendlyErr(e))}</span>`;
-          }
+          box.insertAdjacentHTML('beforeend', `<div class="ai-pending" id="${id}-p">${qHtml}</div>`);
+          return attempt(id, text, qHtml);
         };
         send.addEventListener('click', run);
         input.addEventListener('keydown', (e) => { if (e.key === 'Enter') run(); });
@@ -1173,16 +1305,33 @@
               sent = true;
               const note = (noteEl && noteEl.value || '').trim();
               const shown = note ? `${qHtml}<span class="ai-q">${esc(note)}</span>` : qHtml;
-              const p0 = document.getElementById(id + '-p');
-              if (p0) { p0.classList.remove('ai-photo-ask'); p0.innerHTML = `${shown}<span class="ai-dots">${tr('ai_analyzing')}</span>`; }
-              try {
-                if (!image) throw (imgErr || new Error(tr('ai_error')));
-                const { items } = await window.FoodAI.analyzeImage(image, note);
-                showResult(id, shown, items, box);
-              } catch (e) {
-                const p = document.getElementById(id + '-p');
-                if (p) p.innerHTML = shown + `<span class="ai-err">${esc(friendlyErr(e))}</span>`;
-              }
+              // The photo and its note stay in the row through a failure — the
+              // plate may already be eaten — and «أعد المحاولة» resends the SAME
+              // image and note when a second try can help.
+              const attempt = async () => {
+                const p0 = document.getElementById(id + '-p');
+                if (p0) { p0.classList.remove('ai-photo-ask'); p0.innerHTML = `${shown}<span class="ai-dots">${tr('ai_analyzing')}</span>`; }
+                const stopSlow = image ? slowHint(id + '-p', 'ai_slow_photo') : () => {};
+                try {
+                  if (!image) throw (imgErr || new Error(tr('ai_error')));
+                  const { items } = await window.FoodAI.analyzeImage(image, note);
+                  stopSlow();
+                  showResult(id, shown, items, box);
+                } catch (e) {
+                  stopSlow();
+                  const p = document.getElementById(id + '-p');
+                  if (p) {
+                    // No image was made (a photo the browser could not prepare,
+                    // for whatever reason): nothing was sent, so there is
+                    // nothing to send again — every tap would fail the same way.
+                    const again = !!image && canRetry(e);
+                    p.innerHTML = shown + `<span class="ai-err">${esc(errText(e, again))}</span>` + (again ? retryHtml(e) : '');
+                    announce(errText(e, again));
+                    bindRetry(p, attempt, e);
+                  }
+                }
+              };
+              await attempt();
             };
             if (goEl) goEl.addEventListener('click', go);
             if (noteEl) noteEl.addEventListener('keydown', (e) => { if (e.key === 'Enter') go(); });
@@ -1329,6 +1478,9 @@
   // two drift into disagreeing about the same sentence. Pure local matching —
   // it sends nothing anywhere. The recipe import (js/food.js openRecipeImport)
   // takes the four at the end: rxLinkKind so a link is refused on the phone.
-  window.FoodAI = { open, openPhoto, analyze, analyzeImage, analyzeAudio, ask, friendlyErr, analyzePlanImage, processImage,
+  // canRetry, retryWait and errText are the voice sheet's (js/food.js
+  // openVoiceCapture): ONE answer to «can a second try help, and when?» and one
+  // sentence beside the button, for all three ways of asking.
+  window.FoodAI = { open, openPhoto, analyze, analyzeImage, analyzeAudio, ask, friendlyErr, canRetry, retryWait, errText, analyzePlanImage, processImage,
                     parseText: parseMacroText, analyzeRecipe, decomposeVideo, recipeImage, rxLinkKind };
 })();

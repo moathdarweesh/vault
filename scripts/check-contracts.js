@@ -2486,6 +2486,13 @@ const cssOwner = (i) => CSS_BLOCKS.reduce((best, b) => (b.open < i && b.close > 
   if (!barRule) problems.push('styles.css has no `.enter .trk-bar` rule — the bars do not grow on arrival');
   const ringRules = ['.enter .slp-ring .cal-ring-fg', '.enter .slp-mini .macro-track-fill', '.enter .slp-ring .cal-ring-center'].map((sel) => [sel, rule(sel)]);
   for (const [sel, body] of ringRules) if (!body) problems.push(`styles.css has no \`${sel}\` rule — the sleep ring's arrival is not gated on the stagger host`);
+  // The Program page's three plates (2026-09-27) speak the instrument's motion —
+  // the week's plates grow, the planned hairlines fade, today's ring draws last,
+  // the ribbon's tick draws, today's tile fills, the muscle wells grow, and the
+  // rep moment's plate, ring and figure — each held to the same window.
+  const programRules = ['.enter .prg-col .prg-plate', '.enter .prg-col.is-planned .prg-well::before', '.enter .prg-col.is-today .prg-well::before', '.enter .prg-seg.is-current::before', '.enter .prg-tile.is-today', '.enter .prg-mw-fill',
+    '.enter .prg-week.is-rep .prg-col.is-rep .prg-plate', '.enter .prg-week.is-rep .prg-col.is-rep .prg-well::before', '.enter .prg-week.is-rep .prg-num-was', '.enter .prg-week.is-rep .prg-frac > .trk-num:first-child'].map((sel) => [sel, rule(sel)]);
+  for (const [sel, body] of programRules) if (!body) problems.push(`styles.css has no \`${sel}\` rule — the Program page's arrival is not gated on the stagger host`);
   if (fig && barRule && Number.isFinite(slack) && bar >= 0) {
     const delay = (body) => {
       const m = body.match(/animation-delay:\s*calc\(min\(var\(--i,\s*0\),\s*5\)\s*\*\s*var\(--step,\s*var\(--stagger\)\)\s*\+\s*(?:(\d+)\s*\*\s*var\(--stagger-bar\)|var\(--k\)\s*\*\s*var\(--stagger-bar\))(?:\s*\+\s*(\d+)ms)?\)/);
@@ -2494,7 +2501,7 @@ const cssOwner = (i) => CSS_BLOCKS.reduce((best, b) => (b.open < i && b.close > 
     };
     const dur = (body) => { const m = body.match(/animation:\s*[\w-]+\s+var\((--dur-[a-z]+)\)/); return m ? tok(m[1]) : NaN; };
     const window = base + slack;
-    for (const [name, body] of [['.enter .trk-fig', fig], ['.enter .trk-bar', barRule], ...ringRules.filter(([, b]) => b)]) {
+    for (const [name, body] of [['.enter .trk-fig', fig], ['.enter .trk-bar', barRule], ...ringRules.filter(([, b]) => b), ...programRules.filter(([, b]) => b)]) {
       const d = delay(body), len = dur(body);
       if (d == null) { problems.push(`${name}: the animation-delay is not the stagger term plus a --stagger-bar multiple (and an optional literal ms)`); continue; }
       if (!Number.isFinite(len)) { problems.push(`${name}: the animation duration is not a --dur-* token`); continue; }
@@ -2503,7 +2510,7 @@ const cssOwner = (i) => CSS_BLOCKS.reduce((best, b) => (b.open < i && b.close > 
   }
   const clamp = css.slice(css.indexOf('@media (prefers-reduced-motion: reduce)'));
   if (!/--stagger-bar:\s*0ms/.test(clamp)) problems.push('the reduced-motion clamp zeroes --stagger and --stagger-fast but not --stagger-bar — the bars would still arrive late, one by one, for the user who asked for less motion');
-  contract(`the instrument's bars and figure, and the sleep ring's draw, bars and centre, settle inside motion.js's cleanup window (--stagger-bar ${bar}ms, --dur-fast ${fast}ms, window --dur-base ${base}ms + ${Number.isFinite(slack) ? slack : '?'}ms), and the clamp zeroes the new token`, problems);
+  contract(`the instrument's bars and figure, the sleep ring's draw, bars and centre, and the Program plates' ${programRules.length} arrival rules settle inside motion.js's cleanup window (--stagger-bar ${bar}ms, --dur-fast ${fast}ms, window --dur-base ${base}ms + ${Number.isFinite(slack) ? slack : '?'}ms), and the clamp zeroes the new token`, problems);
 }
 
 // ---------------------------------------------------------------- 75. the fingerprint net's views are the app's views
@@ -2526,6 +2533,23 @@ const cssOwner = (i) => CSS_BLOCKS.reduce((best, b) => (b.open < i && b.close > 
   const twice = listed.filter((v, i) => listed.indexOf(v) !== i);
   if (twice.length) problems.push(`scripts/fp/views.js names ${[...new Set(twice)].join(', ')} more than once`);
   contract(`the fingerprint net renders every view (${listed.length} in scripts/fp/views.js, ${sections.length} <section>s in index.html)`, problems);
+}
+
+// ---------------------------------------------------------------- 76. a buzz the phone may actually make
+// The app buzzes on a set's tick, a new record and the end of a rest
+// (js/app.js buzz(), navigator.vibrate), and Settings offers a Vibration
+// switch. Inside the Android WebView navigator.vibrate needs
+// android.permission.VIBRATE, and the manifest never declared it: read out of
+// the published APK 25 on 2026-09-27, the permission list has no VIBRATE, so
+// every buzz was most likely silent on the phone while the switch said on.
+// A shipped script that vibrates needs the permission in the manifest; it
+// reaches phones with the next APK.
+{
+  const problems = [];
+  const callers = JS.filter((f) => /navigator\.vibrate\s*\(/.test(src[f] || ''));
+  const manifest = read('android/app/src/main/AndroidManifest.xml').replace(/<!--[\s\S]*?-->/g, '');
+  if (callers.length && !/<uses-permission\s+android:name="android\.permission\.VIBRATE"\s*\/>/.test(manifest)) problems.push(`${callers.join(', ')} call navigator.vibrate, and AndroidManifest.xml declares no android.permission.VIBRATE — inside the APK every buzz is silent`);
+  contract(`a script that vibrates has the permission to (${callers.length} caller file(s), android.permission.VIBRATE in the manifest)`, problems);
 }
 
 console.log(failures.length ? `\ncheck-contracts: ${failures.length} broken contract(s)` : '\ncheck-contracts: all contracts hold');

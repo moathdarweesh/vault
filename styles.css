@@ -4768,6 +4768,20 @@ button.bundle-main {
    failed rendered at roughly 2.5:1 on the near-white chat surface. */
 .ai-err { color: var(--red); font-size: var(--fs-meta); }
 .ai-decline { color: var(--text-mute); font-size: var(--fs-meta); font-weight: 600; }
+/* «أعد المحاولة» beside a failed answer (chat, photo, voice): the S rung of the
+   three-size scale, a rounded rectangle, with the 44px halo (-5, not -4: the
+   1px border costs the halo 2px). The calm «up to a minute» line takes its own
+   line under a slow pending row. */
+.ai-retry {
+  position: relative; height: var(--btn-h-s); padding: 0 var(--sp-3);
+  border-radius: var(--radius-btn-s); font-size: var(--fs-btn-s);
+}
+.ai-retry::after { content: ''; position: absolute; inset: -5px 0; }
+.ai-retry svg { width: 16px; height: 16px; }
+.ai-retry:disabled { opacity: 0.5; }
+.ai-slow { flex-basis: 100%; color: var(--text-dim); font-size: var(--fs-meta); }
+.voice-retry:empty { display: none; }
+.voice-retry .ai-slow { text-align: center; }
 .ai-card {
   background: var(--surface-2); border: 1px solid var(--border);
   border-radius: var(--radius); padding: 14px; display: flex;
@@ -5338,6 +5352,32 @@ button.data-row.fig-row {
 }
 .add-tile-text { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
 .add-tile-title { font-size: var(--fs-sub); font-weight: 700; line-height: 1.2; }
+/* «Recently eaten» (2026-09-27): up to five chips above the method tiles, one
+   row that scrolls sideways on its own so the sheet never does. Each chip is
+   the M button (44px, the M radius — a rounded rectangle, never a capsule)
+   holding two lines: the food, then what it came to last time. It is as wide
+   as its food up to a cap, where the name ellipsises. */
+.add-recent { margin: 0 0 var(--sp-3); }
+.add-recent-label { font-size: var(--fs-meta); font-weight: 600; color: var(--text-mute); margin: 0 2px var(--sp-1h); }
+/* overflow-x:auto clips the block axis too (v373), so the row keeps 4px of
+   room on every side for the 2px focus ring at its 2px offset, and gives it
+   back with a negative margin: the chips sit exactly where they did. */
+.add-recent-row { display: flex; gap: var(--sp-2); overflow-x: auto; overscroll-behavior-x: contain; scrollbar-width: none; padding: 4px; margin: -4px -4px -2px; scroll-padding-inline: 4px; }
+.add-recent-row::-webkit-scrollbar { display: none; }
+.add-recent-chip {
+  flex: 0 0 auto; max-width: 62%; min-width: 0;
+  height: var(--btn-h-m); padding: 0 var(--sp-3); border-radius: var(--radius-btn-m);
+  display: flex; flex-direction: column; align-items: flex-start; justify-content: center; gap: 1px;
+  background: var(--surface-2); border: 1px solid var(--border); color: var(--text);
+  font: inherit; text-align: start; cursor: pointer;
+  appearance: none; -webkit-appearance: none; -webkit-tap-highlight-color: transparent;
+  transition: transform 0.12s, background 0.15s;
+}
+.add-recent-chip:active { transform: scale(var(--press-scale)); background: var(--surface-3); }
+.add-recent-name { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: var(--fs-btn-s); font-weight: 600; line-height: 1.2; }
+.add-recent-cal { font-size: var(--fs-meta); color: var(--text-mute); line-height: 1.2; white-space: nowrap; }
+/* The saved-food picker's catalogue group heading, under the user's own foods. */
+.sfp-cat-head { font-size: var(--fs-meta); font-weight: 600; color: var(--text-mute); margin: var(--sp-3) 2px var(--sp-1h); }
 
 .calc-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
 .calc-grid-2 { grid-template-columns: repeat(2, 1fr); }
@@ -6520,6 +6560,19 @@ body:has(> .auth-gate) .modal-overlay { z-index: 1001; }
   overflow: hidden;
   text-overflow: ellipsis;
   max-width: 100%;
+}
+/* Home's strip names the PERIOD each figure counts («Training days this
+   week», «Cardio this week», «Today's sleep»): a cell a third of a 340px
+   screen wide cannot hold that on one line, and an ellipsis would cut off
+   exactly the words that were added. The label wraps, centred and balanced;
+   the grid row stretches the three cells to one height, so the figures stay
+   on one line across the strip. */
+.home-stats .stat-cell-label {
+  white-space: normal;
+  overflow: visible;
+  text-align: center;
+  text-wrap: balance;
+  line-height: 1.3;
 }
 
 /* Muscle heatmap as one horizontal band */
@@ -8004,6 +8057,10 @@ body.theme-light {
 .cx-item { border:1px solid var(--border); border-radius: var(--radius); padding:12px; display:flex; flex-direction:column; gap:10px; }
 .cx-result { display:flex; flex-direction:column; align-items:flex-start; white-space:normal; text-align:start; gap:4px; }
 .cx-result span { font-size:var(--fs-meta); color:var(--text-mute); }
+/* A catalogue result LOGS on one tap, unlike every other result: a plus at its
+   end says so, clear of the text (the picker's rows carry the same mark). */
+.cx-result[data-cat-result] { position:relative; padding-inline-end:44px; }
+.cx-result[data-cat-result] > svg { position:absolute; inset-inline-end:14px; top:50%; transform:translateY(-50%); width:16px; height:16px; }
 /* height:auto is what makes white-space:normal work here — .btn sets a fixed
    height, so a long label overflowed its own button. Measured: two lines (21px)
    still fit the 44px box; at three lines the text is 63px and spilled 9.5px past
@@ -9099,6 +9156,346 @@ body[dir="rtl"] .enter .slp-mini .macro-track-fill { transform-origin: 100% 50%;
 .slp-mini.closed .slp-verdict { color: var(--text-mute); }
 /* The cardio log's day card has no caption row: the figure opens it. */
 .cl-day .trk-fig { margin-top: 0; }
+
+/* =========================================================================
+   THE PROGRAM PAGE — THREE PLATES (2026-09-27; renderProgram in js/app.js).
+   The week, the rotation, the body: one card each, every drawn thing with
+   its short words (the owner's addition to the judge panel's design). The
+   week plate IS the Cardio instrument (.trk-hero / .trk-cap / .trk-fig /
+   .trk-readouts, above) with its own track, because its wells are doors and
+   carry four states; the other two speak the same flat language.
+
+   The identity, item by item: wells, plates and fills are flat (radius 0);
+   the only borders are on the three S buttons (edit, undo, add cardio), and
+   the hairlines between parts are 1px backgrounds, not borders; every radius
+   is a button rung; every size is a token or calc(N * --fs-scale); RTL is
+   logical properties throughout, the transform-origins being the sanctioned
+   overrides. The well heights (72 and 64) are the literals, each declared
+   once. Nothing is padded to a height.
+   ========================================================================= */
+.prg-card { --prg-well: var(--bg); padding: var(--sp-4); margin-bottom: var(--sp-4); }
+body.theme-light .prg-card { --prg-well: var(--surface-2); }
+/* One caption row: the caption at the start, its companion at the end. */
+.prg-cap, .prg-head, .prg-rec-head {
+  display: flex; align-items: center; justify-content: space-between; gap: var(--sp-2);
+  min-height: var(--btn-h-s);
+}
+.prg-cap-next { margin-top: var(--sp-3); }
+.prg-hint { font-size: var(--fs-caption); color: var(--text-mute); white-space: nowrap; min-width: 0; }
+/* The hint rides the caption's row only where it fits (the owner's condition):
+   the English caption is set in capitals, and at 340px under «Larger text» the
+   two no longer share a line — each well still says «N sessions» to a reader. */
+@media (max-width: 359px) {
+  body.text-lg:not([dir="rtl"]) .prg-hint { display: none; }
+}
+
+/* ---- THE WEEK: the figure ---------------------------------------------- */
+.prg-frac { display: inline-flex; align-items: baseline; position: relative; }
+.prg-of { font-size: calc(19px * var(--fs-scale)); font-weight: 700; color: var(--text-mute); }
+.prg-delta { color: var(--text-mute); font-weight: 500; }
+.prg-dsign, .prg-ro-d { font-weight: 700; }
+.is-up.prg-dsign, .is-up.prg-ro-d { color: var(--up); }
+.is-down.prg-dsign, .is-down.prg-ro-d { color: var(--down); }
+.prg-ro-d { font-size: var(--fs-meta); }
+.prg-left.is-met { color: var(--accent-text); }
+/* One and two are words in Arabic (no figure before them), so there the unit
+   IS the figure: it takes the figure's place and weight. */
+.prg-week .trk-unit.is-word { margin-inline-start: 0; font-size: var(--fs-title); line-height: 1; color: var(--text); }
+/* The crossfade figure exists only for the rep moment's arrival. */
+.prg-num-was { display: none; }
+
+/* ---- THE WEEK: the track ----------------------------------------------- */
+.prg-track { display: grid; grid-template-columns: repeat(7, 1fr); gap: var(--sp-1h); margin-top: var(--sp-4); }
+.prg-col {
+  position: relative; display: flex; flex-direction: column; gap: var(--sp-1h); min-width: 0;
+  padding: 0; border: 0; background: none; color: inherit; font: inherit;
+  appearance: none; -webkit-appearance: none; -webkit-tap-highlight-color: transparent;
+}
+button.prg-col { cursor: pointer; transition: transform var(--dur-tap) var(--ease-out); }
+button.prg-col:active { transform: scale(var(--press-scale)); }
+/* 39px of well at 375px; the halo spends half of each 6px gap to reach 45.
+   At 340px the track is 276 wide and seven wells cannot each be 44 (7 × 44 =
+   308): a 34px well reaches 40, its whole seventh of the track. That is the
+   one named exception in test-program-ui.js's reach case. */
+button.prg-col::after { content: ''; position: absolute; inset: 0 calc(var(--sp-1h) / -2); }
+.prg-well { position: relative; display: block; height: 72px; background: var(--prg-well); border-radius: 0; overflow: hidden; }
+.prg-plate-n { font-size: calc(11px * var(--fs-scale)); font-weight: 700; color: var(--accent-ink); line-height: 1; margin-top: var(--sp-1); }
+.prg-col .prg-plate {
+  position: absolute; inset-inline: 0; bottom: 0; height: var(--v, 0%);
+  display: flex; justify-content: center; align-items: flex-start;
+  background: var(--accent); border-radius: 0;
+}
+/* TODAY an accent ring, PLANNED a hairline — drawn inside the recess, so the
+   wells keep one size; MISSED the ground line at its floor, never red. */
+.prg-col.is-today .prg-well::before, .prg-col.is-planned .prg-well::before {
+  content: ''; position: absolute; inset: 0; pointer-events: none;
+}
+.prg-col.is-today .prg-well::before { box-shadow: inset 0 0 0 2px var(--accent); }
+/* The planned outline is the only mark of a day still to do, so it is drawn
+   at a graphic's 3:1 on the well (WCAG 1.4.11), not in the 1.5:1 hairline. */
+.prg-col.is-planned .prg-well::before { box-shadow: inset 0 0 0 1px var(--text-dim); }
+.prg-col.is-missed .prg-well::after {
+  content: ''; position: absolute; inset-inline: 0; bottom: 0; height: var(--bar-w); background: var(--text-mute);
+}
+.prg-dlab { display: flex; flex-direction: column; align-items: center; gap: 2px; font-size: var(--fs-caption); font-weight: 700; color: var(--text-dim); white-space: nowrap; }
+.prg-dlab.is-today { color: var(--text); }
+.prg-dlab.is-today::after { content: ''; width: 12px; height: var(--bar-w); background: var(--accent); }
+
+/* The legend: ONE line under the day labels, a swatch per drawn state, then
+   the note on the plates' figure. The box is one line tall and clips: an item
+   that would wrap drops wholly out of sight instead of starting a second line.
+   Only the note can (it is last); the state words always fit, and the track's
+   label still says what the height means. */
+.prg-legend {
+  display: flex; flex-wrap: wrap; gap: var(--sp-1) var(--sp-2); margin-top: var(--sp-2);
+  font-size: var(--fs-caption); line-height: 1.4; max-height: 1.4em; overflow: hidden;
+}
+.prg-lg { display: inline-flex; align-items: center; gap: var(--sp-1); font-size: var(--fs-caption); font-weight: 700; color: var(--text-mute); white-space: nowrap; }
+.prg-lg-num { margin-inline-start: auto; font-weight: 500; }
+.prg-sw { flex: none; width: 10px; height: 10px; background: var(--prg-well); }
+.prg-sw.is-trained { background: var(--accent); }
+.prg-sw.is-today { box-shadow: inset 0 0 0 2px var(--accent); }
+.prg-sw.is-planned { box-shadow: inset 0 0 0 1px var(--text-dim); }
+.prg-sw.is-missed { box-shadow: inset 0 calc(-1 * var(--bar-w)) 0 var(--text-mute); }
+.prg-week .trk-readouts { margin-top: var(--sp-3); }
+.prg-week .trk-ro { gap: var(--sp-1h); }
+
+/* ---- THE ROTATION ------------------------------------------------------- */
+/* The S button: 36px, rung S, BORDER MEANS INTERACTIVE (.btn-ghost's), and a
+   halo that carries the 44px target (1px border → -5). */
+.prg-btn-s {
+  position: relative; flex: none; height: var(--btn-h-s); padding: 0 var(--sp-3); gap: var(--sp-1);
+  border-radius: var(--radius-btn-s); font-size: var(--fs-btn-s);
+}
+.prg-btn-s svg { width: 16px; height: 16px; }
+.prg-btn-s::after { content: ''; position: absolute; inset: -5px 0; }
+
+/* The ribbon: a display strip — list items, no border, no control. */
+.prg-ribbon { display: flex; gap: var(--sp-1); margin: var(--sp-2) 0 0; padding: 0; list-style: none; }
+.prg-seg {
+  position: relative; flex: 1 1 0; min-width: 0; height: 40px;
+  display: flex; align-items: center; justify-content: center; gap: var(--sp-1); padding: 0 var(--sp-1h);
+  border-radius: var(--radius-btn-s); background: var(--surface-3); color: var(--text-mute);
+}
+.prg-seg-n { font-size: var(--fs-meta); font-weight: 700; }
+.prg-seg-name { font-size: var(--fs-sub); font-weight: 500; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.prg-seg.is-current { background: var(--surface-hi); color: var(--text); }
+.prg-seg.is-current .prg-seg-name { font-weight: 700; }
+.prg-seg.is-current .prg-seg-n { color: var(--accent-text); }
+/* In light the raised segment is too dark for --accent-text at this size
+   (3.9:1); the ember tick already marks the slot, so the number is ink. */
+body.theme-light .prg-seg.is-current .prg-seg-n { color: var(--text); }
+/* The bar tick: the one place orange marks position here. Inset by the
+   corner radius, so it runs along the straight top edge (v318). */
+.prg-seg.is-current::before {
+  content: ''; position: absolute; top: 0; inset-inline: var(--radius-btn-s); height: 3px; background: var(--accent);
+}
+.prg-seg-cur { margin-top: var(--sp-1h); font-size: var(--fs-meta); font-weight: 700; color: var(--text); }
+
+/* The pulled-forward line: --warn, not the accent and not red — the plan was
+   moved, nothing went wrong. A one-row grid so it can collapse to nothing. */
+.prg-moved { display: grid; grid-template-rows: 1fr; margin-top: var(--sp-3); }
+.prg-moved-in {
+  position: relative; min-height: 0; display: flex; align-items: center; gap: var(--sp-2);
+  padding-inline-start: var(--sp-2h);
+}
+.prg-moved-in::before { content: ''; position: absolute; inset-block: 0; inset-inline-start: 0; width: 3px; background: var(--warn); }
+.prg-moved-icon { flex: none; display: grid; place-items: center; color: var(--warn); --icon-accent: var(--warn); }
+.prg-moved-icon svg { width: 18px; height: 18px; }
+.prg-moved-text { flex: 1 1 auto; min-width: 0; font-size: var(--fs-sub); line-height: 1.4; color: var(--text); }
+.prg-moved.is-leaving .prg-moved-in { overflow: hidden; }
+
+/* The day tiles: up to five share the row; six or seven keep 57px and
+   scroll, bleeding to the card's edge with room for a focus halo (v373). The
+   snapport ignores the row's padding, so scroll-padding puts the snap line
+   back on the card's content edge: the first tile starts where the ribbon
+   starts, and its focus ring clears the clip. */
+.prg-tiles { display: flex; gap: var(--sp-1h); margin-top: var(--sp-1); }
+.prg-tile {
+  position: relative; flex: 1 1 0; min-width: 0; height: 84px;
+  display: flex; flex-direction: column; align-items: center; justify-content: space-between;
+  padding: var(--sp-2) var(--sp-1); border: 0; border-radius: var(--radius-btn-m);
+  background: var(--surface-3); color: var(--text); font: inherit; cursor: pointer;
+  appearance: none; -webkit-appearance: none; -webkit-tap-highlight-color: transparent;
+  transition: transform var(--dur-tap) var(--ease-out);
+}
+.prg-tile:active { transform: scale(var(--press-scale)); }
+.prg-tile-day { font-size: var(--fs-meta); font-weight: 700; color: var(--text-mute); white-space: nowrap; }
+.prg-tile-n { font-size: calc(20px * var(--fs-scale)); font-weight: 700; line-height: 1; }
+.prg-tile-name { max-width: 100%; font-size: var(--fs-sub); font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.prg-tile.is-today { background: var(--accent); color: var(--accent-ink); }
+.prg-tile.is-today .prg-tile-day { color: var(--accent-ink); }
+.prg-tiles.is-scroll {
+  overflow-x: auto; scroll-snap-type: x mandatory; scrollbar-width: none;
+  margin-inline: calc(-1 * var(--sp-4)); padding: var(--sp-1) var(--sp-4); scroll-padding-inline: var(--sp-4);
+}
+.prg-tiles.is-scroll::-webkit-scrollbar { display: none; }
+.prg-tiles.is-scroll .prg-tile { flex: 0 0 57px; scroll-snap-align: start; }
+
+/* The cardio lane: a hairline, its caption, the figure rows flat on the card. */
+.prg-lane { position: relative; margin-top: var(--sp-3); padding-top: var(--sp-3); }
+.prg-lane::before { content: ''; position: absolute; top: 0; inset-inline: 0; height: 1px; background: var(--border); }
+.prg-lane-list { display: flex; flex-direction: column; align-items: stretch; }
+.prg-lane .data-row.fig-row { background: transparent; box-shadow: none; }
+.prg-lane .fig-row-main { min-height: 52px; padding: var(--sp-1h) 0; }
+.prg-lane .fig-row-num { font-size: calc(19px * var(--fs-scale)); }
+.prg-lane .prg-add { align-self: flex-start; margin-top: var(--sp-2); }
+
+/* No plan yet: the calendar, the sentence, the one build button. */
+.prg-noplan { display: flex; flex-direction: column; align-items: center; gap: var(--sp-3); padding: var(--sp-2) 0; text-align: center; }
+.prg-noplan-icon { color: var(--text-mute); }
+.prg-noplan-icon svg { width: 40px; height: 40px; }
+.prg-noplan-title { font-size: var(--fs-h3); font-weight: 700; color: var(--text); }
+.prg-noplan-btn { width: 100%; }
+
+/* ---- THE BODY ------------------------------------------------------------ */
+.prg-muscles { display: grid; grid-template-columns: repeat(6, 1fr); gap: var(--sp-1h); margin-top: var(--sp-1); }
+.prg-mw {
+  position: relative; display: flex; flex-direction: column; gap: var(--sp-1); min-width: 0;
+  padding: 0; border: 0; background: none; color: var(--text); font: inherit; cursor: pointer;
+  appearance: none; -webkit-appearance: none; -webkit-tap-highlight-color: transparent;
+  transition: transform var(--dur-tap) var(--ease-out);
+}
+.prg-mw:active { transform: scale(var(--press-scale)); }
+/* 41px of well at 340px: the halo spends half of each 6px gap, as the week's
+   wells do, to reach 47. */
+.prg-mw::after { content: ''; position: absolute; inset: 0 calc(var(--sp-1h) / -2); }
+.prg-mw-n { font-size: calc(13px * var(--fs-scale)); font-weight: 700; text-align: center; line-height: 1.2; }
+.prg-mw-n.is-zero { color: var(--text-dim); }
+.prg-mw-well { position: relative; display: block; height: 64px; background: var(--prg-well); border-radius: 0; overflow: hidden; }
+.prg-mw-fill { position: absolute; inset-inline: 0; bottom: 0; height: var(--v, 0%); background: var(--accent); border-radius: 0; }
+.prg-mw-fill.lvl-1 { opacity: 0.4; }
+.prg-mw-fill.lvl-2 { opacity: 0.6; }
+.prg-mw-fill.lvl-3 { opacity: 0.8; }
+/* A one-word name may be wider than its well («Shoulders»): it stays one
+   line, centred over the gap, rather than shrinking. */
+.prg-mw-name { display: flex; justify-content: center; font-size: var(--fs-meta); color: var(--text-mute); white-space: nowrap; }
+
+.prg-muscles + .prg-rec-head { position: relative; margin-top: var(--sp-3); padding-top: var(--sp-3); }
+.prg-muscles + .prg-rec-head::before { content: ''; position: absolute; top: 0; inset-inline: 0; height: 1px; background: var(--border); }
+/* 8px under the head: the «all records» link's 6px halo stays its own.
+   The three columns share their three rows (name, weight, 1RM) through a
+   subgrid, so a name that wraps to two lines lowers all three weights
+   together and they still read across as one row. */
+.prg-recs { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); grid-template-rows: auto auto auto; margin-top: var(--sp-2); }
+.prg-rec {
+  position: relative; display: grid; grid-row: span 3; grid-template-rows: subgrid; row-gap: var(--sp-1);
+  justify-items: start; align-items: start; min-width: 0;
+  padding: var(--sp-2) var(--sp-1h); border: 0; background: none; color: var(--text); font: inherit; text-align: start; cursor: pointer;
+  appearance: none; -webkit-appearance: none; -webkit-tap-highlight-color: transparent;
+  transition: transform var(--dur-tap) var(--ease-out);
+}
+.prg-rec:first-child { padding-inline-start: 0; }
+.prg-rec:active { transform: scale(var(--press-scale)); }
+.prg-rec + .prg-rec::before { content: ''; position: absolute; inset-block: var(--sp-2); inset-inline-start: 0; width: 1px; background: var(--border); }
+/* dir="auto" in the markup sets a name in its own script's direction (an
+   English name in Arabic is cut at ITS end); match-parent keeps it on the
+   column's side all the same. */
+.prg-rec-name {
+  max-width: 100%; font-size: var(--fs-meta); color: var(--text-mute); overflow-wrap: anywhere; text-align: match-parent;
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+}
+.prg-rec-w { display: inline-flex; flex-wrap: wrap; align-items: baseline; gap: 2px; }
+.prg-rec-w .num { font-size: var(--fs-title); font-weight: 700; line-height: 1; }
+.prg-rec-u { font-size: var(--fs-meta); font-weight: 700; color: var(--text-mute); }
+.prg-rec-orm { font-size: var(--fs-meta); color: var(--text-mute); white-space: nowrap; }
+.prg-all { margin-inline-end: -2px; }
+
+@media (hover: hover) {
+  button.prg-col:hover .prg-well, .prg-mw:hover .prg-mw-well { filter: brightness(1.15); }
+  .prg-tile:not(.is-today):hover, .prg-rec:hover { background: var(--surface-hi); }
+}
+
+/* ARRIVAL — scoped to the stagger host's `.enter`, as the instrument's is:
+   with the class gone every rule here vanishes and the static styles above
+   are the final frame (and, under reduced motion, the only frame). --i is the
+   card's index, inherited; --k a well's column in reading order. Contract 73
+   holds every delay + duration here inside motion.js's cleanup window. No
+   figure's VALUE animates. */
+.enter .prg-col .prg-plate {
+  transform-origin: 50% 100%;
+  transform: scaleY(0);
+  animation: trk-grow var(--dur-fast) var(--ease-out) both;
+  animation-delay: calc(min(var(--i, 0), 5) * var(--step, var(--stagger)) + var(--k) * var(--stagger-bar));
+}
+/* A planned hairline fades rather than grows: growth means «lifted». */
+.enter .prg-col.is-planned .prg-well::before {
+  animation: prg-fade var(--dur-fast) var(--ease-out) both;
+  animation-delay: calc(min(var(--i, 0), 5) * var(--step, var(--stagger)) + 3 * var(--stagger-bar));
+}
+@keyframes prg-fade { from { opacity: 0; } }
+/* Today's ring draws LAST, as the final well lands. */
+.enter .prg-col.is-today .prg-well::before {
+  animation: prg-ring var(--dur-fast) var(--ease-out) both;
+  animation-delay: calc(min(var(--i, 0), 5) * var(--step, var(--stagger)) + 7 * var(--stagger-bar));
+}
+@keyframes prg-ring { from { opacity: 0; transform: scale(0.92); } }
+/* The ribbon's tick draws from its segment's start edge. */
+.enter .prg-seg.is-current::before {
+  transform-origin: 0 50%;
+  transform: scaleX(0);
+  animation: trk-line var(--dur-fast) var(--ease-out) both;
+  animation-delay: calc(min(var(--i, 0), 5) * var(--step, var(--stagger)) + 2 * var(--stagger-bar));
+}
+body[dir="rtl"] .enter .prg-seg.is-current::before { transform-origin: 100% 50%; }
+/* Today's tile takes its ember fill just after the tiles land. */
+.enter .prg-tile.is-today {
+  animation: prg-fill var(--dur-fast) var(--ease-out) both;
+  animation-delay: calc(min(var(--i, 0), 5) * var(--step, var(--stagger)) + 4 * var(--stagger-bar));
+}
+@keyframes prg-fill { from { background-color: var(--surface-3); color: var(--text); } }
+/* The muscle wells reuse the week's keyframe. */
+.enter .prg-mw-fill {
+  transform-origin: 50% 100%;
+  transform: scaleY(0);
+  animation: trk-grow var(--dur-fast) var(--ease-out) both;
+  animation-delay: calc(min(var(--i, 0), 5) * var(--step, var(--stagger)) + var(--k) * var(--stagger-bar));
+}
+/* THE REP MOMENT: back from a finished workout, today's well has just been
+   trained. Only it moves — the ring fades as the plate grows up through it —
+   and the figure's old value crossfades to the new one. */
+.enter .prg-week.is-rep .prg-col:not(.is-rep) .prg-plate { animation: none; transform: none; }
+.enter .prg-week.is-rep .trk-fig { animation: none; opacity: 1; transform: none; }
+.enter .prg-week.is-rep .prg-col.is-rep .prg-plate {
+  transform-origin: 50% 100%;
+  transform: scaleY(0);
+  animation: trk-grow var(--dur-base) var(--ease-out) both;
+  animation-delay: calc(min(var(--i, 0), 5) * var(--step, var(--stagger)) + 0 * var(--stagger-bar));
+}
+.enter .prg-week.is-rep .prg-col.is-rep .prg-well::before {
+  content: ''; position: absolute; inset: 0; pointer-events: none; z-index: 1;
+  box-shadow: inset 0 0 0 2px var(--accent);
+  animation: prg-out var(--dur-base) var(--ease-out) both;
+  animation-delay: calc(min(var(--i, 0), 5) * var(--step, var(--stagger)) + 0 * var(--stagger-bar));
+}
+@keyframes prg-out { to { opacity: 0; } }
+.enter .prg-week.is-rep .prg-num-was {
+  display: block; position: absolute; inset-inline-start: 0; top: 0;
+  animation: prg-out var(--dur-base) var(--ease-out) both;
+  animation-delay: calc(min(var(--i, 0), 5) * var(--step, var(--stagger)) + 0 * var(--stagger-bar));
+}
+.enter .prg-week.is-rep .prg-frac > .trk-num:first-child {
+  animation: prg-fade var(--dur-base) var(--ease-out) both;
+  animation-delay: calc(min(var(--i, 0), 5) * var(--step, var(--stagger)) + 0 * var(--stagger-bar));
+}
+
+/* UNDO A PULLED-FORWARD DAY, one move (js/app.js adds the class for 520ms
+   after the repaint, never under reduced motion). Undo moves DATES, not the
+   cycle: the current slot and the order of the workouts on the tiles are the
+   same before and after, so the ribbon's tick and the tiles' numbers and
+   names stay still, and each tile's day label shifts back one tile (260ms),
+   then the line that said «moved» collapses (200ms). --prg-dir is the reading
+   direction's sign; --prg-step is one tile and its gap, measured. */
+.prg-tiles { --prg-dir: 1; }
+body[dir="rtl"] .prg-tiles { --prg-dir: -1; }
+.prg-tiles.is-unshift .prg-tile-day {
+  animation: prg-shift var(--dur-fast) var(--ease-inout) both;
+}
+/* Each label arrives from the NEXT tile (one step along the reading
+   direction), where that date sat before the undo. */
+@keyframes prg-shift { from { opacity: 0; transform: translateX(calc(var(--prg-dir) * var(--prg-step, 0px))); } }
+.prg-moved.is-leaving { animation: prg-collapse 200ms var(--ease-inout) var(--dur-fast) both; }
+@keyframes prg-collapse { to { grid-template-rows: 0fr; margin-top: 0; opacity: 0; } }
 
 /* =========================================================================
    ^^^ EVERYTHING ABOVE, THEN THE IDENTITY LAYER BELOW. ^^^
