@@ -121,7 +121,7 @@ mark; it is the DON'T at the bottom of this section.
 | Android themed icon | the same five boxes as one white silhouette | `res/drawable/ic_launcher_monochrome.xml` (APK) |
 | Status-bar notification | the silhouette at .95 | `res/drawable/ic_stat_vault.xml` (APK) |
 | Web notification badge | the same silhouette, white on transparent | `icons/badge-96.png` — **rendered** from `ICONS.dumbbell` by `node scripts/build-notif-icons.js` |
-| Web splash, frame 0 | the barbell in the dark fills; then the throw, the rise, the bloom, the door | `index.html` + `styles.css` `.vs-*` |
+| Web splash | the barbell in the dark fills, and it STAYS the barbell: one rep (the row lifts and settles as one object), the bloom, the hand-over to VAULT, the door — no keyframe may resize a bolt (contract 72) | `index.html` + `styles.css` `.vs-*` |
 | Native splash | frame 0 of the web splash, at each PNG's own size | `res/drawable-*/splash.png` — **rendered** from the live stylesheet by `node scripts/build-brand-assets.js` (APK) |
 | **In-app top bar, login, first run** | **the LOCKUP — plates + VAULT/TRAIN** | **`brandLockup()` in `js/ui.js`** |
 | **Admin console** | the same lockup, hand-inlined | `admin.html` (two copies, not from `js/ui.js`) |

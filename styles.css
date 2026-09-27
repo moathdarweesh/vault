@@ -8623,8 +8623,7 @@ body.ember-on .ember {
      units wide and spans the same 82 design units the five bolts did, so the
      group stays at 21% of the short edge: one glyph unit is 1vmin. */
   --vs-g: calc(var(--vs-u) * 82 / 21);
-  --vs-throw: 320ms;          /* the lock */
-  --vs-rise: 340ms;           /* each pair */
+  --vs-lift: 560ms;           /* the rep: up and back, 120ms in — ends at 680ms as the old rise did */
   --vs-glow: 700ms;
   --vs-part: 350ms;           /* the hand-over */
   --vs-name: 410ms;
@@ -8651,8 +8650,8 @@ body.ember-on .ember {
 .vs-leaf-b .vs-face { top: -100%; }
 
 /* A FIXED box, so the parting bolts cannot reflow anything above them. The
-   gap and height animations below are layout properties and they run during
-   the busiest 700ms of a cold launch; `contain` keeps that work inside here. */
+   hand-over's gap animation below is a layout property and it runs during the
+   busiest part of a cold launch; `contain` keeps that work inside here. */
 .vs-mark {
   position: relative;
   z-index: 1;
@@ -8734,30 +8733,24 @@ body.ember-on .ember {
     rgba(255, 106, 0, .10) 60%, rgba(255, 106, 0, 0) 100%);
 }
 
-/* ── PHASE A: the lock throws, the bolts rise, the light comes up ──────── */
-/* Every `from` here IS the resting glyph (contract 72 reads it: a `both` fill
-   paints the first keyframe at t=0, so a `from` that differed from the rest
-   sizes would be the frame the user actually sees). The throw and the rises
-   END where the five bolts always ended — 86u, 58u, 40u — so phase B, the
-   hand-over and the door are untouched. The plates rest at full opacity now
-   (the icon's fills), so nothing dims and nothing "lights": the light is the
-   bloom's job alone. */
-.vs-a .vs-mid { animation: vs-throw var(--vs-throw) var(--ease-out) both; }
-.vs-a .vs-n2, .vs-a .vs-n4 { animation: vs-rise-in var(--vs-rise) var(--ease-back) 260ms both; }
-.vs-a .vs-n1, .vs-a .vs-n5 { animation: vs-rise-out var(--vs-rise) var(--ease-back) 340ms both; }
+/* ── PHASE A: the barbell does one rep, the light comes up ────────────── */
+/* THE LOGO KEEPS ITS SHAPE (owner, 2026-09-27). v403 kept the old keyframes,
+   which grew each bolt from the glyph to the five-bolt heights (86u / 58u /
+   40u): frame 0 was the barbell and 0.3 s later it was five tall bars again,
+   the shaft a white pillar, held through the dwell — the old splash in new
+   colours. Now the whole row lifts and settles back as ONE rigid object (a
+   rep), so every frame is the barbell; it starts and ends at rest, so frame 0
+   still equals the native launch PNGs and phase B takes over the resting logo.
+   Contract 72 refuses any phase-A keyframe that resizes, recolours or
+   re-spaces a bolt, and any that does not end where it starts. */
+.vs-a .vs-bolts { animation: vs-lift var(--vs-lift) var(--ease-inout) 120ms both; }
 .vs-a .vs-bloom { animation: vs-bloom-in var(--vs-glow) linear both; }
 
-@keyframes vs-throw {
-  from { height: calc(var(--vs-g) * 3.2); }
-  to   { height: calc(var(--vs-u) * 86); }
-}
-@keyframes vs-rise-in {
-  from { height: calc(var(--vs-g) * 12); }
-  to   { height: calc(var(--vs-u) * 58); }
-}
-@keyframes vs-rise-out {
-  from { height: calc(var(--vs-g) * 6); }
-  to   { height: calc(var(--vs-u) * 40); }
+@keyframes vs-lift {
+  0%   { transform: none; }
+  42%  { transform: translateY(calc(var(--vs-g) * -2.4)); }
+  74%  { transform: translateY(calc(var(--vs-g) * 0.3)); }
+  100% { transform: none; }
 }
 @keyframes vs-bloom-in {
   0%   { opacity: 0; transform: translate(-50%, -50%) scale(.66); animation-timing-function: var(--ease-out); }

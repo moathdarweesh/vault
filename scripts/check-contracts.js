@@ -2237,6 +2237,30 @@ const cssOwner = (i) => CSS_BLOCKS.reduce((best, b) => (b.open < i && b.close > 
       x += w + me + gap;
     }
     compare('the splash\'s first frame (styles.css .vs-n1….vs-n5)', bs, (b) => b.fill);
+
+    // …AND IT STAYS THE LOGO (owner, 2026-09-27: «السبلاش ليس الجمرة الذي اتفقنا
+    // عليه»). v403 kept the old phase-A keyframes, which grew each bolt to the
+    // five-bolt heights (86u / 58u / 40u): frame 0 was the barbell and 0.3 s later
+    // it was five tall bars again, held through the dwell. So every phase-A
+    // animation on the bolts or their row may move or fade the barbell, never
+    // re-shape it (no size, corner, colour or spacing property in any keyframe),
+    // and must end where it started, so phase B takes over the resting logo.
+    const SHAPE = /^(width|height|min-|max-|border-radius|background|margin|padding|gap|inset|top|bottom|left|right)/;
+    const kf = {};
+    for (const m of css.matchAll(/@keyframes\s+([\w-]+)\s*\{((?:[^{}]*\{[^{}]*\})*[^{}]*)\}/g)) {
+      kf[m[1]] = [...m[2].matchAll(/([\w%,\s.]+)\{([^{}]*)\}/g)].map(([, at, body]) => [at.trim(), decls(body)]);
+    }
+    const phaseA = rules.filter(([s]) => s.some((x) => /^\.vs-a \.vs-(n\d|mid|bolt|bolts|mark)$/.test(x)));
+    for (const [sels, a] of phaseA) {
+      for (const nm of String(a.animation || '').split(',').map((p) => p.trim().split(/\s+/)[0]).filter(Boolean)) {
+        const fr = kf[nm];
+        if (!fr) { problems.push(`the splash: ${sels.join(', ')} runs @keyframes ${nm}, which styles.css does not define`); continue; }
+        for (const [at, d] of fr) for (const p of Object.keys(d)) if (SHAPE.test(p)) problems.push(`the splash's phase A re-shapes the barbell: @keyframes ${nm} (${sels.join(', ')}) animates ${p} at ${at} — the logo must keep its shape until the door opens; move or fade it (transform / opacity), never resize it`);
+        const start = fr.find(([at]) => /(^|,)\s*(from|0%)\s*(,|$)/.test(at)), end = fr.find(([at]) => /(^|,)\s*(to|100%)\s*(,|$)/.test(at));
+        const norm = (d) => JSON.stringify(Object.fromEntries(Object.entries((d && d[1]) || {}).map(([k, v]) => [k, /^(none|1|translate\(0(px)?(, ?0(px)?)?\)|scale\(1\))$/.test(v) ? 'rest' : v])));
+        if (norm(start) !== norm(end)) problems.push(`the splash: @keyframes ${nm} ends somewhere other than where it starts (${norm(start)} → ${norm(end)}) — phase B must take over the resting logo`);
+      }
+    }
   }
 
   // The coloured surfaces agree on the fills, role by role, and a role wears one fill.

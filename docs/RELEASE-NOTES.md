@@ -2,6 +2,29 @@
 
 One section per release since v309, newest first, moved verbatim from `CLAUDE.md` in v401 (batch 6 of the 2026-09-25 review; `docs/REVIEW-2026-09-25.md`). `CLAUDE.md` is the guide and the authority for how the app works now. A section here records what one release changed and why, in the words written at the time, so a later section — or the guide — can supersede what an earlier one says.
 
+## v407 — the splash stays the barbell
+
+«تصميم السبلاش الابتدائي ليس الجمرة الذي اتفقنا عليه». It was not, after the
+first 0.3 s: v403 made frame 0 the ember barbell but kept the old phase-A
+keyframes, which grew each bolt from the glyph to the five-bolt heights (86u /
+58u / 40u). The barbell turned back into five tall bars — the shaft a white
+pillar — and held that shape through the dwell: the old splash in the new
+colours. Measured at 375 px: the shaft went from 18.8 × 12 px to 18.8 × 56 px.
+
+- Phase A is now ONE rep: the whole row lifts 2.4 glyph units and settles
+  (`vs-lift`, 560 ms from 120 ms — it ends at 680 ms, where the old rise did),
+  a rigid move, while the bloom comes up behind it. Measured frame by frame at
+  0/250/400/560/680/1000 ms: every bolt keeps its size (11.3×22.5, 15×45,
+  18.8×12 px), only the row's centre moves (406 → 398 → 407 → 406 px).
+- Frame 0, the hand-over to VAULT, the door and every timing are unchanged, so
+  the native launch PNGs (rendered from frame 0 in v403) still match.
+- **Contract 72 now refuses the regression**: every phase-A keyframe on a bolt
+  or its row may move or fade the barbell (transform / opacity) but never
+  resize, recolour or re-space it, and must end where it starts. Seen failing
+  on v406 with the three offending keyframes named (`vs-throw`, `vs-rise-in`,
+  `vs-rise-out` animate height).
+- docs/BRAND.md: the splash row says the barbell stays the barbell.
+
 ## v406 — the bug hunt on v403/v404: thirteen findings, each reproduced before it was fixed
 
 A read-only bug hunt on the logo and food-log releases returned no Critical and
