@@ -2381,5 +2381,57 @@ const cssOwner = (i) => CSS_BLOCKS.reduce((best, b) => (b.open < i && b.close > 
   contract(`the console cannot be framed and reads in stable pages: a frame-buster opens admin.html's script, ${ranges} .range() read${ranges === 1 ? '' : 's'} all ordered, client_errors/feedback/audit_log by keyset, a write reloads only its table, vault_data backed up ${blobPage || '?'} at a time`, problems);
 }
 
+// 73 — the instrument's motion lands inside motion.js's cleanup window. The
+// Cardio and Sleep heroes (v405) grow seven bars and then settle the figure,
+// every delay a token multiple: the last bar starts at 6 × --stagger-bar and
+// the figure at 6 × --stagger-bar + 40ms, each running --dur-fast. motion.js
+// drops `.enter` on a timer — steps × step + --dur-base + 120ms — and with the
+// class gone every rule scoped to it vanishes, so a settle still in flight at
+// that instant SNAPS to its static state: the exact flash the clamp comment
+// warns about, on the two screens whose motion is the point. The card's own
+// stagger term cancels against the host's `steps × step` (the hero is at most
+// the last real child), so what must hold is the remainder: the bar and the
+// figure offsets, plus their duration, inside --dur-base + 120. Both tokens
+// are read from :root, and the reduced-motion clamp must zero --stagger-bar
+// beside --stagger, or a reduced-motion user waits 216ms for bars that pop in
+// one by one at 0.01ms each. The Sleep hero's ring (the owner's mid-build
+// instruction: the food log's miniature) is held to the same window: the
+// ring draws, its two bars grow and its centre settles, each on the same
+// stagger term plus a --stagger-bar multiple.
+{
+  const problems = [];
+  const css = read('styles.css');
+  const tok = (name) => { const m = css.match(new RegExp('^[ \\t]*' + name + ':\\s*([\\d.]+)ms;', 'm')); return m ? parseFloat(m[1]) : NaN; };
+  const bar = tok('--stagger-bar'), fast = tok('--dur-fast'), base = tok('--dur-base');
+  if (!(bar >= 0)) problems.push('styles.css declares no --stagger-bar token in :root');
+  const slackM = src['js/motion.js'].match(/token\('--dur-base', \d+\) \+ (\d+);/);
+  const slack = slackM ? Number(slackM[1]) : NaN;
+  if (!slackM) problems.push("js/motion.js's cleanup window no longer reads `token('--dur-base', …) + N` — re-derive the window here");
+  const rule = (sel) => { const m = css.match(new RegExp(sel.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '\\s*\\{([^}]*)\\}')); return m ? m[1] : null; };
+  const fig = rule('.enter .trk-fig'), barRule = rule('.enter .trk-bar');
+  if (!fig) problems.push('styles.css has no `.enter .trk-fig` rule — the figure settle is not gated on the stagger host');
+  if (!barRule) problems.push('styles.css has no `.enter .trk-bar` rule — the bars do not grow on arrival');
+  const ringRules = ['.enter .slp-ring .cal-ring-fg', '.enter .slp-mini .macro-track-fill', '.enter .slp-ring .cal-ring-center'].map((sel) => [sel, rule(sel)]);
+  for (const [sel, body] of ringRules) if (!body) problems.push(`styles.css has no \`${sel}\` rule — the sleep ring's arrival is not gated on the stagger host`);
+  if (fig && barRule && Number.isFinite(slack) && bar >= 0) {
+    const delay = (body) => {
+      const m = body.match(/animation-delay:\s*calc\(min\(var\(--i,\s*0\),\s*5\)\s*\*\s*var\(--step,\s*var\(--stagger\)\)\s*\+\s*(?:(\d+)\s*\*\s*var\(--stagger-bar\)|var\(--k\)\s*\*\s*var\(--stagger-bar\))(?:\s*\+\s*(\d+)ms)?\)/);
+      if (!m) return null;
+      return (m[1] ? Number(m[1]) : 6) * bar + (m[2] ? Number(m[2]) : 0);   // --k runs 0…6: seven columns
+    };
+    const dur = (body) => { const m = body.match(/animation:\s*[\w-]+\s+var\((--dur-[a-z]+)\)/); return m ? tok(m[1]) : NaN; };
+    const window = base + slack;
+    for (const [name, body] of [['.enter .trk-fig', fig], ['.enter .trk-bar', barRule], ...ringRules.filter(([, b]) => b)]) {
+      const d = delay(body), len = dur(body);
+      if (d == null) { problems.push(`${name}: the animation-delay is not the stagger term plus a --stagger-bar multiple (and an optional literal ms)`); continue; }
+      if (!Number.isFinite(len)) { problems.push(`${name}: the animation duration is not a --dur-* token`); continue; }
+      if (d + len > window) problems.push(`${name} settles at ${d + len}ms after the card lands (${d}ms delay + ${len}ms), past motion.js's ${window}ms cleanup window (--dur-base ${base} + ${slack}) — the entrance would be cut off and snap`);
+    }
+  }
+  const clamp = css.slice(css.indexOf('@media (prefers-reduced-motion: reduce)'));
+  if (!/--stagger-bar:\s*0ms/.test(clamp)) problems.push('the reduced-motion clamp zeroes --stagger and --stagger-fast but not --stagger-bar — the bars would still arrive late, one by one, for the user who asked for less motion');
+  contract(`the instrument's bars and figure, and the sleep ring's draw, bars and centre, settle inside motion.js's cleanup window (--stagger-bar ${bar}ms, --dur-fast ${fast}ms, window --dur-base ${base}ms + ${Number.isFinite(slack) ? slack : '?'}ms), and the clamp zeroes the new token`, problems);
+}
+
 console.log(failures.length ? `\ncheck-contracts: ${failures.length} broken contract(s)` : '\ncheck-contracts: all contracts hold');
 process.exit(failures.length ? 1 : 0);

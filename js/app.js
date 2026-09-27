@@ -12,7 +12,7 @@
 // build. The literal below is the fallback (file://, or a stripped query) and is
 // still bumped by `npm run release` — see CLAUDE.md "CACHE WORKFLOW".
 const VAULT_BUILD = (() => {
-  const FALLBACK = 'v409';
+  const FALLBACK = 'v410';
   try {
     const src = (document.currentScript && document.currentScript.src) || '';
     const m = src.match(/[?&]v=(\d+)/);
@@ -5279,6 +5279,32 @@ function renderSettings(el) {
       </div>
     </section>
 
+    <!-- THE TWO GOALS (v405): the Cardio and Sleep heroes each carry a goal
+         button, and the same sheet (openGoalModal, js/body.js) is reachable
+         here so the 150 min / 8 h defaults read as settings, not verdicts. The
+         row's sub IS the value — the sheet opens on it. -->
+    <section class="settings-group">
+      <h2 class="settings-group-title">${t('set_g_goals')}</h2>
+      <div class="settings-section">
+        <button class="settings-action-row" data-goal="cardio">
+          <div class="settings-action-icon">${icon('heartPulse', 20)}</div>
+          <div class="settings-action-main">
+            <div class="settings-action-title">${t('cardio_goal_set')}</div>
+            <div class="settings-action-sub"><span class="num">${fmtNum(DB.prefs.cardioGoal())}</span> ${t('unit_min')}</div>
+          </div>
+          <span class="icon-mirror settings-action-chev">${icon('chevronRight', 16)}</span>
+        </button>
+        <button class="settings-action-row" data-goal="sleep">
+          <div class="settings-action-icon">${icon('moon', 20)}</div>
+          <div class="settings-action-main">
+            <div class="settings-action-title">${t('sleep_goal')}</div>
+            <div class="settings-action-sub"><span class="num">${formatDuration(DB.prefs.sleepGoal())}</span></div>
+          </div>
+          <span class="icon-mirror settings-action-chev">${icon('chevronRight', 16)}</span>
+        </button>
+      </div>
+    </section>
+
     <section class="settings-group">
       <h2 class="settings-group-title">${t('set_g_data')}</h2>
       <div class="settings-section">
@@ -5405,6 +5431,8 @@ function renderSettings(el) {
   }
 
   $('#notifications-btn', el)?.addEventListener('click', () => navigate('notifications'));
+  // The two goal rows open the body domain's one goal sheet; it repaints this view on save.
+  el.querySelectorAll('[data-goal]').forEach((b) => b.addEventListener('click', () => openGoalModal(b.dataset.goal)));
 
   // Feedback / suggestions
   $('#feedback-btn', el)?.addEventListener('click', showFeedback);

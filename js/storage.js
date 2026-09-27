@@ -391,6 +391,8 @@ function defaultState() {
       translateExercises: true,   // Arabic UI: transliterate built-in exercise names (kept for older readers)
       exNames: 'translit',        // 'translit' | 'ar' (translated) | 'en' — the one that decides since v299
       restSec: 90,                // guided run: default rest between sets, in seconds
+      cardioGoal: 150,            // minutes a week (the WHO's floor); the Cardio hero's pace line
+      sleepGoal: 480,             // minutes a night (8 h); the Sleep hero's line
     },
     exercises: [
       ...SEED_EXERCISES.map((e) => ({
@@ -1449,6 +1451,16 @@ const DB = {
     reviewOff() { return STATE.prefs.reviewOff === true; },
     setReviewOff(off) { STATE.prefs.reviewOff = !!off; save(); },
     setRestSec(sec) { const n = Math.round(Number(sec)); STATE.prefs.restSec = Number.isFinite(n) ? Math.min(600, Math.max(15, n)) : 90; save(); },
+    // THE TWO GOALS (v405) — the pace line on the Cardio hero and the line on
+    // the Sleep hero. Whole minutes, clamped where they are READ as well as
+    // where they are written: the value arrives from the synced blob and from
+    // imported backups, and an older blob has neither field, so absence is the
+    // default and no migration is needed. Edited from the hero's own goal
+    // button and from the Settings «goals» rows, through one sheet.
+    cardioGoal() { const n = Math.round(Number(STATE.prefs.cardioGoal)); return Number.isFinite(n) && n > 0 ? Math.min(1200, Math.max(30, n)) : 150; },
+    setCardioGoal(min) { const n = Math.round(Number(min)); STATE.prefs.cardioGoal = Number.isFinite(n) && n > 0 ? Math.min(1200, Math.max(30, n)) : 150; save(); },
+    sleepGoal() { const n = Math.round(Number(STATE.prefs.sleepGoal)); return Number.isFinite(n) && n > 0 ? Math.min(720, Math.max(240, n)) : 480; },
+    setSleepGoal(min) { const n = Math.round(Number(min)); STATE.prefs.sleepGoal = Number.isFinite(n) && n > 0 ? Math.min(720, Math.max(240, n)) : 480; save(); },
     // First-run welcome flow: true once the user has seen (or skipped) it.
     onboarded() { return !!(STATE.prefs && STATE.prefs.onboarded); },
     // Housekeeping: set during boot (app.js auto-flags existing users so an update

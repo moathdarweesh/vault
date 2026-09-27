@@ -66,10 +66,27 @@ const ICONS = {
   send: '<path d="M21.6 2.4 2.4 9.8l7.4 3.8Z" fill="currentColor"/><path d="M21.6 2.4 13.8 21.6l-3.8-7.4Z" fill="var(--icon-accent,#ff6a00)"/>',
 
   // ——— cardio & movement ———
-  run: '<path d="M14.6 7.6 8.4 11l2 3.8-4 6.4 2.8 1.6 4.6-7.2-1.4-2.6 3-1.6 3.4 2.2 1.6-2.6-4.2-2.8Z" fill="currentColor"/><circle cx="16.4" cy="4.6" r="2.7" fill="var(--icon-accent,#ff6a00)"/>',
-  walk: '<path d="M11.2 7.4 8 13.4l2.4 2.2-1.8 5.8 2.8.8 2.2-7-1.6-1.8 1.6-2.4 2.4 1.8 1.4 3.6 2.6-1-1.8-4.6Z" fill="currentColor"/><circle cx="13" cy="4.2" r="2.7" fill="var(--icon-accent,#ff6a00)"/>',
-  bike: '<path d="M5.6 12.4a4.6 4.6 0 1 0 0 9.2 4.6 4.6 0 0 0 0-9.2Zm0 2.6a2 2 0 1 1 0 4 2 2 0 0 1 0-4Z" fill="currentColor"/><path d="M18.4 12.4a4.6 4.6 0 1 0 0 9.2 4.6 4.6 0 0 0 0-9.2Zm0 2.6a2 2 0 1 1 0 4 2 2 0 0 1 0-4Z" fill="currentColor"/><path d="M9.2 5.6h4.6l4.8 10.6-2.2 1-4.2-9.2H9.2Z" fill="var(--icon-accent,#ff6a00)"/><path d="m12.6 7.4 2.4.6-2.6 8.8-2.4-.7Z" fill="var(--icon-accent,#ff6a00)"/>',
-  treadmill: '<path d="M4.6 13.6h10.8a3.4 3.4 0 0 1 0 6.8H4.6a3.4 3.4 0 0 1 0-6.8Z" fill="currentColor"/><path d="M16.6 17.4V6.4h-4.4V4h6.8v13.4Z" fill="var(--icon-accent,#ff6a00)"/>',
+  // The four cardio glyphs were redrawn at v405 (the owner circled the tiles:
+  // «الأيقونات ليش كذا؟»). The stick figures read as smudges at 18px; these
+  // are silhouettes he can name at that size. walk and run are ONE family, a
+  // side-view trainer (toe forward, heel counter, collar dip) — the first
+  // footprint drawing read as two pills at 18px and «run» as a filter menu, so
+  // the review asked for a shoe: walk = the trainer planted flat, its sole in
+  // accent 2 units under the upper; run = the same trainer, shorter, with
+  // three ink speed bars trailing 2 units behind the heel — the bars are the
+  // only difference, so the sole is accent on both (the tipped v405 run was
+  // drawn through rotate(-22)/scale(0.76): it left the grid, anti-aliased
+  // softer than its neighbours, and its heel painted to y≈25.1, past the
+  // viewBox, where the svg's own overflow clipped it). bike = two heavy rings
+  // (r 5, counter r 2.4) with a 2-unit Λ frame whose feet land on the rims,
+  // clear of both counters, and an accent saddle 2 units over its apex;
+  // treadmill = a deck, a flat un-rounded post and an accent console. Every
+  // glyph is drawn in grid coordinates, no transform (test-cardio-sleep-ui.js
+  // hit-tests each inside 0..24). No stroke, no circle head.
+  run: '<path d="M7 15.6V7.8c0-.9.7-1.6 1.6-1.6h2.4c.5 0 1 .2 1.3.6l1.7 2.4c.3.4.8.6 1.3.6h1.2l3.9 1.8c1.6.7 2.6 1.8 2.6 3.4v.6Z" fill="currentColor"/><rect x="7" y="17.6" width="16" height="2.8" rx="1.2" fill="var(--icon-accent,#ff6a00)"/><rect x="1" y="8" width="4" height="2" rx="0.8" fill="currentColor"/><rect x="1.6" y="12" width="3.4" height="2" rx="0.8" fill="currentColor"/><rect x="2.2" y="16" width="2.8" height="2" rx="0.8" fill="currentColor"/>',
+  walk: '<path d="M3 15.6V7.8c0-.9.7-1.6 1.6-1.6h3.2c.5 0 1 .2 1.3.6l2.1 2.8c.3.4.8.6 1.3.6h1.9l5.3 2.2c1.8.8 3.3 2 3.3 3.8v.2Z" fill="currentColor"/><rect x="3" y="17.6" width="19" height="2.8" rx="1.2" fill="var(--icon-accent,#ff6a00)"/>',
+  bike: '<path d="M6 11a5 5 0 1 0 0 10 5 5 0 0 0 0-10Zm0 2.6a2.4 2.4 0 1 1 0 4.8 2.4 2.4 0 0 1 0-4.8Z" fill="currentColor"/><path d="M18 11a5 5 0 1 0 0 10 5 5 0 0 0 0-10Zm0 2.6a2.4 2.4 0 1 1 0 4.8 2.4 2.4 0 0 1 0-4.8Z" fill="currentColor"/><path d="M12 8l4.6 4.6-1.4 1.4L12 10.8l-3.2 3.2-1.4-1.4Z" fill="currentColor"/><rect x="8.6" y="3.6" width="6.8" height="2.4" rx="1" fill="var(--icon-accent,#ff6a00)"/>',
+  treadmill: '<rect x="2" y="16" width="20" height="5.2" rx="2" fill="currentColor"/><path d="M17.2 8h2.8v8h-2.8Z" fill="currentColor"/><rect x="13.2" y="2.4" width="8.4" height="3.2" rx="1.2" fill="var(--icon-accent,#ff6a00)"/>',
   columns: '<rect x="3.4" y="3.4" width="6.4" height="17.2" rx="2.6" fill="currentColor"/><rect x="14.2" y="9.4" width="6.4" height="11.2" rx="2.6" fill="var(--icon-accent,#ff6a00)"/>',
 
   // ——— data & body ———

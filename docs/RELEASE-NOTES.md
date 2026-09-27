@@ -2,6 +2,53 @@
 
 One section per release since v309, newest first, moved verbatim from `CLAUDE.md` in v401 (batch 6 of the 2026-09-25 review; `docs/REVIEW-2026-09-25.md`). `CLAUDE.md` is the guide and the authority for how the app works now. A section here records what one release changed and why, in the words written at the time, so a later section — or the guide — can supersede what an earlier one says.
 
+## v410 — cardio and sleep redesigned: one instrument each, a ring for the night, new cardio icons
+
+«إعادة تصميم جذرية … مودرن وأحلى وفخم … عملي وأسهل وأنميشن» for the Cardio
+and Sleep pages, and «هذا بالذات الأيقونات ليش كذا؟ غيّرها وحسّنها» for the cardio
+type picker; then, mid-build, «نفس التغيير الذي حصل بصفحة الأكل يحصل هنا» for
+Sleep. Three design directions were written independently and scored by three
+judges (reaction, practicality, identity, animation, icons, feasibility):
+**THE INSTRUMENT** won (49.7 against 44.5 and 42), with grafts from the other two.
+Built in an isolated worktree with a failing-first suite, reviewed twice
+(code + browser QA, 20 findings, then 21 more), fixed and polished.
+
+- **Cardio: one instrument card.** The eyebrow and the three stat boxes are gone:
+  the week's range and an S-size goal button («الهدف الأسبوعي 150 د», new
+  `DB.prefs` cardio goal, default 150 min — WHO), the week's minutes as one mono
+  figure with what is left or met, the sessions and calories as labelled
+  readouts, and a SEVEN-WELL track (one well per day, a day with two sessions
+  shows two stacked segments with a seam, the pace line flat across, future
+  days dimmed, one long session cannot flatten the week — the scale is capped).
+  The «سجّل» button carries the last-used type's glyph and opens on it.
+- **Sleep: the food log's ring.** One card: a 144 px ring filled by last night
+  against the sleep goal (new `DB.prefs` sleep goal, default 8 h; the ring never
+  turns red — sleeping less is information, not an error), the duration in the
+  centre with its verdict («دون الهدف بـ0:45» / «فوق الهدف بـ…» / «على الهدف»),
+  and beside it the 7-night average with its delta, and «عميق» and «كفاءة النوم»
+  as two short bars when the night has stages; the quality word sits in the
+  caption. No night yet: an empty ring and the log button. The sleep sheet
+  opens on last night's times. Stacks below 360 px (375 px with Larger text);
+  every centre line measured against the ring's chord in both languages.
+- **Goals in Settings too**: a «الأهداف» group («هدف الكارديو الأسبوعي», «هدف
+  النوم»), the same sheet as the hero buttons, with a range check that keeps
+  the sheet open and says why; both goals travel in backups.
+- **The cardio type picker**: tiles as radios (aria-checked, the node kept so
+  the selection tint animates), a solid accent plate for the chosen type, and
+  the four glyphs REDRAWN from scratch: walk and run as one trainer family (flat
+  with an accent sole / tipped onto the toe with three accent speed bars), the
+  bike as an A-frame over two thick rings with an accent saddle, the treadmill
+  as a deck and post with an accent console — two masses each, no stroke,
+  checked at 18/22/64 px on dark, light and the accent plate.
+- **Motion**: arrival only, scoped to `.enter`: the wells grow, the ring draws,
+  the figure settles; reduced motion lands on the same end state. Contract 73
+  holds that every piece settles inside motion.js's cleanup window.
+- **Checks**: new suite `scripts/test-cardio-sleep-ui.js` (34 cases, AR/dark +
+  EN/light) failed first on v404's pages; contract 73; test-i18n rule 16 covers
+  the goal hints. Fingerprint net: only cardio, sleep and settings view cells and
+  the cardio/sleep/goal sheets differ.
+- Gate: 70 contracts, 18 suites.
+
 ## v409 — the door: no word, it opens from the vertical middle, the page drops in
 
 «ما تطلع كلمة VAULT فيه، ما لها داعي … الشعار والأنميشن من النصف الطولي يفتح،

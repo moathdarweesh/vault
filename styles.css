@@ -257,6 +257,11 @@
      6 x 140ms = 840ms for a list to finish appearing, each item snapping in at
      0.01ms — motion removed, but the WAIT kept, which is the worse half. */
   --stagger:   140ms;
+  /* The instrument's bars (v405): one step per column of the seven-well track,
+     so the last bar starts 216ms after its card lands. A token for the same
+     reason --stagger is — the clamp flattens durations, never delays, so it
+     is zeroed by name in the reduced-motion block below. */
+  --stagger-bar: 36ms;
 
   --dur-press: var(--dur-tap);   /* alias — the same 120ms under its older name */
   --dur:       200ms;
@@ -2116,13 +2121,16 @@ button.schedule-prev-row { width: 100%; min-height: var(--btn-h-m); font: inheri
   flex-shrink: 0;
 }
 
-.data-icon.treadmill { background: var(--cat-back-bg); color: var(--cat-back); }
-.data-icon.walking   { background: var(--cat-legs-bg); color: var(--cat-legs); }
-.data-icon.running   { background: var(--cat-chest-bg); color: var(--cat-chest); }
-.data-icon.cycling   { background: var(--cat-cardio-bg); color: var(--cat-cardio); }
+/* ONE accent (v405): the four cardio tiles and the sleep tile wore borrowed
+   muscle hues — a green walk, a cyan bike — so a page that is meant to carry
+   one hue carried five. They are neutral wells now, and the glyph's accent
+   mass is the only colour: the pictogram, not a tint, tells walk from bike.
+   A user-made cardio type (.cardio-custom) sits in the same well: tinted, it
+   was the one coloured tile in a list, so the generic glyph drew the eye.
+   (.custom stays the personal-record trophy's accent tile.) */
+.data-icon.treadmill, .data-icon.walking, .data-icon.running, .data-icon.cycling, .data-icon.cardio-custom, .data-icon.sleep { background: var(--surface-3); color: var(--text); }
 .data-icon.custom    { background: var(--accent-soft); color: var(--accent-text); }
 .data-icon.food      { background: var(--cat-arms-bg); color: var(--cat-arms); }
-.data-icon.sleep     { background: var(--cat-shoulders-bg); color: var(--cat-shoulders); }
 .data-icon.workout   { background: var(--cat-legs-bg); color: var(--cat-legs); }
 
 .data-actions {
@@ -2511,37 +2519,44 @@ button.schedule-prev-row { width: 100%; min-height: var(--btn-h-m); font: inheri
   font-variant-numeric: tabular-nums;
   letter-spacing: -0.01em;
 }
+/* The sleep sheet's live total (v405): on the scale, not an 18px literal. */
+.sleep-total-fig { font-size: var(--fs-h2); letter-spacing: var(--tracking-tight); }
+/* The sleep goal sheet: the hours typed («7.5») read back as H:MM, the way the
+   goal is shown on the hero and in Settings. */
+.goal-live { font-size: var(--fs-sub); font-weight: 700; color: var(--text-mute); margin-top: var(--sp-1h); }
 
 /* =========================================================================
    TYPE SELECTOR (cardio type)
    ========================================================================= */
-/* Two columns, not three. The four built-in types filled a 3-column grid as
-   3 + 1, leaving a hole beside the last one and stranding the "+ new type" tile
-   in the middle of row two. Two columns fills evenly and gives each card room. */
+/* Four columns (v405): the four built-in types fill ONE row of square tiles
+   (~66px each inside the 360px sheet); custom types flow to a second row. The
+   grid holds only OPTIONS — the add control is a bordered S action on its own
+   line under it (.type-option-add), so it never strands itself in a hole. */
 .type-selector {
   display: grid;
-  grid-template-columns: repeat(2, 1fr);
-  gap: 8px;
+  grid-template-columns: repeat(4, 1fr);
+  gap: var(--sp-2);
 }
-/* The add tile is an ACTION, not a fifth type: full width, on its own row. */
-.type-option.type-option-add {
-  grid-column: 1 / -1;
-  flex-direction: row;
-  justify-content: center;
-  padding: 12px 8px;
+/* The .bento-add / .ledger-add precedent: a dashed edge IS «this slot is
+   empty, add one». S size; the halo reaches 44 on a 36px row (a 1px border
+   costs the halo 2px, so -5). It says «نوع جديد» — the sheet is already the
+   cardio sheet — and carries the full name for a reader. */
+.type-option-add {
+  position: relative;
+  display: inline-flex; align-items: center; gap: var(--sp-1h);
+  margin-top: var(--sp-2h); height: var(--btn-h-s); padding: 0 var(--sp-3);
+  border: 1px dashed var(--border-hi); border-radius: var(--radius-btn-s);
+  background: transparent; color: var(--text-mute);
+  font: inherit; font-size: var(--fs-btn-s); font-weight: 700; cursor: pointer;
+  appearance: none; -webkit-appearance: none; -webkit-tap-highlight-color: transparent;
+  transition: transform var(--dur-tap) var(--ease-out), color var(--dur-fast) var(--ease-out), border-color var(--dur-fast) var(--ease-out);
 }
-
-/* "+ New cardio type" tile that lives at the end of the type selector */
-.type-option.type-option-add {
-  border-style: dashed;
-  border-color: var(--border-hi);
-  color: var(--text-mute);
-}
+.type-option-add::after { content: ''; position: absolute; inset: -5px 0; }
+.type-option-add svg { width: 16px; height: 16px; flex-shrink: 0; color: var(--accent-text); }
+.type-option-add:active { transform: scale(var(--press-scale)); }
 @media (hover: hover) {
-  .type-option.type-option-add:hover { border-color: var(--accent-line); color: var(--accent-text); background: var(--accent-soft); }
+  .type-option-add:hover { border-color: var(--accent-line); color: var(--accent-text); }
 }
-.type-option.type-option-add svg { color: var(--text-mute); }
-@media (hover: hover) { .type-option.type-option-add:hover svg { color: var(--accent-text); } }
 
 /* Icon picker chips inside the new-cardio-type modal */
 /* gap 8, not 6: each chip's halo reaches 4px out, so at 6px two halos overlap
@@ -2551,9 +2566,12 @@ button.schedule-prev-row { width: 100%; min-height: var(--btn-h-m); font: inheri
   grid-template-columns: repeat(5, 1fr);
   gap: 6px;
 }
+/* The same pulled-back duotone and the same solid plate as .type-option
+   (v405), so both pickers speak one selected state. */
 .cardio-icon-chip {
+  --icon-accent: var(--text-dim);
   background: var(--surface-2);
-  border: 1px solid var(--border);
+  border: 1px solid var(--border-hi);
   border-radius: var(--radius-btn-s);
   padding: 8px;
   position: relative;
@@ -2561,15 +2579,15 @@ button.schedule-prev-row { width: 100%; min-height: var(--btn-h-m); font: inheri
   align-items: center;
   justify-content: center;
   color: var(--text-mute);
-  transition: background-color 0.15s, border-color 0.15s, color 0.15s, transform 0.12s;
+  transition: background-color var(--dur-fast) var(--ease-out), border-color var(--dur-fast) var(--ease-out), color var(--dur-fast) var(--ease-out), transform var(--dur-tap) var(--ease-out);
 }
 /* 38px drawn - 2px of border = 36px of padding box; -4px each side is 44. */
 .cardio-icon-chip::after { content: ''; position: absolute; inset: -4px; }
 .cardio-icon-chip svg { width: 20px; height: 20px; }
 .cardio-icon-chip.active {
-  background: var(--accent-soft);
-  border-color: var(--accent-line);
-  color: var(--accent-text);
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--accent-ink);
 }
 @media (hover: hover) { .cardio-icon-chip:hover { border-color: var(--border-hi); } }
 
@@ -2596,41 +2614,58 @@ button.schedule-prev-row { width: 100%; min-height: var(--btn-h-m); font: inheri
   box-shadow: var(--elev-3);
 }
 
+/* THE TILE (v405): a bordered radio (interactive → --border-hi) at the
+   container radius, exactly its well plus its label plus padding — a two-line
+   custom name grows its row and never clips. The well is a leaf (--radius-sm
+   inside --radius). Idle, the duotone is pulled back the way the nav does it
+   (--icon-accent: --text-dim under a --text-mute base), so an idle tile is two
+   greys and the one orange on the sheet is the chosen one. The press is a
+   key, not a card: down in --dur-tap, the return on the same curve. */
 .type-option {
+  --icon-accent: var(--text-dim);
   background: var(--surface-2);
-  border: 1px solid var(--border);
+  border: 1px solid var(--border-hi);
   border-radius: var(--radius);
-  padding: 14px 8px;
+  padding: var(--sp-2h) var(--sp-1);
+  min-height: 0;
+  min-width: 0;
   text-align: center;
+  color: var(--text-mute);
+  cursor: pointer;
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 6px;
-  transition: background-color 0.15s, border-color 0.15s, color 0.15s, transform 0.12s;
+  gap: var(--sp-1h);
+  transition: transform var(--dur-tap) var(--ease-out), background-color var(--dur-fast) var(--ease-out), border-color var(--dur-fast) var(--ease-out), color var(--dur-fast) var(--ease-out);
 }
+.type-option:active { transform: scale(var(--press-scale)); }
 
+/* The tint spreads: on aria-checked the well crossfades from --surface-3 to
+   the solid accent plate as the tile's own fill goes to --accent-soft and its
+   edge to --accent-line — three surfaces in one beat, driven by setChosen
+   toggling .active on a node that STAYS. The collapse of the duotone to one
+   ink mass on that plate is the identity layer's rule (its solid-fill list). */
 .type-option-icon {
-  width: 40px; height: 40px; border-radius: 12px;
-  display: flex; align-items: center; justify-content: center;
+  width: var(--btn-h-s); height: var(--btn-h-s); border-radius: var(--radius-sm);
+  display: grid; place-items: center; flex-shrink: 0;
   background: var(--surface-3);
-  color: var(--text-mute);
-  transition: background .15s, color .15s;
+  transition: background-color var(--dur-fast) var(--ease-out), color var(--dur-fast) var(--ease-out);
 }
 .type-option svg { width: 22px; height: 22px; }
-.type-option.active .type-option-icon { background: var(--accent-soft, var(--surface-2)); color: var(--accent-text); }
-.type-option-add svg { width: 20px; height: 20px; color: var(--text-mute); }
-
-.type-option.active {
-  border-color: var(--accent-line);
-  background: var(--accent-soft);
-  color: var(--accent-text);
-}
-.type-option.active svg { color: var(--accent-text); }
+.type-option.active { border-color: var(--accent-line); background: var(--accent-soft); }
+.type-option.active .type-option-label { color: var(--accent-text); }
+.type-option.active .type-option-icon { background: var(--accent); color: var(--accent-ink); }
+/* On the sheet's first paint the checked tile's glyph settles from .85 —
+   «this is the one» read before the first tap. Zeroed under reduced motion. */
+@keyframes ed-pick { from { transform: scale(.85); } to { transform: none; } }
+.type-option.ed-pick .type-option-icon { animation: ed-pick var(--dur-fast) var(--ease-back) both; }
 
 .type-option-label {
   font-size: var(--fs-meta);
   font-weight: 700;
-  letter-spacing: -0.01em;
+  color: var(--text-mute);
+  max-width: 100%;
+  overflow-wrap: anywhere;
 }
 
 /* =========================================================================
@@ -4859,16 +4894,6 @@ button.bundle-main {
 /* =========================================================================
    SLEEP STAGES (from Health Connect)
    ========================================================================= */
-.sleep-detail {
-  background: var(--card-bg); border: var(--card-border);
-  border-radius: var(--radius); padding: 14px 14px 12px; margin-bottom: 16px;
-}
-.sleep-detail-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
-.sleep-detail-title { font-size: var(--fs-sub); font-weight: 700; }
-.sleep-quality { font-size: var(--fs-caption); font-weight: 700; padding: 3px 9px; border-radius: 999px; }
-.sleep-quality.q-excellent { background: var(--up-bg); color: var(--up); }
-.sleep-quality.q-good { background: var(--cat-back-bg); color: var(--cat-back); }
-.sleep-quality.q-fair { background: var(--cat-arms-bg); color: var(--cat-arms); }
 .sl-bar { display: flex; height: 12px; border-radius: 999px; overflow: hidden; background: var(--surface-3); }
 .sl-seg { display: block; height: 100%; }
 /* APPLY-vault.md §4 (sleep): orange for deep, mid grey for light, dark grey for
@@ -4883,37 +4908,11 @@ button.bundle-main {
 .sl-seg.rem   { background: color-mix(in srgb, var(--accent) 55%, var(--surface-3)); }
 .sl-seg.light { background: var(--text-dim); }
 .sl-seg.awake { background: var(--surface-3); }
-.sl-dot.deep  { background: var(--accent); }
-.sl-dot.rem   { background: color-mix(in srgb, var(--accent) 55%, var(--surface-3)); }
-.sl-dot.light { background: var(--text-dim); }
-.sl-dot.awake { background: var(--surface-3); }
 
-/* The one card the screen opens on: last night, big enough to read at a glance.
-   34px is the ladder's top rung and the spec's number. */
-.sleep-hero { padding: var(--sp-4); margin-bottom: var(--sp-3); }
-.sleep-hero-label { font-size: calc(12.5px * var(--fs-scale)); font-weight: 600; color: var(--text-mute); }
-.sleep-hero-dur {
-  font-family: 'JetBrains Mono', monospace;
-  font-size: calc(34px * var(--fs-scale)); font-weight: 700; line-height: 1.1;
-  color: var(--text); margin: 6px 0 var(--sp-3);
-}
-/* Two classes deep, because the hero passes {compact:true} to reuse the bar
-   without its legend, and `.sl-bar-wrap .sl-bar` pins that to 6px. A 6px ribbon
-   under a 34px numeral reads as a hairline; this is the card's second element,
-   so it gets the full height. */
-.sleep-hero .sl-bar-wrap .sl-bar { height: 12px; }
-.sleep-hero .sl-bar-wrap { margin-top: 0; }
-.sleep-hero-times {
-  display: flex; align-items: center; gap: 10px;
-  margin-top: var(--sp-3); font-size: var(--fs-sub); color: var(--text-mute);
-}
-.sleep-hero-times .num { color: var(--text); }
-.sleep-mini { display: grid; grid-template-columns: 1fr 1fr; gap: var(--sp-3); margin-bottom: var(--sp-4); }
-.sleep-mini-card { padding: var(--sp-4); }
-.sleep-mini-label { font-size: calc(12.5px * var(--fs-scale)); font-weight: 600; color: var(--text-mute); }
-.sleep-mini-value { font-family: 'JetBrains Mono', monospace; font-size: calc(22px * var(--fs-scale)); font-weight: 700; color: var(--text); margin-top: 4px; }
-.sl-bar-wrap { margin-top: 8px; }
-.sl-bar-wrap .sl-bar { height: 6px; }
+/* The v389 .sleep-hero card, the .sleep-mini pair and the stage legend card
+   went at v405: last night is the ring of .slp-mini (the component block above
+   the identity banner), and the stage bar survives only as a ledger row's
+   bottom edge (.sl-edge). */
 
 /* THE FIGURE ROW (v394 sleep → v395 every .data-row) — the number first.
    [figure][title / sub][one square]: the row's figure at title size in the
@@ -4960,14 +4959,6 @@ button.data-row.fig-row {
 .fig-row-tile { width: 36px; height: 36px; border-radius: var(--radius-sm); }
 .fig-row-tile svg { width: 18px; height: 18px; }
 .sl-edge { height: 4px; border-radius: 0; }
-.sl-legend { display: grid; grid-template-columns: repeat(2, 1fr); gap: 6px 14px; margin-top: 12px; }
-.sl-leg-item { display: flex; align-items: center; gap: 8px; font-size: var(--fs-meta); }
-.sl-dot { width: 9px; height: 9px; border-radius: 3px; flex-shrink: 0; }
-/* .sl-dot colours live with the .sl-seg bars above — one source, so the
-   legend can never name a different colour than the bar it explains. */
-.sl-leg-label { color: var(--text-mute); }
-.sl-leg-val { margin-inline-start: auto; font-weight: 700; color: var(--text); }
-.sleep-eff { font-size: var(--fs-meta); color: var(--text-mute); margin-top: 12px; }
 
 /* =========================================================================
    NUTRITION DASHBOARD (Food tab)
@@ -6594,7 +6585,7 @@ body[data-view="food"] .food-fab { display: inline-flex; }
     --dur-tap: 0ms; --dur-fast: 0ms; --dur-base: 0ms;
     --dur-open: 0ms;
     --dur: 0ms; --dur-slow: 0ms;
-    --stagger: 0ms; --stagger-fast: 0ms;   /* the delay the clamp cannot reach — see the note at :root */
+    --stagger: 0ms; --stagger-fast: 0ms; --stagger-bar: 0ms;   /* the delays the clamp cannot reach — see the note at :root */
   }
   *, *::before, *::after {
     animation-duration: 0.01ms !important;
@@ -8797,6 +8788,198 @@ body.ember-on .ember {
 .settings-group > .settings-section:first-of-type > .section-title { margin-top: 12px; }
 
 /* =========================================================================
+   THE INSTRUMENT (v405) — the Cardio hero, and the caption row + goal
+   control the Sleep ring shares. ONE card: a caption row (the week's range
+   and the goal control), a mono figure with its delta, the readouts that used
+   to be stat boxes, and a seven-column track (trackHtml, js/body.js) whose
+   bars are formed by the data and coloured by state — accent when a day
+   reached the pace line, --surface-3 when it did not, an empty well when
+   nothing was logged — with the goal drawn as one flat bar of the mark
+   across it. (The Sleep hero is the food log's ring: .slp-mini, below.)
+
+   The identity, item by item: flat edges (wells and bars radius 0, the line
+   var(--bar-w)); no border on the card, the wells or the labels — the goal
+   button is the one bordered thing here and it is the one tappable thing;
+   every radius a token; every size on the type scale; ONE hue; both themes
+   through tokens; RTL through logical properties, the two transform-origin
+   overrides being the one property with no logical form. The well height is
+   the one literal, declared once as --trk-h. The box fits what is in it:
+   nothing here is padded to a height.
+   ========================================================================= */
+.trk-hero { padding: var(--sp-4); margin-bottom: var(--sp-4); }
+.trk-cap {
+  display: flex; align-items: center; justify-content: space-between; gap: var(--sp-2);
+  min-height: var(--btn-h-s);
+}
+.trk-range, .trk-cap-lab { font-size: var(--fs-caption); font-weight: 700; color: var(--text-mute); min-width: 0; }
+.trk-cap-lab { text-transform: uppercase; letter-spacing: var(--tracking-caps); }
+
+/* The goal control: the S size exactly, and BORDER MEANS INTERACTIVE. */
+.trk-goal-btn {
+  flex-shrink: 0;
+  display: inline-flex; align-items: center; gap: var(--sp-1);
+  height: var(--btn-h-s); padding: 0 var(--sp-3);
+  border: 1px solid var(--border-hi); border-radius: var(--radius-btn-s);
+  background: var(--surface-2); color: var(--text);
+  font: inherit; font-size: var(--fs-btn-s); font-weight: 700; white-space: nowrap; cursor: pointer;
+  appearance: none; -webkit-appearance: none; -webkit-tap-highlight-color: transparent;
+  transition: transform var(--dur-tap) var(--ease-out), background-color var(--dur-fast) var(--ease-out);
+}
+.trk-goal-btn:active { transform: scale(var(--press-scale)); background: var(--surface-3); }
+/* 36px is the S size; the halo carries the 44px target (1px border → -5). */
+.trk-goal-btn { position: relative; }
+.trk-goal-btn::after { content: ''; position: absolute; inset: -5px 0; }
+
+/* The figure line: the number at the hero size, its unit at baseline, the
+   computed delta (remaining / short by / met) at the end. */
+.trk-fig { display: flex; align-items: flex-end; justify-content: space-between; gap: var(--sp-3); margin-top: var(--sp-3); }
+.trk-val { display: inline-flex; align-items: baseline; min-width: 0; }
+.trk-num { font-size: var(--fs-hero); font-weight: 700; line-height: 1; letter-spacing: var(--tracking-tight); color: var(--text); }
+.trk-unit { font-size: var(--fs-sub); font-weight: 700; color: var(--text-mute); margin-inline-start: var(--sp-1); }
+.trk-deltas { display: flex; flex-direction: column; align-items: flex-end; gap: 2px; min-width: 0; text-align: end; }
+.trk-delta { font-size: var(--fs-meta); font-weight: 700; color: var(--text-mute); }
+.trk-delta.is-met { color: var(--accent-text); }
+
+/* The readouts — the stat boxes that survive, as figures, not boxes. */
+.trk-readouts { display: flex; flex-wrap: wrap; gap: var(--sp-2) var(--sp-5); margin-top: var(--sp-3); }
+.trk-ro { display: inline-flex; align-items: baseline; gap: var(--sp-1h); }
+.trk-ro-val { font-size: var(--fs-label); font-weight: 700; color: var(--text); }
+.trk-ro-lab { font-size: var(--fs-meta); color: var(--text-mute); }
+
+/* THE TRACK. Seven wells of the field; a bar is a bar of the field, not a
+   chip. The goal line is the first child (z-index lifts it over the bars) so
+   the wells stay addressable by position. */
+.trk-bars {
+  --trk-h: 56px;
+  /* The well is a step toward the GROUND from the card, in both themes: dark's
+     card is --surface-2, so --surface-2 wells vanished into it (measured: one
+     rgb value); the black ground reads as a recess there, and light's card is
+     --surface-1, so its wells are --surface-2. The idle bar (--surface-3)
+     stands on either. */
+  --trk-well: var(--bg);
+  position: relative;
+  display: grid; grid-template-columns: repeat(7, 1fr); gap: var(--sp-1h); align-items: end;
+  height: var(--trk-h); margin-top: var(--sp-4);
+}
+.trk-col { position: relative; display: block; height: 100%; background: var(--trk-well); border-radius: 0; }
+body.theme-light .trk-bars { --trk-well: var(--surface-2); }
+/* A day still to come: the well and its label step back, so it does not read
+   as a day with nothing logged (the aria-label omits it). */
+/* A day still to come: its WELL is dimmed. The label keeps --text-dim at
+   full strength — at 0.5 it blended to ~2.4:1, under even the 3:1 floor. */
+.trk-col.is-future { opacity: 0.5; }
+.trk-bar { position: absolute; inset-inline: 0; bottom: var(--b, 0%); height: var(--v, 0%); background: var(--surface-3); border-radius: 0; }
+.trk-bar.is-hit { background: var(--accent); }
+/* Two sessions in one well: a seam in the WELL's own colour between them. */
+.trk-bar + .trk-bar { box-shadow: 0 var(--bar-w) 0 var(--trk-well); }
+.trk-goal { position: absolute; inset-inline: 0; height: var(--bar-w); background: var(--text-mute); pointer-events: none; z-index: 1; }
+/* The week closed on its goal: the line and today's label lift to the accent,
+   so the track visibly closes instead of leaving grey days under a met goal. */
+.trk-bars.is-met .trk-goal { background: var(--accent); }
+.trk-days { display: grid; grid-template-columns: repeat(7, 1fr); gap: var(--sp-1h); margin-top: var(--sp-1h); }
+.trk-day { font-size: var(--fs-caption); font-weight: 700; color: var(--text-dim); text-align: center; white-space: nowrap; min-width: 0; }
+.trk-day.is-today { color: var(--text); }
+.trk-bars.is-met + .trk-days .trk-day.is-today { color: var(--accent-text); }
+
+/* ARRIVAL — all of it scoped to the stagger host's `.enter`, which motion.js
+   removes on its timer (or at once on a re-render), so with the class gone
+   these rules vanish and the static styles above are what the fingerprint
+   net reads. --i is the card's own index, inherited; --k is the bar's column.
+   The bars grow up to a goal line that has already drawn (it finishes as the
+   last bar starts), and the figure settles last, as the seventh bar lands.
+   Contract 73 holds the sum of these delays inside motion.js's window. */
+.enter .trk-bar {
+  transform-origin: 50% 100%;
+  transform: scaleY(0);
+  animation: trk-grow var(--dur-fast) var(--ease-out) both;
+  animation-delay: calc(min(var(--i, 0), 5) * var(--step, var(--stagger)) + var(--k) * var(--stagger-bar));
+}
+@keyframes trk-grow { to { transform: none; } }
+.enter .trk-goal {
+  transform-origin: 0 50%;
+  transform: scaleX(0);
+  animation: trk-line var(--dur-base) var(--ease-out) both;
+  animation-delay: calc(min(var(--i, 0), 5) * var(--step, var(--stagger)));
+}
+/* transform-origin has no logical keyword: the one sanctioned dir override. */
+body[dir="rtl"] .enter .trk-goal { transform-origin: 100% 50%; }
+@keyframes trk-line { to { transform: none; } }
+.enter .trk-fig {
+  opacity: 0;
+  transform: translateY(6px);
+  animation: vlt-enter var(--dur-fast) var(--ease-out) both;
+  animation-delay: calc(min(var(--i, 0), 5) * var(--step, var(--stagger)) + 6 * var(--stagger-bar) + 40ms);
+}
+
+/* =========================================================================
+   THE SLEEP RING (v405 — the owner, mid-build: «أريد نفس التغيير الذي حصل
+   بصفحة الأكل يحصل هنا من ناحية التصميم»). The food log's miniature
+   (.nutri-mini) for last night: ONE card, the caption row the instrument
+   uses (.trk-cap + the S goal button), then a 144px ring beside compact rows
+   in the .macro-track idiom. The ring is the calorie ring's own classes at
+   the miniature's stroke; its fill is last night against the goal, clamped
+   at the goal and never --danger. The centre is the duration and ONE verdict
+   line («دون الهدف بـ0:30»): nowrap, because a verdict broken across the
+   stroke is the failure scripts/test-cardio-sleep-ui.js measures against the
+   inner chord at 375/360/340 × normal/«Larger text», AR and EN. Under 360px
+   (under 375px with «Larger text») the ring stacks above the rows, as the
+   miniature does on the narrowest phones. The bars are bars of the field:
+   flat, one hue. Nothing here is padded to a height.
+   ========================================================================= */
+.slp-mini { padding: var(--sp-3) var(--sp-4) var(--sp-4); margin-bottom: var(--sp-4); }
+.slp-q { color: var(--accent-text); }
+.slp-body { display: flex; align-items: center; gap: var(--sp-4); margin-top: var(--sp-2); }
+.slp-ring { position: relative; width: 144px; height: 144px; flex-shrink: 0; }
+.slp-ring .cal-ring-bg, .slp-ring .cal-ring-fg { stroke-width: 9; }
+/* A zero fill with a round cap still paints a dot at twelve o'clock. */
+.slp-ring .cal-ring-fg.is-empty { stroke-linecap: butt; }
+.slp-ring .cal-ring-num { font-size: calc(24px * var(--fs-scale)); }
+.slp-ring .cal-ring-num.is-none { color: var(--text-dim); }
+.slp-verdict { font-size: var(--fs-caption); letter-spacing: 0; text-transform: none; margin-top: 2px; white-space: nowrap; }
+.slp-verdict.is-met { color: var(--accent-text); }
+.slp-rows { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: var(--sp-2h); }
+.slp-rows > .btn { align-self: flex-start; }
+.slp-mini .macro-track-head { gap: var(--sp-2); margin-bottom: var(--sp-1); }
+.slp-mini .macro-track-name { font-size: var(--fs-meta); color: var(--text-mute); min-width: 0; }
+.slp-mini .macro-track-nums { font-size: var(--fs-meta); font-weight: 700; color: var(--text); white-space: nowrap; }
+.slp-mini .macro-track-left { margin-top: 2px; }
+/* The food log miniature's own track, one to one (.nutri-mini: 6px, the
+   .macro-track-bar capsule) — the owner asked for the food page's design. */
+.slp-mini .macro-track-bar { height: 6px; }
+.slp-mini .macro-track-fill { background: var(--accent); }
+@media (max-width: 359px) {
+  .slp-body { flex-direction: column; }
+  .slp-rows { width: 100%; }
+}
+@media (max-width: 374px) {
+  body.text-lg .slp-body { flex-direction: column; }
+  body.text-lg .slp-rows { width: 100%; }
+}
+/* ARRIVAL, scoped to the stagger host like the instrument's: the ring draws
+   to its value, the two bars grow along the reading direction, and the centre
+   settles as the ring closes. Contract 73 holds each inside motion.js's
+   window; under reduced motion `.enter` is never mounted and the static
+   styles above are the whole render. */
+.enter .slp-ring .cal-ring-fg {
+  animation: slp-draw var(--dur-base) var(--ease-out) both;
+  animation-delay: calc(min(var(--i, 0), 5) * var(--step, var(--stagger)) + 1 * var(--stagger-bar));
+}
+@keyframes slp-draw { from { stroke-dasharray: 0 339.29; } }
+.enter .slp-mini .macro-track-fill {
+  transform-origin: 0 50%;
+  transform: scaleX(0);
+  animation: trk-line var(--dur-base) var(--ease-out) both;
+  animation-delay: calc(min(var(--i, 0), 5) * var(--step, var(--stagger)) + 2 * var(--stagger-bar));
+}
+body[dir="rtl"] .enter .slp-mini .macro-track-fill { transform-origin: 100% 50%; }
+.enter .slp-ring .cal-ring-center {
+  opacity: 0;
+  transform: translateY(6px);
+  animation: vlt-enter var(--dur-fast) var(--ease-out) both;
+  animation-delay: calc(min(var(--i, 0), 5) * var(--step, var(--stagger)) + 4 * var(--stagger-bar));
+}
+
+/* =========================================================================
    ^^^ EVERYTHING ABOVE, THEN THE IDENTITY LAYER BELOW. ^^^
 
    ⚠️ v364 inserted the Settings block INSIDE this banner — between its opening
@@ -8861,7 +9044,7 @@ body { --card-border: 0; }
 
 .card,
 .data-row, .session-card, .compare-card,
-.muscle-heatmap, .rot-slot, .ms-card, .last-set-card, .sleep-detail,
+.muscle-heatmap, .rot-slot, .ms-card, .last-set-card,
 .nutri-hero, .hero-card, .stat-cell, .tool-pod {
   border: 0;
   box-shadow: var(--elev-1);
@@ -9030,7 +9213,8 @@ body { --icon-accent: var(--accent-text); }
    component rule, or the next person has two places to check. */
 .home-center-icon, .hero-cta, .btn-primary, .food-fab, .nutri-setup-icon, .supp-toggle.taken,
 .run-set-done.done, .sd-status-pill, .bento-pr, .health-card-toggle.on,
-.picker-row.picked .picker-row-check {
+.picker-row.picked .picker-row-check,
+.type-option.active .type-option-icon, .cardio-icon-chip.active {
   --icon-accent: currentColor;
 }
 

@@ -123,7 +123,7 @@ for (const [k, [re, why]] of Object.entries(GRAMMAR)) {
 // ── D. ONE DIGIT SCRIPT PER PHRASE (#16) ────────────────────────────────────
 // Digits inside Arabic prose are Arabic-Indic (last_7_days «آخر ٧ أيام»); a
 // sentence whose {n} arrives from fmtNum is Latin throughout.
-for (const k of ['muscle_focus_sub', 'avg_7d', 'pg_volume_30d', 'pg_sessions_30d']) if (/[0-9]/.test(I18N.ar[k] || '')) bad('#16', `${k}: «${I18N.ar[k]}» — a Latin digit in Arabic prose, beside last_7_days «${I18N.ar.last_7_days}»`);
+for (const k of ['muscle_focus_sub', 'pg_volume_30d', 'pg_sessions_30d', 'goal_hint_cardio', 'goal_hint_sleep', 'avg_7n']) if (/[0-9]/.test(I18N.ar[k] || '')) bad('#16', `${k}: «${I18N.ar[k]}» — a Latin digit in Arabic prose, beside last_7_days «${I18N.ar.last_7_days}»`);
 if (/[٠-٩]/.test(I18N.ar.sug_deload_reason || '')) bad('#16', `sug_deload_reason: «${I18N.ar.sug_deload_reason}» — its {n} is fmtNum's Latin figure, so one sentence shows both scripts`);
 
 // ── E. THE COUNT LADDERS (#4 #6 #7) ─────────────────────────────────────────

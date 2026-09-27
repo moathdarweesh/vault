@@ -1744,7 +1744,7 @@ const designA11yCases = [
     r.cardioStays = await ev(() => !!document.querySelector('#modal-root .modal-overlay:not(.nested):not(.is-out) #save-cardio-btn'));
     r.back = (await focusAt(null)).at;
     await ev(() => closeModal());
-    assert.deepEqual(r, { opened: true, out: [], gone: true, cardioStays: true, back: 'button#cardio-add-type.type-option' }, 'the «new cardio type» sheet moves focus in, keeps Tab inside, closes ALONE on Escape and hands focus back to its tile: ' + JSON.stringify(r));
+    assert.deepEqual(r, { opened: true, out: [], gone: true, cardioStays: true, back: 'button#cardio-add-type.type-option-add' }, 'the «new cardio type» sheet moves focus in, keeps Tab inside, closes ALONE on Escape and hands focus back to its tile: ' + JSON.stringify(r));
   }],
 
   ['every field in a sheet is named by its caption, not its placeholder', async ({ page, ev, reset, ids, today }) => {
@@ -1962,6 +1962,11 @@ const designA11yCases = [
     await scan(['.view.active .sd-add-set-btn']);
     await reset('workouts'); await settle();
     await scan(['.view.active .schedule-prev-row']);
+    // The two goal buttons (v405): S-size, 36px, on the Cardio and Sleep heroes.
+    await reset('cardio'); await settle();
+    await scan(['.view.active #cardio-goal-btn']);
+    await reset('sleep'); await settle();
+    await scan(['.view.active #sleep-goal-btn']);
     await reset('home');
     assert.deepEqual([...new Set(small)], [], 'every listed control reaches 44x44 from its centre (its own box or its ::after halo): ' + JSON.stringify([...new Set(small)]));
   }],

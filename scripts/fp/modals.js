@@ -95,6 +95,10 @@ const ENTRIES = [
   // «استخراج وصفة» (openRecipeImport): the source sheet — four tiles, two hidden
   // pickers, the privacy line; its confirm and processing stages share the closure.
   { id: 'recipe-import', name: 'openRecipeImport', args: ['$today', '$noop'], host: 'food' },
+  // The goal sheet (v405): one opener, two goals — the weekly cardio minutes
+  // and the sleep hours — reached from each hero's goal button and Settings.
+  { id: 'goal-cardio', name: 'openGoalModal', args: [{ v: 'cardio' }], host: 'cardio' },
+  { id: 'goal-sleep', name: 'openGoalModal', args: [{ v: 'sleep' }], host: 'sleep' },
 ];
 
 /* Named, with the reason, so contract 36 can tell "left out on purpose" from
