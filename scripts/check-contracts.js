@@ -2303,6 +2303,38 @@ const cssOwner = (i) => CSS_BLOCKS.reduce((best, b) => (b.open < i && b.close > 
     if (!/drop\s*\?\s*'-24px'/.test(read('js/motion.js'))) problems.push("js/motion.js stagger() has no drop offset (--ey '-24px') for the door's reveal");
   }
 
+  // THE LOGO INSIDE THE APP (owner, 2026-09-27: «ليش ما تم تغيير اللوقو»). v403
+  // changed every OUTSIDE surface and left the in-app lockup as two cropped,
+  // all-orange plate halves around VAULT/TRAIN — the old look on the top bar of
+  // five screens, the sign-in page, onboarding and the console. The lockup now
+  // draws the WHOLE barbell, the glyph's five rectangles, in the three role
+  // fills (outer / inner / shaft through --mark-outer, --mark-inner, --text), and
+  // the console's two hand-inlined copies do the same. No cropped half remains.
+  {
+    const ui = src['js/ui.js'];
+    const at = ui.indexOf('function brandLockup(');
+    const body = at < 0 ? '' : ui.slice(at, ui.indexOf('\n}\n', at));
+    const mk = ui.indexOf('function barbellMark(');
+    const mark = mk < 0 ? '' : ui.slice(mk, ui.indexOf('\n}\n', mk));
+    if (at < 0) problems.push('js/ui.js has no brandLockup()');
+    if (/viewBox="1\.5 6 8 12"|viewBox="14\.5 6 8 12"/.test(body + mark)) problems.push('brandLockup() still crops the barbell into two plate halves (viewBox 1.5 6 8 12 / 14.5 6 8 12) — the in-app logo is the whole barbell');
+    if (!/barbellMark\(/.test(body)) problems.push('brandLockup() does not draw barbellMark() — the in-app logo is the whole barbell');
+    const roleOf = { 'bm-o': 'outer', 'bm-i': 'inner', 'bm-s': 'shaft' };
+    const bs = [...mark.matchAll(/<rect class="(bm-[ois])"([^>]*)\/?>/g)].map(([, cls, a]) => ({ x: +(attr(a, 'x') || 0), y: +(attr(a, 'y') || 0), w: +attr(a, 'width'), h: +attr(a, 'height'), r: +(attr(a, 'rx') || 0), rect: true, role: roleOf[cls] }));
+    if (!bs.length) problems.push('barbellMark() draws no <rect class="bm-…"> — the lockup has no barbell');
+    else {
+      compare('the in-app lockup (js/ui.js barbellMark)', bs, null);
+      const order = bs.slice().sort((p, q) => p.x - q.x).map((b) => b.role).join(',');
+      if (order !== ROLE.join(',')) problems.push(`the in-app lockup's rectangles wear the roles ${order} — the barbell is outer, inner, shaft, inner, outer`);
+    }
+    const css = read('styles.css');
+    for (const [cls, tok] of [['bm-o', '--mark-outer'], ['bm-i', '--mark-inner'], ['bm-s', '--text']]) {
+      if (!new RegExp('\\.' + cls + '\\s*\\{\\s*fill:\\s*var\\(' + tok + '\\)').test(css)) problems.push(`styles.css does not fill .${cls} with var(${tok}) — the lockup's ${roleOf[cls]} role must wear the icon's colour`);
+    }
+    const adm = read('admin.html');
+    if (/viewBox="1\.5 6 8 12"|viewBox="14\.5 6 8 12"/.test(adm)) problems.push("admin.html still hand-inlines the two cropped plate halves — the console's logo is the whole barbell too");
+  }
+
   // The coloured surfaces agree on the fills, role by role, and a role wears one fill.
   const roles = {};
   for (const [name, fs] of fills) fs.forEach((f, i) => { (roles[ROLE[i]] = roles[ROLE[i]] || new Map()).set(name + ' #' + (i + 1), f); });

@@ -706,26 +706,42 @@ function confirmDialog({ title, text, onConfirm, confirmLabel, variant = 'danger
 }
 
 // ==========================================================================
-// THE MARK — "AJ" lockup (handoff 00-START-HERE §1). Supersedes THE CUT.
-//
-// Two half-plates flanking two stacked words: VAULT in cream over TRAIN in
-// orange mono. The plates are not a new drawing — they are ICONS.dumbbell cut
-// in half by a cropped viewBox, so if that icon ever changes the mark follows
-// it automatically. The spec pins those two viewBox strings and forbids
-// touching them, which is why they are literals here and not computed.
+// THE MARK — the ember barbell, then VAULT over TRAIN (v413, owner: «ليش ما
+// تم تغيير اللوقو»). Until v412 this lockup was the "AJ" handoff's two
+// half-plates flanking the words — ICONS.dumbbell cut in half by cropped
+// viewBoxes, all in the accent. v403 made the barbell the app's logo on every
+// OUTSIDE surface and left this one behind, so the top bar of five screens, the
+// sign-in page and onboarding still wore the old look. Now the lockup draws the
+// WHOLE glyph — the same five rectangles as icons/icon.svg, the launcher and the
+// splash — in the same three role fills (outer ember, inner accent, the shaft
+// in the text colour, i.e. bone on black and ink on bone, exactly the icon's two
+// variants), before the name. Contract 72 holds its rectangles to the glyph.
 //
 // ONLY TWO SIZES EXIST, per the spec: header (VAULT 11) and splash (VAULT 32).
 // No intermediate sizes, so this takes a name rather than a number — a caller
 // cannot invent a third by passing 18.
 //
-// The three proportions are locked to the VAULT size: plate = 1.35x,
+// The three proportions are locked to the VAULT size: mark height = 1.35x,
 // TRAIN = 0.5x, gap = 0.57x. They are computed here rather than written out
-// twice so a future size cannot drift out of ratio.
+// twice so a future size cannot drift out of ratio. The mark keeps the old
+// plates' height, and at 21:12 it is as wide as the two plates and the second
+// gap were together, so the lockup's footprint does not move.
 // ==========================================================================
+// The barbell at height `h` px: the glyph's ink box (x 1.5–22.5, y 6–18) as the
+// viewBox, each rectangle carrying its role class for the fills in styles.css.
+function barbellMark(h) {
+  const w = Math.round(h * 21 / 12 * 10) / 10;
+  return `<svg class="bl-mark" viewBox="1.5 6 21 12" width="${w}" height="${h}" aria-hidden="true">` +
+    '<rect class="bm-o" x="1.5" y="9" width="3" height="6" rx="1.2"/>' +
+    '<rect class="bm-i" x="5.5" y="6" width="4" height="12" rx="1.6"/>' +
+    '<rect class="bm-s" x="9.5" y="10.4" width="5" height="3.2"/>' +
+    '<rect class="bm-i" x="14.5" y="6" width="4" height="12" rx="1.6"/>' +
+    '<rect class="bm-o" x="19.5" y="9" width="3" height="6" rx="1.2"/>' +
+    '</svg>';
+}
 function brandLockup(size = 'header') {
   const v = size === 'splash' ? 32 : 11;      // VAULT font-size
-  const plateH = Math.round(v * 1.35 * 10) / 10;
-  const plateW = Math.round(plateH * (10 / 15) * 10) / 10;   // the spec's 10x15 aspect
+  const markH = Math.round(v * 1.35 * 10) / 10;
   const sub = Math.round(v * 0.5 * 10) / 10;
   const gap = Math.round(v * 0.57 * 10) / 10;
   // RULE 5, restored. v264 changed this guard from `v >= 10` to `sub >= 11` and
@@ -745,18 +761,11 @@ function brandLockup(size = 'header') {
   const showSub = v >= 10;
   return `
     <div dir="ltr" class="brand-lockup brand-${size}" style="gap:${gap}px">
-      <svg viewBox="1.5 6 8 12" width="${plateW}" height="${plateH}" aria-hidden="true">
-        <rect x="1.5" y="9" width="3" height="6" rx="1.2" fill="currentColor"/>
-        <rect x="5.5" y="6" width="4" height="12" rx="1.6" fill="currentColor"/>
-      </svg>
+      ${barbellMark(markH)}
       <span class="bl-text">
         <span class="bl-name" style="font-size:${v}px">VAULT</span>
         ${showSub ? `<span class="bl-sub" style="font-size:${sub}px">TRAIN</span>` : ''}
       </span>
-      <svg viewBox="14.5 6 8 12" width="${plateW}" height="${plateH}" aria-hidden="true">
-        <rect x="14.5" y="6" width="4" height="12" rx="1.6" fill="currentColor"/>
-        <rect x="19.5" y="9" width="3" height="6" rx="1.2" fill="currentColor"/>
-      </svg>
     </div>`;
 }
 

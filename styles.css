@@ -78,6 +78,12 @@
      bg / surface-1 / -2 / -3, and 5.49:1 on an --accent-soft tile. */
   --accent:      #ff6a00;
   --accent-2:    #e05c00;
+  /* THE MARK'S THREE ROLES (v413) — the barbell in the lockup wears the icon's
+     fills: outer plates ember, inner plates the accent, the shaft var(--text).
+     On the bone ground the inner plates step to --accent-2 for 3:1, as
+     icons/icon.svg's light variant does. */
+  --mark-outer:  #b84a00;
+  --mark-inner:  var(--accent);
   --accent-soft: rgba(255, 106, 0, 0.13);
   --accent-line: rgba(255, 106, 0, 0.30);
   --accent-ink:  #1a0800;
@@ -385,6 +391,7 @@ body.theme-light {
      hue: 4.91:1 on --surface-3, 4.85:1 on accent-soft. */
   --accent-text: #a34400;
   --accent-2:    #e05c00;
+  --mark-inner:  var(--accent-2);   /* 3.40:1 on bone; the raw accent is 2.65:1 */
   --accent-soft: rgba(255, 106, 0, 0.12);
   --accent-line: rgba(255, 106, 0, 0.30);
   --accent-ink:  #1a0800;
@@ -7755,8 +7762,13 @@ body.theme-light {
 .brand-lockup {
   display: inline-flex;
   align-items: center;
-  color: var(--accent);          /* the plates inherit via currentColor */
 }
+/* The barbell's three roles (v413): the same fills as icons/icon.svg in both
+   themes. Contract 72 holds these three rules and the rectangles to the glyph. */
+.brand-lockup .bl-mark { display: block; flex: none; }
+.bm-o { fill: var(--mark-outer); }
+.bm-i { fill: var(--mark-inner); }
+.bm-s { fill: var(--text); }
 .brand-lockup .bl-text {
   display: flex; flex-direction: column; align-items: center; gap: 2px;
 }

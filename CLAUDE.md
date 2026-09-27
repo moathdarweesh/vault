@@ -91,7 +91,7 @@ npm run verify           # contracts + lint + every suite — THE GATE (it print
 npm run release          # bump every marker and re-read them; runs NO tests
 ```
 
-**Current version: v412.** APK: build 24 / v3.3.
+**Current version: v413.** APK: build 24 / v3.3.
 
 > ⚠️ **`npm run release` RUNS NO TESTS, AND THIS LINE USED TO READ AS IF IT DID.**
 > It said «bump every marker + verify», where *verify* meant the MARKERS — and
@@ -490,14 +490,16 @@ One face for text, one for the mark, one for figures. The Google Fonts link in
 > with each other and disagreed with the app; v367 designed a widget family
 > against this page and had to throw it away. Corrected here, from the code.
 
-**Inside the app: `brandLockup(size)` in `js/ui.js`.** Two plates — the left and
-right halves of `ICONS.dumbbell`, cropped by viewBox so the mark follows the icon
-set — flanking `VAULT` (Archivo 800, `.2em`, `--text`) over `TRAIN` (JetBrains
-Mono, `.3em`, `--accent`); the plates are `--accent`. **Exactly two sizes**,
+**Inside the app: `brandLockup(size)` in `js/ui.js`.** Since v413 the whole ember
+barbell (`barbellMark()`, the glyph's five rectangles in `--mark-outer` /
+`--mark-inner` / `--text` — the icon's fills in both themes) followed by
+`VAULT` (Archivo 800, `.2em`, `--text`) over `TRAIN` (JetBrains Mono, `.3em`,
+`--accent`); until v412 it was two cropped all-orange plate halves flanking the
+name, and v403 had left it behind. **Exactly two sizes**,
 `header` (VAULT 11px) and `splash` (32px), and a caller cannot invent a third.
 Three call sites, all in `js/app.js`: `vaultBar()` (five screens), the sign-in
-gate, onboarding step 0. `admin.html` hand-inlines the same two plate SVGs twice
-because it cannot reach `js/ui.js`; nothing keeps those copies in step.
+gate, onboarding step 0. `admin.html` hand-inlines the barbell twice because it
+cannot reach `js/ui.js`; contract 72 refuses a cropped plate half there.
 
 **Outside the app: THE BARBELL (v403, owner decision).** The app's logo is the
 mark the splash opens with — `ICONS.dumbbell` in `js/catalog.js`, five

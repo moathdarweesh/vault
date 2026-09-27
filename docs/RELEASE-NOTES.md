@@ -2,6 +2,32 @@
 
 One section per release since v309, newest first, moved verbatim from `CLAUDE.md` in v401 (batch 6 of the 2026-09-25 review; `docs/REVIEW-2026-09-25.md`). `CLAUDE.md` is the guide and the authority for how the app works now. A section here records what one release changed and why, in the words written at the time, so a later section — or the guide — can supersede what an earlier one says.
 
+## v413 — the logo inside the app is the ember barbell too
+
+«ليش ما تم تغيير اللوقو». It had not been, where the owner looks most: v403 changed
+every OUTSIDE surface (icon, launcher, themed and status icons, badge, splash)
+and deliberately kept the in-app lockup — two cropped, all-orange plate halves
+flanking VAULT/TRAIN — on the top bar of five screens, the sign-in page,
+onboarding and the console. That was the lead's call, not the owner's, and it
+was the wrong one: to him that lockup IS the app's logo.
+
+- `brandLockup()` now draws `barbellMark()`: the WHOLE glyph (the five
+  rectangles of `ICONS.dumbbell`) before the name, in the icon's three role
+  fills — `--mark-outer` #b84a00, `--mark-inner` (the accent; `--accent-2` on the
+  bone ground, as icons/icon.svg's light variant), the shaft in `--text` (bone
+  on black, ink on bone). Measured: 26.1×14.9 px in the header, the same
+  footprint as the old plates and their second gap (lockup 83 px wide), and
+  exactly the icon's fills in both themes.
+- The console's two hand-inlined copies draw the barbell too (dark-only, so
+  the dark icon's literals).
+- **Contract 72 holds it**: the lockup's rectangles against the glyph, their
+  roles outer/inner/shaft/inner/outer, the three fill rules, and no cropped
+  plate half in js/ui.js or admin.html — seven problems named on v412.
+- docs/BRAND.md §1a and the guide describe the new lockup.
+- **Still the old icon on the phone's home screen** until APK 25 is installed:
+  the launcher icon is baked into the APK (its sources changed in v403).
+- Gate: 70 contracts, 18 suites.
+
 ## v412 — a barcode product with unreadable calories is not logged at 0
 
 The last item of the 2026-09-27 pentest. Open Food Facts is crowd data: a

@@ -25,27 +25,29 @@
 ### 1a. Inside the app — THE LOCKUP
 
 `brandLockup(size)` in **`js/ui.js`** is the mark, and the only mark, on every
-in-app surface. Two **plates** flank the name: the left and right halves of
-`ICONS.dumbbell`, cropped by viewBox so the mark follows the icon set
-automatically if that glyph ever changes. Between them, `VAULT` in Archivo 800 at
-`.2em` over `TRAIN` in JetBrains Mono at `.3em`.
+in-app surface. Since v413 (owner: «ليش ما تم تغيير اللوقو») it is **the whole
+ember barbell** — `barbellMark()`, the five rectangles of `ICONS.dumbbell` in
+the icon's three role fills — followed by `VAULT` in Archivo 800 at `.2em` over
+`TRAIN` in JetBrains Mono at `.3em`. Until v412 it was two cropped, all-orange
+plate halves flanking the name: v403 changed every outside surface and left this
+one, so the top bar still wore the old look. Contract 72 now holds its
+rectangles and fills to the glyph like every other surface.
 
 | Rule | Value |
 |---|---|
 | Sizes | **exactly two** — `header` (VAULT 11px) and `splash` (32px). A caller cannot invent a third; anything that is not `'splash'` is the header. |
-| Plate height | `round(v × 1.35)` — 14.9px at header, 43.2px at splash |
-| Plate width | `round(plateH × 10/15)` — 9.9px / 28.8px |
+| Mark height | `round(v × 1.35)` — 14.9px at header, 43.2px at splash |
+| Mark width | `markH × 21/12` (the glyph's ink box) — 26.1px / 75.6px: as wide as the two old plates and their second gap, so the lockup's footprint did not move |
 | Sub-line | `round(v × 0.5)`, drawn only at `v ≥ 10` |
 | Gap | `round(v × 0.57)` |
-| Colour | plates and `TRAIN` in `--accent`; `VAULT` in `--text` |
-
-The two viewBox strings are pinned by the spec and are literals for that reason.
+| Colour | the mark: outer plates `--mark-outer` (#b84a00), inner plates `--mark-inner` (the accent; `--accent-2` on bone), the shaft `--text` — exactly icons/icon.svg's two variants; `TRAIN` in `--accent`; `VAULT` in `--text` |
 **Three call sites**, all in `js/app.js`: the top bar (`vaultBar`, on five
 screens), the sign-in gate, and onboarding step 0.
 
-> `admin.html` hand-inlines the same two plate SVGs twice rather than calling
-> `brandLockup` — it is a standalone page with no access to `js/ui.js`. They are
-> byte-identical to the live ones today and nothing keeps them so.
+> `admin.html` hand-inlines the barbell twice (the console is dark-only, so its
+> fills are the dark icon's literals) rather than calling `brandLockup` — it is a
+> standalone page with no access to `js/ui.js`. Contract 72 refuses a cropped
+> plate half coming back there.
 
 ### 1b. Outside the app — THE BARBELL (v403)
 
@@ -76,7 +78,7 @@ accent's second step, `#e05c00` (3.40:1), because the raw accent measures
 both variants at 512/192/48 and checks fills, contrast, the maskable circle and
 the two PNGs. The trade-off the lead recorded and the owner accepted: this
 spends the accent on four blocks instead of one, so inside the app the accent's
-signal is carried by the lockup's plates and the controls, not by the icon.
+signal is carried by the controls; the lockup wears the same three fills as the icon.
 
 **Geometry on each surface.** `icons/icon.svg`: the glyph at scale 15, inset 76
 in the 512 tile — ink 61.5% wide, farthest corner 181 px from the centre, inside
@@ -123,7 +125,7 @@ mark; it is the DON'T at the bottom of this section.
 | Web notification badge | the same silhouette, white on transparent | `icons/badge-96.png` — **rendered** from `ICONS.dumbbell` by `node scripts/build-notif-icons.js` |
 | Web splash | the barbell alone — NO word (v409): one rep (the row lifts and settles as one object), the bloom, then the door opens from the VERTICAL middle — a left and a right leaf, the barbell split through its shaft, each half leaving with its leaf — and the page drops in from above; no keyframe may resize a bolt (contract 72) | `index.html` + `styles.css` `.vs-*` |
 | Native splash | frame 0 of the web splash, at each PNG's own size | `res/drawable-*/splash.png` — **rendered** from the live stylesheet by `node scripts/build-brand-assets.js` (APK) |
-| **In-app top bar, login, first run** | **the LOCKUP — plates + VAULT/TRAIN** | **`brandLockup()` in `js/ui.js`** |
+| **In-app top bar, login, first run** | **the LOCKUP — the ember barbell + VAULT/TRAIN (v413)** | **`brandLockup()` / `barbellMark()` in `js/ui.js`** |
 | **Admin console** | the same lockup, hand-inlined | `admin.html` (two copies, not from `js/ui.js`) |
 | Download page | the cut wordmark, masked | `get/index.html` |
 | **Privacy page** | the cut wordmark, painted | **`privacy.html`** — its own `--cut-slot` / `--cut-hair` |
