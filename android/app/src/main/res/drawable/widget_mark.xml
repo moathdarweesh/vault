@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  The home-screen widgets' logo: THE BARBELL, whole (APK 25). Until build 24
+  each widget drew the in-app lockup's old look, two plate halves with a gap
+  (widget_mark_start / widget_mark_end); the owner's logo is every place a logo
+  appears, and a widget changes only with a new APK.
+
+  The five rectangles of ICONS.dumbbell in js/catalog.js, path for path as the
+  launcher foreground draws them, cropped to the glyph's ink box (x 1.5..22.5,
+  y 6..18) by the group's translate, so the drawable is exactly 21:12 and every
+  widget sizes its ImageView at that aspect. The widget tile is dark (#0d0a07),
+  so these are the dark icon's fills: outer plates ember #B84A00, inner plates
+  the accent #FF6A00, the shaft bone #FDFAF7. Contract 72 holds the shape, the
+  fills, the centring and every layout's aspect.
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="21dp"
+    android:height="12dp"
+    android:viewportWidth="21"
+    android:viewportHeight="12">
+    <group
+        android:translateX="-1.5"
+        android:translateY="-6">
+        <!-- outer plates, 3x6 r1.2 -->
+        <path
+            android:fillColor="#FFB84A00"
+            android:pathData="M2.7,9h0.6a1.2,1.2 0 0 1 1.2,1.2v3.6a1.2,1.2 0 0 1 -1.2,1.2h-0.6a1.2,1.2 0 0 1 -1.2,-1.2v-3.6a1.2,1.2 0 0 1 1.2,-1.2Z" />
+        <path
+            android:fillColor="#FFB84A00"
+            android:pathData="M20.7,9h0.6a1.2,1.2 0 0 1 1.2,1.2v3.6a1.2,1.2 0 0 1 -1.2,1.2h-0.6a1.2,1.2 0 0 1 -1.2,-1.2v-3.6a1.2,1.2 0 0 1 1.2,-1.2Z" />
+        <!-- inner plates, 4x12 r1.6 -->
+        <path
+            android:fillColor="#FFFF6A00"
+            android:pathData="M7.1,6h0.8a1.6,1.6 0 0 1 1.6,1.6v8.8a1.6,1.6 0 0 1 -1.6,1.6h-0.8a1.6,1.6 0 0 1 -1.6,-1.6v-8.8a1.6,1.6 0 0 1 1.6,-1.6Z" />
+        <path
+            android:fillColor="#FFFF6A00"
+            android:pathData="M16.1,6h0.8a1.6,1.6 0 0 1 1.6,1.6v8.8a1.6,1.6 0 0 1 -1.6,1.6h-0.8a1.6,1.6 0 0 1 -1.6,-1.6v-8.8a1.6,1.6 0 0 1 1.6,-1.6Z" />
+        <!-- the shaft, 5x3.2, square -->
+        <path
+            android:fillColor="#FFFDFAF7"
+            android:pathData="M9.5,10.4h5v3.2h-5Z" />
+    </group>
+</vector>

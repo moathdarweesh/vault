@@ -91,7 +91,7 @@ npm run verify           # contracts + lint + every suite — THE GATE (it print
 npm run release          # bump every marker and re-read them; runs NO tests
 ```
 
-**Current version: v413.** APK: build 24 / v3.3.
+**Current version: v414.** APK: build 25 / v3.4.
 
 > ⚠️ **`npm run release` RUNS NO TESTS, AND THIS LINE USED TO READ AS IF IT DID.**
 > It said «bump every marker + verify», where *verify* meant the MARKERS — and
@@ -508,7 +508,9 @@ outside surface redraws exactly those five boxes: `icons/icon.svg` (dark tile,
 and a bone tile under `prefers-color-scheme: light`), `icons/apple-touch-icon-180.png`
 (rendered from it), `res/drawable/ic_launcher_foreground.xml`, the themed
 `ic_launcher_monochrome.xml` and the status-bar `ic_stat_vault.xml` (one white
-silhouette each), `icons/badge-96.png` (rendered from the glyph) and the splash's
+silhouette each), the home-screen widgets' `widget_mark.xml` (the whole barbell
+in the dark icon's fills, one image per widget at the glyph's 21:12 box, APK 25),
+`icons/badge-96.png` (rendered from the glyph) and the splash's
 frame 0 (`.vs-n1…n5`, and the eleven `res/drawable-*/splash.png` rendered from
 the stylesheet). **Contract 72** holds all of them to the glyph within 0.02
 units; `scripts/test-brand-icon.js` renders the icon and checks fills, contrast

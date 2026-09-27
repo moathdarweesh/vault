@@ -124,15 +124,18 @@ mark; it is the DON'T at the bottom of this section.
 | Status-bar notification | the silhouette at .95 | `res/drawable/ic_stat_vault.xml` (APK) |
 | Web notification badge | the same silhouette, white on transparent | `icons/badge-96.png` — **rendered** from `ICONS.dumbbell` by `node scripts/build-notif-icons.js` |
 | Web splash | the barbell alone — NO word (v409): one rep (the row lifts and settles as one object), the bloom, then the door opens from the VERTICAL middle — a left and a right leaf, the barbell split through its shaft, each half leaving with its leaf — and the page drops in from above; no keyframe may resize a bolt (contract 72) | `index.html` + `styles.css` `.vs-*` |
+| **Home-screen widgets** | the whole barbell in the dark icon's fills, one image at the glyph's 21:12 box (APK 25; until build 24 the old two plate halves) | `res/drawable/widget_mark.xml`, used once by each `res/layout/widget_*.xml` holder (contract 72) |
 | Native splash | frame 0 of the web splash, at each PNG's own size | `res/drawable-*/splash.png` — **rendered** from the live stylesheet by `node scripts/build-brand-assets.js` (APK) |
 | **In-app top bar, login, first run** | **the LOCKUP — the ember barbell + VAULT/TRAIN (v413)** | **`brandLockup()` / `barbellMark()` in `js/ui.js`** |
 | **Admin console** | the same lockup, hand-inlined | `admin.html` (two copies, not from `js/ui.js`) |
 | Download page | the cut wordmark, masked | `get/index.html` |
 | **Privacy page** | the cut wordmark, painted | **`privacy.html`** — its own `--cut-slot` / `--cut-hair` |
 
-Three of those are **baked into the APK**: editing the file changes nothing on a
+Four of those are **baked into the APK** (the launcher layers, the status icon,
+the widgets' mark, the native splash): editing the file changes nothing on a
 phone until a new build is installed. When the glyph or its fills change, run the
-two build scripts, run `node scripts/test-brand-icon.js`, and expect APK 25+.
+two build scripts, run `node scripts/test-brand-icon.js`, and ship a new APK
+(build 25 carries the barbell).
 
 **Two ways to draw the slot, and the surface decides which.** On a flat surface,
 paint it in that surface's own token — `privacy.html` does this with its own

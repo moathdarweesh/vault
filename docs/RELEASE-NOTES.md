@@ -2,6 +2,41 @@
 
 One section per release since v309, newest first, moved verbatim from `CLAUDE.md` in v401 (batch 6 of the 2026-09-25 review; `docs/REVIEW-2026-09-25.md`). `CLAUDE.md` is the guide and the authority for how the app works now. A section here records what one release changed and why, in the words written at the time, so a later section — or the guide — can supersede what an earlier one says.
 
+## v414 — APK 25: the barbell on the phone's home screen
+
+«الوقو الي بتكلم عنه هو الي بيكون برا التطبيق», then «مربع مدور رائع» and
+«انشره». The launcher icon is baked into the APK, so everything v403 changed
+outside the app reached a phone only as this build.
+
+- **APK build 25 / v3.4**, built from this tree and read back out of the
+  binary, never the source: `aapt2 dump badging` gives versionCode 25 /
+  versionName 3.4; the manifest keeps `allowBackup=false`; the launcher
+  foreground's first path is `M2.7,9h0.6a1.2,1.2` (the barbell's outer plate)
+  with the fills #b84a00 / #ff6a00 / #fdfaf7; the signer is SHA-256
+  `e9472323…c010b4`, build 24's, so it installs over it.
+- It carries the v403 icon family (launcher, Android 13+ themed icon, status
+  icon), the eleven splash PNGs rendered from the stylesheet (frame 0 = the
+  barbell, no flash of the old five bolts) and v390's `textZoom` 100.
+- **The widgets wore the old logo, and nothing had said so.** Each widget's
+  mark was the in-app lockup's pre-v413 look: two plate halves with a gap
+  (`widget_mark_start` / `widget_mark_end`). A widget changes only with a new
+  APK, so building 25 without them would have shipped the old logo on the home
+  screen for another build. They are gone; `drawable/widget_mark.xml` draws the
+  whole barbell in the dark icon's fills (the widget tile is dark), and each of
+  the three widgets shows it ONCE at the glyph's 21:12 box and the old height
+  (19.25×11, 35×20, 52.5×30 dp). Read from the built APK: the drawable's
+  five paths and fills, and `widget_today`'s holder pointing at it at 35×20 dp;
+  no plate-half resource remains.
+- **Contract 72 holds the widgets now**: the mark joins the vectors held to
+  `ICONS.dumbbell` (shape, arcs, centre, fills role by role), neither plate
+  half may exist or be referenced, and every widget holder is one image at
+  21:12. Seen to fail first: nine problems named on the old tree, then a
+  planted shaft colour named as «the shaft disagree», file restored byte for
+  byte.
+- `download/THE-VAULT.apk` + its `.sha256`, and `version.json` → `apk` 25 /
+  3.4 / the new hash and notes (contracts 11, 11b and 32). Installed apps show
+  the download banner; the share page is `/vault/get/`.
+
 ## v413 — the logo inside the app is the ember barbell too
 
 «ليش ما تم تغيير اللوقو». It had not been, where the owner looks most: v403 changed

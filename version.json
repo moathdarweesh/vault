@@ -1,12 +1,12 @@
 {
   "_comment": "Update manifest. `web` is the latest web build — it MUST equal the ?v=N in index.html on every release (scripts/release.js writes both); js/update.js reads it fresh (no-store) and reloads the entry html so web/CSS/JS updates reach all devices without a reinstall. `apk` only triggers the in-app download banner when apk.build here is GREATER than the versionCode installed on the device. To release a NEW APK: bump android/app/build.gradle versionCode + versionName, `npm run sync`, build, commit the APK to download/THE-VAULT.apk, then set apk.build/apk.version here to the same numbers (scripts/check-contracts.js refuses a mismatch) and push.",
-  "web": 413,
+  "web": 414,
   "apk": {
-    "build": 24,
-    "version": "3.3",
+    "build": 25,
+    "version": "3.4",
     "url": "https://raw.githubusercontent.com/moathdarweesh/vault/main/download/THE-VAULT.apk",
-    "notes_ar": "أربع ودجات على الشاشة الرئيسيّة بدل واحدة: «اليوم» بتمرينك والسعرات والبروتين والماء، و«المتبقّي» برقمٍ كبير، و«السلسلة»، و«تسجيل سريع» بثلاثة أزرار تفتح التطبيق على الفعل مباشرةً. وتحمل كلّها علامة التطبيق — لوحَي الأثقال البرتقاليَّين — وخطوطه الثلاثة وبلاطته ونسيج أيقونته، فتبدو قطعةً منه لا بطاقةً رسمها النظام.",
-    "notes_en": "Four home-screen widgets instead of one: Today (your workout plus calories, protein and water), Left (one big number), Streak, and Quick log (three buttons that open the app straight on the action). All four carry the app's own mark — the two orange plates — with its three typefaces, its tile and its icon texture, so they read as part of the app rather than a card the system drew.",
-    "sha256": "410bcfc998868e4de5ea741160e7a86b720e62bd5bb7622c7ec2690434f13ca5"
+    "notes_ar": "هويّة التطبيق الجديدة تصل إلى هاتفك: أصبحت أيقونته على الشاشة الرئيسيّة قضيبَ الأثقال بألوان الجمر، ومثلها الأيقونة الموحّدة اللون في أندرويد 13 وما بعده، وأيقونة الإشعارات، وشعار الودجات. وتبدأ شاشة الافتتاح بالشعار نفسه دون وميض. ولم يعد حجم الخطّ في إعدادات الهاتف يكبّر التطبيق؛ لتكبير النصّ استخدم «خطّ أكبر» في إعدادات التطبيق.",
+    "notes_en": "The new identity reaches your phone: the home-screen icon is now the barbell in ember colours, and so are the Android 13+ themed icon, the notification icon and the widgets’ mark. The launch screen opens on the same logo with no flash. Your phone’s font-size setting no longer enlarges the app; to make text bigger, use Larger text in the app’s settings.",
+    "sha256": "ba2356c0c8c5f3796cae7e6bbbe01615eb61637d422a395866df510e1fdcc0fb"
   }
 }

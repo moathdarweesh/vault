@@ -2163,8 +2163,8 @@ const cssOwner = (i) => CSS_BLOCKS.reduce((best, b) => (b.open < i && b.close > 
     if (spec.radius) {
       const far = Math.max(...bs.flatMap((b) => [[b.x, b.y], [b.x + b.w, b.y], [b.x, b.y + b.h], [b.x + b.w, b.y + b.h]]).map(([px, py]) => Math.hypot(px - spec.cx, py - spec.cy)));
       if (far > spec.radius + 1e-6) problems.push(`${name}: ink reaches ${f(far)} from the centre, outside the maskable safe circle (radius ${spec.radius})`);
-    } else if (x0 < spec.lo - 1e-6 || y0 < spec.lo - 1e-6 || x1 > spec.hi + 1e-6 || y1 > spec.hi + 1e-6) {
-      problems.push(`${name}: ink spans x ${f(x0)}..${f(x1)}, y ${f(y0)}..${f(y1)} — outside the ${spec.lo}..${spec.hi} safe zone`);
+    } else if (x0 < spec.lo - 1e-6 || y0 < spec.lo - 1e-6 || x1 > spec.hi + 1e-6 || y1 > (spec.yhi ?? spec.hi) + 1e-6) {
+      problems.push(`${name}: ink spans x ${f(x0)}..${f(x1)}, y ${f(y0)}..${f(y1)} — outside the ${spec.lo}..${spec.hi}${spec.yhi != null ? ` × ${spec.lo}..${spec.yhi}` : ''} safe zone`);
     }
   };
   const compare = (name, bs, fillOf) => {
@@ -2200,7 +2200,8 @@ const cssOwner = (i) => CSS_BLOCKS.reduce((best, b) => (b.open < i && b.close > 
 
   // The three VectorDrawables: every <path>, placed through its <group>'s transform.
   const RES = 'android/app/src/main/res/drawable/';
-  for (const f of ['ic_launcher_foreground.xml', 'ic_launcher_monochrome.xml', 'ic_stat_vault.xml']) {
+  for (const f of ['ic_launcher_foreground.xml', 'ic_launcher_monochrome.xml', 'ic_stat_vault.xml', 'widget_mark.xml']) {
+    if (!fs.existsSync(path.join(root, RES + f))) { problems.push(`${RES + f} does not exist — ${f === 'widget_mark.xml' ? 'the home-screen widgets draw the whole barbell from it' : 'it is one of the surfaces that draw the mark'}`); continue; }
     const xml = read(RES + f).replace(/<!--[\s\S]*?-->/g, '');
     const bs = [];
     for (const m of xml.matchAll(/<group\b([^>]*)>([\s\S]*?)<\/group>|<path\b([^>]*?)\/>/g)) {
@@ -2211,8 +2212,31 @@ const cssOwner = (i) => CSS_BLOCKS.reduce((best, b) => (b.open < i && b.close > 
         for (const b of pathBoxes(attr(p, 'android:pathData'))) bs.push({ ...place(b, T), fill });
       }
     }
-    compare(RES + f, bs, f === 'ic_launcher_foreground.xml' ? (b) => b.fill : null);
-    placed(RES + f, bs, f === 'ic_stat_vault.xml' ? { cx: 12, cy: 12, lo: 2, hi: 22 } : { cx: 54, cy: 54, lo: 18, hi: 90 });
+    compare(RES + f, bs, f === 'ic_launcher_foreground.xml' || f === 'widget_mark.xml' ? (b) => b.fill : null);
+    placed(RES + f, bs, f === 'ic_stat_vault.xml' ? { cx: 12, cy: 12, lo: 2, hi: 22 } : f === 'widget_mark.xml' ? { cx: 10.5, cy: 6, lo: 0, hi: 21, yhi: 12 } : { cx: 54, cy: 54, lo: 18, hi: 90 });
+  }
+
+  // THE HOME-SCREEN WIDGETS wear the logo too (owner, 2026-09-27: the logo is
+  // every place a logo appears). Until APK 25 each widget's mark was the in-app
+  // lockup's old look — two plate halves (widget_mark_start / widget_mark_end)
+  // with a gap — and a widget changes only with a new APK. Each widget_mark
+  // holder is ONE image of drawable/widget_mark (held to the glyph above) at the
+  // glyph's 21:12 ink box, and neither half survives.
+  {
+    for (const old of ['widget_mark_start.xml', 'widget_mark_end.xml']) if (fs.existsSync(path.join(root, RES + old))) problems.push(`${RES + old} still exists — the widgets' old plate half; the mark is drawable/widget_mark, the whole barbell`);
+    const LAY = 'android/app/src/main/res/layout/';
+    for (const f of fs.readdirSync(path.join(root, LAY)).filter((x) => /^widget_.*\.xml$/.test(x))) {
+      const xml = read(LAY + f).replace(/<!--[\s\S]*?-->/g, '');
+      if (/@drawable\/widget_mark_(start|end)\b/.test(xml)) problems.push(`${LAY + f} still draws a plate half (@drawable/widget_mark_start/end) — the widget's logo is the whole barbell`);
+      const at = xml.indexOf('android:id="@+id/widget_mark"');
+      if (at < 0) continue;
+      const holder = xml.slice(at, xml.indexOf('</LinearLayout>', at));
+      const imgs = [...holder.matchAll(/<ImageView\b([^>]*?)\/>/g)].map(([, a]) => a);
+      if (imgs.length !== 1 || !/android:src="@drawable\/widget_mark"/.test(imgs[0] || '')) { problems.push(`${LAY + f}: the widget_mark holder draws ${imgs.length} image(s)${imgs.length === 1 ? ' that are not @drawable/widget_mark' : ''} — it is ONE image of the whole barbell`); continue; }
+      const dp = (k) => { const m = imgs[0].match(new RegExp('android:layout_' + k + '="([\\d.]+)dp"')); return m ? +m[1] : NaN; };
+      const w = dp('width'), h = dp('height');
+      if (!(Math.abs(w / h - 21 / 12) < 0.02)) problems.push(`${LAY + f}: the widget mark is ${w}dp × ${h}dp — the barbell's ink box is 21:12 (${+(h * 21 / 12).toFixed(2)}dp wide at ${h}dp), or it is squashed`);
+    }
   }
 
   // The splash's first painted frame: the rest boxes (styles.css, last declaration
@@ -2339,7 +2363,7 @@ const cssOwner = (i) => CSS_BLOCKS.reduce((best, b) => (b.open < i && b.close > 
   const roles = {};
   for (const [name, fs] of fills) fs.forEach((f, i) => { (roles[ROLE[i]] = roles[ROLE[i]] || new Map()).set(name + ' #' + (i + 1), f); });
   for (const [role, m] of Object.entries(roles)) if (new Set(m.values()).size > 1) problems.push(`the ${role} ${role === 'shaft' ? '' : 'plates '}disagree: ${[...m].map(([k, v]) => `${k} ${v}`).join(', ')}`);
-  contract(`one glyph on every surface: icons/icon.svg, the three launcher/status vectors and the splash's first frame are ICONS.dumbbell's five rectangles (±${TOL} glyph units, every arc a convex corner), in one set of fills, each centred on its canvas and inside its safe zone`, problems);
+  contract(`one glyph on every surface: icons/icon.svg, the three launcher/status vectors, the widgets' mark and the splash's first frame are ICONS.dumbbell's five rectangles (±${TOL} glyph units, every arc a convex corner), in one set of fills, each centred on its canvas and inside its safe zone`, problems);
 }
 
 // 74 — the console cannot be framed, and it reads its tables in stable pages

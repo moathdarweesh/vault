@@ -29,8 +29,7 @@
             android:layout_height="wrap_content"
             android:orientation="horizontal"
             android:layoutDirection="ltr">
-            <ImageView android:layout_width="7.3dp" android:layout_height="11dp" android:src="@drawable/widget_mark_start" android:contentDescription="@null" />
-            <ImageView android:layout_width="7.3dp" android:layout_height="11dp" android:layout_marginStart="3dp" android:src="@drawable/widget_mark_end" android:contentDescription="@null" />
+            <ImageView android:layout_width="19.25dp" android:layout_height="11dp" android:src="@drawable/widget_mark" android:contentDescription="@null" />
         </LinearLayout>
         </LinearLayout>
 
