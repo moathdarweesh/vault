@@ -2552,5 +2552,58 @@ const cssOwner = (i) => CSS_BLOCKS.reduce((best, b) => (b.open < i && b.close > 
   contract(`a script that vibrates has the permission to (${callers.length} caller file(s), android.permission.VIBRATE in the manifest)`, problems);
 }
 
+// ---------------------------------------------------------------- 77. every reminder channel is wired everywhere
+// A reminder channel lives in eight places across three files, and each one
+// fails SILENTLY when a channel is missing from it: the cap's rank map (its
+// yield order is undefined), destFor (a tap falls back to Home), text() (the
+// default branch says «1 reminder today» instead of its words), stillDue (it is
+// never asked, so it fires for what the user already did), NTF_ICON (the
+// in-app bar draws the bell), NTF_CHANNEL_ICON (the reminders page draws no
+// icon at all) and notif_ch_<id> in each dictionary (the settings row prints
+// the raw key). v418 added the sixth channel, `missed`; the ids are read from
+// DB.notif.defaults(), the one place a channel is born, so the next one either
+// reaches all eight or fails the commit.
+{
+  const problems = [];
+  const st = src['js/storage.js'], app = src['js/app.js'];
+  const method = (re, what) => { const m = st.match(re); if (!m) problems.push(`js/storage.js: could not read ${what} — this check has gone silent`); return m ? m[0] : ''; };
+  const defs = method(/^ {4}defaults\(\)\s*\{[\s\S]*?^ {4}\},/m, 'DB.notif.defaults()');
+  const block = (defs.match(/^ {8}channels:\s*\{([\s\S]*?)^ {8}\},/m) || [, ''])[1];
+  const ids = [...block.matchAll(/^ {10}([a-z]\w*):\s*\{/gm)].map((m) => m[1]);
+  if (ids.length < 6) problems.push(`read ${ids.length} channel id(s) from DB.notif.defaults() (${ids.join(', ') || 'none'}) — six since v418; this check has gone silent`);
+  const sched = method(/^ {4}scheduleForDate\(iso, opts\)\s*\{[\s\S]*?^ {4}\},/m, 'scheduleForDate()');
+  const rank = (sched.match(/const rank = \{([^}]*)\}/) || [, ''])[1];
+  if (!rank) problems.push('scheduleForDate() has no `const rank = { … }` cap map — this check has gone silent');
+  const dest = method(/^ {4}destFor\(channel\)\s*\{[\s\S]*?^ {4}\},/m, 'destFor()');
+  const text = method(/^ {4}text\(item, mode\)\s*\{[\s\S]*?^ {4}\},/m, 'text()');
+  const due = method(/^ {4}stillDue\(item\)\s*\{[\s\S]*?^ {4}\},/m, 'stillDue()');
+  const appMap = (name) => { const m = app.match(new RegExp('^const ' + name + ' = \\{([\\s\\S]*?)^\\};', 'm')); if (!m) problems.push(`js/app.js has no ${name} map — this check has gone silent`); return m ? m[1] : ''; };
+  const ntfIcon = appMap('NTF_ICON'), chIcon = appMap('NTF_CHANNEL_ICON');
+  let I18N = { en: {}, ar: {} };
+  try { I18N = require('vm').runInNewContext(src['js/i18n.js'] + '\n;I18N', {}); } catch (e) { problems.push('js/i18n.js does not evaluate: ' + e.message); }
+  // A place a channel may be absent from, and why. Empty is the healthy state.
+  const EXEMPT = {
+    'rank water': 'water is not generate-then-trim: scheduleForDate generates it LAST, into whatever room the cap has left, so it yields by construction (the comment above the rank map says so)',
+  };
+  const key = (id) => new RegExp('(?:^|[\\s{,])' + id + '\\s*:', 'm');
+  const cased = (id) => new RegExp("case '" + id + "'\\s*:");
+  const own = (o, k) => Object.prototype.hasOwnProperty.call(o || {}, k);
+  const PLACES = [
+    ['rank', 'the cap rank map in scheduleForDate()', (id) => key(id).test(rank)],
+    ['destFor', 'destFor()', (id) => key(id).test(dest)],
+    ['text', "text() — a case '<id>' of its own", (id) => cased(id).test(text)],
+    ['stillDue', "stillDue() — a case '<id>' of its own", (id) => cased(id).test(due)],
+    ['NTF_ICON', 'NTF_ICON in js/app.js', (id) => key(id).test(ntfIcon)],
+    ['NTF_CHANNEL_ICON', 'NTF_CHANNEL_ICON in js/app.js', (id) => key(id).test(chIcon)],
+    ['en', 'the EN dictionary (notif_ch_<id>)', (id) => own(I18N.en, 'notif_ch_' + id)],
+    ['ar', 'the AR dictionary (notif_ch_<id>)', (id) => own(I18N.ar, 'notif_ch_' + id)],
+  ];
+  for (const id of ids) for (const [tag, where, ok] of PLACES) {
+    if (EXEMPT[tag + ' ' + id] || ok(id)) continue;
+    problems.push(`reminder channel '${id}' (born in DB.notif.defaults()) is missing from ${where}`);
+  }
+  contract(`every reminder channel is wired everywhere (${ids.length} channels × ${PLACES.length} places, ${Object.keys(EXEMPT).length} named exemption)`, problems);
+}
+
 console.log(failures.length ? `\ncheck-contracts: ${failures.length} broken contract(s)` : '\ncheck-contracts: all contracts hold');
 process.exit(failures.length ? 1 : 0);

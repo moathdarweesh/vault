@@ -91,7 +91,7 @@ npm run verify           # contracts + lint + every suite — THE GATE (it print
 npm run release          # bump every marker and re-read them; runs NO tests
 ```
 
-**Current version: v417.** APK: build 25 / v3.4.
+**Current version: v418.** APK: build 25 / v3.4.
 
 > ⚠️ **`npm run release` RUNS NO TESTS, AND THIS LINE USED TO READ AS IF IT DID.**
 > It said «bump every marker + verify», where *verify* meant the MARKERS — and
@@ -140,6 +140,7 @@ Every device loads the same live URL, so a bad push reaches everyone at once.
 - **v314 / v315 new per-user data goes at the TOP LEVEL of the blob**, never inside `plan`: the plan is rebuilt field by field in SEVEN places (`planSlot` rebuilds every slot on every load; `setRotation` drops what it does not name), and a top-level slice needs its six additive edits incl. `hasUserData`. Scheduled cardio (`STATE.cardioPlan`): completion is a real `DB.cardio` row with `planId`; a tick CLAIMS an unclaimed same-type row; un-ticking never hard-deletes a row the tick did not create; the join is guarded on `entityIdSafe`; Home repaints instead of writing when its `data-iso` day has moved.
 - **v329 shopping list:** never materialised while empty (`hasUserData` counts it); `_validateBlob` permits every legacy field; amounts are the recipe's words, never parsed or summed; a tick never moves its row nor enters undo. **v332:** `[hidden]` does not hide an element the stylesheet gave a `display` — pair it with `[hidden] { display: none }` or use `style.display` (v400 again).
 - **v336 recipe auto-fill:** never one model call per row — a row with a weight waits for a pause, a weightless one for the row to be LEFT; `!hasFigures` is not "settled" (a real zero exists); `parseGrams()` returns null both for "no amount" and "not grams" — ask the string. **v377 search:** `FOOD_SYNONYMS` keys are the FOLDED form; لبن/حليب are deliberately not merged. **v383:** plan day names are user data — translate them for display (`planDayName`, `PLAN_DAY_AR`), never in the stored plan. **v391/v392:** the recipe view is read-only and its scaler moves only an amount's leading number, never writing. **v400 recipe import:** a clip is decomposed ON the device; the draft is built field by field (never spread the Worker's object); `closeModal()` FIRST, then the editor. **v416:** one Escape closes ONE sheet (the global handler skips a key a sheet's trap already took, `e.defaultPrevented`); a backdrop click in a sheet's first 350 ms is ignored; a named all-zero ingredient is a deliberate zero (`_manual` + `_zero`, restored on reopen, lifted by a NAME edit only, and an answered zero after a rename settles as one); no lone UTF-16 surrogate reaches the blob (`wellFormedText` in storage.js, whole-character cuts in the Worker); the sleep and cardio histories are day logs (`sleeplog`/`cardiolog`) — a logged night's log has no add (its row is the door), and only TODAY's cardio log carries a scheduled tick, as Home.
+- **v418 the day without training:** `STATE.skips` = `{last, days}` (top level, `DB.skips`) records a planned training day that passed with no `DB.sessions` row (a «minimum» one counts, cardio does not). It moves nothing in the rotation — that is `restDates`' job — and a rest date wins wherever both could show; settled only on a current blob (`settleSkips()`: after a pull, on the fast path's no-change answer, at boot with no account or no network), seven days back at most, from the first settle on, 400 kept, not `hasUserData`. «كان يوم راحة» is `toRest()` → `setRest()`, which postpones that slot; `undoRest()` puts both back.
 
 ## Navigation & information architecture (v197–v202) — read before touching a view
 
@@ -394,6 +395,7 @@ Fifteen defects; these five are the ones with lessons in them:
   notifications block listens — contract 7 sees an event, nobody sees a swallowed
   ReferenceError. `scripts/test-notif-events.js` refuses a direct call. A reminder
   asks ONE predicate, `DB.notif.stillDue()`, when armed and when it fires (contract 54, v398).
+- **Six channels since v418** — `train`, `missed`, `supps`, `water`, `food`, `streak`. `missed` (on, 21:00) fires on a planned training day with no session logged; `train` and `missed` go quiet once one is, or once the day is a declared rest (`stillDue`, sessions only — cardio is not a session), and the alarms are re-synced, debounced (`queueAlarmResync`), from `vault:session-saved` AND from the guided run's own `commitExercise` — the run fires the event only from its summary. A channel is born in `DB.notif.defaults()` and contract 77 holds it to all eight places it lives (the cap's rank map, `destFor`, `text()`, `stillDue`, `NTF_ICON`, `NTF_CHANNEL_ICON`, `notif_ch_<id>` in both dictionaries).
 - **The home-screen widgets** (v365–v367): the snapshot's day is resolved at WRITE
   time, never passed in from a render; logout must clear it (`DB.widget.clear()` —
   native storage no localStorage sweep reaches); `Capacitor.Plugins.X` and every

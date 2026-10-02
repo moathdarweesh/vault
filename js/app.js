@@ -12,7 +12,7 @@
 // build. The literal below is the fallback (file://, or a stripped query) and is
 // still bumped by `npm run release` — see CLAUDE.md "CACHE WORKFLOW".
 const VAULT_BUILD = (() => {
-  const FALLBACK = 'v417';
+  const FALLBACK = 'v418';
   try {
     const src = (document.currentScript && document.currentScript.src) || '';
     const m = src.match(/[?&]v=(\d+)/);
@@ -193,7 +193,7 @@ function maybeAskNotifPermission() {
 let notifLogExpanded = false;
 
 const NTF_CHANNEL_ICON = {
-  train: 'dumbbell', supps: 'pill', water: 'droplet',
+  train: 'dumbbell', missed: 'dumbbell', supps: 'pill', water: 'droplet',
   food: 'utensils', streak: 'zap', summary: 'bell',
 };
 
@@ -311,6 +311,24 @@ function syncRemindersOrWarn() {
     }).catch(() => {});
   } catch (_) {}
 }
+// The same OS sequence after a DAY changed under the reminders (a rest taken, a
+// session saved, v418) rather than a setting: the user touched no reminder, so a
+// failure is not raised at them — syncRemindersOrWarn's toast would replace the
+// one the action itself just raised. The one place the guard on Notify lives.
+function resyncAlarms() {
+  try {
+    if (window.Notify && typeof Notify.sync === 'function') Promise.resolve(Notify.sync()).catch(() => {});
+  } catch (_) {}
+}
+// The same re-sync once per BURST (1500 ms): the day screen and the guided run
+// save exercise after exercise, and each sync cancels and re-arms the whole
+// horizon. Shared by the session-saved listener (the day screen's summary) and
+// the run's own commits, which fire no event — without it a run still going at
+// the evening reminder's hour got «no workout logged today» mid-workout.
+function queueAlarmResync() {
+  clearTimeout(__sessionSyncTimer);
+  __sessionSyncTimer = setTimeout(resyncAlarms, 1500);
+}
 function renderNotifications(el) {
   const cfg = DB.notif.get();
   const ch = cfg.channels;
@@ -341,6 +359,8 @@ function renderNotifications(el) {
         return ch.food.meals.length
           ? t('notif_sum_food').replace('{n}', fmtNum(ch.food.meals.length))
           : t('notif_sum_food_none');
+      // Its one setting is its time (v418).
+      case 'missed': return t('notif_ch_missed_sub').replace('{time}', ch.missed.at);
       default: return t('notif_sum_streak');
     }
   };
@@ -367,6 +387,9 @@ function renderNotifications(el) {
       <button type="button" class="ntfs-opt${ch.train.mode === 'fixed' ? ' sel' : ''}" role="radio" aria-checked="${ch.train.mode === 'fixed'}" data-train-mode="fixed">${t('notif_train_mode_fixed')}</button>
     </div>
     ${ch.train.mode === 'fixed' ? `<input type="time" class="ntfs-time" value="${escapeHtml(ch.train.at)}" aria-label="${escapeHtml(t('notif_train_mode_fixed'))}" data-train-at>` : ''}`;
+
+  // The missed-workout reminder (v418) has one setting, its time; the switch is the row's.
+  const missedBody = `<input type="time" class="ntfs-time" value="${escapeHtml(ch.missed.at)}" aria-label="${escapeHtml(t('notif_ch_missed'))}" data-missed-at>`;
 
   // Doses and meal times are the same shape — {id, at, name} — so they get the
   // same editor. A dose can additionally be LINKED to a real supplement, which
@@ -440,6 +463,7 @@ function renderNotifications(el) {
 
     <div class="card ntfs-list">
       ${row('train', trainBody)}
+      ${row('missed', missedBody)}
       ${row('supps', suppsBody)}
       ${row('water', waterBody)}
       ${row('food', foodBody)}
@@ -493,6 +517,9 @@ function renderNotifications(el) {
   }));
   el.querySelector('[data-train-at]')?.addEventListener('change', (e) => {
     if (e.target.value) { DB.notif.setChannel('train', { at: e.target.value }); redraw(); }
+  });
+  el.querySelector('[data-missed-at]')?.addEventListener('change', (e) => {
+    if (e.target.value) { DB.notif.setChannel('missed', { at: e.target.value }); redraw(); }
   });
   el.querySelectorAll('[data-water-h]').forEach((b) => b.addEventListener('click', () => {
     DB.notif.setChannel('water', { everyMin: Number(b.dataset.waterH) * 60 }); redraw();
@@ -775,7 +802,15 @@ function armNotifications() {
  * of work changes — this is the same code running at the same moment, reached
  * by a name the tooling can check.
  */
-window.addEventListener('vault:session-saved', () => { maybeAskNotifPermission(); });
+// A saved session silences today's training and missed-workout reminders
+// (DB.notif.stillDue, v418), but the OS still holds the alarms armed before it,
+// so they are re-synced — once per burst, because the day screen saves exercise
+// after exercise and each sync cancels and re-arms the whole horizon. Its timer
+// (__sessionSyncTimer) is declared with the bar's state below.
+window.addEventListener('vault:session-saved', () => {
+  maybeAskNotifPermission();
+  queueAlarmResync();
+});
 window.addEventListener('vault:reminders-changed', () => {
   // The pair, in the order the supplement sheet used: arm the in-app timers
   // first, then run the OS sequence, which is what reports a failure to the user.
@@ -808,9 +843,13 @@ let ntfTimer = null;
 // The bars WAITING their turn, oldest first, at most one per channel — a later
 // word for a waiting channel replaces its words, never adds a second bar.
 let ntfQueue = [];
+// The session-saved re-sync's debounce (v418, the listener above). Declared here,
+// not above that listener: test-notif-events.js reads a column-0 declaration as
+// the start of a new owner, and the listener block must stay the shell's.
+let __sessionSyncTimer = null;
 
 const NTF_ICON = {
-  train: 'dumbbell', supps: 'pill', water: 'droplet',
+  train: 'dumbbell', missed: 'dumbbell', supps: 'pill', water: 'droplet',
   food: 'utensils', streak: 'zap', summary: 'bell',
   ok: 'check', error: 'info',
 };
@@ -2321,6 +2360,25 @@ function renderHome(el) {
     `;
   }
 
+  // A PLANNED DAY THAT PASSED WITHOUT A SESSION (v418), said once: the newest
+  // one not yet acknowledged, under the hero because the hero's slot is what
+  // «كان يوم راحة» moves. The hint says that consequence, which nothing on the
+  // screen shows. A day the plan no longer has a slot for is not drawn.
+  const skip = DB.skips.unseen();
+  const skipDay = skip ? new Date(skip.date + 'T12:00:00') : null;   // noon: date-only maths, DST-safe
+  const skipPlan = skipDay ? DB.plan.workoutForDate(skipDay) : null;
+  const skipSlot = skipPlan ? (planDayName(skipPlan.name) || t('workout_label')) : '';
+  const skipCardHtml = skipPlan ? `
+    <div class="skip-card" data-iso="${escapeHtml(skip.date)}">
+      <div class="skip-card-title">${escapeHtml(t('skip_card_title').replace('{day}', () => dayName(skipDay.getDay(), true)))}</div>
+      <div class="skip-card-body">${escapeHtml(t('skip_card_body').replace('{slot}', () => skipSlot))}</div>
+      <div class="skip-card-actions">
+        <button type="button" class="btn btn-ghost" data-skip-rest="${escapeHtml(skip.date)}" aria-describedby="home-skip-hint">${t('skip_card_rest')}</button>
+        <button type="button" class="btn btn-ghost" data-skip-ok>${t('skip_card_ok')}</button>
+      </div>
+      <div class="skip-card-hint" id="home-skip-hint">${escapeHtml(t('skip_card_rest_hint').replace('{slot}', () => skipSlot))}</div>
+    </div>` : '';
+
   el.innerHTML = `
     ${vaultBar({ action: icon('settings', 19), actionLabel: t('settings_title') })}
 
@@ -2341,6 +2399,8 @@ function renderHome(el) {
     ${comingBackHtml}
 
     ${heroHtml}
+
+    ${skipCardHtml}
 
     ${cardioSchedHtml}
 
@@ -2450,6 +2510,7 @@ function renderHome(el) {
   $('#home-rest-toggle', el)?.addEventListener('click', () => {
     if (DB.plan.restPromptedToday()) {
       DB.plan.setRest(new Date(), true);
+      resyncAlarms();   // today's training and missed-workout alarms no longer apply
       showToast(t('rest_today_on'));
       renderView('home');
       return;
@@ -2461,9 +2522,13 @@ function renderHome(el) {
   // persuading INTO training.
   $('#home-undo-rest', el)?.addEventListener('click', () => {
     DB.plan.setRest(new Date(), false);
+    resyncAlarms();   // a training day again: its alarms come back
     showToast(t('rest_today_off'));
     renderView('home');   // NOT renderHome() — it needs its view element
   });
+  // The day-without-training card: «كان يوم راحة» flips the day, «حسنًا» only acknowledges it.
+  $('[data-skip-rest]', el)?.addEventListener('click', (e) => skipToRest(e.currentTarget.dataset.skipRest));
+  $('[data-skip-ok]', el)?.addEventListener('click', () => { DB.skips.markSeen(); renderView('home'); });
   // One delegated listener for all seven chips rather than seven bindings.
   $('.wk-rail', el)?.addEventListener('click', (e) => {
     const chip = e.target.closest('[data-day]');
@@ -2476,6 +2541,26 @@ function renderHome(el) {
     navigate('exercise-detail', { exerciseId: lastSetCard.dataset.openExercise }));
   if (typeof Health !== 'undefined') Health.bindHomeSection();
   $('#home-weight', el)?.addEventListener('click', () => openWeightSheet());
+}
+
+// «كان يوم راحة» (v418), from the Home card and the Day view alike: a recorded
+// day without training becomes the declared rest it was — DB.plan.setRest
+// through DB.skips.toRest — which postpones that day's slot to the next
+// training day, so whichever screen is up is painted again. The slot is read
+// BEFORE the flip (a rest day carries none), and the day is re-asked at click
+// time: a pull may have flipped it already, and then there is nothing to do.
+function skipToRest(iso) {
+  const plan = DB.plan.workoutForDate(new Date(iso + 'T12:00:00'));
+  if (!plan || !DB.skips.has(iso)) { renderView(currentView); return; }
+  const slot = planDayName(plan.name) || t('workout_label');
+  const tok = DB.skips.toRest(iso);
+  DB.skips.markSeen();
+  showToast(t('skip_rest_toast').replace('{slot}', () => slot), {
+    actionLabel: t('rest_undo'),
+    onAction: () => { DB.skips.undoRest(tok); renderView(currentView); resyncAlarms(); },
+  });
+  renderView(currentView);
+  resyncAlarms();   // the rotation moved: the coming days' training texts name other slots
 }
 
 // The screen BEHIND an open sheet. renderView rewrites .view; the sheet lives in
@@ -3463,6 +3548,9 @@ function renderDay(el) {
   const sups = DB.supplements.list().filter((s) => DB.supplements.isTaken(s.id, iso));
   const plan = DB.plan.workoutForDate(d);
   const wasRest = DB.plan.isRest(d);
+  // A planned day that passed without a session (v418), past days only.
+  // DB.skips.has() already yields to a declared rest, so the two never show together.
+  const wasSkipped = !!plan && iso < todayISO() && DB.skips.has(iso);
 
   const byId = Object.fromEntries(DB.exercises.list().map((e) => [e.id, e]));
   const totalSets = sessions.reduce((n, s) => n + s.sets.length, 0);
@@ -3504,6 +3592,13 @@ function renderDay(el) {
         : plan ? escapeHtml(planDayName(plan.name) || t('start_workout'))
         : t('rest_day')}</p>
     </div>
+
+    ${wasSkipped ? `
+      <div class="day-skipped">
+        <span>${t('day_skipped')}</span>
+        <button type="button" class="btn btn-ghost" data-skip-rest="${escapeHtml(iso)}" aria-describedby="day-skip-hint">${t('skip_card_rest')}</button>
+      </div>
+      <div class="skip-card-hint" id="day-skip-hint">${escapeHtml(t('skip_card_rest_hint').replace('{slot}', () => planDayName(plan.name) || t('workout_label')))}</div>` : ''}
 
     ${nothing ? `
       <div class="day-empty">
@@ -3567,6 +3662,8 @@ function renderDay(el) {
        </div>`) : ''}
     </div>
   `;
+
+  $('[data-skip-rest]', el)?.addEventListener('click', (e) => skipToRest(e.currentTarget.dataset.skipRest));
 
   // The rail is live here too, so you can walk the week without going back.
   // The animation is DIRECTION-AWARE: picking an earlier day slides the content
@@ -4380,6 +4477,7 @@ function openRestSheet() {
       if (step1.dataset.rest === 'minimum') { paint(2); overlay.querySelector('[role="dialog"]')?.focus({ preventScroll: true }); return; }
       // Full rest. THIS is the only place the day is actually marked off.
       DB.plan.setRest(new Date(), true);
+      resyncAlarms();   // today's training and missed-workout alarms no longer apply
       close(() => { showToast(t('rest_today_on')); renderView('home'); });
       return;
     }
@@ -7424,6 +7522,7 @@ function renderSessionRun(el) {
     const prior = DB.sessions.prSnapshot(exId, existingId);
     if (existingId) {
       if (!DB.sessions.update(existingId, { date: runCtx.date, sets: cleaned })) { convenienceError(DB.saveState()); return false; }
+      queueAlarmResync();   // a session exists for today: the evening reminders are quiet (stillDue), and the OS alarms learn it
       st.savedSessionId = existingId;
     } else {
       // Tagged 'minimum' when the run inherited a reduced day from the rest-day
@@ -7439,6 +7538,7 @@ function renderSessionRun(el) {
       });
       if (!created) { convenienceError(DB.saveState()); return false; }
       st.savedSessionId = created.id;
+      queueAlarmResync();   // the first set of the day silences the evening reminders; the OS alarm armed this morning must learn it
     }
     // Stash rather than toast: a mid-workout toast would fight the rest-timer bar
     // (and [data-next] dismisses toasts on the way out). The summary screen shows
@@ -8828,6 +8928,35 @@ function openSupplementModal(id = null) {
 // ==========================================================================
 let authMode = 'in'; // 'in' | 'up'
 
+// THE DAYS WITHOUT TRAINING (v418) are recorded only on a blob known to be
+// current. A planned day settled on a copy the cloud is about to replace would
+// be recorded as missed when it was trained on another device, and the save
+// would turn the coming pull into a conflict. So DB.skips.settle() runs at
+// three seams, each a moment that is known: (a) the end of refreshAfterSync, a
+// pull having landed; (b) a foreground sync whose answer left the blob current;
+// (c) boot, once its first sync attempt has resolved — or at once when there
+// is no account copy, or no network, to wait for. One run per tick however
+// many seams fire in it: settle is idempotent, so a second would only repeat
+// the walk.
+let __skipsSettleTick = false;
+function settleSkips() {
+  if (__skipsSettleTick) return;
+  __skipsSettleTick = true;
+  setTimeout(() => { __skipsSettleTick = false; }, 0);
+  let added = [];
+  try { added = DB.skips.settle(); } catch (_) { return; }
+  if (added && added.length && (currentView === 'home' || currentView === 'day')) renderView(currentView);
+}
+// A sync answer that leaves this device's blob current: nothing moved
+// ('synced', the fast path), ours was the newer copy and went up ('pushed'),
+// or there is no network to bring a newer one. Every other answer waits:
+// 'pulled' settles through refreshAfterSync, a conflict through its dialog's
+// finish(), and a failed round trip on a live network at the next foreground.
+function settleSkipsAfter(r) {
+  if (r === 'synced' || r === 'pushed'
+      || (r === 'offline' && typeof navigator !== 'undefined' && navigator.onLine === false)) settleSkips();
+}
+
 // Everything that has to follow a cloud PULL, i.e. after the whole blob was
 // replaced by a copy from another device.
 function refreshAfterSync() {
@@ -8862,6 +8991,7 @@ function refreshAfterSync() {
   // were armed from the pre-pull blob) and run the OS sequence in its one order.
   try { armNotifications(); } catch (_) {}
   try { if (window.Notify) Notify.foreground({ catchUp: false }); } catch (_) {}   // re-arm only: boot/visibility already ran the catch-up, a second one burns the bar
+  settleSkips();   // seam (a): the pulled blob is the current one
 }
 
 function hideAuthGate() {
@@ -10043,7 +10173,7 @@ function renderPersonalRecords(el) {
 }
 
 async function bootCloud() {
-  if (!window.Cloud || !Cloud.configured()) return; // not set up → local-only
+  if (!window.Cloud || !Cloud.configured()) { settleSkips(); return; } // not set up → local-only; seam (c): no cloud copy exists to be newer
   // Read (and clear) a failed OAuth return BEFORE the SDK starts: it is a key
   // or null, and it is said below on whichever surface this boot ends on.
   const oauthErr0 = takeOAuthReturnError();
@@ -10075,8 +10205,10 @@ async function bootCloud() {
     const known = !!(Cloud.wasLinked && Cloud.wasLinked()) && !!(Cloud.localHasData && Cloud.localHasData());
     if (offline && known) {
       try { showToast(t(oauthErr || 'auth_offline_grace')); } catch (_) {}
+      settleSkips();   // seam (c): no network, so this blob is the only copy there is to read
       return; // let them train; sync resumes when the connection does
     }
+    if (!Cloud.getLastUid()) settleSkips();   // seam (c): never linked — no account copy exists to be newer
     showAuthGate('in');
     if (oauthErr) { const e = document.getElementById('auth-err'); if (e) e.textContent = t(oauthErr); }
     return;
@@ -10088,6 +10220,7 @@ async function bootCloud() {
     if (r === 'pulled') refreshAfterSync();
     else if (r === 'conflict') showConflictDialog(); // both sides changed → ask
     else if (r === 'duplicate' || r === 'held') { showDuplicateAccountDialog(r); return; }   // nothing below may act as the second account
+    else settleSkipsAfter(r);   // seam (c): boot's first sync attempt has resolved
   } catch (_) {}
   ensureUsername(); // enforce a handle for already-logged-in users too
   if (Cloud.touchLastSeen) Cloud.touchLastSeen();  // fire-and-forget activity stamp
@@ -10638,6 +10771,7 @@ function afterScripts(fn) {
     if (r === 'pulled') refreshAfterSync();
     else if (r === 'conflict') showConflictDialog();
     else if (r === 'duplicate' || r === 'held') showDuplicateAccountDialog(r);
+    else settleSkipsAfter(r);   // seam (b): 'synced' is the fast path's «nothing moved»
   }
   // "Sync resumes when you reconnect" — app.js has promised this to the user in
   // both languages since the offline grace path was written, and NOTHING

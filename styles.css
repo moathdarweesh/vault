@@ -6512,6 +6512,59 @@ body:has(> .auth-gate) .modal-overlay { z-index: 1001; }
   font-size: var(--fs-sub);
 }
 
+/* A planned day that passed without a session (v418, DB.skips). One card right
+   under the hero, never a sheet: what was planned, what the day became, and the
+   one flip — «It was a rest day», which postpones that slot — beside OK, with
+   the flip's consequence in the hint under them. The buttons are the app's own
+   .btn on the 44px rung (the flip is .btn-ghost, an outline like the Rest
+   chip's), so this block draws none; the card takes the hero's corner, which
+   keeps their 12px corners at the 2:1 law. */
+.skip-card {
+  background: var(--card-bg);
+  border: var(--card-border);
+  box-shadow: var(--elev-1);
+  border-radius: var(--radius-lg);
+  padding: var(--sp-5);
+  margin-bottom: var(--card-gap);
+  color: var(--text);
+}
+.skip-card-title {
+  font-size: var(--fs-h3);
+  font-weight: 700;
+  line-height: 1.3;
+  margin-bottom: var(--sp-1);
+}
+.skip-card-body {
+  font-size: var(--fs-sub);
+  line-height: 1.5;
+  color: var(--text-mute);
+}
+.skip-card-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sp-2);
+  margin-top: var(--sp-4);
+}
+.skip-card-hint {
+  margin-top: var(--sp-2);
+  font-size: var(--fs-meta);
+  line-height: 1.4;
+  color: var(--text-mute);
+}
+/* The Day view's line for the same record: the words and the same flip beside
+   them, the same hint under the line. */
+.day-skipped {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sp-2) var(--sp-3);
+  margin-top: var(--sp-3);
+  font-size: var(--fs-sub);
+  color: var(--text-mute);
+}
+.day-skipped + .skip-card-hint { margin-bottom: var(--sp-3); }
+
 /* 3-stat strip */
 .stat-strip {
   display: grid;

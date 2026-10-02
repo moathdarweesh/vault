@@ -464,6 +464,11 @@ function defaultState() {
     // refuseHealthKey(). User intent, so it syncs with the blob; deliberately
     // not in hasUserData(): a list of refusals is not content.
     healthDeleted: { sleep: [], cardio: [] },
+    // The planned training days that passed without a session (DB.skips). A
+    // TOP-LEVEL key on purpose, never a field of plan (seven places rebuild that
+    // object). last = the last day settled; '' = never, so tracking starts at
+    // the first settle and nothing is backfilled for an existing user.
+    skips: { last: '', days: {} },
   };
 }
 
@@ -704,6 +709,26 @@ function refuseHealthKey(domain, key) {
     .filter((k) => Date.parse(k) >= floor).slice(-HC_REFUSED_MAX);
 }
 
+// The skip record (DB.skips), SHAPE only — the cleanHealthDeleted discipline.
+// last is an ISO day or ''; an entry is an ISO-day key holding {at: string,
+// seen: boolean}; anything else is dropped, and the newest SKIPS_MAX days are
+// kept. Unknown fields ride through (a newer build's are kept, not erased) and
+// the key order is left as it was, so a load that changes nothing writes
+// nothing. The keys are checked because they are what a view puts in markup.
+// Declared above "let STATE = …loadState()" for the reason at HC_REFUSED_DAYS.
+const SKIPS_MAX = 400;
+const ISO_DAY_RE = /^\d{4}-\d{2}-\d{2}$/;
+function cleanSkips(v) {
+  const src = v && typeof v === 'object' && !Array.isArray(v) ? v : {};
+  const raw = src.days && typeof src.days === 'object' && !Array.isArray(src.days) ? src.days : {};
+  const ok = Object.keys(raw).filter((k) => ISO_DAY_RE.test(k) && !!raw[k] && typeof raw[k] === 'object' &&
+    !Array.isArray(raw[k]) && typeof raw[k].at === 'string' && typeof raw[k].seen === 'boolean');
+  const keep = new Set(ok.slice().sort().slice(-SKIPS_MAX));
+  const days = {};
+  for (const k of ok) if (keep.has(k)) days[k] = { ...raw[k] };
+  return { ...src, last: typeof src.last === 'string' && ISO_DAY_RE.test(src.last) ? src.last : '', days };
+}
+
 
 function loadState() {
   SCHEMA_TOO_NEW = false;
@@ -748,6 +773,7 @@ function loadState() {
     parsed.supplementLogs = parsed.supplementLogs || {};
     parsed.foodLogs = parsed.foodLogs || {};
     parsed.water = parsed.water || {};
+    parsed.skips = parsed.skips || { last: '', days: {} };   // v418 — an older blob is backfilled silently
     // SHAPE, not just presence. A pulled or imported blob with `sleep: {}` used
     // to pass validation (present) and throw at the first `[...STATE.sleep]`;
     // a session without `sets`, or with reps typed as '8x', broke Home and the
@@ -760,7 +786,7 @@ function loadState() {
     for (const k of ['exercises', 'sessions', 'cardio', 'cardioTypes', 'cardioPlan', 'foods', 'sleep', 'supplements', 'mealBundles', 'recipes', 'bodyweight', 'shoppingLists']) {
       if (k in parsed && !Array.isArray(parsed[k])) { parsed[k] = []; normChanged = true; }
     }
-    for (const k of ['supplementLogs', 'foodLogs', 'water']) {
+    for (const k of ['supplementLogs', 'foodLogs', 'water', 'skips']) {
       if (!parsed[k] || typeof parsed[k] !== 'object' || Array.isArray(parsed[k])) { parsed[k] = {}; normChanged = true; }
     }
     const sessionsBefore = JSON.stringify(parsed.sessions);
@@ -799,6 +825,11 @@ function loadState() {
     const refusedBefore = parsed.healthDeleted === undefined ? null : JSON.stringify(parsed.healthDeleted);
     parsed.healthDeleted = cleanHealthDeleted(parsed.healthDeleted);
     if (refusedBefore !== null && JSON.stringify(parsed.healthDeleted) !== refusedBefore) normChanged = true;
+    // The skip record, the same way: a malformed day is dropped, never repaired,
+    // and only a blob that actually changed is persisted.
+    const skipsBefore = JSON.stringify(parsed.skips);
+    parsed.skips = cleanSkips(parsed.skips);
+    if (JSON.stringify(parsed.skips) !== skipsBefore) normChanged = true;
     // Scheduled-cardio ROWS, normalised like sessions. A row without a usable id
     // is DROPPED rather than repaired: the id is the join key the Home tick writes
     // into the cardio log as planId, and `undefined === undefined` would let one
@@ -1832,6 +1863,109 @@ const DB = {
     },
   },
 
+  // ----- a planned training day that passed without a session (v418) -----
+  // STATE.skips — top level, never a field of plan. A SKIP IS NOT A REST DAY:
+  // plan.restDates POSTPONES the day's workout; a skip only records that the
+  // day went by, and the rotation moves exactly as it always did for a missed
+  // day. Where both could be said of one date, isRest() wins — has() and
+  // list() ask it.
+  //
+  // "A session was logged" means ANY DB.sessions row dated that day (a minimum
+  // session too). Cardio does not count: the owner's words were «ولا جلسة
+  // بتمارين», and it is what the Program page's week wells count.
+  skips: {
+    MAX: SKIPS_MAX,
+    BACKFILL_DAYS: 7,
+    // Healed in memory, never written: loadState has already shaped every
+    // STATE that came through a door; this covers one built any other way.
+    _s() {
+      const s = STATE.skips;
+      if (!s || typeof s !== 'object' || Array.isArray(s) || !s.days || typeof s.days !== 'object' || Array.isArray(s.days)) STATE.skips = cleanSkips(s);
+      return STATE.skips;
+    },
+    // An OWN entry or null — a date key, never a name off the prototype.
+    _day(iso) {
+      const days = this._s().days;
+      return Object.prototype.hasOwnProperty.call(days, iso) ? days[iso] : null;
+    },
+    _trainedOn(iso) { return (STATE.sessions || []).some((s) => !!s && s.date === iso); },
+    has(iso) { return !!this._day(iso) && !DB.plan.isRest(iso); },
+    // Newest first, rest days excluded.
+    list() {
+      const days = this._s().days;
+      return Object.keys(days).filter((d) => !DB.plan.isRest(d)).sort().reverse()
+        .map((date) => ({ date, at: days[date].at, seen: days[date].seen }));
+    },
+    // Records every planned training day that passed with no session, from the
+    // day after last up to yesterday — at most BACKFILL_DAYS back, so a month
+    // away from the app does not come home to a month of failures. The FIRST
+    // call only starts the clock. Idempotent: a second call the same day
+    // changes nothing. Writes only when something changed, and returns the
+    // dates it newly recorded. Its caller runs it only on a CURRENT blob, one a
+    // pending pull can no longer replace (settleSkips() in app.js).
+    settle(todayIso = todayISO()) {
+      if (!ISO_DAY_RE.test(String(todayIso))) return [];
+      const s = this._s();
+      const yesterday = addDaysISO(todayIso, -1);
+      if (!s.last) { s.last = yesterday; save(); return []; }
+      const floor = addDaysISO(todayIso, -this.BACKFILL_DAYS);
+      const after = addDaysISO(s.last, 1);
+      const at = new Date().toISOString();
+      const added = [];
+      for (let d = after > floor ? after : floor; d <= yesterday; d = addDaysISO(d, 1)) {
+        if (this._day(d) || DB.plan.isRest(d) || this._trainedOn(d)) continue;
+        if (!DB.plan.workoutForDate(DB.notif._dateOf(d, 12))) continue;   // not a planned training day (noon: numeric, local)
+        s.days[d] = { at, seen: false };
+        added.push(d);
+      }
+      // Forward only: a device whose clock or time zone is behind the one that
+      // settled last must not walk last back and write for nothing.
+      const moved = yesterday > s.last;
+      if (moved) s.last = yesterday;
+      if (added.length) {
+        const keys = Object.keys(s.days).sort();
+        while (keys.length > this.MAX) delete s.days[keys.shift()];
+      }
+      if (added.length || moved) save();
+      return added;
+    },
+    unseen() {
+      const u = this.list().find((x) => !x.seen);
+      return u ? { date: u.date, at: u.at } : null;
+    },
+    // Every entry, not only the newest: the card shows one day, and its answer
+    // stands for the run of days behind it. No change, no write.
+    markSeen() {
+      const days = this._s().days;
+      let changed = false;
+      for (const d of Object.keys(days)) if (!days[d].seen) { days[d].seen = true; changed = true; }
+      if (changed) save();
+    },
+    // «It was a rest day»: the record goes and the day becomes a declared rest
+    // through the one writer of restDates, so the workout it carried moves to
+    // the next training day exactly as a rest declared in advance would.
+    // Returns the undo token {date, at, wasRest}: at is null when the day had
+    // no entry, wasRest says the day was a rest day already.
+    toRest(iso) {
+      const e = this._day(iso);
+      const wasRest = DB.plan.isRest(iso);
+      if (e) delete this._s().days[iso];
+      if (!wasRest) DB.plan.setRest(iso, true);   // its save() persists the deletion too
+      else if (e) save();
+      return { date: iso, at: e ? e.at : null, wasRest };
+    },
+    // The exact inverse of toRest(): the rest it declared is withdrawn and the
+    // record comes back, marked seen — the user has already answered it.
+    undoRest(token) {
+      const tk = token && typeof token === 'object' ? token : {};
+      if (!ISO_DAY_RE.test(String(tk.date))) return false;
+      if (typeof tk.at === 'string') this._s().days[tk.date] = { at: tk.at, seen: true };
+      if (!tk.wasRest && DB.plan.isRest(tk.date)) DB.plan.setRest(tk.date, false);   // its save() persists the entry too
+      else save();
+      return true;
+    },
+  },
+
   // ----- Health Connect (Android) -----
   // Caches the last sync so the home screen can show cards offline, plus the
   // per-metric show/hide preferences for the home screen.
@@ -2168,6 +2302,8 @@ const DB = {
         (b.shoppingLists && b.shoppingLists.length) ||
         // healthDeleted is deliberately ABSENT: the keys of deleted watch
         // sessions are not content, and a device holding nothing else is empty.
+        // skips is ABSENT for the same reason: which planned days went by
+        // without a session follows from the plan and the log, it is not content.
         // notif counts ONLY for content the user typed (supplement doses, meal
         // times). The object itself is written into every blob at boot by
         // migrateFromReminders(), so counting its mere presence made a fresh
@@ -2195,7 +2331,7 @@ const DB = {
     }
     // healthDeleted's two lists are NORMALISED on load (cleanHealthDeleted), not
     // refused here: a stray entry in a list of refusals is not worth a pull.
-    for (const k of ['prefs', 'foodLogs', 'supplementLogs', 'water', 'notif', 'plan', 'nutrition', 'reminders', 'health', 'healthDeleted']) {
+    for (const k of ['prefs', 'foodLogs', 'supplementLogs', 'water', 'notif', 'plan', 'nutrition', 'reminders', 'health', 'healthDeleted', 'skips']) {
       if (k in data && data[k] != null && (typeof data[k] !== 'object' || Array.isArray(data[k]))) return false;
     }
     // ELEMENTS, not just sections. A null or a bare value in a record list
@@ -2209,6 +2345,9 @@ const DB = {
     for (const k of ['exercises', 'cardio', 'cardioTypes', 'cardioPlan', 'sleep', 'foods', 'supplements', 'mealBundles', 'recipes', 'bodyweight', 'shoppingLists']) {
       if (Array.isArray(data[k]) && !data[k].every(isRecord)) return false;
     }
+    // The skip record's days are NORMALISED, not refused (cleanSkips): one
+    // malformed entry in a list of skipped days is not worth refusing a pull.
+    if (isRecord(data.skips)) data.skips = cleanSkips(data.skips);
     if (isRecord(data.foodLogs) && !Object.keys(data.foodLogs).every((d) => data.foodLogs[d] == null || (Array.isArray(data.foodLogs[d]) && data.foodLogs[d].every(isRecord)))) return false;
     if (isRecord(data.supplementLogs) && !Object.keys(data.supplementLogs).every((d) => data.supplementLogs[d] == null || isRecord(data.supplementLogs[d]))) return false;
     // `name` on the list and `quantity`/`unit` on an item are LEGACY: a device on
@@ -2259,6 +2398,8 @@ const DB = {
         if (day && typeof day === 'object') for (const sid of Object.keys(day)) if (!ok(sid)) return false;
       }
     }
+    // skips carries no entity id: its keys are ISO days, and cleanSkips (on load
+    // and in _validateBlob) drops any key that is not one.
     return true;
   },
   importJSON(json) {
@@ -2707,6 +2848,10 @@ const DB = {
         cap: 'auto',
         channels: {
           train: { on: true, mode: 'auto', at: '09:00', offsetMin: 30 },
+          // A planned training day with no session logged by this time (v418).
+          // ON by default on purpose: a v417 client rebuilds the channels by
+          // name and drops this one, and a dropped channel returns as its default.
+          missed: { on: true, at: '21:00' },
           supps: { on: true, doses: [] },
           water: { on: true, everyMin: 120 },
           // `meals` mirrors `supps.doses` exactly — {id, at, name} — because the
@@ -2730,6 +2875,10 @@ const DB = {
       // field at all — which must read as 'auto', not as 0.
       let cap = n.cap;
       if (cap !== 'none' && !(Number(cap) > 0)) cap = 'auto';
+      // The missed channel's time is HEALED here, like the window's: this
+      // object is synced, and a malformed time would arm nothing anywhere.
+      const missed = pickOwn(d.channels.missed, c.missed);
+      missed.at = this._validHHMM(missed.at, d.channels.missed.at);
       return {
         asked: !!n.asked,
         cap,
@@ -2746,6 +2895,7 @@ const DB = {
         // prototype, so the next hasOwnProperty on the channel threw.
         channels: {
           train: pickOwn(d.channels.train, c.train),
+          missed,
           supps: Object.assign(pickOwn(d.channels.supps, c.supps), {
             doses: Array.isArray((c.supps || {}).doses) ? c.supps.doses.slice() : [],
           }),
@@ -2825,7 +2975,12 @@ const DB = {
     setChannel(id, patch) {
       const cur = this.get();
       if (!cur.channels[id]) return;
-      cur.channels[id] = Object.assign(cur.channels[id], patch || {});
+      if (id === 'missed') {
+        // Field by field: on, and a valid at — '25:99' keeps the time already set.
+        const p = patch && typeof patch === 'object' && !Array.isArray(patch) ? patch : {};
+        if ('on' in p) cur.channels.missed.on = !!p.on;
+        if ('at' in p) cur.channels.missed.at = this._validHHMM(p.at, cur.channels.missed.at);
+      } else cur.channels[id] = Object.assign(cur.channels[id], patch || {});
       STATE.notif = cur;
       save();
     },
@@ -2923,6 +3078,12 @@ const DB = {
       if (iso !== todayISO()) return true;
       const p = it.payload || {};
       switch (it.channel) {
+        // Both training reminders go quiet once ANY session is logged today, or
+        // once the day is declared a rest (v418; cardio does not count, see
+        // DB.skips). The training reminder used to arrive after the user had
+        // already trained, and a rest taken at noon left the in-app timer live.
+        case 'train':
+        case 'missed': return !DB.skips._trainedOn(iso) && !DB.plan.isRest(iso);
         // A dose linked to a real supplement goes quiet once it is ticked off —
         // the permission sheet's promise, «logging something cancels its reminder».
         case 'supps': return !(p.suppId && DB.supplements.isTaken(p.suppId, iso));
@@ -2991,6 +3152,7 @@ const DB = {
     destFor(channel) {
       const map = {
         train: { view: 'session-day', context: { date: todayISO() } },
+        missed: { view: 'home' },
         supps: { view: 'supplements' },
         water: { view: 'food' },
         food: { view: 'food' },
@@ -3066,6 +3228,15 @@ const DB = {
           { name: workout.name || '', n: (workout.exerciseIds || []).length });
       }
 
+      // -- missed -------------------------------------------------------------
+      // The same training days, at the user's own evening time: no session yet,
+      // and the day is about to be recorded as one without training. Not a
+      // demand, and its words say so. Quiet once a session is logged
+      // (stillDue(), in the guards below).
+      if (ch.missed.on && workout) {
+        push(this._clampToWindow(ch.missed.at), 'missed', 'missed:' + iso, { name: workout.name || '' });
+      }
+
       // -- supps -------------------------------------------------------------
       // One per configured dose, at its own time. No time is ever suggested.
       if (ch.supps.on) {
@@ -3119,14 +3290,14 @@ const DB = {
         return true;
       });
 
-      // Over the cap, food yields first; train/supps/streak never do. (Water is
+      // Over the cap, food yields first; train/missed/supps/streak never do. (Water is
       // not in this list because it is no longer generate-then-trim — see below.)
       // noCap lets the notifications page compute how many were HELD BACK, by
       // asking the same question twice. Without it the cap does its work
       // invisibly, which is a large part of why the schedule felt broken.
       const cap = o.noCap ? Infinity : this.dailyCap(iso);
       const room = Math.max(0, cap - (isToday && !o.noCap ? this.day().count : 0));
-      const rank = { food: 1, train: 9, supps: 9, streak: 9 };
+      const rank = { food: 1, train: 9, missed: 9, supps: 9, streak: 9 };
       while (kept.length > room) {
         let victim = -1, worst = 9;
         for (let i = kept.length - 1; i >= 0; i--) {
@@ -3260,6 +3431,16 @@ const DB = {
           const w = (typeof fmtWeight === 'function') ? fmtWeight(set.weight || 0) : num(set.weight || 0);
           const u = (typeof unitLabel === 'function') ? unitLabel() : 'kg';
           return { title, body: F('notif_train_body', { ex: exName, w, u, reps: num(set.reps || 0) }) };
+        }
+
+        // The evening one (v418): today's planned day, still without a session.
+        // True at any hour of that day, so 'live' and 'plan' read the same.
+        // The day named as every screen names it (planDayName, typeof-guarded).
+        case 'missed': {
+          const day = p.name != null ? null : DB.plan.workoutForDate(this._dateOf(iso, 12));
+          const stored = p.name || (day && day.name);
+          const slot = (stored && typeof planDayName === 'function' ? planDayName(stored) : stored) || tr('notif_ch_train');
+          return { title: F('notif_missed_title', {}), body: F('notif_missed_body', { slot }) };
         }
 
         case 'supps':

@@ -83,8 +83,31 @@ const ROOT = path.resolve(__dirname, '..');
     return out;
   });
 
+  // v363–v417 pinned session-saved to the permission ask ALONE:
+  //   assert.deepEqual(got.afterSessionSaved, ['maybeAskNotifPermission'],
+  //     'vault:session-saved did not synchronously reach the permission ask: ' + JSON.stringify(got.afterSessionSaved));
+  // v418 widens it on purpose. A logged session must silence today's training
+  // and missed-workout reminders, and an alarm already handed to the OS is
+  // withdrawn only by a re-sync — stillDue() answers at fire time in the app,
+  // never inside Android's alarm. So the listener still asks synchronously
+  // (the line below is the old assertion, kept), and then re-syncs the alarms
+  // ONCE, debounced: a run of saves during a workout is one re-sync.
   assert.deepEqual(got.afterSessionSaved, ['maybeAskNotifPermission'],
     'vault:session-saved did not synchronously reach the permission ask: ' + JSON.stringify(got.afterSessionSaved));
+  const resync = await page.evaluate(async () => {
+    const real = window.Notify;
+    let n = 0;
+    window.Notify = Object.assign({}, real, { sync: () => { n += 1; return Promise.resolve({ ok: true }); } });
+    try {
+      window.dispatchEvent(new CustomEvent('vault:session-saved'));
+      window.dispatchEvent(new CustomEvent('vault:session-saved'));
+      const now = n;                                   // read BEFORE yielding: the re-sync is not synchronous
+      await new Promise((r) => setTimeout(r, 2200));   // the debounce is 1500 ms
+      return { now, later: n };
+    } finally { window.Notify = real; }
+  });
+  assert.deepEqual(resync, { now: 0, later: 1 },
+    'two vault:session-saved in a row re-sync the alarms once, after the debounce (want {now:0, later:1}): ' + JSON.stringify(resync));
   assert.deepEqual(got.afterRemindersChanged, ['armNotifications', 'syncRemindersOrWarn'],
     'vault:reminders-changed did not run the pair in order: ' + JSON.stringify(got.afterRemindersChanged));
   assert.deepEqual(got.afterUnrelated, [],

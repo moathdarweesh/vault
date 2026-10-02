@@ -185,7 +185,9 @@
       // decodeResource(res, 0) and getting null on every notification — silently,
       // because a missing large icon is not an error. Copied in now, but they are
       // a NATIVE resource: this one reaches nobody until a new APK is installed.
-      largeIcon: 'cat_' + (it.channel || 'summary') + '_192',
+      // The missed-workout channel (v418) wears the training icon: it is about
+      // the same training day, and no new drawable means no new APK.
+      largeIcon: 'cat_' + (it.channel === 'missed' ? 'train' : (it.channel || 'summary')) + '_192',
       iconColor: '#FF6A00',
       // AN ABSOLUTE, DATED TRIGGER — not `{on:{hour,minute}}`.
       //

@@ -1026,13 +1026,18 @@ const I18N = {
     notif_food_body_plan: '{p} g protein is the day’s target.',
     notif_streak_title_n: '{n}-day streak at risk', notif_streak_title_many: '{n}-day streak at risk',
     notif_streak_body: 'Any logged activity before midnight counts.',
+    // The missed-workout channel (v418). Not binding, by the owner's word: it
+    // names what was planned and what the day becomes without a session, and
+    // nothing is owed. {slot} is the day's own slot name, as {name} above.
+    notif_missed_title: 'No workout logged today',
+    notif_missed_body: '{slot} was planned. No pressure: if the day ends without a session, it is recorded as a day without training.',
     notif_summary_title_1: '1 reminder today',
     notif_perm_title: 'Reminders, on your terms',
-    notif_perm_body: 'Five reminders, all inside your day window, each one switchable on its own.',
+    notif_perm_body: 'Six reminders, all inside your day window, each one switchable on its own.',
     notif_perm_cta: 'Turn on reminders',
     // ---- Notifications settings + permission sheet (§7, §8) ---------------
     notif_settings_title: 'Notifications',
-    notif_settings_of: '{n} of 5',
+    notif_settings_of: '{n} of 6',
     notif_window_title: 'Your day window',
     notif_window_hint: 'Everything is scheduled inside this. Outside it, supplements and meals wait for the start and water is skipped.',
     notif_ch_train: 'Training',
@@ -1040,6 +1045,8 @@ const I18N = {
     notif_ch_water: 'Water',
     notif_ch_food: 'Meals',
     notif_ch_streak: 'Streak',
+    notif_ch_missed: 'Missed workout',
+    notif_ch_missed_sub: 'At {time}, when a training day has no logged session',
     notif_sum_train_auto: 'Half an hour before your usual time',
     notif_sum_train_fixed: 'Every training day at {at}',
     notif_sum_supps: '{n} doses',
@@ -1087,6 +1094,16 @@ const I18N = {
     // describe what the user DID, and neither carries a verdict.
     day_moved_in: 'Moved in',
     day_rest_taken: 'Rest taken',
+    // A planned day that passed without a session (v418, DB.skips). It does not
+    // move the rotation; «It was a rest day» turns it into a rest date, which
+    // does — and the hint beside the button says so before the tap.
+    skip_card_title: 'No workout on {day}',
+    skip_card_body: '{slot} was planned. The day is recorded as a day without training.',
+    skip_card_rest: 'It was a rest day',
+    skip_card_rest_hint: '{slot} moves to your next training day',
+    skip_card_ok: 'OK',
+    skip_rest_toast: 'Rest day recorded. {slot} is next.',
+    day_skipped: 'No workout logged',
     pg_volume_30d: 'Volume · 30 days',
     pg_sessions_30d: 'Sessions · 30 days',
     pg_days_unit: 'days',
@@ -2069,13 +2086,15 @@ const I18N = {
     notif_food_body_plan: '{p} غ بروتين هدف اليوم.',
     notif_streak_title_n: 'سلسلة {n} أيام على المحك', notif_streak_title_many: 'سلسلة {n} يوماً على المحك',
     notif_streak_body: 'أي نشاط مسجّل قبل منتصف الليل يكفي.',
+    notif_missed_title: 'لم تسجّل تمرينًا اليوم',
+    notif_missed_body: 'كان المخطَّط {slot}. لا بأس؛ إن انتهى اليوم بلا جلسة سُجِّل يومًا بلا تمرين.',
     notif_summary_title_1: 'تذكير واحد اليوم',
     notif_perm_title: 'نذكّرك بشروطك',
-    notif_perm_body: 'خمسة تذكيرات فقط، كلها داخل نافذة يومك، وكل واحدة تُطفأ وحدها بأي وقت.',
+    notif_perm_body: 'ستة تذكيرات فقط، كلها داخل نافذة يومك، وكل واحدة تُطفأ وحدها بأي وقت.',
     notif_perm_cta: 'فعّل التذكيرات',
     // ---- إعدادات الإشعارات وشيت الإذن (§7، §8) ----------------------------
     notif_settings_title: 'الإشعارات',
-    notif_settings_of: '{n} من 5',   // Latin 5: every figure in the app goes through fmtNum, which is en-US
+    notif_settings_of: '{n} من 6',   // Latin 6: every figure in the app goes through fmtNum, which is en-US
     notif_window_title: 'نافذة يومك',
     notif_window_hint: 'كل شيء يُجدول داخلها. خارجها تنتظر المكمّلات والوجبات حتى بدايتها ويسقط الماء.',
     notif_ch_train: 'التمرين',
@@ -2083,6 +2102,8 @@ const I18N = {
     notif_ch_water: 'الماء',
     notif_ch_food: 'الوجبات',
     notif_ch_streak: 'السلسلة',
+    notif_ch_missed: 'تمرين لم يُسجَّل',
+    notif_ch_missed_sub: 'في {time} إن مرّ يوم التمرين بلا جلسة مسجَّلة',
     notif_sum_train_auto: 'قبل موعدك المعتاد بنصف ساعة',
     notif_sum_train_fixed: 'كل يوم تمرين الساعة {at}',
     notif_sum_supps: '{n} جرعات',
@@ -2127,6 +2148,13 @@ const I18N = {
     notif_arm_hint: 'افتح التطبيق مرة أسبوعياً على الأقل لتبقى مُجهّزة.',
     day_moved_in: 'يوم مُقدَّم',
     day_rest_taken: 'راحة مأخوذة',
+    skip_card_title: 'لم تتمرّن يوم {day}',
+    skip_card_body: 'كان المخطَّط {slot}، وسُجِّل اليوم بلا تمرين.',
+    skip_card_rest: 'كان يوم راحة',
+    skip_card_rest_hint: 'يُؤجَّل {slot} إلى موعدك التالي',
+    skip_card_ok: 'حسنًا',
+    skip_rest_toast: 'سُجِّل يوم راحة، و{slot} في موعدك التالي',
+    day_skipped: 'يوم بلا تمرين',
     pg_volume_30d: 'الحجم · ٣٠ يوماً',
     pg_sessions_30d: 'الجلسات · ٣٠ يوماً',
     pg_days_unit: 'يوم',

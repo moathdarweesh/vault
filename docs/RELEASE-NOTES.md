@@ -2,6 +2,62 @@
 
 One section per release since v309, newest first, moved verbatim from `CLAUDE.md` in v401 (batch 6 of the 2026-09-25 review; `docs/REVIEW-2026-09-25.md`). `CLAUDE.md` is the guide and the authority for how the app works now. A section here records what one release changed and why, in the words written at the time, so a later section — or the guide — can supersede what an earlier one says.
 
+## v418 — a planned day that passes without a workout is recorded, and the user is told
+
+**«خلي انو اذا ما سجلت ولا جلسة بتمارين ينحط انو راحة او عدم الذهاب الى النادي
+وترسل للمستخدم اشعار له انو ما اكمل التمرين — وطبعا مش لازم يكمل التمرين».**
+A planned training day that ends with no session logged is now RECORDED, as a
+day without training («يوم بلا تمرين»): `STATE.skips` = `{ last, days }`, a new
+top-level slice behind `DB.skips`, settled once the device holds a current blob
+on a later day (`settleSkips()` in app.js, only where no pending pull can still
+replace it). A session is any `DB.sessions` row on that date, a «minimum» one
+too; cardio is not a session. The record looks back seven days at most, starts
+on the first settle (nothing is back-filled for an existing user), keeps 400
+days, and is not user data for `hasUserData`. It is the OTHER status beside the
+rest date: `plan.restDates` postpones the day's slot, a skip moves nothing — the
+rotation behaves for a missed day exactly as before — and wherever both could
+be said of a date, the rest date wins.
+
+**The reminder, and its silence after a session.** A sixth channel, `missed`
+(«تمرين لم يُسجَّل», on by default at 21:00, its own time on the reminders page),
+fires on a planned training day while no session is logged. Not binding, as the
+owner said: «لم تسجّل تمرينًا اليوم — كان المخطَّط {slot}. لا بأس؛ إن انتهى اليوم
+بلا جلسة سُجِّل يومًا بلا تمرين.» It is in every place a channel lives, and
+contract 77 now holds every channel to all eight of them (the cap's rank map,
+destFor, text(), stillDue, both icon maps, both dictionaries) — each fails
+silently on its own. The counts that said five reminders say six.
+
+**The Home card and the flip.** The newest unseen day is said once, in one card
+under the hero: «لم تتمرّن يوم {day}» and what was planned, «حسنًا», and
+«كان يوم راحة» with its consequence beside it («يُؤجَّل {slot} إلى موعدك
+التالي»). The flip makes the day a rest date through `setRest`, so that slot
+moves to today's hero; its toast carries an Undo that puts both back. The Day
+view of that date carries the same line and the same flip.
+
+**The training reminder that fired after you trained.** `stillDue()` had no
+`train` case, so the training reminder arrived even with today's session
+logged. `train` and `missed` both go quiet once a session is logged, or once the
+day is declared a rest (a rest taken at noon used to leave the in-app timer
+live), and a saved session now re-syncs the OS alarms (debounced, 1.5 s) so an
+alarm already handed to Android is withdrawn too — from the day screen's
+`vault:session-saved` and from the guided run's own commits, which fire no
+event: without the second, a run still going at 21:00 got «no workout logged
+today» mid-workout. `scripts/test-notif-events.js` pins the new listener in place
+of the old one-call pin, which it quotes.
+
+**The gate.** `scripts/test-skips.js` (node) failed on v417 at its first case
+(«a blob without `skips` loads with the default … — got null»), and named 15 of
+16 defects planted in the new storage code (the sixteenth changes nothing: a
+rest date already has no slot); `scripts/test-skips-ui.js` drives the card, the
+flip and its Undo, the reminders row and «6 of 6», the Day view and the re-sync
+in AR/dark and EN/light; the fix pass added two more, each seen failing with its
+line put back: a rest declared today silences both reminders (node), and the
+guided run's own commit re-syncs the alarms with no session-saved event behind
+it (browser, through the real run: Start → guided → a set ticked → Next).
+Contract 77 was seen naming a channel removed from each place in turn, and a
+new channel wired nowhere. Gate: 73 contracts, lint, 24
+suites.
+
 ## v417 — the Program page as three plates; six things made easier; vibration for APK 26
 
 **The Program page (owner: redesign it radically, same function, with explanatory
