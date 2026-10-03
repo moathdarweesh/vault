@@ -34,6 +34,7 @@ The release history — one section per version since v309 — is in `docs/RELEA
 - **Run:** `node dev-server.js` → http://localhost:8080 (serves `Cache-Control: no-store`). Honors `$PORT`. Also `.claude/launch.json` server name `vault` for the preview tool.
 - **Verify:** `npm run verify` — contracts (`scripts/check-contracts.js`), ESLint 9 (dev-only) and every `scripts/test-*.js` suite (node `vm` suites + real-Chrome Playwright suites); the commands print the current counts, so no document states them. One-time setup: `npm i --no-save playwright eslint@9 globals` as ONE command — a second `--no-save` install prunes the first (v353). A change is also measured in the running app: the fingerprint net for "nothing moved", `scripts/ux-audit.js` / `ux-flows.js` for the design and the daily tap paths. **Screenshots time out on this app — do not rely on them.**
 - **A check is trusted only after it has been seen to fail** (v335, v369): plant the defect, watch the check name it, restore the file byte-for-byte. A probe whose subject is the default value cannot fail (v369); a suite must never read an artifact it did not just create — `.fpnet/` holds old records (v361).
+- **Task tiers — the pipeline is sized to the task (2026-10-03).** «المهمة اللي كانت تخلص بنص ساعة صارت تخلص بثلاث ساعات»: measured on v419, every task, whatever its size, went through 3 explorers → 3 planners → 3–4 builders → review → the full gate (exploration 9 min, planning 19, the slowest builder 74, verification 25 — the browser suites ran one after another until the pooled runner below). **Name the tier in the first line of the task.** **Small** (one screen, strings, a style, a one-file fix, a doc): no explorer, no planner, no builder — edit directly; lint + contracts + the suite(s) that cover the touched file (`QA_ONLY` / one suite); the full gate at release. **Medium** (one feature in one layer — a sheet, a reminder channel): one explorer OR a direct read, the plan written in the chat (no plan agents), ONE builder on the files, one review, the touched suites; the full gate at release. **Large** (a new table / Worker mode / cross-layer / security-relevant): the full pipeline, with each builder sized to ≤ 30 min (split the backend into SQL / Worker / tests once the plan fixes the interfaces), builders running only their own suite, the full gate ONCE at the end by the integrator, and fail-first proofs as in-memory plants (fs patching), never browser restarts. Every tier: never two Playwright suites at once from two agents (`TEST_JOBS=1` inside a worktree); `npm run release` only after `npm run verify`.
 - **Editing by script** (v368, v369, v376, v387, v395): detect a file's DOMINANT line ending, never its presence (the working tree is LF except where a checkout left CRLF — `js/catalog.js` is CRLF today); write after each edit and read the bytes back; `node --check` after every JS edit; never delete a whole line that may sit inside a ternary. `www/` and `android/.../assets/public/` are build artifacts — never count them as usage in a dead-code scan (v337).
 
 ## Non-negotiable rules
@@ -907,6 +908,27 @@ claim "all five suites pass" was wrong, both times because a Playwright-needing 
 > - **exit 0 with no output is a FAILURE**, not a pass — every real suite here ends with a
 >   PASS line, so silence means nothing executed.
 
+### One verdict at two speeds (2026-10-03) — and the false pass a pool could produce
+
+The browser suites took ~560 s one after another while the node suites took 2 s, and the
+owner's complaint was that a task had grown from half an hour to three. Each browser suite
+owns its server (port 0) and its Chrome, so they share nothing that could let one pass for
+another; `scripts/test-all.js` now runs the node suites first (a broken one is on screen in
+2 s), then the browser suites N at a time from one queue — `HEAVY` first, measured seconds
+in the comments, so the longest never starts last — then the `EXCLUSIVE` ones alone
+(`test-startup.js`: its ASSERTION is a timing). `--jobs 1` is the previous runner character
+for character. **The one new way to lie:** under load a case with a short timeout can fail
+although nothing is wrong (`test-convenience-ui.js` did, inside an agent worktree). A pool
+that simply re-ran it would turn that into a silent green. So a browser suite that fails
+beside others runs ONCE more, alone; the second verdict is the verdict, but a pass there is
+printed as `PASSED ONLY ALONE — load-sensitive` with the pooled failure's tail above it. That
+line means a case to fix (or a suite to name in `EXCLUSIVE` with its reason), never a result
+to accept. A skip and a silent exit are never retried: neither is load. `RUNNER BUG — never
+run` names any suite that reached no verdict. `scripts/test-runner.js` proves all of it over
+fake suites in a temp directory (`TEST_ALL_DIR`), each of its 24 assertions seen failing on a
+defect planted in a scratch copy of the runner (`TEST_RUNNER_UNDER_TEST`), the real file
+untouched.
+
 ### What running them for the first time found
 
 Installing Playwright and running everything caught a **third** instance of the same blind
@@ -923,8 +945,16 @@ assert a tick does not enter undo history, add a typed item, assert the footer a
 ```bash
 npm run check        # contracts only
 npm run lint         # ESLint 9 with the project's rules (v353); --strict in CI
-npm test             # every suite; a skip is reported, loudly
+npm test             # every suite; a skip is reported, loudly. Node suites first, then the
+                     #   browser suites 3 at a time (default min(3, cores − 1)), HEAVY first,
+                     #   EXCLUSIVE alone; a browser suite that fails beside others runs once
+                     #   more alone and a pass there is NAMED (2026-10-03)
+npm test -- --jobs 1 # the old runner exactly: alphabetical, one at a time, no retry
+TEST_JOBS=2 npm test # the pool width from the environment; the flag beats it; inside an
+                     #   agent worktree ALWAYS 1 (two Chromes from two agents = false failures)
+npm test -- --no-retry   # keep the first verdict (CI may want a load-sensitive case red)
 npm run test:strict  # a skip is a FAILURE — what CI runs
+node scripts/test-runner.js   # proves test-all.js itself over fake suites (24 assertions)
 npm run verify       # contracts + lint + suites (lint joined in v353)
 ```
 

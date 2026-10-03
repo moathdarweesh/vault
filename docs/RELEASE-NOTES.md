@@ -2,6 +2,99 @@
 
 One section per release since v309, newest first, moved verbatim from `CLAUDE.md` in v401 (batch 6 of the 2026-09-25 review; `docs/REVIEW-2026-09-25.md`). `CLAUDE.md` is the guide and the authority for how the app works now. A section here records what one release changed and why, in the words written at the time, so a later section — or the guide — can supersede what an earlier one says.
 
+## npm test — the browser suites three at a time, one verdict (no version bump: nothing shipped changed)
+
+**The owner's complaint (2026-10-03): «المهمة اللي كانت تخلص بنص ساعة صارت تخلص
+بثلاث ساعات».** Measured on the v419 build, the time went to two places: every
+task, whatever its size, through the whole agent pipeline (now the task tiers in
+`CLAUDE.md`, «How to run & verify»), and the gate — `npm test` ran its browser
+suites one after another, ~560 s of the gate's ~600 s, while the node suites
+finished in 2 s. Each browser suite starts its own server on port 0 and its own
+Chrome; they share nothing that could let one pass for another, so they can run
+side by side.
+
+**The shape.** `scripts/test-all.js` runs the node suites first, one at a time (a
+broken one is on screen within 2 s), then the browser suites `--jobs N` at a time
+from one queue — default `min(3, cores − 1)`, `$TEST_JOBS` sets it too, the flag
+wins — longest first (`HEAVY`, the seconds each took alone in its comments, so the
+longest never starts last), then the `EXCLUSIVE` ones alone after the pool
+(`test-startup.js`, whose assertion IS a timing). `--jobs 1` is the previous
+runner character for character: alphabetical, one at a time, no retry; the
+equivalence was proved by running the committed runner and the new one over the
+same directory of fake suites and diffing the output with the timings normalised.
+The four verdict lines, the failure blocks and the counts line are unchanged. Two
+lines are new: `wall … s, --jobs N`, and `RUNNER BUG — never run, so NOT passing`
+should any suite reach no verdict.
+
+**The one new way a gate could lie, and how it is refused.** Under load a case
+with a short timeout can fail although nothing is wrong (`test-convenience-ui.js`
+did, inside an agent worktree beside another Chrome). A pool that simply re-ran it
+would turn that into a silent green. So a browser suite that FAILS beside others
+runs ONCE more, alone. The second verdict is the verdict — but a pass there is
+printed as `PASSED ONLY ALONE — load-sensitive`, with the pooled failure's tail
+above it: a case to fix, or a suite to name in `EXCLUSIVE` with its reason, never a
+result to accept. A skip and a silent exit are never retried (neither is load), a
+suite that fails both times says `failed beside others AND alone`, and
+`--no-retry` keeps the first verdict for a CI that wants such a case red.
+
+**The runner has a test now.** `scripts/test-runner.js` builds a temp directory
+of fake suites — node fakes, browser fakes that hold a few hundred ms, a library,
+a delegated file, a flaky one that fails its first run and passes its second —
+points the runner at it with `TEST_ALL_DIR`, and asserts 24 things from the output
+and from per-fake interval files (order, overlap and «alone» are computed from
+start/end stamps, never from shared state): the classification rules the 2026-09
+CI section records, the exact verdict and counts lines, silent exit = FAIL, the
+SKIP/`--strict` exits, `--jobs 1` = alphabetical with overlap 1 and no retry,
+identical final verdicts in both modes, node before browser, exactly N at a time,
+`TEST_JOBS` and the flag's precedence, HEAVY first, EXCLUSIVE alone and after the
+pool, the lonely retry (named, printed, really alone, never for a skip or a silent
+exit), `--no-retry`, `--jobs 0` and `TEST_JOBS=abc` refused with exit 2. Each
+assertion was seen to FAIL on a defect planted in a scratch copy of the runner
+(`TEST_RUNNER_UNDER_TEST`), the real file untouched: 29 plants, all caught — a
+pool that drops the last suite (R12), one that runs everything at once or one at a
+time (R14), a retry that runs inside the live pool (R20), a summary that omits the
+load-sensitive line (R19), a `--jobs 0` accepted (R23). It runs as an ordinary node
+suite in `npm test` (~14 s). One of its own helpers lied first: «max overlap»
+counted how many intervals TOUCHED the longest one (five, for a 600 ms fake that
+five shorter ones brushed in turn) instead of how many ran at one instant; a sweep
+over starts and ends replaced it before any plant was trusted.
+
+**Measured, six timed runs alternating on the owner's laptop (12 cores), after one
+untimed pooled warm-up, the same 28 suites each time.** The per-suite final
+verdict sets, the module and delegated lines, and every PASS line's suite-written
+tail (numbers normalised) were identical across all nine runs; **zero RETRY
+lines**, so no suite proved load-sensitive at three workers.
+
+| run | `--jobs` | wall | result | RETRY |
+|---|---|---|---|---|
+| 1 | 1 | 598 s | 28 passed · 0 failed · 0 skipped | 0 |
+| 2 | 3 | 227 s | 28 passed · 0 failed · 0 skipped | 0 |
+| 3 | 1 | 597 s | 28 passed · 0 failed · 0 skipped | 0 |
+| 4 | 3 | 227 s | 28 passed · 0 failed · 0 skipped | 0 |
+| 5 | 1 | 609 s | 28 passed · 0 failed · 0 skipped | 0 |
+| 6 | 3 | 231 s | 28 passed · 0 failed · 0 skipped | 0 |
+| + | 4 | 244 s | 28 passed · 0 failed · 0 skipped | 0 |
+| + | 3, `--strict` | 229 s | 28 passed · 0 failed · 0 skipped | 0 |
+
+**Median wall: `--jobs 1` 598 s · `--jobs 3` 227 s — 2.6×.** The floor is
+`test-sync-status-ui.js` (181 s alone, 167 s pooled), which hosts every
+`test-convenience-ui.js` case in one page; `--jobs 4` measured 244 s — slower than
+3, because the floor does not move and the fourth Chrome only adds contention — so
+the default stays 3. Splitting the convenience cases out was assessed and deferred:
+sync-status-ui's own work is ~5–10 s, so the split alone would move the floor from
+~181 to ~170 s, and the real gain needs the convenience sections sharded into
+separate files, each passing alone three times and failing on a plant before it
+replaces the in-sequence run — worth doing when a pooled sync-status-ui nears the
+300 s timeout. Contention per browser suite, pooled ÷ alone (medians): sync-status
+0.92, cardio-sleep 0.96, ai-retry 1.00, program 1.01, fingerprint 1.04 (47 → 49 s,
+its 1500 ms `SLOW_MS` render check green in every pooled run), run-home 0.98,
+food-quick 1.04, shared-recipes 1.24 (13.7 → 17.0 s), admin-console 0.94, skips-ui
+1.16 (8.8 → 10.2 s), food-log 0.98, notif-events 1.12, brand-icon 0.70; the node
+suites' 1.3–1.5 on 150–300 ms figures is ~70 ms of process-start noise. Inside an
+agent worktree the rule is `TEST_JOBS=1`: two pools from two trees are six Chromes,
+and that is the recorded false failure. CI (4 vCPU) takes the default 3; if its
+runs show RETRY lines, its step gets `TEST_JOBS: 2`.
+
 ## v418 — a planned day that passes without a workout is recorded, and the user is told
 
 **«خلي انو اذا ما سجلت ولا جلسة بتمارين ينحط انو راحة او عدم الذهاب الى النادي
