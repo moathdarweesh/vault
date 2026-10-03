@@ -917,6 +917,49 @@
     return { recipes: many.length ? many : [data.recipe] };
   }
 
+  // «شاركها» (v419) — ONE saved recipe offered to everyone, through the one
+  // door. The Worker has the AI review it and, on approval, publishes it itself
+  // (the moderated text never passes back through the phone before it is
+  // stored). The answer is a VERDICT, never prose: {verdict:'approve', id, name}
+  // | {verdict:'reject'|'refused', reason:<code>}; the app translates the code
+  // (shr_rej_<code>), so no model-written sentence reaches the screen.
+  // SIGNED IN FIRST: nothing is published for a caller nobody verified, and a
+  // signed-out tap spends no request. Built FIELD BY FIELD — the stored
+  // recipe's createdAt, its `shared` marker and the editor's private fields
+  // never leave the phone. The fields are share-only, so an OLD Worker answers
+  // 400 'no input' before its budget («not available yet»). Never cached: a
+  // verdict is about this one publish.
+  async function shareRecipe(rec, signal) {
+    let session = null;
+    try { session = window.Cloud && typeof Cloud.getSession === 'function' ? await Cloud.getSession() : null; } catch (_) {}
+    if (!session) throw new Error('unauthorized');
+    const src = rec || {};
+    let lang = 'en';
+    try { lang = DB.prefs.get().lang === 'ar' ? 'ar' : 'en'; } catch (_) {}
+    const figure = (v) => Number(v) || 0;
+    const payload = { mode: 'share-recipe', lang, shareRecipe: {
+      name: String(src.name || '').trim().slice(0, 80),
+      servings: Math.min(99, Math.max(1, Number(src.servings) || 1)),
+      items: (Array.isArray(src.items) ? src.items : []).slice(0, 30).map((it) => ({
+        name: String((it && it.name) || '').trim().slice(0, 80),
+        qty: String((it && it.qty) || '').slice(0, 24),
+        calories: figure(it && it.calories), protein: figure(it && it.protein),
+        carbs: figure(it && it.carbs), fat: figure(it && it.fat),
+      })),
+      sourceId: String(src.id || ''),
+    } };
+    const { res, data } = await workerPost(payload, signal);
+    if (res.status === 400 && data.error === 'no input' && !data.code) throw new Error(tr('shr_unavailable'));
+    if (!res.ok) throw workerError(res, data);
+    if (data.verdict === 'approve' && typeof data.id === 'string' && data.id) {
+      return { verdict: 'approve', id: data.id, name: typeof data.name === 'string' ? data.name.slice(0, 80).replace(/[\uD800-\uDBFF]$/, '') : '' };
+    }
+    if ((data.verdict === 'reject' || data.verdict === 'refused') && typeof data.reason === 'string') {
+      return { verdict: data.verdict, reason: /^[a-z_]{1,40}$/.test(data.reason) ? data.reason : 'other' };
+    }
+    throw new Error('parse error');
+  }
+
   // ---------------------------------------------------------------- UI
   let logDate = null; // which day "add to log" writes to
 
@@ -1480,7 +1523,8 @@
   // takes the four at the end: rxLinkKind so a link is refused on the phone.
   // canRetry, retryWait and errText are the voice sheet's (js/food.js
   // openVoiceCapture): ONE answer to «can a second try help, and when?» and one
-  // sentence beside the button, for all three ways of asking.
+  // sentence beside the button, for all three ways of asking. shareRecipe is
+  // the recipe view's «شاركها» (js/food.js openShareRecipe).
   window.FoodAI = { open, openPhoto, analyze, analyzeImage, analyzeAudio, ask, friendlyErr, canRetry, retryWait, errText, analyzePlanImage, processImage,
-                    parseText: parseMacroText, analyzeRecipe, decomposeVideo, recipeImage, rxLinkKind };
+                    parseText: parseMacroText, analyzeRecipe, decomposeVideo, recipeImage, rxLinkKind, shareRecipe };
 })();

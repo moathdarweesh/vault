@@ -23,6 +23,7 @@ window.VAULT_KEYS = Object.freeze({
   recovery: 'vault_pre_sync_backup',       // the rescue copy taken before an overwrite
   recoveryFailed: 'vault_pre_sync_backup_failed',
   catalog: 'vault_catalog_cache',
+  sharedRecipes: 'vault_shared_recipes',   // Cloud.pullSharedRecipes — {uid, at, rows}, 30 min, swept on logout
   foodaiCache: 'foodai_cache',
   announcement: 'vault_announcement_dismissed',
   reminderSeen: 'vault_reminder_seen',
@@ -1868,6 +1869,104 @@ window.VAULT_KEYS = Object.freeze({
     return result;
   }
 
+  // ---- shared recipes («اقتراحات», v419 — backend migration 35) -----------
+  // The app's first CROSS-USER content: recipes users chose to share, published
+  // by the Worker once the AI approved them (FoodAI.shareRecipe), read here by
+  // every signed-in user. Anonymous by construction: the grant names its
+  // columns and `author`/`source_id` are not among them, so every read below
+  // names its columns too (`*` is refused with 42501), and contract 78 holds
+  // each list to that grant. A SEPARATE function from pullCatalog on purpose —
+  // contract 27 reads that body as what a signed-out boot touches, and this
+  // table is granted to `authenticated` only: no session, no request.
+  //
+  // The LIST carries no ingredients (most of a row's bytes; the card shows a
+  // name and four figures) — a tap reads one row's items. It is cached for 30
+  // minutes PER ACCOUNT, like the catalog; a failure answers this account's
+  // cache, else null, and the card is then simply absent.
+  // `.eq('status', 'approved')` is REQUIRED, not belt and braces: the owner's
+  // admin policy also shows him the removed rows, and he would be fed them.
+  const SHARED_CACHE_KEY = VAULT_KEYS.sharedRecipes;
+  const SHARED_TTL = 30 * 60 * 1000;   // 30 min
+  // One row FIELD BY FIELD, never the server's object spread: nothing a widened
+  // grant might one day add rides into the cache or the card. Values are kept
+  // as they came — js/food.js cleanSharedRecipes is the one judge of them.
+  function sharedRow(r) {
+    if (!r || typeof r !== 'object' || Array.isArray(r)) return null;
+    return { id: r.id, lang: r.lang, name: r.name, servings: r.servings, meals: r.meals,
+      kcal: r.kcal, protein: r.protein, carbs: r.carbs, fat: r.fat, created_at: r.created_at };
+  }
+  async function pullSharedRecipes(opts) {
+    if (!configured()) return null;
+    try { await ensureSdk(); } catch (_) {}
+    const c = sb(); const s = await getSession();
+    const uid = s && s.user && s.user.id;
+    if (!c || !uid) return null;
+    let cached = null;
+    try { cached = JSON.parse(localStorage.getItem(SHARED_CACHE_KEY) || 'null'); } catch (_) {}
+    const own = cached && cached.uid === uid && Array.isArray(cached.rows) ? cached : null;
+    const age = own ? Date.now() - Number(own.at) : NaN;   // a stamp from the future (a clock set back) is stale
+    if (own && !(opts && opts.fresh) && age >= 0 && age < SHARED_TTL) return own.rows;
+    try {
+      const { data, error } = await c
+        .from('shared_recipes')
+        .select('id,lang,name,servings,meals,kcal,protein,carbs,fat,created_at')
+        .eq('status', 'approved')
+        .order('created_at', { ascending: false })
+        .order('id', { ascending: false })
+        .limit(300);
+      if (error || !Array.isArray(data)) return own ? own.rows : null;
+      const rows = data.map(sharedRow).filter(Boolean);
+      try { localStorage.setItem(SHARED_CACHE_KEY, JSON.stringify({ uid: uid, at: Date.now(), rows: rows })); } catch (_) {}
+      return rows;
+    } catch (_) { return own ? own.rows : null; }
+  }
+  // ONE row's ingredients, read when its sheet opens; null on any failure.
+  // Cleaned to the six fields a recipe row has (types and the stored bounds),
+  // then remembered for the session — a published row never changes. Copies go
+  // out, so a caller's own bookkeeping on a row never reaches the memo.
+  const sharedItems = new Map();
+  const sharedText = (v, n) => (typeof v === 'string' ? v : '').trim().slice(0, n).replace(/[\uD800-\uDBFF]$/, '').trim();   // a cut never leaves half an emoji
+  const sharedFigure = (v) => { const n = Number(v); return Number.isFinite(n) ? Math.min(100000, Math.max(0, n)) : 0; };
+  async function getSharedRecipeItems(id) {
+    if (typeof id !== 'string' || !id) return null;
+    if (sharedItems.has(id)) return sharedItems.get(id).map((it) => ({ ...it }));
+    const c = sb(); const s = await getSession();
+    if (!c || !s) return null;
+    try {
+      const { data, error } = await c
+        .from('shared_recipes')
+        .select('items')
+        .eq('id', id)
+        .maybeSingle();
+      if (error || !data || !Array.isArray(data.items)) return null;
+      const items = data.items.slice(0, 30)
+        .filter((it) => it && typeof it === 'object' && !Array.isArray(it))
+        .map((it) => ({ name: sharedText(it.name, 80), qty: sharedText(it.qty, 24),
+          calories: sharedFigure(it.calories), protein: sharedFigure(it.protein), carbs: sharedFigure(it.carbs), fat: sharedFigure(it.fat) }))
+        .filter((it) => it.name);
+      if (!items.length) return null;
+      sharedItems.set(id, items);
+      return items.map((it) => ({ ...it }));
+    } catch (_) { return null; }
+  }
+  // Take a published recipe down. Only the AUTHOR's own: the definer RPC deletes
+  // where author = auth.uid() and answers false for anything else, and so does
+  // this. An RPC, not a client DELETE: the SELECT policy hides a removed row
+  // from its author. No ban check there on purpose — erasure stays open.
+  // `error` is 'offline', 'signin' or the server's words (the view says which).
+  async function withdrawSharedRecipe(id) {
+    const c = sb(); const s = await getSession();
+    if (!c) return { ok: false, error: 'offline' };
+    if (!s) return { ok: false, error: 'signin' };
+    try {
+      const { data, error } = await c.rpc('withdraw_shared_recipe', { p_id: id });
+      if (error && /not authenticated/i.test(error.message || '')) return { ok: false, error: 'signin' };
+      if (error) return { ok: false, error: /fetch|network/i.test(error.message || '') ? 'offline' : (error.message || 'error') };
+      if (data === true) { try { localStorage.removeItem(SHARED_CACHE_KEY); } catch (_) {} }
+      return { ok: data === true };
+    } catch (_) { return { ok: false, error: 'offline' }; }
+  }
+
   // ---- feedback / suggestions ---------------------------------------------
   // Insert the user's OWN feedback row (RLS enforces user_id = self). The
   // username is snapshotted so the admin inbox reads well even if it changes.
@@ -2009,6 +2108,7 @@ window.VAULT_KEYS = Object.freeze({
     // device has.
     if (typeof DB !== 'undefined' && DB.widget) { try { DB.widget.clear(); } catch (_) {} }
     syncActivity = { uid: '', active: 0, outcome: '', confirmedAt: '' };
+    sharedItems.clear();
     try {
       localStorage.removeItem(VAULT_KEYS.store);
       // The three OTHER full copies of the blob. The pre-sync rescue held the whole
@@ -2022,6 +2122,7 @@ window.VAULT_KEYS = Object.freeze({
       localStorage.removeItem(VAULT_KEYS.corrupt);
       localStorage.removeItem(VAULT_KEYS.foodaiCache);
       localStorage.removeItem(CATALOG_CACHE_KEY);
+      localStorage.removeItem(SHARED_CACHE_KEY);   // public rows, but keyed to this account's uid
       localStorage.removeItem(LAST_UID_KEY);
       localStorage.removeItem(VAULT_KEYS.lastEmail);   // it describes LAST_UID_KEY and goes with it
       localStorage.removeItem(VAULT_KEYS.ui);   // the pre-paint mirror of prefs — the next account must not inherit this one's frame
@@ -2128,6 +2229,7 @@ window.VAULT_KEYS = Object.freeze({
     captcha: { mount: mountCaptcha, unmount: unmountCaptcha, token: captchaToken, reset: resetCaptcha, siteKey: CAPTCHA_SITE_KEY },
     touchLastSeen, getMyFlags, submitFeedback, reportError,
     pullCatalog,
+    pullSharedRecipes, getSharedRecipeItems, withdrawSharedRecipe,
     backupExerciseImage, restoreExerciseImage, removeExerciseImage,
     deleteAccount, clearLocalUserData,
   };

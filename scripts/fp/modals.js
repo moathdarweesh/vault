@@ -21,6 +21,16 @@
 // true or the net captures an absence and calls it a failure.
 'use strict';
 
+// Two community recipes as Cloud.pullSharedRecipes hands them to the
+// suggestions sheets («اقتراحات», v419) — one Arabic, one English, the list's
+// columns only (the ingredients are read on a tap: see shared-recipe's `pre`).
+// Declared up here because ENTRIES reads it; the entries themselves join at
+// the END of the list.
+const SHR_ROWS = [
+  { id: 'shr-fx-1', lang: 'ar', name: 'شوربة عدس', servings: 4, meals: ['lunch', 'dinner'], kcal: 309, protein: 19.3, carbs: 47.5, fat: 4.3, created_at: '2026-10-01T09:00:00.000Z' },
+  { id: 'shr-fx-2', lang: 'en', name: 'Chicken rice bowl', servings: 2, meals: ['lunch'], kcal: 540, protein: 48, carbs: 62, fat: 9.5, created_at: '2026-09-30T12:00:00.000Z' },
+];
+
 const ENTRIES = [
   // Six sheets are NOT #modal-root sheets: they append their own overlay to .app
   // (the sheet-overlay family) or to body (the lightbox), so each names its root
@@ -109,6 +119,18 @@ const ENTRIES = [
       { name: 'عدس أحمر', qty: '٣٠٠ غ', calories: 1070, protein: 76, carbs: 180, fat: 3, _src: 'ai', _auto: 'done' },
       { name: 'بصل', qty: 'بصلة', calories: 44, protein: 1, carbs: 10, fat: 0, _src: 'ai', _auto: 'done' },
       { name: 'زيت', qty: 'ملعقة', calories: 120, protein: 0, carbs: 0, fat: 14, _src: 'ai', _auto: 'done' }] }] }, '$noop'], host: 'food' },
+  // «اقتراحات» (v419): a community recipe's sheet — its ingredients answered
+  // by `pre` (the harness stub's getSharedRecipeItems answers null, which would
+  // capture the failure line instead) — «show more» for lunch, the share sheet
+  // over the fixture's own recipe, and the report sheet.
+  { id: 'shared-recipe', name: 'openSharedRecipe', args: [{ v: SHR_ROWS[0] }, '$today', '$noop'], host: 'food',
+    pre: "Cloud.getSharedRecipeItems = async function () { return [" +
+         "{ name: 'عدس أحمر', qty: '٣٠٠ غ', calories: 1070, protein: 76, carbs: 180, fat: 3 }, " +
+         "{ name: 'بصل', qty: 'بصلة', calories: 44, protein: 1, carbs: 10, fat: 0 }, " +
+         "{ name: 'زيت زيتون', qty: 'ملعقة', calories: 120, protein: 0, carbs: 0, fat: 14 }]; };" },
+  { id: 'shared-list', name: 'openSharedSuggestions', args: [{ v: SHR_ROWS }, { v: 'lunch' }, '$noop'], host: 'food' },
+  { id: 'share-recipe', name: 'openShareRecipe', args: ['$recipe', '$noop'], host: 'food' },
+  { id: 'shared-report', name: 'openSharedReport', args: [{ v: SHR_ROWS[0] }, '$noop'], host: 'food' },
 ];
 
 /* Named, with the reason, so contract 36 can tell "left out on purpose" from

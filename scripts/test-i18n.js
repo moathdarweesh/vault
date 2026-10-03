@@ -89,6 +89,12 @@ const TERMS = [
   [/Health Connect/, /Health Connect/, 'Health Connect keeps its product name, as the other eight keys do'],
   [/\bsession/i, /جلس/, 'a workout session is «جلسة» — «حصّة» is a food serving (rec_serv_*)'],
   [/saved food/i, /طعام|أطعم/, 'a saved food is «طعام» (plural «أطعمة»), not «أكل»'],
+  // The four meal periods (v419, «اقتراحات»): one formal word each, in every key
+  // whose English names the period — the suggestions card's four buttons among them.
+  [/\bsnack/i, /وجبة خفيفة/, 'a snack is «وجبة خفيفة» — never «سناك» or «تصبيرة»'],
+  [/\bbreakfast/i, /فطور/, 'breakfast is «فطور»'],
+  [/\blunch/i, /غداء/, 'lunch is «غداء», with its hamza'],
+  [/\bdinner/i, /عشاء/, 'dinner is «عشاء», with its hamza'],
 ];
 const TERM_EXCEPTIONS = {
   run_last_weight: 'a column over the weight itself: «أعلى وزن / آخر وزن» name the figure, where EN names its source',

@@ -9550,6 +9550,49 @@ body[dir="rtl"] .prg-tiles { --prg-dir: -1; }
 .prg-moved.is-leaving { animation: prg-collapse 200ms var(--ease-inout) var(--dur-fast) both; }
 @keyframes prg-collapse { to { grid-template-rows: 0fr; margin-top: 0; opacity: 0; } }
 
+/* «اقتراحات» — THE SUGGESTIONS CARD (v419, js/food.js MEAL SUGGESTIONS). A
+   .card under the water card: a head (the heading, and «show more» when the
+   period holds more than three), four period buttons on the S rung — modelled
+   on .rec-reading's: a bordered rounded rectangle, the pressed one filled, a
+   44px halo — then up to three figure rows divided by the hairline, as the
+   dish chooser's (.rx-dishes). (0,2,0) on the rows beats the identity layer's
+   .data-row fill and --elev-1 at (0,1,0). */
+.card.shr-card { margin-top: 12px; padding: var(--sp-3); display: flex; flex-direction: column; gap: var(--sp-2h); }
+.shr-head { display: flex; align-items: center; justify-content: space-between; gap: var(--sp-2); min-width: 0; }
+.shr-title { display: flex; align-items: center; gap: var(--sp-2); min-width: 0; margin: 0; font-size: var(--fs-label); font-weight: 700; color: var(--text); }
+/* Pinned: the global svg { width: 100% } would stretch the glyph across the heading. */
+.shr-title svg { width: 16px; height: 16px; flex: none; }
+.shr-periods { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: var(--sp-1); }
+.shr-period {
+  position: relative; height: var(--btn-h-s); min-width: 0; padding: 0 var(--sp-1);
+  border: 1px solid var(--border-hi); border-radius: var(--radius-btn-s);
+  background: transparent; color: var(--text-mute);
+  font: inherit; font-size: var(--fs-btn-s); font-weight: 700; white-space: nowrap; cursor: pointer;
+  appearance: none; -webkit-appearance: none; -webkit-tap-highlight-color: transparent;
+  transition: color 0.15s, background 0.15s, border-color 0.15s;
+}
+.shr-period::after { content: ''; position: absolute; inset: -5px 0; }   /* 44px on a 36px bordered box */
+.shr-period[aria-pressed="true"] { background: var(--surface-3); border-color: var(--accent-line); color: var(--text); }
+/* Under 360px four columns cannot hold «وجبة خفيفة» / «Breakfast»: two rows of two. */
+@media (max-width: 359px) {
+  .shr-periods { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+.shr-rows { display: flex; flex-direction: column; }
+.shr-rows > .shr-row { background: transparent; box-shadow: none; border-radius: 0; }
+.shr-rows > .shr-row + .shr-row { border-top: 1px solid var(--border); }
+.shr-rows .fig-row-main { padding-inline: 0; }
+.shr-empty { margin: 0; padding: var(--sp-2) 0; font-size: var(--fs-sub); color: var(--text-mute); text-align: center; }
+/* A community recipe's sheet: one serving's figures under its name, and the
+   report link under the actions. */
+.shr-figs { margin: 0; font-size: var(--fs-sub); line-height: 1.5; color: var(--text-mute); }
+.shr-figs .num { color: var(--text); font-weight: 700; }
+.shr-figs-k { font-weight: 700; color: var(--text); }
+.shr-report { align-self: center; }
+/* The share sheet's four terms, and the verdict that replaces them. */
+.shr-terms > p { margin: 0; font-size: var(--fs-sub); line-height: 1.5; color: var(--text-dim); }
+.shr-verdict { margin: 0; font-size: var(--fs-label); font-weight: 700; color: var(--text); }
+.shr-reason { margin: var(--sp-1) 0 0; font-size: var(--fs-sub); color: var(--text-mute); overflow-wrap: anywhere; }
+
 /* =========================================================================
    ^^^ EVERYTHING ABOVE, THEN THE IDENTITY LAYER BELOW. ^^^
 

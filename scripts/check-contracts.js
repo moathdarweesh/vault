@@ -2605,5 +2605,113 @@ const cssOwner = (i) => CSS_BLOCKS.reduce((best, b) => (b.open < i && b.close > 
   contract(`every reminder channel is wired everywhere (${ids.length} channels × ${PLACES.length} places, ${Object.keys(EXEMPT).length} named exemption)`, problems);
 }
 
+// ---------------------------------------------------------------- 78. no client file selects a column of shared_recipes it is not granted
+// v419 (2026-10-02) publishes users' recipes to every account, and the
+// author's anonymity is STRUCTURAL, not a promise: migration 35 grants
+// `authenticated` SELECT on a named column list that leaves out `author` and
+// `source_id`, so no client — the console included — can read who shared
+// what FROM THIS TABLE (35's header, point 2: an admin session can still match
+// a row's id to the author's blob, which carries recipes[].shared.id).
+// Nothing but this check keeps the clients in step with that list, and
+// both ways of drifting are silent until they ship: a reader that selects,
+// filters or orders on a column outside it, or selects `*` (a bare .select()
+// is `*`), is refused with 42501 on every device; and an edit that adds
+// `author` to a select, or to the grant, turns the design back into a promise.
+// The grant is read from 35 wherever it sits (pending/ until the owner applies
+// it, migrations/ after) and replayed, in number order, with every later
+// file's grants and revokes on the table — a table-wide SELECT or any write
+// privilege for a client role is refused (the two DEFINER functions are the
+// only writers). Every `.from('shared_recipes')` chain in a shipped script or
+// admin.html names its columns as literals inside its own chain (cut at `;`,
+// `.then(` or the next `.from(`), or this check says it cannot read it.
+{
+  const problems = [];
+  const HIDDEN = ['author', 'source_id'];
+  const CLIENT_ROLE = /\b(?:authenticated|anon|public)\b/i;
+  const sqlFiles = [];
+  for (const d of ['backend/pending', 'backend/migrations']) {
+    if (!exists(d)) continue;
+    for (const f of fs.readdirSync(path.join(root, d))) if (/^\d+_[\w.-]*\.sql$/.test(f) && parseInt(f, 10) >= 35) sqlFiles.push({ n: parseInt(f, 10), f: d + '/' + f });
+  }
+  sqlFiles.sort((a, b) => a.n - b.n || (a.f < b.f ? -1 : 1));
+  const m35 = sqlFiles.filter((s) => s.n === 35).map((s) => s.f);
+  if (!m35.length) problems.push('there is no backend/pending/35_*.sql and no backend/migrations/35_*.sql — the migration that creates public.shared_recipes and grants its columns is MISSING: the clients read a table no file creates, and there is no grant to hold them to');
+  else if (m35.length > 1) problems.push(`migration 35 exists ${m35.length} times (${m35.join(', ')}) — once applied it is git mv'd out of pending/, never copied`);
+  const granted = new Set();
+  let columnGrants = 0;
+  for (const { f } of sqlFiles) {
+    const sql = read(f).replace(/\/\*[\s\S]*?\*\//g, '').replace(/--[^\n]*/g, '');
+    for (const m of sql.matchAll(/\b(grant|revoke)\s+([^;]*?)\s+on\s+(?:table\s+)?(?:public\.)?"?shared_recipes"?\s+(?:to|from)\s+([^;]*);/gi)) {
+      const roles = m[3].replace(/\s+/g, ' ').trim();
+      if (!CLIENT_ROLE.test(roles)) continue;
+      const isGrant = m[1].toLowerCase() === 'grant';
+      for (const p of m[2].matchAll(/\b(select|insert|update|delete|truncate|references|trigger|all)\b(?:\s+privileges)?\s*(?:\(([^)]*)\))?/gi)) {
+        const priv = p[1].toLowerCase();
+        const cols = p[2] === undefined ? null : p[2].split(',').map((c) => c.replace(/"/g, '').trim().toLowerCase()).filter(Boolean);
+        if (!isGrant) {
+          // revoking a table privilege revokes every column privilege with it
+          if (priv === 'select' && cols) cols.forEach((c) => granted.delete(c));
+          else if (priv === 'select' || priv === 'all') granted.clear();
+        } else if (priv === 'select' && cols) { columnGrants++; cols.forEach((c) => granted.add(c)); }
+        else if (priv === 'select' || priv === 'all') problems.push(`${f} grants ${roles} ${priv.toUpperCase()} on the whole of public.shared_recipes — that includes author and source_id; grant a column list`);
+        else problems.push(`${f} grants ${roles} ${priv.toUpperCase()} on public.shared_recipes — no client role writes it; publish_shared_recipe and withdraw_shared_recipe are the only writers`);
+      }
+    }
+  }
+  for (const c of HIDDEN) if (granted.has(c)) problems.push(`the grant on public.shared_recipes names ${c} — any signed-in account could read it; the author's anonymity IS that column list`);
+  if (m35.length && !columnGrants) problems.push(`${m35[0]} grants no client role a SELECT column list on public.shared_recipes (grant select (…) on public.shared_recipes to authenticated) — every reader would be refused with 42501, or the grant is spelled in a form this check cannot read and it has gone silent`);
+
+  const lineAt = (s, i) => s.slice(0, i).split('\n').length;
+  const blankOut = (c) => c.replace(/[^\n]/g, '');
+  const checkColumn = (at, raw, how) => {
+    const c = raw.trim().replace(/^\w+\s*:(?!:)\s*/, '').replace(/::\w+$/, '').replace(/->.*$/, '').trim().toLowerCase();
+    if (c === '*') problems.push(`${at} ${how} \`*\` of shared_recipes — refused with 42501 (author and source_id are not granted); name the columns`);
+    else if (HIDDEN.includes(c)) problems.push(`${at} ${how} \`${c}\` of shared_recipes — no client may read who shared a recipe from this table; the grant leaves ${c} out on purpose`);
+    else if (!/^[a-z_]\w*$/.test(c)) problems.push(`${at} ${how} «${raw.trim()}» of shared_recipes — this check cannot read that as one column`);
+    else if (m35.length && !granted.has(c)) problems.push(`${at} ${how} \`${c}\` of shared_recipes, a column the grant does not name (granted: ${[...granted].join(', ') || 'nothing'}) — refused with 42501`);
+  };
+  // A filter or an order names a column too, and Postgres wants SELECT on it.
+  // A non-literal first argument is refused only for the names that are
+  // PostgREST's alone; filter/not/contains/is collide with Array, Node and Object.
+  const COLUMN_ARG = /\.(eq|neq|gte|gt|lte|lt|ilike|like|is|in|contains|containedBy|overlaps|not|filter|textSearch|order)\(\s*(?:'([^']*)'|"([^"]*)")?/g;
+  const POSTGREST_ONLY = /^(?:eq|neq|gte|gt|lte|lt|ilike|like|in|containedBy|overlaps|textSearch|order)$/;
+  let chains = 0, cloudReads = 0;
+  const readers = new Set();
+  for (const [file, whole] of [...JS.map((f) => [f, src[f] || '']), ['admin.html', admin]]) {
+    // comments only where they OPEN a line (contract 74's rule), newlines kept so line numbers hold
+    const text = whole.replace(/^[ \t]*\/\*[\s\S]*?\*\//gm, blankOut).replace(/^[ \t]*\/\/.*$/gm, '');
+    const aliases = [...text.matchAll(/\bconst\s+([A-Za-z_]\w*)\s*=\s*['"`]shared_recipes['"`]/g)].map((m) => '|' + m[1]).join('');
+    const FROM = new RegExp('\\.from\\(\\s*(?:([\'"`])shared_recipes\\1' + aliases + ')\\s*\\)', 'g');
+    for (const m of text.matchAll(FROM)) {
+      const at = `${file}:${lineAt(text, m.index)}`;
+      const rest = text.slice(m.index + m[0].length);
+      const stop = rest.search(/;|\.then\(|\.from\(/);
+      const chain = stop < 0 ? rest : rest.slice(0, stop);
+      chains++; readers.add(file);
+      const write = chain.match(/\.(insert|update|upsert|delete)\s*\(/);
+      if (write) problems.push(`${at} writes shared_recipes with .${write[1]}() — no client role holds a write privilege on it; the Worker publishes a recipe and withdraw_shared_recipe removes it`);
+      const sels = [...chain.matchAll(/\.select\(\s*(?:'([^']*)'|"([^"]*)"|`([^`$]*)`)?/g)];
+      if (!sels.length && !write) problems.push(`${at} reads shared_recipes with no .select('<columns>') in the same chain — this check cannot see which columns it reads`);
+      for (const s of sels) {
+        const cols = [s[1], s[2], s[3]].find((x) => x !== undefined);
+        const after = chain.slice(s.index + s[0].length);
+        if (cols === undefined) { problems.push(/^\s*\)/.test(after) ? `${at} calls .select() with no columns on shared_recipes — that is select *, refused with 42501 (author and source_id are not granted)` : `${at} passes .select() something other than one literal column list on shared_recipes — this check cannot read it; spell the columns in the call`); continue; }
+        if (!/^\s*[),]/.test(after)) { problems.push(`${at} builds the .select() column list of shared_recipes out of pieces — this check cannot read it; spell the columns in one literal`); continue; }
+        if (file === 'js/cloud.js') cloudReads++;
+        for (const raw of cols.split(',')) checkColumn(at, raw, 'selects');
+      }
+      for (const a of chain.matchAll(COLUMN_ARG)) {
+        const col = a[2] !== undefined ? a[2] : a[3];
+        if (col !== undefined) checkColumn(at, col, a[1] === 'order' ? 'orders by' : `filters (.${a[1]}) on`);
+        else if (POSTGREST_ONLY.test(a[1])) problems.push(`${at} .${a[1]}() on shared_recipes names its column in a form this check cannot read — spell it as a literal`);
+      }
+      const opaque = chain.match(/\.(or)\(|\.(match)\(\s*\{/);
+      if (opaque) problems.push(`${at} .${opaque[1] || opaque[2]}() on shared_recipes names its columns in a form this check cannot read — filter with .eq/.in/.order, one literal column each`);
+    }
+  }
+  if (!cloudReads) problems.push("js/cloud.js has no .from('shared_recipes').select('<columns>') — the suggestions have no reader, or it moved out of this check's sight; this check has gone silent");
+  contract(`no client file selects a column of shared_recipes it is not granted (${chains} chain(s) in ${[...readers].join(', ') || 'no file'}, held to the ${granted.size} column(s) ${m35.length ? m35[0].replace(/^backend\//, '') : 'NO migration 35'} grants; never author, source_id or *; no client write)`, problems);
+}
+
 console.log(failures.length ? `\ncheck-contracts: ${failures.length} broken contract(s)` : '\ncheck-contracts: all contracts hold');
 process.exit(failures.length ? 1 : 0);

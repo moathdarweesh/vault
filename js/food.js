@@ -117,7 +117,36 @@ function renderFood(el) {
   }
 
   const host = $('#nutri-host', el);
+  // «اقتراحات» (v419): the dashboard painted from memory above; the community
+  // list arrives (or does not) after it, and only the card is drawn again.
+  // Scoped to THIS render's view — never `.view.active` from inside a render.
+  loadSharedRecipes().then((changed) => { if (changed) shrRepaint($('#nutri-host', el)); });
   host?.addEventListener('click', (e) => {
+    // The suggestions card's three controls, ABOVE the hero's catch-all at the
+    // end: the card sits outside .nutri-hero, and these branches return first
+    // so no edit to that test can ever turn a period tap into opening the log.
+    const shrBtn = e.target.closest('[data-shr-period]');
+    if (shrBtn) {
+      const p = shrBtn.getAttribute('data-shr-period');
+      if (!SHR_PERIODS.includes(p)) return;
+      SHR_PICK = { period: p, clock: mealPeriodFor(new Date()) };
+      shrRepaint(host);
+      // The card was redrawn under the finger: focus goes back to the button pressed.
+      const again = host.querySelector('[data-shr-period="' + p + '"]');
+      if (again) again.focus({ preventScroll: true });
+      return;
+    }
+    const shrRow = e.target.closest('[data-shr-open]');
+    if (shrRow) {
+      const r = sharedPool().find((x) => x.id === shrRow.getAttribute('data-shr-open'));
+      if (r) openSharedRecipe(r, null, rerender);   // null = today, resolved at log time
+      return;
+    }
+    if (e.target.closest('[data-shr-more]')) {
+      const period = shrPeriod(new Date());
+      openSharedSuggestions(rankSuggestions(sharedPool(), period, shrGauge()), period, rerender);
+      return;
+    }
     const setup = e.target.closest('[data-setup-goal]');
     if (setup) { openCalculatorModal(rerender); return; }
     const edit = e.target.closest('[data-edit-goal]');
@@ -190,7 +219,8 @@ function nutritionGauge(date) {
 function nutritionDashboardHtml(date) {
   const nut = DB.nutrition;
 
-  // Not set up yet → invite the user to build a target.
+  // Not set up yet → invite the user to build a target. The suggestions card
+  // follows it, ranked without a «calories left» (there is no target to leave).
   if (!nut.hasTargets()) {
     return `
       <button class="nutri-setup" data-setup-goal>
@@ -199,6 +229,7 @@ function nutritionDashboardHtml(date) {
           <div class="nutri-setup-title">${t('nutri_setup_title')}</div>
         </div>
       </button>
+      ${sharedCardHtml(null)}
     `;
   }
 
@@ -259,7 +290,7 @@ function nutritionDashboardHtml(date) {
       </div>
     </div>
 
-    ${waterCard}
+    ${waterCard}${sharedCardHtml(gauge)}
   `;
 }
 
@@ -1174,11 +1205,47 @@ function recStoredItem(it) {
   return c;
 }
 
+// The ingredient rows of a recipe sheet: the name, and the amount exactly as
+// written (a [data-qty] span bindRecScaler rewrites). Shared by the user's own
+// recipe view and a community recipe's sheet («اقتراحات», v419).
+function recViewRowsHtml(items) {
+  return (items || []).map((it, i) => `<div class="cx-row"><span>${escapeHtml(it.name)}</span>${String(it.qty || '').trim() ? `<span class="num rec-view-qty" dir="auto" data-qty="${i}">${escapeHtml(it.qty)}</span>` : ''}</div>`).join('');
+}
+// The servings stepper as a SCALER (v392): `items` is read at paint time, so a
+// sheet whose ingredients arrive later hands the array it fills and calls the
+// returned paint() once they are drawn. Nothing is written anywhere.
+function bindRecScaler(modal, input, items, base) {
+  // Rewrites the amount spans in place — the rows never re-render, so the eye
+  // stays where it was and the stepper keeps focus.
+  const paint = () => {
+    // parseInt alone: a 0 typed or stepped down to is a NUMBER, and `|| base` would read it as blank and jump to 4.
+    const raw = parseInt(input.value, 10);
+    const n = Number.isFinite(raw) ? Math.min(99, Math.max(1, raw)) : base;
+    if (String(n) !== input.value) input.value = String(n);
+    const f = n / base;
+    modal.querySelectorAll('[data-qty]').forEach((el) => {
+      const it = (items || [])[Number(el.dataset.qty)];
+      el.textContent = recScaleQty(it && it.qty, f);
+    });
+  };
+  modal.querySelectorAll('[data-step]').forEach((b) => b.addEventListener('click', () => {
+    const cur = parseInt(input.value, 10);
+    input.value = String((Number.isFinite(cur) ? cur : base) + Number(b.dataset.step));
+    paint();
+  }));
+  input.addEventListener('input', paint);
+  input.addEventListener('change', paint);
+  return paint;
+}
+
 function openRecipeView(date, rec, onSave) {
   // Re-read by id: the picker's copy can be older than an edit made since.
   const r = DB.recipes.list().find((x) => x.id === rec.id) || rec;
   const base = Math.max(1, Number(r.servings) || 1);
-  const modal = convenienceModal(`
+  // «شاركها» needs the share call; «أزل من المشاركة» is offered whenever the
+  // recipe carries the marker, so a published copy can always be taken down.
+  const canShare = !!(window.FoodAI && typeof FoodAI.shareRecipe === 'function');
+  const modal = openModal(`
     <div class="modal-header"><h2 class="modal-title">${escapeHtml(r.name)}</h2><button class="icon-btn" data-close aria-label="${escapeHtml(t('close'))}">${icon('close', 20)}</button></div>
     <div class="cx-stack">
       <div class="rt-serv"><span class="rt-serv-k">${t('rec_servings')}</span>
@@ -1187,32 +1254,46 @@ function openRecipeView(date, rec, onSave) {
           <input type="number" id="rec-view-servings" class="num" inputmode="numeric" min="1" max="99" step="1" value="${base}" aria-label="${escapeHtml(t('rec_servings'))}">
           <button type="button" data-step="1" aria-label="${escapeHtml(t('rec_serv_more'))}">${icon('plus', 16)}</button>
         </span></div>
-      <div class="cx-list rec-view">${(r.items || []).map((it, i) => `<div class="cx-row"><span>${escapeHtml(it.name)}</span>${String(it.qty || '').trim() ? `<span class="num rec-view-qty" dir="auto" data-qty="${i}">${escapeHtml(it.qty)}</span>` : ''}</div>`).join('')}</div>
-      <button type="button" class="btn btn-ghost" data-edit-view>${t('rec_edit')}</button>
+      <div class="cx-list rec-view">${recViewRowsHtml(r.items)}</div>
+      <div class="cx-actions">
+        <button type="button" class="btn btn-ghost" data-edit-view>${t('rec_edit')}</button>
+        ${r.shared || canShare ? `<button type="button" class="btn btn-ghost" data-share-view>${r.shared ? t('shr_unshare') : t('shr_share')}</button>` : ''}
+      </div>
     </div>`);
-  const servInput = modal.querySelector('#rec-view-servings');
-  // Rewrites the amount spans in place — the rows never re-render, so the eye
-  // stays where it was and the stepper keeps focus.
-  const paint = () => {
-    // parseInt alone: a 0 typed or stepped down to is a NUMBER, and `|| base` would read it as blank and jump to 4.
-    const raw = parseInt(servInput.value, 10);
-    const n = Number.isFinite(raw) ? Math.min(99, Math.max(1, raw)) : base;
-    if (String(n) !== servInput.value) servInput.value = String(n);
-    const f = n / base;
-    modal.querySelectorAll('[data-qty]').forEach((el) => {
-      const it = (r.items || [])[Number(el.dataset.qty)];
-      el.textContent = recScaleQty(it && it.qty, f);
-    });
-  };
-  modal.querySelectorAll('[data-step]').forEach((b) => b.addEventListener('click', () => {
-    const cur = parseInt(servInput.value, 10);
-    servInput.value = String((Number.isFinite(cur) ? cur : base) + Number(b.dataset.step));
-    paint();
-  }));
-  servInput.addEventListener('input', paint);
-  servInput.addEventListener('change', paint);
+  // null under a dialog that must be answered (openModal's hold).
+  if (!modal) return;
+  guardConvenienceModal(modal);
+  bindRecScaler(modal, modal.querySelector('#rec-view-servings'), r.items || [], base);
   modal.querySelector('[data-edit-view]').addEventListener('click', () => {
     openRecipeEditor(date, r, () => openSavedFoodPicker(date, onSave, 'recipes'));
+  });
+  const shareBtn = modal.querySelector('[data-share-view]');
+  if (shareBtn) shareBtn.addEventListener('click', async () => {
+    if (shareBtn.disabled) return;
+    // Re-read by id: the marker is the truth, not what this sheet drew.
+    const cur = DB.recipes.list().find((x) => x.id === r.id);
+    if (!cur) { convenienceError({ ok: false, code: 'STALE' }); return; }
+    if (!cur.shared) { openShareRecipe(cur, () => openRecipeView(date, cur, onSave)); return; }
+    if (!(window.Cloud && typeof Cloud.withdrawSharedRecipe === 'function')) { showToast(t('shr_withdraw_failed')); return; }
+    shareBtn.disabled = true;
+    const owner = Cloud.getLastUid();
+    let res = null;
+    try { res = await Cloud.withdrawSharedRecipe(cur.shared.id); } catch (_) { res = null; }
+    // Another account signed in meanwhile: this blob is not the one asked about.
+    if (Cloud.getLastUid() !== owner) return;
+    // A refusal WITH a reason keeps the marker: the copy is still published.
+    // {ok:false} with NO error is the database answering «nothing of yours by
+    // that id» — already gone (a lost reply after an earlier withdraw, or the
+    // owner removed it) — so the marker is cleared exactly as on success.
+    if (!res || (!res.ok && res.error)) {
+      shareBtn.disabled = false;
+      showToast(res && res.error === 'offline' ? t('auth_err_network') : res && res.error === 'signin' ? t('shr_signin') : t('shr_withdraw_failed'));
+      return;
+    }
+    const w = DB.recipes.setShared(cur.id, null);
+    if (!w || !w.ok) { shareBtn.disabled = false; convenienceError(w); return; }
+    if (modal.isConnected && !modal.classList.contains('is-out')) openRecipeView(date, cur, onSave);
+    showToast(t('shr_withdrawn'));
   });
 }
 
@@ -2424,7 +2505,7 @@ function openSavedFoodPicker(date, onSave, initialTab) {
         <button type="button" class="bundle-main" data-view-rec="${escapeHtml(r.id)}">
           <div class="bundle-name">${escapeHtml(r.name)}</div>
           <div class="bundle-meta">${recIngLabel(r.items.length, true)} · ${recServLabel(r.servings, true)} ·
-            <span class="num">${fmtNum(per.calories)}</span> ${t('cal')} ${t('rec_u_per')}</div>
+            <span class="num">${fmtNum(per.calories)}</span> ${t('cal')} ${t('rec_u_per')}${r.shared ? ' · ' + t('shr_tag_shared') : ''}</div>
         </button>
         <button type="button" class="btn btn-primary bundle-add" data-log-rec="${escapeHtml(r.id)}" aria-label="${escapeHtml(t('add'))}">${icon('plus', 16)}</button>
         <button type="button" class="icon-btn" data-edit-rec="${escapeHtml(r.id)}" aria-label="${escapeHtml(t('rec_edit'))}">${icon('edit', 16)}</button>
@@ -2465,8 +2546,10 @@ function openSavedFoodPicker(date, onSave, initialTab) {
       if (r) openRecipeEditor(date, r, () => openSavedFoodPicker(date, onSave, 'recipes'));
     }));
     listEl.querySelectorAll('[data-del-rec]').forEach((b) => b.addEventListener('click', () => {
+      // A shared recipe's published copy outlives it (v419): the question says so.
+      const doomed = DB.recipes.list().find((x) => x.id === b.dataset.delRec);
       confirmDialog({
-        title: t('delete_recipe_q'), text: '', confirmLabel: t('delete'), variant: 'danger',
+        title: t('delete_recipe_q'), text: doomed && doomed.shared ? t('shr_del_note') : '', confirmLabel: t('delete'), variant: 'danger',
         onConfirm: () => {
           const result = DB.recipes.remove(b.dataset.delRec);
           if (!result.ok) { convenienceError(result); return; }
@@ -2621,6 +2704,436 @@ function openSavedFoodPicker(date, onSave, initialTab) {
   if (tab === 'bundles') drawBundles();
   else if (tab === 'recipes') drawRecipes();
   else draw();
+}
+
+// ===========================================================================
+// MEAL SUGGESTIONS — «اقتراحات» (v419)
+//
+// The Food tab's card of recipes OTHER users chose to share, each reviewed by
+// the AI before the Worker published it (FoodAI.shareRecipe, migration 35).
+// Four meal periods; the clock's is pressed, and a tap on another holds until
+// the clock moves into the next period. Up to three recipes for the period,
+// ranked by what fits the calories still left (when a target exists), then by
+// protein per kcal, then the newer; «show more» lists all of them. A tap opens
+// the recipe: one serving's figures, the ingredients (read on the tap — the
+// list carries none), «Log a serving», «Save to my recipes» and a report.
+//
+// THE LIST IS OTHER PEOPLE'S TEXT. Cloud.pullSharedRecipes copies each row
+// field by field; cleanSharedRecipes is the one judge of the values — an unsafe
+// id, a nameless row, a figure that is not one, no period it suits: DROPPED,
+// never repaired — and every name is escaped where it is drawn. It lives in
+// memory only, never in the blob (the food_catalog precedent). The user's own
+// published recipes (the `shared` marker, DB.recipes.setShared) are never
+// suggested back: they are one tap away in «وصفاتي».
+// ===========================================================================
+const SHR_PERIODS = ['breakfast', 'lunch', 'snack', 'dinner'];
+// The cleaned community list; null until a pull has answered with a list.
+let SHARED_RECIPES = null;
+// When the last pull started (the 5-minute throttle) and the one in flight.
+let __sharedAt = 0, __sharedPending = null;
+// A period the user pressed, with the clock's period when they pressed it.
+let SHR_PICK = null;
+// Recipes reported this session leave the card at once.
+const SHR_HIDDEN = {};
+
+// The meal period an hour falls in: 5–10 breakfast, 11–15 lunch, 16–18 a
+// snack, the rest dinner. Duck-typed on getHours() so a test can pass a clock.
+function mealPeriodFor(now) {
+  const h = now && typeof now.getHours === 'function' ? now.getHours() : new Date().getHours();
+  return h >= 5 && h <= 10 ? 'breakfast' : h >= 11 && h <= 15 ? 'lunch' : h >= 16 && h <= 18 ? 'snack' : 'dinner';
+}
+// The period the card shows: the user's pick while the clock is still in the
+// period it was made in, else the clock's own.
+function shrPeriod(now) {
+  const clock = mealPeriodFor(now);
+  return SHR_PICK && SHR_PICK.clock === clock && SHR_PERIODS.includes(SHR_PICK.period) ? SHR_PICK.period : clock;
+}
+// A literal ternary, never t('shr_meal_' + p): each key stays a whole quoted
+// literal that contracts 5 and 38 can see.
+function shrMealName(p) {
+  return p === 'breakfast' ? t('shr_meal_breakfast') : p === 'lunch' ? t('shr_meal_lunch') : p === 'snack' ? t('shr_meal_snack') : t('shr_meal_dinner');
+}
+// The period's recipes, best first: those that fit the calories left (only
+// when there is a target — `gauge` is nutritionGauge's, or null), then protein
+// per kcal, then the newer. A new array; the rows are never touched.
+function rankSuggestions(list, period, gauge) {
+  const left = gauge && typeof gauge.calLeft === 'number' && Number.isFinite(gauge.calLeft) ? Math.max(0, gauge.calLeft) : null;
+  const fit = (r) => (left !== null && Number(r.kcal) <= left ? 1 : 0);
+  const dense = (r) => (Number(r.kcal) > 0 ? Number(r.protein) / Number(r.kcal) : 0);
+  const at = (r) => String(r.created_at || '');
+  return (Array.isArray(list) ? list : []).filter((r) => r && Array.isArray(r.meals) && r.meals.includes(period))
+    .sort((a, b) => (fit(b) - fit(a)) || (dense(b) - dense(a)) || (at(b) > at(a) ? 1 : at(b) < at(a) ? -1 : 0));
+}
+// One untrusted string: whole characters (wellFormedText), no control
+// characters, one space between words, cut at `n` without halving an emoji.
+function shrText(v, n) {
+  let s = wellFormedText(typeof v === 'string' ? v : '').replace(/[\u0000-\u001f\u007f]+/g, ' ').replace(/\s+/g, ' ').trim();
+  if (s.length > n) s = wellFormedText(s.slice(0, n)).trim();
+  return s;
+}
+// One untrusted figure: a finite number from 0 to 100000, else null (the row
+// is dropped — a figure that is not one is never clamped into one).
+function shrFig(v) {
+  const n = typeof v === 'number' ? v : typeof v === 'string' && v.trim() ? Number(v) : NaN;
+  return Number.isFinite(n) && n >= 0 && n <= 100000 ? n : null;
+}
+// ONE ingredient, FIELD BY FIELD — the only place a shared item is built, for
+// the list's rows, a sheet's ingredients and the copy «Save» writes. Spreading
+// the server's object would carry whatever it holds (an id, an editor flag)
+// into the user's blob, where cleanMealItems keeps every extra field.
+function shrItem(it) {
+  if (!it || typeof it !== 'object' || Array.isArray(it)) return null;
+  const name = shrText(it.name, 80);
+  const f = [shrFig(it.calories), shrFig(it.protein), shrFig(it.carbs), shrFig(it.fat)];
+  if (!name || f.some((x) => x === null)) return null;
+  return { name, qty: shrText(it.qty, 24), calories: f[0], protein: f[1], carbs: f[2], fat: f[3] };
+}
+// A list of ingredients, 1–30, every one valid — or null.
+function shrItems(list) {
+  if (!Array.isArray(list) || !list.length || list.length > 30) return null;
+  const out = list.map(shrItem);
+  return out.every(Boolean) ? out : null;
+}
+// The rows as the card may draw them. Idempotent: cleaning its own output
+// changes nothing. A row with no `items` key (every list row) keeps none; a
+// row that carries items keeps them only when they are valid, else it goes.
+function cleanSharedRecipes(rows) {
+  const out = [], seen = new Set();
+  for (const r of Array.isArray(rows) ? rows : []) {
+    if (out.length >= 200) break;
+    if (!r || typeof r !== 'object' || Array.isArray(r) || !entityIdSafe(r.id) || seen.has(r.id)) continue;
+    const name = shrText(r.name, 80);
+    const meals = SHR_PERIODS.filter((p) => Array.isArray(r.meals) && r.meals.includes(p));
+    const f = [shrFig(r.kcal), shrFig(r.protein), shrFig(r.carbs), shrFig(r.fat)];
+    if (!name || !meals.length || f.some((x) => x === null)) continue;
+    const s = Math.round(Number(r.servings));
+    const row = { id: r.id, lang: r.lang === 'ar' || r.lang === 'en' ? r.lang : '', name,
+      servings: Number.isFinite(s) ? Math.min(99, Math.max(1, s)) : 1, meals,
+      kcal: f[0], protein: f[1], carbs: f[2], fat: f[3],
+      created_at: typeof r.created_at === 'string' && r.created_at.length <= 40 ? r.created_at : '' };
+    if (r.items !== undefined) {
+      const items = shrItems(r.items);
+      if (!items) continue;
+      row.items = items;
+    }
+    seen.add(r.id);
+    out.push(row);
+  }
+  return out;
+}
+// What the card may suggest: the community list minus the user's own
+// published copies (their markers) and minus what they reported this session.
+function sharedPool() {
+  if (!Array.isArray(SHARED_RECIPES) || !SHARED_RECIPES.length) return [];
+  const own = new Set(DB.recipes.list().map((r) => r && r.shared && r.shared.id).filter(Boolean));
+  return SHARED_RECIPES.filter((r) => !own.has(r.id) && !Object.prototype.hasOwnProperty.call(SHR_HIDDEN, r.id));
+}
+// The copy «Save to my recipes» writes: name, servings and the six fields of
+// each ingredient. No id anywhere — DB.recipes.add gives the recipe and every
+// row their own — and never a `shared` marker: a copy is not a publication.
+function shrCopyDraft(r) {
+  const s = Math.round(Number(r && r.servings));
+  return { name: shrText(r && r.name, 80), servings: Number.isFinite(s) ? Math.min(99, Math.max(1, s)) : 1,
+    items: (r && Array.isArray(r.items) ? r.items : []).map(shrItem).filter(Boolean) };
+}
+// Is that copy already among the user's recipes? Same name, servings and
+// ingredients, as DB.recipes stores them.
+function shrCopyExists(r) {
+  const d = shrCopyDraft(r);
+  if (!d.name || !d.items.length) return false;
+  const sig = (x) => JSON.stringify([String(x.name || '').trim(), Number(x.servings) || 1, (x.items || []).map((it) =>
+    [String(it.name || '').trim(), String(it.qty || '').trim(), Number(it.calories) || 0, Number(it.protein) || 0, Number(it.carbs) || 0, Number(it.fat) || 0])]);
+  const want = sig(d);
+  return DB.recipes.list().some((x) => sig(x) === want);
+}
+// Pull the community list into memory. Resolves whether what the card would
+// draw changed. One pull at a time (a second caller shares it), at most one
+// per five minutes — stamped BEFORE the call, like bootCatalog — unless
+// `opts.force`; `opts.fresh` asks Cloud past its own 30-minute cache. A Cloud
+// without the call, or an answer that is not a list, keeps what is in memory.
+function loadSharedRecipes(opts) {
+  const force = !!(opts && opts.force);
+  if (!(window.Cloud && typeof Cloud.pullSharedRecipes === 'function')) return Promise.resolve(false);
+  if (__sharedPending) return force ? __sharedPending.then(() => loadSharedRecipes(opts)) : __sharedPending;
+  if (!force && __sharedAt && Date.now() - __sharedAt < 5 * 60 * 1000) return Promise.resolve(false);
+  __sharedAt = Date.now();
+  const p = Promise.resolve()
+    .then(() => Cloud.pullSharedRecipes({ fresh: !!(opts && opts.fresh) }))
+    .then((rows) => {
+      if (!Array.isArray(rows)) return false;
+      const next = cleanSharedRecipes(rows);
+      const changed = JSON.stringify(next) !== JSON.stringify(SHARED_RECIPES);
+      SHARED_RECIPES = next;
+      return changed;
+    }, () => false);
+  __sharedPending = p;
+  p.then(() => { if (__sharedPending === p) __sharedPending = null; });
+  return p;
+}
+// The «calories left» the card ranks by: today's gauge, or none without a target.
+function shrGauge() {
+  return DB.nutrition.hasTargets() ? nutritionGauge(todayISO()) : null;
+}
+// A figure in mono, rounded: the card and the sheet read alike.
+function shrNum(v) {
+  return '<span class="num">' + fmtNum(Math.round(Number(v) || 0)) + '</span>';
+}
+// The three macros as the recipe ledger writes them («٣٠ بروتين»), for recJoin.
+function shrMacros(r) {
+  return [shrNum(r.protein) + ' ' + t('protein_label'), shrNum(r.carbs) + ' ' + t('carbs_label'), shrNum(r.fat) + ' ' + t('fat_label')];
+}
+// One suggestion: the figure row (v395), a door to the recipe's sheet.
+function shrRowHtml(r) {
+  return `<button type="button" class="data-row fig-row shr-row" data-shr-open="${escapeHtml(r.id)}">
+      <div class="fig-row-main">${figRowFig(fmtNum(Math.round(Number(r.kcal) || 0)), t('cal'))}
+        <div class="fig-row-text"><span class="fig-row-title" dir="auto">${escapeHtml(r.name)}</span><span class="fig-row-sub">${recJoin(shrMacros(r))}</span></div>
+      </div></button>`;
+}
+// The card, or '' when there is nothing to suggest — no box around nothing.
+function sharedCardHtml(gauge) {
+  const pool = sharedPool();
+  if (!pool.length) return '';
+  const period = shrPeriod(new Date());
+  const ranked = rankSuggestions(pool, period, gauge);
+  return `
+    <div class="card shr-card" id="shr-card">
+      <div class="shr-head">
+        <h2 class="shr-title">${icon('utensils', 16)}<span>${t('shr_title')}</span></h2>
+        ${ranked.length > 3 ? `<button type="button" class="link-btn" data-shr-more>${t('show_more')}</button>` : ''}
+      </div>
+      <div class="shr-periods">${SHR_PERIODS.map((p) => `<button type="button" class="shr-period" data-shr-period="${p}" aria-pressed="${p === period}">${shrMealName(p)}</button>`).join('')}</div>
+      ${ranked.length ? `<div class="shr-rows">${ranked.slice(0, 3).map(shrRowHtml).join('')}</div>` : `<p class="shr-empty">${t('shr_none')}</p>`}
+    </div>`;
+}
+// Redraw the card alone — a period tap, the list arriving — where the
+// dashboard puts it: after the water card, or after the setup button.
+function shrRepaint(host) {
+  if (!host) return;
+  const html = sharedCardHtml(shrGauge());
+  const old = host.querySelector('#shr-card');
+  if (old) { if (html) old.outerHTML = html; else old.remove(); return; }
+  if (!html) return;
+  const after = host.querySelector('.water-card') || host.querySelector('.nutri-setup');
+  if (after) after.insertAdjacentHTML('afterend', html);
+  else host.insertAdjacentHTML('beforeend', html);
+}
+
+// ONE COMMUNITY RECIPE: its name, one serving's figures, the ingredients read
+// on the tap, the servings scaler (amounts only — the log is one serving, as
+// the picker's «+» is), «Log a serving», «Save to my recipes», a report.
+function openSharedRecipe(rec, date, onSave) {
+  const r = cleanSharedRecipes([rec])[0];
+  if (!r) return;
+  const figs = (p) => `<span class="shr-figs-k">${t('rec_per')}</span> ${recJoin([shrNum(p.kcal) + ' ' + t('cal'), ...shrMacros(p)])}`;
+  const overlay = openModal(`
+    <div class="modal-header"><h2 class="modal-title" dir="auto">${escapeHtml(r.name)}</h2><button class="icon-btn" data-close aria-label="${escapeHtml(t('close'))}">${icon('close', 20)}</button></div>
+    <div class="cx-stack">
+      <p class="shr-figs" id="shr-figs">${figs(r)}</p>
+      <div class="rt-serv"><span class="rt-serv-k">${t('rec_servings')}</span>
+        <span class="rt-step">
+          <button type="button" data-step="-1" aria-label="${escapeHtml(t('rec_serv_less'))}">${icon('minus', 16)}</button>
+          <input type="number" id="shr-servings" class="num" inputmode="numeric" min="1" max="99" step="1" value="${r.servings}" aria-label="${escapeHtml(t('rec_servings'))}">
+          <button type="button" data-step="1" aria-label="${escapeHtml(t('rec_serv_more'))}">${icon('plus', 16)}</button>
+        </span></div>
+      <div class="cx-list rec-view" id="shr-items" aria-busy="true"><div class="cx-row"><span>${t('cx_loading')}</span></div></div>
+      <div class="cx-actions">
+        <button type="button" class="btn btn-primary" id="shr-log">${t('shr_log')}</button>
+        <button type="button" class="btn btn-ghost" id="shr-save" disabled>${t('shr_save')}</button>
+      </div>
+      <button type="button" class="link-btn shr-report" id="shr-report">${t('shr_report')}</button>
+    </div>`);
+  // null under a dialog that must be answered (openModal's hold).
+  if (!overlay) return;
+  guardConvenienceModal(overlay);
+  const items = [];
+  const paint = bindRecScaler(overlay, overlay.querySelector('#shr-servings'), items, r.servings);
+  const listEl = overlay.querySelector('#shr-items');
+  const saveBtn = overlay.querySelector('#shr-save');
+  let full = null;
+  const markSaved = () => {
+    const had = document.activeElement === saveBtn;
+    saveBtn.disabled = true;
+    saveBtn.textContent = t('shr_in_recipes');
+    // A disabled button drops keyboard focus to <body>; it stays in the sheet.
+    if (had) overlay.querySelector('.modal')?.focus({ preventScroll: true });
+  };
+  Promise.resolve()
+    .then(() => (window.Cloud && typeof Cloud.getSharedRecipeItems === 'function' ? Cloud.getSharedRecipeItems(r.id) : null))
+    .catch(() => null)
+    .then((raw) => {
+      if (!overlay.isConnected) return;
+      listEl.removeAttribute('aria-busy');
+      const got = shrItems(raw);
+      if (!got) {
+        listEl.innerHTML = `<div class="cx-row"><span>${navigator.onLine === false ? t('auth_err_network') : t('ai_error')}</span></div>`;
+        return;
+      }
+      items.push(...got);
+      full = { ...r, items: got };
+      listEl.innerHTML = recViewRowsHtml(items);
+      paint();
+      // Re-derived from the ingredients, by the same rounding the server used.
+      const per = DB.recipes.perServing(full);
+      overlay.querySelector('#shr-figs').innerHTML = figs({ kcal: per.calories, protein: per.protein, carbs: per.carbs, fat: per.fat });
+      if (shrCopyExists(full)) markSaved(); else saveBtn.disabled = false;
+    });
+
+  // ONE SERVING, ONE ROW — whatever the scaler shows (it moves amounts only).
+  let logging = false;
+  overlay.querySelector('#shr-log').addEventListener('click', () => {
+    if (logging) return;
+    logging = true;
+    const result = DB.foodLogs.addMany(date || todayISO(), [{
+      name: r.name, servings: 1,
+      calories: r.kcal, protein: r.protein, carbs: r.carbs, fat: r.fat,
+      source: 'shared', sourceId: r.id,
+    }]);
+    if (!result.ok) { logging = false; convenienceError(result); return; }
+    closeModal();
+    if (typeof onSave === 'function') onSave();
+    offerUndo(t('rec_logged').replace('{name}', r.name), result);
+  });
+  saveBtn.addEventListener('click', () => {
+    if (saveBtn.disabled || !full) return;
+    if (shrCopyExists(full)) { markSaved(); return; }
+    const w = withUndo(() => DB.recipes.add(shrCopyDraft(full)));
+    if (!w.value) { showToast(DB.saveState().ok ? t('rec_need_ing') : t('sc_failed')); return; }
+    markSaved();
+    offerUndo(t('shr_saved'), w);
+  });
+  overlay.querySelector('#shr-report').addEventListener('click', () => openSharedReport(r, onSave));
+}
+
+// «show more»: every suggestion of the period, in rank order.
+function openSharedSuggestions(rows, period, onSave) {
+  const list = cleanSharedRecipes(rows);
+  const overlay = openModal(`
+    <div class="modal-header"><div><h2 class="modal-title">${t('shr_title')}</h2><div class="modal-subtitle">${shrMealName(period)}</div></div>
+      <button class="icon-btn" data-close aria-label="${escapeHtml(t('close'))}">${icon('close', 20)}</button></div>
+    <div class="shr-rows">${list.map(shrRowHtml).join('')}</div>`);
+  if (!overlay) return;
+  guardConvenienceModal(overlay);
+  overlay.querySelectorAll('[data-shr-open]').forEach((b) => b.addEventListener('click', () => {
+    const r = list.find((x) => x.id === b.dataset.shrOpen);
+    if (r) openSharedRecipe(r, null, onSave);
+  }));
+}
+
+// «Report this recipe»: three reasons, sent as one feedback row whose context
+// names the recipe (`recipe-report:<id>`) — the owner's inbox reads it, and the
+// recipe leaves this user's card at once.
+function openSharedReport(rec, onDone) {
+  const r = cleanSharedRecipes([rec])[0];
+  if (!r) return;
+  const overlay = openModal(`
+    <div class="modal-header"><div><h2 class="modal-title">${t('shr_report_title')}</h2><div class="modal-subtitle" dir="auto">${escapeHtml(r.name)}</div></div>
+      <button class="icon-btn" data-close aria-label="${escapeHtml(t('close'))}">${icon('close', 20)}</button></div>
+    <div class="cx-stack">
+      <button type="button" class="btn btn-ghost" data-shr-reason="not_food">${t('shr_reason_not_food')}</button>
+      <button type="button" class="btn btn-ghost" data-shr-reason="offensive">${t('shr_reason_offensive')}</button>
+      <button type="button" class="btn btn-ghost" data-shr-reason="wrong_figures">${t('shr_reason_wrong')}</button>
+      <p class="auth-err" id="shr-rep-err" role="alert"></p>
+    </div>`);
+  if (!overlay) return;
+  guardConvenienceModal(overlay);
+  const err = overlay.querySelector('#shr-rep-err');
+  let busy = false;
+  overlay.querySelectorAll('[data-shr-reason]').forEach((b) => b.addEventListener('click', async () => {
+    const reason = b.dataset.shrReason;
+    if (busy || !['not_food', 'offensive', 'wrong_figures'].includes(reason)) return;
+    err.textContent = '';
+    if (!(window.Cloud && typeof Cloud.submitFeedback === 'function' && typeof Cloud.getSession === 'function')) { err.textContent = t('shr_report_failed'); return; }
+    busy = true;
+    let session = null;
+    try { session = await Cloud.getSession(); } catch (_) {}
+    if (!session) { busy = false; err.textContent = t('shr_signin'); return; }
+    const owner = Cloud.getLastUid();
+    let res = null;
+    try { res = await Cloud.submitFeedback(reason, 'recipe-report:' + r.id); } catch (_) {}
+    busy = false;
+    if (Cloud.getLastUid() !== owner) return;
+    if (res && res.ok) SHR_HIDDEN[r.id] = true;   // sent: it leaves the card even if this sheet is gone
+    if (!overlay.isConnected || overlay.classList.contains('is-out')) return;
+    if (res && res.ok) { closeModal(); if (typeof onDone === 'function') onDone(); showToast(t('shr_reported')); return; }
+    err.textContent = res && res.error === 'ratelimit' ? t('feedback_too_many') : res && res.error === 'offline' ? t('auth_err_network') : t('shr_report_failed');
+  }));
+}
+
+// «شاركها»: what sharing means, in four lines, then one request. The AI's
+// verdict comes back as a CODE and is said in one translated sentence; an
+// approval writes the marker {id, at} (DB.recipes.setShared), so the view
+// offers «أزل من المشاركة» on every device.
+function openShareRecipe(rec, onBack) {
+  const overlay = openModal(`
+    <div class="modal-header"><div><h2 class="modal-title">${t('shr_share_title')}</h2><div class="modal-subtitle" dir="auto">${escapeHtml(rec.name)}</div></div>
+      <button class="icon-btn" data-close aria-label="${escapeHtml(t('close'))}">${icon('close', 20)}</button></div>
+    <div class="cx-stack" id="shr-share-body">
+      <div class="cx-list shr-terms"><p>${t('shr_term_review')}</p><p>${t('shr_term_anon')}</p><p>${t('shr_term_withdraw')}</p><p>${t('shr_term_copy')}</p></div>
+      <p class="auth-err" id="shr-share-err" role="alert"></p>
+      <button type="button" class="btn btn-primary" id="shr-send">${t('shr_send')}</button>
+    </div>`);
+  if (!overlay) return;
+  guardConvenienceModal(overlay);
+  const body = overlay.querySelector('#shr-share-body');
+  const err = overlay.querySelector('#shr-share-err');
+  const send = overlay.querySelector('#shr-send');
+  const onScreen = () => overlay.isConnected && !overlay.classList.contains('is-out');
+  const back = () => { closeModal(); if (typeof onBack === 'function') onBack(); };
+  // A rejection or a refusal: the code in one sentence — an unknown code says
+  // only that it was not accepted — and «OK» back to the recipe.
+  const drawVerdict = (reason) => {
+    // t()'s fallback '' — a code the dictionaries do not know prints nothing.
+    const why = t('shr_rej_' + reason, '');
+    body.innerHTML = `<div role="alert"><p class="shr-verdict">${t('shr_rejected')}</p>${why ? `<p class="shr-reason">${escapeHtml(why)}</p>` : ''}</div>
+      <button type="button" class="btn btn-primary" id="shr-ok">${t('shr_ok')}</button>`;
+    const ok = body.querySelector('#shr-ok');
+    ok.addEventListener('click', back);
+    ok.focus({ preventScroll: true });
+  };
+  send.addEventListener('click', async () => {
+    if (send.disabled) return;
+    err.textContent = '';
+    if (!(window.FoodAI && typeof FoodAI.shareRecipe === 'function')) { err.textContent = t('shr_unavailable'); return; }
+    const cur = DB.recipes.list().find((x) => x.id === rec.id);
+    if (!cur) { err.textContent = t('cx_stale'); return; }
+    // The server keeps whole servings (1–99); a scaled recipe says so first.
+    if (!Number.isInteger(Number(cur.servings))) { err.textContent = t('shr_whole_servings'); return; }
+    let session = null;
+    try { session = window.Cloud && typeof Cloud.getSession === 'function' ? await Cloud.getSession() : null; } catch (_) {}
+    if (!session) { err.textContent = t('shr_signin'); return; }
+    send.disabled = true;
+    send.textContent = t('shr_sending');
+    const owner = Cloud.getLastUid();
+    let res = null;
+    try {
+      res = await FoodAI.shareRecipe(cur);
+    } catch (e) {
+      if (!onScreen() || Cloud.getLastUid() !== owner) return;
+      err.textContent = window.FoodAI && typeof FoodAI.friendlyErr === 'function' ? FoodAI.friendlyErr(e) : t('ai_error');
+      send.disabled = false;
+      send.textContent = t('shr_send');
+      return;
+    }
+    // Another account signed in meanwhile: nothing is written to its blob.
+    if (Cloud.getLastUid() !== owner) return;
+    if (res && res.verdict === 'approve') {
+      // Written even if the sheet was closed during the review: the copy IS
+      // published, and without its marker the view could never take it down.
+      const w = DB.recipes.setShared(cur.id, { id: res.id, at: new Date().toISOString() });
+      if (!w || !w.ok) {
+        // A copy no marker points at could not be withdrawn from the app.
+        if (window.Cloud && typeof Cloud.withdrawSharedRecipe === 'function') Promise.resolve().then(() => Cloud.withdrawSharedRecipe(res.id)).catch(() => {});
+        if (onScreen()) closeModal();
+        convenienceError(w);
+        return;
+      }
+      if (onScreen()) back();
+      showToast(res.name && res.name !== cur.name ? t('shr_published_as').replace('{name}', res.name) : t('shr_published'));
+      return;
+    }
+    if (!onScreen()) return;
+    drawVerdict(res && res.reason);
+  });
 }
 
 // ===========================================================================

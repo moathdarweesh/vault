@@ -12,7 +12,7 @@
 // build. The literal below is the fallback (file://, or a stripped query) and is
 // still bumped by `npm run release` — see CLAUDE.md "CACHE WORKFLOW".
 const VAULT_BUILD = (() => {
-  const FALLBACK = 'v418';
+  const FALLBACK = 'v419';
   try {
     const src = (document.currentScript && document.currentScript.src) || '';
     const m = src.match(/[?&]v=(\d+)/);
@@ -5177,10 +5177,10 @@ function cxHeader(key) {
   return `<div class="modal-header"><h2 class="modal-title">${t(key)}</h2><button class="icon-btn" data-close aria-label="${escapeHtml(t('close'))}">${icon('close',20)}</button></div>`;
 }
 function guardConvenienceModal(modal) {
-  const owner = Cloud.getLastUid();
+  const owner = Cloud.getLastUid() || '';   // '' not null: it is written into a data attribute (see the save-state listener)
   modal.dataset.convenienceOwner = owner;
   modal.addEventListener('click', event => {
-    if (owner === Cloud.getLastUid()) return;
+    if (owner === (Cloud.getLastUid() || '')) return;
     event.preventDefault(); event.stopImmediatePropagation(); closeModal();
   }, true);
   return modal;
@@ -5296,7 +5296,10 @@ function openUnifiedSearch() {
 }
 window.addEventListener('vault:save-state', () => {
   const modal = document.querySelector('[data-convenience-owner]');
-  if (modal && modal.dataset.convenienceOwner !== Cloud.getLastUid()) { closeModal(); return; }
+  // `|| ''` on BOTH sides (v419): a dataset value is always a string, and a
+  // signed-out device's null owner became "null" — an owner that never matched,
+  // so this closed every convenience sheet on every write.
+  if (modal && modal.dataset.convenienceOwner !== (Cloud.getLastUid() || '')) { closeModal(); return; }
   document.getElementById('cx-query')?.dispatchEvent(new Event('input'));
 });
 function openSearchDay(date) {

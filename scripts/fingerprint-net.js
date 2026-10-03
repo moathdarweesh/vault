@@ -168,7 +168,7 @@ function pageCapture(opts) {
     // exists in both dictionaries; it cannot prove the rendered screen reached
     // it. v332: "The key still existed in both dictionaries, so contract 5
     // stayed green. Only reading the string catches it."
-    rawKeys: (visible.match(/\b(?:cx|rec|sl|run|sd|auth|pi|rest|cardio|ntf|sc|tab|nav|notif)_[a-z0-9_]+\b/g) || []).slice(0, 8),
+    rawKeys: (visible.match(/\b(?:cx|rec|sl|run|sd|auth|pi|rest|cardio|ntf|sc|tab|nav|notif|shr)_[a-z0-9_]+\b/g) || []).slice(0, 8),
     // "A wrong key name returns '' and the icon vanishes silently, with no
     // error — this actually shipped once."
     emptySvg: [...root.querySelectorAll('svg')].filter((s) => !s.innerHTML.trim()).length,

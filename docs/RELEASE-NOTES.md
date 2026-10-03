@@ -2,6 +2,116 @@
 
 One section per release since v309, newest first, moved verbatim from `CLAUDE.md` in v401 (batch 6 of the 2026-09-25 review; `docs/REVIEW-2026-09-25.md`). `CLAUDE.md` is the guide and the authority for how the app works now. A section here records what one release changed and why, in the words written at the time, so a later section — or the guide — can supersede what an earlier one says.
 
+## v419 — «اقتراحات»: meal suggestions from recipes users share, reviewed by the AI
+
+**The owner's ask (2026-10-02): a box of suggestions for breakfast, lunch, a
+snack and dinner, fed by recipes users share with each other, each checked
+before anyone sees it.** His answers set the shape: the AI is the moderator at
+this stage (no human queue), no author name, food only. It is the first content
+in the app that crosses accounts — until now a recipe lived only in its owner's
+blob, and the one shared table was the admin-curated food catalog.
+
+**The suggestions card.** The Food tab carries «اقتراحات», outside the hero:
+four period buttons — فطور، غداء، وجبة خفيفة، عشاء («سناك» is dialect, and
+`scripts/test-i18n.js` now pins the four terms) — with the clock's period
+pressed (05–10, 11–15, 16–18, else dinner), and up to three community recipes
+with their per-serving kcal and macros, the ones that fit what is left of the
+day's calories first. A tap opens the ingredients (fetched for that one recipe;
+the list never carries them) with a stepper that scales the amounts only,
+«سجّل حصّة» (always one serving, `source: 'shared'`, with Undo), «احفظها في
+وصفاتي» (a copy with new ids) and a report (a `feedback` row with context
+`recipe-report:<id>`; the recipe leaves the card). The card is absent while
+there is nothing to suggest, the user's own published recipes never appear in
+it, and the list is cached 30 minutes per account.
+
+**Sharing, and the moderator.** A recipe's own view gains «شاركها», whose sheet
+states four terms (reviewed automatically; published without your name;
+withdrawable at any time; the copy does not follow later edits, and sharing
+again replaces it). The Worker's new `share-recipe` mode asks a model — never a
+`-lite` one — for a verdict, corrected NAMES and meal tags, and nothing else:
+figures, amounts, servings and the item count stay the user's, a name
+"corrected" into another script is dropped, and a different item count is a
+parse error. A refusal arrives as a CODE (`not_food`, `offensive`,
+`personal_data`, `link_or_ad`, `spam`, `unsafe`, `implausible`, and the
+database's `daily_limit`, `active_limit`, `blocked`, `unavailable`) that the app
+translates (`shr_rej_<code>`); model-written prose never reaches the screen. On
+approval the recipe carries `shared: {id, at}` (`DB.recipes.setShared`, outside
+the undo ledger), so «أزل من المشاركة» shows offline and on every device.
+
+**The trust path: the Worker publishes.** After the model approves, the Worker
+calls `publish_shared_recipe` with the caller's own token and the server key
+`SHARE_KEY`, which the DEFINER function compares with a Supabase Vault secret —
+no service-role key anywhere, and the moderated text never passes back through
+the phone before it is stored. The database re-checks the shape, the ban and the
+caps itself (10 a day, 100 held), so a leaked key still cannot write garbage,
+and computes the per-serving figures with `DB.recipes.perServing`'s rounding.
+Re-sharing replaces: one row per author and source recipe. A caller the Worker
+could not verify (the auth-outage path) gets a 503 and nothing is published.
+
+**Anonymity is structural.** `authenticated` holds SELECT on a column list
+without `author` and `source_id`, and no client role holds a write privilege —
+the console cannot read the author from this table either (an admin session can
+still match a published row's id to the blob that carries `recipes[].shared.id`:
+migration 35's header, point 2). Contract 78 holds every client read
+to that list: never `author`, `source_id` or `*`, filters and orders included.
+Withdrawing is an RPC that deletes the row, and `delete_own_account()` now
+deletes the account's published recipes. The privacy page says all three — the
+exception to isolation, the AI review, withdrawal and deletion — dated
+2026-10-02.
+
+**What waits for v2.** A console centre and `admin_remove_shared_recipe` (until
+then the owner removes a recipe with the one SQL line in 35's header), a reports
+table, `my_shared_recipes()`, a status chip beyond the picker's «مُشارَكة»,
+hiding after N reports, and restore.
+
+**The gate.** Migration `35_shared-recipes-v31.sql` (with the `share_recipe_key`
+Vault secret and the Worker's `SHARE_KEY`, the same hex) was applied before this
+release could pass the hook: contract 4 refuses a client read of a table no
+applied migration creates, and 14 an RPC call it cannot match to the SQL.
+`scripts/test-share-recipe.js` (node, the Worker's mode),
+`scripts/test-shared-recipes.js` (node) and `scripts/test-shared-recipes-ui.js`
+(browser, AR/dark and EN/light) are new, and so is contract 78.
+**Found on the way: a signed-out device lost every convenience sheet on every
+write.** `guardConvenienceModal` wrote `Cloud.getLastUid()` into a data
+attribute, and a device that never signed in has `null` there, which a data
+attribute stores as the string "null"; the `vault:save-state` listener then saw
+an owner that never matched and closed the sheet — the quick-log water cup in
+the search sheet, a saved copy in the new recipe sheet, the share sheet while
+its marker was written. Both sides now compare `|| ''`. Surfaced by three of
+the new suite's cases failing for one cause; pinned by its case 17.
+
+**How 35 reached the database (2026-10-03).** Before it ran, four reviewers read
+it against the live project, each finding checked by a skeptic: no blocker, no
+major, seven minors — fixed first (35f7993): an ingredient name is bounded as
+SENT, since the array is stored verbatim and `x` plus a megabyte of spaces trims
+to one character; a figure's text is at most 16 characters (a value bound alone
+admits 16 000 decimals); GATE 0 now refuses a live `delete_own_account()` that
+GAINED a statement, not only one that lost one; the header says what anonymity
+covers (other users — an admin session can match a row's id to the author's
+blob), that a ban does not take down what an account already shared, and the
+way back in the order that does not break account deletion; and the Worker's
+`readShare` refuses a serving that would round past 100000 before the budget —
+unrefused it was moderated, charged a unit, then answered 502 on every retry
+(counted in whole tenths; equal to the database's numeric rounding over 621 471
+cases against a BigInt oracle; S7 fails on the unfixed Worker and on a float
+rewrite). The owner then said «انت طبقها». The key was generated on his machine
+by a script that pipes it to `wrangler secret put` and copies it for the Vault
+form without printing it (ASCII stdin: under a UTF-8 console the writer prepends
+a byte-order mark to the secret; the clipboard entry is marked to stay out of
+Windows clipboard history); he pasted it into the Vault. The file itself went
+through the Supabase MCP `execute_sql` as ONE DO block: the text between
+`begin;` and `commit;` as eleven dollar-quoted parts, each checked against the
+md5 of the committed file before an EXECUTE ran them — a 50 KB script copied by
+hand is otherwise unverifiable, and no SQL editor was being driven. It was
+rehearsed first the same way with a throwaway key the database generated and a
+final RAISE (all seven VERIFY blocks passed, everything rolled back), then run
+for real. Read back: the three functions' `prosrc` md5 equals the file's
+bodies, 0 rows, 2 SELECT policies, the 12-column grant, no probe user, and anon
+gets 42501 through REST for the table and both functions. The Worker is version
+`5f14979a`.
+
+Gate: 74 contracts, lint, 28 suites (run pooled, `--jobs 3`).
+
 ## npm test — the browser suites three at a time, one verdict (no version bump: nothing shipped changed)
 
 **The owner's complaint (2026-10-03): «المهمة اللي كانت تخلص بنص ساعة صارت تخلص

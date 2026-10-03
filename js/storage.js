@@ -805,6 +805,8 @@ function loadState() {
     parsed.mealBundles = Array.isArray(parsed.mealBundles) ? parsed.mealBundles : [];
     parsed.shoppingLists = Array.isArray(parsed.shoppingLists) ? parsed.shoppingLists : [];
     parsed.recipes = Array.isArray(parsed.recipes) ? parsed.recipes : [];
+    // v419: a «shared» marker that is not one is dropped (cleanRecipeShared).
+    for (const r of parsed.recipes) if (cleanRecipeShared(r)) normChanged = true;
     // Nutrition targets (added later) — backfill for existing users.
     if (!parsed.nutrition || typeof parsed.nutrition !== 'object') {
       parsed.nutrition = defaultNutrition();
@@ -1322,6 +1324,23 @@ function cleanMealItems(items) {
     Number.isFinite(it.purchase.quantity) && it.purchase.quantity > 0 && it.purchase.quantity <= 10000000 &&
     ['g','kg','ml','l','piece'].includes(it.purchase.unit) && ['raw','cooked','unspecified'].includes(it.purchase.preparation)) &&
     ['calories','protein','carbs','fat'].every(k => Number.isFinite(it[k]) && it[k] >= 0 && it[k] <= 100000)) ? clean : null;
+}
+// A RECIPE'S «SHARED» MARKER (v419): {id, at} — the published copy's id on the
+// server (shared_recipes) and when it was published, written only by
+// DB.recipes.setShared. A marker that is not one (an unsafe id, a missing,
+// unreadable or over-long stamp) is DELETED on the way in, never refused with
+// its blob: its id reaches a withdraw call and the view's «Stop sharing».
+// Unknown fields of a valid marker ride through, as everywhere in the blob.
+// loadState() calls this at BOOT, from `let STATE = …loadState()` above: it may
+// read no const declared below that line (the HC_REFUSED_DAYS reason).
+function recipeSharedOk(s) {
+  return !!s && typeof s === 'object' && !Array.isArray(s) && entityIdSafe(s.id) &&
+    typeof s.at === 'string' && s.at.length <= 40 && !isNaN(Date.parse(s.at));
+}
+function cleanRecipeShared(r) {
+  if (!r || typeof r !== 'object' || !('shared' in r) || recipeSharedOk(r.shared)) return false;
+  delete r.shared;
+  return true;
 }
 
 const DB = {
@@ -2345,6 +2364,9 @@ const DB = {
     for (const k of ['exercises', 'cardio', 'cardioTypes', 'cardioPlan', 'sleep', 'foods', 'supplements', 'mealBundles', 'recipes', 'bodyweight', 'shoppingLists']) {
       if (Array.isArray(data[k]) && !data[k].every(isRecord)) return false;
     }
+    // A recipe's «shared» marker is NORMALISED, not refused (cleanRecipeShared):
+    // a stale marker on one recipe is not worth refusing a pull or a restore.
+    if (Array.isArray(data.recipes)) data.recipes.forEach(cleanRecipeShared);
     // The skip record's days are NORMALISED, not refused (cleanSkips): one
     // malformed entry in a list of skipped days is not worth refusing a pull.
     if (isRecord(data.skips)) data.skips = cleanSkips(data.skips);
@@ -3931,6 +3953,22 @@ const DB = {
       return result.ok ? copyData(entity) : null;
     },
     remove(id) { return changeSlice(() => STATE.recipes || [], next => { STATE.recipes = next; }, (STATE.recipes || []).filter(x => x.id !== id), 'cx_meal_changed'); },
+    // THE «SHARED» MARKER (v419): {id, at} of the copy FoodAI.shareRecipe
+    // published, or null once it is withdrawn — so the view says «شاركها» or
+    // «أزل من المشاركة» offline and on every device. NOT in the undo ledger
+    // (remember=false): an Undo cannot un-publish, and a marker undone would
+    // describe a server that disagrees. `update` keeps it ({...old}); `add`
+    // never takes one, so a saved copy of someone's recipe is never "shared".
+    setShared(id, shared) {
+      const list = STATE.recipes || [], old = list.find(x => x.id === id);
+      if (!id || !old) return { ok: false, code: 'STALE' };
+      let entity;
+      if (shared === null) { entity = { ...old }; delete entity.shared; }
+      else if (!recipeSharedOk(shared)) return { ok: false, code: 'VALIDATION' };
+      else entity = { ...old, shared: { id: shared.id, at: shared.at } };
+      return changeSlice(() => STATE.recipes || [], next => { STATE.recipes = next; },
+        list.map(x => x.id === id ? entity : x), 'cx_meal_changed', false);
+    },
   },
 
   // ----- Meal bundles ("my usual breakfast" in one tap) -----

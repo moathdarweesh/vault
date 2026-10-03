@@ -3,11 +3,19 @@
 -- published only after the AI moderator approves them, and read by every
 -- signed-in account without the author's name.
 --
--- NOT APPLIED. It is in backend/pending/ on purpose: a LIVE WRITE to the
--- owner's production database, which only he runs (CLAUDE.md, the list that
--- "still needs the owner"). Written 2026-10-02 for v419 (plan
--- twinkling-forging-pelican, "Backend"). README §2 carries its row; move both
--- when it has run. Nothing here has touched the live project.
+-- APPLIED + VERIFIED LIVE 2026-10-03, on the owner's order, through the
+-- Supabase MCP `execute_sql` as ONE DO block: the text between `begin;` and
+-- `commit;` below, sent as eleven dollar-quoted parts, each checked against
+-- the md5 of this committed file before an EXECUTE ran them — so what ran is
+-- this file, byte for byte, in the DO's own transaction. Rehearsed first the
+-- same way with a throwaway key the database generated and a final RAISE
+-- (every VERIFY passed, everything rolled back), then run for real once the
+-- owner's key was in the Vault. Read back afterwards: the table, the three
+-- functions (md5 of each prosrc = the body in this file), the two SELECT
+-- policies, the 12-column grant, RLS on, no probe row; through REST, anon gets
+-- 42501 for the table and for both functions. Written 2026-10-02 for v419; a
+-- four-lens pre-apply review's fixes are commit 35f7993. The HOW TO APPLY
+-- below is the SQL-editor path, kept for a re-run.
 --
 -- ONE TRANSACTION, idempotent, lock_timeout 5 s (nothing applied if it aborts;
 -- re-run it). GATE 0 runs before any DDL; every VERIFY block runs before the
