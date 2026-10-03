@@ -95,6 +95,21 @@ agent worktree the rule is `TEST_JOBS=1`: two pools from two trees are six Chrom
 and that is the recorded false failure. CI (4 vCPU) takes the default 3; if its
 runs show RETRY lines, its step gets `TEST_JOBS: 2`.
 
+**On CI the first pooled run took 529 s, not less — the runner being honest about a red
+tree.** `ci.yml` had been failing at «Test suites» on every commit since v415 (2026-09-27;
+480–556 s each), unread because the gate that blocks is the local one. The cases that measure
+whether text fits its box — `test-program-ui.js`, `test-run-home-ui.js`,
+`test-cardio-sleep-ui.js`, `test-food-log-ui.js`, the convenience bar at 340 px «Larger
+text» — are font-metric assertions, and the harness fence blocks the font hosts by design, so
+Chrome measures Windows' `system-ui` here and Linux's wider one there; plus
+`test-share-recipe.js` S4, which reads an i18n key that lands only with v419's client. Each
+of those FAILs bought its lonely retry (sync-status-ui alone is 181 s), every retry failed
+again («failed beside others AND alone» — a real failure, not load), and the verdict set
+equalled the sequential CI run's exactly. On a green tree the same job is the ~230 s measured
+here. Making CI green is its own task: admit the two read-only font hosts in the suites' fence
+as `scripts/ux-audit.js` does, install the fonts on the runner, or make the fit checks
+relative to the rendered font — the owner's call.
+
 ## v418 — a planned day that passes without a workout is recorded, and the user is told
 
 **«خلي انو اذا ما سجلت ولا جلسة بتمارين ينحط انو راحة او عدم الذهاب الى النادي

@@ -929,6 +929,16 @@ fake suites in a temp directory (`TEST_ALL_DIR`), each of its 24 assertions seen
 defect planted in a scratch copy of the runner (`TEST_RUNNER_UNDER_TEST`), the real file
 untouched.
 
+**CI is red, and has been since v415 (2026-09-27), unread** — the «Test suites» step fails
+on every commit on the text-fit cases (program, run-home, cardio-sleep, food-log, the
+convenience bar at 340 px «Larger text»): the fence blocks the font hosts by design, so those
+font-metric assertions run under Linux's wider `system-ui` there and Windows' here. The first
+pooled run there took 529 s, not less, because every FAIL buys its lonely retry — and every
+retry failed again («failed beside others AND alone»: real, not load; the verdict set equalled
+the sequential CI run's). Making it green is its own task (admit the two read-only font hosts
+as `scripts/ux-audit.js` does, install the fonts on the runner, or measure relative to the
+rendered font); until then a CI «Test suites» failure is read as this class first.
+
 ### What running them for the first time found
 
 Installing Playwright and running everything caught a **third** instance of the same blind
