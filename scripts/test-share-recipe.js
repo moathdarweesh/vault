@@ -256,6 +256,12 @@ scase('S7 every invalid input is refused with 400 no input, before the budget an
   const atBounds = { name: 'n'.repeat(80), servings: 99, sourceId: 's'.repeat(64), items: Array.from({ length: 30 }, (_, i) => ({ name: 'i'.repeat(79) + (i % 10), qty: 'q'.repeat(24), calories: i ? 0 : 100000, protein: 100000, carbs: 0, fat: 0.05 })) };
   const edge = await h.call(share(atBounds));
   assert.equal(edge.status, 200, 'control: a recipe AT every bound (80, 24, 30 items, 99 servings, 0 and 100000, a 64-character id) is served — got ' + edge.status + ' ' + j(edge.data));
+  // …and a SERVING at its bound: 100000.4 kcal rounds to 100000, 100000 g of fat is 100000 (the database's own rounding).
+  const serving = (k, a, b) => share({ servings: 1, items: [{ ...recipe().items[0], [k]: a }, { ...recipe().items[1], [k]: b }] });
+  for (const [label, payload] of [['100000.4 kcal a serving', serving('calories', 100000, 0.4)], ['100000 g of fat a serving', serving('fat', 100000, 0)]]) {
+    const at = await h.call(payload);
+    assert.equal(at.status, 200, 'control: ' + label + ' is served — got ' + at.status + ' ' + j(at.data));
+  }
   const item = (over) => [{ ...recipe().items[0], ...over }, recipe().items[1]];
   const without = (k) => { const it = { ...recipe().items[0] }; delete it[k]; return [it, recipe().items[1]]; };
   const many = (n) => Array.from({ length: n }, (_, i) => ({ name: 'item ' + i, qty: '1', calories: 10, protein: 1, carbs: 1, fat: 1 }));
@@ -278,6 +284,17 @@ scase('S7 every invalid input is refused with 400 no input, before the budget an
     ['no recipe name', share({ name: '' })], ['a blank recipe name', share({ name: ' \n ' })], ['an 81-character recipe name', share({ name: 'n'.repeat(81) })],
     ['a numeric recipe name', share({ name: 42 })],
     ['total kcal 0', share({ items: [item({ calories: 0 })[0], { ...recipe().items[1], calories: 0 }] })],
+    // publish_shared_recipe()'s LAST shape check (migration 35, its VERIFY row of the same name): each
+    // ingredient is in range, the serving is not. Unrefused here, it was moderated, charged a unit of the
+    // daily budget, then answered 502 on every retry.
+    ['200000 kcal a serving', serving('calories', 100000, 100000)],
+    ['100000.5 kcal a serving (rounds to 100001)', serving('calories', 100000, 0.5)],
+    ['100000.1 g of fat a serving', serving('fat', 100000, 0.1)],
+    // The Worker counts in whole TENTHS so that no float decides a boundary: these three sum to 100000.5
+    // exactly (the database rounds that to 100001), while their float sum is 100000.49999999999 — a
+    // rewrite that added the figures as floats would round it to 100000 and let it through.
+    ['100000.5 kcal a serving in three parts', share({ servings: 1, items: [{ ...recipe().items[0], calories: 18442.1 }, { ...recipe().items[1], calories: 78431.7 }, { name: 'egg', qty: '1', calories: 3126.7, protein: 6, carbs: 0, fat: 5 }] })],
+    ['200000.1 g of protein over 2 servings (100000.05 rounds to 100000.1)', share({ servings: 2, items: [{ ...recipe().items[0], protein: 100000 }, { ...recipe().items[1], protein: 100000 }, { name: 'egg', qty: '1', calories: 70, protein: 0.1, carbs: 0, fat: 5 }] })],
     ['no sourceId', share({ sourceId: undefined })], ['an empty sourceId', share({ sourceId: '' })], ['a sourceId with a space', share({ sourceId: 'rec 1' })],
     ['a sourceId with a slash', share({ sourceId: 'rec/1' })], ['a 65-character sourceId', share({ sourceId: 's'.repeat(65) })], ['a numeric sourceId', share({ sourceId: 12 })],
   ];

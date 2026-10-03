@@ -567,6 +567,13 @@ function readShare(body) {
   }
   const name = shareText(s.name, SHARE_NAME);
   if (!name || !(items.reduce((n, it) => n + it.calories, 0) > 0)) return null;
+  // Per serving, as publish_shared_recipe() rounds it (migration 35, step 4: kcal to a whole,
+  // macros to 0.1, halves up) — its LAST shape check, refused here before the budget: unrefused,
+  // such a recipe was moderated, charged a unit, then answered 502 on every retry. Counted in
+  // whole tenths, so no float decides a boundary: a serving is over when it would ROUND past the bound.
+  const tenths = (k) => items.reduce((n, it) => n + Math.round(it[k] * 10), 0);
+  const over = (k, half) => 2 * tenths(k) >= s.servings * (2 * SHARE_FIG * 10 + half);
+  if (over('calories', 10) || over('protein', 1) || over('carbs', 1) || over('fat', 1)) return null;
   return { recipe: { name, servings: s.servings, items }, sourceId: s.sourceId };
 }
 

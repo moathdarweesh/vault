@@ -32,9 +32,13 @@
 -- 2. ANONYMITY IS STRUCTURAL. `authenticated` gets a column-level SELECT on
 --    every column EXCEPT author, source_id, removed_at and removed_reason, and
 --    no table-level privilege; `anon` and PUBLIC get nothing. No client — the
---    Console included — can learn who shared what: a `select *` is refused
---    with 42501, so every reader names its columns (check-contracts #78 holds
---    js/cloud.js and admin.html to this list). No client role may write.
+--    Console included — can read who shared what FROM THIS TABLE: a `select *`
+--    is refused with 42501, so every reader names its columns (check-contracts
+--    #78 holds js/cloud.js and admin.html to this list). That hides the author
+--    from every other USER. It does NOT hide it from an ADMIN session: the
+--    author's own blob carries recipes[].shared.id (DB.recipes.setShared) and
+--    18's vault_data_admin_read lets an admin read every blob, so the Console
+--    could match a row's id to its author. No client role may write.
 -- 3. Two SELECT policies: every signed-in account reads APPROVED rows; an
 --    admin also reads removed ones. Neither references its own table (27's
 --    42P17 lesson), and there is no ban policy on SELECT (a banned account
@@ -45,7 +49,10 @@
 --    own token (so the author is auth.uid() and cannot be forged) and the
 --    server key SHARE_KEY, which it compares with the Vault secret
 --    `share_recipe_key`. A client calling it directly does not hold the key.
---    The checks, in order, each a `raise exception` the Worker maps to a code:
+--    The checks, in order, each a `raise exception`; the Worker maps the five
+--    a caller can meet to a code and answers 'not authenticated' and 'share
+--    payload invalid' as a 502 (its own readShare refuses every such shape
+--    first, the per-serving bound included, before the budget):
 --      'not authenticated'      no auth.uid()
 --      'share blocked'          public.is_banned() — a DEFINER bypasses the
 --                               RESTRICTIVE ban policies, so it asks itself
@@ -58,11 +65,14 @@
 --    dinner; source_id ^[A-Za-z0-9_-]{1,64}$; the recipe's keys exactly
 --    {items,name,servings}; name 1-80 characters after btrim; servings a whole
 --    1-99; 1-30 items, each with keys exactly
---    {calories,carbs,fat,name,protein,qty}, a name of 1-80, a qty string of at
---    most 24, four figures that are JSON numbers in 0-100000; the total
---    calories above 0; each per-serving figure at most 100000 (the columns'
---    own check — refused by name instead of with a raw 23514). Even a leaked
---    key cannot write anything a saved recipe could not hold. Then one author
+--    {calories,carbs,fat,name,protein,qty}, a name of at most 80 AS SENT and
+--    not blank (the array is stored verbatim, so the bound is on the raw
+--    string, not its trimmed copy), a qty string of at most 24, four figures
+--    that are JSON numbers in 0-100000 written in at most 16 characters (a
+--    value bound alone admits 16 000 decimals); the total calories above 0;
+--    each per-serving figure at most 100000 (the columns' own check — refused
+--    by name instead of with a raw 23514). Even a leaked key cannot write
+--    anything a saved recipe could not hold. Then one author
 --    at a time (an advisory lock on the author), the two caps — counted as
 --    DEFINER, because a count under RLS counts nothing (26) — then the older
 --    copy of the same source is deleted and the new row inserted. The caps do
@@ -85,8 +95,10 @@
 -- installed (vault.decrypted_secrets); a Vault secret named share_recipe_key
 -- holds 64 lowercase hex characters; pgcrypto's extensions.digest(bytea,text)
 -- exists; and the LIVE delete_own_account() still contains each `delete from`
--- statement of migration 18 (whitespace collapsed) — a body changed outside
--- the migrations is never silently overwritten.
+-- statement of migration 18 (whitespace collapsed) and NO OTHER `delete from`
+-- (nine, or ten once this file has run) — a body that lost a statement, or
+-- gained one outside the migrations, is never silently overwritten. (A gained
+-- statement of another kind — an update, a perform — is not detected.)
 --
 -- ── VERIFY — what each block proves, BY CALLING ────────────────────────────
 -- Probes are THROWAWAY auth users; every block that writes ends by raising
@@ -95,7 +107,7 @@
 -- block 1 proves it). A clean run prints, in a client that shows NOTICEs:
 --   VERIFY 1 ok: RLS on; authenticated SELECTs exactly the 12 public columns; no table privilege for any client role; both functions definer, pinned and locked; the Vault unreadable to clients; the stamp trigger in place
 --   VERIFY 2 ok: a publish returns the id and the stored name; per-serving figures as hand-computed; author is the caller; 80 Arabic characters fit; re-sharing a source leaves one row with a new id
---   VERIFY 3 ok: a wrong or missing key, 32 malformed payloads, a banned or disabled account and a caller with no sub are each refused by name
+--   VERIFY 3 ok: a wrong or missing key, 34 malformed payloads, a banned or disabled account and a caller with no sub are each refused by name
 --   VERIFY 4 ok: the 11th recipe in a day and the 101st held are refused; re-sharing at either cap replaces; a withdraw frees a place
 --   VERIFY 5 ok: another account reads the 12 columns of an approved row and nothing else; author, source_id, *, INSERT, UPDATE and DELETE are 42501; a removed row is hidden; anon reads nothing; the admin sees removed rows and still not the author
 --   VERIFY 6 ok: another account cannot withdraw a recipe; its author can, once; no session is refused
@@ -136,6 +148,35 @@
 --   update public.shared_recipes
 --      set status = 'removed', removed_at = pg_catalog.now(), removed_reason = '<why>'
 --    where id = '<uuid>';
+-- A ban does NOT take down what the account already shared: is_banned() is
+-- asked only at publish, so its approved rows stay in the feed. To remove
+-- everything one account shared (SQL editor, as postgres):
+--   update public.shared_recipes
+--      set status = 'removed', removed_at = pg_catalog.now(), removed_reason = '<why>'
+--    where author = '<user uuid>' and status = 'approved';
+-- (A ban that hides content by itself would be a later migration with its own
+-- calling VERIFY: a trigger on user_flags. Not a user_flags subquery in the
+-- SELECT policy — a no-op under RLS — and not a uuid-taking definer helper
+-- granted to authenticated — an oracle.)
+--
+-- The way back, if this file ever has to be undone (it discards every published
+-- copy and is a real removal: the owner confirms it). ONE transaction with
+-- lock_timeout 5 s, in THIS order:
+--   1. delete_own_account goes back to the body of migration 18 FIRST (section 2
+--      of 18_drop-mirror-v14.sql, verbatim; OR REPLACE, so its ACL stays). After
+--      this file its body names shared_recipes, and plpgsql resolves a table when
+--      the statement RUNS: with the table gone and this body left, every account
+--      deletion raises 42P01 (the trap the header of 18 records).
+--   2. publish_shared_recipe and withdraw_shared_recipe are removed.
+--   3. shared_recipes is removed LAST. Its foreign key goes with it, and that
+--      takes ACCESS EXCLUSIVE on auth.users (applying took SHARE ROW EXCLUSIVE):
+--      sign-ins and token refreshes queue behind it, hence the lock_timeout.
+--   4. notify pgrst to reload its schema; then delete the Vault secret
+--      share_recipe_key and run npx wrangler secret delete SHARE_KEY.
+-- stamp_created_at stays: it belongs to migration 30, and the feedback and
+-- client_errors triggers run it. The statements are NOT spelled out here on
+-- purpose: check-contracts #4 replays this text with its comments, and a
+-- commented-out removal would read as the last word about the table.
 -- ============================================================================
 
 begin;
@@ -181,6 +222,12 @@ begin
       raise exception 'GATE 0: the live delete_own_account() no longer contains "%" — it was changed outside the migrations; reconcile it before this file replaces it. Nothing was applied.', stmt;
     end if;
   end loop;
+  -- ...and nothing beyond them: 18 wrote nine `delete from`, this file a tenth
+  -- (present on a re-run). 'delete from ' is 12 characters.
+  if (pg_catalog.length(body) - pg_catalog.length(pg_catalog.replace(body, 'delete from ', ''))) / 12
+     <> 9 + (pg_catalog.strpos(body, 'delete from public.shared_recipes where author = uid') > 0)::integer then
+    raise exception 'GATE 0: the live delete_own_account() holds a `delete from` that neither migration 18 nor this file wrote — it was changed outside the migrations; reconcile it before this file replaces it. Nothing was applied.';
+  end if;
 end $$;
 
 -- ── 1. the table ───────────────────────────────────────────────────────────
@@ -350,7 +397,10 @@ begin
        or pg_catalog.jsonb_typeof(item->'qty') is distinct from 'string' then
       raise exception 'share payload invalid';
     end if;
-    if pg_catalog.char_length(pg_catalog.btrim(item->>'name')) not between 1 and share_name
+    -- The array is stored VERBATIM (step 8), so the bound is on the name as sent:
+    -- 'x' followed by a megabyte of spaces has a trimmed length of 1.
+    if pg_catalog.char_length(pg_catalog.btrim(item->>'name')) < 1
+       or pg_catalog.char_length(item->>'name') > share_name
        or pg_catalog.char_length(item->>'qty') > share_qty then
       raise exception 'share payload invalid';
     end if;
@@ -358,7 +408,11 @@ begin
       if pg_catalog.jsonb_typeof(item->fig) is distinct from 'number' then
         raise exception 'share payload invalid';
       end if;
-      if (item->>fig)::numeric not between 0 and share_fig then
+      -- In range AND short: jsonb keeps every digit it was sent, and a number
+      -- with 16 000 decimals is still "between 0 and 100000". The Worker's
+      -- figures are at most 7 characters (99999.9).
+      if (item->>fig)::numeric not between 0 and share_fig
+         or pg_catalog.char_length(item->>fig) > 16 then
         raise exception 'share payload invalid';
       end if;
     end loop;
@@ -646,7 +700,7 @@ begin
     end if;
   end loop;
 
-  -- 3b. thirty-two malformed payloads, each refused by name before anything is written
+  -- 3b. thirty-four malformed payloads, each refused by name before anything is written
   for bad in
     select * from (values
       ('servings 0',            'en'::text, array['lunch']::text[], 'verify35-bad'::text, pg_catalog.jsonb_set(base, '{servings}', '0')),
@@ -661,6 +715,8 @@ begin
       ('a blank name',          'en', array['lunch'], 'verify35-bad', pg_catalog.jsonb_set(base, '{name}', '"   "')),
       ('an 81-character item',  'en', array['lunch'], 'verify35-bad', pg_catalog.jsonb_set(base, '{items,0,name}', pg_catalog.to_jsonb(pg_catalog.repeat('x', 81)))),
       ('a nameless item',       'en', array['lunch'], 'verify35-bad', pg_catalog.jsonb_set(base, '{items,0,name}', '"  "')),
+      ('an item name padded past 80', 'en', array['lunch'], 'verify35-bad', pg_catalog.jsonb_set(base, '{items,0,name}', pg_catalog.to_jsonb('x' || pg_catalog.repeat(' ', 80)))),
+      ('a figure of 40 decimals', 'en', array['lunch'], 'verify35-bad', pg_catalog.jsonb_set(base, '{items,0,fat}', ('0.' || pg_catalog.repeat('1', 40))::jsonb)),
       ('a 25-character qty',    'en', array['lunch'], 'verify35-bad', pg_catalog.jsonb_set(base, '{items,0,qty}', pg_catalog.to_jsonb(pg_catalog.repeat('q', 25)))),
       ('a figure of -1',        'en', array['lunch'], 'verify35-bad', pg_catalog.jsonb_set(base, '{items,0,protein}', '-1')),
       ('a figure of 100001',    'en', array['lunch'], 'verify35-bad', pg_catalog.jsonb_set(base, '{items,0,calories}', '100001')),
@@ -746,15 +802,15 @@ begin
   perform public.publish_shared_recipe(k, 'en', array['lunch','dinner'], 'verify35-good', base);
   reset role;
 
-  if tried <> 32 then
-    raise exception 'VERIFY 3b failed: % malformed payloads were tried, expected 32', tried;
+  if tried <> 34 then
+    raise exception 'VERIFY 3b failed: % malformed payloads were tried, expected 34', tried;
   end if;
 
   raise exception 'ROLLBACK-OK: VERIFY 3';
 exception
   when others then
     if pg_catalog.strpos(sqlerrm, 'ROLLBACK-OK: VERIFY 3') = 0 then raise; end if;
-    raise notice 'VERIFY 3 ok: a wrong or missing key, 32 malformed payloads, a banned or disabled account and a caller with no sub are each refused by name';
+    raise notice 'VERIFY 3 ok: a wrong or missing key, 34 malformed payloads, a banned or disabled account and a caller with no sub are each refused by name';
 end $$;
 
 -- 4. the caps: ten a day, a hundred held — counted as DEFINER, about the caller only
@@ -949,7 +1005,7 @@ begin
     raise exception 'VERIFY 5d failed: the admin does not see a removed recipe';
   end if;
   if state <> '42501' then
-    raise exception 'VERIFY 5d failed: the admin reading author gave SQLSTATE % (expected 42501 — the Console must not learn who shared)', state;
+    raise exception 'VERIFY 5d failed: the admin reading author gave SQLSTATE % (expected 42501 — the Console must not read author from this table)', state;
   end if;
 
   raise exception 'ROLLBACK-OK: VERIFY 5';
