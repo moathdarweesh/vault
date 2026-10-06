@@ -7,7 +7,17 @@
 // fields the engine reads (the marker's sig, noAuto, origin), the content
 // signature, the question «is this recipe wanted?», the device ledger and the
 // queue a trigger fills. What the engine does with them — every request — is
-// the browser suite's. Node built-ins only; no
+// the browser suite's. Since v421, «اقتراحات اليوم» (J): the READY MEALS that
+// ship with the app (SUGGESTION_PRESETS in js/catalog.js) resolved item by item
+// against FOOD_PRESETS, their figures (suggestionItems), the pool of the three
+// sources and the card's order (suggestionPool, shrCardOrder, a card that is
+// never empty), and a copy of a ready meal that automatic sharing never
+// publishes (origin 'builtin'); and the fixes after its review: every
+// ingredient in grams or millilitres (SERVING_WEIGHTS), one meal one row (a
+// saved copy stands in for the ready meal or the community row it copies, a
+// withdrawn copy leaves the list — shrForget), and «show more» drawn bare with
+// one source. Each of those assertions was seen to fail on a defect planted in
+// memory (js/food.js, js/catalog.js). Node built-ins only; no
 // real storage, no account, no network — every Supabase answer and every
 // Worker reply is a fake built here.
 // Run: node scripts/test-shared-recipes.js
@@ -230,11 +240,14 @@ test('E DB.recipes.setShared', () => {
   assert.ok(!('noAuto' in stored(rec.id)), 'and it DELETES the field — true or absent, never false: ' + json(stored(rec.id)));
   deq(DB.recipes.setNoAuto('no-such-recipe', true), { ok: false, code: 'STALE' }, 'an unknown recipe is STALE');
   assert.equal(ledger(), led, 'and none of it entered the undo ledger');
-  // v420 — origin: add() keeps it only as 'shared'; an edit can neither set,
-  // replace nor remove it.
+  // v420 — origin: add() keeps it only as 'shared' — and, since v421, as
+  // 'builtin' (a copy of a ready meal); an edit can neither set, replace nor
+  // remove it.
   const fromFeed = DB.recipes.add({ name: 'QA From The Feed', servings: 1, items: [ingredient()], origin: 'shared' });
   assert.equal(fromFeed && stored(fromFeed.id).origin, 'shared', "add keeps origin: 'shared'");
-  for (const other of ['mine', 'Shared', ' shared', true, 1, ['shared'], { v: 'shared' }, null]) {
+  const fromReady = DB.recipes.add({ name: 'QA From The Ready Meals', servings: 1, items: [ingredient()], origin: 'builtin' });
+  assert.equal(fromReady && stored(fromReady.id).origin, 'builtin', "add keeps origin: 'builtin' (v421) — a copy of a ready meal is never published as the user's own");
+  for (const other of ['mine', 'Shared', ' shared', 'Builtin', 'built-in', true, 1, ['shared'], { v: 'shared' }, null]) {
     const r = DB.recipes.add({ name: 'QA Own', servings: 1, items: [ingredient()], origin: other });
     assert.ok(r && !('origin' in stored(r.id)), 'add takes no other origin: ' + json(other) + ' → ' + json(r && stored(r.id).origin));
   }
@@ -806,6 +819,404 @@ test('I automatic sharing', async () => {
   await tick();
 });
 
+// ---------------------------------------------------------------- J. «اقتراحات اليوم» — the ready meals (v421)
+// A set of everyday meals ships with the app (SUGGESTION_PRESETS, js/catalog.js)
+// so the card answers «what do I eat today?» before any recipe exists, with no
+// account and offline. No figure is stored there: every item names ONE
+// catalogue entry and an amount, and the figures are computed from the entry
+// (suggestionItems, js/food.js). THE CATALOGUE HALF, here: every item resolves
+// to exactly one FOOD_PRESETS entry by its exact `en`, in the entry's own
+// unit — grams (`g`) for a serving that names grams, a whole count of the
+// serving (`n`) otherwise, never both — 2 to 6 items a meal, at least 16 meals
+// and at least 4 for each of the four periods, ids unique and safe (they ride
+// into the food log as a sourceId), names unique in each language, and nothing
+// stored on a meal or an item but what the shape names.
+test('J SUGGESTION_PRESETS — the ready meals resolve against the catalogue; their figures, the pool and the card', () => {
+  const { DB, run } = foodApp();
+  const presets = plain(run('typeof SUGGESTION_PRESETS === "undefined" ? null : SUGGESTION_PRESETS'));
+  assert.ok(Array.isArray(presets), 'SUGGESTION_PRESETS is a list in js/catalog.js');
+  const catalog = plain(run('FOOD_PRESETS'));
+  const periods = plain(run('SHR_PERIODS'));
+  deq(periods, ['breakfast', 'lunch', 'snack', 'dinner'], 'setup: the four periods, as food.js spells them');
+  // The grams a serving names: the figure before a trailing «g» ('100g' → 100,
+  // '1 cup · 243g' → 243, '2 eggs · 100g' → 100, '100g cooked' → 100); 'ml',
+  // 'egg', 'medium', 'tbsp', 'pieces' name none. (parseGrams is NOT the reader
+  // here: it wants the weight LAST and reads ml as grams, so it answers null
+  // for '100g cooked' and 250 for '250ml' — an entry's unit is decided by what
+  // its serving NAMES.)
+  const gramsIn = (s) => { const m = String(s).match(/(\d+(?:\.\d+)?)\s*g(?![A-Za-z])/); return m ? Number(m[1]) : null; };
+  deq(['100g', '1 cup · 243g', '2 eggs · 100g', '100g cooked', '5g', '250ml', '1 egg', '1 medium', '1 tbsp', '3 pieces', '1 cup · 240ml'].map(gramsIn),
+    [100, 243, 100, 100, 5, null, null, null, null, null, null], 'the reader of a serving: grams named, or none');
+  assert.ok(presets.length >= 16, 'at least 16 meals: ' + presets.length);
+  const ids = new Set(), names = { en: new Set(), ar: new Set() };
+  const perPeriod = Object.fromEntries(periods.map((p) => [p, 0]));
+  for (const m of presets) {
+    const where = 'meal ' + json(m && m.id);
+    assert.ok(m && typeof m === 'object' && !Array.isArray(m), where + ' is a record');
+    deq(Object.keys(m).sort(), ['ar', 'en', 'id', 'items', 'meals'], where + ': exactly {id, en, ar, meals, items} — no figure is stored on a meal: ' + json(Object.keys(m)));
+    assert.ok(SAFE_ID.test(m.id), where + ': a safe id — it rides into the food log as a sourceId');
+    assert.ok(!ids.has(m.id), where + ': a unique id');
+    ids.add(m.id);
+    for (const lang of ['en', 'ar']) {
+      const nm = m[lang];
+      assert.ok(typeof nm === 'string' && nm.trim() === nm && nm.length >= 1 && nm.length <= 80, where + '.' + lang + ' is a trimmed name of 1–80 characters (a saved copy is a recipe): ' + json(nm));
+      assert.ok(!names[lang].has(nm), where + '.' + lang + ' is unique among the meals: ' + json(nm));
+      names[lang].add(nm);
+    }
+    assert.ok(/[؀-ۿ]/.test(m.ar) && !/[؀-ۿ]/.test(m.en), where + ': ar is written in Arabic and en is not: ' + json([m.en, m.ar]));
+    assert.ok(Array.isArray(m.meals) && m.meals.length >= 1 && m.meals.length <= 4, where + ': 1–4 periods: ' + json(m.meals));
+    assert.ok(m.meals.every((p) => periods.includes(p)) && new Set(m.meals).size === m.meals.length, where + ': periods from the four, each once: ' + json(m.meals));
+    for (const p of m.meals) perPeriod[p]++;
+    assert.ok(Array.isArray(m.items) && m.items.length >= 2 && m.items.length <= 6, where + ': 2–6 items: ' + json(m.items && m.items.length));
+    for (const it of m.items) {
+      const at = where + ' item ' + json(it && it.en);
+      assert.ok(it && typeof it === 'object' && !Array.isArray(it), at + ' is a record');
+      const keys = Object.keys(it).sort().join(',');
+      assert.ok(keys === 'en,g' || keys === 'en,n', at + ': exactly {en, g} or {en, n} — one amount, no figure: ' + json(it));
+      const hits = catalog.filter((p) => p.en === it.en);
+      assert.equal(hits.length, 1, at + ': names exactly one FOOD_PRESETS entry by its exact `en` (found ' + hits.length + ')');
+      const entry = hits[0];
+      const grams = gramsIn(entry.s);
+      if (grams !== null) {
+        assert.ok('g' in it, at + ": the entry's serving names grams (" + json(entry.s) + '), so the amount is `g`, not a count: ' + json(it));
+        assert.ok(Number.isFinite(it.g) && it.g > 0 && it.g <= 1000, at + ': g is a weight in 1–1000: ' + json(it.g));
+      } else {
+        assert.ok('n' in it, at + ": the entry's serving is a unit (" + json(entry.s) + '), so the amount is `n`, not grams: ' + json(it));
+        assert.ok(Number.isInteger(it.n) && it.n >= 1 && it.n <= 10, at + ': n is a whole count in 1–10: ' + json(it.n));
+      }
+      for (const k of ['cal', 'pro', 'carb', 'f']) assert.ok(Number.isFinite(entry[k]), at + ': the entry carries a finite ' + k + ' (every row carries f, v271): ' + json(entry));
+    }
+  }
+  for (const p of periods) assert.ok(perPeriod[p] >= 4, 'at least 4 meals for ' + p + ': ' + perPeriod[p] + ' — ' + json(perPeriod));
+  // EVERY INGREDIENT IN GRAMS (v421 fix F2) — «كل وجبة أو مكوّن … محسوب السعرات
+  // والغرامات», the owner. A unit entry a meal counts (`n`) carries the weight
+  // of ONE of its servings in SERVING_WEIGHTS (js/catalog.js): exactly one of
+  // `g` or `ml`, a whole number in 1–1000, `ml` exactly where the entry's own
+  // serving names millilitres (a liquid reads as it is poured). A weight on an
+  // entry whose serving already names grams would never be read: refused too.
+  const weights = plain(run('typeof SERVING_WEIGHTS === "undefined" ? null : SERVING_WEIGHTS'));
+  assert.ok(weights && typeof weights === 'object' && !Array.isArray(weights), 'SERVING_WEIGHTS is a map in js/catalog.js');
+  for (const [en, w] of Object.entries(weights)) {
+    const at = 'SERVING_WEIGHTS[' + json(en) + ']';
+    const hits = catalog.filter((p) => p.en === en);
+    assert.equal(hits.length, 1, at + ' names exactly one FOOD_PRESETS entry by its exact `en`');
+    assert.equal(gramsIn(hits[0].s), null, at + ': a weight belongs to a UNIT entry — ' + json(hits[0].s) + ' already names grams');
+    assert.ok(w && typeof w === 'object' && Object.keys(w).length === 1 && ('g' in w || 'ml' in w), at + ' is exactly {g} or {ml}: ' + json(w));
+    const v = 'g' in w ? w.g : w.ml;
+    assert.ok(Number.isInteger(v) && v >= 1 && v <= 1000, at + ': a whole number in 1–1000: ' + json(v));
+    assert.equal('ml' in w, /\d\s*ml\b/i.test(hits[0].s), at + ': millilitres exactly where the serving names ml (' + json(hits[0].s) + '): ' + json(w));
+  }
+  for (const m of presets) for (const it of m.items) if ('n' in it) assert.ok(Object.prototype.hasOwnProperty.call(weights, it.en), 'meal ' + json(m.id) + ' counts ' + json(it.en) + ' (' + json(catalog.find((p) => p.en === it.en).s) + '): its serving weighs something in SERVING_WEIGHTS, or the amount cannot read in grams');
+
+  // ── 1. THE FIGURES (suggestionItems, js/food.js) ─────────────────────────
+  // A meal's items as recipe items {id, name, qty, calories, protein, carbs,
+  // fat}: the name in the UI language, the amount as '150 غ' / '150 g' for
+  // grams, and a count as n × its SERVING_WEIGHTS weight in grams or
+  // millilitres ('100 غ' for two eggs) — Latin digits in both languages,
+  // the figures the entry's × (g / the grams its serving names) or × n — kcal
+  // whole, macros to 0.1. First BY HAND, on «Vegetable omelette with bread»
+  // (sg-veg-omelette): Egg ×2 (78/6/1/5.6 → 156/12/2/11.2), Tomato 50 of
+  // '100g' (18/1/3/0 → 9/0.5/1.5/0), Bell Pepper 50 of '100g' (31/1/6/0 →
+  // 15.5 → 16/0.5/3/0), Olive Oil ×1 tbsp (119/0/0/13.2), Whole-Wheat Bread
+  // 35 of '1 slice · 35g' (90/4/16/1.1) — the catalogue entries as they stand;
+  // then, over every meal, against this file's own reading (gramsIn) of
+  // every entry — never parseGrams.
+  const items = (preset) => plain(run('suggestionItems(' + json(preset) + ')'));
+  const omelette = presets.find((m) => m.id === 'sg-veg-omelette');
+  assert.ok(omelette && json(omelette.items) === json([{ en: 'Egg', n: 2 }, { en: 'Tomato', g: 50 }, { en: 'Bell Pepper', g: 50 }, { en: 'Olive Oil', n: 1 }, { en: 'Whole-Wheat Bread', g: 35 }]),
+    'the hand-computed meal is still sg-veg-omelette as written: ' + json(omelette && omelette.items));
+  // Since the v421 fix (F2) a count reads in grams: two eggs of 50 g are
+  // «100 g», one tablespoon of olive oil (14 g) «14 g» — ONE figure the scaler
+  // moves with the figures beside it.
+  deq(items(omelette), [
+    { id: 'sg-veg-omelette-1', name: 'Egg', qty: '100 g', calories: 156, protein: 12, carbs: 2, fat: 11.2 },
+    { id: 'sg-veg-omelette-2', name: 'Tomato', qty: '50 g', calories: 9, protein: 0.5, carbs: 1.5, fat: 0 },
+    { id: 'sg-veg-omelette-3', name: 'Bell Pepper', qty: '50 g', calories: 16, protein: 0.5, carbs: 3, fat: 0 },
+    { id: 'sg-veg-omelette-4', name: 'Olive Oil', qty: '14 g', calories: 119, protein: 0, carbs: 0, fat: 13.2 },
+    { id: 'sg-veg-omelette-5', name: 'Whole-Wheat Bread', qty: '35 g', calories: 90, protein: 4, carbs: 16, fat: 1.1 },
+  ], 'the omelette by hand (EN): a count scales the unit entry and reads as n × its serving\'s weight in grams, grams scale by the grams the serving names, kcal whole, macros to 0.1');
+  run('STATE.prefs.lang = "ar"');
+  deq(items(omelette).map((it) => [it.name, it.qty]), [['بيضة', '100 غ'], ['طماطم', '50 غ'], ['فلفل رومي', '50 غ'], ['زيت زيتون', '14 غ'], ['خبز قمح كامل', '35 غ']],
+    'in Arabic the names are the entries\' `ar` and EVERY amount reads in grams, in Latin digits like the figures beside it (ui.js): «100 غ» for two eggs, «14 غ» for a tablespoon of oil, «50 غ»');
+  deq(items(omelette).map((it) => [it.calories, it.protein, it.carbs, it.fat]), [[156, 12, 2, 11.2], [9, 0.5, 1.5, 0], [16, 0.5, 3, 0], [119, 0, 0, 13.2], [90, 4, 16, 1.1]], 'and the figures do not depend on the language');
+  // Every amount of every meal is ONE figure and its unit, in both languages.
+  for (const m of presets) {
+    for (const q of items(m).map((it) => it.qty)) assert.match(q, /^[0-9]+ (غ|مل)$/, 'AR: ' + m.id + ' reads every amount as «<Latin figure> غ» or «<Latin figure> مل» (one digit script beside the Latin figures line): ' + json(q));
+  }
+  run('STATE.prefs.lang = "en"');
+  for (const m of presets) {
+    for (const q of items(m).map((it) => it.qty)) assert.match(q, /^\d+ (g|ml)$/, 'EN: ' + m.id + ' reads every amount as "<figure> g" or "<figure> ml": ' + json(q));
+  }
+  const round1 = (v) => Math.round(v * 10) / 10;
+  const entryOf = (en) => catalog.find((p) => p.en === en);
+  const oracle = (preset) => preset.items.map((it, i) => {
+    const e = entryOf(it.en), grams = gramsIn(e.s), k = grams !== null ? it.g / grams : it.n, w = weights[it.en];
+    return { id: preset.id + '-' + (i + 1), name: e.en, qty: grams !== null ? it.g + ' g' : 'g' in w ? it.n * w.g + ' g' : it.n * w.ml + ' ml',
+      calories: Math.round(e.cal * k), protein: round1(e.pro * k), carbs: round1(e.carb * k), fat: round1(e.f * k) };
+  });
+  for (const m of presets) deq(items(m), oracle(m), 'every item of ' + m.id + ' priced by this file\'s own reading of the serving');
+  // A meal that does not resolve is null — never a partial list with figures
+  // nothing in it accounts for.
+  const planted = (list) => items({ id: 'sg-planted', en: 'Planted', ar: 'مزروع', meals: ['lunch'], items: list });
+  for (const [what, list] of [
+    ['an entry the catalogue has not', [{ en: 'Oats', g: 50 }, { en: 'Ful Medames', g: 200 }]],
+    ['grams on a unit entry (the spec\'s own Olive Oil g: 10)', [{ en: 'Oats', g: 50 }, { en: 'Olive Oil', g: 10 }]],
+    ['a count on a grams entry', [{ en: 'Oats', n: 1 }, { en: 'Olive Oil', n: 1 }]],
+    ['both g and n', [{ en: 'Oats', g: 50, n: 1 }, { en: 'Olive Oil', n: 1 }]],
+    ['neither', [{ en: 'Oats' }, { en: 'Olive Oil', n: 1 }]],
+    ['g that is not a weight', [{ en: 'Oats', g: 0 }, { en: 'Olive Oil', n: 1 }]],
+    ['n that is not a whole count', [{ en: 'Oats', g: 50 }, { en: 'Olive Oil', n: 1.5 }]],
+    ['an item that is not a record', [{ en: 'Oats', g: 50 }, 'Olive Oil']],
+    ['no items', []],
+  ]) assert.equal(planted(list), null, 'a meal with ' + what + ' is null: ' + json(planted(list)));
+  for (const bad of ['null', 'undefined', '"sg-x"', '{}', '{ items: "x" }']) assert.equal(plain(run('suggestionItems(' + bad + ')')), null, 'what is not a meal is null: ' + bad);
+
+  // ── 2. THE POOL (suggestionPool) AND THE CARD'S ORDER (shrCardOrder) ────
+  const pool = () => plain(run('suggestionPool()'));
+  const six = (it) => ({ name: it.name, qty: it.qty, calories: it.calories, protein: it.protein, carbs: it.carbs, fat: it.fat });
+  // A fresh app — no recipe, no list — holds the ready meals alone, in the
+  // catalogue's order, one serving each, the figures the sum of the items.
+  let p = pool();
+  deq(p.map((r) => r.id), presets.map((m) => 'builtin:' + m.id), 'no recipes and no list: the ready meals alone, in the catalogue\'s order');
+  for (const r of p) {
+    deq(Object.keys(r).sort(), ['carbs', 'fat', 'id', 'items', 'kcal', 'meals', 'name', 'protein', 'servings', 'src'], 'a ready row is exactly {id, src, name, servings, meals, kcal, protein, carbs, fat, items}: ' + json(Object.keys(r)));
+    const m = presets.find((x) => 'builtin:' + x.id === r.id);
+    deq([r.src, r.servings, r.name, r.meals], ['builtin', 1, m.en, periods.filter((x) => m.meals.includes(x))], r.id + ': src builtin, one serving, the meal\'s name and its periods in the fixed order (the judge\'s, as a feed row\'s)');
+    const want = oracle(m), per = DB.recipes.perServing({ servings: 1, items: want });
+    deq([r.kcal, r.protein, r.carbs, r.fat], [per.calories, per.protein, per.carbs, per.fat], r.id + ': the figures are the sum of its items, by DB.recipes.perServing');
+    deq(r.items, want.map(six), r.id + ': its items, six fields each (shrItem)');
+  }
+  const om = p.find((r) => r.id === 'builtin:sg-veg-omelette');
+  deq([om.kcal, om.protein, om.carbs, om.fat], [390, 17, 22.5, 25.5], 'the omelette by hand: 156+9+16+119+90 kcal, 12+0.5+0.5+0+4 protein, 2+1.5+3+0+16 carbs, 11.2+0+0+13.2+1.1 fat');
+  // One own recipe, published (its marker names a feed row), one not; a feed
+  // of three, one of them that very copy.
+  const feed = [
+    row({ id: 'pub-1', lang: 'en', name: 'QA bowl, as published', meals: ['lunch'], kcal: 254, protein: 26, carbs: 28, fat: 3, created_at: '2026-10-05T08:00:00.000Z' }),
+    row({ id: 'other-1', lang: 'en', name: 'Tuna salad', meals: ['lunch', 'dinner'], kcal: 250, protein: 30, carbs: 10, fat: 12, created_at: '2026-10-04T08:00:00.000Z' }),
+    row({ id: 'other-2', lang: 'en', name: 'Oat porridge', meals: ['breakfast'], kcal: 350, protein: 14, carbs: 55, fat: 8, created_at: '2026-10-03T08:00:00.000Z' }),
+  ];
+  run('SHARED_RECIPES = cleanSharedRecipes(' + json(feed) + ')');
+  const mine = DB.recipes.add({ name: 'QA bowl', servings: 2, items: [ingredient(), ingredient({ name: 'دجاج', qty: '150 غ', calories: 248, protein: 46, carbs: 0, fat: 5 })] });
+  const own2 = DB.recipes.add({ name: 'QA unpublished', servings: 1, items: [ingredient()] });
+  assert.ok(mine && own2 && DB.recipes.setShared(mine.id, { id: 'pub-1', at: '2026-10-05T08:00:00.000Z' }).ok, 'setup: two own recipes, the first published as pub-1');
+  p = pool();
+  deq(p.map((r) => r.src), ['mine', 'mine', 'community', 'community'].concat(presets.map(() => 'builtin')), 'the sources in order: mine, community, builtin — ' + json(p.map((r) => r.src)));
+  const m1 = p.find((r) => r.id === 'mine:' + mine.id), m2 = p.find((r) => r.id === 'mine:' + own2.id);
+  assert.ok(m1 && m2, 'both own recipes are rows, under mine:<id>');
+  deq(Object.keys(m1).sort(), ['carbs', 'created_at', 'fat', 'id', 'items', 'kcal', 'meals', 'name', 'protein', 'recId', 'servings', 'src'], 'an own row is exactly {id, src, name, servings, meals, kcal, protein, carbs, fat, items, recId, created_at}: ' + json(Object.keys(m1)));
+  const per1 = DB.recipes.perServing(mine);
+  deq([m1.recId, m1.name, m1.servings, m1.created_at, m1.kcal, m1.protein, m1.carbs, m1.fat], [mine.id, 'QA bowl', 2, mine.createdAt, per1.calories, per1.protein, per1.carbs, per1.fat], 'recId, the name, the servings, createdAt, and one serving\'s figures by DB.recipes.perServing');
+  deq(m1.items, mine.items.map(six), 'the own recipe\'s items, six fields each');
+  deq(m1.meals, ['lunch'], 'the published recipe takes the feed row\'s periods');
+  deq(m2.meals, periods, 'an unpublished one suits every period');
+  assert.ok(!p.some((r) => r.id === 'pub-1'), 'the feed\'s copy of the published recipe is left out: it appears ONCE, as mine — ' + json(p.filter((r) => r.src !== 'builtin').map((r) => r.id)));
+  deq(p.filter((r) => r.src === 'community').map((r) => r.id), ['other-1', 'other-2'], 'the other users\' rows keep the server\'s id');
+  deq(p.filter((r) => r.src === 'community').map((r) => Object.keys(r).sort()), [['carbs', 'created_at', 'fat', 'id', 'kcal', 'lang', 'meals', 'name', 'protein', 'servings', 'src'], ['carbs', 'created_at', 'fat', 'id', 'kcal', 'lang', 'meals', 'name', 'protein', 'servings', 'src']], 'a community row is cleanSharedRecipes\' row with its source named');
+  // A marker the feed does not hold (withdrawn there, or not pulled yet): every period.
+  assert.ok(DB.recipes.setShared(own2.id, { id: 'not-in-the-feed', at: '2026-10-05T08:00:00.000Z' }).ok, 'setup: a marker the list does not hold');
+  deq(pool().find((r) => r.id === 'mine:' + own2.id).meals, periods, 'a published recipe the list does not hold suits every period');
+  // A reported row leaves the community half, as before.
+  run('SHR_HIDDEN["other-2"] = true');
+  assert.ok(!pool().some((r) => r.id === 'other-2'), 'a reported row is not in the pool');
+  run('delete SHR_HIDDEN["other-2"]');
+  // A stored recipe with no well-formed ingredient (a blob may carry a null
+  // row) is no row — and the pool never throws: it is read from a render.
+  const withNull = JSON.parse(DB.exportJSON());
+  withNull.recipes.push({ id: 'qa-null-row', name: 'QA Null Row', servings: 1, items: [null], createdAt: '2026-10-01T00:00:00.000Z', updatedAt: '2026-10-01T00:00:00.000Z' });
+  assert.equal(DB.importJSON(JSON.stringify(withNull)), true, 'setup: a backup with a null row restores');
+  let got = null;
+  try { got = pool(); } catch (e) { got = 'threw: ' + e.message; }
+  assert.ok(Array.isArray(got) && !got.some((r) => r.id === 'mine:qa-null-row') && got.some((r) => r.id === 'mine:' + mine.id), 'the recipe with no ingredient is no row, the others still are, and nothing threw: ' + (Array.isArray(got) ? got.length + ' rows' : got));
+  // The judge (cleanSuggestion): a row that is not one is null, never repaired.
+  const judge = (r) => plain(run('cleanSuggestion(' + json(r) + ')'));
+  const good = { id: 'mine:rec-1', src: 'mine', recId: 'rec-1', name: 'QA', servings: 2, meals: ['lunch'], kcal: 100, protein: 1, carbs: 2, fat: 3, items: [ingredient()], created_at: '2026-10-01T00:00:00.000Z' };
+  deq(judge(good), good.items && Object.assign({}, good, { items: [six(ingredient())] }), 'a well-formed own row passes as it is');
+  for (const [what, change] of [
+    ['an id without its prefix', (r) => { r.id = 'rec-1'; }],
+    ['an unsafe id behind the prefix', (r) => { r.id = 'mine:<x>'; }],
+    ['an unsafe recId', (r) => { r.recId = '<x>'; }],
+    ['no recId on an own row', (r) => { delete r.recId; }],
+    ['no items', (r) => { delete r.items; }],
+    ['an item that is not one', (r) => { r.items = [null]; }],
+    ['a figure that is not one', (r) => { r.kcal = 'x'; }],
+    ['no period', (r) => { r.meals = ['brunch']; }],
+    ['no name', (r) => { r.name = '  '; }],
+  ]) { const r = JSON.parse(json(good)); change(r); assert.equal(judge(r), null, 'a row with ' + what + ' is null: ' + json(r)); }
+  deq(judge(Object.assign({}, good, { src: 'ai', id: 'srv-1' })), Object.assign({ src: 'community' }, plain(run('cleanSharedRecipes([' + json(Object.assign({}, good, { src: 'ai', id: 'srv-1' })) + '])[0]'))), 'a source that is not one of the three reads as community, under cleanSharedRecipes');
+  assert.equal(judge(Object.assign({}, good, { src: 'builtin', id: 'builtin:sg-x', recId: undefined })).recId, undefined, 'a ready row carries no recId');
+  for (const bad of ['null', '[]', '"x"', '7']) assert.equal(plain(run('cleanSuggestion(' + bad + ')')), null, 'what is not a row is null: ' + bad);
+  // THE CARD'S ORDER: the best-ranked of each source — mine, community,
+  // builtin — then the rest by rank; nothing of the period lost.
+  const byId = Object.fromEntries(pool().map((r) => [r.id, r]));
+  const order = (period, gauge) => plain(run('shrCardOrder(suggestionPool(), ' + json(period) + ', ' + json(gauge) + ')')).map((r) => r.id);
+  const ranked = (period, gauge) => plain(run('rankSuggestions(suggestionPool(), ' + json(period) + ', ' + json(gauge) + ')')).map((r) => r.id);
+  for (const gauge of [null, { calLeft: 300 }]) {
+    const o = order('lunch', gauge), rk = ranked('lunch', gauge);
+    const head = (src) => rk.find((id) => byId[id].src === src);
+    deq(o.slice(0, 3), [head('mine'), head('community'), head('builtin')], 'lunch (' + json(gauge) + '): the best mine, the best community, the best builtin — ' + json(o.slice(0, 3)));
+    deq(o.slice(3), rk.filter((id) => !o.slice(0, 3).includes(id)), 'then the rest by rank');
+    deq([...o].sort(), [...rk].sort(), 'nothing of the period lost or doubled');
+    assert.ok(o.slice(0, 3).every((id, i) => rk.indexOf(id) <= rk.indexOf(o[i]) || byId[id].src !== byId[o[i]].src), 'a head is the best of its source');
+  }
+  const snack = order('snack', null);
+  assert.ok(byId[snack[0]].src === 'mine' && byId[snack[1]].src === 'builtin' && !snack.some((id) => byId[id].src === 'community'), 'a period with no community row: mine, then the best builtin — ' + json(snack.slice(0, 3)));
+  deq(plain(run('shrCardOrder([], "lunch", null)')), [], 'an empty pool orders to nothing');
+  const before = run('JSON.stringify(suggestionPool())');
+  run('var __pool = suggestionPool(); shrCardOrder(__pool, "lunch", null);');
+  assert.equal(run('JSON.stringify(__pool)'), before, 'the pool handed in is never reordered in place');
+
+  // ── THE CARD IS NEVER '' (sharedCardHtml) ────────────────────────────────
+  DB.recipes.list().forEach((r) => DB.recipes.remove(r.id));
+  run('SHARED_RECIPES = null');
+  const card = run('sharedCardHtml(null)');
+  assert.ok(typeof card === 'string' && card.includes('id="shr-card"'), 'with no recipe and no list the card is still drawn');
+  assert.equal((card.match(/data-shr-src="builtin"/g) || []).length, 3, 'three rows, every one a ready meal: ' + (card.match(/data-shr-src="[a-z]+"/g) || []).join(' '));
+  assert.ok(!/class="shr-src"/.test(card), 'and a ready meal carries no caption');
+  assert.ok(card.includes('<span>' + run("t('shr_title')") + '</span>') && run("t('shr_title')") === 'Today’s suggestions', 'titled «' + run("t('shr_title')") + '»');
+  assert.equal((card.match(/aria-pressed="true"/g) || []).length, 1, 'one period pressed');
+  assert.ok(card.includes('data-shr-period="' + run('mealPeriodFor(new Date())') + '" aria-pressed="true"'), 'the clock\'s');
+  assert.ok(card.includes('data-shr-more'), 'at least four ready meals a period: «show more» is offered');
+  const own3 = DB.recipes.add({ name: 'QA own first', servings: 1, items: [ingredient()] });
+  const card2 = run('sharedCardHtml(null)');
+  const srcs = (card2.match(/data-shr-src="([a-z]+)"/g) || []).map((s) => s.slice(14, -1));
+  deq(srcs, ['mine', 'builtin', 'builtin'], 'with one own recipe: it leads, the ready meals follow — ' + json(srcs));
+  assert.equal((card2.match(/class="shr-src"/g) || []).length, 1, 'one caption, on the own row');
+  assert.ok(card2.includes('<span class="shr-src">' + run("t('shr_src_mine')") + '</span><span class="fig-row-title"'), 'reading «' + run("t('shr_src_mine')") + '» over the name');
+  assert.ok(card2.includes('data-shr-open="mine:' + own3.id + '"'), 'the own row opens by mine:<id>');
+  // The card shows the clock's period: a row that suits every period is on it whenever this runs.
+  run('SHARED_RECIPES = cleanSharedRecipes(' + json([Object.assign({}, feed[1], { meals: periods })]) + ')');
+  const card3 = run('sharedCardHtml({ calLeft: 2000 })');
+  deq((card3.match(/data-shr-src="([a-z]+)"/g) || []).map((s) => s.slice(14, -1)), ['mine', 'community', 'builtin'], 'with a community row too: one of each');
+  assert.ok(card3.includes('<span class="shr-src">' + run("t('shr_src_community')") + '</span>'), 'the community row says «' + run("t('shr_src_community')") + '»');
+  run('SHARED_RECIPES = null');
+  DB.recipes.remove(own3.id);
+
+  // ── 3. A COPY OF A READY MEAL IS NEVER PUBLISHED ─────────────────────────
+  // «احفظها في وصفاتي» on a ready meal stores origin: 'builtin' (shrCopyDraft
+  // reads the row's src; a community row stays 'shared'), DB.recipes.add
+  // keeps it (case E), and automatic sharing wants NO recipe that carries an
+  // origin at all — not a copy of a ready meal, not one a blob brought.
+  const ready = pool().find((r) => r.src === 'builtin');
+  const draft = plain(run('shrCopyDraft(' + json(ready) + ')'));
+  assert.equal(draft.origin, 'builtin', "a ready meal's copy says origin: 'builtin': " + json(draft));
+  deq(draft.items, ready.items, 'with the meal\'s items, six fields each');
+  assert.equal(plain(run('shrCopyDraft(' + json(Object.assign({}, ready, { src: 'community' })) + ')')).origin, 'shared', "a community row's copy stays origin: 'shared'");
+  assert.equal(run('shrCopyExists(' + json(ready) + ')'), false, 'before saving, no copy exists');
+  const copy = DB.recipes.add(draft);
+  assert.ok(copy && (JSON.parse(DB.exportJSON()).recipes.find((r) => r.id === copy.id) || {}).origin === 'builtin', "stored with origin: 'builtin'");
+  assert.equal(run('shrCopyExists(' + json(ready) + ')'), true, 'after saving, the copy is found — the save button is spent');
+  const wantsIt = (code) => { try { return plain(run('autoShareWants(' + code + ')')); } catch (e) { return 'threw: ' + e.message; } };
+  const rec = (id) => 'DB.recipes.list().find((x) => x.id === ' + json(id) + ')';
+  assert.equal(wantsIt(rec(copy.id)), false, "a copy of a ready meal (origin: 'builtin') is never wanted");
+  const ownOne = { id: 'qa-own-one', name: 'QA own', servings: 1, items: [ingredient()] };
+  assert.equal(wantsIt(json(ownOne)), true, 'the control: the same recipe without an origin is wanted');
+  for (const o of ['builtin', 'shared', 'planted', '', null, 0, false]) assert.equal(wantsIt(json(Object.assign({}, ownOne, { origin: o }))), false, 'a recipe that carries ANY origin is not wanted: ' + json(o));
+
+  // ── 4. ONE MEAL, ONE ROW (v421 fix F3) ───────────────────────────────────
+  // (a) A COPY OF A READY MEAL stands in for it: the ready meal leaves the
+  // pool — so the card AND «show more», which both read it — and the copy
+  // takes its periods. Matched by the figures (one serving, the same
+  // per-serving kcal and macros, as many ingredients), never by the name: the
+  // copy's name is in the language it was saved in.
+  const idsOf = () => pool().map((r) => r.id);
+  assert.ok(!idsOf().includes(ready.id), 'the ready meal the copy was saved from leaves the pool: ' + json(idsOf().filter((id) => id.startsWith('builtin:')).slice(0, 3)));
+  deq(pool().find((r) => r.id === 'mine:' + copy.id).meals, ready.meals, 'and the copy takes its periods, not all four');
+  run('STATE.prefs.lang = "ar"');
+  assert.ok(!idsOf().includes(ready.id), 'in Arabic too — the copy (saved in English) is matched by its figures, not its name');
+  run('STATE.prefs.lang = "en"');
+  deq(plain(run('rankSuggestions(suggestionPool(), ' + json(ready.meals[0]) + ', null)')).filter((r) => r.name === ready.name).map((r) => r.src), ['mine'], '«show more» of its period lists the meal ONCE, as the user\'s own');
+  // An EDITED copy is another meal: it stands beside its source, in every period.
+  const second = pool().find((r) => r.src === 'builtin');
+  const copy2 = DB.recipes.add(plain(run('shrCopyDraft(' + json(second) + ')')));
+  assert.ok(copy2 && !idsOf().includes(second.id), 'setup: a second copy stands in for its meal too');
+  const edited = DB.recipes.update(copy2.id, { items: copy2.items.map((it, i) => (i ? it : Object.assign({}, it, { calories: it.calories + 50 }))) });
+  assert.ok(edited && edited.origin === 'builtin', 'setup: the copy edited (an edit keeps its origin)');
+  assert.ok(idsOf().includes(second.id), 'an edited copy no longer matches: its source is back');
+  deq(pool().find((r) => r.id === 'mine:' + copy2.id).meals, periods, 'and the edited copy suits every period, as any recipe of the user\'s own');
+  // One serving only: the same items over two servings is not the meal.
+  DB.recipes.update(copy2.id, { items: second.items, servings: 2 });
+  assert.ok(idsOf().includes(second.id), 'a copy over two servings is not the meal: the source stays');
+  // A recipe of the user's own with the very figures, but no origin, is theirs — never a stand-in.
+  DB.recipes.remove(copy2.id);
+  DB.recipes.add({ name: 'QA same figures, my own', servings: 1, items: second.items });
+  assert.ok(idsOf().includes(second.id), 'a recipe with no origin never stands in for a ready meal, whatever its figures');
+  DB.recipes.list().filter((r) => r.name === 'QA same figures, my own').forEach((r) => DB.recipes.remove(r.id));
+  // (b) A COPY OF A COMMUNITY RECIPE (origin 'shared') stands in for the feed
+  // row: the same name (trimmed, whitespace and case folded), the same
+  // servings, and each of kcal, protein, carbs and fat within 1 (the feed's
+  // own rounding) — two users' recipes can share a name, servings and kcal.
+  const oats = { id: 'c-oats', lang: 'en', name: 'Community Oats', servings: 2, meals: ['breakfast'], kcal: 300, protein: 10, carbs: 50, fat: 5, created_at: '2026-10-05T08:00:00.000Z' };
+  const tuna = { id: 'c-tuna', lang: 'en', name: 'Tuna bowl', servings: 1, meals: ['lunch'], kcal: 450, protein: 40, carbs: 30, fat: 12, created_at: '2026-10-04T08:00:00.000Z' };
+  run('SHARED_RECIPES = cleanSharedRecipes(' + json([oats, tuna]) + ')');
+  const oatsCopy = DB.recipes.add({ name: '  community   OATS ', servings: 2, origin: 'shared', items: [ingredient({ name: 'Oats', qty: '160 g', calories: 601, protein: 20, carbs: 100, fat: 10 })] });
+  assert.ok(oatsCopy && oatsCopy.origin === 'shared', 'setup: a copy saved from the list (601 kcal over 2 servings = 301 a serving, the feed says 300)');
+  assert.ok(!idsOf().includes('c-oats'), 'the feed row a copy was saved from leaves the pool');
+  deq(pool().find((r) => r.id === 'mine:' + oatsCopy.id).meals, ['breakfast'], 'and the copy takes its periods');
+  assert.ok(idsOf().includes('c-tuna'), 'another user\'s other recipe stays');
+  // The feed row's own macros, so each near miss below differs in ONE thing.
+  const tunaItem = (over) => ingredient(Object.assign({ name: 'Tuna', calories: 450, protein: 40, carbs: 30, fat: 12 }, over));
+  // Not the same recipe: a kcal off by 2, other macros, other servings, another name, no origin.
+  for (const [what, data] of [
+    ['kcal off by 2', { name: 'Tuna bowl', servings: 1, origin: 'shared', items: [tunaItem({ calories: 452 })] }],
+    ['other macros (protein 25)', { name: 'Tuna bowl', servings: 1, origin: 'shared', items: [tunaItem({ protein: 25 })] }],
+    ['other servings', { name: 'Tuna bowl', servings: 2, origin: 'shared', items: [tunaItem({ calories: 900, protein: 80, carbs: 60, fat: 24 })] }],
+    ['another name', { name: 'Tuna bowl, mine', servings: 1, origin: 'shared', items: [tunaItem()] }],
+    ['no origin', { name: 'Tuna bowl', servings: 1, items: [tunaItem()] }],
+  ]) {
+    const x = DB.recipes.add(data);
+    assert.ok(x && idsOf().includes('c-tuna'), 'a copy with ' + what + ' is not that recipe: the feed row stays');
+    DB.recipes.remove(x.id);
+  }
+  const tunaCopy = DB.recipes.add({ name: 'Tuna bowl', servings: 1, origin: 'shared', items: [tunaItem({ calories: 449.6 })] });
+  assert.ok(!idsOf().includes('c-tuna'), 'the same name, servings and all four figures within 1: the feed row leaves');
+  // A published copy's marker claims its feed row first; a second copy of the
+  // same recipe stands beside it (one feed row, one stand-in).
+  const tunaTwice = DB.recipes.add({ name: 'Tuna bowl', servings: 1, origin: 'shared', items: [tunaItem()] });
+  deq([pool().find((r) => r.id === 'mine:' + tunaCopy.id).meals, pool().find((r) => r.id === 'mine:' + tunaTwice.id).meals], [['lunch'], periods], 'one feed row stands in once: the first copy takes its periods, the second suits every period');
+  [oatsCopy, tunaCopy, tunaTwice].forEach((x) => DB.recipes.remove(x.id));
+  // TWO USERS, ONE NAME (the review's case): the feed is newest first, and
+  // the newer row shares the name, servings and kcal of the one the copy came
+  // from — but not its macros. The copy stands in for ITS row only, and takes
+  // that row's periods.
+  const bNew = { id: 'c-cr-b', lang: 'en', name: 'Chicken and rice', servings: 1, meals: ['dinner'], kcal: 500, protein: 55, carbs: 40, fat: 10, created_at: '2026-10-05T09:00:00.000Z' };
+  const aOld = { id: 'c-cr-a', lang: 'en', name: 'Chicken and rice', servings: 1, meals: ['lunch'], kcal: 500, protein: 25, carbs: 70, fat: 12, created_at: '2026-10-01T09:00:00.000Z' };
+  run('SHARED_RECIPES = cleanSharedRecipes(' + json([bNew, aOld]) + ')');
+  const crCopy = DB.recipes.add({ name: 'Chicken and rice', servings: 1, origin: 'shared', items: [ingredient({ name: 'Chicken and rice', calories: 500, protein: 25, carbs: 70, fat: 12 })] });
+  assert.ok(!idsOf().includes('c-cr-a') && idsOf().includes('c-cr-b'), 'the copy of the OLDER row leaves that row out and the newer one — another recipe — stays: ' + json(idsOf().filter((x) => /^c-cr/.test(x))));
+  deq(pool().find((r) => r.id === 'mine:' + crCopy.id).meals, ['lunch'], 'and the copy takes the periods of the row it came from');
+  DB.recipes.remove(crCopy.id);
+  run('SHARED_RECIPES = cleanSharedRecipes(' + json([oats, tuna]) + ')');
+  // (c) A COPY THIS DEVICE TOOK DOWN leaves at once (shrForget): the list in
+  // memory still holds it, and with no marker naming it the user's own recipe
+  // would come back as another user's.
+  const pubd = DB.recipes.add({ name: 'QA mine, published', servings: 1, items: [ingredient()] });
+  DB.recipes.setShared(pubd.id, { id: 'c-tuna', at: '2026-10-05T08:00:00.000Z' });
+  assert.ok(!idsOf().includes('c-tuna'), 'setup: published, the feed\'s copy is left out (the marker)');
+  DB.recipes.setShared(pubd.id, null);
+  assert.ok(idsOf().includes('c-tuna'), 'setup: the marker cleared and nothing else done, the copy is back as another user\'s — the defect');
+  run('shrForget("c-tuna")');
+  assert.ok(!idsOf().includes('c-tuna') && !plain(run('sharedPool()')).some((r) => r.id === 'c-tuna'), 'shrForget leaves it out of the list the card reads');
+  for (const bad of ['null', '7', '""', '{}']) run('shrForget(' + bad + ')');
+  assert.equal(plain(run('Object.keys(SHR_HIDDEN).filter((k) => !["c-tuna"].includes(k))')).length, 0, 'shrForget writes nothing for what is not an id');
+  run('delete SHR_HIDDEN["c-tuna"]; SHARED_RECIPES = null');
+  DB.recipes.remove(pubd.id);
+
+  // ── 5. «SHOW MORE» WITH ONE SOURCE (v421 fix F5) ─────────────────────────
+  // A caption tells groups apart: with the ready meals alone (day one) the
+  // rows are drawn bare — no group caption, no row caption — in rank order.
+  DB.recipes.list().forEach((r) => DB.recipes.remove(r.id));
+  const sheetOf = (period) => run('(function () { let html = null; const o = openModal; openModal = (s) => { html = s; return null; }; try { openSharedSuggestions(rankSuggestions(suggestionPool(), ' + json(period) + ', null), ' + json(period) + ', null); } finally { openModal = o; } return html; })()');
+  for (const period of periods) {
+    const html = sheetOf(period);
+    assert.ok(!/data-shr-group=/.test(html) && !/class="shr-src/.test(html), period + ': one source, no caption at all: ' + json((html.match(/data-shr-group="[a-z]+"/g) || []).concat(html.match(/class="shr-src[^"]*"/g) || [])));
+    deq((html.match(/data-shr-open="([^"]+)"/g) || []).map((s) => s.slice(15, -1)), plain(run('rankSuggestions(suggestionPool(), ' + json(period) + ', null)')).map((r) => r.id), period + ': every ready meal of the period, in rank order');
+  }
+  const own4 = DB.recipes.add({ name: 'QA two sources', servings: 1, items: [ingredient()] });
+  const two = sheetOf('lunch');
+  deq((two.match(/data-shr-group="([a-z]+)"/g) || []).map((s) => s.slice(16, -1)), ['mine', 'builtin'], 'two sources: two captions, in the pool\'s order');
+  DB.recipes.remove(own4.id);
+});
+
 (async () => {
   const failed = [];
   for (const [name, fn] of cases) {
@@ -816,6 +1227,6 @@ test('I automatic sharing', async () => {
     console.log(`test-shared-recipes: ${failed.length} of ${cases.length} cases failed (${failed.map((n) => n[0]).join(', ')})`);
     process.exitCode = 1;
   } else {
-    console.log(`PASS shared recipes: ${cases.length} cases — the meal period, the ranking, the cleaning and the saved copy (food.js); the shared marker outside the undo ledger and normalised at every door (storage.js); shareRecipe signed-in, share-only, field by field, never cached (foodai.js); the list by named columns, approved only, cached per account, the items memoised, the withdraw by its literal args, swept on logout (cloud.js); the harness stubs and the raw-key net; automatic sharing's data layer — a copy stored with its origin, the marker's sig by name, noAuto outside the ledger, the two prefs read strictly, the device ledger swept on logout — and what its engine stands on: the content signature (FNV-1a, always 8 hex, moved by the content alone), the one question «is this recipe wanted?» over every reason, the device ledger per account, per day and survived when storage fails, the queue a trigger fills (ids once, one timer, the gap kept for the next trigger) and a hold that only extends; and the review's fixes — the ledger following the marker and noAuto, so every recipes Undo stays applicable after automatic sharing wrote; the question total over a null row (never a throw out of a render); the published ids an Undo leaves behind`);
+    console.log(`PASS shared recipes: ${cases.length} cases — the meal period, the ranking, the cleaning and the saved copy (food.js); the shared marker outside the undo ledger and normalised at every door (storage.js); shareRecipe signed-in, share-only, field by field, never cached (foodai.js); the list by named columns, approved only, cached per account, the items memoised, the withdraw by its literal args, swept on logout (cloud.js); the harness stubs and the raw-key net; automatic sharing's data layer — a copy stored with its origin, the marker's sig by name, noAuto outside the ledger, the two prefs read strictly, the device ledger swept on logout — and what its engine stands on: the content signature (FNV-1a, always 8 hex, moved by the content alone), the one question «is this recipe wanted?» over every reason, the device ledger per account, per day and survived when storage fails, the queue a trigger fills (ids once, one timer, the gap kept for the next trigger) and a hold that only extends; and the review's fixes — the ledger following the marker and noAuto, so every recipes Undo stays applicable after automatic sharing wrote; the question total over a null row (never a throw out of a render); the published ids an Undo leaves behind; and «اقتراحات اليوم» (v421): the ready meals (catalog.js) — every item one catalogue entry in its own unit, 2–6 a meal, at least 4 meals a period, ids and names unique — priced from the catalogue by hand and by this file's own reading (suggestionItems); the pool of the three sources in order, an own published recipe once as mine with the feed's periods, every row judged alike; the card's order (the best of each source, then the rest by rank) and a card that is never empty; a copy of a ready meal stored with origin 'builtin' and automatic sharing wanting no recipe that carries an origin at all; and the fixes after its review — every amount of a ready meal one figure in grams or millilitres (SERVING_WEIGHTS: one weight per counted entry, ml where the serving names ml), a saved copy standing in for the ready meal or the community row it copies (by figures, by folded name, servings and kcal), an edited copy beside its source, a withdrawn copy left out (shrForget), and «show more» with one source drawn bare`);
   }
 })();

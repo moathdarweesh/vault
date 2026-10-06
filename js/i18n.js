@@ -703,9 +703,10 @@ const I18N = {
     rec_empty_import: 'Extract from a video or an image', rec_empty_import_sub: 'Or from a link or pasted text',
     rec_row_done: 'Done', rec_view_group: 'Which figures to show',
     // «اقتراحات» — meal suggestions from recipes users share, reviewed by the AI before they are published (js/food.js MEAL SUGGESTIONS, v419)
-    shr_title: 'Suggestions',
+    shr_title: 'Today’s suggestions',
     shr_meal_breakfast: 'Breakfast', shr_meal_lunch: 'Lunch', shr_meal_snack: 'Snack', shr_meal_dinner: 'Dinner',
     shr_none: 'No suggestions yet',
+    shr_src_mine: 'From my recipes', shr_src_community: 'From other users', shr_src_builtin: 'Ready suggestions',
     shr_log: 'Log a serving',
     shr_save: 'Save to my recipes', shr_saved: 'Saved to your recipes', shr_in_recipes: 'In your recipes',
     shr_report: 'Report this recipe', shr_report_title: 'What is wrong with this recipe?',
@@ -1828,9 +1829,10 @@ const I18N = {
     rec_empty_import: 'استخرج من مقطع أو صورة', rec_empty_import_sub: 'أو من رابط أو نصّ',
     rec_row_done: 'تم', rec_view_group: 'الأرقام المعروضة',
     // «اقتراحات» — وصفات يشاركها المستخدمون وتراجعها خدمة الذكاء الاصطناعي قبل نشرها (v419). الفصحى: «وجبة خفيفة» لا «سناك»، و«الغداء/العشاء» بالهمزة
-    shr_title: 'اقتراحات',
+    shr_title: 'اقتراحات اليوم',
     shr_meal_breakfast: 'فطور', shr_meal_lunch: 'غداء', shr_meal_snack: 'وجبة خفيفة', shr_meal_dinner: 'عشاء',
     shr_none: 'لا اقتراحات بعد',
+    shr_src_mine: 'من وصفاتي', shr_src_community: 'من المستخدمين', shr_src_builtin: 'اقتراحات جاهزة',
     shr_log: 'سجّل حصّة',
     shr_save: 'احفظها في وصفاتي', shr_saved: 'حُفظت في وصفاتي', shr_in_recipes: 'في وصفاتي',
     shr_report: 'أبلِغ عن هذه الوصفة', shr_report_title: 'ما المشكلة في هذه الوصفة؟',

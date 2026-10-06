@@ -12,7 +12,7 @@
 // build. The literal below is the fallback (file://, or a stripped query) and is
 // still bumped by `npm run release` — see CLAUDE.md "CACHE WORKFLOW".
 const VAULT_BUILD = (() => {
-  const FALLBACK = 'v420';
+  const FALLBACK = 'v421';
   try {
     const src = (document.currentScript && document.currentScript.src) || '';
     const m = src.match(/[?&]v=(\d+)/);
@@ -5167,7 +5167,12 @@ function applyConvenienceUndo(token) {
   if (!result.ok) { convenienceError(result); return; }
   if (window.Cloud && typeof Cloud.withdrawSharedRecipe === 'function' && typeof shrOrphanedIds === 'function') {
     try {
-      for (const id of shrOrphanedIds(recipesBefore, DB.recipes.list())) Promise.resolve().then(() => Cloud.withdrawSharedRecipe(id)).catch(() => {});
+      for (const id of shrOrphanedIds(recipesBefore, DB.recipes.list())) {
+        // …and it leaves the suggestions card at once (v421): the list in
+        // memory still holds it, and nothing names it as the user's own now.
+        if (typeof shrForget === 'function') shrForget(id);
+        Promise.resolve().then(() => Cloud.withdrawSharedRecipe(id)).catch(() => {});
+      }
     } catch (_) {}
   }
   // Guided-run drafts are derived from sessions. A stale draft must not write

@@ -2,6 +2,93 @@
 
 One section per release since v309, newest first, moved verbatim from `CLAUDE.md` in v401 (batch 6 of the 2026-09-25 review; `docs/REVIEW-2026-09-25.md`). `CLAUDE.md` is the guide and the authority for how the app works now. A section here records what one release changed and why, in the words written at the time, so a later section — or the guide — can supersede what an earlier one says.
 
+## v421 — «اقتراحات اليوم»: what to eat today, there from the first day
+
+**The owner, 2026-10-06, after v420 went live and the card never showed: «انت اصلا متذكر ايش
+الفكره الاساسيه؟ هي انو خانه الاقتراحات تكون اقتراح ايش اكل اليوم عادي ممكن انت تحطها او تاخذها
+من وصفات الناس او ال ai يحطها فحطها مربع بار تحت المي وسميها اقتراحات اليوم وكل وجبه او مكون
+موجود يكون محسوب السعرات والغرامات».** v419/v420 built a card that showed ONLY recipes other users
+had published, and hid itself while there were none — the database held zero rows, so nobody had
+ever seen it. The card is now a permanent «اقتراحات اليوم» under the water card (under the setup
+button when there is no target) that answers «what do I eat now?» from three sources, in this
+order: the user's own recipes, other users' approved recipes, and 25 READY meals that ship with the
+app (no AI call, offline). Every row carries its calories and macros per serving; every ingredient
+in a suggestion's sheet carries its amount in grams (millilitres for a liquid) and its own figures.
+
+**The ready meals (`js/catalog.js`, data only).** `SUGGESTION_PRESETS`: 25 everyday and Gulf meals
+(فول بزيت الزيتون، شوفان بالحليب والموز، دجاج مشوي مع أرز وسلطة، شوربة عدس، سلطة تونة، كبسة دجاج…),
+2–5 items each, at least 4 per period (breakfast 11 · lunch 9 · snack 10 · dinner 14). An item names
+the EXACT `en` of one `FOOD_PRESETS` entry with `g` (grams, only where the serving names grams) or
+`n` (a count of the entry's own serving); no figure is stored — every figure is computed from the
+catalogue entry (`g` ÷ the grams its serving names, or × `n`; kcal whole, macros to 0.1, the
+rounding of `DB.recipes.perServing`). `SERVING_WEIGHTS` gives the eight unit-measured entries a
+weight per serving (olive oil 14 g, Arabic bread 60 g, banana 120 g, apple 180 g, egg 50 g, dates
+24 g, milk 250 ml, lentil soup 240 ml — standard portions whose energy matches the entry's own
+figure), so a counted item reads «14 غ», never «ملعقة». Amounts are Latin digits in both languages,
+like the figures beside them (ui.js's rule): an Arabic-Indic amount switched script at the scaler's
+first step.
+
+**The pool and the card (`js/food.js`).** `suggestionItems(preset)` prices a meal (null when any
+item fails to resolve — a partial list would show figures nothing in it accounts for);
+`suggestionPool()` is the three sources as normalised rows (`mine:<recipe id>`, the feed's own ids,
+`builtin:<preset id>`), each judged by `cleanSuggestion` the way a feed row is, each priced inside its
+own try/catch (a price that throws never blanks Food — v420 case 20). The card's three rows are the
+best-ranked `mine`, the best `community`, the best `builtin` (each when it exists), then the rest by
+rank (`shrCardOrder`; `rankSuggestions` unchanged: the period, the fit to the calories left, protein
+per kcal, newer). A `mine` or `community` row carries a caption above its name («من وصفاتي» / «من
+المستخدمين»); a ready meal carries none (the default says nothing). «عرض المزيد» groups the period's
+rows under those captions plus «اقتراحات جاهزة» — and draws no caption when only one source has rows
+(day one: a single heading over everything would distinguish nothing). The title is «اقتراحات اليوم» /
+"Today's suggestions"; the card never returns `''`.
+
+**One meal, one row.** The user's own published recipe appears once, as theirs (its feed copy left
+out by the marker, as v420), under its published copy's periods; an unpublished one suits every
+period. A saved COPY stands in for what it copies: a ready meal's copy (`origin: 'builtin'`, one
+serving, equal per-serving figures and item count — language-free) and a community recipe's copy
+(`origin: 'shared'`, same folded name, servings and all four figures within 1 — two users' recipes
+can share a name, servings and kcal) each take their source's place and periods; an edited copy is
+a different meal and stands beside it. A copy that leaves the server leaves the card at once
+(`shrForget(id)` → `SHR_HIDDEN`): «أزل من المشاركة», an Undo that removes a published recipe, and a
+re-share, whose server REPLACES the old copy (the old id would otherwise come back from a stale or
+cached list beside the user's own row).
+
+**The sheets.** A ready meal opens the suggestion sheet with its ingredients at once (no fetch, no
+`aria-busy`), a figures line under every ingredient (`recViewRowsHtml(items, withFigs)` — opt-in;
+the user's own recipe view in the picker is byte-identical to v420), the scaler moving amounts and
+figures together, «سجّل حصّة» (one serving, `source: 'builtin'`, `sourceId` = the preset id, Undo),
+«احفظها في وصفاتي» (a copy with `origin: 'builtin'` AND `noAuto: true` in the same Undo step — so a
+phone still on v420, which refuses only `origin === 'shared'`, never auto-publishes it), no report. A
+community recipe's sheet gains the same figures line. The user's own recipe opens its recipe view
+with «سجّل حصّة» first (`openRecipeView(date, rec, onSave, { log: true })` — the card's first row
+used to be the one row nobody could eat from; the redraws inside the view keep it, and «تعديل»
+returns to Food), three actions measured at 320 px with larger text. `autoShareWants` refuses any
+recipe that carries an `origin`; the share sheet's fourth term follows it. A `$` in a recipe or feed
+name reaches the toasts as written (function-form `replace`).
+
+**How it was built — the LARGE tier.** A written spec → three builders in sequence (the ready
+meals / the pool, card and sheet / the browser suite) → three review lenses with a skeptic per
+finding (figures and logic, the project's rules and the screen, what v419/v420 already did): nine
+confirmed, six fixes (`fixes-v421.md`: the own row could not be logged; «ملعقة» amounts that never
+moved with the scaler; the same meal twice after a save or a withdraw; a copy a v420 phone would
+publish; a lone caption; `$` in a name) → one fix builder + two checkers with a skeptic each: four
+more (a re-share's replaced copy, the numeral flip, a community twin matched on kcal alone, two stale
+test descriptions), fixed by hand. The run straddled a model change mid-build (the workflow resumed
+with its two finished builders replayed from cache).
+
+**Tests.** `scripts/test-shared-recipes.js` case J (the catalogue half: every item one entry in its
+own unit, weights, ids and names; the figures by hand and by the file's own reading; the pool's
+three sources, the card's order, the copies standing in, `shrForget`, «show more» bare with one
+source) and `scripts/test-i18n.js` §M now reads the ready meals' Arabic names. `scripts/test-shared-
+recipes-ui.js`: 35 cases × two passes (cases 1–5, 8, 14, 16, 18 rewritten to the new card; 33 the
+user's own row, 34 a ready meal's sheet, log, save, copy and the engine, 35 the layout at 375/320
+with and without larger text). Every new assertion was seen failing on an in-memory plant, the repo
+files hash-identical after: 23 + 28 node plants, 42 browser plants, 31 for the fixes, 4 for the
+follow-up (the Arabic-digit plant fails in the Arabic pass only — it is an Arabic-only defect).
+
+Gate: all contracts, lint, 28 suites (pooled, 256 s, no retry). The first full run failed for a real reason, alone as well as pooled: the card is on every Food render now, and its «عرض المزيد» (a 32 px `.link-btn` whose halo reaches 44 by 6 px below) met the period buttons' 5 px halo across the card's 10 px gap — the periods won the shared pixel and the link measured 43 (`test-convenience-ui.js`'s 44×44 scan). `.shr-head` gained 2 px below it; measured 12 px between the two boxes, and the second run was green.
+
+Fingerprint net, v420 → v421: the sheets lane 124/128 cells identical — the picker's recipe view among them, byte-identical as promised; the four that differ are the community recipe's sheet (a figures line under each ingredient) and «عرض المزيد» (the title, the list's structure), in both contexts. The views lane 160/176: the eight Food cells, where the card now appears in the empty state with ready meals (declared), and the eight Home cells, whose only difference is the footer's «VAULT · v419 → v420» (each before-capture predates its own release's marker bump). Nothing else moved. In the running app (preview, Arabic, after midnight): the card under «حدّد هدفك اليومي», «عشاء» pressed, three ready meals; the first one's sheet lists «صدر دجاج 150 غ · 248 سعرة …» and «زيت زيتون 14 غ · 119 سعرة …», 248 + 197 + 17 + 119 = 581 = its header, and at two servings every amount and figure doubles.
+
 ## v420 — recipes are shared automatically: «اقتراحات» fills itself
 
 **The owner, 2026-10-03, two hours after v419 went live: «مش لازم احد يشارك فيها

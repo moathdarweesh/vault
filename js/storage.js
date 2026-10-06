@@ -3984,10 +3984,11 @@ const DB = {
         items: clean.map(it => { const {servings, ...rest} = it; return {...rest, qty:wellFormedText(String(it.qty || '').slice(0,24))}; }),
         createdAt: old?.createdAt || new Date().toISOString(), updatedAt: new Date().toISOString() };
       // WHERE A RECIPE CAME FROM (v420): `origin: 'shared'` marks a copy saved
-      // from the community list, so automatic sharing never publishes someone
-      // else's recipe back. Taken at CREATION only, and only as that one value;
-      // an edit keeps whatever `old` holds ({...old}) and takes none from a patch.
-      if (!id && patch && patch.origin === 'shared') entity.origin = 'shared';
+      // from the community list, `origin: 'builtin'` (v421) a copy of a ready
+      // meal — so automatic sharing never publishes either back as the user's
+      // own. Taken at CREATION only, and only as those two literals; an edit
+      // keeps whatever `old` holds ({...old}) and takes none from a patch.
+      if (!id && patch && (patch.origin === 'shared' || patch.origin === 'builtin')) entity.origin = patch.origin;
       const result = changeSlice(() => STATE.recipes || [], next => { STATE.recipes = next; },
         old ? list.map(x => x.id === id ? entity : x) : [...list,entity], 'cx_meal_changed');
       return result.ok ? copyData(entity) : null;

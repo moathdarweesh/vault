@@ -702,3 +702,102 @@ const FOOD_PRESETS = [
   { cat: 'drinks', en: 'Energy Drink', ar: 'مشروب طاقة', s: '1 can · 250ml', sa: '١ علبة · ٢٥٠مل', cal: 110, pro: 0, carb: 27, f: 0 },
 ];
 
+// THE READY MEALS — «اقتراحات اليوم» (v421). The suggestions card answers «what
+// do I eat today?» from the first day — before any recipe exists, with no
+// account and offline — so a set of everyday meals ships with the app: common
+// Gulf and everyday plates, each COMPOSED of the catalogue's own entries above.
+// No figure is stored here: js/food.js (suggestionItems) resolves every item
+// against FOOD_PRESETS and computes the calories and macros, so a corrected
+// entry corrects every meal that uses it and a figure can never drift from its
+// ingredient. The shape:
+//   { id, en, ar, meals: ['breakfast' | 'lunch' | 'snack' | 'dinner', …],
+//     items: [{ en, g }, { en, n }, …] }
+// - `en` of an item is the EXACT `en` of ONE FOOD_PRESETS entry — the
+//   catalogue's own names, never a server preset.
+// - `g` = grams, allowed only for an entry whose serving `s` names grams
+//   ('100g', '150g', '1 cup · 243g', '100g cooked' …); `n` = how many of the
+//   entry's own serving, for an entry whose serving is a unit ('1 egg',
+//   '1 medium', '1 tbsp', '250ml' …). One of the two, never both; n is whole.
+// - 2 to 6 items a meal; ids unique and safe (they ride into the food log as a
+//   sourceId); names unique in each language, formal MSA Arabic.
+// scripts/test-shared-recipes.js (case J) resolves every item against the
+// catalogue and refuses one that does not; check a new meal there as you
+// write it.
+const SUGGESTION_PRESETS = [
+  // Breakfast
+  { id: 'sg-ful-olive-bread', en: 'Ful with olive oil and bread', ar: 'فول بزيت الزيتون وخبز', meals: ['breakfast', 'dinner'],
+    items: [{ en: 'Foul (Fava Beans)', g: 200 }, { en: 'Olive Oil', n: 1 }, { en: 'Arabic Bread', n: 1 }, { en: 'Tomato', g: 100 }] },
+  { id: 'sg-oats-milk-banana', en: 'Oats with milk and banana', ar: 'شوفان بالحليب والموز', meals: ['breakfast', 'snack'],
+    items: [{ en: 'Oats', g: 50 }, { en: 'Milk', n: 1 }, { en: 'Banana', n: 1 }] },
+  { id: 'sg-eggs-labneh-bread', en: 'Boiled eggs, labneh and bread', ar: 'بيض مسلوق ولبنة وخبز', meals: ['breakfast'],
+    items: [{ en: 'Boiled Eggs', g: 100 }, { en: 'Labneh', g: 50 }, { en: 'Arabic Bread', n: 1 }, { en: 'Cucumber', g: 100 }] },
+  { id: 'sg-veg-omelette', en: 'Vegetable omelette with bread', ar: 'عجة بالخضار مع خبز', meals: ['breakfast', 'dinner'],
+    items: [{ en: 'Egg', n: 2 }, { en: 'Tomato', g: 50 }, { en: 'Bell Pepper', g: 50 }, { en: 'Olive Oil', n: 1 }, { en: 'Whole-Wheat Bread', g: 35 }] },
+  { id: 'sg-labneh-olive-bread', en: 'Labneh with olive oil and bread', ar: 'لبنة بزيت الزيتون وخبز', meals: ['breakfast', 'dinner'],
+    items: [{ en: 'Full-Fat Labneh', g: 100 }, { en: 'Olive Oil', n: 1 }, { en: 'Arabic Bread', n: 1 }, { en: 'Cucumber', g: 100 }] },
+  { id: 'sg-dates-milk', en: 'Dates and milk', ar: 'تمر وحليب', meals: ['breakfast', 'snack'],
+    items: [{ en: 'Sukkari Dates', g: 50 }, { en: 'Milk', n: 1 }] },
+  { id: 'sg-greek-yogurt-berries', en: 'Greek yogurt with strawberries and almonds', ar: 'زبادي يوناني بالفراولة واللوز', meals: ['breakfast', 'snack'],
+    items: [{ en: 'Greek Yogurt', g: 170 }, { en: 'Strawberry', g: 100 }, { en: 'Almonds', g: 20 }] },
+  { id: 'sg-shakshuka-bread', en: 'Shakshuka with bread', ar: 'شكشوكة مع الخبز', meals: ['breakfast', 'dinner'],
+    items: [{ en: 'Shakshuka', g: 300 }, { en: 'Arabic Bread', n: 1 }] },
+  // Lunch
+  { id: 'sg-chicken-rice-salad', en: 'Grilled chicken with rice and salad', ar: 'دجاج مشوي مع أرز وسلطة', meals: ['lunch', 'dinner'],
+    items: [{ en: 'Grilled Chicken Breast', g: 150 }, { en: 'Cooked Basmati Rice', g: 158 }, { en: 'Mixed Salad', g: 150 }, { en: 'Olive Oil', n: 1 }] },
+  { id: 'sg-fish-rice-veg', en: 'Grilled fish with rice and vegetables', ar: 'سمك مشوي مع أرز وخضار', meals: ['lunch', 'dinner'],
+    items: [{ en: 'Grilled White Fish', g: 200 }, { en: 'White Rice', g: 150 }, { en: 'Broccoli', g: 100 }, { en: 'Olive Oil', n: 1 }] },
+  { id: 'sg-lentil-soup-bread', en: 'Lentil soup with bread and salad', ar: 'شوربة عدس مع خبز وسلطة', meals: ['lunch', 'dinner'],
+    items: [{ en: 'Lentil Soup', n: 1 }, { en: 'Arabic Bread', n: 1 }, { en: 'Mixed Salad', g: 100 }] },
+  { id: 'sg-tuna-salad', en: 'Tuna salad with bread', ar: 'سلطة تونة مع خبز', meals: ['lunch', 'dinner'],
+    items: [{ en: 'Tuna in Water (can)', g: 80 }, { en: 'Mixed Salad', g: 150 }, { en: 'Tomato', g: 100 }, { en: 'Olive Oil', n: 1 }, { en: 'Whole-Wheat Bread', g: 35 }] },
+  { id: 'sg-chicken-kabsa-salad', en: 'Chicken kabsa with salad and yogurt', ar: 'كبسة دجاج مع سلطة وزبادي', meals: ['lunch'],
+    items: [{ en: 'Chicken Kabsa', g: 350 }, { en: 'Mixed Salad', g: 100 }, { en: 'Yogurt', g: 100 }] },
+  { id: 'sg-kofta-potato-salad', en: 'Kofta with potatoes and salad', ar: 'كفتة مع بطاطا وسلطة', meals: ['lunch', 'dinner'],
+    items: [{ en: 'Kabab / Kofta', g: 150 }, { en: 'Potato', g: 150 }, { en: 'Mixed Salad', g: 100 }] },
+  { id: 'sg-chicken-pasta-veg', en: 'Chicken with pasta and vegetables', ar: 'دجاج مع مكرونة وخضار', meals: ['lunch', 'dinner'],
+    items: [{ en: 'Chicken Breast', g: 150 }, { en: 'Pasta', g: 150 }, { en: 'Zucchini', g: 100 }, { en: 'Olive Oil', n: 1 }] },
+  { id: 'sg-chicken-wrap-veg', en: 'Chicken wrap with vegetables', ar: 'لفافة دجاج بالخضار', meals: ['lunch', 'dinner'],
+    items: [{ en: 'Flour Tortilla Wrap', g: 70 }, { en: 'Grilled Chicken Breast', g: 100 }, { en: 'Lettuce', g: 50 }, { en: 'Tomato', g: 50 }, { en: 'Hummus', g: 30 }] },
+  { id: 'sg-salmon-sweet-potato', en: 'Salmon with sweet potato and broccoli', ar: 'سلمون مع بطاطا حلوة وبروكلي', meals: ['lunch', 'dinner'],
+    items: [{ en: 'Salmon', g: 150 }, { en: 'Sweet Potato', g: 150 }, { en: 'Broccoli', g: 100 }] },
+  // Snack
+  { id: 'sg-nuts-apple', en: 'Nuts and an apple', ar: 'مكسرات وتفاحة', meals: ['snack'],
+    items: [{ en: 'Mixed Nuts', g: 30 }, { en: 'Apple', n: 1 }] },
+  { id: 'sg-yogurt-banana', en: 'Yogurt and a banana', ar: 'زبادي وموز', meals: ['snack', 'breakfast'],
+    items: [{ en: 'Yogurt', g: 170 }, { en: 'Banana', n: 1 }] },
+  { id: 'sg-pb-toast-banana', en: 'Peanut butter toast with banana', ar: 'خبز بزبدة الفول السوداني والموز', meals: ['snack', 'breakfast'],
+    items: [{ en: 'Whole-Wheat Bread', g: 70 }, { en: 'Natural Peanut Butter', g: 16 }, { en: 'Banana', n: 1 }] },
+  { id: 'sg-hummus-veg', en: 'Hummus with vegetables', ar: 'حمص بالطحينة مع خضار', meals: ['snack'],
+    items: [{ en: 'Hummus', g: 100 }, { en: 'Carrot', g: 100 }, { en: 'Cucumber', g: 100 }] },
+  { id: 'sg-protein-shake-dates', en: 'Protein shake with dates', ar: 'مخفوق بروتين بالتمر', meals: ['snack'],
+    items: [{ en: 'Whey Protein (scoop)', g: 30 }, { en: 'Milk', n: 1 }, { en: 'Dates', n: 1 }] },
+  { id: 'sg-cottage-strawberries', en: 'Cottage cheese with strawberries', ar: 'جبن قريش بالفراولة', meals: ['snack', 'breakfast'],
+    items: [{ en: 'Cottage Cheese', g: 150 }, { en: 'Strawberry', g: 100 }] },
+  // Dinner
+  { id: 'sg-boiled-eggs-veg', en: 'Boiled eggs with vegetables', ar: 'بيض مسلوق مع خضار', meals: ['dinner', 'snack'],
+    items: [{ en: 'Boiled Eggs', g: 100 }, { en: 'Cucumber', g: 100 }, { en: 'Tomato', g: 100 }] },
+  { id: 'sg-halloumi-salad', en: 'Halloumi salad', ar: 'سلطة بالجبن الحلوم', meals: ['dinner'],
+    items: [{ en: 'Halloumi Cheese', g: 100 }, { en: 'Mixed Salad', g: 150 }, { en: 'Tomato', g: 100 }, { en: 'Olive Oil', n: 1 }] },
+];
+
+// The weight of ONE catalogue serving for each unit-measured entry the ready
+// meals use, so every ingredient on «اقتراحات اليوم» reads in grams (liquids in
+// millilitres, as their label says) — «وكل وجبة أو مكوّن موجود يكون محسوب
+// السعرات والغرامات», the owner (v421). A unit label («ملعقة», «رغيف», «حبة»)
+// carries no figure, so the servings scaler had nothing to move beside figures
+// that doubled. Standard portions (USDA FoodData Central) whose energy matches
+// the entry's own figure; js/food.js (suggestionItems) prints n × this weight,
+// and scripts/test-shared-recipes.js (case J) refuses a unit entry the ready
+// meals use without one here — exactly one of g / ml, a whole number in 1–1000,
+// ml exactly where the entry's serving names ml.
+const SERVING_WEIGHTS = {
+  'Olive Oil': { g: 14 },      // 1 tbsp = 13.5 g = 119 kcal
+  'Arabic Bread': { g: 60 },   // pita 6½″ = 60 g = 165 kcal
+  'Banana': { g: 120 },        // 1 medium ≈ 118–130 g (≈ 105–115 kcal)
+  'Apple': { g: 180 },         // 1 medium ≈ 182 g (≈ 95–100 kcal)
+  'Egg': { g: 50 },            // 1 large = 50 g = 78 kcal (boiled)
+  'Dates': { g: 24 },          // 3 dates ≈ 24 g = 65 kcal
+  'Milk': { ml: 250 },         // the entry's own 250ml
+  'Lentil Soup': { ml: 240 },  // the entry's own 1 cup · 240ml
+};
+

@@ -315,6 +315,8 @@ if (!/has BOTH an EN and an AR entry in `js\/i18n\.js`/.test(read('CLAUDE.md')))
 // can put on screen meets the same dialect list.
 const catalogAr = [];
 for (const p of vm.runInContext('FOOD_PRESETS', c)) catalogAr.push([`FOOD_PRESETS «${p.en}».ar`, p.ar], [`FOOD_PRESETS «${p.en}».sa`, p.sa]);
+// v421: the ready meals of «اقتراحات اليوم» are named on the card and in its sheet.
+for (const p of vm.runInContext('SUGGESTION_PRESETS', c)) catalogAr.push([`SUGGESTION_PRESETS «${p.en}».ar`, p.ar]);
 for (const table of ['PLAN_DAY_AR', 'EXERCISE_NAME_AR', 'EXERCISE_NAME_AR_FULL']) for (const [k, v] of Object.entries(vm.runInContext(table, c))) catalogAr.push([`${table}[«${k}»]`, v]);
 let catalogStrings = 0;
 for (const [where, v] of catalogAr) {

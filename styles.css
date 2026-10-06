@@ -9558,7 +9558,12 @@ body[dir="rtl"] .prg-tiles { --prg-dir: -1; }
    dish chooser's (.rx-dishes). (0,2,0) on the rows beats the identity layer's
    .data-row fill and --elev-1 at (0,1,0). */
 .card.shr-card { margin-top: 12px; padding: var(--sp-3); display: flex; flex-direction: column; gap: var(--sp-2h); }
-.shr-head { display: flex; align-items: center; justify-content: space-between; gap: var(--sp-2); min-width: 0; }
+/* margin-bottom 2 (v421, the card is always drawn now): «show more» is a 32px
+   .link-btn whose halo reaches 44 by 6px below its box, and the period buttons'
+   halo rises 5px above theirs — 11px of halo across the card's 10px gap, so the
+   periods won the shared strip and the link measured 43. 12px clears it with 1px
+   of slack for a fractional edge. */
+.shr-head { display: flex; align-items: center; justify-content: space-between; gap: var(--sp-2); min-width: 0; margin-bottom: 2px; }
 .shr-title { display: flex; align-items: center; gap: var(--sp-2); min-width: 0; margin: 0; font-size: var(--fs-label); font-weight: 700; color: var(--text); }
 /* Pinned: the global svg { width: 100% } would stretch the glyph across the heading. */
 .shr-title svg { width: 16px; height: 16px; flex: none; }
@@ -9592,6 +9597,17 @@ body[dir="rtl"] .prg-tiles { --prg-dir: -1; }
 .shr-terms > p { margin: 0; font-size: var(--fs-sub); line-height: 1.5; color: var(--text-dim); }
 .shr-verdict { margin: 0; font-size: var(--fs-label); font-weight: 700; color: var(--text); }
 .shr-reason { margin: var(--sp-1) 0 0; font-size: var(--fs-sub); color: var(--text-mute); overflow-wrap: anywhere; }
+/* v421, the three sources: a row's source over its name («من وصفاتي», «من
+   المستخدمين» — a ready meal says nothing), and the same line as a group
+   caption in «show more», where the groups stack under one .shr-list. */
+.shr-src { font-size: var(--fs-meta); font-weight: 700; color: var(--text-mute); }
+.shr-list { display: flex; flex-direction: column; }
+.shr-group { margin: var(--sp-3) 0 var(--sp-1); }
+.shr-list > .shr-group:first-child { margin-top: 0; }
+/* A suggestion sheet's ingredients carry their figures under the amount line
+   (.has-figs wraps; the figures span takes the whole second line). */
+.rec-view .cx-row.has-figs { flex-wrap: wrap; row-gap: 2px; }
+.rec-view .cx-row > .rec-view-figs { flex: 0 0 100%; font-size: var(--fs-meta); color: var(--text-mute); }
 
 /* =========================================================================
    ^^^ EVERYTHING ABOVE, THEN THE IDENTITY LAYER BELOW. ^^^

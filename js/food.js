@@ -144,13 +144,12 @@ function renderFood(el) {
     }
     const shrRow = e.target.closest('[data-shr-open]');
     if (shrRow) {
-      const r = sharedPool().find((x) => x.id === shrRow.getAttribute('data-shr-open'));
-      if (r) openSharedRecipe(r, null, rerender);   // null = today, resolved at log time
+      shrOpen(suggestionPool().find((x) => x.id === shrRow.getAttribute('data-shr-open')), rerender);
       return;
     }
     if (e.target.closest('[data-shr-more]')) {
       const period = shrPeriod(new Date());
-      openSharedSuggestions(rankSuggestions(sharedPool(), period, shrGauge()), period, rerender);
+      openSharedSuggestions(rankSuggestions(suggestionPool(), period, shrGauge()), period, rerender);
       return;
     }
     const setup = e.target.closest('[data-setup-goal]');
@@ -1211,11 +1210,22 @@ function recStoredItem(it) {
   return c;
 }
 
+// One ingredient's figures FOR THE AMOUNT SHOWN — «٣٣٠ سعرة · ٦٢ بروتين · …»,
+// the card's own spelling (shrNum, shrMacros) — at `f` times its stored
+// amount, so the scaler moves them with the amounts and the two never disagree.
+function recItemFigsHtml(it, f) {
+  const k = Number.isFinite(f) && f > 0 ? f : 1;
+  const x = (v) => (Number(v) || 0) * k;
+  return recJoin([shrNum(x(it && it.calories)) + ' ' + t('cal'), ...shrMacros({ protein: x(it && it.protein), carbs: x(it && it.carbs), fat: x(it && it.fat) })]);
+}
 // The ingredient rows of a recipe sheet: the name, and the amount exactly as
 // written (a [data-qty] span bindRecScaler rewrites). Shared by the user's own
-// recipe view and a community recipe's sheet («اقتراحات», v419).
-function recViewRowsHtml(items) {
-  return (items || []).map((it, i) => `<div class="cx-row"><span>${escapeHtml(it.name)}</span>${String(it.qty || '').trim() ? `<span class="num rec-view-qty" dir="auto" data-qty="${i}">${escapeHtml(it.qty)}</span>` : ''}</div>`).join('');
+// recipe view and a suggestion's sheet («اقتراحات», v419). `withFigs` adds
+// each ingredient's figures under its line ([data-figs], scaled too): the
+// suggestion sheets say what every ingredient costs (the owner, v421); the
+// user's own recipe view keeps the stove's silence.
+function recViewRowsHtml(items, withFigs) {
+  return (items || []).map((it, i) => `<div class="cx-row${withFigs ? ' has-figs' : ''}"><span>${escapeHtml(it.name)}</span>${String(it.qty || '').trim() ? `<span class="num rec-view-qty" dir="auto" data-qty="${i}">${escapeHtml(it.qty)}</span>` : ''}${withFigs ? `<span class="rec-view-figs" data-figs="${i}">${recItemFigsHtml(it, 1)}</span>` : ''}</div>`).join('');
 }
 // The servings stepper as a SCALER (v392): `items` is read at paint time, so a
 // sheet whose ingredients arrive later hands the array it fills and calls the
@@ -1233,6 +1243,11 @@ function bindRecScaler(modal, input, items, base) {
       const it = (items || [])[Number(el.dataset.qty)];
       el.textContent = recScaleQty(it && it.qty, f);
     });
+    // The figures under an ingredient follow its amount (a suggestion's sheet).
+    modal.querySelectorAll('[data-figs]').forEach((el) => {
+      const it = (items || [])[Number(el.dataset.figs)];
+      if (it) el.innerHTML = recItemFigsHtml(it, f);
+    });
   };
   modal.querySelectorAll('[data-step]').forEach((b) => b.addEventListener('click', () => {
     const cur = parseInt(input.value, 10);
@@ -1244,10 +1259,18 @@ function bindRecScaler(modal, input, items, base) {
   return paint;
 }
 
-function openRecipeView(date, rec, onSave) {
+// `opts.log` (v421): the view opened from the «اقتراحات اليوم» card, where the
+// user's own recipe is the FIRST row — and a row there is a meal to eat, so the
+// view carries «سجّل حصّة» first: ONE serving, whatever the scaler shows, as
+// the picker's «+» logs it. The picker opens the view without it (its rows
+// keep their own «+»), so that view is unchanged. Every redraw of the view
+// from inside it hands `opts` on, and «تعديل» from the card lands back on Food
+// (onSave), not in the saved-food picker the card never opened.
+function openRecipeView(date, rec, onSave, opts) {
   // Re-read by id: the picker's copy can be older than an edit made since.
   const r = DB.recipes.list().find((x) => x.id === rec.id) || rec;
   const base = Math.max(1, Number(r.servings) || 1);
+  const logHere = !!(opts && opts.log);
   // «شاركها» needs the share call; «أزل من المشاركة» is offered whenever the
   // recipe carries the marker, so a published copy can always be taken down.
   const canShare = !!(window.FoodAI && typeof FoodAI.shareRecipe === 'function');
@@ -1263,7 +1286,7 @@ function openRecipeView(date, rec, onSave) {
           <button type="button" data-step="1" aria-label="${escapeHtml(t('rec_serv_more'))}">${icon('plus', 16)}</button>
         </span></div>
       <div class="cx-list rec-view">${recViewRowsHtml(r.items)}</div>
-      <div class="cx-actions">
+      <div class="cx-actions">${logHere ? `<button type="button" class="btn btn-primary" data-log-view>${t('shr_log')}</button>` : ''}
         <button type="button" class="btn btn-ghost" data-edit-view>${t('rec_edit')}</button>
         ${r.shared || canShare ? `<button type="button" class="btn btn-ghost" data-share-view>${r.shared ? t('shr_unshare') : t('shr_share')}</button>` : ''}
       </div>
@@ -1272,8 +1295,31 @@ function openRecipeView(date, rec, onSave) {
   if (!modal) return;
   guardConvenienceModal(modal);
   bindRecScaler(modal, modal.querySelector('#rec-view-servings'), r.items || [], base);
+  // «سجّل حصّة» (opts.log): the picker's «+» body — ONE SERVING as a single
+  // row, the recipe read again by id (an edit or a delete since this sheet was
+  // drawn wins), the bundle button's 800 ms guard against a double tap (a flag:
+  // `disabled` on the focused button would drop focus to <body> on a refusal).
+  const logBtn = modal.querySelector('[data-log-view]');
+  let logBusy = false;
+  if (logBtn) logBtn.addEventListener('click', () => {
+    if (logBusy) return;
+    logBusy = true; setTimeout(() => { logBusy = false; }, 800);
+    const cur = DB.recipes.list().find((x) => x.id === r.id);
+    if (!cur) { convenienceError({ ok: false, code: 'STALE' }); return; }
+    const per = DB.recipes.perServing(cur);
+    const result = DB.foodLogs.addMany(date || todayISO(), [{
+      name: cur.name, servings: 1,
+      calories: per.calories, protein: per.protein, carbs: per.carbs, fat: per.fat,
+      source: 'recipe',
+    }]);
+    if (!result.ok) { convenienceError(result); return; }
+    closeModal();
+    if (typeof onSave === 'function') onSave();
+    // A function, never a string, as the replacement: a name may hold «$&».
+    offerUndo(t('rec_logged').replace('{name}', () => cur.name), result);
+  });
   modal.querySelector('[data-edit-view]').addEventListener('click', () => {
-    openRecipeEditor(date, r, () => openSavedFoodPicker(date, onSave, 'recipes'));
+    openRecipeEditor(date, r, logHere ? () => { if (typeof onSave === 'function') onSave(); } : () => openSavedFoodPicker(date, onSave, 'recipes'));
   });
   const shareBtn = modal.querySelector('[data-share-view]');
   if (shareBtn) shareBtn.addEventListener('click', async () => {
@@ -1286,8 +1332,8 @@ function openRecipeView(date, rec, onSave) {
     // away under «أزل من المشاركة». The button no longer says what a tap would
     // do (a tap on «شاركها» would WITHDRAW the recipe), so the tap does nothing
     // but draw the view again, with the button that is true now.
-    if (!!cur.shared !== drewShared) { openRecipeView(date, cur, onSave); return; }
-    if (!cur.shared) { openShareRecipe(cur, () => openRecipeView(date, cur, onSave)); return; }
+    if (!!cur.shared !== drewShared) { openRecipeView(date, cur, onSave, opts); return; }
+    if (!cur.shared) { openShareRecipe(cur, () => openRecipeView(date, cur, onSave, opts)); return; }
     if (!(window.Cloud && typeof Cloud.withdrawSharedRecipe === 'function')) { showToast(t('shr_withdraw_failed')); return; }
     shareBtn.disabled = true;
     const owner = Cloud.getLastUid();
@@ -1317,7 +1363,13 @@ function openRecipeView(date, rec, onSave) {
     }
     const w = DB.recipes.setShared(cur.id, null);
     if (!w || !w.ok) { shareBtn.disabled = false; convenienceError(w); return; }
-    if (modal.isConnected && !modal.classList.contains('is-out')) openRecipeView(date, cur, onSave);
+    // The list in memory (a 5-minute throttle, a 30-minute cache) still holds
+    // the copy just withdrawn, and with the marker gone nothing leaves it out
+    // any more: it would come back on the card as another user's recipe — the
+    // user's own, with «أبلِغ» on it. It leaves now, as a reported row does.
+    // `cur` is the recipe as it was BEFORE this write: its marker names the copy.
+    shrForget(cur.shared.id);
+    if (modal.isConnected && !modal.classList.contains('is-out')) openRecipeView(date, cur, onSave, opts);
     showToast(t('shr_withdrawn'));
   });
 }
@@ -2741,26 +2793,38 @@ function openSavedFoodPicker(date, onSave, initialTab) {
 }
 
 // ===========================================================================
-// MEAL SUGGESTIONS — «اقتراحات» (v419)
+// MEAL SUGGESTIONS — «اقتراحات اليوم» (v419; the three sources since v421)
 //
-// The Food tab's card of the recipes users share, each reviewed by the AI
-// before the Worker published it (FoodAI.shareRecipe, migration 35). Since
-// v420 a saved recipe is shared by itself (AUTOMATIC SHARING, further down).
-// Four meal periods; the clock's is pressed, and a tap on another holds until
-// the clock moves into the next period. Up to three recipes for the period,
-// ranked by what fits the calories still left (when a target exists), then by
-// protein per kcal, then the newer; «show more» lists all of them. A tap opens
-// the recipe: one serving's figures, the ingredients (read on the tap — the
-// list carries none), «Log a serving», «Save to my recipes» and a report.
+// The Food tab's card that answers «what do I eat today?» — there from the
+// first day, under the water card — filled from three sources in this order
+// (suggestionPool): the user's OWN recipes, the recipes other users share
+// (each reviewed by the AI before the Worker published it — FoodAI.shareRecipe,
+// migration 35; since v420 a saved recipe is shared by itself: AUTOMATIC
+// SHARING, further down), and a READY set of everyday meals that ships with
+// the app (SUGGESTION_PRESETS in js/catalog.js, composed of the catalogue's
+// own entries and priced from them here — suggestionItems — with no AI call,
+// no account and no network). Four meal periods; the clock's is pressed, and a
+// tap on another holds until the clock moves into the next period. Three rows
+// for the period — the best-ranked of each source, so a new user sees ready
+// meals and a user with recipes sees their own first (shrCardOrder) — ranked by
+// what fits the calories still left (when a target exists), then by protein
+// per kcal, then the newer; «show more» lists the whole period under three
+// captions. A tap opens the row: an own recipe as everywhere (openRecipeView);
+// a community recipe or a ready meal in the suggestion sheet — one serving's
+// figures, every ingredient with its amount AND its figures (read on the tap
+// for a community recipe; a ready meal carries them), «Log a serving», «Save
+// to my recipes», and a report for a community recipe alone.
 //
 // THE LIST IS OTHER PEOPLE'S TEXT. Cloud.pullSharedRecipes copies each row
 // field by field; cleanSharedRecipes is the one judge of the values — an unsafe
 // id, a nameless row, a figure that is not one, no period it suits: DROPPED,
 // never repaired — and every name is escaped where it is drawn. It lives in
-// memory only, never in the blob (the food_catalog precedent). The user's own
-// published recipes (the `shared` marker, DB.recipes.setShared) ARE suggested
-// since v420 — the card must not stay empty while the first recipes arrive —
-// and such a row's sheet offers neither a copy nor a report (shrIsOwn).
+// memory only, never in the blob (the food_catalog precedent). Every row of
+// the three sources passes the same judge (cleanSuggestion) before the card
+// reads it. The user's own published recipes (the `shared` marker,
+// DB.recipes.setShared) appear ONCE, as their own — the feed's copy is left
+// out — and an own row the sheet still meets (the harness) offers neither a
+// copy nor a report (shrIsOwn).
 // ===========================================================================
 const SHR_PERIODS = ['breakfast', 'lunch', 'snack', 'dinner'];
 // The cleaned community list; null until a pull has answered with a list.
@@ -2863,21 +2927,214 @@ function sharedPool() {
   if (!Array.isArray(SHARED_RECIPES) || !SHARED_RECIPES.length) return [];
   return SHARED_RECIPES.filter((r) => !Object.prototype.hasOwnProperty.call(SHR_HIDDEN, r.id));
 }
+// A PUBLISHED COPY THIS DEVICE JUST TOOK DOWN leaves the card at once (v421),
+// as a reported row does: the list in memory keeps it until the next pull (a
+// 5-minute throttle, a 30-minute cache), and with no marker naming it any more
+// the user's own recipe would be suggested a second time as another user's.
+// «أزل من المشاركة» (openRecipeView) and an Undo that withdraws what it left
+// behind (applyConvenienceUndo, js/app.js, through shrOrphanedIds) both call
+// this — app.js never writes this file's state by name.
+function shrForget(id) {
+  if (typeof id === 'string' && id) SHR_HIDDEN[id] = true;
+}
 // Is that community row the user's OWN published recipe? Its id is the id a
 // local marker holds.
 function shrIsOwn(id) {
   return DB.recipes.list().some((x) => !!(x && x.shared && x.shared.id === id));
 }
+
+// ---- THE READY MEALS (v421) -------------------------------------------------
+// The grams a catalogue serving NAMES ('100g' → 100, '1 cup · 243g' → 243,
+// '100g cooked' → 100), or null for a unit serving ('1 egg', '1 tbsp',
+// '250ml'). NOT parseGrams: that one wants the weight LAST and reads ml as
+// grams, so it answers null for '100g cooked' and 250 for '250ml' — an entry's
+// unit is decided by what its serving names, and scripts/test-shared-recipes.js
+// (case J) reads it the same way.
+function servingGrams(s) {
+  const m = String(s || '').match(/(\d+(?:\.\d+)?)\s*g(?![A-Za-z])/);
+  return m && Number(m[1]) > 0 ? Number(m[1]) : null;
+}
+// A ready meal's ingredients as recipe items {id, name, qty, calories, protein,
+// carbs, fat}. Each item of SUGGESTION_PRESETS names ONE catalogue entry (its
+// exact `en`) and an amount — `g` grams of a serving that names grams, or `n`
+// of a unit serving — and the figures are the entry's × that scale, by
+// DB.recipes.perServing's rounding (kcal whole, macros to 0.1), so a corrected
+// entry corrects every meal. The name and the amount read in the UI language,
+// and EVERY amount is ONE figure in grams — or millilitres for a liquid — «١٥٠
+// غ» / '150 g', «٢٥٠ مل» / '250 ml' (the owner: every ingredient «محسوب
+// السعرات والغرامات»): a unit is n × the weight of one serving
+// (SERVING_WEIGHTS, js/catalog.js), so the scaler, which moves an amount's
+// leading number alone (recScaleQty), moves every amount with its figures. A
+// unit entry with no weight there keeps its own serving label (sa/s, «٢ ×» in
+// front when more than one) — never reached: case J refuses one. null when ANY
+// item fails to resolve — a meal missing an ingredient would show figures
+// nothing in it accounts for.
+function suggestionItems(preset) {
+  const ar = (DB.prefs.get().lang || 'en') === 'ar';
+  // Latin digits in both languages (ui.js's rule for every computed figure):
+  // the figures line beside each amount is fmtNum's Latin, and the scaler
+  // writes Latin — an Arabic-Indic amount switched script at the first step.
+  const digits = (v) => String(v);
+  const list = preset && typeof preset === 'object' && Array.isArray(preset.items) ? preset.items : [];
+  if (!list.length) return null;
+  const out = [];
+  for (let i = 0; i < list.length; i++) {
+    const it = list[i];
+    const entry = it && typeof it === 'object' ? FOOD_PRESETS.find((p) => p.en === it.en) : null;
+    if (!entry) return null;
+    const grams = servingGrams(entry.s);
+    let scale, qty;
+    if (grams !== null && it.n === undefined && Number.isFinite(it.g) && it.g > 0) {
+      scale = it.g / grams;
+      qty = digits(it.g) + ' ' + t('unit_g');
+    } else if (grams === null && it.g === undefined && Number.isInteger(it.n) && it.n > 0) {
+      scale = it.n;
+      const w = typeof SERVING_WEIGHTS === 'object' && SERVING_WEIGHTS && Object.prototype.hasOwnProperty.call(SERVING_WEIGHTS, entry.en) ? SERVING_WEIGHTS[entry.en] : null;
+      qty = w && Number.isFinite(w.g) && w.g > 0 ? digits(Math.round(it.n * w.g)) + ' ' + t('unit_g')
+        : w && Number.isFinite(w.ml) && w.ml > 0 ? digits(Math.round(it.n * w.ml)) + ' ' + t('unit_ml')
+        : (it.n > 1 ? digits(it.n) + ' × ' : '') + String((ar ? entry.sa : entry.s) || '');
+    } else return null;
+    const f = DB.recipes.perServing({ servings: 1, items: [{ calories: entry.cal * scale, protein: entry.pro * scale, carbs: entry.carb * scale, fat: entry.f * scale }] });
+    out.push({ id: preset.id + '-' + (i + 1), name: foodPresetName(entry), qty, calories: f.calories, protein: f.protein, carbs: f.carbs, fat: f.fat });
+  }
+  return out;
+}
+// ONE POOL ROW, CLEANED — the three sources read alike, judged alike:
+// {id, src, name, servings, meals, kcal, protein, carbs, fat, items?, recId?,
+// created_at?}. A community row is cleanSharedRecipes' verdict with its
+// source named; an own recipe ('mine:' + its id, `recId`) or a ready meal
+// ('builtin:' + its id) must carry its items and a safe id behind the prefix.
+// A row that is not one is null — dropped, never repaired, as a feed row.
+function cleanSuggestion(r) {
+  if (!r || typeof r !== 'object' || Array.isArray(r)) return null;
+  const src = r.src === 'mine' || r.src === 'builtin' ? r.src : 'community';
+  if (src === 'community') {
+    const c = cleanSharedRecipes([r])[0];
+    return c ? Object.assign({ src }, c) : null;
+  }
+  const tail = typeof r.id === 'string' && r.id.slice(0, src.length + 1) === src + ':' ? r.id.slice(src.length + 1) : '';
+  const name = shrText(r.name, 80);
+  const meals = SHR_PERIODS.filter((p) => Array.isArray(r.meals) && r.meals.includes(p));
+  const f = [shrFig(r.kcal), shrFig(r.protein), shrFig(r.carbs), shrFig(r.fat)];
+  const items = shrItems(r.items);
+  if (!entityIdSafe(tail) || !name || !meals.length || f.some((x) => x === null) || !items) return null;
+  if (src === 'mine' && !entityIdSafe(r.recId)) return null;
+  const s = Math.round(Number(r.servings));
+  const row = { id: src + ':' + tail, src, name, servings: Number.isFinite(s) ? Math.min(99, Math.max(1, s)) : 1, meals, kcal: f[0], protein: f[1], carbs: f[2], fat: f[3], items };
+  if (src === 'mine') row.recId = r.recId;
+  if (typeof r.created_at === 'string' && r.created_at && r.created_at.length <= 40) row.created_at = r.created_at;
+  return row;
+}
+// EVERY ROW THE CARD MAY DRAW, from the three sources in this order: the
+// user's own recipes (every one with at least one well-formed ingredient —
+// one serving's figures by DB.recipes.perServing; the periods of the feed's
+// copy when the recipe is published and the list holds it, else every period),
+// the community's (sharedPool, minus the user's own published copies — those
+// are already here as `mine`), and the ready meals (one serving each, the sum
+// of suggestionItems). Each row through cleanSuggestion. Never a throw: a
+// blob row that is not a recipe is skipped — this is read from a render — and
+// so is a row whose figures cannot be worked out (a dependency that throws, as
+// DB.recipes.perServing may): the card is drawn INSIDE the dashboard, whose
+// handlers are bound after it, so a throw here would leave Food painted and
+// dead (test-shared-recipes-ui.js case 20, the v420 rule).
+// A COPY THE USER SAVED STANDS IN FOR THE ROW IT WAS SAVED FROM, on the card
+// and in «show more» alike (the same meal twice — the copy heading the card,
+// its original a row below — tells nothing): a ready meal's copy (origin
+// 'builtin') is matched by its figures — one serving, the same per-serving
+// kcal and macros, as many ingredients — because its name is in the language
+// it was saved in; a community recipe's (origin 'shared') by its name (folded),
+// its servings and its kcal within 1. The original is left out and the copy
+// takes its periods (a published marker's feed row still wins). An EDITED copy
+// no longer matches and stands beside its source: it is another meal now.
+function suggestionPool() {
+  const feed = sharedPool();
+  const ar = (DB.prefs.get().lang || 'en') === 'ar';
+  const presets = typeof SUGGESTION_PRESETS === 'undefined' || !Array.isArray(SUGGESTION_PRESETS) ? [] : SUGGESTION_PRESETS;
+  // The ready meals priced FIRST: an own copy below may stand in for one.
+  const ready = [];
+  for (const p of presets) {
+    try {
+      const items = suggestionItems(p);
+      if (!items) continue;
+      const per = DB.recipes.perServing({ servings: 1, items });
+      ready.push({ id: 'builtin:' + p.id, src: 'builtin', name: ar ? p.ar : p.en, servings: 1, meals: p.meals,
+        kcal: per.calories, protein: per.protein, carbs: per.carbs, fat: per.fat, items });
+    } catch (_) { /* skipped: its figures cannot be read */ }
+  }
+  const recs = DB.recipes.list().filter((rec) => rec && typeof rec === 'object');
+  // The feed rows already here as the user's own: every published copy (its
+  // marker) — and, below, every row a saved copy stands in for.
+  const own = new Set(recs.map((rec) => (rec.shared && typeof rec.shared === 'object' ? rec.shared.id : null)).filter(Boolean));
+  const taken = new Set();   // the ready meals a saved copy stands in for
+  const fold = (s) => shrText(s, 80).toLowerCase();
+  const rows = [];
+  for (const rec of recs) {
+    const marker = rec.shared && typeof rec.shared === 'object' ? rec.shared.id : null;
+    const items = (Array.isArray(rec.items) ? rec.items : []).map(shrItem).filter(Boolean);
+    if (!items.length) continue;
+    const pub = marker ? feed.find((r) => r.id === marker) : null;
+    try {
+      const per = DB.recipes.perServing({ servings: rec.servings, items });
+      let twin = null;
+      if (rec.origin === 'builtin' && Number(rec.servings) === 1) {
+        twin = ready.find((b) => !taken.has(b.id) && b.items.length === items.length && b.kcal === per.calories && b.protein === per.protein && b.carbs === per.carbs && b.fat === per.fat) || null;
+        if (twin) taken.add(twin.id);
+      } else if (rec.origin === 'shared') {
+        // All four figures: two users' recipes can share a name, servings and
+        // kcal (the feed is newest first, so `find` took the wrong one). The
+        // server prices a row with perServing's own rounding: a real copy matches.
+        const near = (a, b) => Math.abs(Number(a) - b) <= 1;
+        twin = feed.find((r) => !own.has(r.id) && fold(r.name) === fold(rec.name) && Number(r.servings) === Number(rec.servings)
+          && near(r.kcal, per.calories) && near(r.protein, per.protein) && near(r.carbs, per.carbs) && near(r.fat, per.fat)) || null;
+        if (twin) own.add(twin.id);
+      }
+      rows.push({ id: 'mine:' + rec.id, src: 'mine', recId: rec.id, name: rec.name, servings: rec.servings, meals: pub ? pub.meals : twin ? twin.meals : SHR_PERIODS,
+        kcal: per.calories, protein: per.protein, carbs: per.carbs, fat: per.fat, items, created_at: rec.createdAt });
+    } catch (_) { /* skipped: its figures cannot be read */ }
+  }
+  for (const r of feed) if (!own.has(r.id)) rows.push(Object.assign({ src: 'community' }, r));
+  for (const b of ready) if (!taken.has(b.id)) rows.push(b);
+  return rows.map(cleanSuggestion).filter(Boolean);
+}
+// THE CARD'S ORDER for a period: the best-ranked row of each source — mine,
+// then community, then builtin, each when it exists — then the rest by rank.
+// A new user sees ready meals; a user with recipes sees their own first
+// without the others leaving. A new array, as rankSuggestions'.
+function shrCardOrder(pool, period, gauge) {
+  const ranked = rankSuggestions(pool, period, gauge);
+  const heads = ['mine', 'community', 'builtin'].map((s) => ranked.find((r) => r.src === s)).filter(Boolean);
+  return heads.concat(ranked.filter((r) => !heads.includes(r)));
+}
+// A tap on a row: the user's own recipe opens as it does everywhere
+// (openRecipeView, by its id — the row is a reading of it, not the recipe),
+// with «سجّل حصّة» on it (opts.log): a suggestion is a meal to eat, and the
+// card's first row must not be the one row nobody can log from; a community
+// recipe or a ready meal opens the suggestion sheet.
+function shrOpen(r, onSave) {
+  if (!r) return;
+  if (r.src === 'mine') {
+    const rec = DB.recipes.list().find((x) => x && x.id === r.recId);
+    if (rec) openRecipeView(null, rec, onSave, { log: true });   // null = today, resolved at log time
+    return;
+  }
+  openSharedRecipe(r, null, onSave);   // null = today, resolved at log time
+}
+// The caption of a source — a literal ternary, never t('shr_src_' + src):
+// each key stays a whole quoted literal that contracts 5 and 38 can see.
+function shrSrcCaption(src) {
+  return src === 'mine' ? t('shr_src_mine') : src === 'community' ? t('shr_src_community') : t('shr_src_builtin');
+}
 // The copy «Save to my recipes» writes: name, servings and the six fields of
 // each ingredient. No id anywhere — DB.recipes.add gives the recipe and every
 // row their own — and never a `shared` marker: a copy is not a publication.
-// `origin: 'shared'` (v420) is what DB.recipes.add stores so that automatic
-// sharing never publishes someone else's recipe back: always this literal,
-// whatever the row itself carries.
+// `origin` is what DB.recipes.add stores so that automatic sharing never
+// publishes the copy back as the user's own: 'builtin' for a ready meal (the
+// pool's `src`, v421), else always the literal 'shared' (v420), whatever
+// `origin` the row itself carries.
 function shrCopyDraft(r) {
   const s = Math.round(Number(r && r.servings));
   return { name: shrText(r && r.name, 80), servings: Number.isFinite(s) ? Math.min(99, Math.max(1, s)) : 1,
-    items: (r && Array.isArray(r.items) ? r.items : []).map(shrItem).filter(Boolean), origin: 'shared' };
+    items: (r && Array.isArray(r.items) ? r.items : []).map(shrItem).filter(Boolean), origin: r && r.src === 'builtin' ? 'builtin' : 'shared' };
 }
 // THE CANONICAL FORM of a recipe's content: its name, its servings and, per
 // ingredient, the name, the amount and the four figures — as DB.recipes stores
@@ -2945,19 +3202,22 @@ function shrNum(v) {
 function shrMacros(r) {
   return [shrNum(r.protein) + ' ' + t('protein_label'), shrNum(r.carbs) + ' ' + t('carbs_label'), shrNum(r.fat) + ' ' + t('fat_label')];
 }
-// One suggestion: the figure row (v395), a door to the recipe's sheet.
-function shrRowHtml(r) {
-  return `<button type="button" class="data-row fig-row shr-row" data-shr-open="${escapeHtml(r.id)}">
+// One suggestion: the figure row (v395), a door to the row's sheet. Its source
+// rides on data-shr-src; a caption over the name says «من وصفاتي» or «من
+// المستخدمين» where that informs (a ready meal says nothing — the default),
+// and `bare` leaves it off under a group caption that already says it.
+function shrRowHtml(r, bare) {
+  const cap = !bare && (r.src === 'mine' || r.src === 'community') ? `<span class="shr-src">${shrSrcCaption(r.src)}</span>` : '';
+  return `<button type="button" class="data-row fig-row shr-row" data-shr-open="${escapeHtml(r.id)}" data-shr-src="${escapeHtml(r.src)}">
       <div class="fig-row-main">${figRowFig(fmtNum(Math.round(Number(r.kcal) || 0)), t('cal'))}
-        <div class="fig-row-text"><span class="fig-row-title" dir="auto">${escapeHtml(r.name)}</span><span class="fig-row-sub">${recJoin(shrMacros(r))}</span></div>
+        <div class="fig-row-text">${cap}<span class="fig-row-title" dir="auto">${escapeHtml(r.name)}</span><span class="fig-row-sub">${recJoin(shrMacros(r))}</span></div>
       </div></button>`;
 }
-// The card, or '' when there is nothing to suggest — no box around nothing.
+// The card — never '' since v421: the ready meals mean there is always
+// something to suggest (shr_none stays for a period that somehow has no row).
 function sharedCardHtml(gauge) {
-  const pool = sharedPool();
-  if (!pool.length) return '';
   const period = shrPeriod(new Date());
-  const ranked = rankSuggestions(pool, period, gauge);
+  const ranked = shrCardOrder(suggestionPool(), period, gauge);
   return `
     <div class="card shr-card" id="shr-card">
       <div class="shr-head">
@@ -2965,7 +3225,7 @@ function sharedCardHtml(gauge) {
         ${ranked.length > 3 ? `<button type="button" class="link-btn" data-shr-more>${t('show_more')}</button>` : ''}
       </div>
       <div class="shr-periods">${SHR_PERIODS.map((p) => `<button type="button" class="shr-period" data-shr-period="${p}" aria-pressed="${p === period}">${shrMealName(p)}</button>`).join('')}</div>
-      ${ranked.length ? `<div class="shr-rows">${ranked.slice(0, 3).map(shrRowHtml).join('')}</div>` : `<p class="shr-empty">${t('shr_none')}</p>`}
+      ${ranked.length ? `<div class="shr-rows">${ranked.slice(0, 3).map((r) => shrRowHtml(r)).join('')}</div>` : `<p class="shr-empty">${t('shr_none')}</p>`}
     </div>`;
 }
 // Redraw the card alone — a period tap, the list arriving — where the
@@ -2974,23 +3234,30 @@ function shrRepaint(host) {
   if (!host) return;
   const html = sharedCardHtml(shrGauge());
   const old = host.querySelector('#shr-card');
-  if (old) { if (html) old.outerHTML = html; else old.remove(); return; }
-  if (!html) return;
+  if (old) { old.outerHTML = html; return; }
   const after = host.querySelector('.water-card') || host.querySelector('.nutri-setup');
   if (after) after.insertAdjacentHTML('afterend', html);
   else host.insertAdjacentHTML('beforeend', html);
 }
 
-// ONE COMMUNITY RECIPE: its name, one serving's figures, the ingredients read
-// on the tap, the servings scaler (amounts only — the log is one serving, as
-// the picker's «+» is), «Log a serving», «Save to my recipes», a report.
+// ONE SUGGESTION'S SHEET — a community recipe, or a ready meal (a row whose
+// `src` is 'builtin', v421): its name, one serving's figures, the ingredients
+// with their amounts and figures (read on the tap for a community recipe; a
+// ready meal carries its own, so nothing is fetched and nothing is busy), the
+// servings scaler (amounts and their figures only — the log is one serving, as
+// the picker's «+» is), «Log a serving» (source 'shared' or 'builtin'), «Save
+// to my recipes» (a copy whose origin says where it came from), and a report
+// for a community recipe alone — nobody reports a ready meal.
 // The user's OWN published recipe (v420) is a row like any other to log from,
 // but it is already in their recipes — the save button is spent from the
 // start — and nobody reports themselves: that row's sheet has no report.
 function openSharedRecipe(rec, date, onSave) {
-  const r = cleanSharedRecipes([rec])[0];
+  const builtin = !!(rec && rec.src === 'builtin');
+  const r = builtin ? cleanSuggestion(rec) : cleanSharedRecipes([rec])[0];
   if (!r) return;
-  const own = shrIsOwn(r.id);
+  const own = !builtin && shrIsOwn(r.id);
+  // What the log row names: a ready meal by the preset's id behind the prefix.
+  const sourceId = builtin ? r.id.slice('builtin:'.length) : r.id;
   const figs = (p) => `<span class="shr-figs-k">${t('rec_per')}</span> ${recJoin([shrNum(p.kcal) + ' ' + t('cal'), ...shrMacros(p)])}`;
   const overlay = openModal(`
     <div class="modal-header"><h2 class="modal-title" dir="auto">${escapeHtml(r.name)}</h2><button class="icon-btn" data-close aria-label="${escapeHtml(t('close'))}">${icon('close', 20)}</button></div>
@@ -3002,12 +3269,13 @@ function openSharedRecipe(rec, date, onSave) {
           <input type="number" id="shr-servings" class="num" inputmode="numeric" min="1" max="99" step="1" value="${r.servings}" aria-label="${escapeHtml(t('rec_servings'))}">
           <button type="button" data-step="1" aria-label="${escapeHtml(t('rec_serv_more'))}">${icon('plus', 16)}</button>
         </span></div>
-      <div class="cx-list rec-view" id="shr-items" aria-busy="true"><div class="cx-row"><span>${t('cx_loading')}</span></div></div>
+      ${builtin ? `<div class="cx-list rec-view" id="shr-items">${recViewRowsHtml(r.items, true)}</div>`
+        : `<div class="cx-list rec-view" id="shr-items" aria-busy="true"><div class="cx-row"><span>${t('cx_loading')}</span></div></div>`}
       <div class="cx-actions">
         <button type="button" class="btn btn-primary" id="shr-log">${t('shr_log')}</button>
         <button type="button" class="btn btn-ghost" id="shr-save" disabled>${own ? t('shr_in_recipes') : t('shr_save')}</button>
       </div>
-      ${own ? '' : `<button type="button" class="link-btn shr-report" id="shr-report">${t('shr_report')}</button>`}
+      ${own || builtin ? '' : `<button type="button" class="link-btn shr-report" id="shr-report">${t('shr_report')}</button>`}
     </div>`);
   // null under a dialog that must be answered (openModal's hold).
   if (!overlay) return;
@@ -3024,7 +3292,20 @@ function openSharedRecipe(rec, date, onSave) {
     // A disabled button drops keyboard focus to <body>; it stays in the sheet.
     if (had) overlay.querySelector('.modal')?.focus({ preventScroll: true });
   };
-  Promise.resolve()
+  // The ingredients are in: drawn with their figures, the scaler told, the
+  // serving's figures re-derived from them (by the same rounding the server
+  // used), and the copy offered unless it is already among the recipes.
+  const settle = (got) => {
+    items.push(...got);
+    full = { ...r, items: got };
+    listEl.innerHTML = recViewRowsHtml(items, true);
+    paint();
+    const per = DB.recipes.perServing(full);
+    overlay.querySelector('#shr-figs').innerHTML = figs({ kcal: per.calories, protein: per.protein, carbs: per.carbs, fat: per.fat });
+    if (own || shrCopyExists(full)) markSaved(); else saveBtn.disabled = false;
+  };
+  if (builtin) settle(r.items);
+  else Promise.resolve()
     .then(() => (window.Cloud && typeof Cloud.getSharedRecipeItems === 'function' ? Cloud.getSharedRecipeItems(r.id) : null))
     .catch(() => null)
     .then((raw) => {
@@ -3035,14 +3316,7 @@ function openSharedRecipe(rec, date, onSave) {
         listEl.innerHTML = `<div class="cx-row"><span>${navigator.onLine === false ? t('auth_err_network') : t('ai_error')}</span></div>`;
         return;
       }
-      items.push(...got);
-      full = { ...r, items: got };
-      listEl.innerHTML = recViewRowsHtml(items);
-      paint();
-      // Re-derived from the ingredients, by the same rounding the server used.
-      const per = DB.recipes.perServing(full);
-      overlay.querySelector('#shr-figs').innerHTML = figs({ kcal: per.calories, protein: per.protein, carbs: per.carbs, fat: per.fat });
-      if (own || shrCopyExists(full)) markSaved(); else saveBtn.disabled = false;
+      settle(got);
     });
 
   // ONE SERVING, ONE ROW — whatever the scaler shows (it moves amounts only).
@@ -3053,41 +3327,61 @@ function openSharedRecipe(rec, date, onSave) {
     const result = DB.foodLogs.addMany(date || todayISO(), [{
       name: r.name, servings: 1,
       calories: r.kcal, protein: r.protein, carbs: r.carbs, fat: r.fat,
-      source: 'shared', sourceId: r.id,
+      source: builtin ? 'builtin' : 'shared', sourceId,
     }]);
     if (!result.ok) { logging = false; convenienceError(result); return; }
     closeModal();
     if (typeof onSave === 'function') onSave();
-    offerUndo(t('rec_logged').replace('{name}', r.name), result);
+    // A function, never a string, as the replacement: another user's name may
+    // hold «$&» or «$1», which a replacement STRING would expand.
+    offerUndo(t('rec_logged').replace('{name}', () => r.name), result);
   });
   saveBtn.addEventListener('click', () => {
     if (saveBtn.disabled || !full) return;
     if (shrCopyExists(full)) { markSaved(); return; }
-    const w = withUndo(() => DB.recipes.add(shrCopyDraft(full)));
+    const w = withUndo(() => {
+      const made = DB.recipes.add(shrCopyDraft(full));
+      // A READY MEAL'S COPY is never published by itself — on THIS build
+      // autoShareWants refuses any `origin`, but v420 refuses only 'shared',
+      // and a phone still on v420 that pulls this blob would publish the copy
+      // as the user's own recipe. v420 already refuses `noAuto`, so the copy
+      // carries it from birth (outside the ledger, carried into this Undo's
+      // snapshot by carryRecipeField). A hand share still lifts it.
+      if (made && builtin) DB.recipes.setNoAuto(made.id, true);
+      return made;
+    });
     if (!w.value) { showToast(DB.saveState().ok ? t('rec_need_ing') : t('sc_failed')); return; }
     markSaved();
     offerUndo(t('shr_saved'), w);
     // That Undo is on the recipes slice: automatic sharing writes no marker
     // under it for its 10 s, or the Undo would answer STALE (v420).
     autoShareHold(11000);
+    // The card behind follows at once: the copy now stands in for the row it
+    // was saved from (suggestionPool), so a card still drawing that row would
+    // hold a door that opens nothing.
+    if (typeof onSave === 'function') onSave();
   });
   const reportBtn = overlay.querySelector('#shr-report');
   if (reportBtn) reportBtn.addEventListener('click', () => openSharedReport(r, onSave));
 }
 
-// «show more»: every suggestion of the period, in rank order.
+// «show more»: every suggestion of the period, in rank order, grouped under
+// the three source captions — the groups that have rows, in the pool's order
+// (mine, community, builtin); a row under its caption carries none of its own.
+// A caption tells groups apart, so ONE group (day one: the ready meals alone)
+// is drawn bare, with no caption at all — a lone «اقتراحات جاهزة» over every
+// row would distinguish nothing and repeat the title's «اقتراحات».
 function openSharedSuggestions(rows, period, onSave) {
-  const list = cleanSharedRecipes(rows);
+  const list = (Array.isArray(rows) ? rows : []).map(cleanSuggestion).filter(Boolean);
+  const groups = ['mine', 'community', 'builtin'].map((src) => [src, list.filter((r) => r.src === src)]).filter(([, g]) => g.length);
+  const captioned = groups.length > 1;
   const overlay = openModal(`
     <div class="modal-header"><div><h2 class="modal-title">${t('shr_title')}</h2><div class="modal-subtitle">${shrMealName(period)}</div></div>
       <button class="icon-btn" data-close aria-label="${escapeHtml(t('close'))}">${icon('close', 20)}</button></div>
-    <div class="shr-rows">${list.map(shrRowHtml).join('')}</div>`);
+    <div class="shr-list">${groups.map(([src, g]) => `${captioned ? `<p class="shr-src shr-group" data-shr-group="${src}">${shrSrcCaption(src)}</p>` : ''}<div class="shr-rows">${g.map((r) => shrRowHtml(r, true)).join('')}</div>`).join('')}</div>`);
   if (!overlay) return;
   guardConvenienceModal(overlay);
-  overlay.querySelectorAll('[data-shr-open]').forEach((b) => b.addEventListener('click', () => {
-    const r = list.find((x) => x.id === b.dataset.shrOpen);
-    if (r) openSharedRecipe(r, null, onSave);
-  }));
+  overlay.querySelectorAll('[data-shr-open]').forEach((b) => b.addEventListener('click', () => shrOpen(list.find((x) => x.id === b.dataset.shrOpen), onSave)));
 }
 
 // «Report this recipe»: three reasons, sent as one feedback row whose context
@@ -3137,14 +3431,15 @@ function openSharedReport(rec, onDone) {
 // (v420) — for a recipe the user took out of sharing, for a signed-in user who
 // turned automatic sharing off — and the fourth line says which holds: the
 // published copy follows later edits only while automatic sharing is on AND
-// the recipe is the user's own (a copy saved from the list, origin 'shared',
-// is one autoShareWants never follows, so its line says the copy stays).
+// the recipe is the user's own (a copy saved from the list or of a ready meal
+// — any `origin` — is one autoShareWants never follows, so its line says the
+// copy stays).
 function openShareRecipe(rec, onBack) {
   const overlay = openModal(`
     <div class="modal-header"><div><h2 class="modal-title">${t('shr_share_title')}</h2><div class="modal-subtitle" dir="auto">${escapeHtml(rec.name)}</div></div>
       <button class="icon-btn" data-close aria-label="${escapeHtml(t('close'))}">${icon('close', 20)}</button></div>
     <div class="cx-stack" id="shr-share-body">
-      <div class="cx-list shr-terms"><p>${t('shr_term_review')}</p><p>${t('shr_term_anon')}</p><p>${t('shr_term_withdraw')}</p><p>${DB.prefs.autoShare() && rec.origin !== 'shared' ? t('shr_term_follow') : t('shr_term_copy')}</p></div>
+      <div class="cx-list shr-terms"><p>${t('shr_term_review')}</p><p>${t('shr_term_anon')}</p><p>${t('shr_term_withdraw')}</p><p>${DB.prefs.autoShare() && rec.origin === undefined ? t('shr_term_follow') : t('shr_term_copy')}</p></div>
       <p class="auth-err" id="shr-share-err" role="alert"></p>
       <button type="button" class="btn btn-primary" id="shr-send">${t('shr_send')}</button>
     </div>`);
@@ -3201,7 +3496,11 @@ function openShareRecipe(rec, onBack) {
       // «Not automatically» is cleared first (v420): the user asked for this
       // recipe to be shared, so it follows its edits again like any other.
       DB.recipes.setNoAuto(cur.id, false);
+      // The marker as it stands NOW (automatic sharing may have written one
+      // while this review ran): a replaced copy leaves the card, as in runAutoShare.
+      const prev = DB.recipes.list().find((x) => x.id === cur.id);
       const w = DB.recipes.setShared(cur.id, { id: res.id, at: new Date().toISOString(), sig });
+      if (w && w.ok && prev && prev.shared && prev.shared.id && prev.shared.id !== res.id) shrForget(prev.shared.id);
       if (!w || !w.ok) {
         // A copy no marker points at could not be withdrawn from the app.
         if (window.Cloud && typeof Cloud.withdrawSharedRecipe === 'function') Promise.resolve().then(() => Cloud.withdrawSharedRecipe(res.id)).catch(() => {});
@@ -3210,7 +3509,7 @@ function openShareRecipe(rec, onBack) {
         return;
       }
       if (onScreen()) back();
-      showToast(res.name && res.name !== cur.name ? t('shr_published_as').replace('{name}', res.name) : t('shr_published'));
+      showToast(res.name && res.name !== cur.name ? t('shr_published_as').replace('{name}', () => res.name) : t('shr_published'));
       return;
     }
     if (!onScreen()) return;
@@ -3300,7 +3599,9 @@ function shrAutoSave(o) {
   } catch (_) { return false; }
 }
 // DOES AUTOMATIC SHARING WANT THIS RECIPE SENT? Only when all of it holds: it
-// was not taken out of sharing, it is not a copy from the community list, its
+// was not taken out of sharing, it is the user's own — a recipe that carries an
+// `origin` AT ALL (a copy from the community list, 'shared'; a copy of a ready
+// meal, 'builtin'; whatever a blob may bring) is never theirs to publish — its
 // servings are whole and it has calories (the Worker refuses the rest before
 // its budget), it is unpublished or was EDITED since it was published, and no
 // review has already refused this very content on this device. A marker with
@@ -3309,7 +3610,7 @@ function shrAutoSave(o) {
 // `store` is the device ledger when the caller already read it (a backfill
 // asks about every recipe).
 function autoShareWants(rec, store) {
-  if (!rec || typeof rec !== 'object' || rec.noAuto || rec.origin === 'shared') return false;
+  if (!rec || typeof rec !== 'object' || rec.noAuto || rec.origin !== undefined) return false;
   // A row that is not one (an imported or pulled blob may hold a null): never
   // wanted, and never a throw — this question is asked from a render.
   if (!Array.isArray(rec.items) || !rec.items.every((it) => it && typeof it === 'object')) return false;
@@ -3477,6 +3778,10 @@ async function runAutoShare() {
         if (w && w.code !== 'STALE') { __autoOff = true; return null; }
         return SHR_AUTO_GAP;
       }
+      // A RE-share: the server REPLACED the old copy (one row per author and
+      // recipe, migration 35), so the old id is gone there — and gone from the
+      // card now, or a stale list would draw it beside the user's own row.
+      if (now && now.shared && now.shared.id && now.shared.id !== res.id) shrForget(now.shared.id);
       // The user's own recipe is a suggestion now: the list is read past both
       // caches and the card alone is drawn again. No toast per recipe.
       loadSharedRecipes({ force: true, fresh: true }).then((changed) => {
