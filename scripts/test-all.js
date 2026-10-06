@@ -50,6 +50,7 @@ const HEAVY = [
   'test-program-ui.js',        //  60 s
   'test-fingerprint.js',       //  47 s
   'test-run-home-ui.js',       //  21 s
+  'test-shared-recipes-ui.js', //  ~20 s (30 s pooled, 2026-10-06: 32 cases on a virtual clock)
   'test-food-quick-ui.js',     //  18 s
 ];
 

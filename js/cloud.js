@@ -24,6 +24,9 @@ window.VAULT_KEYS = Object.freeze({
   recoveryFailed: 'vault_pre_sync_backup_failed',
   catalog: 'vault_catalog_cache',
   sharedRecipes: 'vault_shared_recipes',   // Cloud.pullSharedRecipes — {uid, at, rows}, 30 min, swept on logout
+  shareAuto: 'vault_share_auto',           // automatic recipe sharing (js/food.js, v420) — this DEVICE's ledger for one account:
+                                           // uid, day, n (requests sent that local day), until (a pause's end) and
+                                           // tried (recipe id → sig, reason, at: what a review refused). Never in the blob; swept on logout
   foodaiCache: 'foodai_cache',
   announcement: 'vault_announcement_dismissed',
   reminderSeen: 'vault_reminder_seen',
@@ -2123,6 +2126,7 @@ window.VAULT_KEYS = Object.freeze({
       localStorage.removeItem(VAULT_KEYS.foodaiCache);
       localStorage.removeItem(CATALOG_CACHE_KEY);
       localStorage.removeItem(SHARED_CACHE_KEY);   // public rows, but keyed to this account's uid
+      localStorage.removeItem(VAULT_KEYS.shareAuto);   // the automatic-sharing ledger: this account's recipe ids, and what a review refused
       localStorage.removeItem(LAST_UID_KEY);
       localStorage.removeItem(VAULT_KEYS.lastEmail);   // it describes LAST_UID_KEY and goes with it
       localStorage.removeItem(VAULT_KEYS.ui);   // the pre-paint mirror of prefs — the next account must not inherit this one's frame

@@ -121,6 +121,12 @@ function renderFood(el) {
   // list arrives (or does not) after it, and only the card is drawn again.
   // Scoped to THIS render's view — never `.view.active` from inside a render.
   loadSharedRecipes().then((changed) => { if (changed) shrRepaint($('#nutri-host', el)); });
+  // Automatic sharing (v420): whatever of the user's own recipes is not
+  // published yet is queued from here — the Food tab is where its one-time
+  // notice belongs. It only queues; runAutoShare() checks every gate itself.
+  // Background work never breaks a render: a throw in there would leave the
+  // dashboard painted with none of its handlers.
+  try { autoShareBackfill(); } catch (_) {}
   host?.addEventListener('click', (e) => {
     // The suggestions card's three controls, ABOVE the hero's catch-all at the
     // end: the card sits outside .nutri-hero, and these branches return first
@@ -1245,6 +1251,8 @@ function openRecipeView(date, rec, onSave) {
   // «شاركها» needs the share call; «أزل من المشاركة» is offered whenever the
   // recipe carries the marker, so a published copy can always be taken down.
   const canShare = !!(window.FoodAI && typeof FoodAI.shareRecipe === 'function');
+  // What the share button is DRAWN as: read again at the tap (see its handler).
+  const drewShared = !!r.shared;
   const modal = openModal(`
     <div class="modal-header"><h2 class="modal-title">${escapeHtml(r.name)}</h2><button class="icon-btn" data-close aria-label="${escapeHtml(t('close'))}">${icon('close', 20)}</button></div>
     <div class="cx-stack">
@@ -1273,10 +1281,24 @@ function openRecipeView(date, rec, onSave) {
     // Re-read by id: the marker is the truth, not what this sheet drew.
     const cur = DB.recipes.list().find((x) => x.id === r.id);
     if (!cur) { convenienceError({ ok: false, code: 'STALE' }); return; }
+    // THE MARKER MOVED UNDER THIS SHEET (v420): automatic sharing published the
+    // recipe while the button still read «شاركها» — or a pull took the marker
+    // away under «أزل من المشاركة». The button no longer says what a tap would
+    // do (a tap on «شاركها» would WITHDRAW the recipe), so the tap does nothing
+    // but draw the view again, with the button that is true now.
+    if (!!cur.shared !== drewShared) { openRecipeView(date, cur, onSave); return; }
     if (!cur.shared) { openShareRecipe(cur, () => openRecipeView(date, cur, onSave)); return; }
     if (!(window.Cloud && typeof Cloud.withdrawSharedRecipe === 'function')) { showToast(t('shr_withdraw_failed')); return; }
     shareBtn.disabled = true;
     const owner = Cloud.getLastUid();
+    // «Not automatically» BEFORE the request (v420): an automatic re-share in
+    // flight then takes its own fresh copy down (runAutoShare's approve branch
+    // reads noAuto) instead of writing a marker this handler would clear
+    // without withdrawing it. And a recipe with neither the marker nor this
+    // flag is one automatic sharing would publish again by itself: if the
+    // marker then fails to clear, the flag still stands and nothing is re-sent.
+    const kept = DB.recipes.setNoAuto(cur.id, true);
+    if (!kept || !kept.ok) { shareBtn.disabled = false; convenienceError(kept); return; }
     let res = null;
     try { res = await Cloud.withdrawSharedRecipe(cur.shared.id); } catch (_) { res = null; }
     // Another account signed in meanwhile: this blob is not the one asked about.
@@ -1286,6 +1308,9 @@ function openRecipeView(date, rec, onSave) {
     // that id» — already gone (a lost reply after an earlier withdraw, or the
     // owner removed it) — so the marker is cleared exactly as on success.
     if (!res || (!res.ok && res.error)) {
+      // Still published: automatic sharing may follow it again — the flag goes
+      // back to what it was before this tap.
+      if (kept.changed) DB.recipes.setNoAuto(cur.id, false);
       shareBtn.disabled = false;
       showToast(res && res.error === 'offline' ? t('auth_err_network') : res && res.error === 'signin' ? t('shr_signin') : t('shr_withdraw_failed'));
       return;
@@ -2089,6 +2114,9 @@ function openRecipeEditor(date, existing, onDone, opts) {
     var made = existing && existing.id ? DB.recipes.update(existing.id, payload) : DB.recipes.add(payload);
     if (!made) { showToast(t(DB.saveState().ok ? 'rec_need_ing' : 'sc_failed')); return; }
     saved = true;
+    // Automatic sharing (v420), trigger 1 of 3: a saved recipe — new or edited
+    // — is queued; autoShareWants() decides whether anything is sent for it.
+    queueAutoShare([made.id]);
     closeModal();
     // Back in the dish chooser (opts.onClose), the saved card's «حُفظت» is the
     // confirmation: a toast there covered the very mark it repeats.
@@ -2436,12 +2464,15 @@ function openRecipeChooser(date, drafts, onDone) {
       if (all.classList.contains('is-waiting')) return;
       all.classList.add('is-waiting');
       let ok = 0, bad = 0;
+      const madeIds = [];
       // In order, every one attempted: a refused write leaves its card unmarked.
       list.forEach((d, i) => {
         if (d._saved) return;
         const made = DB.recipes.add({ name: nameOf(d, i), servings: Math.max(1, Number(d.servings) || 1), items: d.items.map(recStoredItem) });
-        if (made) { d._saved = true; d._savedId = made.id; ok++; } else bad++;
+        if (made) { d._saved = true; d._savedId = made.id; madeIds.push(made.id); ok++; } else bad++;
       });
+      // Automatic sharing (v420), trigger 2 of 3: the recipes THIS tap made.
+      queueAutoShare(madeIds);
       if (bad) {
         draw();
         // Saved + refused ≤ 4 dishes, so a partial save names one, two or three.
@@ -2557,6 +2588,9 @@ function openSavedFoodPicker(date, onSave, initialTab) {
           // closure's listEl is detached and the picker is already gone.
           openSavedFoodPicker(date, onSave, 'recipes');
           offerUndo(t('rec_deleted'), result);
+          // An Undo on the recipes slice is on offer for 10 s: a marker written
+          // under it by automatic sharing would turn that Undo STALE (v420).
+          autoShareHold(11000);
         },
       });
     }));
@@ -2709,8 +2743,9 @@ function openSavedFoodPicker(date, onSave, initialTab) {
 // ===========================================================================
 // MEAL SUGGESTIONS — «اقتراحات» (v419)
 //
-// The Food tab's card of recipes OTHER users chose to share, each reviewed by
-// the AI before the Worker published it (FoodAI.shareRecipe, migration 35).
+// The Food tab's card of the recipes users share, each reviewed by the AI
+// before the Worker published it (FoodAI.shareRecipe, migration 35). Since
+// v420 a saved recipe is shared by itself (AUTOMATIC SHARING, further down).
 // Four meal periods; the clock's is pressed, and a tap on another holds until
 // the clock moves into the next period. Up to three recipes for the period,
 // ranked by what fits the calories still left (when a target exists), then by
@@ -2723,8 +2758,9 @@ function openSavedFoodPicker(date, onSave, initialTab) {
 // id, a nameless row, a figure that is not one, no period it suits: DROPPED,
 // never repaired — and every name is escaped where it is drawn. It lives in
 // memory only, never in the blob (the food_catalog precedent). The user's own
-// published recipes (the `shared` marker, DB.recipes.setShared) are never
-// suggested back: they are one tap away in «وصفاتي».
+// published recipes (the `shared` marker, DB.recipes.setShared) ARE suggested
+// since v420 — the card must not stay empty while the first recipes arrive —
+// and such a row's sheet offers neither a copy nor a report (shrIsOwn).
 // ===========================================================================
 const SHR_PERIODS = ['breakfast', 'lunch', 'snack', 'dinner'];
 // The cleaned community list; null until a pull has answered with a list.
@@ -2821,30 +2857,57 @@ function cleanSharedRecipes(rows) {
   }
   return out;
 }
-// What the card may suggest: the community list minus the user's own
-// published copies (their markers) and minus what they reported this session.
+// What the card may suggest: the community list minus what the user reported
+// this session. Their OWN published recipes stay in it (v420).
 function sharedPool() {
   if (!Array.isArray(SHARED_RECIPES) || !SHARED_RECIPES.length) return [];
-  const own = new Set(DB.recipes.list().map((r) => r && r.shared && r.shared.id).filter(Boolean));
-  return SHARED_RECIPES.filter((r) => !own.has(r.id) && !Object.prototype.hasOwnProperty.call(SHR_HIDDEN, r.id));
+  return SHARED_RECIPES.filter((r) => !Object.prototype.hasOwnProperty.call(SHR_HIDDEN, r.id));
+}
+// Is that community row the user's OWN published recipe? Its id is the id a
+// local marker holds.
+function shrIsOwn(id) {
+  return DB.recipes.list().some((x) => !!(x && x.shared && x.shared.id === id));
 }
 // The copy «Save to my recipes» writes: name, servings and the six fields of
 // each ingredient. No id anywhere — DB.recipes.add gives the recipe and every
 // row their own — and never a `shared` marker: a copy is not a publication.
+// `origin: 'shared'` (v420) is what DB.recipes.add stores so that automatic
+// sharing never publishes someone else's recipe back: always this literal,
+// whatever the row itself carries.
 function shrCopyDraft(r) {
   const s = Math.round(Number(r && r.servings));
   return { name: shrText(r && r.name, 80), servings: Number.isFinite(s) ? Math.min(99, Math.max(1, s)) : 1,
-    items: (r && Array.isArray(r.items) ? r.items : []).map(shrItem).filter(Boolean) };
+    items: (r && Array.isArray(r.items) ? r.items : []).map(shrItem).filter(Boolean), origin: 'shared' };
+}
+// THE CANONICAL FORM of a recipe's content: its name, its servings and, per
+// ingredient, the name, the amount and the four figures — as DB.recipes stores
+// them. No id, no stamp, no marker: two recipes that read alike ARE alike.
+// The one spelling behind «is that copy already saved?» and the signature.
+function shrCanon(rec) {
+  const x = rec && typeof rec === 'object' ? rec : {};
+  return [String(x.name || '').trim(), Number(x.servings) || 1, (Array.isArray(x.items) ? x.items : []).map((it) => {
+    const i = it && typeof it === 'object' ? it : {};
+    return [String(i.name || '').trim(), String(i.qty || '').trim(), Number(i.calories) || 0, Number(i.protein) || 0, Number(i.carbs) || 0, Number(i.fat) || 0];
+  })];
+}
+// A recipe's content in 8 lowercase hex characters: FNV-1a (32-bit) over the
+// canonical form's JSON, one UTF-16 unit at a time. It rides on the marker
+// (`shared.sig`, the content AS PUBLISHED), so an edit is told from a
+// published recipe on every device. ALWAYS 8 characters — DB.recipes.setShared
+// drops any other shape, and a marker with no sig reads as up to date.
+function shrSig(rec) {
+  const s = JSON.stringify(shrCanon(rec));
+  let h = 0x811c9dc5;
+  for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 0x01000193); }
+  return (h >>> 0).toString(16).padStart(8, '0');
 }
 // Is that copy already among the user's recipes? Same name, servings and
 // ingredients, as DB.recipes stores them.
 function shrCopyExists(r) {
   const d = shrCopyDraft(r);
   if (!d.name || !d.items.length) return false;
-  const sig = (x) => JSON.stringify([String(x.name || '').trim(), Number(x.servings) || 1, (x.items || []).map((it) =>
-    [String(it.name || '').trim(), String(it.qty || '').trim(), Number(it.calories) || 0, Number(it.protein) || 0, Number(it.carbs) || 0, Number(it.fat) || 0])]);
-  const want = sig(d);
-  return DB.recipes.list().some((x) => sig(x) === want);
+  const want = JSON.stringify(shrCanon(d));
+  return DB.recipes.list().some((x) => JSON.stringify(shrCanon(x)) === want);
 }
 // Pull the community list into memory. Resolves whether what the card would
 // draw changed. One pull at a time (a second caller shares it), at most one
@@ -2921,9 +2984,13 @@ function shrRepaint(host) {
 // ONE COMMUNITY RECIPE: its name, one serving's figures, the ingredients read
 // on the tap, the servings scaler (amounts only — the log is one serving, as
 // the picker's «+» is), «Log a serving», «Save to my recipes», a report.
+// The user's OWN published recipe (v420) is a row like any other to log from,
+// but it is already in their recipes — the save button is spent from the
+// start — and nobody reports themselves: that row's sheet has no report.
 function openSharedRecipe(rec, date, onSave) {
   const r = cleanSharedRecipes([rec])[0];
   if (!r) return;
+  const own = shrIsOwn(r.id);
   const figs = (p) => `<span class="shr-figs-k">${t('rec_per')}</span> ${recJoin([shrNum(p.kcal) + ' ' + t('cal'), ...shrMacros(p)])}`;
   const overlay = openModal(`
     <div class="modal-header"><h2 class="modal-title" dir="auto">${escapeHtml(r.name)}</h2><button class="icon-btn" data-close aria-label="${escapeHtml(t('close'))}">${icon('close', 20)}</button></div>
@@ -2938,9 +3005,9 @@ function openSharedRecipe(rec, date, onSave) {
       <div class="cx-list rec-view" id="shr-items" aria-busy="true"><div class="cx-row"><span>${t('cx_loading')}</span></div></div>
       <div class="cx-actions">
         <button type="button" class="btn btn-primary" id="shr-log">${t('shr_log')}</button>
-        <button type="button" class="btn btn-ghost" id="shr-save" disabled>${t('shr_save')}</button>
+        <button type="button" class="btn btn-ghost" id="shr-save" disabled>${own ? t('shr_in_recipes') : t('shr_save')}</button>
       </div>
-      <button type="button" class="link-btn shr-report" id="shr-report">${t('shr_report')}</button>
+      ${own ? '' : `<button type="button" class="link-btn shr-report" id="shr-report">${t('shr_report')}</button>`}
     </div>`);
   // null under a dialog that must be answered (openModal's hold).
   if (!overlay) return;
@@ -2975,7 +3042,7 @@ function openSharedRecipe(rec, date, onSave) {
       // Re-derived from the ingredients, by the same rounding the server used.
       const per = DB.recipes.perServing(full);
       overlay.querySelector('#shr-figs').innerHTML = figs({ kcal: per.calories, protein: per.protein, carbs: per.carbs, fat: per.fat });
-      if (shrCopyExists(full)) markSaved(); else saveBtn.disabled = false;
+      if (own || shrCopyExists(full)) markSaved(); else saveBtn.disabled = false;
     });
 
   // ONE SERVING, ONE ROW — whatever the scaler shows (it moves amounts only).
@@ -3000,8 +3067,12 @@ function openSharedRecipe(rec, date, onSave) {
     if (!w.value) { showToast(DB.saveState().ok ? t('rec_need_ing') : t('sc_failed')); return; }
     markSaved();
     offerUndo(t('shr_saved'), w);
+    // That Undo is on the recipes slice: automatic sharing writes no marker
+    // under it for its 10 s, or the Undo would answer STALE (v420).
+    autoShareHold(11000);
   });
-  overlay.querySelector('#shr-report').addEventListener('click', () => openSharedReport(r, onSave));
+  const reportBtn = overlay.querySelector('#shr-report');
+  if (reportBtn) reportBtn.addEventListener('click', () => openSharedReport(r, onSave));
 }
 
 // «show more»: every suggestion of the period, in rank order.
@@ -3061,14 +3132,19 @@ function openSharedReport(rec, onDone) {
 
 // «شاركها»: what sharing means, in four lines, then one request. The AI's
 // verdict comes back as a CODE and is said in one translated sentence; an
-// approval writes the marker {id, at} (DB.recipes.setShared), so the view
-// offers «أزل من المشاركة» on every device.
+// approval writes the marker {id, at, sig} (DB.recipes.setShared), so the view
+// offers «أزل من المشاركة» on every device. It stays beside automatic sharing
+// (v420) — for a recipe the user took out of sharing, for a signed-in user who
+// turned automatic sharing off — and the fourth line says which holds: the
+// published copy follows later edits only while automatic sharing is on AND
+// the recipe is the user's own (a copy saved from the list, origin 'shared',
+// is one autoShareWants never follows, so its line says the copy stays).
 function openShareRecipe(rec, onBack) {
   const overlay = openModal(`
     <div class="modal-header"><div><h2 class="modal-title">${t('shr_share_title')}</h2><div class="modal-subtitle" dir="auto">${escapeHtml(rec.name)}</div></div>
       <button class="icon-btn" data-close aria-label="${escapeHtml(t('close'))}">${icon('close', 20)}</button></div>
     <div class="cx-stack" id="shr-share-body">
-      <div class="cx-list shr-terms"><p>${t('shr_term_review')}</p><p>${t('shr_term_anon')}</p><p>${t('shr_term_withdraw')}</p><p>${t('shr_term_copy')}</p></div>
+      <div class="cx-list shr-terms"><p>${t('shr_term_review')}</p><p>${t('shr_term_anon')}</p><p>${t('shr_term_withdraw')}</p><p>${DB.prefs.autoShare() && rec.origin !== 'shared' ? t('shr_term_follow') : t('shr_term_copy')}</p></div>
       <p class="auth-err" id="shr-share-err" role="alert"></p>
       <button type="button" class="btn btn-primary" id="shr-send">${t('shr_send')}</button>
     </div>`);
@@ -3104,6 +3180,9 @@ function openShareRecipe(rec, onBack) {
     send.disabled = true;
     send.textContent = t('shr_sending');
     const owner = Cloud.getLastUid();
+    // The content AS SENT, named before the await: an edit made during the
+    // review must read as «changed since it was published» (v420).
+    const sig = shrSig(cur);
     let res = null;
     try {
       res = await FoodAI.shareRecipe(cur);
@@ -3119,7 +3198,10 @@ function openShareRecipe(rec, onBack) {
     if (res && res.verdict === 'approve') {
       // Written even if the sheet was closed during the review: the copy IS
       // published, and without its marker the view could never take it down.
-      const w = DB.recipes.setShared(cur.id, { id: res.id, at: new Date().toISOString() });
+      // «Not automatically» is cleared first (v420): the user asked for this
+      // recipe to be shared, so it follows its edits again like any other.
+      DB.recipes.setNoAuto(cur.id, false);
+      const w = DB.recipes.setShared(cur.id, { id: res.id, at: new Date().toISOString(), sig });
       if (!w || !w.ok) {
         // A copy no marker points at could not be withdrawn from the app.
         if (window.Cloud && typeof Cloud.withdrawSharedRecipe === 'function') Promise.resolve().then(() => Cloud.withdrawSharedRecipe(res.id)).catch(() => {});
@@ -3134,6 +3216,329 @@ function openShareRecipe(rec, onBack) {
     if (!onScreen()) return;
     drawVerdict(res && res.reason);
   });
+}
+
+// ===========================================================================
+// AUTOMATIC SHARING (v420) — «أي وصفة حدا حطها تتشارك على طول»
+//
+// Every recipe a signed-in user saves is sent for the same review as «شاركها»
+// and published without their name, unless they turn that off (Settings, or
+// «أوقِفها» on the one-time notice). Nothing on the server changed for it: a
+// request still spends one unit of the day's AI budget and the database keeps
+// its caps. So THE CLIENT IS FRUGAL — one request at a time, a gap between
+// two, a ceiling per day per device, a pause when the server says «enough for
+// today», and a recipe a review refused is not sent again until it changes.
+//
+// WHAT IS SENT is decided by autoShareWants() alone, from three fields the
+// recipe carries (js/storage.js): the marker's `sig` — the content AS
+// PUBLISHED, which an edit moves shrSig() away from — `noAuto` (the user took
+// it out of sharing) and `origin: 'shared'` (a copy of someone else's recipe).
+// What a review refused, the day's count and a pause live on the DEVICE
+// (VAULT_KEYS.shareAuto), never in the blob.
+//
+// THREE TRIGGERS, and only these: the editor's save, the import chooser's
+// «احفظ الكل», and a render of Food (the backfill). A trigger only QUEUES ids;
+// runAutoShare() takes one recipe per step and reads every gate again each
+// time. Turning the setting ON sends nothing by itself.
+// ===========================================================================
+const SHR_AUTO_DELAY = 1500;                 // ms from a trigger to the first step
+const SHR_AUTO_NOTICE_MS = 12000;            // the one-time notice stays this long, and the first request waits for it
+const SHR_AUTO_GAP = 4000;                   // ms between two requests
+const SHR_AUTO_DAY_MAX = 12;                 // requests per local day, per device
+const SHR_AUTO_PAUSE_MS = 6 * 3600 * 1000;   // after «the daily limit» — the database's, or the AI budget's
+const SHR_AUTO_TRIED_MAX = 100;              // refusals remembered per device, the newest kept
+// The ids waiting · the ONE timer · a step in flight · «stopped until the app
+// is opened again» · when a pending Undo on the recipes slice ends · whether
+// the one rate-limit wait of this session is spent · when the gap after the
+// last request ends · the one-time notice's own button, while it may still be
+// on screen · when that notice was raised (its window is counted from here).
+let __autoQueue = [], __autoTimer = null, __autoBusy = false, __autoOff = false, __autoHoldUntil = 0, __autoRetried = false,
+  __autoNextAt = 0, __autoNoticeBtn = null, __autoNoticeAt = 0;
+
+// The account this device's ledger belongs to: the last signed-in uid, or ''.
+function shrAutoUid() {
+  return String((window.Cloud && typeof Cloud.getLastUid === 'function' && Cloud.getLastUid()) || '');
+}
+// THIS DEVICE'S LEDGER for the signed-in account — {uid, day, n, until, tried}
+// — read CLEAN every time: another account's object is ignored (the next save
+// replaces it), a count from another day is zero, a pause never reaches
+// further than one pause from now (a clock set forward, then back), and
+// `tried` keeps {sig, reason, at} under a safe recipe id and nothing else.
+function shrAutoStore() {
+  const uid = shrAutoUid();
+  const out = { uid, day: todayISO(), n: 0, until: 0, tried: {} };
+  let o = null;
+  try { o = JSON.parse(localStorage.getItem(VAULT_KEYS.shareAuto) || 'null'); } catch (_) { o = null; }   // eslint-disable-line vault/no-direct-storage-in-views -- a per-DEVICE ledger from the registry, never blob state (v420)
+  if (!uid || !o || typeof o !== 'object' || Array.isArray(o) || o.uid !== uid) return out;
+  if (o.day === out.day && Number.isFinite(o.n) && o.n > 0) out.n = Math.floor(o.n);
+  if (Number.isFinite(o.until) && o.until > 0) out.until = Math.min(o.until, Date.now() + SHR_AUTO_PAUSE_MS);
+  const tried = o.tried && typeof o.tried === 'object' && !Array.isArray(o.tried) ? o.tried : {};
+  for (const id of Object.keys(tried)) {
+    const x = tried[id];
+    if (id === '__proto__' || !entityIdSafe(id) || !x || typeof x !== 'object' || typeof x.sig !== 'string') continue;
+    out.tried[id] = { sig: x.sig, reason: typeof x.reason === 'string' ? x.reason : '', at: Number(x.at) || 0 };
+  }
+  return out;
+}
+// Write it back — only as the account it was READ for (a ledger read before an
+// account change is dropped, never stamped with the new uid), under the day
+// its count belongs to, keeping the newest SHR_AUTO_TRIED_MAX refusals.
+// Answers whether it was written: a storage that refuses is survived, and the
+// engine sends nothing it could not count first.
+function shrAutoSave(o) {
+  const uid = shrAutoUid();
+  if (!uid || !o || typeof o !== 'object' || o.uid !== uid) return false;
+  let tried = o.tried && typeof o.tried === 'object' && !Array.isArray(o.tried) ? o.tried : {};
+  const ids = Object.keys(tried);
+  if (ids.length > SHR_AUTO_TRIED_MAX) {
+    ids.sort((a, b) => (Number(tried[b] && tried[b].at) || 0) - (Number(tried[a] && tried[a].at) || 0));
+    tried = Object.fromEntries(ids.slice(0, SHR_AUTO_TRIED_MAX).map((id) => [id, tried[id]]));
+  }
+  try {
+    localStorage.setItem(VAULT_KEYS.shareAuto, JSON.stringify({ uid, day: o.day, n: o.n, until: o.until, tried }));   // eslint-disable-line vault/no-direct-storage-in-views -- the per-DEVICE ledger, see shrAutoStore
+    return true;
+  } catch (_) { return false; }
+}
+// DOES AUTOMATIC SHARING WANT THIS RECIPE SENT? Only when all of it holds: it
+// was not taken out of sharing, it is not a copy from the community list, its
+// servings are whole and it has calories (the Worker refuses the rest before
+// its budget), it is unpublished or was EDITED since it was published, and no
+// review has already refused this very content on this device. A marker with
+// no sig — v419's «شاركها», or another build's — counts as up to date: what
+// it published cannot be compared, and a guess would re-send every old recipe.
+// `store` is the device ledger when the caller already read it (a backfill
+// asks about every recipe).
+function autoShareWants(rec, store) {
+  if (!rec || typeof rec !== 'object' || rec.noAuto || rec.origin === 'shared') return false;
+  // A row that is not one (an imported or pulled blob may hold a null): never
+  // wanted, and never a throw — this question is asked from a render.
+  if (!Array.isArray(rec.items) || !rec.items.every((it) => it && typeof it === 'object')) return false;
+  if (!Number.isInteger(Number(rec.servings)) || !(DB.recipes.totals(rec).calories > 0)) return false;
+  const sig = shrSig(rec), mark = rec.shared;
+  if (mark && (mark.sig === undefined || mark.sig === null || mark.sig === sig)) return false;
+  const tried = (store && store.tried) || shrAutoStore().tried;
+  const refused = Object.prototype.hasOwnProperty.call(tried, rec.id) ? tried[rec.id] : null;
+  return !(refused && refused.sig === sig);
+}
+// A trigger: the ids join the queue (once each) and ONE timer is armed — none
+// while a step is in flight, which arms the next one itself. The gap after a
+// request holds for a trigger too: a recipe saved a second after one left
+// starts its own a whole SHR_AUTO_GAP after it, never SHR_AUTO_DELAY (bounded
+// by the gap, so a clock set back cannot park the queue).
+function queueAutoShare(ids) {
+  for (const id of Array.isArray(ids) ? ids : []) if (typeof id === 'string' && id && !__autoQueue.includes(id)) __autoQueue.push(id);
+  if (__autoQueue.length && !__autoTimer && !__autoBusy) {
+    __autoTimer = setTimeout(runAutoShare, Math.max(SHR_AUTO_DELAY, Math.min(SHR_AUTO_GAP, __autoNextAt - Date.now())));
+  }
+}
+// An Undo on the recipes slice was just offered: for `ms` nothing is sent and
+// no marker is written. The marker is written outside the undo ledger, so it
+// changes the slice under the Undo, which would then answer STALE.
+function autoShareHold(ms) {
+  __autoHoldUntil = Math.max(__autoHoldUntil, Date.now() + Math.max(0, Number(ms) || 0));
+}
+// ONE STEP: every gate, then at most ONE recipe sent and its answer acted on.
+// Never two requests in flight (__autoBusy); the next step is armed
+// SHR_AUTO_GAP later. A closed gate stops it quietly and empties the queue —
+// the next trigger builds it again from the recipes themselves.
+async function runAutoShare() {
+  clearTimeout(__autoTimer);
+  __autoTimer = null;
+  if (__autoBusy) return;
+  __autoBusy = true;
+  let sent = false;   // did THIS step send a request?
+  const pause = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+  // The gates that need no await, read again after every await below.
+  const open = () => !__autoOff && DB.prefs.autoShare()
+    && !!(window.FoodAI && typeof FoodAI.shareRecipe === 'function')
+    && !!(window.Cloud && typeof Cloud.configured === 'function' && Cloud.configured())
+    && navigator.onLine !== false && !(DB.loadFailed && DB.loadFailed())
+    && (typeof Cloud.isSettled !== 'function' || Cloud.isSettled());
+  // Answers the wait before the next step, or null: stop.
+  const step = async () => {
+    if (!open()) return null;
+    let session = null;
+    try { session = typeof Cloud.getSession === 'function' ? await Cloud.getSession() : null; } catch (_) {}
+    // THE SESSION MUST OWN THE STORE (the pushOnce rule): whoever LAST_UID
+    // names owns the recipes on this device, and a different session holding
+    // it — a 'duplicate' or 'held' device, another account's session in the
+    // tab — sends nothing of theirs under its own token.
+    if (!session || !session.user || session.user.id !== Cloud.getLastUid() || !open()) return null;
+    // The device ledger: an account to count for (a request that could not be
+    // counted is never sent, so without one nothing may even be announced), no
+    // pause, room left in the day.
+    const store = shrAutoStore();
+    if (!store.uid || store.until > Date.now() || store.n >= SHR_AUTO_DAY_MAX) return null;
+    // THE ONE-TIME NOTICE IS STILL ON SCREEN. A toast's timer pauses under a
+    // pointer or the keyboard's focus (WCAG 2.2.1), so the notice can outlive
+    // its window — and while «أوقِفها» is on offer nothing is sent under it.
+    // Its own button tells: any other toast replaces that element. It is
+    // «seen» only once it ENDED on screen — its whole window run out with the
+    // page visible, or its button tapped (the onAction below). A notice that
+    // was replaced, hidden by a navigation, or under a hidden page is raised
+    // again, and nothing is sent until one has run its whole window on screen.
+    const toastEl = document.getElementById('toast');
+    const toastUp = !!(toastEl && toastEl.classList.contains('show'));
+    const hidden = document.visibilityState === 'hidden';
+    if (__autoNoticeBtn) {
+      const up = toastUp && __autoNoticeBtn.isConnected;
+      if (up && !hidden) return 1000;        // still on offer: look again in a second
+      if (up) hideToast();                   // the page went away under it: it starts over
+      else if (!hidden && Date.now() - __autoNoticeAt >= SHR_AUTO_NOTICE_MS) DB.prefs.setAutoShareSeen();
+      __autoNoticeBtn = null;
+    }
+    if (hidden && !DB.prefs.autoShareSeen()) return SHR_AUTO_GAP;
+    // The two WAITS sit below the notice block on purpose: a wait skips the
+    // rest of the step, and the block above is the notice's only observer — a
+    // notice displaced while a wait held the step would otherwise be stamped
+    // «seen» later for a window nobody saw. Neither wait sends or writes.
+    // A pull or a push is on the wire: the setting and the markers may be about
+    // to change under this step — wait, keep the queue, read every gate again.
+    if (typeof Cloud.syncState === 'function' && Cloud.syncState().status === 'syncing') return SHR_AUTO_GAP;
+    // An Undo on the recipes slice is still on offer: nothing moves under it.
+    if (Date.now() < __autoHoldUntil) return __autoHoldUntil - Date.now();
+    // The next recipe that is still wanted, re-read: the queue holds ids only.
+    let cur = null;
+    while (__autoQueue.length && !cur) {
+      const id = __autoQueue.shift();
+      const r = DB.recipes.list().find((x) => x.id === id);
+      if (autoShareWants(r, store)) cur = r;
+    }
+    if (!cur) return null;
+    // THE ONE-TIME NOTICE, before the first request this account ever sends
+    // from here: what happens, and «أوقِفها» for as long as it shows. Nothing
+    // is sent in that window, and the gates are read again after it. It never
+    // replaces a toast that carries an action (an Undo): it waits its turn.
+    if (!DB.prefs.autoShareSeen()) {
+      __autoQueue.unshift(cur.id);
+      if (toastUp && toastEl.classList.contains('has-action')) return SHR_AUTO_GAP;
+      showToast(t('shr_auto_notice'), { duration: SHR_AUTO_NOTICE_MS, actionLabel: t('shr_auto_stop'), onAction: () => {
+        DB.prefs.setAutoShare(false);
+        // The user answered it: the notice is seen, and never shown again.
+        DB.prefs.setAutoShareSeen();
+        // Nothing is left running: the queue is emptied and the window's
+        // timer dropped, so turning it on again starts from a trigger.
+        __autoQueue.length = 0;
+        clearTimeout(__autoTimer);
+        __autoTimer = null;
+        if (currentView === 'settings') renderView('settings');   // its row says «متوقفة» at once
+        showToast(t('shr_auto_stopped'));
+      } });
+      __autoNoticeBtn = toastEl ? toastEl.querySelector('.toast-action') : null;
+      // Not «seen» yet: that is stamped above, once the window has run out on
+      // screen. Meanwhile the notice is looked at every second.
+      __autoNoticeAt = Date.now();
+      return 1000;
+    }
+    // js/foodai.js loads after this file: the check sits beside the call (contract 26).
+    if (!(window.FoodAI && typeof FoodAI.shareRecipe === 'function')) return null;
+    // The content AS SENT is named before the await, and the request is
+    // COUNTED before it leaves: a reload mid-request cannot spend the day's
+    // ceiling twice, and a ledger that cannot be written sends nothing.
+    const owner = Cloud.getLastUid(), sig = shrSig(cur);
+    store.n += 1;
+    if (!shrAutoSave(store)) return null;
+    let res = null;
+    sent = true;
+    try {
+      res = await FoodAI.shareRecipe(cur);
+    } catch (e) {
+      // Another account signed in meanwhile: its ledger is not this one's to write.
+      if (Cloud.getLastUid() !== owner) return null;
+      // «Try again in a minute»: waited out ONCE, the recipe back at the head.
+      if (e && e.retryAfter && !e.noRetry && !__autoRetried) { __autoRetried = true; __autoQueue.unshift(cur.id); return e.retryAfter; }
+      // Anything else — no network, a deadline, a Worker without the mode —
+      // stops automatic sharing until the app is opened again. The AI's day
+      // budget (noRetry) is also REMEMBERED, so the next opening does not ask.
+      __autoOff = true;
+      if (e && e.noRetry) { const s = shrAutoStore(); s.until = Date.now() + SHR_AUTO_PAUSE_MS; shrAutoSave(s); }
+      return null;
+    }
+    // Another account signed in meanwhile: nothing is written to its blob.
+    if (Cloud.getLastUid() !== owner) return null;
+    if (res && res.verdict === 'approve') {
+      while (Date.now() < __autoHoldUntil) await pause(__autoHoldUntil - Date.now());
+      if (Cloud.getLastUid() !== owner) return null;
+      // Taken out of sharing while the review ran («أزل من المشاركة» sets
+      // noAuto): the user's answer stands — no marker, and the fresh copy
+      // comes down with the same call a failed marker write makes. Automatic
+      // sharing turned OFF while the review ran (Settings, or a pull) is
+      // treated the same — except for a recipe that already had a marker: the
+      // server replaced its old copy, so the new id must be kept, or the
+      // published copy loses its only handle in the app.
+      const now = DB.recipes.list().find((x) => x.id === cur.id);
+      const w = now && (now.noAuto || (!DB.prefs.autoShare() && !now.shared)) ? null : DB.recipes.setShared(cur.id, { id: res.id, at: new Date().toISOString(), sig });
+      if (!w || !w.ok) {
+        // A copy no marker points at could never be withdrawn from the app.
+        if (typeof Cloud.withdrawSharedRecipe === 'function') Promise.resolve().then(() => Cloud.withdrawSharedRecipe(res.id)).catch(() => {});
+        // STALE is about that one recipe (deleted meanwhile, or another window
+        // wrote first). A device that cannot WRITE keeps no marker for any
+        // recipe: it stops until the app is opened again.
+        if (w && w.code !== 'STALE') { __autoOff = true; return null; }
+        return SHR_AUTO_GAP;
+      }
+      // The user's own recipe is a suggestion now: the list is read past both
+      // caches and the card alone is drawn again. No toast per recipe.
+      loadSharedRecipes({ force: true, fresh: true }).then((changed) => {
+        const host = $('#nutri-host');
+        if (changed && host) shrRepaint(host);
+      });
+      return SHR_AUTO_GAP;
+    }
+    const reason = res && typeof res.reason === 'string' ? res.reason : '';
+    // The database's own daily cap: a pause this device remembers.
+    if (res && res.verdict === 'refused' && reason === 'daily_limit') {
+      const s = shrAutoStore(); s.until = Date.now() + SHR_AUTO_PAUSE_MS; shrAutoSave(s);
+      return null;
+    }
+    // The moderator said no, or the account may not share: THIS content is
+    // not sent again from this device (an edit changes its sig).
+    if (res && (res.verdict === 'reject' || (res.verdict === 'refused' && reason === 'blocked'))) {
+      const s = shrAutoStore(); s.tried[cur.id] = { sig, reason, at: Date.now() }; shrAutoSave(s);
+      if (res.verdict === 'reject') return SHR_AUTO_GAP;
+    }
+    // «blocked», the cap on held recipes, «unavailable», or an answer this
+    // build does not know: until the app is opened again; nothing remembered
+    // beyond the line above.
+    __autoOff = true;
+    return null;
+  };
+  let wait = null;
+  // A step that throws is a defect, never a reason to keep asking the server.
+  try { wait = await step(); } catch (_) { wait = null; __autoOff = true; }
+  __autoBusy = false;
+  // The gap runs from the ANSWER, and the next trigger reads it (queueAutoShare).
+  if (sent) __autoNextAt = Date.now() + SHR_AUTO_GAP;
+  // A stopped engine FORGETS a notice it can no longer watch: a stop (the
+  // setting off, offline, another account, a pause) while the notice was up
+  // must not stamp it «seen» at the next run for a window nobody saw.
+  if (wait === null) { __autoQueue.length = 0; __autoNoticeBtn = null; __autoNoticeAt = 0; return; }
+  if (__autoQueue.length) __autoTimer = setTimeout(runAutoShare, Math.max(0, wait));
+}
+// Trigger 3 of 3 — a render of Food: every recipe automatic sharing still
+// wants is queued. Asked only when a step could run at all (the setting, an
+// account, no pause, room in the day), so a render arms no timer for nothing.
+function autoShareBackfill() {
+  if (__autoOff || !DB.prefs.autoShare() || !(window.Cloud && typeof Cloud.configured === 'function' && Cloud.configured())) return;
+  const store = shrAutoStore();
+  if (!store.uid || store.until > Date.now() || store.n >= SHR_AUTO_DAY_MAX) return;
+  queueAutoShare(DB.recipes.list().filter((r) => autoShareWants(r, store)).map((r) => r.id));
+}
+// THE PUBLISHED COPIES AN UNDO LEAVES BEHIND. The marker and `noAuto` are
+// written outside the undo ledger and CARRIED into its snapshots of the
+// recipes slice (js/storage.js carryRecipeField), so every Undo stays
+// applicable after automatic sharing published something — and the Undo of an
+// ADD made before the recipe was published then removes a recipe whose copy is
+// up with nothing left in the app to hold its id. `before` and `after` are the
+// recipes list on either side of that Undo; the answer is the marker ids of
+// the recipes present (with a marker) in `before` and absent from `after`,
+// which applyConvenienceUndo (js/app.js) withdraws. Pure: it reads nothing.
+// Deleting a recipe by hand is another matter — its copy stays (spec 3.6).
+function shrOrphanedIds(before, after) {
+  const kept = new Set((Array.isArray(after) ? after : []).map((r) => r && r.id));
+  return (Array.isArray(before) ? before : [])
+    .filter((r) => r && r.shared && typeof r.shared.id === 'string' && r.shared.id && !kept.has(r.id))
+    .map((r) => r.shared.id);
 }
 
 // ===========================================================================

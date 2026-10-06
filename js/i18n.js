@@ -739,6 +739,13 @@ const I18N = {
     shr_unavailable: 'Sharing is not available yet',
     shr_tag_shared: 'shared',
     shr_del_note: 'Its published copy stays shared. Stop sharing it first if you want it removed.',
+    // automatic sharing (v420): the Settings row, the one-time notice with its «Turn off» action, and the share sheet's fourth term while it is on
+    shr_auto: 'Sharing my recipes', shr_auto_on: 'Automatic', shr_auto_off: 'Off',
+    shr_auto_sub: 'Your recipes are published to Suggestions without your name, after an automatic review.',
+    shr_auto_off_sub: 'New recipes are not published. Recipes already published stay until you choose “Stop sharing” in each one.',
+    shr_auto_notice: 'Your recipes are now published to Suggestions without your name.',
+    shr_auto_stop: 'Turn off', shr_auto_stopped: 'Automatic sharing is off',
+    shr_term_follow: 'Its published copy is updated when you edit it.',
     // «استخراج وصفة» — a recipe from a video, a link, an image or text (js/food.js openRecipeImport)
     rx_title: 'Extract a recipe',
     rx_src_video: 'Video', rx_src_video_sub: 'A clip saved on your phone',
@@ -1857,6 +1864,13 @@ const I18N = {
     shr_unavailable: 'المشاركة غير متاحة بعد',
     shr_tag_shared: 'مُشارَكة',
     shr_del_note: 'تبقى نسختها المنشورة. أزلها من المشاركة أولًا إن أردت حذفها.',
+    // المشاركة التلقائية (v420): صفّ الإعدادات، والإشعار الذي يظهر مرة واحدة مع زر «أوقِفها»، والبند الرابع في ورقة المشاركة ما دامت مفعّلة
+    shr_auto: 'مشاركة وصفاتي', shr_auto_on: 'تلقائية', shr_auto_off: 'متوقفة',
+    shr_auto_sub: 'تُنشر وصفاتك في الاقتراحات دون اسمك، بعد مراجعة آلية.',
+    shr_auto_off_sub: 'لا تُنشر وصفاتك الجديدة. ما نُشر منها يبقى منشورًا حتى تختار «أزل من المشاركة» في كل وصفة.',
+    shr_auto_notice: 'تُنشر وصفاتك الآن في الاقتراحات دون اسمك.',
+    shr_auto_stop: 'أوقِفها', shr_auto_stopped: 'أُوقفت المشاركة التلقائية',
+    shr_term_follow: 'تُحدَّث نسختها المنشورة حين تعدّلها.',
     // «استخراج وصفة» — بالفصحى، كبقية القاموس
     rx_title: 'استخراج وصفة',
     rx_src_video: 'مقطع فيديو', rx_src_video_sub: 'مقطعٌ محفوظ على هاتفك',

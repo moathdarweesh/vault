@@ -1245,6 +1245,25 @@ function forgetUndoOf(id) {
   }
 }
 const copyData = value => value == null ? value : JSON.parse(JSON.stringify(value));
+// CARRY a field written OUTSIDE the ledger into the ledger's snapshots of the
+// recipes slice (v420): the «shared» marker and `noAuto`. DB.undo.apply refuses
+// an entry whose `after` no longer equals the slice, and automatic sharing
+// writes the marker a few seconds after every saved recipe — without this,
+// every recipes Undo in «آخر التعديلات» (an edit, an add, a delete) answered
+// STALE from then on, and blocked the older entries behind it. The snapshots
+// then say what the slice says about the server; the field itself is never
+// undone (an Undo cannot un-publish). `value` undefined deletes the field, as
+// the writers do, so the key order stays in step with the slice.
+function carryRecipeField(id, key, value) {
+  for (const e of undoEntries) {
+    if (e.read() !== STATE.recipes) continue;
+    for (const snap of [e.before, e.after]) {
+      const r = Array.isArray(snap) ? snap.find(x => x && x.id === id) : null;
+      if (!r) continue;
+      if (value === undefined) delete r[key]; else r[key] = copyData(value);
+    }
+  }
+}
 const operationOwner = () => typeof Cloud !== 'undefined' && Cloud.getLastUid ? Cloud.getLastUid() : '';
 function changeSlice(read, write, next, label, remember = true) {
   // A REFUSAL NOBODY RECORDED IS A REFUSAL NOBODY CAN EXPLAIN. This returned
@@ -1331,6 +1350,9 @@ function cleanMealItems(items) {
 // unreadable or over-long stamp) is DELETED on the way in, never refused with
 // its blob: its id reaches a withdraw call and the view's «Stop sharing».
 // Unknown fields of a valid marker ride through, as everywhere in the blob.
+// Since v420 a marker may also carry `sig` — 8 hex characters naming the
+// content that was published — and one without it is still a valid marker:
+// this test is unchanged, and setShared is the one door that judges a sig.
 // loadState() calls this at BOOT, from `let STATE = …loadState()` above: it may
 // read no const declared below that line (the HC_REFUSED_DAYS reason).
 function recipeSharedOk(s) {
@@ -1560,6 +1582,19 @@ const DB = {
     setReviewSeen(iso) { STATE.prefs.reviewSeen = String(iso || ''); saveLocal(); },
     reviewOff() { return STATE.prefs.reviewOff === true; },
     setReviewOff(off) { STATE.prefs.reviewOff = !!off; save(); },
+    // AUTOMATIC RECIPE SHARING (v420). Default ON: every recipe a signed-in
+    // user saves is sent for the automatic review and published without their
+    // name, so an older blob — which has neither field — reads as on and unseen
+    // and needs no migration. Both are read STRICTLY (`!== false`, `=== true`):
+    // the values arrive from the synced blob and from imported backups, where
+    // 0, '' or "false" must not read as a choice nobody made. The choice follows
+    // the account (save). «Seen» records that the one-time notice was shown: it
+    // is housekeeping, like setOnboarded, and rides along with the next genuine
+    // edit (saveLocal) instead of marking the blob dirty by itself.
+    autoShare() { return STATE.prefs.autoShare !== false; },
+    setAutoShare(on) { STATE.prefs.autoShare = !!on; save(); },
+    autoShareSeen() { return STATE.prefs.autoShareSeen === true; },
+    setAutoShareSeen() { STATE.prefs.autoShareSeen = true; saveLocal(); },
     setRestSec(sec) { const n = Math.round(Number(sec)); STATE.prefs.restSec = Number.isFinite(n) ? Math.min(600, Math.max(15, n)) : 90; save(); },
     // THE TWO GOALS (v410) — the pace line on the Cardio hero and the line on
     // the Sleep hero. Whole minutes, clamped where they are READ as well as
@@ -3948,6 +3983,11 @@ const DB = {
       const entity = { ...old, id: old?.id || uid(), name, servings,
         items: clean.map(it => { const {servings, ...rest} = it; return {...rest, qty:wellFormedText(String(it.qty || '').slice(0,24))}; }),
         createdAt: old?.createdAt || new Date().toISOString(), updatedAt: new Date().toISOString() };
+      // WHERE A RECIPE CAME FROM (v420): `origin: 'shared'` marks a copy saved
+      // from the community list, so automatic sharing never publishes someone
+      // else's recipe back. Taken at CREATION only, and only as that one value;
+      // an edit keeps whatever `old` holds ({...old}) and takes none from a patch.
+      if (!id && patch && patch.origin === 'shared') entity.origin = 'shared';
       const result = changeSlice(() => STATE.recipes || [], next => { STATE.recipes = next; },
         old ? list.map(x => x.id === id ? entity : x) : [...list,entity], 'cx_meal_changed');
       return result.ok ? copyData(entity) : null;
@@ -3959,15 +3999,44 @@ const DB = {
     // (remember=false): an Undo cannot un-publish, and a marker undone would
     // describe a server that disagrees. `update` keeps it ({...old}); `add`
     // never takes one, so a saved copy of someone's recipe is never "shared".
+    // v420: an optional `sig` — the 8 lowercase hex characters naming the
+    // content AS SENT, which is how automatic sharing tells an edited recipe
+    // from a published one. It is copied BY NAME and only in that exact shape;
+    // the marker is REBUILT, never spread, so every other key a caller hands
+    // over is dropped, and a sig that is not one leaves the marker as {id, at}
+    // (never a refusal: the copy IS published, and the marker is its only handle).
     setShared(id, shared) {
       const list = STATE.recipes || [], old = list.find(x => x.id === id);
       if (!id || !old) return { ok: false, code: 'STALE' };
       let entity;
       if (shared === null) { entity = { ...old }; delete entity.shared; }
       else if (!recipeSharedOk(shared)) return { ok: false, code: 'VALIDATION' };
-      else entity = { ...old, shared: { id: shared.id, at: shared.at } };
-      return changeSlice(() => STATE.recipes || [], next => { STATE.recipes = next; },
+      else {
+        entity = { ...old, shared: { id: shared.id, at: shared.at } };
+        if (typeof shared.sig === 'string' && /^[0-9a-f]{8}$/.test(shared.sig)) entity.shared.sig = shared.sig;
+      }
+      const w = changeSlice(() => STATE.recipes || [], next => { STATE.recipes = next; },
         list.map(x => x.id === id ? entity : x), 'cx_meal_changed', false);
+      // The ledger's snapshots follow the marker (carryRecipeField), so an Undo
+      // made before this write is still applicable after it.
+      if (w.ok && w.changed) carryRecipeField(id, 'shared', entity.shared);
+      return w;
+    },
+    // «NOT AUTOMATICALLY» (v420): `noAuto: true` on a recipe the user took out
+    // of sharing, so automatic sharing does not publish it again; cleared when
+    // they share it by hand. The field is true or ABSENT, never false. Outside
+    // the undo ledger, like the marker it travels with: it records an answer
+    // about the server, and an Undo that restored it would re-publish or
+    // re-withdraw nothing. A call that changes nothing answers changed:false.
+    setNoAuto(id, on) {
+      const list = STATE.recipes || [], old = list.find(x => x.id === id);
+      if (!id || !old) return { ok: false, code: 'STALE' };
+      const entity = { ...old };
+      if (on) entity.noAuto = true; else delete entity.noAuto;
+      const w = changeSlice(() => STATE.recipes || [], next => { STATE.recipes = next; },
+        list.map(x => x.id === id ? entity : x), 'cx_meal_changed', false);
+      if (w.ok && w.changed) carryRecipeField(id, 'noAuto', entity.noAuto);
+      return w;
     },
   },
 

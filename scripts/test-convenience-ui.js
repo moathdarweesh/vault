@@ -3,6 +3,11 @@
 const assert = require('node:assert/strict');
 module.exports = async function testConvenienceUI(page) {
   await page.evaluate(() => {
+    // Automatic recipe sharing (v420) is OFF for this whole suite: rxKit counts
+    // EVERY POST to the Worker's host, and a recipe saved by a case here must
+    // add none of its own. What it sends when it is on is
+    // test-shared-recipes-ui.js's subject, not this suite's.
+    DB.prefs.setAutoShare(false);
     DB.nutrition.setTargets({calories:2000,protein:120,carbs:220,fat:60});
     DB.foods.add({name:'QA oats',calories:100,protein:5,carbs:15,fat:2});
     DB.recipes.add({name:'QA rice',servings:4,items:[{name:'Rice',qty:'200 g',calories:300,protein:5,carbs:60,fat:1}]});
@@ -1480,7 +1485,10 @@ const RECIPE_IMPORT = [
       await page.locator('#rec-save').click();
       assert.equal(await toastText(page), await tr(page, 'rec_saved'), 'the unchanged recipe saves at once');
       await page.waitForTimeout(1300);
-      assert.equal(kit.bodies.length, sent, 'and no request reached the Worker: ' + kit.bodies.slice(sent).join(' | '));
+      // A save is also automatic sharing's trigger (v420), which would add a
+      // request of its own to this count: it is turned off at the top of this
+      // suite, and the message says so.
+      assert.equal(kit.bodies.length, sent, 'and, with automatic sharing off, no request reached the Worker: ' + kit.bodies.slice(sent).join(' | '));
       const saved = await page.evaluate(() => DB.recipes.list().filter((r) => r.name === 'QA salted'));
       assert.equal(saved.length, 1, 'ONE recipe, updated in place');
       for (const it of saved[0].items) assert.equal(Object.keys(it).sort().join(','), 'calories,carbs,fat,id,name,protein,qty', 'a stored row holds exactly its fields: ' + Object.keys(it).join(','));

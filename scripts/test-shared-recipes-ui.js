@@ -6,6 +6,19 @@
 // one's own recipe from its view («شاركها» / «أزل من المشاركة»), which reports
 // the moderator's verdict in one translated sentence.
 //
+// AUTOMATIC SHARING (v420) is the third half: every recipe a signed-in user
+// saves is sent for that same review by itself (js/food.js, runAutoShare) —
+// after a one-time notice with «أوقِفها», one request at a time, a gap between
+// two, a ceiling per day, a pause when the server says «enough for today» —
+// and the user's own published recipes are suggested on their own card.
+// Cases 18–24 and 26–32 drive that engine; 25 is its row in Settings. The
+// review of v420 added 28–31 (a displaced notice; «أزل من المشاركة» under a
+// re-share in flight and a sync on the wire; the setting turned off during a
+// review; «آخر التعديلات» after the engine published) and rows in 10, 18, 19,
+// 20 and 25; the fix after it added 32 (a notice cut short by a hold or a stop
+// — a delete's Undo, the setting off, offline — raised again, never stamped
+// seen for a window nobody saw) and a row in 20.
+//
 // Same harness as scripts/test-skips-ui.js (scripts/fp/server.js): the repo
 // over loopback on a free port, js/cloud.js replaced by the offline stub
 // ('out'), and a route filter that aborts every request that is not 127.0.0.1.
@@ -21,15 +34,60 @@
 // the request, so the wire format the Worker reads is asserted here too.
 //
 // Every expectation comes from the case's own fixture and every string through
-// t(): the same assertions run in AR/dark and EN/light. The clock is real; the
-// meal period it implies is computed HERE from the hour (5–10 breakfast, 11–15
-// lunch, 16–18 snack, else dinner), never from the app's own function.
+// t(): the same assertions run in AR/dark and EN/light. The meal period the
+// clock implies is computed HERE from the hour (5–10 breakfast, 11–15 lunch,
+// 16–18 snack, else dinner), never from the app's own function.
+//
+// THE CLOCK is Playwright's (page.clock), installed before the page loads at
+// the real time and left RUNNING: cases 1–17 and 25 meet an ordinary clock.
+// The engine's waits are 1.5 s, 12 s and 4 s, so its cases STOP the clock
+// (`account()`) and step it (`clock.run(ms)`): «nothing is sent inside the
+// window» is then a statement about the page's own timeline, not about how
+// fast this machine was. js/food.js's constants are never touched.
+//
+// THE ENGINE AND THE OLDER CASES. Under the 'out' stub Cloud.configured() is
+// false and there is no last uid; the engine asks for both before anything
+// else, so in cases 1–17 and 25 it is inert whatever they save — the loop
+// asserts those two facts, and an idle engine, before EVERY case. Only
+// `account()` opens it (a configured Cloud, a uid, a session), and the loop
+// closes it again after every case. The engine's own state (the queue, its
+// timer, the session flag, the device ledger) is module state in js/food.js:
+// `engineReset` is the ONE place this suite touches it, between cases;
+// `reboot()` is the real thing — the app opened again — where a case needs
+// exactly that.
 //
 // Seen failing on the tree before the feature was built (the project's rule: a
 // check is trusted only after it has been seen to fail), and planted defects
 // named by their case: drop the period filter (2, 3), swap the fit term (3),
 // log `servings: n` (7), spread the server's items into the draft (8), print
 // the name unescaped (14).
+// v420: every assertion cases 10, 13, 16 and 18–27 gained (their `setup:`
+// lines aside) was seen to fail on a defect planted IN MEMORY — js/food.js;
+// js/app.js for the Settings row, js/storage.js where an edit drops a field —
+// each plant caught by the assertion it was written for, in both passes (a
+// plant on an English word, in the English one). Among them: a request inside
+// the notice's window (18), an unchanged re-save shared again (18), a rejected
+// recipe retried (21), «the daily limit» not stopping the queue (22), two
+// requests in flight (23), a copy from the list shared (20), a withdrawn
+// recipe shared again (20), the user's own row kept off the card (16), a
+// marker written after an account change (24).
+// The review's fixes (28–31 and the rows added to 10, 18, 19, 20, 25), each
+// seen to fail the same way: «seen» stamped when the notice is DRAWN (18, 28),
+// a displaced notice not raised again (28), the notice raised under a hidden
+// page (28), «أوقِفها» not stamping seen (19), a session that is not the
+// device's account sending (20), a sync on the wire not waited for (20, 29),
+// the gate dropping the queue instead of holding it (29), noAuto set only
+// AFTER the withdraw (29), noAuto left on after a refused withdraw (29), the
+// setting turned off mid-review ignored (30), a marker replaced withdrawn (30),
+// the ledger not following the marker (31, js/storage.js), an orphaned copy
+// not withdrawn (31, js/app.js), the fourth term by the setting alone (10),
+// the hint the same in both states (25, js/app.js).
+// The fix after the review, seen to fail the same way: the hold wait read
+// above the notice block (32), a stopped step keeping the notice it could no
+// longer watch (32, and for the offline stop alone), «seen» stamped when the
+// notice is drawn and a displaced notice counted as seen (32), the notice
+// raised again left unwatched or cut short (32), a dependency that throws
+// under the backfill escaping the render of Food (20).
 //
 // Standalone: it runs itself behind the require.main guard and is required by
 // no other suite. QA_ONLY=<words> re-runs the cases whose name contains them.
@@ -38,10 +96,34 @@ const assert = require('node:assert/strict');
 const { chromium } = require('playwright');
 const { start, fence } = require('./fp/server.js');
 
+// The engine's state in js/food.js: one `let` declares them all, and the lint's
+// derived globals see only the first name of a declaration (__autoQueue).
+/* global __autoTimer:writable, __autoBusy, __autoOff:writable, __autoHoldUntil:writable, __autoRetried:writable, __autoNextAt:writable, __autoNoticeBtn:writable, __autoNoticeAt:writable */
+
 const ONLY = process.env.QA_ONLY || '';
 const WORKER_HOST = 'vault-calories.moathdarweesh2000.workers.dev';
 const PERIODS = ['breakfast', 'lunch', 'snack', 'dinner'];
 const XSS = '<img src=x onerror="window.__xss=1">';
+// The engine's figures BY THE SPEC (v420 §2), never read from js/food.js: the
+// wait after a trigger, the one-time notice's window, the gap between two
+// requests, the requests a device may send in a local day, the pause after
+// «the daily limit», and how long an Undo on the recipes keeps it waiting.
+const DELAY = 1500, NOTICE = 12000, GAP = 4000, DAY_MAX = 12, PAUSE = 6 * 3600 * 1000, HOLD = 11000;
+// «Try again in a minute»: the wait js/foodai.js puts on a rate-limited answer
+// (429 without the day's code), which the engine waits out once.
+const RETRY = 60000;
+// «Nothing, ever»: longer than every wait above put together.
+const QUIET = 30000;
+const UID = 'qa-user';
+// Where the page's clock starts: now — unless the Riyadh day (UTC+3, the
+// context's zone) has under three quarters of an hour left. The engine cases
+// step the clock forward — 29 minutes of page time over one page, measured —
+// and the day's ceiling (23) is counted per LOCAL day, so a run that would
+// cross midnight starts just after it instead.
+const clockStart = () => {
+  const now = Date.now(), minute = Math.floor(now / 60000 + 180) % 1440;
+  return minute >= 1395 ? now + (1441 - minute) * 60000 : now;
+};
 
 // ── the page kit ────────────────────────────────────────────────────────────
 async function openPage(browser, origin, { lang, theme }) {
@@ -60,7 +142,10 @@ async function openPage(browser, origin, { lang, theme }) {
   page.on('console', (m) => { if (m.type() === 'error' && !/Failed to load resource/.test(m.text())) errors.push(m.text()); });
   const guard = await fence(page);
   // THE WORKER STUB — registered after the fence, so it wins for this host.
-  const worker = { queue: [], calls: [] };
+  // An answer marked `gate` waits until the case lets it go (`letGo()`): the
+  // request is then IN FLIGHT for exactly as long as the case says, whatever
+  // the machine's speed. `most` is the most requests ever in flight at once.
+  const worker = { queue: [], calls: [], inflight: 0, most: 0, release: null };
   await page.route((url) => url.hostname === WORKER_HOST, async (route) => {
     const req = route.request();
     const cors = { 'access-control-allow-origin': '*', 'access-control-allow-headers': '*', 'access-control-allow-methods': 'POST, OPTIONS' };
@@ -68,21 +153,32 @@ async function openPage(browser, origin, { lang, theme }) {
     let body = null;
     try { body = req.postDataJSON(); } catch (_) { body = null; }
     worker.calls.push(body);
+    worker.inflight++;
+    worker.most = Math.max(worker.most, worker.inflight);
     const next = worker.queue.shift() || { status: 500, body: { error: 'upstream' } };
-    if (next.delay) await new Promise((r) => setTimeout(r, next.delay));
-    return route.fulfill({ status: next.status, headers: { ...cors, 'content-type': 'application/json' }, body: JSON.stringify(next.body) });
+    try {
+      if (next.delay) await new Promise((r) => setTimeout(r, next.delay));
+      if (next.gate) await new Promise((r) => { worker.release = r; });
+      return await route.fulfill({ status: next.status, headers: { ...cors, 'content-type': 'application/json' }, body: JSON.stringify(next.body) });
+    } finally { worker.inflight--; }
   });
-  await page.goto(origin + '/');
-  await page.waitForFunction(() => typeof navigate === 'function' && typeof DB !== 'undefined' && typeof FoodAI !== 'undefined');
-  await page.waitForFunction(() => !document.getElementById('splash'), null, { timeout: 8000 }).catch(() => {});
-  await page.evaluate(({ lang, theme }) => {
-    DB.prefs.setLang(lang); DB.prefs.setTheme(theme); DB.prefs.setOnboarded(); DB.notif.setAsked();
-    applyLang(lang); applyTheme(theme); hideAuthGate();
-    document.getElementById('onboard-gate')?.remove();
-    DB.nutrition.setTargets({ calories: 2000, protein: 120, carbs: 220, fat: 60 });
-    navigate('home');
-  }, { lang, theme });
+  // Every timer of the page is the clock's from its first script on (see the
+  // header); it runs like any clock until a case stops it.
+  await page.clock.install({ time: clockStart() });
   const ev = (fn, arg) => page.evaluate(fn, arg);
+  const boot = async () => {
+    await page.goto(origin + '/');
+    await page.waitForFunction(() => typeof navigate === 'function' && typeof DB !== 'undefined' && typeof FoodAI !== 'undefined');
+    await page.waitForFunction(() => !document.getElementById('splash'), null, { timeout: 8000 }).catch(() => {});
+    await page.evaluate(({ lang, theme }) => {
+      DB.prefs.setLang(lang); DB.prefs.setTheme(theme); DB.prefs.setOnboarded(); DB.notif.setAsked();
+      applyLang(lang); applyTheme(theme); hideAuthGate();
+      document.getElementById('onboard-gate')?.remove();
+      DB.nutrition.setTargets({ calories: 2000, protein: 120, carbs: 220, fat: 60 });
+      navigate('home');
+    }, { lang, theme });
+  };
+  await boot();
   const reset = (view, ctx) => ev(({ view, ctx }) => {
     try { closeModal(); } catch (_) {}
     const r = document.getElementById('modal-root'); if (r) r.innerHTML = '';
@@ -91,8 +187,35 @@ async function openPage(browser, origin, { lang, theme }) {
     navigate('home', {}, { fromPop: true });
     if (view !== 'home') navigate(view, ctx || {});
   }, { view, ctx });
-  const fresh = () => { worker.queue.length = 0; worker.calls.length = 0; };
-  return { ctx, page, ev, reset, errors, guard, lang, theme, worker, fresh };
+  const fresh = () => { worker.queue.length = 0; worker.calls.length = 0; worker.most = 0; };
+  // THE CLOCK, for the engine's cases. stop(): nothing in the page moves until
+  // run(ms) — which fires every timer due in those ms, in order — and go()
+  // hands the page its running clock back (the loop does, after every case).
+  const clock = {
+    stop: async () => { await page.clock.pauseAt((await ev(() => Date.now())) + 200); },
+    run: (ms) => page.clock.runFor(ms),
+    go: () => page.clock.resume(),
+  };
+  // The stub has RECEIVED n requests since fresh() — in flight or answered —
+  // and exactly n: `what` is the case's own sentence for that request…
+  const sent = async (n, what) => {
+    const end = Date.now() + 5000;
+    while (worker.calls.length < n && Date.now() < end) await new Promise((r) => setTimeout(r, 10));
+    assert.equal(worker.calls.length, n, `${what}: the Worker was asked ${n} time(s) by now, for: ${JSON.stringify(worker.calls.map((c) => c && c.shareRecipe && c.shareRecipe.name))}`);
+  };
+  // …and the page has had n ANSWERS since account() (pageSignIn counts them as
+  // the share call settles): the engine has acted on each as far as it can
+  // without the clock moving. The network takes real time; this waits for it.
+  const answered = async (n, what) => {
+    await sent(n, what);
+    await page.waitForFunction((n) => window.__answered >= n, n, { timeout: 5000 });
+  };
+  const letGo = () => { const r = worker.release; worker.release = null; if (r) r(); };
+  // THE APP OPENED AGAIN: a new page load — every `let` of js/food.js is new,
+  // localStorage (the blob, the device ledger) is what it was. The clock runs
+  // while it loads; the case stops it again through account().
+  const reboot = async () => { await clock.go(); await boot(); };
+  return { ctx, page, ev, reset, errors, guard, lang, theme, worker, fresh, clock, sent, answered, letGo, reboot };
 }
 
 // ── the fixture ─────────────────────────────────────────────────────────────
@@ -131,13 +254,22 @@ const rankIds = (rows, period, calLeft) => rows.filter((r) => r.meals.includes(p
 
 // ── in-page helpers ─────────────────────────────────────────────────────────
 // The five Cloud methods, as each case wants them, recording into __shr.
+// `freshRows` is what a pull PAST the caches answers ({fresh: true} — the one
+// automatic sharing makes after an approval); `fresh` counts those. A
+// `withdraw` of 'deferred' holds every withdraw call open until the case
+// answers it by its index (`withdrawWaits`), so a withdraw can be IN FLIGHT
+// while a share answers.
 async function stubCloud(page, cfg) {
   await page.evaluate((cfg) => {
-    const q = window.__shr = { pulls: 0, items: [], withdraw: [], feedback: [], release: null };
+    const q = window.__shr = { pulls: 0, fresh: 0, items: [], withdraw: [], withdrawWaits: [], feedback: [], release: null };
     const copy = (x) => JSON.parse(JSON.stringify(x));
     if (cfg.pull === 'missing') delete Cloud.pullSharedRecipes;
     else if (cfg.pull === 'deferred') Cloud.pullSharedRecipes = () => { q.pulls++; return new Promise((res) => { q.release = res; }); };
-    else Cloud.pullSharedRecipes = async () => { q.pulls++; return cfg.rows == null ? null : copy(cfg.rows); };
+    else Cloud.pullSharedRecipes = async (o) => {
+      q.pulls++;
+      if (o && o.fresh) { q.fresh++; if (cfg.freshRows) return copy(cfg.freshRows); }
+      return cfg.rows == null ? null : copy(cfg.rows);
+    };
     Cloud.getSharedRecipeItems = async (id) => {
       q.items.push(id);
       if (cfg.itemsDelay) await new Promise((r) => setTimeout(r, cfg.itemsDelay));
@@ -145,7 +277,8 @@ async function stubCloud(page, cfg) {
       return it ? copy(it) : null;
     };
     Cloud.getSession = async () => (cfg.signedIn === false ? null : { access_token: 'qa-token', user: { id: 'qa-user' } });
-    Cloud.withdrawSharedRecipe = async (id) => { q.withdraw.push(id); return copy(cfg.withdraw || { ok: true }); };
+    if (cfg.withdraw === 'deferred') Cloud.withdrawSharedRecipe = (id) => { q.withdraw.push(id); return new Promise((res) => { q.withdrawWaits.push(res); }); };
+    else Cloud.withdrawSharedRecipe = async (id) => { q.withdraw.push(id); return copy(cfg.withdraw || { ok: true }); };
     Cloud.submitFeedback = async (m, c) => { q.feedback.push([m, c]); return copy(cfg.feedback || { ok: true }); };
   }, cfg);
 }
@@ -211,11 +344,19 @@ const toastText = () => {
   const el = document.getElementById('toast');
   return el && el.classList.contains('show') ? ((el.querySelector('.toast-msg') || el).textContent || '').trim() : '';
 };
+// The toast's ACTION while it is offered («تراجع», «أوقِفها»), else ''.
+const toastAct = () => {
+  const el = document.getElementById('toast');
+  const b = el && el.classList.contains('show') && el.classList.contains('has-action') ? el.querySelector('.toast-action') : null;
+  return b ? b.textContent.trim() : '';
+};
 const rowsToday = () => DB.foodLogs.listForDate(todayISO()).map((r) => ({ name: r.name, servings: r.servings, calories: r.calories, protein: r.protein, carbs: r.carbs, fat: r.fat, source: r.source }));
 function wipe() {
   for (const d of Object.keys(STATE.foodLogs)) DB.foodLogs.listForDate(d).slice().forEach((r) => DB.foodLogs.remove(d, r.id));
   DB.recipes.list().forEach((r) => DB.recipes.remove(r.id));
   DB.nutrition.setTargets({ calories: 2000, protein: 120, carbs: 220, fat: 60 });
+  // Automatic sharing is ON by default, and every case starts from the default.
+  if (!DB.prefs.autoShare()) DB.prefs.setAutoShare(true);
 }
 const sheetUp = (page, sel) => page.waitForFunction((s) => !!document.querySelector('#modal-root .modal-overlay:not(.is-out) ' + s), sel, { timeout: 4000 });
 const sheetGone = (page) => page.waitForFunction(() => !document.querySelector('#modal-root .modal-overlay:not(.is-out)'), null, { timeout: 3000 });
@@ -235,6 +376,113 @@ async function openOwnView(page, id) {
   await page.evaluate((id) => openRecipeView(todayISO(), DB.recipes.list().find((r) => r.id === id), () => {}), id);
   await sheetUp(page, '[data-edit-view]');
 }
+const recOf = (id) => DB.recipes.list().find((x) => x.id === id) || null;
+const markOf = (id) => { const r = DB.recipes.list().find((x) => x.id === id); return (r && r.shared) || null; };
+// A signature as the marker carries it: 8 lowercase hex characters.
+const SIG = /^[0-9a-f]{8}$/;
+
+// ── automatic sharing (v420): the engine's kit ──────────────────────────────
+// THE ACCOUNT, in the page: a configured Cloud with a last uid (window.__qaUid,
+// so a case can change the account in the middle of a request), and a recorder
+// under fetch — window.__posts holds the PAGE'S time of every request to the
+// Worker, taken the instant it leaves, so «nothing was sent» never waits for
+// the network to say so.
+// window.__answered counts the share calls that have SETTLED (an answer or a
+// throw): FoodAI.shareRecipe is still the real one, called through.
+function pageSignIn(a) {
+  window.__qaUid = a.uid;
+  Cloud.configured = () => true;
+  Cloud.getLastUid = () => window.__qaUid;
+  if (!window.__qaFetch) {
+    window.__qaFetch = window.fetch;
+    window.fetch = function (input) {
+      if (String((input && input.url) || input).indexOf(a.host) !== -1) window.__posts.push(Date.now());
+      return window.__qaFetch.apply(this, arguments);
+    };
+    const share = FoodAI.shareRecipe;
+    FoodAI.shareRecipe = function () {
+      const p = share.apply(this, arguments);
+      const settle = () => { window.__answered++; };
+      p.then(settle, settle);
+      return p;
+    };
+  }
+  window.__posts = [];
+  window.__answered = 0;
+}
+// …and back to the 'out' stub's install, whatever the case set.
+function pageSignOut() {
+  Cloud.configured = () => false;
+  Cloud.getLastUid = () => null;
+  Cloud.getSession = async () => null;
+  // What cases 20 and 28 close, should they fail half-way: the own properties
+  // over the prototype's real navigator.onLine and document.visibilityState,
+  // the settled sync, the stub's sync status, DB's own loadFailed.
+  delete navigator.onLine;
+  delete document.visibilityState;
+  Cloud.isSettled = () => true;
+  qaCloud.status = 'pending';
+  if (window.__qaLoadFailed) { DB.loadFailed = window.__qaLoadFailed; delete window.__qaLoadFailed; }
+}
+// THE ENGINE'S OWN STATE, put back to a page that never shared anything: the
+// queue, its one timer, «stopped until the app is opened again», the hold, the
+// one rate-limit wait, the gap, the notice's button and when it was raised —
+// and the device ledger.
+// `seen` is whether the one-time notice was shown already. The ONE place this
+// suite writes js/food.js's module state (see the header). Answers whether a
+// request is still in flight, which a reset cannot undo.
+function engineReset(seen) {
+  __autoQueue.length = 0;
+  clearTimeout(__autoTimer);
+  __autoTimer = null; __autoOff = false; __autoHoldUntil = 0; __autoRetried = false; __autoNextAt = 0; __autoNoticeBtn = null; __autoNoticeAt = 0;
+  localStorage.removeItem(VAULT_KEYS.shareAuto);
+  if (seen) DB.prefs.setAutoShareSeen(); else delete STATE.prefs.autoShareSeen;
+  return __autoBusy;
+}
+// OPEN THE ENGINE FOR A CASE: the five Cloud methods (stubCloud's cfg), the
+// account, a clean engine — and the clock STOPPED: from here the page moves
+// only by clock.run(). `seen: false` is a device that has not shown the notice
+// yet; `keep` leaves the engine and its ledger as they are (after a reboot).
+async function account(kit, cfg = {}) {
+  await stubCloud(kit.page, { rows: [], ...cfg });
+  await kit.ev(pageSignIn, { uid: UID, host: WORKER_HOST });
+  if (!cfg.keep) assert.equal(await kit.ev(engineReset, cfg.seen !== false), false, 'setup: no request is in flight when the case begins');
+  await kit.clock.stop();
+}
+// The page's time of every request it sent to the Worker, and the device's
+// ledger as it is stored.
+const posts = (kit) => kit.ev(() => window.__posts.slice());
+const ledger = () => JSON.parse(localStorage.getItem(VAULT_KEYS.shareAuto) || 'null');
+const pageNow = () => Date.now();
+// SAVE THROUGH THE EDITOR — the engine's first trigger. A `draft` is added; an
+// `id` is opened and saved again, a new `name` typed first when given. The
+// pointer leaves the screen afterwards: a toast with an action does not time
+// out under a pointer (WCAG 2.2.1), and the notice is such a toast.
+async function editorSave(kit, { draft, id, name }) {
+  const { page, ev } = kit;
+  if (id) await ev((id) => openRecipeEditor(null, DB.recipes.list().find((r) => r.id === id), () => {}), id);
+  else await ev((d) => openRecipeEditor(null, d, () => {}), draft);
+  const live = (sel) => page.locator('#modal-root .modal-overlay:not(.is-out) ' + sel);
+  await live('#rec-rows .rec-row').first().waitFor({ timeout: 4000 });
+  if (name) await live('#rec-name').fill(name);
+  await live('#rec-save').click();
+  await page.mouse.move(0, 0);
+  assert.equal(await ev(toastText), await ev(() => t('rec_saved')), 'setup: the editor saved the recipe');
+  const want = name || (draft && draft.name);
+  return ev(({ id, want }) => DB.recipes.list().find((r) => (id ? r.id === id : r.name === want)) || null, { id, want });
+}
+// A recipe automatic sharing wants: whole servings, calories, nobody's copy.
+const dish = (name) => ({ ...BOWL, name });
+// The user's own published recipe as the community list returns it: one
+// serving of BOWL, suited to every period so the clock's is always among them.
+const ownRow = (id, name) => row(id, name, PERIODS, 254, 26, 28, 3, 2, 0);
+// Another user's «Tuna salad» (TUNA_ITEMS), suited to every period too: an
+// engine case steps the clock by minutes, and a row for the clock's period
+// alone would be off the card at the first redraw after that walk crossed
+// 05:00, 11:00, 16:00 or 19:00.
+const tunaRow = (id) => row(id, 'Tuna salad', PERIODS, 250, 30, 10, 12, 4, 30);
+// What the Worker answers.
+const APPROVE = (id, extra) => ({ status: 200, body: { verdict: 'approve', id, name: '' }, ...(extra || {}) });
 
 // ── the cases ───────────────────────────────────────────────────────────────
 const CASES = [
@@ -477,22 +725,43 @@ const CASES = [
     assert.equal((await ev(readSheet)).repErr, want.many, 'the hourly cap → «' + want.many + '»');
   }],
 
-  ['(10) share: the four terms, a request in the Worker\'s protocol, the marker {id, at}, «Stop sharing» on the view and «shared» in the picker; a corrected name is announced', async ({ page, ev, reset, worker, fresh }) => {
+  ['(10) share: the four terms — the fourth by the setting — a request in the Worker\'s protocol, the marker {id, at, sig}, «Stop sharing» on the view and «shared» in the picker; a corrected name is announced', async ({ page, ev, reset, worker, fresh }) => {
     await reset('food');
     const rec = await ownRecipe(page, BOWL);
     await stubCloud(page, { rows: [] });
     await openOwnView(page, rec.id);
     const want = await ev(() => ({ share: t('shr_share'), unshare: t('shr_unshare'), title: t('shr_share_title'), send: t('shr_send'), sending: t('shr_sending'),
-      terms: [t('shr_term_review'), t('shr_term_anon'), t('shr_term_withdraw'), t('shr_term_copy')], published: t('shr_published'), tag: t('shr_tag_shared'), note: t('shr_del_note') }));
+      terms: [t('shr_term_review'), t('shr_term_anon'), t('shr_term_withdraw')], follow: t('shr_term_follow'), copy: t('shr_term_copy'), published: t('shr_published'), tag: t('shr_tag_shared'), note: t('shr_del_note') }));
     const v = await ev(readSheet);
     assert.deepEqual(v.share, { text: want.share, disabled: false }, 'the view offers «' + want.share + '»');
     assert.ok(v.edit, 'beside «edit»');
     await page.locator('#modal-root [data-share-view]').click();
     await sheetUp(page, '#shr-send');
+    // THE FOURTH TERM SAYS WHICH HOLDS (v420): with automatic sharing on — the
+    // default — the published copy follows the recipe's later edits…
+    assert.equal(await ev(() => DB.prefs.autoShare()), true, 'setup: automatic sharing is on, the default');
+    assert.deepEqual((await ev(readSheet)).terms, [...want.terms, want.follow], 'the four terms, in order; with automatic sharing on the fourth says the copy follows your edits');
+    // …but not for a copy saved from the list (origin 'shared'): automatic
+    // sharing never follows that recipe, so its fourth line says the copy stays
+    // as sent — with the setting still on.
+    await ev(() => closeModal());
+    const fromList = await ownRecipe(page, { ...BOWL, name: 'QA copy from the list', origin: 'shared' });
+    assert.equal(await ev((id) => DB.recipes.list().find((r) => r.id === id).origin, fromList.id), 'shared', 'setup: a copy from the list carries its origin');
+    await openOwnView(page, fromList.id);
+    await page.locator('#modal-root [data-share-view]').click();
+    await sheetUp(page, '#shr-send');
+    assert.deepEqual((await ev(readSheet)).terms, [...want.terms, want.copy], 'a copy saved from the list: the fourth term says the copy stays as sent, although automatic sharing is on');
+    assert.equal(await ev(() => DB.prefs.autoShare()), true, 'setup: and the setting was on throughout');
+    // …and with it off the copy stays as it was sent. The request below leaves
+    // from this sheet: sharing by hand is what is left when the setting is off.
+    await ev(() => { closeModal(); DB.prefs.setAutoShare(false); });
+    await openOwnView(page, rec.id);
+    await page.locator('#modal-root [data-share-view]').click();
+    await sheetUp(page, '#shr-send');
     const s = await ev(readSheet);
     assert.equal(s.title, want.title, 'the share sheet\'s title');
     assert.equal(s.sub, BOWL.name, 'it names the recipe');
-    assert.deepEqual(s.terms, want.terms, 'the four terms, in order');
+    assert.deepEqual(s.terms, [...want.terms, want.copy], 'with automatic sharing off the fourth says the copy does not follow them');
     assert.deepEqual(s.send, { text: want.send, disabled: false }, '«' + want.send + '»');
     fresh();
     worker.queue.push({ status: 200, delay: 400, body: { verdict: 'approve', id: 'pub-1', name: BOWL.name } });
@@ -511,9 +780,13 @@ const CASES = [
     assert.equal(b.shareRecipe.servings, 2);
     assert.ok(b.shareRecipe.items.every((it) => JSON.stringify(Object.keys(it).sort()) === JSON.stringify(['calories', 'carbs', 'fat', 'name', 'protein', 'qty'])), 'every item has exactly six keys: ' + JSON.stringify(b.shareRecipe.items));
     assert.deepEqual(b.shareRecipe.items.map((it) => [it.name, it.qty, it.calories]), BOWL.items.map((it) => [it.name, it.qty, it.calories]), 'the items as stored');
-    const mark = await ev((id) => DB.recipes.list().find((r) => r.id === id).shared, rec.id);
-    assert.ok(mark && mark.id === 'pub-1' && typeof mark.at === 'string' && !Number.isNaN(Date.parse(mark.at)), 'the recipe carries shared = {id, at}: ' + JSON.stringify(mark));
-    assert.deepEqual(Object.keys(mark).sort(), ['at', 'id'], 'and nothing else');
+    const mark = await ev(markOf, rec.id);
+    assert.ok(mark && mark.id === 'pub-1' && typeof mark.at === 'string' && !Number.isNaN(Date.parse(mark.at)), 'the recipe carries shared = {id, at, …}: ' + JSON.stringify(mark));
+    // The sig (v420) names the content AS PUBLISHED: it is what tells a later
+    // edit from the copy everyone sees.
+    assert.deepEqual(Object.keys(mark).sort(), ['at', 'id', 'sig'], 'the marker is {id, at, sig} and nothing else');
+    assert.ok(SIG.test(mark.sig), 'the sig is 8 hex characters: ' + mark.sig);
+    assert.equal(mark.sig, await ev((id) => shrSig(DB.recipes.list().find((r) => r.id === id)), rec.id), 'and it is the signature of the recipe as it was sent');
     assert.equal(await ev(toastText), want.published, '«' + want.published + '»');
     // The picker tags it, and deleting it says the published copy stays.
     await ev(() => { closeModal(); openSavedFoodPicker(todayISO(), () => {}, 'recipes'); });
@@ -589,7 +862,7 @@ const CASES = [
     assert.equal(worker.calls.length, 0, 'and no request');
   }],
 
-  ['(13) stop sharing: the withdraw call names the published id and the marker goes; a failure keeps it and says so', async ({ page, ev, reset }) => {
+  ['(13) stop sharing: the withdraw call names the published id, the marker goes and the recipe is out of automatic sharing until it is shared by hand again; a failure keeps it and says so; a button the marker moved under only redraws', async ({ page, ev, reset, worker, fresh }) => {
     await reset('food');
     const rec = await ownRecipe(page, BOWL);
     const set = await ev((id) => DB.recipes.setShared(id, { id: 'pub-9', at: new Date().toISOString() }), rec.id);
@@ -604,16 +877,20 @@ const CASES = [
     assert.equal(await ev((id) => (DB.recipes.list().find((r) => r.id === id).shared || {}).id, rec.id), 'pub-9', 'a failure keeps the marker');
     assert.equal(await ev(toastText), want.failed, '«' + want.failed + '»');
     assert.deepEqual((await ev(readSheet)).share, { text: want.unshare, disabled: false }, 'and the button is live again');
+    assert.equal(await ev((id) => 'noAuto' in DB.recipes.list().find((r) => r.id === id), rec.id), false, 'a recipe that is still published is not taken out of automatic sharing');
     await stubCloud(page, { rows: [], withdraw: { ok: true } });
     await page.locator('#modal-root [data-share-view]').click();
     await page.waitForFunction((s) => { const b = document.querySelector('#modal-root .modal-overlay:not(.is-out) [data-share-view]'); return !!b && b.textContent.trim() === s; }, want.share, { timeout: 4000 });
     assert.deepEqual(await ev(() => window.__shr.withdraw), ['pub-9'], 'withdrawn by the published id');
     assert.equal(await ev((id) => 'shared' in DB.recipes.list().find((r) => r.id === id), rec.id), false, 'the marker is gone');
     assert.equal(await ev(toastText), want.done, '«' + want.done + '»');
+    // «Not automatically» (v420): without it automatic sharing would publish
+    // the recipe again at the next render of Food (case 20 watches that).
+    assert.equal(await ev((id) => DB.recipes.list().find((r) => r.id === id).noAuto, rec.id), true, 'and the recipe is marked noAuto: the user took it out of sharing');
     // {ok:false} with NO error: the database found nothing of ours by that id —
     // already gone (a lost reply after an earlier withdraw, or the owner's own
     // removal). It reads as withdrawn, and the marker goes too.
-    await ev((id) => DB.recipes.setShared(id, { id: 'pub-10', at: new Date().toISOString() }), rec.id);
+    await ev((id) => { DB.recipes.setNoAuto(id, false); DB.recipes.setShared(id, { id: 'pub-10', at: new Date().toISOString() }); }, rec.id);
     await stubCloud(page, { rows: [], withdraw: { ok: false } });
     await openOwnView(page, rec.id);
     assert.equal((await ev(readSheet)).share.text, want.unshare, 'setup: shared again');
@@ -622,6 +899,42 @@ const CASES = [
     assert.deepEqual(await ev(() => window.__shr.withdraw), ['pub-10'], 'asked once, by the new published id');
     assert.equal(await ev((id) => 'shared' in DB.recipes.list().find((r) => r.id === id), rec.id), false, 'an answer of «nothing to delete» clears the marker');
     assert.equal(await ev(toastText), want.done, 'and says it is no longer shared');
+    assert.equal(await ev((id) => DB.recipes.list().find((r) => r.id === id).noAuto, rec.id), true, 'and it too leaves the recipe out of automatic sharing');
+    // SHARED BY HAND AGAIN (v420): the user asked for it, so «not automatically»
+    // is lifted and the recipe follows its edits like any other.
+    await page.locator('#modal-root [data-share-view]').click();
+    await sheetUp(page, '#shr-send');
+    fresh();
+    worker.queue.push(APPROVE('pub-11'));
+    await page.locator('#shr-send').click();
+    await page.waitForFunction((u) => { const b = document.querySelector('#modal-root .modal-overlay:not(.is-out) [data-share-view]'); return !!b && b.textContent.trim() === u; }, want.unshare, { timeout: 5000 });
+    const again = await ev(recOf, rec.id);
+    assert.ok(again.shared && again.shared.id === 'pub-11' && SIG.test(again.shared.sig), 'setup: shared by hand, the marker carries its sig: ' + JSON.stringify(again.shared));
+    assert.equal('noAuto' in again, false, 'sharing it by hand lifts noAuto: ' + JSON.stringify(Object.keys(again)));
+    // THE MARKER MOVED UNDER THE OPEN SHEET (v420). Automatic sharing publishes
+    // in the background, so a view drawn with «شاركها» can be looking at a
+    // recipe that is shared by now — and a tap there must not WITHDRAW it. The
+    // tap only draws the view again, with the button that is true.
+    await ev(() => closeModal());
+    const under = await ownRecipe(page, { ...BOWL, name: 'QA moved under' });
+    await stubCloud(page, { rows: [], withdraw: { ok: true } });
+    await openOwnView(page, under.id);
+    assert.equal((await ev(readSheet)).share.text, want.share, 'setup: the view was drawn for a recipe that is not shared');
+    await ev((id) => DB.recipes.setShared(id, { id: 'pub-under', at: new Date().toISOString() }), under.id);
+    await page.locator('#modal-root [data-share-view]').click();
+    await page.waitForTimeout(200);
+    assert.deepEqual(await ev(() => window.__shr.withdraw), [], 'a tap on a «share» the recipe outgrew withdraws nothing');
+    assert.equal(await ev(() => !!document.querySelector('#modal-root #shr-send')), false, 'and it opens no share sheet for a recipe that is shared already');
+    assert.equal(((await ev(readSheet)).share || {}).text, want.unshare, 'the view is drawn again, offering «' + want.unshare + '» now');
+    assert.deepEqual(await ev((id) => { const r = DB.recipes.list().find((x) => x.id === id); return [(r.shared || {}).id, 'noAuto' in r]; }, under.id), ['pub-under', false], 'the marker stands and the recipe stays in automatic sharing');
+    // The other way round — a pull took the marker away under «Stop sharing»:
+    // the tap asks the server nothing and opens no share sheet either.
+    await ev((id) => DB.recipes.setShared(id, null), under.id);
+    await page.locator('#modal-root [data-share-view]').click();
+    await page.waitForTimeout(200);
+    assert.deepEqual(await ev(() => window.__shr.withdraw), [], 'a tap on a «stop sharing» with nothing left to stop asks the server nothing');
+    assert.equal(await ev(() => !!document.querySelector('#modal-root #shr-send')), false, 'and it does not open the share sheet by surprise');
+    assert.equal(((await ev(readSheet)).share || {}).text, want.share, 'the view is drawn again, offering «' + want.share + '»');
   }],
 
   ['(14) untrusted text: a name carrying markup never becomes an element — card, sheet, ingredients, report, «show more» — and a row with an unsafe id is dropped', async ({ page, ev, reset }) => {
@@ -703,21 +1016,44 @@ const CASES = [
     }
   }],
 
-  ['(16) the user\'s own published recipe is never suggested back to them', async ({ page, ev, reset }) => {
+  // v419 took the user's own published rows OFF their card. With automatic
+  // sharing (v420) the first rows a new install can show are the user's own, so
+  // they stay — as a row to log from, never to copy or to report.
+  ['(16) the user\'s own published recipe IS suggested, and its sheet offers no copy and no report', async ({ page, ev, reset }) => {
     const { P, O } = await periods(page);
     const rows = sixRows('qa-c16', P, O);
-    await stubCloud(page, { rows });
+    await stubCloud(page, { rows, items: { 'qa-c16-3': TUNA_ITEMS, 'qa-c16-1': TUNA_ITEMS }, itemsDelay: 300 });
     await load(page);
-    await reset('food');
-    assert.ok((await ev(readCard)).rows.includes('qa-c16-3'), 'setup: another user\'s view of it — the row is on the card');
     const rec = await ownRecipe(page, BOWL);
     const set = await ev((id) => DB.recipes.setShared(id, { id: 'qa-c16-3', at: new Date().toISOString() }), rec.id);
     assert.ok(set && set.ok !== false, 'setup: our recipe carries the published id: ' + JSON.stringify(set));
     await reset('food');
     const c = await ev(readCard);
-    assert.ok(!c.rows.includes('qa-c16-3'), 'our own published copy is off the card: ' + JSON.stringify(c.rows));
-    assert.deepEqual(c.rows, rankIds(rows.filter((r) => r.id !== 'qa-c16-3'), P, 2000), 'the others rank as before');
-    assert.equal(c.more, null, 'three left in the period, so no «show more»');
+    const want = await ev(() => ({ more: t('show_more'), log: t('shr_log'), save: t('shr_save'), mine: t('shr_in_recipes'), report: t('shr_report') }));
+    assert.ok(c && c.rows.includes('qa-c16-3'), 'our own published recipe is on the card: ' + JSON.stringify(c && c.rows));
+    assert.deepEqual(c.rows, rankIds(rows, P, 2000).slice(0, 3), 'ranked like any other row');
+    assert.equal(c.more, want.more, 'and counted: four in the period, so «' + want.more + '»');
+    // ITS SHEET, from the first paint — before the ingredients arrive: the
+    // recipe is already in the user's recipes, and nobody reports themselves.
+    await page.locator(cardRow('qa-c16-3')).click();
+    await sheetUp(page, '#shr-log');
+    const first = await ev(readSheet);
+    assert.deepEqual(first.save, { text: want.mine, disabled: true }, 'the save button is spent from the start: «' + want.mine + '»');
+    assert.equal(first.report, null, 'there is no report button on one\'s own recipe');
+    assert.deepEqual(first.log, { text: want.log, disabled: false }, 'and «' + want.log + '» is offered as on any row');
+    await page.waitForFunction(() => document.querySelectorAll('#modal-root .rec-view [data-qty]').length === 3, null, { timeout: 4000 });
+    const s = await ev(readSheet);
+    assert.deepEqual(s.save, { text: want.mine, disabled: true }, 'the ingredients arriving do not offer a copy after all');
+    assert.equal(s.report, null, 'nor a report');
+    await page.locator('#shr-log').click();
+    await sheetGone(page);
+    assert.deepEqual(await ev(rowsToday), [{ name: 'Tuna salad', servings: 1, calories: 250, protein: 30, carbs: 10, fat: 12, source: 'shared' }], 'logging a serving works as for any row');
+    assert.equal(await ev(() => DB.recipes.list().length), 1, 'and nothing was copied into the recipes');
+    // Another user's row on the same card keeps both.
+    await openRowSheet(page, 'qa-c16-1');
+    const other = await ev(readSheet);
+    assert.deepEqual(other.save, { text: want.save, disabled: false }, 'another user\'s recipe still offers «' + want.save + '»');
+    assert.deepEqual(other.report, { text: want.report, disabled: false }, 'and «' + want.report + '»');
   }],
 
   // Surfaced by cases 8, 10 and 13 (v419): guardConvenienceModal wrote
@@ -735,6 +1071,1101 @@ const CASES = [
     assert.ok(await ev(() => !!document.querySelector('#modal-root .modal-overlay:not(.is-out) [data-ql="water"]')), 'the sheet is still open after the write');
     await ev(() => closeModal());
   }],
+
+  // ── AUTOMATIC SHARING (v420) ──────────────────────────────────────────────
+  // From here a case opens the engine with account(): the clock is stopped and
+  // stepped, the Worker's answers are queued, and `posts` is the page's own
+  // record of every request on the page's own timeline. An assertion that
+  // nothing was sent always follows a clock.run(): that is when it could have.
+  ['(18) a save in the editor: the notice with «أوقِفها», then — when its window ends — exactly ONE request; the marker carries its sig, the list is pulled fresh and the card repainted; an unchanged re-save sends nothing, an edit sends one more for the same sourceId', async (kit) => {
+    const { page, ev, reset, worker, clock, answered } = kit;
+    await account(kit, { seen: false, freshRows: [ownRow('pub-18', 'QA auto bowl')] });
+    await load(page);
+    await reset('food');
+    assert.equal(await ev(readCard), null, 'setup: nobody has shared anything, so there is no card');
+    const want = await ev(() => ({ notice: t('shr_auto_notice'), stop: t('shr_auto_stop') }));
+    worker.queue.push(APPROVE('pub-18'));
+    const t0 = await ev(pageNow);
+    const rec = await editorSave(kit, { draft: dish('QA auto bowl') });
+    assert.ok(rec && !rec.shared, 'setup: the recipe is saved, and not shared');
+    // Nothing happens at once: the engine waits DELAY after its trigger.
+    await clock.run(DELAY - 100);
+    assert.notEqual(await ev(toastText), want.notice, 'no notice before the delay is up');
+    assert.equal(await ev(() => DB.prefs.autoShareSeen()), false, 'and nothing is stamped as seen');
+    await clock.run(100);
+    // THE ONE-TIME NOTICE, before the first request this account sends from here.
+    assert.deepEqual([await ev(toastText), await ev(toastAct)], [want.notice, want.stop], 'the notice says what will happen, with «' + want.stop + '» on it');
+    // «SEEN» IS WHAT ENDED ON SCREEN, not what was drawn: a notice up for a
+    // second and then replaced or hidden (case 28) must come back, so nothing
+    // is stamped while it is still up.
+    assert.equal(await ev(() => DB.prefs.autoShareSeen()), false, 'while the notice is up it is not yet «seen»: the stamp waits for its window to run out on screen');
+    assert.deepEqual(await posts(kit), [], 'and nothing was sent with it');
+    // ITS WINDOW: nothing is sent for as long as the notice stays.
+    await clock.run(NOTICE - 100);
+    assert.deepEqual(await posts(kit), [], `nothing is sent inside the notice's window (${DELAY + NOTICE - 100} ms after the save)`);
+    assert.equal(await ev(toastAct), want.stop, 'the notice is still up, «' + want.stop + '» still on offer');
+    assert.equal(await ev(() => DB.prefs.autoShareSeen()), false, 'still not «seen» a moment before the window ends');
+    assert.equal(await ev((id) => 'shared' in DB.recipes.list().find((r) => r.id === id), rec.id), false, 'and no marker was written');
+    await clock.run(100);
+    await answered(1, 'when the notice\'s window ends the recipe is sent');
+    assert.deepEqual((await posts(kit)).map((at) => at - t0), [DELAY + NOTICE], 'exactly ONE request, at the moment the window ends');
+    assert.equal(await ev(() => DB.prefs.autoShareSeen()), true, 'its window run out on screen, the notice is «seen»: the device remembers that it was shown');
+    assert.deepEqual([worker.calls[0].mode, worker.calls[0].shareRecipe.sourceId], ['share-recipe', rec.id], 'the share request, for the recipe just saved');
+    const mark = await ev(markOf, rec.id);
+    assert.ok(mark && mark.id === 'pub-18' && !Number.isNaN(Date.parse(mark.at)), 'the approval wrote the marker: ' + JSON.stringify(mark));
+    assert.deepEqual(Object.keys(mark).sort(), ['at', 'id', 'sig'], 'as {id, at, sig}');
+    assert.ok(SIG.test(mark.sig), 'the sig is 8 hex characters: ' + mark.sig);
+    assert.equal(mark.sig, await ev((id) => shrSig(DB.recipes.list().find((r) => r.id === id)), rec.id), 'and names the content as it was sent');
+    // The user's own recipe is a suggestion now: the list is read PAST both
+    // caches, and the card alone is drawn — on a Food tab nobody re-rendered.
+    await page.waitForFunction(() => !!document.querySelector('.view.active #shr-card'), null, { timeout: 3000 }).catch(() => {});
+    assert.equal(await ev(() => window.__shr.fresh), 1, 'the community list was pulled fresh, once');
+    assert.deepEqual(((await ev(readCard)) || {}).rows, ['pub-18'], 'and the card was painted, the recipe on it');
+    assert.equal(await ev(toastText), '', 'no toast per recipe');
+    // AN UNCHANGED RE-SAVE is a write and a trigger — and nothing to send: the
+    // marker's sig still names this very content.
+    await editorSave(kit, { id: rec.id });
+    await clock.run(QUIET);
+    assert.deepEqual([(await posts(kit)).length, worker.calls.length], [1, 1], 'an unchanged re-save sends nothing: the page has asked once in all, and the Worker heard once');
+    // AN EDIT moves the content away from that sig: one more request for the
+    // same recipe (the server replaces the published copy by its sourceId).
+    await stubCloud(page, { rows: [], freshRows: [ownRow('pub-18b', 'QA auto bowl, edited')] });
+    worker.queue.push(APPROVE('pub-18b'));
+    const t1 = await ev(pageNow);
+    await editorSave(kit, { id: rec.id, name: 'QA auto bowl, edited' });
+    await clock.run(DELAY - 100);
+    assert.equal((await posts(kit)).length, 1, 'the edit\'s request waits the delay too');
+    await clock.run(100);
+    assert.notEqual(await ev(toastText), want.notice, 'and there is no second notice: this device showed it once');
+    await answered(2, 'an edited recipe is sent again');
+    assert.deepEqual((await posts(kit)).slice(1).map((at) => at - t1), [DELAY], 'an edit sends ONE more, the delay after its save');
+    assert.deepEqual([worker.calls[1].shareRecipe.sourceId, worker.calls[1].shareRecipe.name], [rec.id, 'QA auto bowl, edited'], 'for the same sourceId, with the new content');
+    const mark2 = await ev(markOf, rec.id);
+    assert.equal(mark2 && mark2.id, 'pub-18b', 'the marker follows the new copy: ' + JSON.stringify(mark2));
+    assert.notEqual(mark2.sig, mark.sig, 'and its sig moved with the content');
+    assert.equal(mark2.sig, await ev((id) => shrSig(DB.recipes.list().find((r) => r.id === id)), rec.id), 'to the content as sent');
+    await page.waitForFunction(() => !!document.querySelector('.view.active #shr-card [data-shr-open="pub-18b"]'), null, { timeout: 3000 }).catch(() => {});
+    assert.deepEqual(((await ev(readCard)) || {}).rows, ['pub-18b'], 'the card is drawn again from the fresh list');
+    const led = (await ev(ledger)) || {};
+    assert.deepEqual([led.uid, led.n, led.day], [UID, 2, await ev(() => todayISO())], 'the device counted both requests, for this account and this day');
+  }],
+
+  ['(19) «أوقِفها» inside the window: no request ever, the setting off and Settings showing it; turning it on in Settings sends nothing by itself — the next render of Food does; turned off in Settings while a saved recipe waits, it stays home; a notice the keyboard holds up holds the request too', async (kit) => {
+    const { page, ev, reset, worker, fresh, clock, answered } = kit;
+    await account(kit, { seen: false });
+    await reset('food');
+    const want = await ev(() => ({ notice: t('shr_auto_notice'), stop: t('shr_auto_stop'), stopped: t('shr_auto_stopped') }));
+    const rec = await editorSave(kit, { draft: dish('QA stopped bowl') });
+    await clock.run(DELAY);
+    assert.deepEqual([await ev(toastText), await ev(toastAct)], [want.notice, want.stop], 'setup: the notice is up');
+    // «أوقِفها», one second before the window ends.
+    await clock.run(NOTICE - 1000);
+    await page.locator('#toast.show .toast-action').click();
+    await page.mouse.move(0, 0);
+    assert.equal(await ev(() => DB.prefs.autoShare()), false, '«' + want.stop + '» turns automatic sharing off');
+    assert.equal(await ev(toastText), want.stopped, 'and says so');
+    // The user ANSWERED the notice: that is «seen» too (the window never ran
+    // out on screen), so turning sharing on later shows no second notice.
+    assert.equal(await ev(() => DB.prefs.autoShareSeen()), true, '«' + want.stop + '» stamps the notice as seen');
+    await clock.run(QUIET * 2);
+    assert.deepEqual([await posts(kit), worker.calls.length, await ev((id) => 'shared' in DB.recipes.list().find((r) => r.id === id), rec.id)], [[], 0, false],
+      'no request, ever: the page sent none, the Worker heard none, and the recipe is not shared');
+    // SETTINGS shows it off…
+    await reset('settings');
+    const radios = () => [...document.querySelectorAll('.view.active [data-auto-share]')].map((b) => [b.dataset.autoShare, b.getAttribute('aria-checked')]);
+    assert.deepEqual(await ev(radios), [['1', 'false'], ['0', 'true']], 'the Settings row shows automatic sharing off');
+    // …and turning it on there sends nothing by itself.
+    await page.locator('.view.active [data-auto-share="1"]').click();
+    await page.mouse.move(0, 0);
+    assert.deepEqual(await ev(radios), [['1', 'true'], ['0', 'false']], 'setup: turned on again in Settings');
+    assert.equal(await ev(() => DB.prefs.autoShare()), true, 'setup: the setting is on');
+    await clock.run(QUIET * 2);
+    assert.deepEqual(await posts(kit), [], 'turning it on in Settings sends nothing by itself');
+    // The next render of Food is what queues the recipe — and the notice, shown
+    // once already, is not shown again.
+    worker.queue.push(APPROVE('pub-19'));
+    const t1 = await ev(pageNow);
+    await reset('food');
+    await clock.run(DELAY - 100);
+    assert.deepEqual(await posts(kit), [], 'the render\'s request waits the delay');
+    await clock.run(100);
+    assert.notEqual(await ev(toastText), want.notice, 'the notice, shown once on this device, is not shown again');
+    await answered(1, 'the next render of Food sends the recipe that was held back');
+    assert.deepEqual((await posts(kit)).map((at) => at - t1), [DELAY], 'the next render of Food sends it, the delay after the render');
+    assert.equal(worker.calls[0].shareRecipe.sourceId, rec.id, 'the recipe that was held back');
+    assert.equal(((await ev(markOf, rec.id)) || {}).id, 'pub-19', 'and it is published');
+    // TURNED OFF IN SETTINGS WHILE A RECIPE WAITS TO LEAVE. The setting is read
+    // when the request would go, not when the recipe was saved: a recipe saved
+    // with sharing on, and the row tapped off before the delay is up, stays home.
+    await clock.run(QUIET);
+    worker.queue.push(APPROVE('pub-19-late'));
+    const late = await editorSave(kit, { draft: dish('QA stopped in Settings') });
+    await clock.run(DELAY - 100);
+    await reset('settings');
+    await page.locator('.view.active [data-auto-share="0"]').click();
+    await page.mouse.move(0, 0);
+    assert.equal(await ev(() => DB.prefs.autoShare()), false, 'setup: turned off in Settings, 100 ms before the request would leave');
+    await clock.run(QUIET);
+    assert.deepEqual([(await posts(kit)).length, worker.calls.length, await ev((id) => 'shared' in DB.recipes.list().find((r) => r.id === id), late.id)], [1, 1, false],
+      'turned off in Settings while a saved recipe waits: it is never sent, and not shared');
+    // A NOTICE THE KEYBOARD HOLDS UP. A toast with an action does not time out
+    // under the keyboard's focus (WCAG 2.2.1), so the notice can outlive its
+    // window — and while «أوقِفها» is still on offer nothing is sent under it.
+    // The focus gone, the notice runs out, and only then does the recipe leave.
+    await ev(wipe);
+    await account(kit, { seen: false });
+    fresh();
+    await reset('food');
+    worker.queue.push(APPROVE('pub-19-held'));
+    await editorSave(kit, { draft: dish('QA held notice') });
+    await clock.run(DELAY);
+    await ev(() => document.querySelector('#toast .toast-action').focus());
+    await clock.run(NOTICE + QUIET);
+    assert.deepEqual([await ev(toastText), await ev(toastAct)], [want.notice, want.stop], 'setup: held by the focus, the notice outlives its window (js/ui.js showToast)');
+    assert.deepEqual(await posts(kit), [], 'nothing is sent while «' + want.stop + '» is still on offer');
+    await ev(() => document.activeElement.blur());
+    await clock.run(NOTICE + GAP);
+    await answered(1, 'the focus gone and the notice run out, the recipe is sent');
+  }],
+
+  ['(20) nothing is sent — signed out, a session that is not the device\'s account, the setting off, offline, no account id, no configured cloud, a sync not settled, a sync on the wire, a store that failed to load; 2.5 servings, a copy saved from the list, a recipe the user withdrew — and the notice is not spent on any of it; with the gates open exactly the wanted recipes go', async (kit) => {
+    const { page, ev, reset, worker, clock, answered } = kit;
+    await account(kit, { seen: false, rows: [tunaRow('qa-c20-3')], items: { 'qa-c20-3': TUNA_ITEMS } });
+    await load(page);
+    await reset('food');
+    const want = await ev(() => ({ notice: t('shr_auto_notice'), share: t('shr_share') }));
+    // A render of Food (trigger 3), then longer than every wait of the engine.
+    const silent = async (what) => {
+      await reset('food');
+      await clock.run(QUIET);
+      assert.deepEqual([await posts(kit), worker.calls.length], [[], 0], what + ': nothing is sent — the page asked nothing, the Worker heard nothing');
+      assert.equal(await ev(() => DB.prefs.autoShareSeen()), false, what + ': and the one-time notice was not spent on it');
+    };
+    // THREE RECIPES IT DOES NOT WANT, with every gate open — and nothing else
+    // in the recipes yet, so each render below is about that recipe alone.
+    // 2.5 servings: the server keeps whole servings, and would refuse it only
+    // after the day's budget was charged for the request.
+    await ownRecipe(page, { ...BOWL, name: 'QA half servings', servings: 2.5 });
+    await silent('2.5 servings');
+    // A copy saved from the community list is someone else's recipe: never
+    // published back — not at a render, not when it is saved again in the editor.
+    await openRowSheet(page, 'qa-c20-3');
+    await page.locator('#shr-save').click();
+    await page.mouse.move(0, 0);
+    const copy = await ev(() => DB.recipes.list().find((r) => r.name === 'Tuna salad') || null);
+    assert.ok(copy && copy.origin === 'shared', 'the saved copy says where it came from — origin: \'shared\': ' + JSON.stringify(copy && Object.keys(copy)));
+    await silent('a copy saved from the list');
+    await editorSave(kit, { id: copy.id });
+    await silent('that copy, saved again in the editor');
+    // A recipe the user took out of sharing stays out — after an edit as well.
+    const gone = await ownRecipe(page, dish('QA withdrawn bowl'));
+    await ev((id) => { DB.recipes.setShared(id, { id: 'pub-20', at: new Date().toISOString(), sig: shrSig(DB.recipes.list().find((r) => r.id === id)) }); }, gone.id);
+    await openOwnView(page, gone.id);
+    await page.locator('#modal-root [data-share-view]').click();
+    await page.waitForFunction((s) => { const b = document.querySelector('#modal-root .modal-overlay:not(.is-out) [data-share-view]'); return !!b && b.textContent.trim() === s; }, want.share, { timeout: 4000 });
+    assert.deepEqual(await ev(() => window.__shr.withdraw), ['pub-20'], 'setup: the user withdrew it');
+    await silent('a recipe the user withdrew');
+    await editorSave(kit, { id: gone.id, name: 'QA withdrawn bowl, edited' });
+    await silent('that recipe, after an edit');
+    // A RECIPE WHOSE ROWS ARE NOT ALL ROWS — a null an imported or pulled blob
+    // may carry (the validator keeps it): never sent, and never a throw out of
+    // the render of Food, whose handlers are bound AFTER the backfill — the
+    // water button still logs.
+    assert.equal(await ev(() => {
+      const b = JSON.parse(DB.exportJSON());
+      b.recipes.push({ id: 'qa-c20-null-row', name: 'QA null row', servings: 1, items: [null], createdAt: '2026-10-01T00:00:00.000Z', updatedAt: '2026-10-01T00:00:00.000Z' });
+      return DB.importJSON(JSON.stringify(b));
+    }), true, 'setup: a backup carrying a recipe with a null row restores');
+    assert.deepEqual(await ev(() => (DB.recipes.list().find((r) => r.id === 'qa-c20-null-row') || {}).items), [null], 'setup: and the stored recipe carries that row');
+    await silent('a recipe with a null row');
+    const water = await ev(() => DB.water.get(todayISO()));
+    await page.locator('.view.active [data-add-water="250"]').click();
+    assert.equal(await ev(() => DB.water.get(todayISO())), water + 250, 'and the render of Food kept its handlers: the water button still logs');
+    await ev(() => DB.recipes.remove('qa-c20-null-row'));
+    // A DEPENDENCY THAT THROWS under autoShareWants — a well-formed recipe and
+    // DB.recipes.totals replaced by a throw: the render of Food survives it
+    // (the backfill is fenced), its handlers are bound, and nothing is sent.
+    // A throw out of the render, should the fence be missing, is kept here so
+    // that the water button — the defect as the user meets it — is what speaks.
+    const whole = await ownRecipe(page, dish('QA well-formed under a throw'));
+    await ev(() => { window.__qaTotals = DB.recipes.totals; DB.recipes.totals = () => { throw new Error('qa: totals'); }; });
+    try {
+      const threw = await reset('food').then(() => null, (e) => String((e && e.message) || e));
+      await clock.run(QUIET);
+      const cup = await ev(() => DB.water.get(todayISO()));
+      await page.locator('.view.active [data-add-water="250"]').click();
+      assert.equal(await ev(() => DB.water.get(todayISO())), cup + 250, 'a dependency that throws under the backfill: the render of Food kept its handlers — the water button still logs');
+      assert.deepEqual([threw, await posts(kit), worker.calls.length, await ev(() => DB.prefs.autoShareSeen())], [null, [], 0, false], 'nothing escaped the render, and nothing is sent for it — the page asked nothing, the Worker heard nothing, the notice not spent');
+    } finally {
+      await ev(() => { DB.recipes.totals = window.__qaTotals; delete window.__qaTotals; });
+      await ev((id) => DB.recipes.remove(id), whole.id);
+    }
+    // NINE CLOSED GATES — every one the engine reads before a request (§2, and
+    // the review's two: the session must be the account whose recipes are on
+    // the device, and a sync on the wire is waited out — case 29 has the wait).
+    // Under each, a recipe automatic sharing would send is saved through the
+    // editor (trigger 1) — and waits, with the ones saved under the gates
+    // before it.
+    const gates = [
+      ['signed out', () => { Cloud.getSession = async () => null; }, () => { Cloud.getSession = async () => ({ access_token: 'qa-token', user: { id: 'qa-user' } }); }],
+      // a duplicate or held device, or another account's session in the tab
+      ['a session that is not the account on this device', () => { Cloud.getSession = async () => ({ access_token: 'qa-token', user: { id: 'qa-someone-else' } }); }, () => { Cloud.getSession = async () => ({ access_token: 'qa-token', user: { id: 'qa-user' } }); }],
+      ['the setting off', () => { DB.prefs.setAutoShare(false); }, () => { DB.prefs.setAutoShare(true); }],
+      ['offline', () => { Object.defineProperty(navigator, 'onLine', { configurable: true, get: () => false }); }, () => { delete navigator.onLine; }],
+      ['a session with no account id', () => { window.__qaUid = null; }, () => { window.__qaUid = 'qa-user'; }],
+      ['a cloud that is not configured', () => { Cloud.configured = () => false; }, () => { Cloud.configured = () => true; }],
+      ['the first sync not settled yet', () => { Cloud.isSettled = () => false; }, () => { Cloud.isSettled = () => true; }],
+      ['a sync on the wire', () => { qaCloud.status = 'syncing'; }, () => { qaCloud.status = 'pending'; }],
+      ['a store that failed to load (READ-ONLY)', () => { window.__qaLoadFailed = DB.loadFailed; DB.loadFailed = () => true; }, () => { DB.loadFailed = window.__qaLoadFailed; delete window.__qaLoadFailed; }],
+    ];
+    const wanted = [];
+    for (const [what, close, open] of gates) {
+      await ev(close);
+      wanted.push((await editorSave(kit, { draft: dish('QA gate: ' + what) })).id);
+      await silent(what);
+      await ev(open);
+    }
+    assert.equal(await ev(() => navigator.onLine), true, 'setup: online again');
+    // THE CONTROL — the same engine, the same recipes, every gate open: the
+    // notice it never spent comes first, then exactly the recipes saved under
+    // the gates are sent — one each — and none of the other three.
+    wanted.forEach((_, i) => worker.queue.push(APPROVE('pub-20-' + i)));
+    await reset('food');
+    await clock.run(DELAY);
+    assert.equal(await ev(toastText), want.notice, 'the control: with the gates open the notice comes');
+    await clock.run(NOTICE);
+    for (let i = 1; i <= wanted.length; i++) {
+      await answered(i, `the control: wanted recipe ${i} of ${wanted.length} is sent`);
+      await clock.run(GAP);
+    }
+    await clock.run(QUIET);
+    assert.deepEqual(worker.calls.map((c) => c.shareRecipe.sourceId).sort(), wanted.slice().sort(),
+      'the control: one request for each recipe saved under a closed gate and no other — not the 2.5 servings, the copy or the withdrawn one: ' + JSON.stringify(worker.calls.map((c) => c.shareRecipe.name)));
+  }],
+
+  ['(21) a rejection is remembered: the next renders of Food do not send the recipe again, and nothing is said about it; after an edit it is sent again; a save right after an answer waits out the gap', async (kit) => {
+    const { page, ev, reset, worker, clock, answered } = kit;
+    await account(kit);
+    const rec = await ownRecipe(page, dish('QA rejected bowl'));
+    worker.queue.push({ status: 200, body: { verdict: 'reject', reason: 'personal_data' } });
+    await reset('food');
+    await clock.run(DELAY);
+    await answered(1, 'a render of Food sends the recipe that is not published yet');
+    assert.equal(worker.calls[0].shareRecipe.sourceId, rec.id, 'the render of Food sent that recipe');
+    assert.equal(await ev((id) => 'shared' in DB.recipes.list().find((r) => r.id === id), rec.id), false, 'a rejected recipe gets no marker');
+    assert.equal(await ev(toastText), '', 'and the review\'s answer raises no toast');
+    const sig = await ev((id) => shrSig(DB.recipes.list().find((r) => r.id === id)), rec.id);
+    const tried = ((await ev(ledger)) || {}).tried || {};
+    assert.deepEqual(tried[rec.id] && [tried[rec.id].sig, tried[rec.id].reason], [sig, 'personal_data'], 'the device remembers which content was refused, and why: ' + JSON.stringify(tried));
+    for (let i = 0; i < 2; i++) { await reset('food'); await clock.run(QUIET); }
+    assert.deepEqual([(await posts(kit)).length, worker.calls.length], [1, 1], 'the next renders of Food do not send the same content again: the page has asked once in all, and the Worker heard once');
+    // After an edit it is other content, and the review is asked again.
+    worker.queue.push(APPROVE('pub-21'));
+    await editorSave(kit, { id: rec.id, name: 'QA rejected bowl, fixed' });
+    await clock.run(DELAY);
+    await answered(2, 'after an edit the recipe is sent again');
+    assert.deepEqual([worker.calls[1].shareRecipe.sourceId, worker.calls[1].shareRecipe.name], [rec.id, 'QA rejected bowl, fixed'], 'the same recipe, as it reads NOW — the queue holds ids, never a copy of the recipe');
+    assert.equal(((await ev(markOf, rec.id)) || {}).id, 'pub-21', 'and it is published');
+    // A SAVE RIGHT AFTER AN ANSWER waits out the gap: two requests are never
+    // closer than GAP, whichever trigger asks for the second.
+    worker.queue.push(APPROVE('pub-21-b'));
+    const t2 = await ev(pageNow);
+    await editorSave(kit, { id: rec.id, name: 'QA rejected bowl, fixed twice' });
+    await clock.run(GAP - 100);
+    assert.equal((await posts(kit)).length, 2, 'a recipe saved right after an answer does not leave the delay later: the gap after that answer holds for it too');
+    await clock.run(100);
+    await answered(3, 'the gap over, the new edit is sent');
+    assert.deepEqual((await posts(kit)).slice(2).map((at) => at - t2), [GAP], 'exactly a gap after the answer before it');
+  }],
+
+  ['(22) «the daily limit» stops the queue — the recipes behind it are not sent — and a later render inside the pause sends nothing; the AI budget\'s 429 does the same, and the app opened again still waits', async (kit) => {
+    const { page, ev, reset, worker, fresh, clock, answered, reboot } = kit;
+    await account(kit);
+    for (const n of ['QA limit one', 'QA limit two', 'QA limit three']) await ownRecipe(page, dish(n));
+    // THE DATABASE'S OWN CAP: 200 {verdict: 'refused', reason: 'daily_limit'}.
+    worker.queue.push({ status: 200, body: { verdict: 'refused', reason: 'daily_limit' } }, APPROVE('pub-22-a'), APPROVE('pub-22-b'));
+    await reset('food');
+    await clock.run(DELAY);
+    await answered(1, 'setup: the first of the three is sent, and refused');
+    const at = (await posts(kit))[0];
+    await clock.run(QUIET);
+    assert.deepEqual([(await posts(kit)).length, await ev(() => DB.recipes.list().filter((r) => r.shared).length)], [1, 0], 'the two recipes behind the refused one are not sent, and nothing is published');
+    assert.equal(((await ev(ledger)) || {}).until, at + PAUSE, 'the device remembers a pause of six hours from the answer');
+    await reset('food');
+    await clock.run(QUIET);
+    assert.deepEqual([(await posts(kit)).length, worker.calls.length], [1, 1], 'a later render of Food inside the pause sends nothing: the Worker heard the one refused request and no other');
+    // THE AI'S DAY BUDGET: 429 {code: 'DAILY_LIMIT'} — a throw this time, the
+    // same answer. A device with a clean ledger, the same three recipes.
+    await account(kit);
+    fresh();
+    worker.queue.push({ status: 429, body: { error: 'daily limit', code: 'DAILY_LIMIT' } }, APPROVE('pub-22-c'), APPROVE('pub-22-d'));
+    await reset('food');
+    await clock.run(DELAY);
+    await answered(1, 'setup: the first of the three is sent, and answered 429');
+    const at2 = (await posts(kit))[0];
+    await clock.run(QUIET);
+    assert.equal((await posts(kit)).length, 1, 'the AI budget\'s 429 stops the queue too: the two recipes behind it are not sent');
+    await reset('food');
+    await clock.run(QUIET);
+    assert.equal((await posts(kit)).length, 1, 'and a later render of Food sends nothing');
+    assert.equal(((await ev(ledger)) || {}).until, at2 + PAUSE, 'the device remembers the same pause, six hours from the answer');
+    // THE APP OPENED AGAIN inside the pause: a new page on the same device.
+    // Whatever the old page kept in memory is gone; the ledger's pause holds.
+    await reboot();
+    await account(kit, { keep: true });
+    await reset('food');
+    await editorSave(kit, { draft: dish('QA limit four') });
+    await clock.run(QUIET);
+    assert.deepEqual([await posts(kit), worker.calls.length, await ev(() => DB.recipes.list().filter((r) => r.shared).length)], [[], 1, 0],
+      'opened again inside the pause, the app sends nothing — not for a render, not for a save: the Worker heard the one 429 and no other, and nothing is published');
+  }],
+
+  ['(23) the backfill: a render of Food sends what is not published yet ONE AT A TIME — never two in flight, a gap after every answer — and at most ' + DAY_MAX + ' in a day', async (kit) => {
+    const { ev, reset, worker, clock, sent, answered, letGo } = kit;
+    await account(kit);
+    const N = DAY_MAX + 2;
+    const ids = await ev((n) => {
+      const out = [];
+      for (let i = 1; i <= n; i++) out.push(DB.recipes.add({ name: 'QA backfill ' + i, servings: 2, items: [{ name: 'Rice', qty: '200 g', calories: 260 + i, protein: 5, carbs: 56, fat: 1 }] }).id);
+      return out;
+    }, N);
+    // The first answer is HELD: that request is in flight for as long as this
+    // case says, whatever the machine's speed.
+    worker.queue.push(APPROVE('pub-23-1', { gate: true }));
+    for (let i = 2; i <= N; i++) worker.queue.push(APPROVE('pub-23-' + i));
+    const t0 = await ev(pageNow);
+    await reset('food');
+    await clock.run(DELAY - 100);
+    assert.deepEqual(await posts(kit), [], 'nothing before the delay');
+    await clock.run(100);
+    await sent(1, 'the delay over, the render\'s first recipe is sent');
+    // IN FLIGHT. Food is rendered again — another trigger — and the clock runs
+    // far past every wait of the engine: nothing leaves until the answer is in.
+    await reset('food');
+    await clock.run(QUIET);
+    assert.deepEqual((await posts(kit)).map((at) => at - t0), [DELAY], 'one request, and no second one while it is in flight');
+    assert.equal(worker.inflight, 1, 'setup: the first request is still unanswered');
+    letGo();
+    await answered(1, 'setup: the held answer arrives');
+    // THE GAP runs from the ANSWER: the next recipe leaves GAP after it, no sooner.
+    for (let i = 2; i <= DAY_MAX; i++) {
+      await clock.run(GAP - 100);
+      assert.equal((await posts(kit)).length, i - 1, `request ${i} waits out the gap after answer ${i - 1}`);
+      await clock.run(100);
+      await answered(i, `the gap over, request ${i} of the day leaves`);
+    }
+    // THE DAY'S CEILING: two recipes are still unpublished, and they wait.
+    await clock.run(QUIET);
+    assert.deepEqual([(await posts(kit)).length, worker.calls.length, worker.most], [DAY_MAX, DAY_MAX, 1],
+      `${DAY_MAX} requests in the day and no more, with ${N} recipes to publish — as many as the Worker heard, never two of them in flight`);
+    const asked = worker.calls.map((c) => c.shareRecipe.sourceId);
+    assert.ok(new Set(asked).size === DAY_MAX && asked.every((id) => ids.includes(id)), 'each recipe once: ' + JSON.stringify(worker.calls.map((c) => c.shareRecipe.name)));
+    assert.equal(await ev(() => DB.recipes.list().filter((r) => r.shared).length), DAY_MAX, `${DAY_MAX} are published; the other two wait for tomorrow`);
+    const led = (await ev(ledger)) || {};
+    assert.deepEqual([led.uid, led.n, led.day], [UID, DAY_MAX, await ev(() => todayISO())], 'the device counted them, for this account and this day');
+    await reset('food');
+    await clock.run(QUIET);
+    assert.equal((await posts(kit)).length, DAY_MAX, 'another render the same day sends nothing more');
+  }],
+
+  ['(24) an account change while the request is in flight: its answer writes no marker, pulls nothing and withdraws nothing, and the queue stops; a refusal that arrives after it pauses nobody', async (kit) => {
+    const { page, ev, reset, worker, fresh, clock, sent, answered, letGo } = kit;
+    await account(kit);
+    await ownRecipe(page, dish('QA other account bowl'));
+    await ownRecipe(page, dish('QA other account bowl two'));
+    worker.queue.push(APPROVE('pub-24', { gate: true }), APPROVE('pub-24-b'), APPROVE('pub-24-c'));
+    await reset('food');
+    await clock.run(DELAY);
+    await sent(1, 'setup: the first recipe is sent, its answer held');
+    // Another account signs in on this phone while the review runs.
+    await ev(() => { window.__qaUid = 'qa-someone-else'; });
+    letGo();
+    await answered(1, 'setup: the held approval arrives');
+    assert.equal(await ev(() => DB.recipes.list().filter((r) => r.shared).length), 0, 'the approval writes no marker into what is another account\'s data by now');
+    await clock.run(QUIET);
+    assert.equal((await posts(kit)).length, 1, 'and the queue stops: the second recipe is not sent in the other account\'s name');
+    assert.equal(await ev(() => window.__shr.fresh), 0, 'nothing is pulled for it');
+    assert.deepEqual(await ev(() => window.__shr.withdraw), [], 'and nothing is withdrawn in the other account\'s name');
+    const led = (await ev(ledger)) || {};
+    assert.deepEqual([led.uid, led.n], [UID, 1], 'the device ledger is still the first account\'s, its one request counted');
+    // THE CONTROL: the same engine, the account unchanged through the request.
+    await ev((uid) => { window.__qaUid = uid; }, UID);
+    await reset('food');
+    await clock.run(DELAY);
+    await answered(2, 'the control: back on the first account, a render of Food sends again');
+    assert.equal(await ev(() => DB.recipes.list().filter((r) => r.shared).length), 1, 'the control: with the account unchanged the approval does write its marker');
+    // A REFUSAL that arrives after the change writes nothing either: the day's
+    // budget answering 429 would otherwise pause the OTHER account's device.
+    await account(kit);
+    fresh();
+    worker.queue.push({ status: 429, body: { error: 'daily limit', code: 'DAILY_LIMIT' }, gate: true });
+    await reset('food');
+    await clock.run(DELAY);
+    await sent(1, 'setup: the recipe still unpublished is sent, its answer held');
+    await ev(() => { window.__qaUid = 'qa-someone-else'; });
+    letGo();
+    await answered(1, 'setup: the held 429 arrives');
+    await clock.run(QUIET);
+    const led2 = (await ev(ledger)) || {};
+    assert.deepEqual([led2.uid, led2.n, led2.until], [UID, 1, 0], 'a «daily limit» that arrives after the account changed pauses nobody: the ledger is still the first account\'s, with no pause in it');
+  }],
+
+  ['(25) Settings: «Sharing my recipes» is the first row of its group — a hint that tells the truth in both states, and two radios that say and set the state — and it fits at 375 and 320, in both states, with and without «Larger text»', async ({ page, ev, reset }) => {
+    await reset('settings');
+    const want = await ev(() => ({ group: t('set_g_data'), title: t('shr_auto'), hint: t('shr_auto_sub'), hintOff: t('shr_auto_off_sub'), on: t('shr_auto_on'), off: t('shr_auto_off') }));
+    const readRow = () => {
+      const group = [...document.querySelectorAll('.view.active .settings-group')].find((g) => g.querySelector('[data-auto-share]'));
+      if (!group) return null;
+      const sec = group.querySelector('.settings-section');   // the group's FIRST row
+      const box = sec.querySelector('.unit-toggle');
+      return {
+        group: ((group.querySelector('.settings-group-title') || {}).textContent || '').trim(),
+        first: !!sec.querySelector('[data-auto-share]'),
+        title: ((sec.querySelector('.section-title') || {}).textContent || '').trim(),
+        hints: [...sec.querySelectorAll('p.settings-hint')].map((p) => p.textContent.trim()),
+        role: box && box.getAttribute('role'), label: box && box.getAttribute('aria-label'),
+        radios: [...sec.querySelectorAll('.unit-toggle > .unit-option')].map((b) => ({ v: b.dataset.autoShare, role: b.getAttribute('role'), checked: b.getAttribute('aria-checked'), active: b.classList.contains('active'), text: b.textContent.trim() })),
+        all: document.querySelectorAll('.view.active [data-auto-share]').length,
+      };
+    };
+    const r = await ev(readRow);
+    assert.ok(r, 'the row is on the Settings screen');
+    assert.equal(r.group, want.group, 'in the «' + want.group + '» group');
+    assert.equal(r.first, true, 'as that group\'s first row');
+    assert.equal(r.title, want.title, 'titled «' + want.title + '»');
+    assert.deepEqual(r.hints, [want.hint], 'one hint, saying what automatic sharing does');
+    assert.deepEqual([r.role, r.label], ['radiogroup', want.title], 'a radiogroup, named like its title');
+    assert.deepEqual(r.radios, [{ v: '1', role: 'radio', checked: 'true', active: true, text: want.on }, { v: '0', role: 'radio', checked: 'false', active: false, text: want.off }], 'two radios: «' + want.on + '» first and chosen — the default — then «' + want.off + '»');
+    assert.equal(r.all, 2, 'and no second copy of the control');
+    await page.locator('.view.active [data-auto-share="0"]').click();
+    assert.deepEqual((await ev(readRow)).radios.map((x) => [x.v, x.checked, x.active]), [['1', 'false', false], ['0', 'true', true]], '«' + want.off + '» chosen: the row says so');
+    assert.equal(await ev(() => DB.prefs.autoShare()), false, 'and the setting is stored off');
+    // THE HINT TELLS THE TRUTH IN BOTH STATES: off, it says new recipes are not
+    // published and what is published stays until «أزل من المشاركة» — the
+    // on-state sentence would be false for the one and silent about the other.
+    assert.deepEqual((await ev(readRow)).hints, [want.hintOff], 'with «' + want.off + '» chosen the one hint reads «' + want.hintOff + '»');
+    assert.notEqual(want.hintOff, want.hint, 'setup: the two hints differ');
+    await page.locator('.view.active [data-auto-share="1"]').click();
+    assert.deepEqual((await ev(readRow)).radios.map((x) => [x.v, x.checked, x.active]), [['1', 'true', true], ['0', 'false', false]], '«' + want.on + '» chosen again');
+    assert.equal(await ev(() => DB.prefs.autoShare()), true, 'and stored on');
+    assert.deepEqual((await ev(readRow)).hints, [want.hint], 'and the hint is the on-state one again');
+    // The row fits in BOTH states: the off hint is the longer sentence.
+    try {
+      for (const on of [true, false]) {
+        await ev((on) => DB.prefs.setAutoShare(on), on);
+        for (const width of [375, 320]) {
+          await page.setViewportSize({ width, height: 812 });
+          await reset('settings');
+          for (const lg of [false, true]) {
+            const g = await ev((lg) => {
+              document.body.classList.toggle('text-lg', lg);
+              const sec = document.querySelector('.view.active [data-auto-share]').closest('.settings-section');
+              const hint = sec.querySelector('p.settings-hint'), opts = [...sec.querySelectorAll('.unit-option')];
+              const box = (el) => el.getBoundingClientRect();
+              const out = {
+                hint: hint.textContent.trim(),
+                spill: opts.filter((b) => b.scrollWidth > b.clientWidth + 1 || b.scrollHeight > b.clientHeight + 1).map((b) => `${b.dataset.autoShare} ${b.scrollWidth}x${b.scrollHeight} in ${b.clientWidth}x${b.clientHeight}`),
+                heights: opts.map((b) => Math.round(box(b).height)),
+                oneRow: new Set(opts.map((b) => Math.round(box(b).top))).size === 1,
+                hintIn: box(hint).left >= box(sec).left - 1 && box(hint).right <= box(sec).right + 1 && hint.scrollWidth <= hint.clientWidth + 1,
+                secSpill: sec.scrollWidth > sec.clientWidth + 1,
+                inView: box(sec).left >= 0 && box(sec).right <= window.innerWidth + 1,
+                pageSpill: document.documentElement.scrollWidth > window.innerWidth + 1,
+              };
+              document.body.classList.remove('text-lg');
+              return out;
+            }, lg);
+            const where = `${width}px${lg ? ' + larger text' : ''}, sharing ${on ? 'on' : 'off'}`;
+            assert.equal(g.hint, on ? want.hint : want.hintOff, `the hint for that state at ${where}`);
+            assert.deepEqual(g.spill, [], `a radio's word overflows its button at ${where}: ${g.spill.join(', ')}`);
+            assert.ok(g.heights.length === 2 && g.heights.every((h) => h === 44), `both radios on the M rung (44px) at ${where}: ${g.heights}`);
+            assert.equal(g.oneRow, true, `side by side at ${where}`);
+            assert.equal(g.hintIn, true, `the hint stays inside its row at ${where}`);
+            assert.deepEqual([g.secSpill, g.inView, g.pageSpill], [false, true, false], `the row overflows at ${where}`);
+          }
+        }
+      }
+    } finally {
+      await page.setViewportSize({ width: 375, height: 812 });
+      await ev(() => DB.prefs.setAutoShare(true));
+    }
+  }],
+
+  // Section 7 of the v420 spec lists 18–25. This one holds what its §2 and §3
+  // also promise and no case above reaches: the import chooser's «احفظ الكل»
+  // as a trigger of its own, and autoShareHold — an Undo on the recipes slice
+  // (10 s) must still work, so nothing is sent and no marker written under it —
+  // and, beside it, the notice that waits while any Undo is on the screen.
+  ['(26) the other doors: «save all» in the import chooser queues the recipes it made; under an Undo on the recipes — a copy just saved, a recipe just deleted — nothing is sent and no marker is written, and the Undo still works; the one-time notice never takes an Undo\'s place', async (kit) => {
+    const { page, ev, reset, worker, fresh, clock, sent, answered, letGo } = kit;
+    await account(kit, { rows: [tunaRow('qa-c26-3')], items: { 'qa-c26-3': TUNA_ITEMS } });
+    await load(page);
+    await reset('food');
+    const want = await ev(() => ({ undo: t('undo'), saved: t('shr_saved'), deleted: t('rec_deleted'), undone: t('updated') }));
+    // «احفظ الكل»: the chooser saves every dish it holds, and Food is not
+    // rendered again — only that tap can have queued them.
+    worker.queue.push(APPROVE('pub-26-a'), APPROVE('pub-26-b'));
+    await ev((d) => openRecipeChooser(null, d, () => {}), [dish('QA import one'), dish('QA import two')]);
+    await page.locator('#rx-pick-all').click();
+    await page.mouse.move(0, 0);
+    const made = await ev(() => DB.recipes.list().map((r) => r.id));
+    assert.equal(made.length, 2, 'setup: «save all» saved both dishes');
+    await clock.run(DELAY - 100);
+    assert.deepEqual(await posts(kit), [], 'the chooser\'s request waits the delay');
+    await clock.run(100);
+    await answered(1, '«save all» is a trigger: the first dish it saved is sent');
+    await clock.run(GAP);
+    await answered(2, '«save all» queued every dish it saved: the second is sent a gap later');
+    assert.deepEqual(worker.calls.map((c) => c.shareRecipe.sourceId).sort(), made.slice().sort(), '«save all» queued the recipes it made: both are sent');
+    await clock.run(QUIET);
+    // (a) A REQUEST WAITING TO LEAVE. A third recipe is saved in the editor,
+    // and before its delay is up a copy is saved from the list: that Undo is on
+    // the recipes slice, and a marker written under it would turn it stale.
+    worker.queue.push(APPROVE('pub-26-c'));
+    const third = await editorSave(kit, { draft: dish('QA held bowl') });
+    await openRowSheet(page, 'qa-c26-3');
+    const t1 = await ev(pageNow);
+    await page.locator('#shr-save').click();
+    await page.mouse.move(0, 0);
+    assert.deepEqual([await ev(toastText), await ev(toastAct)], [want.saved, want.undo], 'setup: the copy is saved, its Undo on offer');
+    await ev(() => closeModal());
+    await clock.run(9000);
+    const under = (await posts(kit)).length;
+    assert.equal(await ev(toastAct), want.undo, 'setup: 9 s in, the Undo is still on offer');
+    await page.locator('#toast.show .toast-action').click();
+    await page.mouse.move(0, 0);
+    assert.deepEqual([under, await ev(toastText), await ev(() => DB.recipes.list().some((r) => r.name === 'Tuna salad'))], [2, want.undone, false],
+      'nothing was sent under the Undo (9 s in), so it answers «' + want.undone + '» — not that the recipes moved under it — and takes the copy back');
+    await clock.run(HOLD - 9000 - 100);
+    assert.equal((await posts(kit)).length, 2, `the engine waits ${HOLD} ms from the save`);
+    await clock.run(100);
+    await answered(3, 'the hold over, the waiting recipe is sent');
+    assert.deepEqual((await posts(kit)).slice(2).map((at) => at - t1), [HOLD], `exactly ${HOLD} ms after the copy was saved`);
+    assert.equal(((await ev(markOf, third.id)) || {}).id, 'pub-26-c', 'and it is published');
+    await clock.run(QUIET);
+    // (b) A REQUEST ALREADY IN FLIGHT when an Undo is offered: its approval
+    // arrives under the Undo and waits for it before writing the marker.
+    worker.queue.push(APPROVE('pub-26-d', { gate: true }));
+    const fourth = await ownRecipe(page, dish('QA in flight bowl'));
+    await reset('food');
+    await clock.run(DELAY);
+    await sent(4, 'setup: the fourth recipe is sent, its answer held');
+    await ev(() => openSavedFoodPicker(todayISO(), () => {}, 'recipes'));
+    await sheetUp(page, `[data-del-rec="${made[0]}"]`);
+    await page.locator(`#modal-root [data-del-rec="${made[0]}"]`).click();
+    await page.waitForFunction(() => !!document.querySelector('#modal-root .confirm-dialog'), null, { timeout: 3000 });
+    await page.locator('#modal-root .confirm-dialog [data-ok]').click();
+    await page.mouse.move(0, 0);
+    assert.deepEqual([await ev(toastText), await ev(toastAct)], [want.deleted, want.undo], 'setup: a recipe is deleted, its Undo on offer');
+    assert.equal(await ev((id) => DB.recipes.list().some((r) => r.id === id), made[0]), false, 'setup: it is gone');
+    await ev(() => closeModal());
+    letGo();
+    await answered(4, 'setup: the held approval arrives, under the Undo');
+    assert.equal(await ev(markOf, fourth.id), null, 'the approval that arrived under the Undo has written no marker');
+    await clock.run(9000);
+    const early = await ev(markOf, fourth.id);
+    await page.locator('#toast.show .toast-action').click();
+    await page.mouse.move(0, 0);
+    assert.deepEqual([early, await ev(toastText), await ev((id) => DB.recipes.list().some((r) => r.id === id), made[0])], [null, want.undone, true],
+      'nor 9 s in — so the delete\'s Undo answers «' + want.undone + '» too, and brings the recipe back');
+    await clock.run(HOLD - 9000 - 100);
+    assert.equal(await ev(markOf, fourth.id), null, `the marker waits ${HOLD} ms from the delete`);
+    await clock.run(100);
+    await page.waitForFunction((id) => { const r = DB.recipes.list().find((x) => x.id === id); return !!(r && r.shared); }, fourth.id, { timeout: 3000 }).catch(() => {});
+    assert.equal(((await ev(markOf, fourth.id)) || {}).id, 'pub-26-d', 'and then it is written');
+    // (c) THE ONE-TIME NOTICE NEVER TAKES AN UNDO'S PLACE. A device that has not
+    // shown it yet; a recipe is saved, and a serving logged from the list before
+    // the delay is up — that Undo (10 s, on the food log: no hold) is on screen
+    // when the notice is due. The notice waits its turn, and comes after it.
+    await ev(wipe);
+    await account(kit, { seen: false, rows: [tunaRow('qa-c26-3')], items: { 'qa-c26-3': TUNA_ITEMS } });
+    fresh();
+    await load(page);
+    await reset('food');
+    const say = await ev(() => ({ notice: t('shr_auto_notice'), stop: t('shr_auto_stop'), logged: t('rec_logged').replace('{name}', 'Tuna salad') }));
+    worker.queue.push(APPROVE('pub-26-e'));
+    await editorSave(kit, { draft: dish('QA behind an Undo') });
+    await openRowSheet(page, 'qa-c26-3');
+    await page.locator('#shr-log').click();
+    await sheetGone(page);
+    await page.mouse.move(0, 0);
+    assert.deepEqual([await ev(toastText), await ev(toastAct)], [say.logged, want.undo], 'setup: a serving is logged, its Undo on offer');
+    await clock.run(DELAY);
+    assert.deepEqual([await ev(toastText), await ev(toastAct), await ev(() => DB.prefs.autoShareSeen())], [say.logged, want.undo, false],
+      'the notice is due, and an Undo is on screen: the Undo stays, and the notice is not spent');
+    await clock.run(10000 - DELAY + GAP);
+    assert.deepEqual([await ev(toastText), await ev(toastAct), await posts(kit)], [say.notice, say.stop, []], 'the Undo gone, the notice comes — before anything is sent');
+    await clock.run(NOTICE);
+    await answered(1, 'the notice shown and its window over, the recipe is sent');
+  }],
+
+  // Also beyond section 7's list: the answers §2 names that no case above
+  // meets, and what a review meets when the recipe changed under it. Every
+  // part is a device with a clean engine; the first five have three recipes
+  // each, so «the recipes behind it» always exist.
+  ['(27) the other answers: «blocked» is remembered and stops the session; the cap on held recipes, «unavailable» and a failed request stop it and remember nothing; a rate limit is waited out once and the same recipe goes again; an approval for a recipe withdrawn or deleted meanwhile writes no marker and its copy comes down; an edit made during the review is sent after it', async (kit) => {
+    const { page, ev, reset, worker, fresh, clock, sent, answered, letGo } = kit;
+    const want = await ev(() => ({ share: t('shr_share') }));
+    // A device that never shared, three unpublished recipes, the first answer
+    // as given and approvals behind it; Food is rendered and the first request
+    // answered. Answers the id of the recipe that was sent.
+    const firstAnswer = async (px, answer, what) => {
+      await ev(wipe);
+      await account(kit);
+      fresh();
+      for (const n of ['one', 'two', 'three']) await ownRecipe(page, dish(`QA ${px} ${n}`));
+      worker.queue.push(answer, APPROVE('pub-27-' + px + '-b'), APPROVE('pub-27-' + px + '-c'));
+      await reset('food');
+      await clock.run(DELAY);
+      await answered(1, 'setup: the first recipe is sent, and ' + what);
+      return worker.calls[0].shareRecipe.sourceId;
+    };
+    // Is anything else sent — the recipes behind it, or at a later render of Food?
+    const afterwards = async () => {
+      await clock.run(QUIET);
+      await reset('food');
+      await clock.run(QUIET);
+      return [(await posts(kit)).length, worker.calls.length];
+    };
+    // «BLOCKED»: the account may not share. That content is not sent again, and
+    // nothing else is asked until the app is opened again.
+    const blocked = await firstAnswer('blocked', { status: 200, body: { verdict: 'refused', reason: 'blocked' } }, 'the account is «blocked»');
+    assert.deepEqual(await afterwards(), [1, 1], '«blocked» stops automatic sharing for the session: not the recipes behind it, not a later render of Food');
+    let led = (await ev(ledger)) || {};
+    assert.deepEqual([Object.keys(led.tried || {}), ((led.tried || {})[blocked] || {}).reason, led.until], [[blocked], 'blocked', 0], 'the refused recipe is remembered with its reason, and no pause is stored: ' + JSON.stringify(led));
+    // THE CAP ON HELD RECIPES, and «unavailable»: the session stops, and the
+    // device remembers nothing — neither is about that one recipe, or about today.
+    for (const reason of ['active_limit', 'unavailable']) {
+      await firstAnswer(reason.replace('_', '-'), { status: 200, body: { verdict: 'refused', reason } }, 'refused as «' + reason + '»');
+      assert.deepEqual(await afterwards(), [1, 1], `«${reason}» stops automatic sharing for the session too`);
+      led = (await ev(ledger)) || {};
+      assert.deepEqual([Object.keys(led.tried || {}), led.until], [[], 0], `and nothing is remembered for «${reason}» — no recipe refused, no pause: ` + JSON.stringify(led));
+    }
+    // A REQUEST THAT FAILS (the Worker answers 500): no second try, the same stop.
+    await firstAnswer('failed', { status: 500, body: { error: 'upstream' } }, 'the request fails');
+    assert.deepEqual(await afterwards(), [1, 1], 'a request that fails stops automatic sharing for the session: it is not tried again, and the recipes behind it wait');
+    led = (await ev(ledger)) || {};
+    assert.deepEqual([Object.keys(led.tried || {}), led.until], [[], 0], 'and a failure is not remembered as a refusal or a pause: ' + JSON.stringify(led));
+    // «TRY AGAIN IN A MINUTE» (429 without the day's code) is waited out — ONCE
+    // per opening of the app — and the SAME recipe goes again.
+    const busy = await firstAnswer('busy', { status: 429, body: { error: 'rate limited' } }, 'the Worker is busy');
+    worker.queue.splice(1, 0, { status: 429, body: { error: 'rate limited' } });   // approve · busy again · approve
+    const tBusy = (await posts(kit))[0];
+    await clock.run(RETRY - 100);
+    assert.equal((await posts(kit)).length, 1, 'a rate limit is waited out: nothing for the minute it asks for, not even the recipes behind it');
+    await clock.run(100);
+    await answered(2, 'the minute over, automatic sharing asks again');
+    assert.deepEqual([worker.calls[1].shareRecipe.sourceId, (await posts(kit))[1] - tBusy], [busy, RETRY], 'the SAME recipe, a minute after the busy answer');
+    await clock.run(GAP);
+    await answered(3, 'setup: the next recipe is sent, and the Worker is busy again');
+    await clock.run(RETRY);
+    assert.deepEqual(await afterwards(), [3, 3], 'a second rate limit is not waited out: one wait per opening of the app, then it stops');
+    // AN APPROVAL FOR A RECIPE THE USER WITHDREW WHILE IT WAS REVIEWED. The
+    // recipe was published, then edited — so it is sent again — and during that
+    // review the user takes it out of sharing. Their answer stands: no marker,
+    // and the copy the approval just published comes down as well.
+    await ev(wipe);
+    await account(kit, { withdraw: { ok: true } });
+    fresh();
+    const rec = await ownRecipe(page, dish('QA withdrawn in review'));
+    await ev((id) => { DB.recipes.setShared(id, { id: 'pub-27-old', at: new Date().toISOString(), sig: '00000000' }); }, rec.id);
+    worker.queue.push(APPROVE('pub-27-new', { gate: true }));
+    await reset('food');
+    await clock.run(DELAY);
+    await sent(1, 'setup: the edited recipe is sent again, its answer held');
+    await openOwnView(page, rec.id);
+    await page.locator('#modal-root [data-share-view]').click();
+    await page.waitForFunction((s) => { const b = document.querySelector('#modal-root .modal-overlay:not(.is-out) [data-share-view]'); return !!b && b.textContent.trim() === s; }, want.share, { timeout: 4000 });
+    assert.deepEqual(await ev(() => window.__shr.withdraw), ['pub-27-old'], 'setup: the user withdrew the published copy while the new one was reviewed');
+    await ev(() => closeModal());
+    letGo();
+    await answered(1, 'setup: the held approval arrives');
+    await page.waitForFunction(() => window.__shr.withdraw.length > 1, null, { timeout: 2000 }).catch(() => {});
+    assert.deepEqual(await ev((id) => { const r = DB.recipes.list().find((x) => x.id === id); return [r.shared || null, r.noAuto]; }, rec.id), [null, true], 'an approval for a recipe the user withdrew meanwhile writes no marker: their answer stands');
+    assert.deepEqual(await ev(() => window.__shr.withdraw), ['pub-27-old', 'pub-27-new'], 'and the copy that approval just published is taken down too');
+    // A RECIPE DELETED WHILE IT WAS REVIEWED: its marker cannot be written, and
+    // a copy no marker points at could never be withdrawn from the app — so it
+    // is taken down at once, and the queue goes on to the next recipe.
+    await ev(wipe);
+    await account(kit, { withdraw: { ok: true } });
+    fresh();
+    const doomed = await ownRecipe(page, dish('QA deleted in review'));
+    await ownRecipe(page, dish('QA behind the deleted one'));
+    worker.queue.push(APPROVE('pub-27-doomed', { gate: true }), APPROVE('pub-27-behind'));
+    await reset('food');
+    await clock.run(DELAY);
+    await sent(1, 'setup: the first recipe is sent, its answer held');
+    assert.equal(worker.calls[0].shareRecipe.sourceId, doomed.id, 'setup: it is the recipe about to be deleted');
+    await ev((id) => { DB.recipes.remove(id); }, doomed.id);
+    letGo();
+    await answered(1, 'setup: the held approval arrives');
+    await page.waitForFunction(() => window.__shr.withdraw.length > 0, null, { timeout: 2000 }).catch(() => {});
+    assert.deepEqual(await ev(() => window.__shr.withdraw), ['pub-27-doomed'], 'a marker that cannot be written — the recipe was deleted meanwhile — takes the published copy down');
+    await clock.run(GAP);
+    await answered(2, 'and the queue goes on: the recipe behind it is sent a gap later');
+    // AN EDIT MADE WHILE THE REVIEW RAN. The marker names the content AS SENT —
+    // the sig is taken before the request leaves — so the recipe reads as
+    // changed since it was published, and the next render of Food sends the edit.
+    await ev(wipe);
+    await account(kit);
+    fresh();
+    const live = await ownRecipe(page, dish('QA edited in review'));
+    const sigSent = await ev((id) => shrSig(DB.recipes.list().find((r) => r.id === id)), live.id);
+    worker.queue.push(APPROVE('pub-27-live', { gate: true }), APPROVE('pub-27-live-2'));
+    await reset('food');
+    await clock.run(DELAY);
+    await sent(1, 'setup: the recipe is sent, its answer held');
+    await ev((id) => { DB.recipes.update(id, { name: 'QA edited in review, since' }); }, live.id);
+    letGo();
+    await answered(1, 'setup: the held approval arrives');
+    assert.equal(((await ev(markOf, live.id)) || {}).sig, sigSent, 'an edit made during the review: the marker names the content as it was SENT, not as it reads now');
+    await clock.run(QUIET);
+    await reset('food');
+    await clock.run(DELAY);
+    await answered(2, 'so the next render of Food sends the edit');
+    assert.equal(worker.calls[1].shareRecipe.name, 'QA edited in review, since', 'as the recipe reads now');
+  }],
+  // ── THE REVIEW OF v420 ───────────────────────────────────────────────────
+  // (finding 8) «seen» used to be stamped the moment the notice was DRAWN, so
+  // any other toast, a tab switch or a hidden page took it away for good and
+  // the recipes went anyway. It is seen only once it ENDED on screen now: a
+  // displaced notice comes back, nothing is sent until one has run its whole
+  // window with the page visible, and under a hidden page it is not raised.
+  ['(28) a displaced notice is not spent: hidden by a navigation or replaced by another toast it comes back, and the request leaves only after a full window on screen; under a hidden page it is raised only once the page is visible again', async (kit) => {
+    const { ev, reset, worker, fresh, clock, answered } = kit;
+    const want = await ev(() => ({ notice: t('shr_auto_notice'), stop: t('shr_auto_stop') }));
+    const seen = () => ev(() => DB.prefs.autoShareSeen());
+    const noticeUp = async () => [await ev(toastText), await ev(toastAct)];
+    // When the notice on screen was raised — the engine's own record, read only.
+    const raisedAt = () => ev(() => __autoNoticeAt);
+    // (a) A NAVIGATION one second in: navigate() hides every toast.
+    await account(kit, { seen: false });
+    await reset('food');
+    worker.queue.push(APPROVE('pub-28-a'));
+    await editorSave(kit, { draft: dish('QA displaced by a tab') });
+    await clock.run(DELAY);
+    assert.deepEqual(await noticeUp(), [want.notice, want.stop], 'setup: the notice is up');
+    await clock.run(1000);
+    await ev(() => navigate('home'));
+    assert.equal(await ev(toastAct), '', 'setup: the navigation took the notice down');
+    await clock.run(1000);
+    assert.deepEqual([await noticeUp(), await seen(), await posts(kit)], [[want.notice, want.stop], false, []], 'within a second the notice is back — not spent, and nothing was sent');
+    const backA = await raisedAt();
+    await clock.run(NOTICE - 1000);
+    assert.deepEqual([await posts(kit), await seen(), await ev(toastAct)], [[], false, want.stop], 'its window counts from its RETURN: a second before that ends nothing is sent, and «' + want.stop + '» is still on offer');
+    await clock.run(1000);
+    await answered(1, 'a full window on screen later, the recipe is sent');
+    assert.deepEqual([(await posts(kit)).map((at) => at - backA), await seen()], [[NOTICE], true], 'exactly a full window after it came back — and only then is it seen');
+    // (b) ANOTHER TOAST two seconds in: showToast rewrites the one element.
+    await ev(wipe);
+    await account(kit, { seen: false });
+    fresh();
+    await reset('food');
+    worker.queue.push(APPROVE('pub-28-b'));
+    await editorSave(kit, { draft: dish('QA displaced by a toast') });
+    await clock.run(DELAY);
+    assert.deepEqual(await noticeUp(), [want.notice, want.stop], 'setup: the notice is up');
+    await clock.run(2000);
+    await ev(() => showToast('QA another toast'));
+    assert.deepEqual(await noticeUp(), ['QA another toast', ''], 'setup: another toast took its place');
+    await clock.run(1000);
+    assert.deepEqual([await noticeUp(), await seen(), await posts(kit)], [[want.notice, want.stop], false, []], 'within a second the notice is back — not spent, nothing sent');
+    const backB = await raisedAt();
+    await clock.run(NOTICE - 1000);
+    assert.deepEqual([await posts(kit), await seen()], [[], false], 'nothing a second before the returned window ends');
+    await clock.run(1000);
+    await answered(1, 'the returned window over, the recipe is sent');
+    assert.deepEqual([(await posts(kit)).map((at) => at - backB), await seen()], [[NOTICE], true], 'exactly a full window after it came back; seen then');
+    // (c) THE PAGE HIDDEN — before the notice is due, and then a second into it.
+    await ev(wipe);
+    await account(kit, { seen: false });
+    fresh();
+    await reset('food');
+    worker.queue.push(APPROVE('pub-28-c'));
+    const hide = () => ev(() => { Object.defineProperty(document, 'visibilityState', { configurable: true, get: () => 'hidden' }); });
+    const show = () => ev(() => { delete document.visibilityState; });
+    await hide();
+    await editorSave(kit, { draft: dish('QA under a hidden page') });
+    await clock.run(DELAY + QUIET);
+    assert.deepEqual([await ev(toastAct), await seen(), await posts(kit)], ['', false, []], 'hidden before the notice is due: it is not raised, not spent, and nothing is sent — however long the page stays hidden');
+    await show();
+    await clock.run(GAP);
+    assert.deepEqual([await noticeUp(), await seen()], [[want.notice, want.stop], false], 'visible again, the notice comes');
+    await clock.run(1000);
+    await hide();
+    await clock.run(1000);
+    assert.deepEqual([await ev(toastText), await seen(), await posts(kit)], ['', false, []], 'hidden a second into the notice: it is taken down — it starts over — and is not spent');
+    await clock.run(NOTICE + QUIET);
+    assert.deepEqual([await ev(toastText), await seen(), await posts(kit)], ['', false, []], 'and nothing is sent for as long as the page stays hidden');
+    await show();
+    await clock.run(GAP);
+    assert.deepEqual(await noticeUp(), [want.notice, want.stop], 'visible again, the notice is raised again');
+    const backC = await raisedAt();
+    await clock.run(NOTICE);
+    await answered(1, 'and after its full window on screen the recipe is sent');
+    assert.deepEqual([(await posts(kit)).map((at) => at - backC), await seen()], [[NOTICE], true], 'a full window after it came back; seen then');
+  }],
+
+  // (findings 1 and 6) «أزل من المشاركة» tapped while an automatic re-share of
+  // the same recipe is in flight, with the share answered FIRST: the handler
+  // marks the recipe «not automatically» BEFORE its request, so the engine's
+  // approval takes down the copy it just published instead of writing a marker
+  // the handler would then clear without withdrawing. And a sync on the wire
+  // HOLDS the queue (the other gates empty it): the request leaves by itself.
+  ['(29) «Stop sharing» under a re-share in flight, the share answered first: the engine withdraws the NEW copy, no marker, noAuto set, nothing re-sent; a refused withdraw keeps the marker and lifts noAuto; a sync on the wire holds the queue and the request leaves by itself once it is back', async (kit) => {
+    const { page, ev, reset, worker, fresh, clock, sent, answered, letGo } = kit;
+    const want = await ev(() => ({ share: t('shr_share'), unshare: t('shr_unshare'), done: t('shr_withdrawn'), network: t('auth_err_network') }));
+    // [the marker's id or null, noAuto as stored: true, or 'absent']
+    const state = (id) => ev((id) => { const r = DB.recipes.list().find((x) => x.id === id); return [(r.shared || {}).id || null, 'noAuto' in r ? r.noAuto : 'absent']; }, id);
+    const viewSays = (s) => page.waitForFunction((s) => { const b = document.querySelector('#modal-root .modal-overlay:not(.is-out) [data-share-view]'); return !!b && b.textContent.trim() === s; }, s, { timeout: 4000 });
+    // (a) The share answered first, the withdraw still open.
+    await account(kit, { withdraw: 'deferred' });
+    const rec = await ownRecipe(page, dish('QA withdrawn under a re-share'));
+    await ev((id) => { DB.recipes.setShared(id, { id: 'pub-29-old', at: new Date().toISOString(), sig: '00000000' }); }, rec.id);
+    worker.queue.push(APPROVE('pub-29-new', { gate: true }));
+    await reset('food');
+    await clock.run(DELAY);
+    await sent(1, 'setup: the edited recipe is sent again, its answer held');
+    await openOwnView(page, rec.id);
+    assert.equal((await ev(readSheet)).share.text, want.unshare, 'setup: the view offers «' + want.unshare + '»');
+    await page.locator('#modal-root [data-share-view]').click();
+    await page.waitForFunction(() => window.__shr.withdraw.length === 1, null, { timeout: 2000 });
+    assert.deepEqual([await ev(() => window.__shr.withdraw), await state(rec.id)], [['pub-29-old'], ['pub-29-old', true]], 'the tap asks for the OLD copy to come down, and marks the recipe «not automatically» BEFORE the answer');
+    letGo();
+    await answered(1, 'setup: the held approval arrives while the withdraw is still open');
+    await page.waitForFunction(() => window.__shr.withdraw.length === 2, null, { timeout: 2000 }).catch(() => {});
+    assert.deepEqual([await ev(() => window.__shr.withdraw), await state(rec.id)], [['pub-29-old', 'pub-29-new'], ['pub-29-old', true]], 'the approval finds the recipe out of sharing: it writes no marker and takes its NEW copy down');
+    // The database answers the first withdraw: nothing of yours by that id (the
+    // re-share replaced it) — read as already gone.
+    await ev(() => window.__shr.withdrawWaits[0]({ ok: false }));
+    await viewSays(want.share);
+    assert.deepEqual([await state(rec.id), await ev(toastText)], [[null, true], want.done], 'the withdraw answered: no marker, «not automatically» stands, and the view says it is no longer shared');
+    await ev(() => closeModal());
+    await clock.run(QUIET);
+    await reset('food');
+    await clock.run(QUIET);
+    assert.deepEqual([(await posts(kit)).length, worker.calls.length, await ev(() => window.__shr.withdraw)], [1, 1, ['pub-29-old', 'pub-29-new']], 'and nothing is sent again — one request in all, the two withdraws and no other');
+    // (b) A withdraw REFUSED with a reason: the copy is still published, so the
+    // flag set before the request goes back to what it was.
+    await ev(wipe);
+    await account(kit, { withdraw: { ok: false, error: 'offline' } });
+    fresh();
+    const kept = await ownRecipe(page, dish('QA withdraw refused'));
+    await ev((id) => { DB.recipes.setShared(id, { id: 'pub-29-kept', at: new Date().toISOString(), sig: '00000000' }); }, kept.id);
+    await openOwnView(page, kept.id);
+    await page.locator('#modal-root [data-share-view]').click();
+    await page.waitForTimeout(200);
+    assert.deepEqual([await ev(() => window.__shr.withdraw), await state(kept.id), await ev(toastText)], [['pub-29-kept'], ['pub-29-kept', 'absent'], want.network], 'a withdraw refused with a reason (offline): the marker stays, «not automatically» is lifted again, and the view says why');
+    assert.equal(await ev((id) => autoShareWants(DB.recipes.list().find((r) => r.id === id)), kept.id), true, 'so automatic sharing still follows that recipe (it reads as edited since it was published)');
+    await ev(() => closeModal());
+    // (c) A SYNC ON THE WIRE holds the queue: nothing leaves while it lasts, and
+    // the request leaves by itself once it is over — no save, no render of Food.
+    await ev(wipe);
+    await account(kit);
+    fresh();
+    worker.queue.push(APPROVE('pub-29-sync'));
+    await ev(() => { qaCloud.status = 'syncing'; });
+    const held = await editorSave(kit, { draft: dish('QA behind a sync') });
+    await clock.run(DELAY + QUIET);
+    assert.deepEqual([await posts(kit), await ev(() => __autoQueue.length)], [[], 1], 'a sync on the wire: nothing is sent, and the recipe is KEPT in the queue — the other gates empty it');
+    await ev(() => { qaCloud.status = 'pending'; });
+    await clock.run(GAP);
+    await answered(1, 'the sync over, the request leaves by itself');
+    assert.equal(worker.calls[0].shareRecipe.sourceId, held.id, 'for the recipe that waited');
+  }],
+
+  // (finding 11) The setting turned off while a request is in flight: the
+  // approval writes no marker and takes the copy down — except for a recipe
+  // that already had one: the server REPLACED its old copy, so the new id is
+  // kept, or the published copy loses its only handle in the app.
+  ['(30) the setting turned off during the review: the approval writes no marker and withdraws the new copy; for a recipe that already had a marker the marker is updated and nothing is withdrawn', async (kit) => {
+    const { page, ev, reset, worker, fresh, clock, sent, answered, letGo } = kit;
+    await account(kit, { withdraw: { ok: true } });
+    const first = await ownRecipe(page, dish('QA setting off in review'));
+    worker.queue.push(APPROVE('pub-30-a', { gate: true }));
+    await reset('food');
+    await clock.run(DELAY);
+    await sent(1, 'setup: the recipe is sent, its answer held');
+    await ev(() => DB.prefs.setAutoShare(false));   // what the Settings row does (js/app.js)
+    letGo();
+    await answered(1, 'setup: the held approval arrives');
+    await page.waitForFunction(() => window.__shr.withdraw.length > 0, null, { timeout: 2000 }).catch(() => {});
+    assert.deepEqual([await ev(markOf, first.id), await ev(() => window.__shr.withdraw)], [null, ['pub-30-a']], 'turned off during the review: no marker, and the copy the approval published comes down');
+    await clock.run(QUIET);
+    assert.equal((await posts(kit)).length, 1, 'and nothing else is sent');
+    // A recipe that already had a marker: the re-share REPLACED its old copy.
+    await ev(wipe);
+    await account(kit, { withdraw: { ok: true } });
+    fresh();
+    const had = await ownRecipe(page, dish('QA replaced in review'));
+    await ev((id) => { DB.recipes.setShared(id, { id: 'pub-30-old', at: new Date().toISOString(), sig: '00000000' }); }, had.id);
+    worker.queue.push(APPROVE('pub-30-new', { gate: true }));
+    await reset('food');
+    await clock.run(DELAY);
+    await sent(1, 'setup: the edited recipe is sent again, its answer held');
+    await ev(() => DB.prefs.setAutoShare(false));
+    letGo();
+    await answered(1, 'setup: the held approval arrives');
+    await page.waitForTimeout(200);
+    assert.deepEqual([((await ev(markOf, had.id)) || {}).id, await ev(() => window.__shr.withdraw)], ['pub-30-new', []], 'a recipe that already had a marker keeps the NEW id — its old copy was replaced — and nothing is withdrawn');
+  }],
+
+  // (findings 3 and 16) The marker is written outside the undo ledger, and
+  // used to turn every recipes Undo in «آخر التعديلات» STALE seconds after a
+  // save. The ledger's snapshots follow it now (js/storage.js
+  // carryRecipeField) — and the Undo of an ADD the engine had published
+  // withdraws the copy it leaves behind (js/app.js applyConvenienceUndo).
+  ['(31) «Recent changes» after the engine published: the Undo of the save still applies — not STALE — and, for an add, withdraws the published copy; the Undo of an edit keeps the marker and withdraws nothing', async (kit) => {
+    const { page, ev, reset, worker, clock, answered } = kit;
+    await account(kit, { withdraw: { ok: true } });
+    // The wipe before this case wrote its removals into the ledger under no
+    // account; the app drops a ledger another owner wrote the moment it is
+    // listed (DB.undo.list), so what follows is this account's alone.
+    await ev(() => DB.undo.list());
+    const want = await ev(() => ({ undone: t('updated'), stale: t('cx_stale') }));
+    const undoHead = async () => {
+      await ev(() => openRecentChanges());
+      await sheetUp(page, '[data-undo]');
+      const rows = await ev(() => [...document.querySelectorAll('#modal-root [data-undo]')].map((b) => b.disabled));
+      assert.equal(rows[0], false, 'setup: the newest entry offers its Undo: ' + JSON.stringify(rows));
+      await page.locator('#modal-root [data-undo]:not([disabled])').first().click();
+      await page.waitForTimeout(200);
+      return ev(toastText);
+    };
+    worker.queue.push(APPROVE('pub-31-add'));
+    await reset('food');
+    const added = await editorSave(kit, { draft: dish('QA added then undone') });
+    await clock.run(DELAY);
+    await answered(1, 'setup: the saved recipe is sent and approved');
+    assert.equal(((await ev(markOf, added.id)) || {}).id, 'pub-31-add', 'setup: its marker is written');
+    const said = await undoHead();
+    assert.notEqual(said, want.stale, 'the save\'s Undo is not STALE although the marker was written after it');
+    assert.equal(said, want.undone, 'it answers «' + want.undone + '»');
+    assert.equal(await ev((id) => DB.recipes.list().some((r) => r.id === id), added.id), false, 'and takes the recipe back');
+    await page.waitForFunction(() => window.__shr.withdraw.length > 0, null, { timeout: 2000 }).catch(() => {});
+    assert.deepEqual(await ev(() => window.__shr.withdraw), ['pub-31-add'], 'the Undo of an ADD withdraws the copy the engine published: nothing in the app held its id any more');
+    // The Undo of an EDIT: the recipe stays, with the marker of its newest copy.
+    worker.queue.push(APPROVE('pub-31-b'), APPROVE('pub-31-c'));
+    const edited = await editorSave(kit, { draft: dish('QA edited then undone') });
+    await clock.run(DELAY + GAP);
+    await answered(2, 'setup: the second recipe is sent and approved');
+    await editorSave(kit, { id: edited.id, name: 'QA edited then undone, edited' });
+    await clock.run(GAP);
+    await answered(3, 'setup: the edit is sent and approved — the marker moves to the new copy');
+    assert.equal(((await ev(markOf, edited.id)) || {}).id, 'pub-31-c', 'setup: the marker names the new copy');
+    assert.equal(await undoHead(), want.undone, 'the edit\'s Undo applies — «' + want.undone + '», not STALE');
+    assert.deepEqual(await ev((id) => { const r = DB.recipes.list().find((x) => x.id === id); return [r && r.name, ((r || {}).shared || {}).id]; }, edited.id), ['QA edited then undone', 'pub-31-c'], 'the old content is back and the marker — the newest copy\'s — stays');
+    assert.deepEqual(await ev(() => window.__shr.withdraw), ['pub-31-add'], 'and nothing is withdrawn for it');
+  }],
+
+  // (the fix after the review) A NOTICE CUT SHORT BY A HOLD OR A STOP. Case 28
+  // has the notice displaced while the step kept looking at it; here the step
+  // itself is HELD (an Undo's hold) or STOPPED (the setting off, offline)
+  // while the notice is up — and the notice was stamped «seen» at the next run
+  // for a window nobody saw, the recipes then published with no notice. The
+  // two waits sit below the notice block, and a stopped step forgets the
+  // notice it can no longer watch: the notice is raised again, and the
+  // request leaves only a full window after THAT raise.
+  ['(32) a notice cut short by a hold or a stop is not spent — a delete\'s Undo hold, the setting turned off in Settings, going offline: the notice is raised again, seen only once a full window ran on screen, and the request leaves only then', async (kit) => {
+    const { page, ev, reset, worker, fresh, clock, answered } = kit;
+    const want = await ev(() => ({ notice: t('shr_auto_notice'), stop: t('shr_auto_stop'), deleted: t('rec_deleted'), undo: t('undo') }));
+    const seen = () => ev(() => DB.prefs.autoShareSeen());
+    const noticeUp = async () => [await ev(toastText), await ev(toastAct)];
+    // When the notice on screen was raised — the engine's own record, read only.
+    const raisedAt = () => ev(() => __autoNoticeAt);
+    // THE WINDOW AFTER A RAISE: a second before it ends nothing is sent, it is
+    // not seen and «أوقِفها» is still on offer; then exactly ONE request, a full
+    // window after that raise, for the recipe saved — and only then is it seen.
+    const fullWindow = async (rec, back, what) => {
+      await clock.run(NOTICE - 100);
+      assert.deepEqual([await posts(kit), await seen(), await ev(toastAct)], [[], false, want.stop], what + ': a second before a full window after that raise nothing is sent, it is not seen, and «' + want.stop + '» is still on offer');
+      await clock.run(100);
+      await answered(1, what + ': a full window after it was raised again, the recipe is sent');
+      assert.deepEqual([(await posts(kit)).map((at) => at - back), await seen(), worker.calls[0].shareRecipe.sourceId], [[NOTICE], true, rec.id], what + ': exactly ONE request, a full window after THAT raise, for the recipe saved — and only then is it seen');
+    };
+    // (a) A DELETE FROM «وصفاتي» two seconds in: its Undo toast takes the
+    // notice's place, and the delete holds the engine for HOLD ms. The hold is
+    // read BELOW the notice block, so the step sees the notice gone before it
+    // waits — and after the hold the notice is raised again.
+    await account(kit, { seen: false });
+    await reset('food');
+    const doomed = await ownRecipe(page, dish('QA deleted meanwhile'));
+    worker.queue.push(APPROVE('pub-32-a'));
+    const recA = await editorSave(kit, { draft: dish('QA under a delete') });
+    await clock.run(DELAY);
+    assert.deepEqual(await noticeUp(), [want.notice, want.stop], 'setup: the notice is up');
+    await clock.run(2000);
+    await ev(() => openSavedFoodPicker(todayISO(), () => {}, 'recipes'));
+    await sheetUp(page, `[data-del-rec="${doomed.id}"]`);
+    await page.locator(`#modal-root [data-del-rec="${doomed.id}"]`).click();
+    await page.waitForFunction(() => !!document.querySelector('#modal-root .confirm-dialog'), null, { timeout: 3000 });
+    const delAt = await ev(pageNow);
+    await page.locator('#modal-root .confirm-dialog [data-ok]').click();
+    await page.mouse.move(0, 0);
+    assert.deepEqual([await noticeUp(), await ev((id) => DB.recipes.list().some((r) => r.id === id), doomed.id)], [[want.deleted, want.undo], false], 'setup: the recipe is deleted, and its Undo took the notice\'s place');
+    await ev(() => closeModal());
+    await clock.run(1000);
+    assert.deepEqual([await noticeUp(), await seen(), await posts(kit)], [[want.deleted, want.undo], false, []], 'the engine looked once under the Undo: the Undo stays, the notice is not spent, nothing is sent');
+    await clock.run(HOLD - 1000 - 100);
+    assert.deepEqual([await ev(toastAct), await seen(), await posts(kit)], ['', false, []], 'a moment before the hold ends: the Undo ran out, the notice is not back yet, it is not spent, nothing is sent');
+    await clock.run(100);
+    assert.deepEqual([await noticeUp(), await seen(), await posts(kit)], [[want.notice, want.stop], false, []], 'the hold over, the notice is raised AGAIN — the window the Undo cut short was not stamped seen, and nothing was sent');
+    const backA = await raisedAt();
+    assert.equal(backA - delAt, HOLD, `raised the moment the hold ended, ${HOLD} ms after the delete`);
+    await fullWindow(recA, backA, '(a)');
+    // (b) THE SETTING TURNED OFF IN SETTINGS two seconds in: the navigation
+    // takes the toast down and «متوقفة» stops the step — which forgets the
+    // notice it can no longer watch. Turned on again, the next render of Food
+    // raises it AGAIN rather than stamping the cut-short window seen.
+    await ev(wipe);
+    await account(kit, { seen: false });
+    fresh();
+    await reset('food');
+    worker.queue.push(APPROVE('pub-32-b'));
+    const recB = await editorSave(kit, { draft: dish('QA stopped in Settings') });
+    await clock.run(DELAY);
+    assert.deepEqual(await noticeUp(), [want.notice, want.stop], 'setup: the notice is up');
+    await clock.run(2000);
+    await reset('settings');
+    await page.locator('.view.active [data-auto-share="0"]').click();
+    await page.mouse.move(0, 0);
+    assert.deepEqual([await ev(() => DB.prefs.autoShare()), await ev(toastAct)], [false, ''], 'setup: «متوقفة» picked two seconds into the notice, which the navigation took down');
+    await clock.run(1000);
+    assert.deepEqual([await ev(toastAct), await seen(), await posts(kit)], ['', false, []], 'stopped by the setting a second later: no notice is raised over Settings, it is not spent, nothing is sent');
+    await clock.run(QUIET);
+    await page.locator('.view.active [data-auto-share="1"]').click();
+    await page.mouse.move(0, 0);
+    await clock.run(QUIET);
+    assert.deepEqual([await ev(() => DB.prefs.autoShare()), await ev(toastAct), await seen(), await posts(kit)], [true, '', false, []], '«تلقائية» again: nothing by itself — no notice, not spent, nothing sent');
+    await reset('food');
+    await clock.run(DELAY);
+    assert.deepEqual([await noticeUp(), await seen(), await posts(kit)], [[want.notice, want.stop], false, []], 'the next render of Food raises the notice AGAIN — the window the setting cut short was not stamped seen, and nothing was sent');
+    await fullWindow(recB, await raisedAt(), '(b)');
+    // (c) OFFLINE two seconds in: the step stops and forgets the notice, which
+    // runs out on screen by itself, unwatched. Online again, the next render
+    // of Food raises it AGAIN: nothing is sent on a window the engine could
+    // not watch to its end.
+    await ev(wipe);
+    await account(kit, { seen: false });
+    fresh();
+    await reset('food');
+    worker.queue.push(APPROVE('pub-32-c'));
+    const recC = await editorSave(kit, { draft: dish('QA gone offline') });
+    await clock.run(DELAY);
+    assert.deepEqual(await noticeUp(), [want.notice, want.stop], 'setup: the notice is up');
+    await clock.run(2000);
+    await ev(() => { Object.defineProperty(navigator, 'onLine', { configurable: true, get: () => false }); });
+    await clock.run(1000);
+    assert.deepEqual([await noticeUp(), await seen(), await posts(kit)], [[want.notice, want.stop], false, []], 'offline a second later: the step stops — the notice is left to itself on screen, it is not spent, nothing is sent');
+    await clock.run(5 * 60 * 1000);
+    assert.deepEqual([await ev(toastAct), await seen(), await posts(kit)], ['', false, []], 'five minutes offline: the notice ran out unwatched — not spent, and nothing was sent');
+    await ev(() => { delete navigator.onLine; });
+    assert.equal(await ev(() => navigator.onLine), true, 'setup: online again');
+    await reset('food');
+    await clock.run(DELAY);
+    assert.deepEqual([await noticeUp(), await seen(), await posts(kit)], [[want.notice, want.stop], false, []], 'online again, the next render of Food raises the notice AGAIN — the window nobody watched was not stamped seen, and nothing was sent');
+    await fullWindow(recC, await raisedAt(), '(c)');
+  }],
 ];
 
 async function run() {
@@ -750,10 +2181,24 @@ async function run() {
         if (ONLY && !name.includes(ONLY)) continue;   // QA_ONLY=<words>: re-run one case while planting a defect
         try {
           await kit.ev(wipe); kit.fresh();
+          // What cases 1–17 and 25 stand on (see the header), read before EVERY
+          // case: no cloud and no account — so automatic sharing sends nothing,
+          // whatever the case saves — and nothing of the engine left running.
+          assert.deepEqual(await kit.ev(() => [Cloud.configured(), Cloud.getLastUid(), __autoQueue.length, __autoBusy]), [false, null, 0, false],
+            'setup: the case starts signed out and unconfigured, the engine idle — automatic sharing is inert until account() opens it');
           await fn({ ...kit, browser, origin }); passed++; console.log(`  ok    ${lang}/${theme}  ${name}`);
         } catch (e) { failures.push(`${lang}/${theme}  ${name}: ${e.message}`); console.log(`  FAIL  ${lang}/${theme}  ${name}\n        ${e.message.split('\n')[0]}`); }
-        // Back to the 'out' stub's signed-out session, whatever the case set.
-        await kit.ev(() => { Cloud.getSession = async () => null; try { closeModal(); } catch (_) {} hideToast(); }).catch(() => {});
+        // Back to the 'out' stub's signed-out install, whatever the case set or
+        // left: an answer still held is let go and its request allowed to end (a
+        // reset cannot undo a request in flight — if the engine is waiting on the
+        // stopped clock, the clock is stepped past every wait it has); then the
+        // account is taken away, the engine put back, and the clock runs again.
+        kit.letGo();
+        await kit.ev(() => { try { closeModal(); } catch (_) {} hideToast(); }).catch(() => {});
+        await kit.page.waitForFunction(() => !__autoBusy, null, { timeout: 2000 }).catch(() => kit.clock.run(HOLD + NOTICE).catch(() => {}));
+        await kit.ev(pageSignOut).catch(() => {});
+        await kit.ev(engineReset, true).catch(() => {});
+        await kit.clock.go().catch(() => {});
       }
       await kit.ev(wipe).catch(() => {});
       if (kit.errors.length) failures.push(`${lang}/${theme} page errors: ${kit.errors.join(' | ')}`);
@@ -762,7 +2207,7 @@ async function run() {
     }
   } finally { await browser.close(); await srv.close(); }
   if (failures.length) { console.error(`FAIL  shared recipes UI: ${failures.length} failed`); failures.forEach((f) => console.error('  - ' + f)); process.exitCode = 1; return; }
-  console.log(`PASS  shared recipes UI (${passed} cases, AR/dark + EN/light, 375px): the «Suggestions» card (absent on null, on a missing method and before the answer; four period buttons with only the clock's pressed; three rows ranked by what fits the calories left, then protein per kcal; an empty period's one line; «show more» in rank order; outside the hero, kept by a water tap with no second pull), a recipe's sheet (name, one serving's figures, the ingredients fetched on the tap, a 4 → 2 scaler), «Log a serving» as one serving with Undo, «Save to my recipes» as a clean copy, the report (one feedback row, the row leaves; signed out sends nothing), sharing (four terms, the Worker's protocol, the {id, at} marker, «Stop sharing», «shared» in the picker, a corrected name announced), a rejection's translated reason, the failures (daily limit, an old Worker, signed out, non-whole servings), withdrawing (the published id; a failure keeps the marker), untrusted names never markup and unsafe ids dropped, the period buttons fitting at 375/320 with and without larger text, and the user's own published recipe never suggested back`);
+  console.log(`PASS  shared recipes UI (${passed} cases, AR/dark + EN/light, 375px): the «Suggestions» card (absent on null, on a missing method and before the answer; four period buttons with only the clock's pressed; three rows ranked by what fits the calories left, then protein per kcal; an empty period's one line; «show more» in rank order; outside the hero, kept by a water tap with no second pull), a recipe's sheet (name, one serving's figures, the ingredients fetched on the tap, a 4 → 2 scaler), «Log a serving» as one serving with Undo, «Save to my recipes» as a clean copy, the report (one feedback row, the row leaves; signed out sends nothing), sharing (four terms — the fourth by the setting — the Worker's protocol, the {id, at, sig} marker, «Stop sharing», «shared» in the picker, a corrected name announced), a rejection's translated reason, the failures (daily limit, an old Worker, signed out, non-whole servings), withdrawing (the published id; a failure keeps the marker; a withdrawn recipe leaves automatic sharing until it is shared by hand; a button the marker moved under only redraws), untrusted names never markup and unsafe ids dropped, the period buttons fitting at 375/320 with and without larger text, the user's own published recipe suggested with no copy and no report; AUTOMATIC SHARING on a stopped clock — a save's one-time notice, then one request when its window ends, the sig, the fresh pull and the repaint, nothing for an unchanged re-save and one more for an edit; «stop» inside the window, the setting turned off while a recipe waits, a notice the keyboard holds up; nothing sent signed out, with the setting off, offline, without an account id or a configured cloud, before the sync settles, on a store that failed to load, for 2.5 servings, a copy from the list or a withdrawn recipe; a rejection remembered until an edit, and the gap kept for a save right after an answer; the daily limit and the AI budget's 429 pausing the device, also after the app is opened again; the backfill one at a time, a gap after each answer, ${DAY_MAX} a day; no marker after an account change, and no pause from a refusal that arrives after one; the Settings row at 375/320; «save all» as a trigger, an Undo on the recipes kept working, the notice waiting behind an Undo; «blocked», the held-recipes cap, «unavailable», a failed request, a rate limit waited out once, an approval for a recipe withdrawn or deleted meanwhile, and an edit made during the review sent after it; THE REVIEW'S FIXES — a notice seen only once it ended on screen (displaced by a navigation or a toast it comes back; under a hidden page it waits), «stop sharing» under a re-share in flight withdrawing the new copy, a refused withdraw lifting noAuto, a sync on the wire holding the queue, the setting turned off mid-review, «Recent changes» applicable after the engine published and withdrawing an undone add's copy, the fourth term for a copy from the list, the Settings hint in both states, a null row never breaking the render of Food; THE FIX AFTER IT — a dependency that throws under the backfill never breaking that render, and a notice cut short by a hold or a stop (a delete's Undo, the setting turned off in Settings, going offline) raised again, nothing sent and nothing seen until a full window ran on screen after THAT raise`);
 }
 
 if (require.main === module) run().catch((e) => { console.error(e); process.exitCode = 1; });

@@ -2,6 +2,80 @@
 
 One section per release since v309, newest first, moved verbatim from `CLAUDE.md` in v401 (batch 6 of the 2026-09-25 review; `docs/REVIEW-2026-09-25.md`). `CLAUDE.md` is the guide and the authority for how the app works now. A section here records what one release changed and why, in the words written at the time, so a later section — or the guide — can supersede what an earlier one says.
 
+## v420 — recipes are shared automatically: «اقتراحات» fills itself
+
+**The owner, 2026-10-03, two hours after v419 went live: «مش لازم احد يشارك فيها
+بل اي وصفه حدا حطها تتشارك على طول».** v419 made sharing an act — a button, a
+sheet with four terms — and its card stayed empty until someone performed it.
+Now every recipe a signed-in user SAVES is submitted for the same automatic
+review and published without their name; the user's own published recipes
+appear in their own card too; and the recipes already in the account are sent in
+the background, in small batches, after a one-time notice.
+
+**The engine (`js/food.js`, after the share flow).** Three triggers only: the
+recipe editor's save (new or edited), the import chooser's «احفظ الكل», and a
+render of the Food tab (the backfill). One request at a time, 1.5 s after a
+trigger, 4 s between requests. A recipe is WANTED when it has no marker or its
+content changed since the published copy (`shared.sig`, eight hex characters of
+FNV-1a over the name, servings and items AS SENT), is the user's own (a copy
+saved from the list carries `origin: 'shared'` and is never republished), was
+not withdrawn (`noAuto`, set by «أزل من المشاركة», lifted by a hand share), has
+whole servings and some calories, and was not refused with this same content
+(a device ledger, `vault_share_auto`, per account: the refusals, the day's
+count, a pause). The budget is the user's: at most 12 requests a day per device
+(the day's 60 AI units are shared with the calorie features), a `daily_limit`
+or an AI-budget refusal pauses automatic sharing for six hours, a cap on held
+recipes or an unknown answer stops it until the app is opened again. The
+session must OWN the store (the `pushOnce` rule: a 'duplicate' or 'held'
+device sends nothing), a sync on the wire holds the step, an Undo on offer
+holds the marker write, and a step that throws stops the engine instead of
+asking the server again. Approval writes `{id, at, sig}` — unless the recipe
+was taken out of sharing, or the setting turned off, while the review ran: then
+no marker and the fresh copy is withdrawn. An approval pulls the list past both
+caches and repaints the card alone.
+
+**The notice, and the switch.** Before the first automatic request an account
+ever sends from a device, a toast says what happens — «تُنشر وصفاتك الآن في
+الاقتراحات دون اسمك» — with «أوقِفها» on it for twelve seconds. It counts as
+seen only when it ENDED on screen (its whole window with the page visible, or
+its button tapped); a notice replaced by another toast, hidden by a navigation,
+under a hidden page, or displaced while a gate held the step is raised again,
+and nothing is sent until one has run its window. Settings gained «مشاركة
+وصفاتي: تلقائية / متوقفة» (the haptics row's shape, first in the data group)
+whose hint says, when off, that new recipes are not published and what was
+published stays until removed one by one. The setting follows the account; the
+«seen» stamp is a device housekeeping write (`saveLocal`, listed in
+`test-sync-status.js`'s HOUSEKEEPING).
+
+**What else moved.** The card no longer hides the user's own published rows;
+in their sheet the copy button is already spent («في وصفاتي») and there is no
+report. The share sheet's fourth term is `shr_term_follow` («تُحدَّث نسختها
+المنشورة حين تعدّلها») only when the engine will follow the recipe (setting on,
+not a copy). A background marker write used to turn «آخر التعديلات» stale:
+`setShared`/`setNoAuto` now carry the written field into the ledger's snapshots
+(`carryRecipeField`), and an Undo that removes a published recipe (the undo of
+an add) withdraws its copy (`shrOrphanedIds`, from `applyConvenienceUndo`).
+`autoShareWants` is total (a blob row of `items:[null]` no longer breaks the
+Food render), and the backfill is wrapped. `privacy.html` (3 October) says it
+all: a recipe you save is reviewed and published unless you turn automatic
+sharing off, the library already in the account too, a hand share still sends
+with the setting off, removal and account deletion. No server change: the
+Worker mode, the RPCs, the caps and the budget are v419's.
+
+**How it was built and checked.** A read-only map of the code by three readers,
+a written spec, three builders in sequence (data, engine and UI, the browser
+suite) each proving every new assertion on planted defects, then three
+reviewers (logic, privacy and cost, the project's rules) with a skeptic per
+finding: 16 confirmed, three major — the notice stamped as seen the moment it
+was drawn; a session that does not own the store publishing another account's
+recipes; «أزل من المشاركة» during an in-flight re-share leaving the new copy up
+— all fixed, and the fixes checked again by two more readers, who found one
+more (a notice displaced while a gate stopped the step), fixed here too. The
+live `shared_recipes` table was empty throughout, so no v419-era copy or
+withdrawal exists that the new fields do not describe. The browser suite `scripts/test-shared-recipes-ui.js` has 32 cases now (64 runs, AR/dark and EN/light; it was 17), every one proved on planted defects; the node suite 9.
+
+Gate: 74 contracts, lint, 28 suites (pooled, 235 s, no retry). Fingerprint net, v419 → v420: the sheets lane 128/128 cells identical (the four share sheets and the recipe view unchanged); the views lane 168/176, the eight differing cells all `settings` (ar/en × dark/light × 375/412), where the new «مشاركة وصفاتي» row re-keys the siblings of its group — the declared change and nothing else.
+
 ## v419 — «اقتراحات»: meal suggestions from recipes users share, reviewed by the AI
 
 **The owner's ask (2026-10-02): a box of suggestions for breakfast, lunch, a

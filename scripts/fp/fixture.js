@@ -35,6 +35,13 @@ function seedFixture() {
   out.foodId = step('food', () => { const r = DB.foods.add({ name: 'Grilled chicken', serving: '100 g', calories: 165, protein: 31, carbs: 0, fat: 3.6 }); return r && r.id || (DB.foods.list().slice(-1)[0] || {}).id; });
   out.supplementId = step('supplement', () => { const r = DB.supplements.add({ name: 'Creatine', dose: '5 g', color: '#ff6a00', times: ['08:00'] }); return r && r.id || (DB.supplements.list().slice(-1)[0] || {}).id; });
 
+  // AUTOMATIC SHARING IS OFF in the fixture (v420). It is ON by default, and
+  // under the signed-in stub a render of Food would queue the recipe below and
+  // — after its notice — send it to the Worker: a toast over the capture, then
+  // a request the fence aborts and FAILS the run on. A capture starts no
+  // background request. (The share sheet's fourth term reads this pref too:
+  // off keeps the line every earlier capture holds.)
+  step('autoShare', () => DB.prefs.setAutoShare(false));
   step('recipe', () => DB.recipes.add({ name: 'Rice and chicken', servings: 2, items: [
     { name: 'Rice', qty: '200 غ', calories: 260, protein: 5, carbs: 56, fat: 1 },
     { name: 'Chicken', qty: '150 غ', calories: 248, protein: 46, carbs: 0, fat: 5 },

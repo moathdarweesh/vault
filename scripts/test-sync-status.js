@@ -457,6 +457,7 @@ async function housekeepingIsNotAnEdit() {
     'DB.exercises.mergeGlobal(catalog)': (c) => c.DB.exercises.mergeGlobal([{ id: 'g-row-1', name: 'Global Row', category: 'Back', image_slug: null, machine_type: null }]),
     'DB.notif.migrateFromReminders()': (c) => c.DB.notif.migrateFromReminders(),
     'DB.plan.markRestPrompted()': (c) => c.DB.plan.markRestPrompted(),
+    'DB.prefs.setAutoShareSeen()': (c) => c.DB.prefs.setAutoShareSeen(),   // the one-time notice's stamp (v420)
   };
   for (const [name, write] of Object.entries(HOUSEKEEPING)) {
     const s = context(), { c, values, keys } = s;

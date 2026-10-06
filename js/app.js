@@ -12,7 +12,7 @@
 // build. The literal below is the fallback (file://, or a stripped query) and is
 // still bumped by `npm run release` — see CLAUDE.md "CACHE WORKFLOW".
 const VAULT_BUILD = (() => {
-  const FALLBACK = 'v419';
+  const FALLBACK = 'v420';
   try {
     const src = (document.currentScript && document.currentScript.src) || '';
     const m = src.match(/[?&]v=(\d+)/);
@@ -5157,8 +5157,19 @@ function withUndo(write) {
   return { value, undoToken: head && head.token !== before ? head.token : null };
 }
 function applyConvenienceUndo(token) {
+  // The recipes BEFORE the Undo: one that removes a recipe automatic sharing
+  // published meanwhile (the Undo of an add, v420) leaves its published copy
+  // with no handle in the app, so that copy is withdrawn — fire-and-forget,
+  // as the engine's own rollbacks are, and no toast: the Undo's own stands.
+  // Deleting a recipe by hand is another matter: its copy stays (shr_del_note).
+  const recipesBefore = DB.recipes.list();
   const result = DB.undo.apply(token);
   if (!result.ok) { convenienceError(result); return; }
+  if (window.Cloud && typeof Cloud.withdrawSharedRecipe === 'function' && typeof shrOrphanedIds === 'function') {
+    try {
+      for (const id of shrOrphanedIds(recipesBefore, DB.recipes.list())) Promise.resolve().then(() => Cloud.withdrawSharedRecipe(id)).catch(() => {});
+    } catch (_) {}
+  }
   // Guided-run drafts are derived from sessions. A stale draft must not write
   // the just-undone values back into persistence when leaving the screen.
   if (viewContext.runState) viewContext.runState = {};
@@ -5530,6 +5541,15 @@ function renderSettings(el) {
     <section class="settings-group">
       <h2 class="settings-group-title">${t('set_g_data')}</h2>
       <div class="settings-section">
+        <div class="section-title">${t('shr_auto')}</div>
+        <p class="settings-hint">${DB.prefs.autoShare() ? t('shr_auto_sub') : t('shr_auto_off_sub')}</p>
+        <div class="unit-toggle" role="radiogroup" aria-label="${escapeHtml(t('shr_auto'))}">
+          <button class="unit-option ${DB.prefs.autoShare() ? 'active' : ''}" role="radio" aria-checked="${!!DB.prefs.autoShare()}" data-auto-share="1">${t('shr_auto_on')}</button>
+          <button class="unit-option ${DB.prefs.autoShare() ? '' : 'active'}" role="radio" aria-checked="${!DB.prefs.autoShare()}" data-auto-share="0">${t('shr_auto_off')}</button>
+        </div>
+      </div>
+
+      <div class="settings-section">
         <div class="section-title">${t('set_history')}</div>
         <button class="btn btn-ghost btn-block" data-plan-history>${t('cx_plan_history')}</button>
         <button class="btn btn-ghost btn-block" data-recent-changes>${t('cx_recent')}</button>
@@ -5631,6 +5651,18 @@ function renderSettings(el) {
     b.addEventListener('click', () => {
       DB.prefs.setHaptics(b.dataset.haptics === '1');
       if (b.dataset.haptics === '1') buzz();   // answer the tap with the thing itself
+      renderSettings(el);
+    })
+  );
+
+  // Automatic recipe sharing (v420) — the first row of the set_g_data group, the
+  // haptics row's shape with the hint the exercise-names row carries. The choice follows
+  // the account. Turning it ON sends nothing by itself: the next render of Food
+  // queues what is not published yet (autoShareBackfill, js/food.js); turning it
+  // OFF is read by the engine before every request.
+  el.querySelectorAll('[data-auto-share]').forEach((b) =>
+    b.addEventListener('click', () => {
+      DB.prefs.setAutoShare(b.dataset.autoShare === '1');
       renderSettings(el);
     })
   );
