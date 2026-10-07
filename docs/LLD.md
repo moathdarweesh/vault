@@ -520,7 +520,7 @@ button is invalid HTML and its click would bubble into starting the workout the 
 - **Root navigation must pass `{fromPop:true}`** so it does not push a history entry the user cannot get behind.
 - **`navigate()` must tear down every layer mounted outside `.view`** — food AI bar, lightbox, add-sheet, rest timer, toast. None is a child of the hidden section, so `display:none` cannot hide them.
 - **`escapeHtml()` wraps every value not originating in this file's own literals.** `t()` and `icon()` output is inserted raw by design.
-- **`DATE_DERIVED_VIEWS = ['home','food','foodlog']`** re-render on a day change; `session-day`/`session-run` are deliberately excluded because their date is an explicit user choice.
+- **`DATE_DERIVED_VIEWS = ['home','food','foodlog','suggestions','sleeplog','cardiolog','supplements','notifications']`** (js/app.js; this line listed the first three until v422) re-render on a day change; `session-day`/`session-run` are deliberately excluded because their date is an explicit user choice.
 
 ### 6.6 Failure modes
 

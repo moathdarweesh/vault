@@ -121,14 +121,14 @@ const ENTRIES = [
       { name: 'زيت', qty: 'ملعقة', calories: 120, protein: 0, carbs: 0, fat: 14, _src: 'ai', _auto: 'done' }] }] }, '$noop'], host: 'food' },
   // «اقتراحات» (v419): a community recipe's sheet — its ingredients answered
   // by `pre` (the harness stub's getSharedRecipeItems answers null, which would
-  // capture the failure line instead) — «show more» for lunch, the share sheet
-  // over the fixture's own recipe, and the report sheet.
+  // capture the failure line instead) — the share sheet over the fixture's own
+  // recipe, and the report sheet. («show more» left with v422: the whole list
+  // is the «suggestions» page now, in the views lane — scripts/fp/views.js.)
   { id: 'shared-recipe', name: 'openSharedRecipe', args: [{ v: SHR_ROWS[0] }, '$today', '$noop'], host: 'food',
     pre: "Cloud.getSharedRecipeItems = async function () { return [" +
          "{ name: 'عدس أحمر', qty: '٣٠٠ غ', calories: 1070, protein: 76, carbs: 180, fat: 3 }, " +
          "{ name: 'بصل', qty: 'بصلة', calories: 44, protein: 1, carbs: 10, fat: 0 }, " +
          "{ name: 'زيت زيتون', qty: 'ملعقة', calories: 120, protein: 0, carbs: 0, fat: 14 }]; };" },
-  { id: 'shared-list', name: 'openSharedSuggestions', args: [{ v: SHR_ROWS }, { v: 'lunch' }, '$noop'], host: 'food' },
   { id: 'share-recipe', name: 'openShareRecipe', args: ['$recipe', '$noop'], host: 'food' },
   { id: 'shared-report', name: 'openSharedReport', args: [{ v: SHR_ROWS[0] }, '$noop'], host: 'food' },
 ];

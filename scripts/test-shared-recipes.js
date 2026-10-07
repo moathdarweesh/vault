@@ -10,14 +10,20 @@
 // the browser suite's. Since v421, «اقتراحات اليوم» (J): the READY MEALS that
 // ship with the app (SUGGESTION_PRESETS in js/catalog.js) resolved item by item
 // against FOOD_PRESETS, their figures (suggestionItems), the pool of the three
-// sources and the card's order (suggestionPool, shrCardOrder, a card that is
-// never empty), and a copy of a ready meal that automatic sharing never
-// publishes (origin 'builtin'); and the fixes after its review: every
-// ingredient in grams or millilitres (SERVING_WEIGHTS), one meal one row (a
-// saved copy stands in for the ready meal or the community row it copies, a
-// withdrawn copy leaves the list — shrForget), and «show more» drawn bare with
-// one source. Each of those assertions was seen to fail on a defect planted in
-// memory (js/food.js, js/catalog.js). Node built-ins only; no
+// sources and an open period's list (suggestionPool, shrPanelHtml: every row,
+// by group, each group in rank order), and a copy of a ready meal that
+// automatic sharing never publishes (origin 'builtin'); and the fixes after its
+// review: every ingredient in grams or millilitres (SERVING_WEIGHTS), one meal
+// one row (a saved copy stands in for the ready meal or the community row it
+// copies, a withdrawn copy leaves the list — shrForget), and one source drawn
+// bare. Since v422 (K), the DOOR on Food (shrDoorHtml: one button, its name, no
+// row) and the PAGE behind it (renderSuggestions: the food log's top, four
+// periods in a day's order, all closed on arrival, «الآن» on the clock's, one
+// open at a time, kept open by a re-render, closed by a new arrival, the
+// calories-left line only with a target; a Back to the page — the router,
+// which is not loaded here — is the browser suite's, case 2). Each of those assertions was
+// seen to fail on a defect planted in memory (js/food.js, js/catalog.js —
+// .../scratchpad/ui421/plants.js). Node built-ins only; no
 // real storage, no account, no network — every Supabase answer and every
 // Worker reply is a fake built here.
 // Run: node scripts/test-shared-recipes.js
@@ -821,7 +827,7 @@ test('I automatic sharing', async () => {
 
 // ---------------------------------------------------------------- J. «اقتراحات اليوم» — the ready meals (v421)
 // A set of everyday meals ships with the app (SUGGESTION_PRESETS, js/catalog.js)
-// so the card answers «what do I eat today?» before any recipe exists, with no
+// so «اقتراحات اليوم» answers «what do I eat today?» before any recipe exists, with no
 // account and offline. No figure is stored there: every item names ONE
 // catalogue entry and an amount, and the figures are computed from the entry
 // (suggestionItems, js/food.js). THE CATALOGUE HALF, here: every item resolves
@@ -831,7 +837,7 @@ test('I automatic sharing', async () => {
 // and at least 4 for each of the four periods, ids unique and safe (they ride
 // into the food log as a sourceId), names unique in each language, and nothing
 // stored on a meal or an item but what the shape names.
-test('J SUGGESTION_PRESETS — the ready meals resolve against the catalogue; their figures, the pool and the card', () => {
+test('J SUGGESTION_PRESETS — the ready meals resolve against the catalogue; their figures, the pool and an open period\'s list', () => {
   const { DB, run } = foodApp();
   const presets = plain(run('typeof SUGGESTION_PRESETS === "undefined" ? null : SUGGESTION_PRESETS'));
   assert.ok(Array.isArray(presets), 'SUGGESTION_PRESETS is a list in js/catalog.js');
@@ -971,7 +977,7 @@ test('J SUGGESTION_PRESETS — the ready meals resolve against the catalogue; th
   ]) assert.equal(planted(list), null, 'a meal with ' + what + ' is null: ' + json(planted(list)));
   for (const bad of ['null', 'undefined', '"sg-x"', '{}', '{ items: "x" }']) assert.equal(plain(run('suggestionItems(' + bad + ')')), null, 'what is not a meal is null: ' + bad);
 
-  // ── 2. THE POOL (suggestionPool) AND THE CARD'S ORDER (shrCardOrder) ────
+  // ── 2. THE POOL (suggestionPool) AND AN OPEN PERIOD'S LIST (shrPanelHtml) ─
   const pool = () => plain(run('suggestionPool()'));
   const six = (it) => ({ name: it.name, qty: it.qty, calories: it.calories, protein: it.protein, carbs: it.carbs, fat: it.fat });
   // A fresh app — no recipe, no list — holds the ready meals alone, in the
@@ -1045,51 +1051,65 @@ test('J SUGGESTION_PRESETS — the ready meals resolve against the catalogue; th
   deq(judge(Object.assign({}, good, { src: 'ai', id: 'srv-1' })), Object.assign({ src: 'community' }, plain(run('cleanSharedRecipes([' + json(Object.assign({}, good, { src: 'ai', id: 'srv-1' })) + '])[0]'))), 'a source that is not one of the three reads as community, under cleanSharedRecipes');
   assert.equal(judge(Object.assign({}, good, { src: 'builtin', id: 'builtin:sg-x', recId: undefined })).recId, undefined, 'a ready row carries no recId');
   for (const bad of ['null', '[]', '"x"', '7']) assert.equal(plain(run('cleanSuggestion(' + bad + ')')), null, 'what is not a row is null: ' + bad);
-  // THE CARD'S ORDER: the best-ranked of each source — mine, community,
-  // builtin — then the rest by rank; nothing of the period lost.
+  // AN OPEN PERIOD'S LIST (v422, shrPanelHtml): EVERY row of the period —
+  // no cap, no «show more» — in the pool's three groups, mine, community,
+  // builtin, each group in rank order, each under its caption because more than
+  // one group has rows; a row carries no caption of its own.
   const byId = Object.fromEntries(pool().map((r) => [r.id, r]));
-  const order = (period, gauge) => plain(run('shrCardOrder(suggestionPool(), ' + json(period) + ', ' + json(gauge) + ')')).map((r) => r.id);
   const ranked = (period, gauge) => plain(run('rankSuggestions(suggestionPool(), ' + json(period) + ', ' + json(gauge) + ')')).map((r) => r.id);
-  for (const gauge of [null, { calLeft: 300 }]) {
-    const o = order('lunch', gauge), rk = ranked('lunch', gauge);
-    const head = (src) => rk.find((id) => byId[id].src === src);
-    deq(o.slice(0, 3), [head('mine'), head('community'), head('builtin')], 'lunch (' + json(gauge) + '): the best mine, the best community, the best builtin — ' + json(o.slice(0, 3)));
-    deq(o.slice(3), rk.filter((id) => !o.slice(0, 3).includes(id)), 'then the rest by rank');
-    deq([...o].sort(), [...rk].sort(), 'nothing of the period lost or doubled');
-    assert.ok(o.slice(0, 3).every((id, i) => rk.indexOf(id) <= rk.indexOf(o[i]) || byId[id].src !== byId[o[i]].src), 'a head is the best of its source');
+  const panel = (period, gauge) => run('shrPanelHtml(' + json(period) + ', suggestionPool(), ' + json(gauge) + ')');
+  const openIds = (html) => (html.match(/data-shr-open="([^"]+)"/g) || []).map((x) => x.slice(15, -1));
+  const groupsIn = (html) => (html.match(/data-shr-group="([a-z]+)"/g) || []).map((x) => x.slice(16, -1));
+  const captions = (html) => (html.match(/<p class="shr-src shr-group" data-shr-group="[a-z]+">([^<]*)<\/p>/g) || []).map((x) => x.replace(/<[^>]+>/g, ''));
+  const caption = (src) => run('shrSrcCaption(' + json(src) + ')');
+  const grouped = (period, gauge) => ['mine', 'community', 'builtin'].flatMap((src) => ranked(period, gauge).filter((id) => byId[id].src === src));
+  // A calories-left figure that MOVES a row inside its group, so the second
+  // pass proves the gauge reaches the page rather than repeating the first.
+  const moving = [300, 450, 600, 800].map((n) => ({ calLeft: n })).find((g) => grouped('lunch', g).join() !== grouped('lunch', null).join());
+  assert.ok(moving, 'setup: some calories-left figure reorders a lunch group');
+  for (const gauge of [null, moving]) {
+    const html = panel('lunch', gauge);
+    deq(openIds(html), grouped('lunch', gauge), 'lunch (' + json(gauge) + '): every row of the period, by group — mine, community, builtin — each group in rank order: ' + json(openIds(html).slice(0, 4)));
+    deq(groupsIn(html), ['mine', 'community', 'builtin'], 'three groups with rows: three captions, in the pool\'s order');
+    deq(captions(html), ['mine', 'community', 'builtin'].map(caption), 'each reading its source: ' + json(captions(html)));
+    assert.equal((html.match(/class="shr-src/g) || []).length, 3, 'and no row carries a caption of its own — the three captions are the groups\'');
+    assert.ok(!/shr-empty/.test(html), 'a period with rows draws no «nothing yet» line');
   }
-  const snack = order('snack', null);
-  assert.ok(byId[snack[0]].src === 'mine' && byId[snack[1]].src === 'builtin' && !snack.some((id) => byId[id].src === 'community'), 'a period with no community row: mine, then the best builtin — ' + json(snack.slice(0, 3)));
-  deq(plain(run('shrCardOrder([], "lunch", null)')), [], 'an empty pool orders to nothing');
+  const snack = panel('snack', null);
+  deq(groupsIn(snack), ['mine', 'builtin'], 'a period no community row suits: two groups, mine then builtin — ' + json(groupsIn(snack)));
+  assert.equal(run('shrPanelHtml("lunch", [], null)'), '<p class="shr-empty">' + run("t('shr_none')") + '</p>', 'a period with no row at all: one «' + run("t('shr_none')") + '» line, nothing else');
   const before = run('JSON.stringify(suggestionPool())');
-  run('var __pool = suggestionPool(); shrCardOrder(__pool, "lunch", null);');
+  run('var __pool = suggestionPool(); shrPanelHtml("lunch", __pool, { calLeft: 300 });');
   assert.equal(run('JSON.stringify(__pool)'), before, 'the pool handed in is never reordered in place');
 
-  // ── THE CARD IS NEVER '' (sharedCardHtml) ────────────────────────────────
+  // ── DAY ONE: THE DOOR, AND EVERY PERIOD FILLED (v422) ─────────────────────
+  // No recipe, no list: Food draws the door and nothing of the list, and every
+  // period of the page opens onto ready meals — at least four each, bare.
   DB.recipes.list().forEach((r) => DB.recipes.remove(r.id));
   run('SHARED_RECIPES = null');
-  const card = run('sharedCardHtml(null)');
-  assert.ok(typeof card === 'string' && card.includes('id="shr-card"'), 'with no recipe and no list the card is still drawn');
-  assert.equal((card.match(/data-shr-src="builtin"/g) || []).length, 3, 'three rows, every one a ready meal: ' + (card.match(/data-shr-src="[a-z]+"/g) || []).join(' '));
-  assert.ok(!/class="shr-src"/.test(card), 'and a ready meal carries no caption');
-  assert.ok(card.includes('<span>' + run("t('shr_title')") + '</span>') && run("t('shr_title')") === 'Today’s suggestions', 'titled «' + run("t('shr_title')") + '»');
-  assert.equal((card.match(/aria-pressed="true"/g) || []).length, 1, 'one period pressed');
-  assert.ok(card.includes('data-shr-period="' + run('mealPeriodFor(new Date())') + '" aria-pressed="true"'), 'the clock\'s');
-  assert.ok(card.includes('data-shr-more'), 'at least four ready meals a period: «show more» is offered');
-  const own3 = DB.recipes.add({ name: 'QA own first', servings: 1, items: [ingredient()] });
-  const card2 = run('sharedCardHtml(null)');
-  const srcs = (card2.match(/data-shr-src="([a-z]+)"/g) || []).map((s) => s.slice(14, -1));
-  deq(srcs, ['mine', 'builtin', 'builtin'], 'with one own recipe: it leads, the ready meals follow — ' + json(srcs));
-  assert.equal((card2.match(/class="shr-src"/g) || []).length, 1, 'one caption, on the own row');
-  assert.ok(card2.includes('<span class="shr-src">' + run("t('shr_src_mine')") + '</span><span class="fig-row-title"'), 'reading «' + run("t('shr_src_mine')") + '» over the name');
-  assert.ok(card2.includes('data-shr-open="mine:' + own3.id + '"'), 'the own row opens by mine:<id>');
-  // The card shows the clock's period: a row that suits every period is on it whenever this runs.
-  run('SHARED_RECIPES = cleanSharedRecipes(' + json([Object.assign({}, feed[1], { meals: periods })]) + ')');
-  const card3 = run('sharedCardHtml({ calLeft: 2000 })');
-  deq((card3.match(/data-shr-src="([a-z]+)"/g) || []).map((s) => s.slice(14, -1)), ['mine', 'community', 'builtin'], 'with a community row too: one of each');
-  assert.ok(card3.includes('<span class="shr-src">' + run("t('shr_src_community')") + '</span>'), 'the community row says «' + run("t('shr_src_community')") + '»');
-  run('SHARED_RECIPES = null');
-  DB.recipes.remove(own3.id);
+  const door = run('shrDoorHtml()');
+  assert.equal(typeof door, 'string', 'the door is markup');
+  assert.equal((door.match(/<button\b/g) || []).length, 1, 'ONE button: ' + door.slice(0, 80));
+  assert.ok(/^<button type="button" class="shr-door" data-shr-door>/.test(door), 'a real button, data-shr-door, class shr-door');
+  assert.ok(door.includes('<span class="shr-door-name">' + run("t('shr_title')") + '</span>') && run("t('shr_title')") === 'Today’s suggestions', 'named «' + run("t('shr_title')") + '» — the owner\'s «فقط اسمها»');
+  assert.ok(/<span class="icon-mirror shr-door-chev"><svg[^>]*><path/.test(door), 'a door row\'s chevron, mirrored in Arabic (.icon-mirror), and a glyph that exists (an unknown key draws an empty <svg>)');
+  assert.ok(!/data-shr-open|data-shr-period|data-shr-sec|data-shr-more|shr-row|shr-src|class="num/.test(door), 'and nothing else: no row, no period, no «show more», no count');
+  const dash = (code) => run('nutritionDashboardHtml(todayISO())' + (code || ''));
+  for (const [what, setup] of [['no target', () => {}], ['a target', () => DB.nutrition.setTargets({ calories: 2000, protein: 120, carbs: 220, fat: 60 })]]) {
+    setup();
+    const html = dash();
+    assert.equal((html.match(/data-shr-door/g) || []).length, 1, what + ': Food draws the door once');
+    assert.ok(!/data-shr-open|data-shr-period|data-shr-more|id="shr-card"/.test(html), what + ': and no row, period or card of the old suggestions');
+    const after = what === 'a target' ? 'class="water-card"' : 'class="nutri-setup"';
+    assert.ok(html.indexOf(after) >= 0 && html.indexOf(after) < html.indexOf('data-shr-door'), what + ': under ' + after);
+  }
+  for (const period of periods) {
+    const html = run('shrPanelHtml(' + json(period) + ', suggestionPool(), null)');
+    const got = openIds(html);
+    assert.ok(got.length >= 4 && got.every((id) => id.startsWith('builtin:')), period + ': at least four rows on day one, every one a ready meal — ' + got.length);
+    deq(got, ranked(period, null), period + ': in rank order');
+    assert.ok(!/class="shr-src|data-shr-group|shr-empty/.test(html), period + ': one source, so no caption at all (v421 F5) and no «nothing yet» line');
+  }
 
   // ── 3. A COPY OF A READY MEAL IS NEVER PUBLISHED ─────────────────────────
   // «احفظها في وصفاتي» on a ready meal stores origin: 'builtin' (shrCopyDraft
@@ -1114,7 +1134,7 @@ test('J SUGGESTION_PRESETS — the ready meals resolve against the catalogue; th
 
   // ── 4. ONE MEAL, ONE ROW (v421 fix F3) ───────────────────────────────────
   // (a) A COPY OF A READY MEAL stands in for it: the ready meal leaves the
-  // pool — so the card AND «show more», which both read it — and the copy
+  // pool — so every period's list on the page, which reads it — and the copy
   // takes its periods. Matched by the figures (one serving, the same
   // per-serving kcal and macros, as many ingredients), never by the name: the
   // copy's name is in the language it was saved in.
@@ -1124,7 +1144,7 @@ test('J SUGGESTION_PRESETS — the ready meals resolve against the catalogue; th
   run('STATE.prefs.lang = "ar"');
   assert.ok(!idsOf().includes(ready.id), 'in Arabic too — the copy (saved in English) is matched by its figures, not its name');
   run('STATE.prefs.lang = "en"');
-  deq(plain(run('rankSuggestions(suggestionPool(), ' + json(ready.meals[0]) + ', null)')).filter((r) => r.name === ready.name).map((r) => r.src), ['mine'], '«show more» of its period lists the meal ONCE, as the user\'s own');
+  deq(plain(run('rankSuggestions(suggestionPool(), ' + json(ready.meals[0]) + ', null)')).filter((r) => r.name === ready.name).map((r) => r.src), ['mine'], 'its period\'s list holds the meal ONCE, as the user\'s own');
   // An EDITED copy is another meal: it stands beside its source, in every period.
   const second = pool().find((r) => r.src === 'builtin');
   const copy2 = DB.recipes.add(plain(run('shrCopyDraft(' + json(second) + ')')));
@@ -1195,26 +1215,118 @@ test('J SUGGESTION_PRESETS — the ready meals resolve against the catalogue; th
   DB.recipes.setShared(pubd.id, null);
   assert.ok(idsOf().includes('c-tuna'), 'setup: the marker cleared and nothing else done, the copy is back as another user\'s — the defect');
   run('shrForget("c-tuna")');
-  assert.ok(!idsOf().includes('c-tuna') && !plain(run('sharedPool()')).some((r) => r.id === 'c-tuna'), 'shrForget leaves it out of the list the card reads');
+  assert.ok(!idsOf().includes('c-tuna') && !plain(run('sharedPool()')).some((r) => r.id === 'c-tuna'), 'shrForget leaves it out of the list the page reads');
   for (const bad of ['null', '7', '""', '{}']) run('shrForget(' + bad + ')');
   assert.equal(plain(run('Object.keys(SHR_HIDDEN).filter((k) => !["c-tuna"].includes(k))')).length, 0, 'shrForget writes nothing for what is not an id');
   run('delete SHR_HIDDEN["c-tuna"]; SHARED_RECIPES = null');
   DB.recipes.remove(pubd.id);
 
-  // ── 5. «SHOW MORE» WITH ONE SOURCE (v421 fix F5) ─────────────────────────
+  // ── 5. AN OPEN PERIOD WITH ONE SOURCE (v421 fix F5, on the page since v422) ─
   // A caption tells groups apart: with the ready meals alone (day one) the
-  // rows are drawn bare — no group caption, no row caption — in rank order.
+  // rows are drawn bare — no group caption, no row caption — in rank order;
+  // a second source brings both captions.
   DB.recipes.list().forEach((r) => DB.recipes.remove(r.id));
-  const sheetOf = (period) => run('(function () { let html = null; const o = openModal; openModal = (s) => { html = s; return null; }; try { openSharedSuggestions(rankSuggestions(suggestionPool(), ' + json(period) + ', null), ' + json(period) + ', null); } finally { openModal = o; } return html; })()');
   for (const period of periods) {
-    const html = sheetOf(period);
+    const html = panel(period, null);
     assert.ok(!/data-shr-group=/.test(html) && !/class="shr-src/.test(html), period + ': one source, no caption at all: ' + json((html.match(/data-shr-group="[a-z]+"/g) || []).concat(html.match(/class="shr-src[^"]*"/g) || [])));
-    deq((html.match(/data-shr-open="([^"]+)"/g) || []).map((s) => s.slice(15, -1)), plain(run('rankSuggestions(suggestionPool(), ' + json(period) + ', null)')).map((r) => r.id), period + ': every ready meal of the period, in rank order');
+    deq(openIds(html), ranked(period, null), period + ': every ready meal of the period, in rank order');
   }
   const own4 = DB.recipes.add({ name: 'QA two sources', servings: 1, items: [ingredient()] });
-  const two = sheetOf('lunch');
-  deq((two.match(/data-shr-group="([a-z]+)"/g) || []).map((s) => s.slice(16, -1)), ['mine', 'builtin'], 'two sources: two captions, in the pool\'s order');
+  const two = panel('lunch', null);
+  deq(groupsIn(two), ['mine', 'builtin'], 'two sources: two captions, in the pool\'s order');
+  deq(openIds(two)[0], 'mine:' + own4.id, 'the own recipe under «' + caption('mine') + '», the first group');
   DB.recipes.remove(own4.id);
+});
+
+// ---------------------------------------------------------------- K. the page behind the door (v422)
+// The owner: «يكون فقط اسمها الاقتراحات وبعدها يودّيه لصفحة ثانية يكون فيها
+// خيارات الغدا والفطور والخ، ثم يضغط على الفطور وتطلع معها الأكلات». What
+// renderSuggestions draws, read from its markup — there is no DOM here; the
+// browser suite drives the taps, the scroll and the layout: the food log's top
+// (a back arrow that goes BACK, the bar title, an sr-only <h1> in the content),
+// the four periods in the order of a day, each header a disclosure whose
+// aria-controls names its own panel, ALL CLOSED on an arrival, «الآن» on the
+// clock's period alone, ONE open at a time (SHR_OPEN) with rows in that panel
+// only, kept open by a re-render, closed by a new arrival (navigate() hands
+// each its own context; a Back hands the same one again — the router is not
+// loaded here, so that is the browser suite's, case 2), the calories-left line
+// with a target only — the gauge the open list is ranked by — and another
+// user's name escaped where it is drawn.
+test('K the page — the food log\'s top, four periods closed on arrival, «الآن» on the clock\'s, one open at a time, kept by a re-render, closed by a new arrival, the calories left with a target', () => {
+  const { DB, run } = foodApp();
+  // No list on the wire (the page's pull answers false at once), a router
+  // context, and an element to render into.
+  run('Cloud.pullSharedRecipes = null; var viewContext = {}; var __el = { innerHTML: "", onclick: null, classList: { contains: () => false } };');
+  const periods = plain(run('SHR_PERIODS'));
+  const render = (ctx) => { if (ctx) run('viewContext = ' + ctx); run('renderSuggestions(__el)'); return run('__el.innerHTML'); };
+  const heads = (html) => [...html.matchAll(/<button type="button" class="shr-pg-head" data-shr-sec="([a-z]+)" aria-expanded="(true|false)" aria-controls="([^"]*)">/g)].map((m) => ({ p: m[1], open: m[2] === 'true', controls: m[3] }));
+  const panels = (html) => [...html.matchAll(/<div class="shr-pg-panel" id="([^"]+)" data-settled( hidden)?>([\s\S]*?)<\/div>\s*<\/section>/g)].map((m) => ({ id: m[1], hidden: !!m[2], rows: (m[3].match(/data-shr-open="[^"]+"/g) || []).map((x) => x.slice(15, -1)) }));
+  const title = run("t('shr_title')"), now = run("t('shr_now')");
+  assert.equal(now, 'Now', 'setup: «Now» in English (and «الآن» in Arabic, test-i18n reads the register)');
+
+  // ── AN ARRIVAL ──────────────────────────────────────────────────────────
+  let html = render('{}');
+  assert.ok(/^\s*<div class="detail-top show-title">\s*<button class="back-btn" data-back aria-label="[^"]+">/.test(html), 'the food log\'s top: a back arrow that goes BACK (data-back), first');
+  assert.ok(html.includes('<div class="detail-top-title">' + title + '</div>') && html.includes('<h1 class="sr-only">' + title + '</h1>'), 'titled «' + title + '» in the bar, and the real heading in the content (the bar goes inert when it tucks)');
+  let h = heads(html), pn = panels(html);
+  deq(h.map((x) => x.p), periods, 'four periods, in the order of a day: ' + json(h.map((x) => x.p)));
+  deq(h.map((x) => x.controls), periods.map((p) => 'shr-pg-' + p), 'each header names its own panel (aria-controls)');
+  deq(pn.map((x) => x.id), periods.map((p) => 'shr-pg-' + p), 'and every panel is in the page, under its header');
+  assert.ok(h.every((x) => !x.open), 'an arrival opens on all four CLOSED: ' + json(h.filter((x) => x.open)));
+  assert.ok(pn.every((x) => x.hidden && !x.rows.length), 'every panel hidden and empty: ' + json(pn.filter((x) => !x.hidden || x.rows.length)));
+  for (const p of periods) assert.ok(new RegExp('data-shr-sec="' + p + '"[^>]*><span class="shr-pg-tile"><svg[^>]*><(?:path|rect)[\\s\\S]*?<span class="shr-pg-name">' + run('shrMealName(' + json(p) + ')') + '</span>').test(html), p + ': a glyph that exists on its tile, then its name');
+  assert.ok(!/shr-pg-left/.test(html), 'no target: no calories-left line, and no empty frame for one');
+  // «الآن» on the clock's period, and on that one alone, whatever the clock says.
+  assert.equal((html.match(/class="shr-pg-now"/g) || []).length, 1, 'one «' + now + '» chip');
+  const chipped = (page) => [...page.matchAll(/data-shr-sec="([a-z]+)"(?:(?!<\/button>)[\s\S])*?<span class="shr-pg-now">([^<]*)<\/span>/g)].map((m) => [m[1], m[2]]);
+  deq(chipped(html), [[run('mealPeriodFor(new Date())'), now]], 'on the clock\'s period');
+  for (const c of periods) deq(chipped(run('shrPageHtml(null, ' + json(c) + ')')), [[c, now]], 'a clock in ' + c + ': the chip on ' + c + ' alone');
+
+  // ── ONE OPEN AT A TIME, KEPT BY A RE-RENDER ─────────────────────────────
+  for (const p of periods) {
+    run('SHR_OPEN = ' + json(p));
+    html = render();
+    h = heads(html); pn = panels(html);
+    deq(h.filter((x) => x.open).map((x) => x.p), [p], p + ' open: its header alone says expanded');
+    deq(pn.filter((x) => !x.hidden).map((x) => x.id), ['shr-pg-' + p], p + ': its panel alone is shown');
+    const mine = pn.find((x) => x.id === 'shr-pg-' + p);
+    assert.ok(mine.rows.length >= 4 && pn.every((x) => x === mine || !x.rows.length), p + ': rows in the open panel only (' + mine.rows.length + ')');
+    assert.equal(run('SHR_OPEN'), p, p + ': and a re-render (the same context) keeps it open');
+  }
+  // A new arrival brings its own context (navigate()), and closes the period.
+  run('SHR_OPEN = "snack"');
+  html = render('{}');
+  assert.ok(heads(html).every((x) => !x.open) && run('SHR_OPEN') === null, 'a NEW arrival closes it: ' + json(heads(html).filter((x) => x.open)));
+  run('SHR_OPEN = "brunch"');
+  assert.ok(heads(render()).every((x) => !x.open), 'a period that is not one opens nothing');
+
+  // ── THE CALORIES LEFT, WITH A TARGET ────────────────────────────────────
+  DB.nutrition.setTargets({ calories: 2000, protein: 120, carbs: 220, fat: 60 });
+  const leftOf = (page) => ((page.match(/<p class="shr-pg-left">([\s\S]*?)<\/p>/) || [])[1] || '');
+  const line = (n) => run("t('widget_remaining')") + ' <span class="num">' + run('fmtNum(' + n + ')') + '</span> ' + run("t('cal')");
+  html = render();
+  assert.equal(leftOf(html), line(2000), 'with a target and nothing eaten: «' + run("t('widget_remaining')") + '» and all of it');
+  assert.ok(html.indexOf('shr-pg-left') > html.indexOf('</h1>') && html.indexOf('shr-pg-left') < html.indexOf('shr-pg-sec'), 'under the heading, above the periods');
+  DB.foodLogs.add(run('todayISO()'), { name: 'QA lunch', servings: 1, calories: 650, protein: 30, carbs: 70, fat: 20 });
+  html = render();
+  assert.equal(leftOf(html), line(1350), 'after a 650 kcal meal: what is LEFT, the gauge the ranking reads');
+  // The open list is ranked by that same gauge. 500 left splits lunch's ready
+  // meals (347–602 kcal) into what fits and what does not, so the order moves.
+  DB.foodLogs.add(run('todayISO()'), { name: 'QA snack', servings: 1, calories: 850, protein: 10, carbs: 100, fat: 40 });
+  run('SHR_OPEN = "lunch"');
+  html = render();
+  assert.equal(leftOf(html), line(500), 'after 1,500 kcal: 500 left');
+  const byGauge = plain(run('rankSuggestions(suggestionPool(), "lunch", shrGauge())')).map((r) => r.id);
+  assert.notDeepEqual(byGauge, plain(run('rankSuggestions(suggestionPool(), "lunch", null)')).map((r) => r.id), 'setup: 500 left reorders lunch');
+  deq(panels(html).find((x) => x.id === 'shr-pg-lunch').rows, byGauge, 'the open list ranked by the calories left (500): what fits comes first');
+  DB.foodLogs.add(run('todayISO()'), { name: 'QA feast', servings: 1, calories: 2000, protein: 0, carbs: 0, fat: 0 });
+  assert.equal(leftOf(render()), line(0), 'past the target: 0 left, as the ranking reads it');
+
+  // ── ANOTHER USER'S NAME IS TEXT ─────────────────────────────────────────
+  run('SHARED_RECIPES = cleanSharedRecipes(' + json([{ id: 'qa-xss', lang: 'en', name: '<img src=x onerror=alert(1)>', servings: 1, meals: periods, kcal: 300, protein: 20, carbs: 30, fat: 10, created_at: '2026-10-05T08:00:00.000Z' }]) + ')');
+  html = render();
+  assert.ok(html.includes('&lt;img src=x onerror=alert(1)&gt;') && !/<img/.test(html), 'a community name is escaped where the page draws it');
+  deq((html.match(/data-shr-group="([a-z]+)"/g) || []).map((x) => x.slice(16, -1)), ['community', 'builtin'], 'and with a second source the open period is captioned by group');
 });
 
 (async () => {
@@ -1227,6 +1339,6 @@ test('J SUGGESTION_PRESETS — the ready meals resolve against the catalogue; th
     console.log(`test-shared-recipes: ${failed.length} of ${cases.length} cases failed (${failed.map((n) => n[0]).join(', ')})`);
     process.exitCode = 1;
   } else {
-    console.log(`PASS shared recipes: ${cases.length} cases — the meal period, the ranking, the cleaning and the saved copy (food.js); the shared marker outside the undo ledger and normalised at every door (storage.js); shareRecipe signed-in, share-only, field by field, never cached (foodai.js); the list by named columns, approved only, cached per account, the items memoised, the withdraw by its literal args, swept on logout (cloud.js); the harness stubs and the raw-key net; automatic sharing's data layer — a copy stored with its origin, the marker's sig by name, noAuto outside the ledger, the two prefs read strictly, the device ledger swept on logout — and what its engine stands on: the content signature (FNV-1a, always 8 hex, moved by the content alone), the one question «is this recipe wanted?» over every reason, the device ledger per account, per day and survived when storage fails, the queue a trigger fills (ids once, one timer, the gap kept for the next trigger) and a hold that only extends; and the review's fixes — the ledger following the marker and noAuto, so every recipes Undo stays applicable after automatic sharing wrote; the question total over a null row (never a throw out of a render); the published ids an Undo leaves behind; and «اقتراحات اليوم» (v421): the ready meals (catalog.js) — every item one catalogue entry in its own unit, 2–6 a meal, at least 4 meals a period, ids and names unique — priced from the catalogue by hand and by this file's own reading (suggestionItems); the pool of the three sources in order, an own published recipe once as mine with the feed's periods, every row judged alike; the card's order (the best of each source, then the rest by rank) and a card that is never empty; a copy of a ready meal stored with origin 'builtin' and automatic sharing wanting no recipe that carries an origin at all; and the fixes after its review — every amount of a ready meal one figure in grams or millilitres (SERVING_WEIGHTS: one weight per counted entry, ml where the serving names ml), a saved copy standing in for the ready meal or the community row it copies (by figures, by folded name, servings and kcal), an edited copy beside its source, a withdrawn copy left out (shrForget), and «show more» with one source drawn bare`);
+    console.log(`PASS shared recipes: ${cases.length} cases — the meal period, the ranking, the cleaning and the saved copy (food.js); the shared marker outside the undo ledger and normalised at every door (storage.js); shareRecipe signed-in, share-only, field by field, never cached (foodai.js); the list by named columns, approved only, cached per account, the items memoised, the withdraw by its literal args, swept on logout (cloud.js); the harness stubs and the raw-key net; automatic sharing's data layer — a copy stored with its origin, the marker's sig by name, noAuto outside the ledger, the two prefs read strictly, the device ledger swept on logout — and what its engine stands on: the content signature (FNV-1a, always 8 hex, moved by the content alone), the one question «is this recipe wanted?» over every reason, the device ledger per account, per day and survived when storage fails, the queue a trigger fills (ids once, one timer, the gap kept for the next trigger) and a hold that only extends; and the review's fixes — the ledger following the marker and noAuto, so every recipes Undo stays applicable after automatic sharing wrote; the question total over a null row (never a throw out of a render); the published ids an Undo leaves behind; and «اقتراحات اليوم» (v421): the ready meals (catalog.js) — every item one catalogue entry in its own unit, 2–6 a meal, at least 4 meals a period, ids and names unique — priced from the catalogue by hand and by this file's own reading (suggestionItems); the pool of the three sources in order, an own published recipe once as mine with the feed's periods, every row judged alike; an open period's list (every row, by group — mine, community, builtin — each in rank order, captioned only with more than one group) and every period filled on day one; a copy of a ready meal stored with origin 'builtin' and automatic sharing wanting no recipe that carries an origin at all; and the fixes after its review — every amount of a ready meal one figure in grams or millilitres (SERVING_WEIGHTS: one weight per counted entry, ml where the serving names ml), a saved copy standing in for the ready meal or the community row it copies (by figures, by folded name, servings and kcal), an edited copy beside its source, a withdrawn copy left out (shrForget), and one source drawn bare; and the page behind the door (v422) — the door one button with its name and no row, the food log's top, four periods closed on arrival, «الآن» on the clock's, one open at a time with rows in it alone, kept by a re-render and closed by a new arrival, the calories left with a target and the list ranked by them, another user's name escaped`);
   }
 })();

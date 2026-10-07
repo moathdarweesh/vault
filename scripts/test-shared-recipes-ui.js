@@ -33,8 +33,39 @@
 // 6 gained the figures under each ingredient, 33–35 are new. THE READY MEALS
 // ARE PRICED HERE (readyMeals), from the catalogue as the fixture — never
 // through js/food.js's suggestionItems — and the card's order is this file's
-// own reading of the spec (rankRows, cardIds), as the community ranking always
-// was (rankIds).
+// own reading of the spec (rankRows, and cardIds until v422), as the community
+// ranking always was (rankIds).
+//
+// THE PAGE (v422) is the fifth. The owner, on a screenshot of v421's card:
+// «يكون فقط اسمها الاقتراحات وبعدها يودّيه لصفحة ثانية … ثم يضغط على الفطور
+// وتطلع معها الأكلات». Food carries ONE door now (data-shr-door: the glyph,
+// «اقتراحات اليوم», the chevron of a door row at the reading end — no period,
+// no row, no count), and the suggestions are a screen of their own, the view
+// 'suggestions' (the Food tab stays lit; its back arrow returns): the food
+// log's top, the calories left when a target exists, and four periods as an
+// accordion — all CLOSED on an arrival, «الآن» on the clock's, one open at a
+// time, a second tap closes it, a log, a save, a re-render, an Undo and a
+// Back to the page keep it, and a new arrival closes it again. An open period is the WHOLE list —
+// no cap, no «show more»: every row of the period, ranked, in three groups
+// (the user's own, the community's, the ready meals) under their captions
+// when more than one group has rows (groupIds is this file's reading). Every
+// case that read the card reads the page now (readPage, arrive, tapPeriod):
+// 1–9, 14–16 and 33–35 were rewritten to it — 33's «own row first» is the
+// first GROUP now, «من وصفاتي», as the page orders by rank within groups — 18
+// has the approval repaint the page, 20 opens the page under a price that
+// throws (the fence moved with the prices: Food reads none of them now), 26
+// saves and logs from a row of the page under its Undos, 31 looks for the
+// withdrawn copy on the page; 36 is the door and the way back,
+// 37 the scroll — a period opened below the fold is brought into view, and a
+// header tapped while the list above it closes keeps its place.
+// The review of v422 added 38 (a new day while the page is on show: the
+// foreground draws it again) and rows in 1, 2 and 8: a sheet open over the
+// page while a repaint replaces the row it was opened from hands focus back to
+// that row drawn anew (1) or to its period's header (8), never to <body>; a
+// Back to the page keeps its period open (2). Each was seen to fail, in both
+// passes, on its fix reverted in memory: the page left out of the day-change
+// repaint (38, js/app.js), the sheet's anchor not moved with its row (1, 8),
+// a Back handing the page a copy of its entry (2, js/app.js).
 //
 // Same harness as scripts/test-skips-ui.js (scripts/fp/server.js): the repo
 // over loopback on a free port, js/cloud.js replaced by the offline stub
@@ -56,8 +87,9 @@
 // 16–18 snack, else dinner), never from the app's own function.
 //
 // THE CLOCK is Playwright's (page.clock), installed before the page loads at
-// the real time and left RUNNING: cases 1–17, 25, 33 and 35 meet an ordinary
-// clock, and 34 until it opens the engine at its end.
+// the real time and left RUNNING: cases 1–17, 25, 33 and 35–38 meet an ordinary
+// clock, and 34 until it opens the engine at its end; 38 sets it a day ahead
+// (setSystemTime, which fires no timer) and back again before it ends.
 // The engine's waits are 1.5 s, 12 s and 4 s, so its cases STOP the clock
 // (`account()`) and step it (`clock.run(ms)`): «nothing is sent inside the
 // window» is then a statement about the page's own timeline, not about how
@@ -65,16 +97,17 @@
 //
 // THE ENGINE AND THE OLDER CASES. Under the 'out' stub Cloud.configured() is
 // false and there is no last uid; the engine asks for both before anything
-// else, so in cases 1–17, 25, 33 and 35 it is inert whatever they save — the loop
+// else, so in cases 1–17, 25, 33 and 35–38 it is inert whatever they save — the loop
 // asserts those two facts, and an idle engine, before EVERY case. Only
 // `account()` opens it (a configured Cloud, a uid, a session), and the loop
 // closes it again after every case. The engine's own state (the queue, its
 // timer, the session flag, the device ledger) is module state in js/food.js:
 // `engineReset` is the ONE place this suite touches it, between cases;
 // `reboot()` is the real thing — the app opened again — where a case needs
-// exactly that. The card's own memory of a period the user pressed
-// (SHR_PICK) is put back in `wipe()`, before every case: a case that fails
-// half-way through a pick must not hand the next one a card for another period.
+// exactly that. The page's open period (SHR_OPEN, v422; the card's pressed
+// period, SHR_PICK, before it) is put back in `wipe()`, before every case: a
+// case that fails half-way through must not hand the next one a period open
+// (an arrival closes it anyway; a case may read the page before it arrives).
 //
 // Seen failing on the tree before the feature was built (the project's rule: a
 // check is trusted only after it has been seen to fail), and planted defects
@@ -143,6 +176,34 @@
 // «أزل من المشاركة» (16) or after an Undo (31, js/app.js); a ready meal's copy
 // stored without noAuto (34); «show more» captioning a lone source (1); a name
 // holding «$&» toasted through a replacement string (7, 33).
+// v422: every assertion the rewritten and new cases carry was seen to fail on
+// a defect planted IN MEMORY — js/food.js, js/app.js or styles.css — in both
+// passes (in the Arabic one alone for the Arabic-only chevron), each caught by
+// the assertion written for it (42 plants): Food pulling the list, an arrival
+// forcing its pull, the list's arrival not painted into the open period, or
+// drawing the whole page again, or closing a sheet open over it (1);
+// a tap leaving the other period open, a second tap not closing, a re-render
+// closing it, an arrival keeping it, «الآن» on every period, a tap redrawing
+// the page whole (its header losing focus), focus not handed back to the row
+// after a log, a log closing the period (2, 7), a closed panel not hidden or
+// holding rows, aria-controls naming no panel (2); the calories line not
+// repainted (7), drawn with no target, reading the target, an opened period
+// ranked without the gauge (3); the door opening the food log, the Food tab
+// dark on the page, the back arrow going forward, the chevron unmirrored, a
+// row back on Food, the door above the water card, a count on it, no door
+// under the setup button (36); the scroll into view and the header kept in
+// place removed (37); an approval not repainting the page (18); the door under
+// the L rung, filled with the accent, its name cut, its words not 700, a
+// header 36 tall, its arrow off its line, «الآن» wider than it, a name cut,
+// the cards touching (15), a row 30 tall (35). Every v421 plant whose code
+// survives (K2–K33, F1–F6, G2, G3) ran again against the rewritten cases and
+// was caught (G2 in the Arabic pass alone, an Arabic-only defect); K28 and K29
+// by the page opening under a price that throws (20), and K27 — which the
+// first lock cannot see, since the copy carries noAuto (fix F4) — by case 34's
+// second lock. K1, K3, K3b, K6, K6b, K8, K9, K15 and K31 were retired with the
+// code they planted into. The 44×44 scan in test-convenience-ui.js names the
+// door, a header and a row when each is shrunk under 44 (three plants, run
+// through test-sync-status-ui.js).
 //
 // Standalone: it runs itself behind the require.main guard and is required by
 // no other suite. QA_ONLY=<words> re-runs the cases whose name contains them.
@@ -154,8 +215,8 @@ const { start, fence } = require('./fp/server.js');
 // The engine's state in js/food.js: one `let` declares them all, and the lint's
 // derived globals see only the first name of a declaration (__autoQueue).
 /* global __autoTimer:writable, __autoBusy, __autoOff:writable, __autoHoldUntil:writable, __autoRetried:writable, __autoNextAt:writable, __autoNoticeBtn:writable, __autoNoticeAt:writable */
-// The suggestion card's memory of a period the user pressed (see the header).
-/* global SHR_PICK:writable */
+// The page's open period (v422; see the header).
+/* global SHR_OPEN:writable */
 
 const ONLY = process.env.QA_ONLY || '';
 const WORKER_HOST = 'vault-calories.moathdarweesh2000.workers.dev';
@@ -311,14 +372,12 @@ const rankRows = (rows, period, calLeft) => rows.filter((r) => r.meals.includes(
   .map((r) => ({ r, fit: calLeft == null ? 0 : (r.kcal <= Math.max(0, calLeft) ? 1 : 0), d: r.kcal > 0 ? r.protein / r.kcal : 0, at: String(r.created_at || '') }))
   .sort((a, b) => (b.fit - a.fit) || (b.d - a.d) || (a.at < b.at ? 1 : a.at > b.at ? -1 : 0)).map((x) => x.r);
 const rankIds = (rows, period, calLeft) => rankRows(rows, period, calLeft).map((r) => r.id);
-// THE CARD'S ORDER (v421 §2): the best-ranked row of each source — the user's
-// own, then the community's, then a ready meal, each when there is one — then
-// the rest by rank. The card draws the first three.
-const cardIds = (rows, period, calLeft) => {
-  const ranked = rankRows(rows, period, calLeft);
-  const heads = ['mine', 'community', 'builtin'].map((s) => ranked.find((r) => r.src === s)).filter(Boolean);
-  return heads.concat(ranked.filter((r) => !heads.includes(r))).map((r) => r.id);
-};
+// THE OPEN PERIOD'S LIST (v422 §2), by this file's own reading: the pool's
+// rows for the period, ranked (rankRows), in three groups — the user's own,
+// the community's, the ready meals — each in rank order; [source, ids] for
+// every group that has rows. The page draws every one: no cap, no «show more».
+const groupIds = (pool, period, calLeft) => ['mine', 'community', 'builtin']
+  .map((s) => [s, rankIds(pool.filter((r) => r.src === s), period, calLeft)]).filter(([, ids]) => ids.length);
 // The community's rows as the pool holds them: their own ids, src named.
 const community = (rows) => rows.map((r) => ({ ...r, src: 'community' }));
 // A recipe of the user's own as the pool reads it (§2): 'mine:' + its id, one
@@ -421,30 +480,87 @@ function rowText(r) {
   return { fig: n(r.kcal), sub: [n(r.protein) + ' ' + t('protein_label'), n(r.carbs) + ' ' + t('carbs_label'), n(r.fat) + ' ' + t('fat_label')].join(' · ') };
 }
 
-function readCard() {
-  const c = document.querySelector('.view.active #shr-card');
-  if (!c) return null;
-  const water = document.querySelector('.view.active .water-card');
+// THE PAGE (v422), read in the page: its top (the bar's title, the real
+// heading), the calories line, every period's header — its name, its «الآن»,
+// whether it says it is open, the panel it names, whether it stands in an
+// <h2> — every panel (hidden? drawn? rows in it? in its own header's card?),
+// and the OPEN period's list: its rows (id, source, name, figures) and its
+// captions, each with the rows under it. `allRows` is every row anywhere on
+// the page — rows belong to the open panel alone — and `focus` where the
+// keyboard is. null when the page is not the screen on show.
+function readPage() {
+  const v = document.querySelector('.view.active[data-view="suggestions"]');
+  if (!v) return null;
+  const txt = (el) => (el ? el.textContent.replace(/\s+/g, ' ').trim() : null);
+  const heads = [...v.querySelectorAll('.shr-pg-head')];
+  const open = heads.filter((h) => h.getAttribute('aria-expanded') === 'true').map((h) => h.dataset.shrSec);
+  const panel = open.length === 1 ? document.getElementById('shr-pg-' + open[0]) : null;
+  const rows = panel ? [...panel.querySelectorAll('.shr-rows .shr-row')] : [];
+  const a = document.activeElement;
   return {
-    cls: c.className,
-    title: ((c.querySelector('h2.shr-title') || {}).textContent || '').trim(),
-    periods: [...c.querySelectorAll('.shr-periods .shr-period')].map((b) => ({ p: b.dataset.shrPeriod, text: b.textContent.trim(), pressed: b.getAttribute('aria-pressed') })),
-    pressed: [...c.querySelectorAll('.shr-period[aria-pressed="true"]')].map((b) => b.dataset.shrPeriod),
-    rows: [...c.querySelectorAll('.shr-rows .shr-row')].map((b) => b.dataset.shrOpen),
-    // v421: each row's source, and the caption over its name ('' for none) —
-    // with whether that caption stands BEFORE the name (null: no caption).
-    srcs: [...c.querySelectorAll('.shr-rows .shr-row')].map((b) => b.dataset.shrSrc || null),
-    caps: [...c.querySelectorAll('.shr-rows .shr-row')].map((b) => ((b.querySelector('.shr-src') || {}).textContent || '').trim()),
-    capFirst: [...c.querySelectorAll('.shr-rows .shr-row')].map((b) => { const s = b.querySelector('.shr-src'), n = b.querySelector('.fig-row-title'); return s && n ? !!(s.compareDocumentPosition(n) & Node.DOCUMENT_POSITION_FOLLOWING) : null; }),
-    titles: [...c.querySelectorAll('.shr-rows .shr-row .fig-row-title')].map((x) => x.textContent),
-    subs: [...c.querySelectorAll('.shr-rows .shr-row .fig-row-sub')].map((x) => x.textContent.replace(/\s+/g, ' ').trim()),
-    figs: [...c.querySelectorAll('.shr-rows .shr-row .fig-row-num')].map((x) => x.textContent.trim()),
-    more: ((c.querySelector('[data-shr-more]') || {}).textContent || '').trim() || null,
-    empty: [...c.querySelectorAll('.shr-empty')].map((x) => x.textContent.trim()),
-    inHero: !!c.closest('.nutri-hero'),
-    afterWater: !!water && !!(water.compareDocumentPosition(c) & Node.DOCUMENT_POSITION_FOLLOWING),
-    text: c.textContent,
+    bar: txt(v.querySelector('.detail-top .detail-top-title')),
+    h1: txt(v.querySelector('h1')),
+    left: txt(v.querySelector('.shr-pg-left')),
+    heads: heads.map((h) => ({ p: h.dataset.shrSec, name: txt(h.querySelector('.shr-pg-name')), now: txt(h.querySelector('.shr-pg-now')),
+      expanded: h.getAttribute('aria-expanded'), controls: h.getAttribute('aria-controls'), inH2: !!h.parentElement && h.parentElement.tagName === 'H2' })),
+    panels: heads.map((h) => {
+      const pn = document.getElementById(h.getAttribute('aria-controls') || '');
+      return pn ? { hidden: pn.hidden, shown: pn.getClientRects().length > 0, rows: pn.querySelectorAll('.shr-row').length, home: pn.closest('.shr-pg-sec') === h.closest('.shr-pg-sec') } : null;
+    }),
+    open,
+    rows: rows.map((b) => b.dataset.shrOpen),
+    srcs: rows.map((b) => b.dataset.shrSrc || null),
+    titles: rows.map((b) => (b.querySelector('.fig-row-title') || {}).textContent),
+    subs: rows.map((b) => txt(b.querySelector('.fig-row-sub'))),
+    figs: rows.map((b) => txt(b.querySelector('.fig-row-num'))),
+    groups: panel ? [...panel.querySelectorAll(':scope > .shr-group')].map((p) => {
+      const list = p.nextElementSibling && p.nextElementSibling.matches('.shr-rows') ? p.nextElementSibling : null;
+      return { src: p.dataset.shrGroup, text: txt(p), rows: list ? [...list.querySelectorAll('.shr-row')].map((b) => b.dataset.shrOpen) : [] };
+    }) : [],
+    captions: v.querySelectorAll('.shr-src, [data-shr-group]').length,
+    rowCaps: v.querySelectorAll('.shr-row .shr-src').length,
+    allRows: [...v.querySelectorAll('.shr-row')].map((b) => b.dataset.shrOpen),
+    empty: panel ? [...panel.querySelectorAll('.shr-empty')].map(txt) : [],
+    more: v.querySelectorAll('[data-shr-more]').length,
+    focus: a && a !== document.body && v.contains(a) ? (a.dataset.shrSec ? 'sec:' + a.dataset.shrSec : a.dataset.shrOpen ? 'row:' + a.dataset.shrOpen : a.tagName) : a === document.body ? 'body' : 'elsewhere',
+    text: v.textContent,
   };
+}
+// THE DOOR (v422) on Food, read in the page: how many there are, and the one
+// button — its tag and type, its words, its glyphs (the utensils first, the
+// chevron of a door row last: the markup icon() draws), whether the chevron
+// sits at the reading end and how it is turned, what stands before it, how
+// wide it is beside that — and `old`, whatever of v421's card Food still draws.
+function readDoor() {
+  const v = document.querySelector('.view.active[data-view="food"]');
+  if (!v) return null;
+  const doors = [...v.querySelectorAll('[data-shr-door]')];
+  const old = v.querySelectorAll('#shr-card, .shr-card, .shr-periods, [data-shr-period], [data-shr-more], [data-shr-open], .shr-row, .shr-rows, [data-shr-sec]').length;
+  const d = doors[0];
+  if (!d) return { n: 0, old };
+  const like = (name, size) => { const x = document.createElement('div'); x.innerHTML = icon(name, size); return x.firstElementChild ? x.firstElementChild.innerHTML : '?'; };
+  const svgs = [...d.querySelectorAll('svg')];
+  const name = d.querySelector('.shr-door-name'), chev = d.querySelector('.shr-door-chev');
+  const cs = chev && chev.querySelector('svg');
+  const nr = name && name.getBoundingClientRect(), cr = chev && chev.getBoundingClientRect();
+  const rtl = getComputedStyle(d).direction === 'rtl';
+  const prev = d.previousElementSibling;
+  return {
+    n: doors.length, old, tag: d.tagName, type: d.getAttribute('type'),
+    text: d.textContent.replace(/\s+/g, ' ').trim(), name: name ? name.textContent.trim() : null,
+    svgs: svgs.length, nums: d.querySelectorAll('.num').length,
+    glyph: svgs[0] === d.firstElementChild && !!svgs[0] && svgs[0].innerHTML === like('utensils', 20),
+    chevron: !!cs && cs === svgs[svgs.length - 1] && cs.innerHTML === like('chevronRight', 16),
+    flip: cs ? getComputedStyle(cs).transform : null,
+    end: nr && cr ? (rtl ? cr.right <= nr.left + 1 : cr.left >= nr.right - 1) : null,
+    after: !prev ? null : prev.matches('.water-card') ? 'water' : prev.matches('.nutri-setup') ? 'setup' : prev.className,
+    inHero: !!d.closest('.nutri-hero'),
+    w: Math.round(d.getBoundingClientRect().width), hostW: prev ? Math.round(prev.getBoundingClientRect().width) : null,
+  };
+}
+// The calories line as the page should print it: «المتبقّي اليوم ١٬٦٠٠ سعرة».
+function leftText(n) {
+  return t('widget_remaining') + ' ' + fmtNum(n) + ' ' + t('cal');
 }
 function readSheet() {
   const m = document.querySelector('#modal-root .modal-overlay:not(.is-out) .modal');
@@ -463,15 +579,6 @@ function readSheet() {
     busy: (() => { const l = m.querySelector('#shr-items'); return l ? l.getAttribute('aria-busy') : null; })(),
     serv: (m.querySelector('#shr-servings') || {}).value,
     log: btn('#shr-log'), save: btn('#shr-save'), report: btn('#shr-report'),
-    rows: [...m.querySelectorAll('.shr-rows .shr-row')].map((b) => b.dataset.shrOpen),
-    // «show more» (v421): the captions in order, each with the rows under it;
-    // every row's source; and how many rows carry a caption of their own.
-    groups: [...m.querySelectorAll('.shr-list > .shr-group')].map((p) => {
-      const list = p.nextElementSibling && p.nextElementSibling.matches('.shr-rows') ? p.nextElementSibling : null;
-      return { src: p.dataset.shrGroup, text: p.textContent.trim(), rows: list ? [...list.querySelectorAll('.shr-row')].map((b) => b.dataset.shrOpen) : [] };
-    }),
-    rowSrcs: [...m.querySelectorAll('.shr-rows .shr-row')].map((b) => b.dataset.shrSrc || null),
-    rowCaps: m.querySelectorAll('.shr-rows .shr-row .shr-src').length,
     reasons: [...m.querySelectorAll('[data-shr-reason]')].map((b) => ({ r: b.dataset.shrReason, text: b.textContent.trim() })),
     repErr: ((m.querySelector('#shr-rep-err') || {}).textContent || '').trim(),
     terms: [...m.querySelectorAll('.cx-list.shr-terms > p')].map((p) => p.textContent.trim()),
@@ -488,10 +595,11 @@ function readSheet() {
     text: m.textContent,
   };
 }
-// LAYOUT (v421, case 35), in the page: «Larger text» set as asked, then one
-// part measured — the card's rows, «show more»'s list, or a ready meal's
-// ingredient lines. `spills` names every element of a box that leaves it side
-// to side, or scrolls its own content sideways (a box can hide its overflow).
+// LAYOUT (v421, case 35; the page since v422), in the page: «Larger text» set
+// as asked, then one part measured — the open period's list, a ready meal's
+// ingredient lines, or an own recipe's actions. `spills` names every element
+// of a box that leaves it side to side, or scrolls its own content sideways
+// (a box can hide its overflow).
 function layoutOf({ part, lg }) {
   document.body.classList.toggle('text-lg', lg);
   const name = (el) => el.getAttribute('class') || el.tagName;
@@ -506,31 +614,27 @@ function layoutOf({ part, lg }) {
     return out;
   };
   const sheet = document.querySelector('#modal-root .modal-overlay:not(.is-out) .modal');
-  if (part === 'card') {
-    const card = document.querySelector('.view.active #shr-card');
-    const rows = [...card.querySelectorAll('.shr-row')];
+  if (part === 'panel') {
+    // The open period on the page: every row — mine, community, ready — and
+    // its group captions, inside the period's card.
+    const panel = document.querySelector('.view.active[data-view="suggestions"] .shr-pg-panel:not([hidden])');
+    const sec = panel.closest('.shr-pg-sec');
+    const rows = [...panel.querySelectorAll('.shr-row')];
     return {
-      srcs: rows.map((b) => b.dataset.shrSrc),
-      spill: rows.flatMap((b) => spills(b).map((x) => b.dataset.shrSrc + ': ' + x)),
-      cardSpill: card.scrollWidth > card.clientWidth + 1,
+      srcs: [...new Set(rows.map((b) => b.dataset.shrSrc))],
+      spill: rows.flatMap((b) => spills(b).map((x) => b.dataset.shrSrc + ' ' + b.dataset.shrOpen + ': ' + x)),
+      secSpill: sec.scrollWidth > sec.clientWidth + 1,
       pageSpill: document.documentElement.scrollWidth > window.innerWidth + 1,
-      rowH: rows.map((b) => Math.round(b.getBoundingClientRect().height)),
-      // A caption: drawn, and wholly above the name. null where there is none.
-      caps: rows.map((b) => {
-        const s = b.querySelector('.shr-src'), n = b.querySelector('.fig-row-title');
-        if (!s) return null;
-        const a = s.getBoundingClientRect();
-        return a.height > 0 && a.bottom <= n.getBoundingClientRect().top + 1;
+      rowH: Math.min(...rows.map((b) => Math.round(b.getBoundingClientRect().height))),
+      // A caption: drawn, inside the card, and wholly above the rows it heads.
+      caps: [...panel.querySelectorAll('.shr-group')].map((p) => {
+        const a = p.getBoundingClientRect(), s = sec.getBoundingClientRect(), next = p.nextElementSibling;
+        return a.height > 0 && a.left >= s.left - 1 && a.right <= s.right + 1 && !!next && a.bottom <= next.getBoundingClientRect().top + 1;
       }),
     };
   }
-  if (part === 'more') {
-    const list = sheet.querySelector('.shr-list');
-    return { spill: spills(list), modalSpill: sheet.scrollWidth > sheet.clientWidth + 1,
-      caps: [...list.querySelectorAll('.shr-group')].map((p) => Math.round(p.getBoundingClientRect().height)) };
-  }
   if (part === 'view') {
-    // An own recipe's view from the card (v421 fix F1): three actions on one
+    // An own recipe's view from the page (v421 fix F1): three actions on one
     // row — «سجّل حصّة», «تعديل», the share button — each word inside its button.
     const row = sheet.querySelector('.cx-actions');
     const btns = [...row.querySelectorAll('button')];
@@ -550,6 +654,50 @@ function layoutOf({ part, lg }) {
     modalSpill: sheet.scrollWidth > sheet.clientWidth + 1,
   };
 }
+// THE DOOR'S BOX (v422, case 15), «Larger text» as asked: its height, the
+// weight and size of its words, its fill beside the card surface's (a probe
+// painted with --card-bg where the door stands), any of its parts outside it,
+// whether its name is cut, and whether the page scrolls sideways.
+function doorLayout(lg) {
+  document.body.classList.toggle('text-lg', lg);
+  const d = document.querySelector('.view.active [data-shr-door]');
+  const b = d.getBoundingClientRect(), cs = getComputedStyle(d), name = d.querySelector('.shr-door-name');
+  const probe = document.createElement('div');
+  probe.style.background = 'var(--card-bg)';
+  d.parentElement.appendChild(probe);
+  const card = getComputedStyle(probe).backgroundColor;
+  probe.remove();
+  return {
+    h: Math.round(b.height), weight: cs.fontWeight, size: parseFloat(cs.fontSize), fill: [cs.backgroundColor, card],
+    outside: [...d.children].filter((c) => { const r = c.getBoundingClientRect(); return r.left < b.left - 1 || r.right > b.right + 1 || r.top < b.top - 1 || r.bottom > b.bottom + 1; }).map((c) => c.getAttribute('class') || c.tagName),
+    clipped: !name || name.scrollWidth > name.clientWidth + 1,
+    pageSpill: document.documentElement.scrollWidth > window.innerWidth + 1,
+  };
+}
+// THE PAGE'S HEADERS (v422, case 15), «Larger text» as asked: each one's
+// height; every part of it — the tile, the name, «الآن», the arrow — inside it
+// and centred on its line; a name cut short; the space between two period
+// cards; and whether the page scrolls sideways.
+function headLayout(lg) {
+  document.body.classList.toggle('text-lg', lg);
+  const heads = [...document.querySelectorAll('.view.active[data-view="suggestions"] .shr-pg-head')];
+  const out = { n: heads.length, h: [], outside: [], offCentre: [], clipped: [], gaps: [], chips: 0, pageSpill: document.documentElement.scrollWidth > window.innerWidth + 1 };
+  for (const h of heads) {
+    const b = h.getBoundingClientRect(), mid = b.top + b.height / 2;
+    out.h.push(Math.round(b.height));
+    for (const c of h.children) {
+      const r = c.getBoundingClientRect(), what = h.dataset.shrSec + ' ' + (c.getAttribute('class') || c.tagName);
+      if (r.left < b.left - 1 || r.right > b.right + 1 || r.top < b.top - 1 || r.bottom > b.bottom + 1) out.outside.push(what);
+      if (Math.abs(r.top + r.height / 2 - mid) > 1) out.offCentre.push(`${what} ${Math.round(r.top + r.height / 2 - mid)}px`);
+    }
+    const name = h.querySelector('.shr-pg-name');
+    if (!name || name.scrollWidth > name.clientWidth + 1) out.clipped.push(h.dataset.shrSec);
+    out.chips += h.querySelectorAll('.shr-pg-now').length;
+  }
+  const secs = [...document.querySelectorAll('.view.active[data-view="suggestions"] .shr-pg-sec')];
+  for (let i = 1; i < secs.length; i++) out.gaps.push(Math.round(secs[i].getBoundingClientRect().top - secs[i - 1].getBoundingClientRect().bottom));
+  return out;
+}
 const toastText = () => {
   const el = document.getElementById('toast');
   return el && el.classList.contains('show') ? ((el.querySelector('.toast-msg') || el).textContent || '').trim() : '';
@@ -567,26 +715,46 @@ function wipe() {
   DB.nutrition.setTargets({ calories: 2000, protein: 120, carbs: 220, fat: 60 });
   // Automatic sharing is ON by default, and every case starts from the default.
   if (!DB.prefs.autoShare()) DB.prefs.setAutoShare(true);
-  // The card shows the clock's period again, whatever a case pressed.
-  SHR_PICK = null;
+  // Every period of the page closed again, whatever a case opened.
+  SHR_OPEN = null;
 }
 const sheetUp = (page, sel) => page.waitForFunction((s) => !!document.querySelector('#modal-root .modal-overlay:not(.is-out) ' + s), sel, { timeout: 4000 });
 const sheetGone = (page) => page.waitForFunction(() => !document.querySelector('#modal-root .modal-overlay:not(.is-out)'), null, { timeout: 3000 });
-const cardRow = (id) => `.view.active #shr-card [data-shr-open="${id}"]`;
-// Open a community row's sheet from the card and wait for its ingredients.
-async function openRowSheet(page, id, { items = true } = {}) {
-  await page.locator(cardRow(id)).click();
+// THE PAGE'S CONTROLS (v422): a period's header, a row of the open period.
+const SEC = (p) => `.view.active[data-view="suggestions"] [data-shr-sec="${p}"]`;
+const pageRow = (id) => `.view.active[data-view="suggestions"] [data-shr-open="${id}"]`;
+// ARRIVE at the page — a navigation of its own, so every period is closed —
+// and, given one, open that period with a tap on its header. The page as it reads.
+async function arrive(kit, p) {
+  await kit.reset('suggestions');
+  if (p) await kit.page.locator(SEC(p)).click();
+  return kit.page.evaluate(readPage);
+}
+// A tap on a period's header, on the page already on screen: it opens that
+// period and closes the one open — or closes it, when it is the one open.
+async function tapPeriod(page, p) {
+  await page.locator(SEC(p)).click();
+  return page.evaluate(readPage);
+}
+// …and «that period, open»: a tap only when it is not open already.
+async function showPeriod(page, p) {
+  const on = await page.evaluate((s) => { const h = document.querySelector(s); return !!h && h.getAttribute('aria-expanded') === 'true'; }, SEC(p));
+  return on ? page.evaluate(readPage) : tapPeriod(page, p);
+}
+// Open a row's sheet from the page and wait for its ingredients: the row is
+// tapped where it is drawn — in the period open now — or, drawn nowhere, in
+// `p` (the clock's period unless named) after an arrival.
+async function openRowSheet(kit, id, { p, items = true } = {}) {
+  const { page } = kit;
+  if (!(await page.evaluate((s) => !!document.querySelector(s), pageRow(id)))) await arrive(kit, p || (await clockPeriod(page)));
+  await page.locator(pageRow(id)).click();
   await sheetUp(page, '#shr-log');
   if (items) await page.waitForFunction(() => document.querySelectorAll('#modal-root .modal-overlay:not(.is-out) .rec-view .cx-row [data-qty], #modal-root .modal-overlay:not(.is-out) .rec-view .cx-row > span:first-child').length > 1, null, { timeout: 4000 });
 }
-// «show more» from the card: the sheet as it reads, left open.
-async function openMore(page) {
-  await page.locator('.view.active #shr-card [data-shr-more]').click();
-  await sheetUp(page, '.shr-rows .shr-row');
-  return page.evaluate(readSheet);
-}
-// The rows of one source's group in that sheet ([] when it has none).
-const group = (sheet, src) => ((sheet.groups || []).find((g) => g.src === src) || { rows: [] }).rows;
+// The rows of one source's group on the page ([] when it has none).
+const group = (s, src) => ((s.groups || []).find((g) => g.src === src) || { rows: [] }).rows;
+// The bottom-nav tabs lit, each with its aria-current.
+const litTabs = () => [...document.querySelectorAll('.nav-btn')].filter((b) => b.classList.contains('active')).map((b) => [b.dataset.view, b.getAttribute('aria-current')]);
 // A recipe of the user's own, through DB.*.
 const ownRecipe = (page, data) => page.evaluate((d) => DB.recipes.add(d), data);
 const BOWL = { name: 'QA shared bowl', servings: 2, items: [
@@ -717,104 +885,157 @@ const APPROVE = (id, extra) => ({ status: 200, body: { verdict: 'approve', id, n
 // ── the cases ───────────────────────────────────────────────────────────────
 const CASES = [
   // v421: the card used to be ABSENT here — no community recipe, no card — and
-  // the owner never saw it. It is there from the first day now, ready meals in it.
-  ['(1) the card is there from the first day: with no community list — a null answer, a Cloud without the call, an empty list, and before the answer — it is titled «اقتراحات اليوم» and holds three ready meals for the clock\'s period, only that period pressed; the list arriving adds its best row by itself; a water tap keeps it and pulls nothing; «show more» with the ready meals alone draws them bare, with no caption', async ({ page, ev, reset, lang }) => {
+  // the owner never saw it. v422: the card became a door and a page, and on
+  // the first day every period of the page unfolds the ready meals.
+  ['(1) the first day: with no community list — a null answer, a Cloud without the call, an empty list, and before the answer — Food carries the door titled «اقتراحات اليوم», and each of the four periods opens on the ready meals alone: every one it has, in rank order, priced from the catalogue, with no caption (one source), no «nothing yet» and no «show more»; the list arriving while a period is open adds its rows there by itself, captioned now — a sheet open over the page stays open, the headers are not drawn again, and the sheet closed hands focus back to its row drawn anew; Food pulls nothing, and an arrival inside the throttle neither', async (kit) => {
+    const { page, ev, reset, lang } = kit;
     const { P, O } = await periods(page);
     const ready = await ev(readyMeals);
-    const want = await ev(() => ({ title: t('shr_title'), labels: ['breakfast', 'lunch', 'snack', 'dinner'].map((p) => t('shr_meal_' + p)), more: t('show_more') }));
+    const want = await ev(() => ({ title: t('shr_title'), community: t('shr_src_community'), builtin: t('shr_src_builtin') }));
     // THE TITLE is the spec's words (v421 §4), not only whatever the dictionary holds.
-    assert.equal(want.title, lang === 'ar' ? 'اقتراحات اليوم' : 'Today’s suggestions', 'the card is titled as the owner named it: ' + want.title);
-    const readyCard = cardIds(ready, P, 2000).slice(0, 3);
-    assert.equal(readyCard.length, 3, 'setup: the clock\'s period has at least three ready meals');
+    assert.equal(want.title, lang === 'ar' ? 'اقتراحات اليوم' : 'Today’s suggestions', 'the door and the page are titled as the owner named them: ' + want.title);
     for (const [cfg, what] of [[{ rows: null }, 'a null answer (no session, an error)'], [{ pull: 'missing' }, 'a Cloud without pullSharedRecipes (an old cloud.js)'], [{ rows: [] }, 'an empty list']]) {
       await stubCloud(page, cfg);
       const answer = await load(page);
       if (cfg.pull === 'missing') assert.equal(answer, false, 'a Cloud without pullSharedRecipes answers false and throws nothing');
       await reset('food');
-      const c = await ev(readCard);
-      assert.ok(c, `${what}: the card is there all the same`);
-      assert.equal(c.title, want.title, `${what}: titled «${want.title}»`);
-      assert.deepEqual(c.rows, readyCard, `${what}: three ready meals, the period's best first: ${JSON.stringify(c.rows)}`);
-      assert.deepEqual(c.srcs, ['builtin', 'builtin', 'builtin'], `${what}: each row says it is a ready meal (data-shr-src)`);
-      assert.deepEqual(c.caps, ['', '', ''], `${what}: and a ready meal carries no caption — the default says nothing`);
-      assert.deepEqual(c.pressed, [P], `${what}: only the clock's period is pressed`);
-      assert.deepEqual(c.empty, [], `${what}: no «nothing yet» line`);
+      const d = await ev(readDoor);
+      assert.deepEqual([d.n, d.name], [1, want.title], `${what}: Food carries the door, titled «${want.title}»`);
+      // DAY ONE (v422): every period has meals to unfold — each in turn, one tap each.
+      await arrive(kit);
+      for (const p of PERIODS) {
+        const pg = await tapPeriod(page, p);
+        const ids = rankIds(ready, p, 2000);
+        assert.ok(ids.length >= 4, `setup: ${p} has at least four ready meals (v421 §1): ${ids.length}`);
+        assert.deepEqual([pg.open, pg.rows], [[p], ids], `${what}: «${p}» opens on every ready meal it has, the best first: ${JSON.stringify(pg.rows)}`);
+        assert.ok(pg.srcs.every((x) => x === 'builtin'), `${what}: ${p}: each row a ready meal (data-shr-src)`);
+        // A caption tells groups apart (v421 fix F5): one source, none — a lone
+        // «اقتراحات جاهزة» over every row would tell nothing, and repeat the
+        // title's «اقتراحات».
+        assert.deepEqual([pg.captions, pg.empty, pg.more], [0, [], 0], `${what}: ${p}: one source, so no caption at all; no «nothing yet»; no «show more» — the page is the whole list`);
+        assert.deepEqual(pg.allRows, ids, `${what}: ${p}: and no row in a closed period`);
+      }
     }
-    // «SHOW MORE» WITH ONE SOURCE (v421 fix F5): no recipe and no list, so the
-    // ready meals alone — drawn bare. A caption tells groups apart; a lone
-    // «اقتراحات جاهزة» over every row would tell nothing, and repeat the
-    // title's «اقتراحات».
-    const bare = await openMore(page);
-    assert.deepEqual([bare.groups, bare.rowCaps, await ev(() => document.querySelectorAll('#modal-root [data-shr-group], #modal-root .shr-src').length)], [[], 0, 0],
-      '«show more» with one source draws no caption at all — no group caption, no row caption: ' + JSON.stringify(bare.groups));
-    assert.deepEqual(bare.rows, rankIds(ready, P, 2000), 'and every ready meal of the period, in rank order');
-    assert.deepEqual(bare.rowSrcs, bare.rows.map(() => 'builtin'), 'each a ready meal');
-    await ev(() => closeModal());
-    await sheetGone(page);
     // Each row is the meal priced from the catalogue: its name, its kcal, its macros.
-    const first = await ev(readCard);
-    const meals = readyCard.map((id) => ready.find((r) => r.id === id));
+    const first = await arrive(kit, P);
+    const meals = first.rows.map((id) => ready.find((r) => r.id === id));
     assert.deepEqual(first.titles, meals.map((m) => m.name), 'the ready meals by name, in the reader\'s language');
     const text = [];
     for (const m of meals) text.push(await ev(rowText, m));
     assert.deepEqual([first.figs, first.subs], [text.map((x) => x.fig), text.map((x) => x.sub)], 'each with one serving\'s figures — the sum of its ingredients, priced from the catalogue');
-    // Before the answer: the Food tab paints the card from memory — the ready
-    // meals — and the list, once it answers, puts its best recipe on the card
-    // by itself: the render's own wiring, no second render.
+    // BEFORE THE ANSWER: the page paints from memory — the ready meals — and
+    // the list, once it answers, puts its rows into the open period by itself:
+    // the page's own wiring, no second arrival.
     const rows = sixRows('qa-c1', P, O);
     await stubCloud(page, { pull: 'deferred' });
     await ev(() => { window.__shrLoading = loadSharedRecipes({ force: true }); });
-    await reset('food');
-    assert.deepEqual(((await ev(readCard)) || {}).rows, readyCard, 'the pull has not answered: the card holds the ready meals meanwhile');
+    let s = await arrive(kit, P);
+    assert.deepEqual([s.rows, s.captions], [rankIds(ready, P, 2000), 0], 'the pull has not answered: the open period holds the ready meals meanwhile, uncaptioned');
+    // A SHEET OPEN when the list answers (§2: the open panel is drawn again,
+    // never the whole page): the sheet stays over the page, and the headers are
+    // the very nodes they were — a whole page drawn again would replace them.
+    await ev((sel) => { window.__qaHead = document.querySelector(sel); }, SEC(P));
+    const tapped = s.rows[0];
+    await page.locator(pageRow(tapped)).click();
+    await sheetUp(page, '#shr-log');
     await ev((rows) => window.__shr.release(rows), rows);
-    await page.waitForFunction((id) => !!document.querySelector(`.view.active #shr-card [data-shr-open="${id}"]`), rankIds(rows, P, 2000)[0], { timeout: 3000 }).catch(() => {});
-    const c = await ev(readCard);
-    assert.ok(/\bcard\b/.test(c.cls) && /\bshr-card\b/.test(c.cls), 'it is a .card.shr-card: ' + c.cls);
-    assert.equal(c.title, want.title, 'its heading is «' + want.title + '»');
-    assert.deepEqual(c.periods.map((x) => x.p), PERIODS, 'four period buttons in day order');
-    assert.deepEqual(c.periods.map((x) => x.text), want.labels, 'each named in the reader\'s language');
-    assert.deepEqual(c.pressed, [P], 'only the clock\'s period is pressed: ' + JSON.stringify(c.periods));
-    assert.ok(c.periods.every((x) => x.pressed === 'true' || x.pressed === 'false'), 'every period button carries aria-pressed');
-    assert.deepEqual(c.rows, cardIds(community(rows).concat(ready), P, 2000).slice(0, 3), 'the list in, its best recipe leads and the best ready meal follows, then the next by rank: ' + JSON.stringify(c.rows));
-    assert.deepEqual(c.srcs.slice(0, 2), ['community', 'builtin'], 'a community row, then a ready meal');
-    assert.equal(c.more, want.more, 'more rows in the period → «' + want.more + '»');
-    assert.equal(c.inHero, false, 'the card is not inside .nutri-hero (whose catch-all opens the log)');
-    assert.equal(c.afterWater, true, 'it follows the water card');
-    assert.ok(!/[{}]/.test(c.text), 'no unfilled placeholder: ' + c.text.trim());
+    await page.waitForFunction((id) => !!document.querySelector(`.view.active [data-shr-open="${id}"]`), rankIds(rows, P, 2000)[0], { timeout: 3000 }).catch(() => {});
+    const kept = await ev((sel) => [!!document.querySelector('#modal-root .modal-overlay:not(.is-out) #shr-log'), !!window.__qaHead && window.__qaHead.isConnected && window.__qaHead === document.querySelector(sel)], SEC(P));
+    await ev(() => { delete window.__qaHead; closeModal(); });
+    await sheetGone(page);
+    assert.deepEqual(kept, [true, true], 'the list answering under an open sheet draws the open panel alone: the sheet stays open, the headers stay the same nodes');
+    s = await ev(readPage);
+    // The row the sheet was opened from was drawn anew under it (v422 review):
+    // the sheet hands focus back to THAT row, by its id — never to <body>.
+    assert.equal(s.focus, 'row:' + tapped, 'the sheet closed, focus is back on the row it was opened from — drawn anew by the list\'s arrival under the sheet — not on <body>');
+    assert.deepEqual(s.groups.map((g) => [g.src, g.text, g.rows]), [['community', want.community, rankIds(rows, P, 2000)], ['builtin', want.builtin, rankIds(ready, P, 2000)]],
+      'the list in, the open period gains the community\'s rows by itself, each group under its caption now that two sources have rows: ' + JSON.stringify(s.groups.map((g) => [g.src, g.rows.length])));
+    assert.deepEqual(s.open, [P], 'and the period stays open');
+    assert.ok(!/[{}]/.test(s.text), 'no unfilled placeholder: ' + s.text.trim().slice(0, 200));
+    // FOOD PULLS NOTHING — it draws a door — and an arrival inside the
+    // five-minute throttle reads what memory holds.
+    await reset('food');
     await page.locator('.view.active [data-add-water="250"]').click();
-    const after = await ev(readCard);
-    assert.ok(after && after.rows.length === 3, 'the water tap repaints the dashboard and the card is still there');
-    assert.equal(await ev(() => window.__shr.pulls), 1, 'and nothing was pulled again: the dashboard repaint reads memory');
+    assert.equal(((await ev(readDoor)) || {}).n, 1, 'the water tap repaints the dashboard, the door with it');
+    await arrive(kit, P);
+    assert.equal(await ev(() => window.__shr.pulls), 1, 'one pull in all: the first arrival shared the one in flight, Food reads nothing of the list, and the next arrival waits out the throttle');
   }],
 
-  ['(2) a period button: Lunch pressed alone shows lunch rows only — the community\'s best, then the ready meals — keeps focus, opens nothing; still pressed after a log', async ({ page, ev, reset }) => {
+  // v422: the period buttons became the page's accordion.
+  ['(2) the accordion: an arrival finds the four periods closed — headers in a day\'s order, each a disclosure naming its own panel, «الآن» on the clock\'s alone; a tap opens that period alone, focus staying on its header and nothing else opening; another tap opens another and closes the first; a second tap closes it; a log from its list keeps it open, focus back on the row, and so do a re-render, the Undo and a Back to the page; leaving for Food and coming back through the door finds every period closed', async (kit) => {
+    const { page, ev, lang } = kit;
     const { P, O, PICK } = await periods(page);
     const rows = sixRows('qa-c2', P, O).concat([row('qa-c2-pick', 'Pick of the period', [PICK], 400, 30, 40, 10, 1, 5)]);
     await stubCloud(page, { rows, items: { 'qa-c2-pick': TUNA_ITEMS } });
     await load(page);
-    await reset('food');
-    assert.ok(await ev(readCard), 'setup: the card is up');
     const pool = community(rows).concat(await ev(readyMeals));
-    await page.locator(`.view.active #shr-card [data-shr-period="${PICK}"]`).click();
-    const c = await ev(readCard);
-    assert.deepEqual(c.pressed, [PICK], `«${PICK}» is the one pressed button`);
-    assert.deepEqual(c.rows, cardIds(pool, PICK, 2000).slice(0, 3), `${PICK}'s rows — the best of each source, then by rank: ${JSON.stringify(c.rows)}`);
-    assert.ok(c.rows.every((id) => pool.find((r) => r.id === id).meals.includes(PICK)), `every row suits ${PICK}: ${JSON.stringify(c.rows)}`);
-    assert.equal(c.rows[0], 'qa-c2-pick', `the community's best for ${PICK} leads`);
-    assert.equal(await ev(() => document.activeElement && document.activeElement.dataset.shrPeriod), PICK, 'focus stays on the button pressed (the card was repainted under it)');
-    assert.equal(await ev(() => currentView), 'food', 'a period button opens nothing');
-    assert.equal(await ev(() => !!document.querySelector('#modal-root .modal-overlay:not(.is-out)')), false, 'and raises no sheet');
-    await openRowSheet(page, 'qa-c2-pick', { items: false });
+    const want = await ev(() => ({ labels: ['breakfast', 'lunch', 'snack', 'dinner'].map((p) => t('shr_meal_' + p)), now: t('shr_now') }));
+    assert.equal(want.now, lang === 'ar' ? 'الآن' : 'Now', 'the chip says «الآن» / «Now»: ' + want.now);
+    // AN ARRIVAL: all four closed.
+    let s = await arrive(kit);
+    assert.deepEqual(s.heads.map((h) => [h.p, h.name]), PERIODS.map((p, i) => [p, want.labels[i]]), 'four periods in the order of a day, each by its name in the reader\'s language');
+    assert.ok(s.heads.every((h) => h.inH2 && h.controls === 'shr-pg-' + h.p), 'each header a button inside an <h2>, naming its own panel (aria-controls): ' + JSON.stringify(s.heads));
+    assert.ok(s.panels.every((x) => x && x.home), 'and every panel it names is there, in its period\'s own card');
+    assert.deepEqual([s.open, s.heads.map((h) => h.expanded), s.allRows], [[], ['false', 'false', 'false', 'false'], []], 'on arrival all four are CLOSED: no header expanded, no row anywhere');
+    assert.ok(s.panels.every((x) => x.hidden && !x.shown && !x.rows), 'every panel hidden and empty: ' + JSON.stringify(s.panels));
+    assert.deepEqual(s.heads.filter((h) => h.now).map((h) => [h.p, h.now]), [[P, want.now]], `«${want.now}» on the clock's period (${P}) and on no other`);
+    // A TAP opens that period, and that one alone.
+    s = await tapPeriod(page, PICK);
+    assert.deepEqual([s.open, s.heads.map((h) => h.expanded)], [[PICK], PERIODS.map((p) => String(p === PICK))], `a tap on «${PICK}» opens it alone: ${JSON.stringify(s.heads.map((h) => h.expanded))}`);
+    assert.deepEqual(s.panels.map((x) => x.shown), PERIODS.map((p) => p === PICK), 'its panel alone is drawn');
+    assert.deepEqual(s.groups.map((g) => [g.src, g.rows]), groupIds(pool, PICK, 2000), `${PICK}'s rows: the community's, then the ready meals, each in rank order: ${JSON.stringify(s.rows)}`);
+    assert.equal(s.rows[0], 'qa-c2-pick', `the community's best for ${PICK} leads`);
+    assert.deepEqual(s.allRows, s.rows, 'and no row anywhere else');
+    assert.equal(s.focus, 'sec:' + PICK, 'focus stays on the header pressed (the page was repainted around it)');
+    assert.deepEqual(await ev(() => [currentView, !!document.querySelector('#modal-root .modal-overlay:not(.is-out)')]), ['suggestions', false], 'a header opens nothing else: no screen, no sheet');
+    // ANOTHER TAP opens another period and closes the first.
+    s = await tapPeriod(page, P);
+    assert.deepEqual([s.open, s.groups.map((g) => [g.src, g.rows])], [[P], groupIds(pool, P, 2000)], `«${P}» opens, with its own rows`);
+    const was = s.panels[PERIODS.indexOf(PICK)];
+    assert.deepEqual([was.shown, was.rows, s.allRows], [false, 0, s.rows], `and «${PICK}» is closed, its rows gone: one period open at a time`);
+    // A SECOND TAP on the open one closes it.
+    s = await tapPeriod(page, P);
+    assert.deepEqual([s.open, s.allRows, s.panels.map((x) => x.shown)], [[], [], [false, false, false, false]], 'a second tap on the open period closes it: none open');
+    assert.equal(s.focus, 'sec:' + P, 'focus still on its header');
+    // A LOG keeps the period open…
+    await tapPeriod(page, PICK);
+    await openRowSheet(kit, 'qa-c2-pick', { items: false });
     await page.locator('#shr-log').click();
     await sheetGone(page);
-    assert.deepEqual((await ev(readCard)).pressed, [PICK], 'the pick holds through a log and the repaint after it');
-    await page.locator(`.view.active #shr-card [data-shr-period="${P}"]`).click();
-    assert.deepEqual((await ev(readCard)).pressed, [P], 'and the clock\'s period can be pressed back');
+    s = await ev(readPage);
+    assert.deepEqual(s.open, [PICK], 'the period holds through a log and the repaint after it');
+    assert.equal(s.left, await ev(leftText, 1600), 'the calories left moved with the serving, 2,000 → 1,600, on the same paint');
+    assert.equal(s.focus, 'row:qa-c2-pick', 'and focus is back on the row the sheet was opened from — the repaint drew that row anew and handed it the focus');
+    // …and so does a re-render…
+    await ev(() => renderView('suggestions'));
+    assert.deepEqual((await ev(readPage)).open, [PICK], 'a re-render of the page (renderView) keeps it open');
+    // …and the Undo, which draws the screen again.
+    await page.locator('#toast.show .toast-action').click();
+    await page.waitForFunction(() => DB.foodLogs.listForDate(todayISO()).length === 0, null, { timeout: 2000 }).catch(() => {});
+    s = await ev(readPage);
+    assert.deepEqual([s.open, s.left], [[PICK], await ev(leftText, 2000)], 'the Undo draws the page again: the period still open, the calories back to 2,000');
+    // …and so does a BACK to this page (v422 review): another screen, then the
+    // browser's Back — the router hands the page its own entry again (its
+    // context object, its scroll offset), which is not a new arrival.
+    await page.locator('.nav-btn[data-view="home"]').click();
+    await page.waitForFunction(() => currentView === 'home', null, { timeout: 3000 });
+    await ev(() => history.back());
+    await page.waitForFunction(() => currentView === 'suggestions', null, { timeout: 3000 }).catch(() => {});
+    s = await ev(readPage);
+    assert.deepEqual([await ev(() => currentView), s && s.open], ['suggestions', [PICK]], 'Home, then Back: the page again, its period still open — a Back returns to the same entry');
+    // LEAVING AND COMING BACK: the Food tab, then the door — a new arrival.
+    await page.locator('.nav-btn[data-view="food"]').click();
+    await page.waitForFunction(() => currentView === 'food', null, { timeout: 3000 });
+    await page.locator('.view.active [data-shr-door]').click();
+    await page.waitForFunction(() => currentView === 'suggestions', null, { timeout: 3000 });
+    s = await ev(readPage);
+    assert.deepEqual([s.open, s.allRows], [[], []], 'leaving for Food and coming back through the door: every period closed again');
   }],
 
-  // v421: the card holds one row of each source, so the community's whole
-  // ranking is read where it is listed whole — «show more», its own group.
-  ['(3) the ranking: with 500 kcal left the fitting recipes lead (E, D, C) — the card\'s community row is E, «show more» lists E, D, C and the ready meals by the same rule; without a target protein per kcal decides (C, E, D)', async ({ page, ev, reset }) => {
+  // v421: the card held one row of each source and «show more» the rest; the
+  // page's open period is the whole ranking (v422).
+  ['(3) the ranking: with 500 kcal left the page says so, and the fitting recipes lead the open period (E, D, C), the ready meals by the same rule; without a target there is no calories line, the door stands under the setup button, and protein per kcal decides (C, E, D)', async (kit) => {
+    const { page, ev, reset } = kit;
     const { P, O } = await periods(page);
     const rows = [
       row('qa-c3-c', 'Dish C', [P], 650, 70, 50, 20, 1, 30),
@@ -825,104 +1046,91 @@ const CASES = [
     await stubCloud(page, { rows });
     await load(page);
     await ev(() => DB.foodLogs.addMany(todayISO(), [{ name: 'QA eaten', servings: 1, calories: 1500, protein: 50, carbs: 150, fat: 50 }]));
-    await reset('food');
     const ready = await ev(readyMeals);
     const pool = community(rows).concat(ready);
-    const c = await ev(readCard);
-    assert.ok(c, 'setup: the card is up');
-    assert.deepEqual(c.rows, cardIds(pool, P, 500).slice(0, 3), 'the card with 500 kcal left: the best of each source, then by rank: ' + JSON.stringify(c.rows));
-    assert.equal(c.titles[0], 'Dish E', 'the community\'s best for 500 kcal left is E — it fits, and has the most protein per kcal of what fits');
-    let more = await openMore(page);
-    assert.deepEqual(group(more, 'community').map((id) => rows.find((r) => r.id === id).name), ['Dish E', 'Dish D', 'Dish C'], '«show more»: what fits 500 kcal first, by protein per kcal; then the rest');
-    assert.deepEqual(group(more, 'builtin'), rankIds(ready, P, 500), 'and the ready meals by the same rule');
-    await ev(() => closeModal());
-    await sheetGone(page);
+    let s = await arrive(kit, P);
+    assert.equal(s.left, await ev(leftText, 500), 'the calories left today, above the periods: 500 — the figure the list is fitted to');
+    assert.deepEqual(group(s, 'community').map((id) => rows.find((r) => r.id === id).name), ['Dish E', 'Dish D', 'Dish C'], 'with 500 kcal left: what fits first, by protein per kcal; then the rest');
+    assert.deepEqual(group(s, 'builtin'), rankIds(ready, P, 500), 'and the ready meals by the same rule');
+    assert.deepEqual(s.groups.map((g) => [g.src, g.rows]), groupIds(pool, P, 500), 'the whole period and nothing of another (Dish F is not here)');
     await ev(() => DB.nutrition.setTargets({ calories: 0, protein: 0, carbs: 0, fat: 0 }));
     await reset('food');
     // The Food tab opens the calculator by itself when no target is set.
     await page.waitForTimeout(400);
     await ev(() => { try { closeModal(); } catch (_) {} });
     await sheetGone(page);
-    const n = await ev(readCard);
-    assert.ok(n, 'the card is there without a target too (under the setup button)');
-    assert.equal(await ev(() => !!document.querySelector('.view.active .nutri-setup')), true, 'setup: no target, so the setup button is up');
-    assert.deepEqual(n.rows, cardIds(pool, P, null).slice(0, 3), 'no target → protein per kcal alone: ' + JSON.stringify(n.rows));
-    assert.equal(n.titles[0], 'Dish C', 'the community\'s best is C now');
-    more = await openMore(page);
-    assert.deepEqual(group(more, 'community').map((id) => rows.find((r) => r.id === id).name), ['Dish C', 'Dish E', 'Dish D'], '«show more» without a target: protein per kcal alone');
-    assert.deepEqual(group(more, 'builtin'), rankIds(ready, P, null), 'the ready meals too');
+    const d = await ev(readDoor);
+    assert.deepEqual([d.n, d.after], [1, 'setup'], 'no target: the door stands under the setup button');
+    s = await arrive(kit, P);
+    assert.equal(s.left, null, 'and the page draws no calories line');
+    assert.equal(await ev(() => document.querySelectorAll('.view.active .shr-pg-left').length), 0, 'not even an empty frame for one');
+    assert.deepEqual(group(s, 'community').map((id) => rows.find((r) => r.id === id).name), ['Dish C', 'Dish E', 'Dish D'], 'no target → protein per kcal alone');
+    assert.deepEqual(group(s, 'builtin'), rankIds(ready, P, null), 'the ready meals too');
   }],
 
   // v421: a period no community recipe suits used to hold one «nothing yet»
-  // line. The ready meals cover every period now.
-  ['(4) a period no community recipe suits holds ready meals alone — its three best, no caption, «show more» for the rest, no empty line — and the period row stays', async ({ page, ev, reset }) => {
+  // line; the ready meals cover every period. v422: all of them, no cap.
+  ['(4) a period no community recipe suits opens on its ready meals alone — every one it has, in rank order, uncaptioned, with no «nothing yet» and no «show more»', async (kit) => {
+    const { page, ev } = kit;
     const { P, O } = await periods(page);
     const empty = PERIODS.find((p) => p !== P && p !== O);
     await stubCloud(page, { rows: sixRows('qa-c4', P, O) });
     await load(page);
-    await reset('food');
     const ready = await ev(readyMeals);
-    await page.locator(`.view.active #shr-card [data-shr-period="${empty}"]`).click();
-    const c = await ev(readCard);
-    const want = await ev(() => ({ none: t('shr_none'), more: t('show_more') }));
-    assert.deepEqual(c.pressed, [empty], `«${empty}» pressed`);
-    assert.deepEqual(c.rows, rankIds(ready, empty, 2000).slice(0, 3), `no community recipe suits ${empty}: its three best ready meals, by rank: ${JSON.stringify(c.rows)}`);
-    assert.deepEqual([c.srcs, c.caps], [['builtin', 'builtin', 'builtin'], ['', '', '']], 'ready meals, with no caption');
-    assert.deepEqual(c.empty, [], `no «${want.none}» line: the ready meals are always there`);
-    assert.equal(c.more, want.more, `more ready meals suit ${empty} → «${want.more}»`);
-    assert.equal(c.periods.length, 4, 'the four period buttons stay');
-    await page.locator(`.view.active #shr-card [data-shr-period="${P}"]`).click();
+    const none = await ev(() => t('shr_none'));
+    const s = await arrive(kit, empty);
+    const ids = rankIds(ready, empty, 2000);
+    assert.deepEqual([s.open, s.rows], [[empty], ids], `no community recipe suits ${empty}: every ready meal it has (${ids.length}), by rank: ${JSON.stringify(s.rows)}`);
+    assert.ok(s.srcs.every((x) => x === 'builtin'), 'ready meals only');
+    assert.deepEqual([s.captions, s.empty, s.more], [0, [], 0], `one source: no caption, no «${none}», no «show more» — the list is whole`);
   }],
 
-  // v421: the whole period, grouped under the three sources' captions.
-  ['(5) «show more» lists the whole period under three captions — my recipes, other users\', ready meals — each group in rank order, no row with a caption of its own; a row there opens its sheet: an own recipe its view, a community recipe or a ready meal the suggestion sheet', async ({ page, ev, reset }) => {
+  // v421: «show more» grouped the period; v422: the open period IS that list.
+  ['(5) an open period lists the whole period under three captions — my recipes, other users\', ready meals — each group in rank order, no row with a caption of its own; a row there opens its sheet: an own recipe its view, a community recipe or a ready meal the suggestion sheet', async (kit) => {
+    const { page, ev } = kit;
     const { P, O } = await periods(page);
     const rows = sixRows('qa-c5', P, O);
     await stubCloud(page, { rows, items: { 'qa-c5-4': TUNA_ITEMS } });
     await load(page);
     const rec = await ownRecipe(page, BOWL);
-    await reset('food');
     const ready = await ev(readyMeals);
-    const s = await openMore(page);
-    const want = await ev((P) => ({ title: t('shr_title'), sub: t('shr_meal_' + P), mine: t('shr_src_mine'), community: t('shr_src_community'), builtin: t('shr_src_builtin') }), P);
-    assert.equal(s.title, want.title, 'the sheet is titled «' + want.title + '»');
-    assert.equal(s.sub, want.sub, 'and names the period');
+    const s = await arrive(kit, P);
+    const want = await ev(() => ({ mine: t('shr_src_mine'), community: t('shr_src_community'), builtin: t('shr_src_builtin'), log: t('shr_log') }));
     assert.deepEqual(s.groups.map((g) => [g.src, g.text]), [['mine', want.mine], ['community', want.community], ['builtin', want.builtin]], 'three captions, in order: «' + [want.mine, want.community, want.builtin].join('», «') + '»');
     const groups = [['mine:' + rec.id], rankIds(rows, P, 2000), rankIds(ready, P, 2000)];
     assert.deepEqual(s.groups.map((g) => g.rows), groups, 'under each, the period\'s rows of that source in rank order');
     assert.deepEqual(s.rows, groups.flat(), 'and no row outside a group');
-    assert.deepEqual(s.rowSrcs, s.groups.flatMap((g) => g.rows.map(() => g.src)), 'every row under its own source\'s caption');
+    assert.deepEqual(s.srcs, s.groups.flatMap((g) => g.rows.map(() => g.src)), 'every row under its own source\'s caption');
     assert.equal(s.rowCaps, 0, 'a row under its caption carries none of its own');
     // The own recipe opens the recipe itself…
-    await page.locator(`#modal-root [data-shr-open="mine:${rec.id}"]`).click();
+    await page.locator(pageRow('mine:' + rec.id)).click();
     await sheetUp(page, '[data-edit-view]').catch(() => {});
     const v = (await ev(readSheet)) || {};
     assert.deepEqual([v.title, !!v.edit, v.log, v.report], [BOWL.name, true, null, null], 'an own recipe opens its recipe view — «edit» on it — not the suggestion sheet');
-    assert.deepEqual([v.logView, v.actions[0]], [{ text: await ev(() => t('shr_log')), disabled: false, primary: true }, 'log'], 'and, opened from a suggestion, «' + (await ev(() => t('shr_log'))) + '» first on it (v421 fix F1)');
+    assert.deepEqual([v.logView, (v.actions || [])[0]], [{ text: want.log, disabled: false, primary: true }, 'log'], 'and, opened from a suggestion, «' + want.log + '» first on it (v421 fix F1)');
     // …a community row the suggestion sheet…
     await ev(() => closeModal());
     await sheetGone(page);
-    await openMore(page);
-    await page.locator('#modal-root [data-shr-open="qa-c5-4"]').click();
+    await page.locator(pageRow('qa-c5-4')).click();
     await sheetUp(page, '#shr-log');
     assert.equal((await ev(readSheet)).title, 'Oat porridge', 'a community row opens that recipe');
     // …and a ready meal its own: the meal's name, with nothing to report.
     await ev(() => closeModal());
     await sheetGone(page);
-    await openMore(page);
     const meal = ready.find((r) => r.id === groups[2][groups[2].length - 1]);
-    await page.locator(`#modal-root [data-shr-open="${meal.id}"]`).click();
+    await page.locator(pageRow(meal.id)).click();
     await sheetUp(page, '#shr-log');
     const b = await ev(readSheet);
     assert.deepEqual([b.title, b.names, b.report], [meal.name, meal.items.map((it) => it.name), null], 'a ready meal opens with its own ingredients, and no report');
   }],
 
-  ['(6) a tap opens the recipe: its name, one serving\'s figures, the ingredients fetched on the tap, and a stepper that scales 4 → 2', async ({ page, ev, reset }) => {
+  ['(6) a tap opens the recipe: its name, one serving\'s figures, the ingredients fetched on the tap, and a stepper that scales 4 → 2', async (kit) => {
+    const { page, ev } = kit;
     const { P, O } = await periods(page);
     await stubCloud(page, { rows: sixRows('qa-c6', P, O), items: { 'qa-c6-3': TUNA_ITEMS }, itemsDelay: 400 });
     await load(page);
-    await reset('food');
-    await page.locator(cardRow('qa-c6-3')).click();
+    await arrive(kit, P);
+    await page.locator(pageRow('qa-c6-3')).click();
     await sheetUp(page, '#shr-log');
     const before = await ev(readSheet);
     const want = await ev(() => ({ per: t('rec_per'), cal: t('cal'), loading: t('cx_loading'), p: t('protein_label'), c: t('carbs_label'), f: t('fat_label'),
@@ -952,22 +1160,24 @@ const CASES = [
     assert.deepEqual(half.figsRows, await ev(figsText, { items: TUNA_ITEMS, f: 0.5 }), 'and each ingredient\'s figures halve with its amount');
   }],
 
-  ['(7) «Log a serving» writes ONE row of one serving with the per-serving figures, closes, repaints the hero, and Undo takes it back; a name holding «$&» is toasted as written', async ({ page, ev, reset }) => {
+  ['(7) «Log a serving» writes ONE row of one serving with the per-serving figures, closes, repaints the page — the calories left move, the period stays open — and Undo takes it back; a name holding «$&» is toasted as written', async (kit) => {
+    const { page, ev } = kit;
     const { P, O } = await periods(page);
     await stubCloud(page, { rows: sixRows('qa-c7', P, O), items: { 'qa-c7-3': TUNA_ITEMS } });
     await load(page);
-    await reset('food');
-    await openRowSheet(page, 'qa-c7-3');
+    await openRowSheet(kit, 'qa-c7-3');
     await page.locator('#modal-root .rt-step [data-step="-1"]').click();   // the stepper scales amounts, never the log
     await page.locator('#shr-log').click();
     await sheetGone(page);
     assert.deepEqual(await ev(rowsToday), [{ name: 'Tuna salad', servings: 1, calories: 250, protein: 30, carbs: 10, fat: 12, source: 'shared' }], 'one row, one serving, the serving\'s figures, source «shared»');
-    assert.equal(await ev(() => ((document.querySelector('.view.active .cal-ring-sub .num') || {}).textContent || '').trim()), await ev(() => fmtNum(250)), 'the hero repainted: 250 eaten');
+    const s = await ev(readPage);
+    assert.deepEqual([s.left, s.open], [await ev(leftText, 1750), [P]], 'the page repainted: 1,750 left, the period still open');
     const msg = await ev(toastText);
     assert.equal(msg, await ev(() => t('rec_logged').replace('{name}', 'Tuna salad')), 'the toast names the recipe');
     await page.locator('#toast.show .toast-action').click();
     await page.waitForTimeout(150);
     assert.deepEqual(await ev(rowsToday), [], 'Undo takes the row back');
+    assert.equal((await ev(readPage)).left, await ev(leftText, 2000), 'and the page is drawn again: 2,000 left');
     // A NAME WITH «$» IN IT (v421 fix F6) is another user's text: the toast
     // prints it as written — a replacement STRING would read «$&» as the
     // placeholder it replaced and «$$» as one «$».
@@ -982,12 +1192,12 @@ const CASES = [
     await page.waitForTimeout(150);
   }],
 
-  ['(8) «Save to my recipes» makes a copy with its own item ids and nothing of the server\'s; the button says it is in the recipes, and still does on reopening; the copy stands in for the row it was saved from, on the card behind at once and in «show more»', async ({ page, ev, reset }) => {
+  ['(8) «Save to my recipes» makes a copy with its own item ids and nothing of the server\'s; the button says it is in the recipes, and still does on reopening; the copy stands in for the row it was saved from — on the page behind at once (the sheet, closed, hands focus to the period\'s header), and at the next arrival', async (kit) => {
+    const { page, ev } = kit;
     const { P, O } = await periods(page);
     await stubCloud(page, { rows: sixRows('qa-c8', P, O), items: { 'qa-c8-3': TUNA_ITEMS } });
     await load(page);
-    await reset('food');
-    await openRowSheet(page, 'qa-c8-3');
+    await openRowSheet(kit, 'qa-c8-3');
     await page.locator('#shr-save').click();
     await page.waitForTimeout(100);
     const recs = await ev(() => DB.recipes.list());
@@ -1004,20 +1214,23 @@ const CASES = [
     assert.ok(s, 'the sheet stays open');
     assert.deepEqual(s.save, { text: await ev(() => t('shr_in_recipes')), disabled: true }, 'the button says «in your recipes» and is spent');
     assert.equal(await ev(toastText), await ev(() => t('shr_saved')), 'the toast says it was saved');
-    await ev(() => closeModal());
-    await sheetGone(page);
     // ONE MEAL, ONE ROW (v421 fix F3b): the copy stands in for the row it was
-    // saved from — same name, servings and kcal — on the card behind at once
-    // (no row left there whose door opens nothing) and in «show more»; it is
-    // the user's own now, under the periods that row carried.
+    // saved from — same name, servings and kcal — on the page behind at once
+    // (no row left there whose door opens nothing) and at the next arrival; it
+    // is the user's own now, under the periods that row carried.
     const mine = 'mine:' + r.id;
-    const c = await ev(readCard);
-    assert.deepEqual([c.rows[0], c.srcs[0], c.caps[0]], [mine, 'mine', await ev(() => t('shr_src_mine'))], 'the card behind already leads with the copy, as the user\'s own: ' + JSON.stringify(c.rows));
-    assert.ok(!c.rows.includes('qa-c8-3'), 'and the row it was saved from is gone from it: ' + JSON.stringify(c.rows));
-    const more = await openMore(page);
-    assert.deepEqual([group(more, 'mine'), more.rows.includes('qa-c8-3')], [[mine], false], '«show more» lists the recipe once, as the user\'s own');
-    await ev(() => closeModal());
+    const cap = await ev(() => t('shr_src_mine'));
+    let pg = await ev(readPage);
+    assert.deepEqual([pg.rows[0], pg.srcs[0], pg.groups[0] && [pg.groups[0].src, pg.groups[0].text]], [mine, 'mine', ['mine', cap]], 'the page behind the sheet already leads with the copy, under «' + cap + '»: ' + JSON.stringify(pg.rows.slice(0, 4)));
+    assert.ok(!pg.allRows.includes('qa-c8-3'), 'and the row it was saved from is gone from it: ' + JSON.stringify(pg.rows.slice(0, 4)));
+    // ESCAPE closes the sheet (v422 review): the row it was opened from is
+    // gone — the copy stands in for it — so focus goes to its period's header,
+    // never to <body>.
+    await page.keyboard.press('Escape');
     await sheetGone(page);
+    assert.equal((await ev(readPage)).focus, 'sec:' + P, 'the sheet closed, focus is on the open period\'s header — the row it was opened from was repainted away under the sheet');
+    pg = await arrive(kit, P);
+    assert.deepEqual([group(pg, 'mine'), pg.allRows.includes('qa-c8-3')], [[mine], false], 'the next arrival lists the recipe once, as the user\'s own');
     // Reached directly, that row's sheet still says the copy is saved.
     await ev((r) => openSharedRecipe(r, null, () => {}), sixRows('qa-c8', P, O)[2]);
     await sheetUp(page, '#shr-log');
@@ -1025,12 +1238,12 @@ const CASES = [
     assert.deepEqual((await ev(readSheet)).save, { text: await ev(() => t('shr_in_recipes')), disabled: true }, 'reopened, it is still in the recipes');
   }],
 
-  ['(9) report: one feedback row «recipe-report:<id>», a thank-you, and the row leaves the card; signed out it asks for a sign-in and sends nothing', async ({ page, ev, reset }) => {
+  ['(9) report: one feedback row «recipe-report:<id>», a thank-you, and the row leaves the page; signed out it asks for a sign-in and sends nothing', async (kit) => {
+    const { page, ev } = kit;
     const { P, O } = await periods(page);
     await stubCloud(page, { rows: sixRows('qa-c9', P, O), items: { 'qa-c9-3': TUNA_ITEMS, 'qa-c9-1': TUNA_ITEMS } });
     await load(page);
-    await reset('food');
-    await openRowSheet(page, 'qa-c9-3', { items: false });
+    await openRowSheet(kit, 'qa-c9-3', { items: false });
     await page.locator('#shr-report').click();
     await sheetUp(page, '[data-shr-reason]');
     const s = await ev(readSheet);
@@ -1042,11 +1255,11 @@ const CASES = [
     await sheetGone(page);
     assert.deepEqual(await ev(() => window.__shr.feedback), [['not_food', 'recipe-report:qa-c9-3']], 'one feedback row, its context naming the recipe');
     assert.equal(await ev(toastText), want.thanks, 'a thank-you');
-    const c = await ev(readCard);
-    assert.ok(!c.rows.includes('qa-c9-3'), 'the reported recipe leaves the card: ' + JSON.stringify(c.rows));
+    const c = await ev(readPage);
+    assert.ok(c.open.length === 1 && c.rows.length && !c.allRows.includes('qa-c9-3'), 'the reported recipe leaves the open period at once: ' + JSON.stringify(c.rows));
     // Signed out: the sheet says so, and nothing is sent.
     await stubCloud(page, { rows: sixRows('qa-c9', P, O), items: { 'qa-c9-1': TUNA_ITEMS }, signedIn: false });
-    await openRowSheet(page, 'qa-c9-1', { items: false });
+    await openRowSheet(kit, 'qa-c9-1', { items: false });
     await page.locator('#shr-report').click();
     await sheetUp(page, '[data-shr-reason]');
     await page.locator('#modal-root [data-shr-reason="offensive"]').click();
@@ -1272,7 +1485,8 @@ const CASES = [
     assert.equal(((await ev(readSheet)).share || {}).text, want.share, 'the view is drawn again, offering «' + want.share + '»');
   }],
 
-  ['(14) untrusted text: a name carrying markup never becomes an element — card, sheet, ingredients, report, «show more» — and a row with an unsafe id is dropped', async ({ page, ev, reset }) => {
+  ['(14) untrusted text: a name carrying markup never becomes an element — the page, the sheet, the ingredients, the report — and a row with an unsafe id is dropped', async (kit) => {
+    const { page, ev } = kit;
     const { P } = await periods(page);
     const rows = [
       row('qa-x-1', XSS, [P], 300, 40, 20, 5, 1, 5),
@@ -1286,18 +1500,18 @@ const CASES = [
     await stubCloud(page, { rows, items });
     await ev(() => { delete window.__xss; });
     await load(page);
-    await reset('food');
-    // Scoped to the card and the sheets: an exercise photo elsewhere carries a
+    // Scoped to the page and the sheets: an exercise photo elsewhere carries a
     // legitimate onerror="this.remove()".
-    const noMarkup = () => ({ img: document.querySelectorAll('#shr-card img, #modal-root img').length, onerror: document.querySelectorAll('#shr-card [onerror], #modal-root [onerror]').length,
-      b: document.querySelectorAll('#shr-card b, #modal-root .rec-view b, #modal-root .rec-view i').length });
-    const c = await ev(readCard);
+    const noMarkup = () => ({ img: document.querySelectorAll('.view[data-view="suggestions"] img, #modal-root img').length, onerror: document.querySelectorAll('.view[data-view="suggestions"] [onerror], #modal-root [onerror]').length,
+      b: document.querySelectorAll('.view[data-view="suggestions"] b, #modal-root .rec-view b, #modal-root .rec-view i').length });
+    const c = await arrive(kit, P);
     const safe = rows.filter((r) => /^qa-x-\d$/.test(r.id));
-    assert.deepEqual(c.rows, cardIds(community(safe).concat(await ev(readyMeals)), P, 2000).slice(0, 3), 'the two unsafe ids are gone; the rest rank as usual: ' + JSON.stringify(c.rows));
+    assert.deepEqual(group(c, 'community'), rankIds(safe, P, 2000), 'the two unsafe ids are gone; the four safe rows rank as usual: ' + JSON.stringify(group(c, 'community')));
+    assert.ok(!c.allRows.includes('bad id!') && !c.allRows.includes('../../x'), 'neither unsafe id is drawn anywhere on the page');
     assert.equal(c.rows[0], 'qa-x-1', 'the community\'s best safe row leads — the two that out-rank it are the unsafe ones');
     assert.equal(c.titles[0], XSS, 'the name prints as text');
-    assert.deepEqual(await ev(noMarkup), { img: 0, onerror: 0, b: 0 }, 'no element made of it on the card');
-    await openRowSheet(page, 'qa-x-1', { items: false });
+    assert.deepEqual(await ev(noMarkup), { img: 0, onerror: 0, b: 0 }, 'no element made of it on the page');
+    await openRowSheet(kit, 'qa-x-1', { items: false });
     await page.waitForFunction(() => document.querySelectorAll('#modal-root .rec-view [data-qty]').length === 1, null, { timeout: 4000 });
     const s = await ev(readSheet);
     assert.equal(s.title, XSS, 'the sheet\'s heading is the text');
@@ -1309,46 +1523,44 @@ const CASES = [
     assert.equal((await ev(readSheet)).sub, XSS, 'the report sheet names it as text');
     assert.deepEqual(await ev(noMarkup), { img: 0, onerror: 0, b: 0 }, 'no element there');
     await ev(() => closeModal());
-    const more = await openMore(page);
-    assert.deepEqual(group(more, 'community'), ['qa-x-1', 'qa-x-2', 'qa-x-3', 'qa-x-4'], '«show more» lists the four safe rows and neither unsafe one');
-    assert.deepEqual(await ev(noMarkup), { img: 0, onerror: 0, b: 0 }, 'nor in «show more»');
+    await sheetGone(page);
+    assert.deepEqual(await ev(noMarkup), { img: 0, onerror: 0, b: 0 }, 'nor on the page once the sheets are gone');
     await page.waitForTimeout(300);
     assert.equal(await ev(() => typeof window.__xss), 'undefined', 'no handler ever ran');
   }],
 
-  ['(15) layout: every period button holds its word at 375 and 320, with and without «Larger text»; the rows are door-sized and the heading glyph is 16px', async ({ page, ev, reset }) => {
-    const { P, O } = await periods(page);
-    await stubCloud(page, { rows: sixRows('qa-c15', P, O) });
-    await load(page);
+  // v422: the period buttons are gone; the page's headers and Food's door are
+  // the controls to fit.
+  ['(15) layout at 375 and 320, with and without «Larger text»: the door is the L rung on the card surface — at least 52 tall, its words 15px (larger with «Larger text») at 700 — its parts inside it and its name whole; every period header at least 56 tall (the floor is 44), its tile, name, «الآن» and arrow inside it and on one line, its name whole, closed and open; the period cards a step (12px) apart; nothing wider than the screen', async (kit) => {
+    const { page, ev, reset } = kit;
+    const { P } = await periods(page);
     try {
       for (const width of [375, 320]) {
         await page.setViewportSize({ width, height: 812 });
-        await reset('food');
         for (const lg of [false, true]) {
-          const g = await ev((lg) => {
-            document.body.classList.toggle('text-lg', lg);
-            const card = document.querySelector('.view.active #shr-card');
-            const out = {
-              spill: [...card.querySelectorAll('.shr-period')].filter((b) => b.scrollWidth > b.clientWidth + 1).map((b) => `${b.dataset.shrPeriod} ${b.scrollWidth}>${b.clientWidth}`),
-              cardSpill: card.scrollWidth > card.clientWidth + 1,
-              periodH: [...card.querySelectorAll('.shr-period')].map((b) => Math.round(b.getBoundingClientRect().height)),
-              rowH: [...card.querySelectorAll('.shr-row')].map((b) => Math.round(b.getBoundingClientRect().height)),
-              svg: (() => { const s = card.querySelector('.shr-title svg'); const r = s && s.getBoundingClientRect(); return r ? [Math.round(r.width), Math.round(r.height)] : null; })(),
-              radius: getComputedStyle(card.querySelector('.shr-period')).borderTopLeftRadius,
-            };
-            document.body.classList.remove('text-lg');
-            return out;
-          }, lg);
           const where = `${width}px${lg ? ' + larger text' : ''}`;
-          assert.deepEqual(g.spill, [], `a period word overflows its button at ${where}: ${g.spill.join(', ')}`);
-          assert.equal(g.cardSpill, false, `the card overflows at ${where}`);
-          assert.ok(g.periodH.every((h) => h === 36), `period buttons on the S rung (36px) at ${where}: ${g.periodH}`);
-          assert.ok(g.rowH.length && g.rowH.every((h) => h >= 44), `rows at least 44px at ${where}: ${g.rowH}`);
-          assert.deepEqual(g.svg, [16, 16], `the heading glyph is 16px at ${where}`);
-          assert.equal(g.radius, '10px', 'a rounded rectangle on the S radius, never a capsule');
+          await reset('food');
+          const d = await ev(doorLayout, lg);
+          assert.ok(d.h >= 52, `the door is at least 52 tall, the L rung, at ${where}: ${d.h}`);
+          assert.equal(d.weight, '700', `its words at 700 at ${where}`);
+          assert.ok(lg ? d.size > 15 : d.size === 15, `its words 15px — larger with «Larger text» — at ${where}: ${d.size}`);
+          assert.equal(d.fill[0], d.fill[1], `the door wears the card surface, never an accent fill — «حدّد هدفك اليومي» is the screen's one filled action — at ${where}: ${JSON.stringify(d.fill)}`);
+          assert.deepEqual([d.outside, d.clipped, d.pageSpill], [[], false, false], `the door's glyph, name and chevron inside it, its name whole, nothing wider than the screen at ${where}: ${JSON.stringify(d)}`);
+          for (const open of [null, P]) {
+            await arrive(kit, open);
+            const h = await ev(headLayout, lg);
+            const state = open ? `${where}, «${open}» open` : where;
+            assert.equal(h.n, 4, `setup: four headers at ${state}`);
+            assert.ok(h.h.every((x) => x >= 56), `every header at least 56 tall at ${state}: ${h.h}`);
+            assert.deepEqual([h.outside, h.offCentre, h.clipped], [[], [], []], `each header's tile, name, «الآن» and arrow inside it and centred on its line, every name whole, at ${state}: ${JSON.stringify(h)}`);
+            assert.equal(h.chips, 1, `setup: one «الآن» at ${state}`);
+            assert.deepEqual(h.gaps, [12, 12, 12], `the period cards 12px apart (--sp-3) at ${state}: ${h.gaps}`);
+            assert.equal(h.pageSpill, false, `the page is not wider than the screen at ${state}`);
+          }
         }
       }
     } finally {
+      await ev(() => document.body.classList.remove('text-lg'));
       await page.setViewportSize({ width: 375, height: 812 });
     }
   }],
@@ -1356,8 +1568,9 @@ const CASES = [
   // v419 took the user's own published rows OFF their card; v420 put the
   // feed's copy back on it. v421: the recipe is the user's OWN row now — once,
   // under the periods the review gave its published copy — and the feed's copy
-  // is left out, of the card and of «show more».
-  ['(16) the user\'s own PUBLISHED recipe is suggested once, as their own — under the periods its published copy carries — and the feed\'s copy is left out of the card and «show more»; should that copy still reach the suggestion sheet it offers no copy and no report; withdrawn from the card, the copy the list still holds is not suggested back, and the view keeps «سجّل حصّة»', async ({ page, ev, reset }) => {
+  // is left out. v422: the same, on the page.
+  ['(16) the user\'s own PUBLISHED recipe is suggested once, as their own — under the periods its published copy carries — and the feed\'s copy is left out of the page; should that copy still reach the suggestion sheet it offers no copy and no report; withdrawn from the page, the copy the list still holds is not suggested back, and the view keeps «سجّل حصّة»', async (kit) => {
+    const { page, ev } = kit;
     const { P, O } = await periods(page);
     // The published copy of OUR recipe, as the list returns it: the review
     // tagged it for O alone.
@@ -1368,24 +1581,17 @@ const CASES = [
     const rec = await ownRecipe(page, BOWL);
     const set = await ev((id) => DB.recipes.setShared(id, { id: 'qa-c16-pub', at: new Date().toISOString() }), rec.id);
     assert.ok(set && set.ok !== false, 'setup: our recipe carries the published id: ' + JSON.stringify(set));
-    await reset('food');
-    const want = await ev(() => ({ more: t('show_more'), log: t('shr_log'), save: t('shr_save'), mine: t('shr_in_recipes'), report: t('shr_report'), cap: t('shr_src_mine') }));
+    const want = await ev(() => ({ log: t('shr_log'), save: t('shr_save'), mine: t('shr_in_recipes'), report: t('shr_report'), cap: t('shr_src_mine') }));
     const pool = [mineRow(await ev(recOf, rec.id), rows)].concat(community(rows.filter((r) => r.id !== pubRow.id)), await ev(readyMeals));
     const mine = 'mine:' + rec.id;
-    let c = await ev(readCard);
-    assert.ok(!c.rows.includes(mine), `its published copy suits ${O} alone, so our recipe is not on ${P}'s card: ${JSON.stringify(c.rows)}`);
-    assert.ok(!c.rows.includes(pubRow.id), 'and neither is the feed\'s copy');
-    assert.deepEqual(c.rows, cardIds(pool, P, 2000).slice(0, 3), `${P}'s card as the pool reads without it`);
-    await page.locator(`.view.active #shr-card [data-shr-period="${O}"]`).click();
-    c = await ev(readCard);
-    assert.deepEqual([c.rows[0], c.srcs[0], c.caps[0]], [mine, 'mine', want.cap], `on ${O}, the period its published copy carries, our recipe is the first row — as our own, «${want.cap}»`);
-    assert.ok(!c.rows.includes(pubRow.id), 'and the feed\'s copy is not on the card: the recipe appears ONCE');
-    assert.deepEqual(c.rows, cardIds(pool, O, 2000).slice(0, 3), `${O}'s card: our recipe, then the best of the others`);
-    const more = await openMore(page);
-    assert.deepEqual([group(more, 'mine'), more.rows.includes(pubRow.id)], [[mine], false], '«show more» lists it once, under «' + want.cap + '», and never the feed\'s copy');
-    assert.deepEqual(group(more, 'community'), rankIds(rows.filter((r) => r.id !== pubRow.id), O, 2000), 'the other users\' recipes of the period, in rank order');
-    await ev(() => closeModal());
-    await sheetGone(page);
+    let c = await arrive(kit, P);
+    assert.ok(!c.allRows.includes(mine), `its published copy suits ${O} alone, so our recipe is not in ${P}: ${JSON.stringify(c.rows.slice(0, 4))}`);
+    assert.ok(!c.allRows.includes(pubRow.id), 'and neither is the feed\'s copy');
+    assert.deepEqual(c.groups.map((g) => [g.src, g.rows]), groupIds(pool, P, 2000), `${P}'s list as the pool reads without it`);
+    c = await tapPeriod(page, O);
+    assert.deepEqual([c.rows[0], c.srcs[0], c.groups[0] && [c.groups[0].src, c.groups[0].text, c.groups[0].rows]], [mine, 'mine', ['mine', want.cap, [mine]]], `in ${O}, the period its published copy carries, our recipe heads the list — as our own, under «${want.cap}»`);
+    assert.ok(!c.allRows.includes(pubRow.id), 'and the feed\'s copy is not on the page: the recipe appears ONCE');
+    assert.deepEqual(c.groups.map((g) => [g.src, g.rows]), groupIds(pool, O, 2000), `${O}'s list: our recipe, then the others, each group in rank order`);
     // THE DOOR v420 BUILT for one's own row stays shut: should the feed's copy
     // still reach the suggestion sheet (opened directly), it is already in the
     // user's recipes — the save button spent from the start — and nobody
@@ -1413,34 +1619,26 @@ const CASES = [
     assert.deepEqual(other.report, { text: want.report, disabled: false }, 'and «' + want.report + '»');
     await ev(() => closeModal());
     await sheetGone(page);
-    // «أزل من المشاركة» FROM THE CARD (v421 fixes F1, F3c). The list in memory
+    // «أزل من المشاركة» FROM THE PAGE (v421 fixes F1, F3c). The list in memory
     // still holds the copy just withdrawn, and with the marker gone nothing
-    // names it as ours: it must leave the card at once, not come back as
+    // names it as ours: it must leave the page at once, not come back as
     // another user's recipe with «أبلِغ» on it. And the view, drawn again by
-    // the withdraw, keeps the «سجّل حصّة» the card opened it with.
+    // the withdraw, keeps the «سجّل حصّة» the page opened it with.
     const words = await ev(() => ({ share: t('shr_share'), unshare: t('shr_unshare'), log: t('shr_log') }));
-    await reset('food');
-    await page.locator(`.view.active #shr-card [data-shr-period="${O}"]`).click();
-    await page.locator(cardRow(mine)).click();
+    await arrive(kit, O);
+    await page.locator(pageRow(mine)).click();
     await sheetUp(page, '[data-edit-view]');
     const before = await ev(readSheet);
-    assert.deepEqual([before.share && before.share.text, before.actions], [words.unshare, ['log', 'edit', 'share']], 'setup: our published recipe\'s view from the card — «' + words.log + '», «edit», «' + words.unshare + '»');
+    assert.deepEqual([before.share && before.share.text, before.actions], [words.unshare, ['log', 'edit', 'share']], 'setup: our published recipe\'s view from the page — «' + words.log + '», «edit», «' + words.unshare + '»');
     await page.locator('#modal-root [data-share-view]').click();
     await page.waitForFunction((s) => { const b = document.querySelector('#modal-root .modal-overlay:not(.is-out) [data-share-view]'); return !!b && b.textContent.trim() === s; }, words.share, { timeout: 4000 });
     assert.deepEqual(await ev(() => window.__shr.withdraw), [pubRow.id], 'setup: withdrawn by its published id');
     assert.deepEqual((await ev(readSheet)).actions, ['log', 'edit', 'share'], 'the view drawn again after the withdraw keeps «' + words.log + '» first');
     await ev(() => closeModal());
     await sheetGone(page);
-    await reset('food');
-    await page.locator(`.view.active #shr-card [data-shr-period="${O}"]`).click();
-    c = await ev(readCard);
-    assert.ok(c.rows.includes(mine) && !c.rows.includes(pubRow.id), `the withdrawn copy is not on ${O}'s card as another user's recipe — ours is there, once: ${JSON.stringify(c.rows)}`);
-    const after = await openMore(page);
-    assert.deepEqual([after.rows.includes(pubRow.id), group(after, 'mine')], [false, [mine]], '«show more» does not list it either');
-    await ev(() => closeModal());
-    await sheetGone(page);
-    await reset('food');
-    await page.locator(`.view.active #shr-card [data-shr-period="${P}"]`).click();
+    c = await arrive(kit, O);
+    assert.ok(c.allRows.includes(mine) && !c.allRows.includes(pubRow.id), `the withdrawn copy is not in ${O} as another user's recipe — ours is there, once: ${JSON.stringify(c.rows.slice(0, 4))}`);
+    assert.deepEqual(group(c, 'mine'), [mine], 'under «' + want.cap + '»');
   }],
 
   // Surfaced by cases 8, 10 and 13 (v419): guardConvenienceModal wrote
@@ -1464,21 +1662,22 @@ const CASES = [
   // stepped, the Worker's answers are queued, and `posts` is the page's own
   // record of every request on the page's own timeline. An assertion that
   // nothing was sent always follows a clock.run(): that is when it could have.
-  ['(18) a save in the editor: the notice with «أوقِفها», then — when its window ends — exactly ONE request; the marker carries its sig, the list is pulled fresh and the card repainted; an unchanged re-save sends nothing, an edit sends one more for the same sourceId', async (kit) => {
-    const { page, ev, reset, worker, clock, answered } = kit;
+  ['(18) a save in the editor: the notice with «أوقِفها», then — when its window ends — exactly ONE request; the marker carries its sig, the list is pulled fresh and the page repainted; an unchanged re-save sends nothing, an edit sends one more for the same sourceId', async (kit) => {
+    const { page, ev, worker, clock, answered } = kit;
     await account(kit, { seen: false, freshRows: [ownRow('pub-18', 'QA auto bowl')] });
     await load(page);
-    await reset('food');
-    const c0 = await ev(readCard);
-    assert.ok(c0 && c0.srcs.length && c0.srcs.every((s) => s === 'builtin'), 'setup: no recipe of ours and none of the community — the card holds ready meals alone: ' + JSON.stringify(c0 && c0.rows));
+    // THE PAGE ON SHOW, the clock's period open: an approval's repaint is the
+    // page's (v422 — Food holds the door alone and has nothing to redraw).
+    const c0 = await arrive(kit, await clockPeriod(page));
+    assert.ok(c0 && c0.srcs.length && c0.srcs.every((s) => s === 'builtin'), 'setup: no recipe of ours and none of the community — the open period holds ready meals alone: ' + JSON.stringify(c0 && c0.rows));
     const want = await ev(() => ({ notice: t('shr_auto_notice'), stop: t('shr_auto_stop') }));
     worker.queue.push(APPROVE('pub-18'));
     const t0 = await ev(pageNow);
     const rec = await editorSave(kit, { draft: dish('QA auto bowl') });
     assert.ok(rec && !rec.shared, 'setup: the recipe is saved, and not shared');
-    // The editor's save draws nothing on the Food tab behind it (its onDone
-    // is a no-op here): what the card shows later, a repaint put there.
-    assert.ok(!(await ev(readCard)).rows.includes('mine:' + rec.id), 'setup: the save itself does not redraw the card');
+    // The editor's save draws nothing on the page behind it (its onDone is a
+    // no-op here): what the page shows later, a repaint put there.
+    assert.ok(!(await ev(readPage)).allRows.includes('mine:' + rec.id), 'setup: the save itself does not redraw the page');
     // Nothing happens at once: the engine waits DELAY after its trigger.
     await clock.run(DELAY - 100);
     assert.notEqual(await ev(toastText), want.notice, 'no notice before the delay is up');
@@ -1508,13 +1707,13 @@ const CASES = [
     assert.ok(SIG.test(mark.sig), 'the sig is 8 hex characters: ' + mark.sig);
     assert.equal(mark.sig, await ev((id) => shrSig(DB.recipes.list().find((r) => r.id === id)), rec.id), 'and names the content as it was sent');
     // The user's own recipe is a suggestion now: the list is read PAST both
-    // caches, and the card alone is drawn — on a Food tab nobody re-rendered —
-    // the recipe on it ONCE, as the user's own (v421): the feed's copy of it,
-    // pub-18, is left out.
-    await page.waitForFunction((id) => !!document.querySelector(`.view.active #shr-card [data-shr-open="mine:${id}"]`), rec.id, { timeout: 3000 }).catch(() => {});
+    // caches, and the open period alone is drawn again — on a page nobody
+    // re-rendered — the recipe in it ONCE, as the user's own (v421): the
+    // feed's copy of it, pub-18, is left out.
+    await page.waitForFunction((id) => !!document.querySelector(`.view.active [data-shr-open="mine:${id}"]`), rec.id, { timeout: 3000 }).catch(() => {});
     assert.equal(await ev(() => window.__shr.fresh), 1, 'the community list was pulled fresh, once');
-    const c1 = (await ev(readCard)) || { rows: [] };
-    assert.deepEqual([c1.rows[0], c1.rows.includes('pub-18')], ['mine:' + rec.id, false], 'and the card was painted, the recipe first on it as the user\'s own, the feed\'s copy left out: ' + JSON.stringify(c1.rows));
+    const c1 = (await ev(readPage)) || { rows: [], groups: [], allRows: [] };
+    assert.deepEqual([c1.rows[0], (c1.groups[0] || {}).src, c1.allRows.includes('pub-18')], ['mine:' + rec.id, 'mine', false], 'and the page was painted, the recipe first in the open period as the user\'s own, the feed\'s copy left out: ' + JSON.stringify(c1.rows.slice(0, 4)));
     assert.equal(await ev(toastText), '', 'no toast per recipe');
     // AN UNCHANGED RE-SAVE is a write and a trigger — and nothing to send: the
     // marker's sig still names this very content.
@@ -1527,7 +1726,7 @@ const CASES = [
     worker.queue.push(APPROVE('pub-18b'));
     const t1 = await ev(pageNow);
     await editorSave(kit, { id: rec.id, name: 'QA auto bowl, edited' });
-    assert.equal(((await ev(readCard)) || { titles: [] }).titles[0], 'QA auto bowl', 'setup: the edit\'s save draws nothing on the card either');
+    assert.equal(((await ev(readPage)) || { titles: [] }).titles[0], 'QA auto bowl', 'setup: the edit\'s save draws nothing on the page either');
     await clock.run(DELAY - 100);
     assert.equal((await posts(kit)).length, 1, 'the edit\'s request waits the delay too');
     await clock.run(100);
@@ -1539,12 +1738,12 @@ const CASES = [
     assert.equal(mark2 && mark2.id, 'pub-18b', 'the marker follows the new copy: ' + JSON.stringify(mark2));
     assert.notEqual(mark2.sig, mark.sig, 'and its sig moved with the content');
     assert.equal(mark2.sig, await ev((id) => shrSig(DB.recipes.list().find((r) => r.id === id)), rec.id), 'to the content as sent');
-    // The card is drawn again from the fresh list: the edit's name on its own
-    // row — nothing but that repaint drew the Food tab since the save — and the
+    // The page is drawn again from the fresh list: the edit's name on its own
+    // row — nothing but that repaint drew the page since the save — and the
     // new copy, pub-18b, left out too.
-    await page.waitForFunction((n) => { const t = document.querySelector('.view.active #shr-card .shr-row .fig-row-title'); return !!t && t.textContent === n; }, 'QA auto bowl, edited', { timeout: 3000 }).catch(() => {});
-    const c2 = (await ev(readCard)) || { rows: [], titles: [] };
-    assert.deepEqual([c2.rows[0], c2.titles[0], c2.rows.includes('pub-18b')], ['mine:' + rec.id, 'QA auto bowl, edited', false], 'the card is drawn again from the fresh list: our row with the edit, the new copy left out: ' + JSON.stringify(c2.rows));
+    await page.waitForFunction((n) => { const t = document.querySelector('.view.active .shr-pg-panel:not([hidden]) .shr-row .fig-row-title'); return !!t && t.textContent === n; }, 'QA auto bowl, edited', { timeout: 3000 }).catch(() => {});
+    const c2 = (await ev(readPage)) || { rows: [], titles: [], allRows: [] };
+    assert.deepEqual([c2.rows[0], c2.titles[0], c2.allRows.includes('pub-18b')], ['mine:' + rec.id, 'QA auto bowl, edited', false], 'the page is drawn again from the fresh list: our row with the edit, the new copy left out: ' + JSON.stringify(c2.rows.slice(0, 4)));
     const led = (await ev(ledger)) || {};
     assert.deepEqual([led.uid, led.n, led.day], [UID, 2, await ev(() => todayISO())], 'the device counted both requests, for this account and this day');
     // THE REPLACED COPY (v421, the fixes' review): the server deleted pub-18
@@ -1659,7 +1858,7 @@ const CASES = [
     await silent('2.5 servings');
     // A copy saved from the community list is someone else's recipe: never
     // published back — not at a render, not when it is saved again in the editor.
-    await openRowSheet(page, 'qa-c20-3');
+    await openRowSheet(kit, 'qa-c20-3');
     await page.locator('#shr-save').click();
     await page.mouse.move(0, 0);
     const copy = await ev(() => DB.recipes.list().find((r) => r.name === 'Tuna salad') || null);
@@ -1706,6 +1905,13 @@ const CASES = [
       await page.locator('.view.active [data-add-water="250"]').click();
       assert.equal(await ev(() => DB.water.get(todayISO())), cup + 250, 'a dependency that throws under the backfill: the render of Food kept its handlers — the water button still logs');
       assert.deepEqual([threw, await posts(kit), worker.calls.length, await ev(() => DB.prefs.autoShareSeen())], [null, [], 0, false], 'nothing escaped the render, and nothing is sent for it — the page asked nothing, the Worker heard nothing, the notice not spent');
+      // …and the page (v422), where the prices are read now — Food reads none
+      // of them: a period opens whatever throws under it, every row it cannot
+      // price left out, and nothing escapes the tap.
+      const errs = kit.errors.length;
+      const pg = await arrive(kit, await clockPeriod(page));
+      assert.deepEqual([pg.open.length, pg.srcs.filter((x) => x !== 'community'), kit.errors.slice(errs)], [1, [], []],
+        'a price that throws: the page still opens its period — every row it cannot price (the user\'s, the ready meals) left out — and nothing escapes the tap: ' + JSON.stringify([pg.open, pg.srcs, kit.errors.slice(errs)]));
     } finally {
       await ev(() => { DB.recipes.totals = window.__qaTotals; delete window.__qaTotals; });
       await ev((id) => DB.recipes.remove(id), whole.id);
@@ -2033,7 +2239,7 @@ const CASES = [
     // the recipes slice, and a marker written under it would turn it stale.
     worker.queue.push(APPROVE('pub-26-c'));
     const third = await editorSave(kit, { draft: dish('QA held bowl') });
-    await openRowSheet(page, 'qa-c26-3');
+    await openRowSheet(kit, 'qa-c26-3');
     const t1 = await ev(pageNow);
     await page.locator('#shr-save').click();
     await page.mouse.move(0, 0);
@@ -2095,7 +2301,7 @@ const CASES = [
     const say = await ev(() => ({ notice: t('shr_auto_notice'), stop: t('shr_auto_stop'), logged: t('rec_logged').replace('{name}', 'Tuna salad') }));
     worker.queue.push(APPROVE('pub-26-e'));
     await editorSave(kit, { draft: dish('QA behind an Undo') });
-    await openRowSheet(page, 'qa-c26-3');
+    await openRowSheet(kit, 'qa-c26-3');
     await page.locator('#shr-log').click();
     await sheetGone(page);
     await page.mouse.move(0, 0);
@@ -2462,7 +2668,9 @@ const CASES = [
     // …and that copy leaves the suggestions at once (v421 fix F3c): the list in
     // memory still holds it, and nothing names it as the user's own any more.
     assert.deepEqual(await ev(() => suggestionPool().filter((r) => r.id === 'pub-31-add').map((r) => r.src)), [], 'the copy the Undo withdrew is not suggested back as another user\'s recipe');
-    assert.ok(!((await ev(readCard)) || { rows: [] }).rows.includes('pub-31-add'), 'nor drawn on the card the Undo repainted');
+    const pg = await arrive(kit, await clockPeriod(page));
+    assert.ok(pg && pg.rows.length && !pg.allRows.includes('pub-31-add'), 'nor drawn on the page: ' + JSON.stringify(pg && pg.rows.slice(0, 4)));
+    await reset('food');
     // The Undo of an EDIT: the recipe stays, with the marker of its newest copy.
     worker.queue.push(APPROVE('pub-31-b'), APPROVE('pub-31-c'));
     const edited = await editorSave(kit, { draft: dish('QA edited then undone') });
@@ -2586,32 +2794,32 @@ const CASES = [
     await fullWindow(recC, await raisedAt(), '(c)');
   }],
 
-  // ── «اقتراحات اليوم» (v421) ──────────────────────────────────────────────
-  // The three sources on one card. Every expectation is this file's own: the
-  // pool's order (cardIds), the ready meals priced from the catalogue
+  // ── «اقتراحات اليوم» (v421; the page since v422) ─────────────────────────
+  // The three sources in one list. Every expectation is this file's own: the
+  // list's order (groupIds), the ready meals priced from the catalogue
   // (readyMeals), the user's own recipe read back as stored (mineRow).
-  ['(33) the user\'s own recipe is the card\'s FIRST row even when it ranks last — captioned «من وصفاتي» — the community\'s best second, captioned «من المستخدمين», the best ready meal third with no caption; the own row opens the recipe view with «سجّل حصّة» first — one serving, Undo, a name with «$» as written — and «تعديل» there lands back on Food; the picker\'s view is unchanged', async ({ page, ev, reset }) => {
+  ['(33) the user\'s own recipe heads the open period under «من وصفاتي» — the first group — even when it ranks last of all; the community\'s rows follow under «من المستخدمين», the ready meals under «اقتراحات جاهزة», each group in rank order; the own row opens the recipe view with «سجّل حصّة» first — one serving, Undo, a name with «$» as written — and «تعديل» there lands back on the page, the period still open; the picker\'s view is unchanged', async (kit) => {
+    const { page, ev } = kit;
     const { P, O } = await periods(page);
     const rows = sixRows('qa-c33', P, O);
     await stubCloud(page, { rows });
     await load(page);
     const rec = await ownRecipe(page, RICE);
-    await reset('food');
     const ready = await ev(readyMeals);
     const mine = mineRow(await ev(recOf, rec.id), rows);
     const pool = [mine].concat(community(rows), ready);
-    assert.ok(rankIds(pool, P, 2000).indexOf(mine.id) >= 3, 'setup: by rank alone our recipe would not even be on the card: ' + rankIds(pool, P, 2000).indexOf(mine.id));
-    const want = await ev(() => ({ mine: t('shr_src_mine'), community: t('shr_src_community') }));
-    const c = await ev(readCard);
-    assert.deepEqual(c.rows, [mine.id, rankIds(rows, P, 2000)[0], rankIds(ready, P, 2000)[0]], 'our recipe first, then the community\'s best, then the best ready meal: ' + JSON.stringify(c.rows));
-    assert.deepEqual(c.rows, cardIds(pool, P, 2000).slice(0, 3), 'the best of each source, in that order');
-    assert.deepEqual(c.srcs, ['mine', 'community', 'builtin'], 'each row names its source (data-shr-src)');
-    assert.deepEqual(c.caps, [want.mine, want.community, ''], `a caption on our recipe («${want.mine}») and on another user's («${want.community}»), none on the ready meal`);
-    assert.deepEqual(c.capFirst, [true, true, null], 'the caption stands over the name');
+    assert.ok(rankIds(pool, P, 2000).indexOf(mine.id) >= 3, 'setup: by rank alone our recipe would come after three others at least: ' + rankIds(pool, P, 2000).indexOf(mine.id));
+    const want = await ev(() => ({ mine: t('shr_src_mine'), community: t('shr_src_community'), builtin: t('shr_src_builtin') }));
+    const c = await arrive(kit, P);
+    assert.deepEqual(c.groups.map((g) => [g.src, g.text]), [['mine', want.mine], ['community', want.community], ['builtin', want.builtin]], `three groups, ours first: «${want.mine}», «${want.community}», «${want.builtin}»`);
+    assert.deepEqual(c.groups.map((g) => [g.src, g.rows]), groupIds(pool, P, 2000), 'each group in rank order');
+    assert.equal(c.rows[0], mine.id, 'our recipe is the list\'s first row although it ranks last: ' + JSON.stringify(c.rows.slice(0, 4)));
+    assert.deepEqual(c.srcs, c.groups.flatMap((g) => g.rows.map(() => g.src)), 'each row names its source (data-shr-src) — the group it stands under');
+    assert.equal(c.rowCaps, 0, 'and carries no caption of its own: its group\'s says it');
     const text = await ev(rowText, mine);
     assert.deepEqual([c.titles[0], c.figs[0], c.subs[0]], [RICE.name, text.fig, text.sub], 'our row: the recipe\'s name and one serving\'s figures');
     // The tap opens the recipe itself — the view the picker opens.
-    await page.locator(cardRow(mine.id)).click();
+    await page.locator(pageRow(mine.id)).click();
     await sheetUp(page, '[data-edit-view]').catch(() => {});
     const v = (await ev(readSheet)) || {};
     assert.equal(v.title, RICE.name, 'the row opens our recipe');
@@ -2619,29 +2827,31 @@ const CASES = [
     assert.deepEqual([v.log, v.save, v.report], [null, null, null], 'not the suggestion sheet: nothing to save a copy of or report');
     assert.deepEqual(v.qty, ['300 g'], 'its ingredient as written');
     assert.deepEqual(v.figsRows, [], 'and the recipe view keeps the stove\'s silence: no figures under an ingredient');
-    // «سجّل حصّة» (v421 fix F1): the card's first row is a meal to eat like the
+    // «سجّل حصّة» (v421 fix F1): the list's first row is a meal to eat like the
     // others — first among the view's actions, the primary one.
     const w = await ev(() => ({ log: t('shr_log'), undo: t('undo') }));
-    assert.deepEqual([v.logView, v.actions], [{ text: w.log, disabled: false, primary: true }, ['log', 'edit', 'share']], 'opened from the card, the view offers «' + w.log + '» first, as the primary action: ' + JSON.stringify(v.actions));
+    assert.deepEqual([v.logView, v.actions], [{ text: w.log, disabled: false, primary: true }, ['log', 'edit', 'share']], 'opened from the page, the view offers «' + w.log + '» first, as the primary action: ' + JSON.stringify(v.actions));
     await page.locator('#modal-root [data-step="1"]').click();   // the scaler moves amounts, never the log
     await page.locator('#modal-root [data-log-view]').click();
     await sheetGone(page);
     assert.deepEqual(await ev(rowsToday), [{ name: RICE.name, servings: 1, calories: 390, protein: 4, carbs: 86, fat: 1, source: 'recipe' }], 'ONE row of one serving, the serving\'s figures, source «recipe» — as the picker\'s «+» logs it');
     assert.deepEqual([await ev(toastText), await ev(toastAct)], [await ev((n) => t('rec_logged').split('{name}').join(n), RICE.name), w.undo], 'the toast names the recipe, with «' + w.undo + '»');
-    assert.equal(await ev(() => ((document.querySelector('.view.active .cal-ring-sub .num') || {}).textContent || '').trim()), await ev(() => fmtNum(390)), 'the hero repainted: 390 eaten');
+    const logged = await ev(readPage);
+    assert.deepEqual([logged.left, logged.open], [await ev(leftText, 1610), [P]], 'the page repainted: 1,610 left, the period still open');
     await page.locator('#toast.show .toast-action').click();
     await page.waitForTimeout(150);
     assert.deepEqual(await ev(rowsToday), [], 'Undo takes it back');
-    // «تعديل» from the card lands back on Food — not in the saved-food picker,
-    // which the card never opened.
-    await page.locator(cardRow(mine.id)).click();
+    // «تعديل» from the page lands back on the page — not in the saved-food
+    // picker, which the page never opened.
+    await page.locator(pageRow(mine.id)).click();
     await sheetUp(page, '[data-edit-view]');
     await page.locator('#modal-root [data-edit-view]').click();
     await page.locator('#modal-root .modal-overlay:not(.is-out) #rec-rows .rec-row').first().waitFor({ timeout: 4000 });
     await page.locator('#modal-root .modal-overlay:not(.is-out) #rec-save').click();
     await sheetGone(page).catch(() => {});
-    assert.deepEqual(await ev(() => [currentView, !!document.querySelector('#modal-root .modal-overlay:not(.is-out)'), !!document.querySelector('#modal-root #sf-list')]), ['food', false, false], 'the edit saved, Food is on screen with no sheet over it — not the saved-food picker');
-    assert.equal(((await ev(readCard)) || { rows: [] }).rows[0], mine.id, 'and the card is there, our recipe first');
+    assert.deepEqual(await ev(() => [currentView, !!document.querySelector('#modal-root .modal-overlay:not(.is-out)'), !!document.querySelector('#modal-root #sf-list')]), ['suggestions', false, false], 'the edit saved, the page is on screen with no sheet over it — not the saved-food picker');
+    const back = (await ev(readPage)) || { open: [], rows: [] };
+    assert.deepEqual([back.open, back.rows[0]], [[P], mine.id], 'the period still open, our recipe first');
     // The picker's view of the same recipe has its own «+» on the row: no log button there.
     await openOwnView(page, rec.id);
     assert.deepEqual([(await ev(readSheet)).logView, (await ev(readSheet)).actions], [null, ['edit', 'share']], 'opened from the picker, the view is as it was: «edit» and the share button alone');
@@ -2658,27 +2868,24 @@ const CASES = [
     await page.waitForTimeout(150);
   }],
 
-  ['(34) a ready meal: its sheet opens with the ingredients already there — no fetch, nothing busy — each with its amount — one figure in grams or millilitres, a counted unit too — and its own figures, the meal\'s figures their sum; the scaler moves every amount with its figures; «Log a serving» writes one serving (source builtin, the meal\'s own id) with Undo; «Save to my recipes» keeps a copy with origin builtin and noAuto — standing in for the meal on the card and in «show more», opening its view with «سجّل حصّة», spent on reopening, its share sheet promising no following — that automatic sharing never sends', async (kit) => {
+  ['(34) a ready meal: its sheet opens with the ingredients already there — no fetch, nothing busy — each with its amount — one figure in grams or millilitres, a counted unit too — and its own figures, the meal\'s figures their sum; the scaler moves every amount with its figures; «Log a serving» writes one serving (source builtin, the meal\'s own id) with Undo; «Save to my recipes» keeps a copy with origin builtin and noAuto — standing in for the meal on the page behind at once and at the next arrival, opening its view with «سجّل حصّة», spent on reopening, its share sheet promising no following — that automatic sharing never sends', async (kit) => {
     const { page, ev, reset, worker, clock, answered } = kit;
     const { P } = await periods(page);
     await stubCloud(page, { rows: [] });
     await load(page);
-    await reset('food');
     const ready = await ev(readyMeals);
     const want = await ev(() => ({ per: t('rec_per'), log: t('shr_log'), save: t('shr_save'), mine: t('shr_in_recipes'), saved: t('shr_saved'), undo: t('undo'),
       terms: [t('shr_term_review'), t('shr_term_anon'), t('shr_term_withdraw')], copy: t('shr_term_copy') }));
-    // THE MEAL THIS CASE OPENS: the first on the card that weighs an ingredient
-    // in grams other than its serving names — so an ingredient's figures can
-    // only come out right if they were scaled by those grams. Every period's
-    // card holds one (the snack period's best, a whey shake, weighs its scoop
-    // exactly as the catalogue serves it).
-    // (Their order is case 1's to pin: here a wrong price would move the card
+    // THE MEAL THIS CASE OPENS: the first of the period that weighs an
+    // ingredient in grams other than its serving names — so an ingredient's
+    // figures can only come out right if they were scaled by those grams.
+    // (The list's order is case 1's to pin: here a wrong price would move it
     // before the figures this case reads could say why.)
-    const card = (await ev(readCard)).rows;
-    assert.ok(card.length === 3 && card.every((id) => ready.some((r) => r.id === id && r.meals.includes(P))), 'setup: the card holds three ready meals of the period: ' + JSON.stringify(card));
-    const meal = card.map((id) => ready.find((r) => r.id === id)).find((m) => m.items.some((it) => it.g !== null && it.g !== it.servingG));
-    assert.ok(meal, 'setup: a meal on the card weighs an ingredient in grams other than its serving: ' + JSON.stringify(card));
-    await page.locator(cardRow(meal.id)).click();
+    const list = (await arrive(kit, P)).rows;
+    assert.ok(list.length >= 4 && list.every((id) => ready.some((r) => r.id === id && r.meals.includes(P))), 'setup: the open period holds the ready meals of the period: ' + JSON.stringify(list));
+    const meal = list.map((id) => ready.find((r) => r.id === id)).find((m) => m.items.some((it) => it.g !== null && it.g !== it.servingG));
+    assert.ok(meal, 'setup: a meal of the period weighs an ingredient in grams other than its serving: ' + JSON.stringify(list));
+    await page.locator(pageRow(meal.id)).click();
     await sheetUp(page, '#shr-log');
     // AT ONCE — nothing is waited for: the ingredients came with the meal.
     const s = await ev(readSheet);
@@ -2712,13 +2919,12 @@ const CASES = [
     await page.waitForTimeout(150);
     assert.deepEqual(await ev(rowsToday), [], 'Undo takes it back');
     // A UNIT COUNTED MORE THAN ONCE — two eggs — in the one meal that has one,
-    // opened from «show more» of its own period: twice the weight of one egg,
+    // opened from its own period on the page: twice the weight of one egg,
     // «١٠٠ غ» / «100 g» (v421 fix F2; it read «٢ × بيضة» before, beside figures
     // the scaler doubled while it still said two eggs).
     const twice = ready.find((m) => m.items.some((it) => it.n > 1));
-    await page.locator(`.view.active #shr-card [data-shr-period="${twice.meals[0]}"]`).click();
-    await openMore(page);
-    await page.locator(`#modal-root [data-shr-open="${twice.id}"]`).click();
+    await showPeriod(page, twice.meals[0]);
+    await page.locator(pageRow(twice.id)).click();
     await sheetUp(page, '#shr-log');
     const t2 = await ev(readSheet);
     assert.deepEqual([t2.title, t2.names, t2.qty], [twice.name, twice.items.map((it) => it.name), twice.items.map((it) => it.qty)], 'a unit taken twice reads as twice its serving\'s weight: ' + JSON.stringify(t2.qty));
@@ -2734,9 +2940,9 @@ const CASES = [
       'at three servings every amount — the eggs too — and every figures line are ×3: ' + JSON.stringify(three.qty));
     await ev(() => closeModal());
     await sheetGone(page);
-    await page.locator(`.view.active #shr-card [data-shr-period="${P}"]`).click();
+    await showPeriod(page, P);
     // «SAVE TO MY RECIPES»: a copy that says where it came from.
-    await page.locator(cardRow(meal.id)).click();
+    await page.locator(pageRow(meal.id)).click();
     await sheetUp(page, '#shr-log');
     await page.locator('#shr-save').click();
     await page.waitForTimeout(100);
@@ -2753,19 +2959,14 @@ const CASES = [
     assert.ok(![...Object.keys(r), ...r.items.flatMap((it) => Object.keys(it))].some((k) => k.startsWith('_')), 'no editor flag reaches the blob');
     assert.deepEqual([(await ev(readSheet)).save, await ev(toastText), await ev(toastAct)], [{ text: want.mine, disabled: true }, want.saved, want.undo], 'the button says it is in the recipes and is spent; the toast says it was saved, with «' + want.undo + '»');
     // ONE MEAL, ONE ROW (v421 fix F3a): the copy stands in for the ready meal
-    // it was saved from — on the card behind at once, and in «show more».
+    // it was saved from — on the page behind at once, and at the next arrival.
     const mineId = 'mine:' + r.id;
-    let cardNow = await ev(readCard);
-    assert.deepEqual([cardNow.rows[0], cardNow.rows.includes(meal.id)], [mineId, false], 'the card behind follows at once: the copy heads it, the ready original has left it: ' + JSON.stringify(cardNow.rows));
+    let pg = await ev(readPage);
+    assert.deepEqual([pg.rows[0], pg.allRows.includes(meal.id)], [mineId, false], 'the page behind follows at once: the copy heads the period, the ready original has left it: ' + JSON.stringify(pg.rows.slice(0, 4)));
     await ev(() => closeModal());
     await sheetGone(page);
-    await reset('food');
-    cardNow = await ev(readCard);
-    assert.deepEqual([cardNow.rows[0], cardNow.srcs[0], cardNow.rows.includes(meal.id)], [mineId, 'mine', false], 'the copy is the user\'s own recipe now — the card\'s first row — and the meal it copies is not on the card a second time');
-    const moreNow = await openMore(page);
-    assert.deepEqual([group(moreNow, 'mine'), moreNow.rows.includes(meal.id)], [[mineId], false], '«show more» lists the meal once, as the user\'s own: ' + JSON.stringify(moreNow.groups.map((g) => [g.src, g.rows.length])));
-    await ev(() => closeModal());
-    await sheetGone(page);
+    pg = await arrive(kit, P);
+    assert.deepEqual([pg.rows[0], pg.srcs[0], group(pg, 'mine'), pg.allRows.includes(meal.id)], [mineId, 'mine', [mineId], false], 'the copy is the user\'s own recipe now — first, under «من وصفاتي» — and the meal it copies is not listed a second time: ' + JSON.stringify(pg.groups.map((g) => [g.src, g.rows.length])));
     // Reached directly, the ready meal's sheet still says the copy is saved.
     await ev((m) => openSharedRecipe(m, null, () => {}), meal);
     await sheetUp(page, '#shr-log');
@@ -2773,7 +2974,7 @@ const CASES = [
     await ev(() => closeModal());
     await sheetGone(page);
     // The copy's row opens the recipe view, with «سجّل حصّة» first (fix F1).
-    await page.locator(cardRow(mineId)).click();
+    await page.locator(pageRow(mineId)).click();
     await sheetUp(page, '[data-edit-view]');
     const view = await ev(readSheet);
     assert.deepEqual([view.title, view.logView && view.logView.text, view.actions[0]], [meal.name, want.log, 'log'], 'the copy\'s row opens its recipe view, «' + want.log + '» first');
@@ -2788,6 +2989,10 @@ const CASES = [
     assert.deepEqual((await ev(readSheet)).terms, [...want.terms, want.copy], 'a copy of a ready meal: the fourth term says the published copy stays as sent');
     await ev(() => closeModal());
     assert.equal(await ev((id) => autoShareWants(DB.recipes.list().find((x) => x.id === id)), r.id), false, 'automatic sharing does not want it');
+    // TWO LOCKS, each enough alone: noAuto (for a phone on v420), and on this
+    // build the origin itself (v421: any origin is refused, not 'shared' only).
+    // Since the copy carries noAuto, the line above cannot see the second.
+    assert.equal(await ev((id) => autoShareWants({ ...DB.recipes.list().find((x) => x.id === id), noAuto: undefined }), r.id), false, 'nor would it without noAuto: its origin «builtin» refuses it on its own');
     // THE ENGINE, OPEN: a recipe of the user's own beside the copy — the
     // control — is sent; the copy never is.
     await account(kit);
@@ -2800,7 +3005,8 @@ const CASES = [
     assert.deepEqual([(await posts(kit)).length, worker.calls.map((x) => x.shareRecipe.sourceId)], [1, [own.id]], 'one request in all, for the user\'s own recipe — the copy of a ready meal is never sent: ' + JSON.stringify(worker.calls.map((x) => x.shareRecipe.name)));
   }],
 
-  ['(35) layout: at 375 and 320, with and without «Larger text», every row of the card — mine, community, ready — keeps its caption, name and figures inside it, the caption over the name, and stays door-sized; «show more»\'s captions, a ready meal\'s ingredient lines — the figures on a line of their own, under the amount — and an own recipe\'s three actions stay inside their sheet', async ({ page, ev, reset }) => {
+  ['(35) layout: at 375 and 320, with and without «Larger text», every row of an open period — mine, community, ready — keeps its name and figures inside it and stays door-sized, and the three captions are drawn inside the card, each over its rows; a ready meal\'s ingredient lines — the figures on a line of their own, under the amount — and an own recipe\'s three actions stay inside their sheet', async (kit) => {
+    const { page, ev } = kit;
     const { P, O } = await periods(page);
     await stubCloud(page, { rows: sixRows('qa-c35', P, O) });
     await load(page);
@@ -2813,20 +3019,14 @@ const CASES = [
         await page.setViewportSize({ width, height: 812 });
         for (const lg of [false, true]) {
           const where = `${width}px${lg ? ' + larger text' : ''}`;
-          await reset('food');
-          const c = await ev(layoutOf, { part: 'card', lg });
-          assert.deepEqual(c.srcs, ['mine', 'community', 'builtin'], `setup: a row of each source at ${where}`);
-          assert.deepEqual(c.spill, [], `a row's caption, name or figures leave the row at ${where}: ${c.spill.join('; ')}`);
-          assert.deepEqual([c.cardSpill, c.pageSpill], [false, false], `the card or the page overflows sideways at ${where}`);
-          assert.ok(c.rowH.every((h) => h >= 44), `rows at least 44px at ${where}: ${c.rowH}`);
-          assert.deepEqual(c.caps, [true, true, null], `the caption is drawn over the name on the two rows that carry one at ${where}: ${JSON.stringify(c.caps)}`);
-          await page.locator('.view.active #shr-card [data-shr-more]').click();
-          await sheetUp(page, '.shr-group');
-          const m = await ev(layoutOf, { part: 'more', lg });
-          assert.deepEqual(m.spill, [], `«show more» spills at ${where}: ${m.spill.join('; ')}`);
-          assert.equal(m.modalSpill, false, `«show more» scrolls sideways at ${where}`);
-          assert.ok(m.caps.length === 3 && m.caps.every((h) => h > 0), `its three captions drawn at ${where}: ${m.caps}`);
-          await page.locator(`#modal-root [data-shr-open="${meal.id}"]`).click();
+          await arrive(kit, P);
+          const c = await ev(layoutOf, { part: 'panel', lg });
+          assert.deepEqual(c.srcs, ['mine', 'community', 'builtin'], `setup: rows of each source at ${where}`);
+          assert.deepEqual(c.spill, [], `a row's name or figures leave the row at ${where}: ${c.spill.join('; ')}`);
+          assert.deepEqual([c.secSpill, c.pageSpill], [false, false], `the period's card or the page overflows sideways at ${where}`);
+          assert.ok(c.rowH >= 44, `every row at least 44px at ${where}: ${c.rowH}`);
+          assert.deepEqual(c.caps, [true, true, true], `the three captions drawn inside the card, each over its rows, at ${where}: ${JSON.stringify(c.caps)}`);
+          await page.locator(pageRow(meal.id)).click();
           await sheetUp(page, '.rec-view .cx-row.has-figs');
           const s = await ev(layoutOf, { part: 'meal', lg });
           assert.equal(s.n, meal.items.length, `setup: the meal's ${meal.items.length} ingredients at ${where}`);
@@ -2835,8 +3035,8 @@ const CASES = [
           assert.equal(s.modalSpill, false, `the meal's sheet scrolls sideways at ${where}`);
           await ev(() => closeModal());
           await sheetGone(page);
-          // The own recipe's view from the card: three actions on one row (fix F1).
-          await page.locator('.view.active #shr-card .shr-row[data-shr-src="mine"]').click();
+          // The own recipe's view from the page: three actions on one row (fix F1).
+          await page.locator('.view.active .shr-row[data-shr-src="mine"]').click();
           await sheetUp(page, '[data-log-view]');
           const v = await ev(layoutOf, { part: 'view', lg });
           assert.equal(v.n, 3, `setup: «log», «edit» and the share button at ${where}`);
@@ -2851,6 +3051,157 @@ const CASES = [
       await ev(() => document.body.classList.remove('text-lg'));
       await page.setViewportSize({ width: 375, height: 812 });
     }
+  }],
+
+  // ── THE DOOR AND THE PAGE (v422) ─────────────────────────────────────────
+  ['(36) the door: Food carries ONE button — the utensils glyph, «اقتراحات اليوم», the chevron of a door row at the reading end — and nothing else of the old card: no period, no row, no count, no «show more»; under the water card (as wide), or under the setup button with no target, outside the hero; a tap opens the page with the Food tab still lit, titled in its bar and in its real heading; its back arrow — and the browser\'s Back — return to Food, off the stack', async (kit) => {
+    const { page, ev, reset, lang } = kit;
+    const { P, O } = await periods(page);
+    // All three sources in memory: none of them reaches Food.
+    await stubCloud(page, { rows: sixRows('qa-c36', P, O) });
+    await load(page);
+    await ownRecipe(page, BOWL);
+    const title = await ev(() => t('shr_title'));
+    await reset('food');
+    const d = await ev(readDoor);
+    assert.deepEqual([d.n, d.tag, d.type], [1, 'BUTTON', 'button'], 'ONE door on Food, a real button: ' + JSON.stringify(d));
+    assert.deepEqual([d.text, d.name, d.nums], [title, title, 0], `its only words are «${title}» — no count, no figure, no subtitle: «${d.text}»`);
+    assert.deepEqual([d.svgs, d.glyph, d.chevron], [2, true, true], 'two glyphs and no more: the utensils first, the chevron of a door row last');
+    assert.equal(d.end, true, 'the chevron at the reading end of the bar');
+    assert.equal(d.flip, lang === 'ar' ? 'matrix(-1, 0, 0, 1, 0, 0)' : 'none', 'and pointing where the reading goes — mirrored in Arabic, as it is drawn in English');
+    assert.equal(d.old, 0, 'nothing of the old card on Food: no period button, no row, no «show more»');
+    assert.deepEqual([d.after, d.inHero, d.w === d.hostW], ['water', false, true], `under the water card and as wide (${d.w} / ${d.hostW}), outside the hero, whose catch-all opens the log`);
+    // THE TAP: the page, the Food tab still lit.
+    await page.locator('.view.active [data-shr-door]').click();
+    await page.waitForFunction(() => currentView === 'suggestions', null, { timeout: 3000 }).catch(() => {});
+    assert.equal(await ev(() => currentView), 'suggestions', 'the door opens the page');
+    assert.deepEqual(await ev(litTabs), [['food', 'page']], 'and the Food tab stays lit — the page is a step into it');
+    const s = await ev(readPage);
+    assert.deepEqual([s.bar, s.h1, s.open], [title, title, []], `titled «${title}» in the bar and in its real heading, every period closed`);
+    assert.deepEqual(await ev(() => navStack.map((e) => e.view)), ['home', 'food', 'suggestions'], 'one step onto the stack');
+    // ITS BACK ARROW goes BACK.
+    await page.locator('.view.active .detail-top [data-back]').click();
+    await page.waitForFunction(() => currentView === 'food', null, { timeout: 3000 }).catch(() => {});
+    assert.deepEqual([await ev(() => currentView), await ev(() => navStack.map((e) => e.view)), await ev(litTabs)], ['food', ['home', 'food'], [['food', 'page']]], 'the back arrow returns to Food — off the stack, not forward onto it');
+    assert.equal((await ev(readDoor)).n, 1, 'and the door is there');
+    // …and so does the browser's Back (popstate; Android's button is goBack too).
+    await page.locator('.view.active [data-shr-door]').click();
+    await page.waitForFunction(() => currentView === 'suggestions', null, { timeout: 3000 });
+    await ev(() => history.back());
+    await page.waitForFunction(() => currentView === 'food', null, { timeout: 3000 }).catch(() => {});
+    assert.deepEqual([await ev(() => currentView), await ev(litTabs)], ['food', [['food', 'page']]], 'the browser\'s Back returns to Food');
+    // NO TARGET: the door under the setup button.
+    await ev(() => DB.nutrition.setTargets({ calories: 0, protein: 0, carbs: 0, fat: 0 }));
+    await reset('food');
+    // The Food tab opens the calculator by itself when no target is set.
+    await page.waitForTimeout(400);
+    await ev(() => { try { closeModal(); } catch (_) {} });
+    await sheetGone(page);
+    const n = await ev(readDoor);
+    assert.deepEqual([n.n, n.after, n.old, n.inHero], [1, 'setup', 0, false], 'no target: the door under the setup button, alone');
+    await page.locator('.view.active [data-shr-door]').click();
+    await page.waitForFunction(() => currentView === 'suggestions', null, { timeout: 3000 }).catch(() => {});
+    assert.deepEqual([await ev(() => currentView), ((await ev(readPage)) || {}).left], ['suggestions', null], 'and it opens the page, with no calories line: there is no target to count from');
+  }],
+
+  ['(37) the scroll: a period opened below the fold is brought into view — its header, and its first row under it; and a header tapped while the list open above it closes keeps its place on screen', async (kit) => {
+    const { page, ev } = kit;
+    await stubCloud(page, { rows: [] });
+    await load(page);
+    // Where a period's header stands on screen, whether it and its open list's
+    // first row are wholly inside the scroller, and how far the page is scrolled.
+    const at = (p) => ev((p) => {
+      const main = document.querySelector('.main'), m = main.getBoundingClientRect();
+      const h = document.querySelector('.view.active [data-shr-sec="' + p + '"]').getBoundingClientRect();
+      const first = document.querySelector('#shr-pg-' + p + ':not([hidden]) .shr-row');
+      const r = first && first.getBoundingClientRect();
+      return { top: Math.round(h.top), head: h.top >= m.top - 1 && h.bottom <= m.bottom + 1, row: r ? r.top >= m.top - 1 && r.bottom <= m.bottom + 1 : null, scroll: Math.round(main.scrollTop) };
+    }, p);
+    // A tap that is only a tap: Playwright would scroll the header into view first.
+    const tap = (p) => ev((p) => document.querySelector('.view.active [data-shr-sec="' + p + '"]').click(), p);
+    const expanded = () => ev(() => [...document.querySelectorAll('.view.active .shr-pg-head')].map((b) => b.getAttribute('aria-expanded')));
+    // A NEW SCREEN HEIGHT, and the app laid out for it. The shell is 100dvh,
+    // which follows a new viewport height a frame late: measured, the scroller
+    // still read 748 tall at a 442px viewport, so the page judged the fold
+    // where it no longer was. The width follows at once (cases 15, 25, 35).
+    const resize = async (height) => {
+      await page.setViewportSize({ width: 375, height });
+      await page.waitForFunction((h) => { const n = document.querySelector('.bottom-nav'); return innerHeight === h && !!n && Math.abs(n.getBoundingClientRect().bottom - h) <= 1; }, height, { timeout: 3000 });
+    };
+    try {
+      // A SCREEN THAT ENDS 20px BELOW THE LAST HEADER: the dinner header on
+      // screen, its list's first row under the fold.
+      await arrive(kit);
+      const fit = await ev(() => { const h = document.querySelector('.view.active [data-shr-sec="dinner"]').getBoundingClientRect(); const m = document.querySelector('.main').getBoundingClientRect(); return Math.round(h.bottom + (innerHeight - m.bottom) + 20); });
+      await resize(fit);
+      await arrive(kit);
+      const before = await at('dinner');
+      assert.deepEqual([before.head, before.scroll], [true, 0], `setup: at 375×${fit} the dinner header is on screen, the page unscrolled: ${JSON.stringify(before)}`);
+      await tap('dinner');
+      assert.deepEqual(await expanded(), ['false', 'false', 'false', 'true'], 'setup: dinner open');
+      const after = await at('dinner');
+      assert.deepEqual([after.head, after.row], [true, true], `opened below the fold, its header and its first row are brought into view: ${JSON.stringify({ before, after })}`);
+      // THE HEADER TAPPED KEEPS ITS PLACE: breakfast open, the page scrolled down
+      // its list to the lunch header; a tap on lunch closes breakfast ABOVE it.
+      await arrive(kit);
+      await tap('breakfast');
+      await ev(() => { const m = document.querySelector('.main'); const h = document.querySelector('.view.active [data-shr-sec="lunch"]'); m.scrollTop += h.getBoundingClientRect().top - m.getBoundingClientRect().top - 120; });
+      const was = await at('lunch');
+      assert.ok(was.head && was.scroll > 0, `setup: breakfast open above it, the lunch header 120px down a scrolled page: ${JSON.stringify(was)}`);
+      await tap('lunch');
+      assert.deepEqual(await expanded(), ['false', 'true', 'false', 'false'], 'setup: lunch open, breakfast closed above it');
+      const now = await at('lunch');
+      assert.ok(Math.abs(now.top - was.top) <= 1 && now.row, `the lunch header keeps its place on screen as breakfast's list closes above it (${was.top} → ${now.top}), its first row in view under it: ${JSON.stringify({ was, now })}`);
+    } finally {
+      await resize(812).catch(() => page.setViewportSize({ width: 375, height: 812 }));
+    }
+  }],
+
+  // v422 review: the page reads «today» and the clock when it is DRAWN, so a
+  // new day has to draw it again — the foreground's repaint (js/app.js,
+  // DATE_DERIVED_VIEWS), as for every screen that derives its day from now.
+  ['(38) a new day: the page left on show overnight is drawn again when the app comes back to the foreground — the new day\'s calories left, «الآن» on the new hour\'s period, the open list ranked for them — and the period open stays open', async (kit) => {
+    const { page, ev } = kit;
+    const { P } = await periods(page);
+    await stubCloud(page, { rows: [] });
+    await load(page);
+    const ready = await ev(readyMeals);
+    const now = await ev(() => t('shr_now'));
+    await ev(() => DB.foodLogs.addMany(todayISO(), [{ name: 'QA eaten', servings: 1, calories: 1700, protein: 50, carbs: 150, fat: 50 }]));
+    let s = await arrive(kit, P);
+    assert.deepEqual([s.left, s.heads.filter((h) => h.now).map((h) => h.p), s.open], [await ev(leftText, 300), [P], [P]], 'setup: 300 left today, «' + now + '» on the clock\'s period, that period open');
+    // THE NEXT MORNING — the next midday when the clock is in the morning
+    // already, so «الآن» has another period to move to — and the app back in
+    // the foreground. Nothing is pulled (the 'out' stub's resume answers
+    // 'nosession'), so the day change alone has to draw the page.
+    const was = await ev(() => Date.now());
+    const hour = P === 'breakfast' ? 13 : 8;
+    const Q = hour === 13 ? 'lunch' : 'breakfast';
+    const next = await ev((hour) => { const d = new Date(); d.setDate(d.getDate() + 1); d.setHours(hour, 0, 0, 0); return d.getTime(); }, hour);
+    try {
+      await page.clock.setSystemTime(next);
+      await ev(() => document.dispatchEvent(new Event('visibilitychange')));
+      s = await ev(readPage);
+      assert.deepEqual([s.left, s.heads.filter((h) => h.now).map((h) => [h.p, h.now]), s.open, s.rows], [await ev(leftText, 2000), [[Q, now]], [P], rankIds(ready, P, 2000)],
+        `the app back the next day at ${hour}:00: the page drawn for it — 2,000 left, not yesterday's 300; «${now}» on ${Q}, not ${P}; the open list ranked for 2,000 — and ${P} still open`);
+    } finally {
+      // Today again, and the app's own day with it (the next foreground repaint).
+      await page.clock.setSystemTime(was + 1000);
+      await ev(() => document.dispatchEvent(new Event('visibilitychange')));
+    }
+    // A WHOLE render under an open sheet (the review's last finding): a new
+    // day on the foreground or a pull's refresh calls renderView, which draws
+    // every node of the page anew — the row the sheet was opened from too. The
+    // sheet still hands focus back to THAT row when it closes, never to <body>.
+    s = await ev(readPage);
+    const rowId = s.rows[0];
+    assert.ok(rowId && s.open[0] === P, 'setup: ' + P + ' still open, with rows: ' + JSON.stringify(s.rows.slice(0, 3)));
+    await page.click(`.view.active [data-shr-open="${rowId}"]`);
+    await sheetUp(page, '#shr-log');
+    await ev(() => renderView('suggestions'));
+    await page.keyboard.press('Escape');
+    await sheetGone(page);
+    assert.equal((await ev(readPage)).focus, 'row:' + rowId, 'a whole render of the page under the sheet, then Escape: focus is back on the row the sheet was opened from, drawn anew');
   }],
 ];
 
@@ -2893,7 +3244,7 @@ async function run() {
     }
   } finally { await browser.close(); await srv.close(); }
   if (failures.length) { console.error(`FAIL  shared recipes UI: ${failures.length} failed`); failures.forEach((f) => console.error('  - ' + f)); process.exitCode = 1; return; }
-  console.log(`PASS  shared recipes UI (${passed} cases, AR/dark + EN/light, 375px): the «Today's suggestions» card (there from the first day — on null, on a missing method, on an empty list and before the answer — with ready meals priced from the catalogue; titled as the owner named it; four period buttons with only the clock's pressed; three rows, the best of each source, ranked by what fits the calories left, then protein per kcal; a period no community recipe suits filled with ready meals; «show more» grouped under three captions, each in rank order; outside the hero, kept by a water tap with no second pull), a recipe's sheet (name, one serving's figures, the ingredients fetched on the tap with each one's figures, a 4 → 2 scaler moving both), «Log a serving» as one serving with Undo, «Save to my recipes» as a clean copy, the report (one feedback row, the row leaves; signed out sends nothing), sharing (four terms — the fourth by the setting — the Worker's protocol, the {id, at, sig} marker, «Stop sharing», «shared» in the picker, a corrected name announced), a rejection's translated reason, the failures (daily limit, an old Worker, signed out, non-whole servings), withdrawing (the published id; a failure keeps the marker; a withdrawn recipe leaves automatic sharing until it is shared by hand; a button the marker moved under only redraws), untrusted names never markup and unsafe ids dropped, the period buttons fitting at 375/320 with and without larger text, the user's own published recipe suggested once, as their own, under its copy's periods (the feed's copy, reached directly, still offering no copy and no report); AUTOMATIC SHARING on a stopped clock — a save's one-time notice, then one request when its window ends, the sig, the fresh pull and the repaint, nothing for an unchanged re-save and one more for an edit; «stop» inside the window, the setting turned off while a recipe waits, a notice the keyboard holds up; nothing sent signed out, with the setting off, offline, without an account id or a configured cloud, before the sync settles, on a store that failed to load, for 2.5 servings, a copy from the list or a withdrawn recipe; a rejection remembered until an edit, and the gap kept for a save right after an answer; the daily limit and the AI budget's 429 pausing the device, also after the app is opened again; the backfill one at a time, a gap after each answer, ${DAY_MAX} a day; no marker after an account change, and no pause from a refusal that arrives after one; the Settings row at 375/320; «save all» as a trigger, an Undo on the recipes kept working, the notice waiting behind an Undo; «blocked», the held-recipes cap, «unavailable», a failed request, a rate limit waited out once, an approval for a recipe withdrawn or deleted meanwhile, and an edit made during the review sent after it; THE REVIEW'S FIXES — a notice seen only once it ended on screen (displaced by a navigation or a toast it comes back; under a hidden page it waits), «stop sharing» under a re-share in flight withdrawing the new copy, a refused withdraw lifting noAuto, a sync on the wire holding the queue, the setting turned off mid-review, «Recent changes» applicable after the engine published and withdrawing an undone add's copy, the fourth term for a copy from the list, the Settings hint in both states, a null row never breaking the render of Food; THE FIX AFTER IT — a dependency that throws under the backfill never breaking that render, and a notice cut short by a hold or a stop (a delete's Undo, the setting turned off in Settings, going offline) raised again, nothing sent and nothing seen until a full window ran on screen after THAT raise; «اقتراحات اليوم» (v421) — the user's own recipe first even when it ranks last, captioned, opening its recipe view; a ready meal's sheet with its ingredients at once, each with its figures, the scaler moving both, one serving logged as source builtin with Undo, a copy saved with origin builtin that its share sheet promises nothing for and automatic sharing never sends; captions on the user's and other users' rows only; the card, «show more» and a ready meal's sheet laid out at 375/320 with and without larger text; and a price that throws never breaking the render of Food; THE FIXES AFTER ITS REVIEW — «سجّل حصّة» on the user's own recipe opened from the card (first, one serving, Undo, kept through a withdraw's redraw, «تعديل» back to Food, the picker's view unchanged, three actions fitting at 320), every ingredient of a ready meal in grams or millilitres and every amount scaling with its figures, one meal one row (a ready meal's or a community recipe's copy standing in for it, the card behind repainted, a copy withdrawn by «أزل من المشاركة» or by an Undo never suggested back), a ready meal's copy carrying noAuto, «show more» with one source drawn bare, and a name holding «$» toasted as written`);
+  console.log(`PASS  shared recipes UI (${passed} cases, AR/dark + EN/light, 375px): «اقتراحات اليوم» as a door and a page (v422) — Food's door (one button: the glyph, the name the owner gave, a chevron to the reading end; nothing of the old card; under the water card or the setup button, outside the hero; the tap opening the page with the Food tab lit, its back arrow and the browser's Back returning to Food) and the page (there from the first day — on null, on a missing method, on an empty list and before the answer — every period unfolding ready meals priced from the catalogue; four periods closed on arrival, «الآن» on the clock's alone, one open at a time, a second tap closing it, a log, a re-render, an Undo and a Back to the page keeping it, a new arrival closing it, a new day drawing it again; a sheet over the page handing focus back to its row drawn anew under it, or to its period's header; the calories left with a target and no line without one; the whole period ranked by what fits them, then protein per kcal, in three groups captioned only when more than one has rows; the community list arriving into the open period by itself; Food pulling nothing; the door and the headers fitting at 375/320 with and without larger text; a period below the fold brought into view and a tapped header kept in place), a recipe's sheet (name, one serving's figures, the ingredients fetched on the tap with each one's figures, a 4 → 2 scaler moving both), «Log a serving» as one serving with Undo, «Save to my recipes» as a clean copy, the report (one feedback row, the row leaves; signed out sends nothing), sharing (four terms — the fourth by the setting — the Worker's protocol, the {id, at, sig} marker, «Stop sharing», «shared» in the picker, a corrected name announced), a rejection's translated reason, the failures (daily limit, an old Worker, signed out, non-whole servings), withdrawing (the published id; a failure keeps the marker; a withdrawn recipe leaves automatic sharing until it is shared by hand; a button the marker moved under only redraws), untrusted names never markup and unsafe ids dropped, the user's own published recipe suggested once, as their own, under its copy's periods (the feed's copy, reached directly, still offering no copy and no report); AUTOMATIC SHARING on a stopped clock — a save's one-time notice, then one request when its window ends, the sig, the fresh pull and the page repainted, nothing for an unchanged re-save and one more for an edit; «stop» inside the window, the setting turned off while a recipe waits, a notice the keyboard holds up; nothing sent signed out, with the setting off, offline, without an account id or a configured cloud, before the sync settles, on a store that failed to load, for 2.5 servings, a copy from the list or a withdrawn recipe; a rejection remembered until an edit, and the gap kept for a save right after an answer; the daily limit and the AI budget's 429 pausing the device, also after the app is opened again; the backfill one at a time, a gap after each answer, ${DAY_MAX} a day; no marker after an account change, and no pause from a refusal that arrives after one; the Settings row at 375/320; «save all» as a trigger, an Undo on the recipes kept working, the notice waiting behind an Undo; «blocked», the held-recipes cap, «unavailable», a failed request, a rate limit waited out once, an approval for a recipe withdrawn or deleted meanwhile, and an edit made during the review sent after it; THE REVIEW'S FIXES — a notice seen only once it ended on screen (displaced by a navigation or a toast it comes back; under a hidden page it waits), «stop sharing» under a re-share in flight withdrawing the new copy, a refused withdraw lifting noAuto, a sync on the wire holding the queue, the setting turned off mid-review, «Recent changes» applicable after the engine published and withdrawing an undone add's copy, the fourth term for a copy from the list, the Settings hint in both states, a null row never breaking the render of Food; THE FIX AFTER IT — a dependency that throws under the backfill never breaking that render nor the page's open period, and a notice cut short by a hold or a stop (a delete's Undo, the setting turned off in Settings, going offline) raised again, nothing sent and nothing seen until a full window ran on screen after THAT raise; «اقتراحات اليوم» (v421) — the user's own recipe heading its period under «من وصفاتي» even when it ranks last, opening its recipe view; a ready meal's sheet with its ingredients at once, each with its figures, the scaler moving both, one serving logged as source builtin with Undo, a copy saved with origin builtin that its share sheet promises nothing for and automatic sharing never sends; the open period and a ready meal's sheet laid out at 375/320 with and without larger text; THE FIXES AFTER ITS REVIEW — «سجّل حصّة» on the user's own recipe opened from the page (first, one serving, Undo, kept through a withdraw's redraw, «تعديل» back to the page, the picker's view unchanged, three actions fitting at 320), every ingredient of a ready meal in grams or millilitres and every amount scaling with its figures, one meal one row (a ready meal's or a community recipe's copy standing in for it, the page behind repainted, a copy withdrawn by «أزل من المشاركة» or by an Undo never suggested back), a ready meal's copy carrying noAuto, one source drawn bare, and a name holding «$» toasted as written`);
 }
 
 if (require.main === module) run().catch((e) => { console.error(e); process.exitCode = 1; });

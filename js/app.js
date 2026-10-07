@@ -12,7 +12,7 @@
 // build. The literal below is the fallback (file://, or a stripped query) and is
 // still bumped by `npm run release` — see CLAUDE.md "CACHE WORKFLOW".
 const VAULT_BUILD = (() => {
-  const FALLBACK = 'v421';
+  const FALLBACK = 'v422';
   try {
     const src = (document.currentScript && document.currentScript.src) || '';
     const m = src.match(/[?&]v=(\d+)/);
@@ -1181,6 +1181,7 @@ function navigate(view, context = {}, opts = {}) {
     planner: 'workouts', 'personal-records': 'workouts', 'muscle-sessions': 'workouts',
     cardio: 'cardio', food: 'food', sleep: 'sleep',
     compare: 'home', settings: 'home', calendar: 'home', supplements: 'home', foodlog: 'food',
+    suggestions: 'food',   // «اقتراحات اليوم» (v422): its door is on Food, so Food stays lit
     sleeplog: 'sleep', cardiolog: 'cardio',   // each log is a step INTO its tab, like the food log
     day: 'home', notifications: 'home',
     'session-day': 'workouts', 'session-run': 'workouts',   // the run screens belong to Program; without this no tab was lit
@@ -1771,6 +1772,7 @@ function renderView(view) {
     case 'supplements': renderSupplements(el); break;
     case 'notifications': renderNotifications(el); break;
     case 'foodlog': renderFoodLog(el); break;
+    case 'suggestions': renderSuggestions(el); break;
     case 'sleeplog': renderSleepLog(el); break;
     case 'cardiolog': renderCardioLog(el); break;
     case 'session-day': renderSessionDay(el); break;
@@ -10800,7 +10802,11 @@ function afterScripts(fn) {
   // `todayIso` from todayISO() at RENDER time and every tick writes to that
   // captured date, so a phone left open overnight recorded the morning's doses
   // against YESTERDAY. The notifications page reads today's log and today's
-  // remaining schedule the same way.
+  // remaining schedule the same way. So does «اقتراحات اليوم» (v422): the
+  // calories left, the «الآن» chip and the open list's ranking are read from
+  // todayISO() and the clock at RENDER time — a page left open overnight kept
+  // yesterday's «300 left» and «الآن» on dinner into the morning (on Food, in
+  // v421, the card was redrawn with Food).
   // One place that acts on a background sync result, so foreground and reconnect
   // can never disagree about what "pulled" or "conflict" means. Quiet by design:
   // no toast on success — this fires whenever the app is opened, and "Synced"
@@ -10819,7 +10825,7 @@ function afterScripts(fn) {
   // is, so the sentence is true.
   window.addEventListener('online', () => { try { syncResume(); } catch (_) {} });
 
-  const DATE_DERIVED_VIEWS = ['home', 'food', 'foodlog', 'sleeplog', 'cardiolog', 'supplements', 'notifications'];
+  const DATE_DERIVED_VIEWS = ['home', 'food', 'foodlog', 'suggestions', 'sleeplog', 'cardiolog', 'supplements', 'notifications'];
   let __lastActiveDay = todayISO();
 
   // GOING AWAY is the other half of the guided-run auto-save. Android can kill a

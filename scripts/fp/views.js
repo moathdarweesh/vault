@@ -35,6 +35,7 @@ module.exports = [
   { view: 'supplements' },
   { view: 'notifications' },
   { view: 'foodlog' },              // today, with no rows and NO TARGETS in the empty state: the four .macro-totals tiles, never the miniature ring (read back from a v405 record); a closed day's miniature is covered by scripts/test-food-log-ui.js
+  { view: 'suggestions' },          // «اقتراحات اليوم» (v422), as an arrival draws it: the four periods all CLOSED, «الآن» on the clock's, and no calories line (no target in the empty state); an open period's rows and captions are covered by scripts/test-shared-recipes-ui.js
   { view: 'sleeplog' },             // today, empty: the day arrows, the empty state and the add; a night's ring, rows and a closed night are covered by scripts/test-cardio-sleep-ui.js
   { view: 'cardiolog' },            // today, empty: the day arrows, the empty state and the add; the day card, rows and scheduled ticks are covered by scripts/test-cardio-sleep-ui.js
   { view: 'day' },                  // ditto

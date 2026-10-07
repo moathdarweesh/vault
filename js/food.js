@@ -117,10 +117,8 @@ function renderFood(el) {
   }
 
   const host = $('#nutri-host', el);
-  // «اقتراحات» (v419): the dashboard painted from memory above; the community
-  // list arrives (or does not) after it, and only the card is drawn again.
-  // Scoped to THIS render's view — never `.view.active` from inside a render.
-  loadSharedRecipes().then((changed) => { if (changed) shrRepaint($('#nutri-host', el)); });
+  // «اقتراحات اليوم» is its own page since v422 (renderSuggestions): Food
+  // draws only its door, and the community list is pulled where it is read.
   // Automatic sharing (v420): whatever of the user's own recipes is not
   // published yet is queued from here — the Food tab is where its one-time
   // notice belongs. It only queues; runAutoShare() checks every gate itself.
@@ -128,30 +126,10 @@ function renderFood(el) {
   // dashboard painted with none of its handlers.
   try { autoShareBackfill(); } catch (_) {}
   host?.addEventListener('click', (e) => {
-    // The suggestions card's three controls, ABOVE the hero's catch-all at the
-    // end: the card sits outside .nutri-hero, and these branches return first
-    // so no edit to that test can ever turn a period tap into opening the log.
-    const shrBtn = e.target.closest('[data-shr-period]');
-    if (shrBtn) {
-      const p = shrBtn.getAttribute('data-shr-period');
-      if (!SHR_PERIODS.includes(p)) return;
-      SHR_PICK = { period: p, clock: mealPeriodFor(new Date()) };
-      shrRepaint(host);
-      // The card was redrawn under the finger: focus goes back to the button pressed.
-      const again = host.querySelector('[data-shr-period="' + p + '"]');
-      if (again) again.focus({ preventScroll: true });
-      return;
-    }
-    const shrRow = e.target.closest('[data-shr-open]');
-    if (shrRow) {
-      shrOpen(suggestionPool().find((x) => x.id === shrRow.getAttribute('data-shr-open')), rerender);
-      return;
-    }
-    if (e.target.closest('[data-shr-more]')) {
-      const period = shrPeriod(new Date());
-      openSharedSuggestions(rankSuggestions(suggestionPool(), period, shrGauge()), period, rerender);
-      return;
-    }
+    // The door to «اقتراحات اليوم» (v422), ABOVE the hero's catch-all at the
+    // end: it sits outside .nutri-hero, and this branch returns first so no
+    // edit to that test can ever turn a tap on it into opening the log.
+    if (e.target.closest('[data-shr-door]')) { navigate('suggestions'); return; }
     const setup = e.target.closest('[data-setup-goal]');
     if (setup) { openCalculatorModal(rerender); return; }
     const edit = e.target.closest('[data-edit-goal]');
@@ -224,8 +202,8 @@ function nutritionGauge(date) {
 function nutritionDashboardHtml(date) {
   const nut = DB.nutrition;
 
-  // Not set up yet → invite the user to build a target. The suggestions card
-  // follows it, ranked without a «calories left» (there is no target to leave).
+  // Not set up yet → invite the user to build a target. The door to the
+  // suggestions follows it (its page ranks without a «calories left»).
   if (!nut.hasTargets()) {
     return `
       <button class="nutri-setup" data-setup-goal>
@@ -234,7 +212,7 @@ function nutritionDashboardHtml(date) {
           <div class="nutri-setup-title">${t('nutri_setup_title')}</div>
         </div>
       </button>
-      ${sharedCardHtml(null)}
+      ${shrDoorHtml()}
     `;
   }
 
@@ -295,7 +273,7 @@ function nutritionDashboardHtml(date) {
       </div>
     </div>
 
-    ${waterCard}${sharedCardHtml(gauge)}
+    ${waterCard}${shrDoorHtml()}
   `;
 }
 
@@ -1211,7 +1189,7 @@ function recStoredItem(it) {
 }
 
 // One ingredient's figures FOR THE AMOUNT SHOWN — «٣٣٠ سعرة · ٦٢ بروتين · …»,
-// the card's own spelling (shrNum, shrMacros) — at `f` times its stored
+// the suggestion rows' own spelling (shrNum, shrMacros) — at `f` times its stored
 // amount, so the scaler moves them with the amounts and the two never disagree.
 function recItemFigsHtml(it, f) {
   const k = Number.isFinite(f) && f > 0 ? f : 1;
@@ -1259,13 +1237,14 @@ function bindRecScaler(modal, input, items, base) {
   return paint;
 }
 
-// `opts.log` (v421): the view opened from the «اقتراحات اليوم» card, where the
-// user's own recipe is the FIRST row — and a row there is a meal to eat, so the
-// view carries «سجّل حصّة» first: ONE serving, whatever the scaler shows, as
-// the picker's «+» logs it. The picker opens the view without it (its rows
-// keep their own «+»), so that view is unchanged. Every redraw of the view
-// from inside it hands `opts` on, and «تعديل» from the card lands back on Food
-// (onSave), not in the saved-food picker the card never opened.
+// `opts.log` (v421): the view opened from «اقتراحات اليوم» (its own page since
+// v422), where the user's own recipes head a period's list — and a row there
+// is a meal to eat, so the view carries «سجّل حصّة» first: ONE serving,
+// whatever the scaler shows, as the picker's «+» logs it. The picker opens the
+// view without it (its rows keep their own «+»), so that view is unchanged.
+// Every redraw of the view from inside it hands `opts` on, and «تعديل» from
+// there lands back on the suggestions (onSave), not in the saved-food picker
+// the page never opened.
 function openRecipeView(date, rec, onSave, opts) {
   // Re-read by id: the picker's copy can be older than an edit made since.
   const r = DB.recipes.list().find((x) => x.id === rec.id) || rec;
@@ -1365,7 +1344,7 @@ function openRecipeView(date, rec, onSave, opts) {
     if (!w || !w.ok) { shareBtn.disabled = false; convenienceError(w); return; }
     // The list in memory (a 5-minute throttle, a 30-minute cache) still holds
     // the copy just withdrawn, and with the marker gone nothing leaves it out
-    // any more: it would come back on the card as another user's recipe — the
+    // any more: it would come back in the suggestions as another user's recipe — the
     // user's own, with «أبلِغ» on it. It leaves now, as a reported row does.
     // `cur` is the recipe as it was BEFORE this write: its marker names the copy.
     shrForget(cur.shared.id);
@@ -2793,34 +2772,38 @@ function openSavedFoodPicker(date, onSave, initialTab) {
 }
 
 // ===========================================================================
-// MEAL SUGGESTIONS — «اقتراحات اليوم» (v419; the three sources since v421)
+// MEAL SUGGESTIONS — «اقتراحات اليوم» (v419; the three sources since v421;
+// its own page since v422)
 //
-// The Food tab's card that answers «what do I eat today?» — there from the
-// first day, under the water card — filled from three sources in this order
-// (suggestionPool): the user's OWN recipes, the recipes other users share
-// (each reviewed by the AI before the Worker published it — FoodAI.shareRecipe,
-// migration 35; since v420 a saved recipe is shared by itself: AUTOMATIC
-// SHARING, further down), and a READY set of everyday meals that ships with
-// the app (SUGGESTION_PRESETS in js/catalog.js, composed of the catalogue's
-// own entries and priced from them here — suggestionItems — with no AI call,
-// no account and no network). Four meal periods; the clock's is pressed, and a
-// tap on another holds until the clock moves into the next period. Three rows
-// for the period — the best-ranked of each source, so a new user sees ready
-// meals and a user with recipes sees their own first (shrCardOrder) — ranked by
-// what fits the calories still left (when a target exists), then by protein
-// per kcal, then the newer; «show more» lists the whole period under three
-// captions. A tap opens the row: an own recipe as everywhere (openRecipeView);
-// a community recipe or a ready meal in the suggestion sheet — one serving's
-// figures, every ingredient with its amount AND its figures (read on the tap
-// for a community recipe; a ready meal carries them), «Log a serving», «Save
-// to my recipes», and a report for a community recipe alone.
+// What answers «what do I eat today?» — there from the first day — filled
+// from three sources in this order (suggestionPool): the user's OWN recipes,
+// the recipes other users share (each reviewed by the AI before the Worker
+// published it — FoodAI.shareRecipe, migration 35; since v420 a saved recipe
+// is shared by itself: AUTOMATIC SHARING, further down), and a READY set of
+// everyday meals that ships with the app (SUGGESTION_PRESETS in js/catalog.js,
+// composed of the catalogue's own entries and priced from them here —
+// suggestionItems — with no AI call, no account and no network).
+// The owner (2026-10-07): «يكون فقط اسمها الاقتراحات وبعدها يودّيه لصفحة
+// ثانية … ثم يضغط على الفطور وتطلع معها الأكلات». So Food carries a DOOR alone
+// (shrDoorHtml: one bar, its name, under the water card), and the page
+// (renderSuggestions, view 'suggestions') holds four meal periods as an
+// accordion, all closed on arrival, one open at a time, the clock's marked
+// «الآن». An open period lists EVERY suggestion it has — ranked by what fits
+// the calories still left (when a target exists), then by protein per kcal,
+// then the newer — under «من وصفاتي» / «من المستخدمين» / «اقتراحات جاهزة» when
+// more than one source has rows. A tap opens the row: an own recipe as
+// everywhere (openRecipeView, with «سجّل حصّة»); a community recipe or a ready
+// meal in the suggestion sheet — one serving's figures, every ingredient with
+// its amount AND its figures (read on the tap for a community recipe; a ready
+// meal carries them), «Log a serving», «Save to my recipes», and a report for
+// a community recipe alone.
 //
 // THE LIST IS OTHER PEOPLE'S TEXT. Cloud.pullSharedRecipes copies each row
 // field by field; cleanSharedRecipes is the one judge of the values — an unsafe
 // id, a nameless row, a figure that is not one, no period it suits: DROPPED,
 // never repaired — and every name is escaped where it is drawn. It lives in
 // memory only, never in the blob (the food_catalog precedent). Every row of
-// the three sources passes the same judge (cleanSuggestion) before the card
+// the three sources passes the same judge (cleanSuggestion) before the page
 // reads it. The user's own published recipes (the `shared` marker,
 // DB.recipes.setShared) appear ONCE, as their own — the feed's copy is left
 // out — and an own row the sheet still meets (the harness) offers neither a
@@ -2831,9 +2814,15 @@ const SHR_PERIODS = ['breakfast', 'lunch', 'snack', 'dinner'];
 let SHARED_RECIPES = null;
 // When the last pull started (the 5-minute throttle) and the one in flight.
 let __sharedAt = 0, __sharedPending = null;
-// A period the user pressed, with the clock's period when they pressed it.
-let SHR_PICK = null;
-// Recipes reported this session leave the card at once.
+// The period open on the page, or null — ONE at a time. Module state, so a
+// re-render (a logged serving, a save, a sync, an approval) keeps it open;
+// a new arrival at the page closes it (renderSuggestions, by __shrCtx).
+let SHR_OPEN = null;
+// The navigation the page was last drawn for: navigate() hands every arrival
+// a context object of its own, and a Back hands the SAME one again (with its
+// scroll offset, which an open period is part of). Any other render reuses it.
+let __shrCtx = null;
+// Recipes reported this session leave the list at once.
 const SHR_HIDDEN = {};
 
 // The meal period an hour falls in: 5–10 breakfast, 11–15 lunch, 16–18 a
@@ -2841,12 +2830,6 @@ const SHR_HIDDEN = {};
 function mealPeriodFor(now) {
   const h = now && typeof now.getHours === 'function' ? now.getHours() : new Date().getHours();
   return h >= 5 && h <= 10 ? 'breakfast' : h >= 11 && h <= 15 ? 'lunch' : h >= 16 && h <= 18 ? 'snack' : 'dinner';
-}
-// The period the card shows: the user's pick while the clock is still in the
-// period it was made in, else the clock's own.
-function shrPeriod(now) {
-  const clock = mealPeriodFor(now);
-  return SHR_PICK && SHR_PICK.clock === clock && SHR_PERIODS.includes(SHR_PICK.period) ? SHR_PICK.period : clock;
 }
 // A literal ternary, never t('shr_meal_' + p): each key stays a whole quoted
 // literal that contracts 5 and 38 can see.
@@ -2894,7 +2877,7 @@ function shrItems(list) {
   const out = list.map(shrItem);
   return out.every(Boolean) ? out : null;
 }
-// The rows as the card may draw them. Idempotent: cleaning its own output
+// The rows as the page may draw them. Idempotent: cleaning its own output
 // changes nothing. A row with no `items` key (every list row) keeps none; a
 // row that carries items keeps them only when they are valid, else it goes.
 function cleanSharedRecipes(rows) {
@@ -2921,13 +2904,13 @@ function cleanSharedRecipes(rows) {
   }
   return out;
 }
-// What the card may suggest: the community list minus what the user reported
+// What the page may suggest: the community list minus what the user reported
 // this session. Their OWN published recipes stay in it (v420).
 function sharedPool() {
   if (!Array.isArray(SHARED_RECIPES) || !SHARED_RECIPES.length) return [];
   return SHARED_RECIPES.filter((r) => !Object.prototype.hasOwnProperty.call(SHR_HIDDEN, r.id));
 }
-// A PUBLISHED COPY THIS DEVICE JUST TOOK DOWN leaves the card at once (v421),
+// A PUBLISHED COPY THIS DEVICE JUST TOOK DOWN leaves the list at once (v421),
 // as a reported row does: the list in memory keeps it until the next pull (a
 // 5-minute throttle, a 30-minute cache), and with no marker naming it any more
 // the user's own recipe would be suggested a second time as another user's.
@@ -3025,7 +3008,7 @@ function cleanSuggestion(r) {
   if (typeof r.created_at === 'string' && r.created_at && r.created_at.length <= 40) row.created_at = r.created_at;
   return row;
 }
-// EVERY ROW THE CARD MAY DRAW, from the three sources in this order: the
+// EVERY ROW THE PAGE MAY DRAW, from the three sources in this order: the
 // user's own recipes (every one with at least one well-formed ingredient —
 // one serving's figures by DB.recipes.perServing; the periods of the feed's
 // copy when the recipe is published and the list holds it, else every period),
@@ -3034,12 +3017,12 @@ function cleanSuggestion(r) {
 // of suggestionItems). Each row through cleanSuggestion. Never a throw: a
 // blob row that is not a recipe is skipped — this is read from a render — and
 // so is a row whose figures cannot be worked out (a dependency that throws, as
-// DB.recipes.perServing may): the card is drawn INSIDE the dashboard, whose
-// handlers are bound after it, so a throw here would leave Food painted and
-// dead (test-shared-recipes-ui.js case 20, the v420 rule).
-// A COPY THE USER SAVED STANDS IN FOR THE ROW IT WAS SAVED FROM, on the card
-// and in «show more» alike (the same meal twice — the copy heading the card,
-// its original a row below — tells nothing): a ready meal's copy (origin
+// DB.recipes.perServing may): the page is drawn before its handler is bound,
+// so a throw here would leave it painted and dead (test-shared-recipes-ui.js
+// case 20, the v420 rule, from the days the card sat inside Food's dashboard).
+// A COPY THE USER SAVED STANDS IN FOR THE ROW IT WAS SAVED FROM, in every
+// period's list (the same meal twice — the copy under «من وصفاتي», its
+// original further down — tells nothing): a ready meal's copy (origin
 // 'builtin') is matched by its figures — one serving, the same per-serving
 // kcal and macros, as many ingredients — because its name is in the language
 // it was saved in; a community recipe's (origin 'shared') by its name (folded),
@@ -3096,19 +3079,10 @@ function suggestionPool() {
   for (const b of ready) if (!taken.has(b.id)) rows.push(b);
   return rows.map(cleanSuggestion).filter(Boolean);
 }
-// THE CARD'S ORDER for a period: the best-ranked row of each source — mine,
-// then community, then builtin, each when it exists — then the rest by rank.
-// A new user sees ready meals; a user with recipes sees their own first
-// without the others leaving. A new array, as rankSuggestions'.
-function shrCardOrder(pool, period, gauge) {
-  const ranked = rankSuggestions(pool, period, gauge);
-  const heads = ['mine', 'community', 'builtin'].map((s) => ranked.find((r) => r.src === s)).filter(Boolean);
-  return heads.concat(ranked.filter((r) => !heads.includes(r)));
-}
 // A tap on a row: the user's own recipe opens as it does everywhere
 // (openRecipeView, by its id — the row is a reading of it, not the recipe),
 // with «سجّل حصّة» on it (opts.log): a suggestion is a meal to eat, and the
-// card's first row must not be the one row nobody can log from; a community
+// list's own rows must not be the ones nobody can log from; a community
 // recipe or a ready meal opens the suggestion sheet.
 function shrOpen(r, onSave) {
   if (!r) return;
@@ -3166,7 +3140,7 @@ function shrCopyExists(r) {
   const want = JSON.stringify(shrCanon(d));
   return DB.recipes.list().some((x) => JSON.stringify(shrCanon(x)) === want);
 }
-// Pull the community list into memory. Resolves whether what the card would
+// Pull the community list into memory. Resolves whether what the page would
 // draw changed. One pull at a time (a second caller shares it), at most one
 // per five minutes — stamped BEFORE the call, like bootCatalog — unless
 // `opts.force`; `opts.fresh` asks Cloud past its own 30-minute cache. A Cloud
@@ -3190,11 +3164,11 @@ function loadSharedRecipes(opts) {
   p.then(() => { if (__sharedPending === p) __sharedPending = null; });
   return p;
 }
-// The «calories left» the card ranks by: today's gauge, or none without a target.
+// The «calories left» the page ranks by: today's gauge, or none without a target.
 function shrGauge() {
   return DB.nutrition.hasTargets() ? nutritionGauge(todayISO()) : null;
 }
-// A figure in mono, rounded: the card and the sheet read alike.
+// A figure in mono, rounded: the list and the sheet read alike.
 function shrNum(v) {
   return '<span class="num">' + fmtNum(Math.round(Number(v) || 0)) + '</span>';
 }
@@ -3203,41 +3177,215 @@ function shrMacros(r) {
   return [shrNum(r.protein) + ' ' + t('protein_label'), shrNum(r.carbs) + ' ' + t('carbs_label'), shrNum(r.fat) + ' ' + t('fat_label')];
 }
 // One suggestion: the figure row (v395), a door to the row's sheet. Its source
-// rides on data-shr-src; a caption over the name says «من وصفاتي» or «من
-// المستخدمين» where that informs (a ready meal says nothing — the default),
-// and `bare` leaves it off under a group caption that already says it.
-function shrRowHtml(r, bare) {
-  const cap = !bare && (r.src === 'mine' || r.src === 'community') ? `<span class="shr-src">${shrSrcCaption(r.src)}</span>` : '';
+// rides on data-shr-src. No caption of its own (v422): every row stands under
+// its group's caption — or under none, when its group is the only one.
+function shrRowHtml(r) {
   return `<button type="button" class="data-row fig-row shr-row" data-shr-open="${escapeHtml(r.id)}" data-shr-src="${escapeHtml(r.src)}">
       <div class="fig-row-main">${figRowFig(fmtNum(Math.round(Number(r.kcal) || 0)), t('cal'))}
-        <div class="fig-row-text">${cap}<span class="fig-row-title" dir="auto">${escapeHtml(r.name)}</span><span class="fig-row-sub">${recJoin(shrMacros(r))}</span></div>
+        <div class="fig-row-text"><span class="fig-row-title" dir="auto">${escapeHtml(r.name)}</span><span class="fig-row-sub">${recJoin(shrMacros(r))}</span></div>
       </div></button>`;
 }
-// The card — never '' since v421: the ready meals mean there is always
-// something to suggest (shr_none stays for a period that somehow has no row).
-function sharedCardHtml(gauge) {
-  const period = shrPeriod(new Date());
-  const ranked = shrCardOrder(suggestionPool(), period, gauge);
-  return `
-    <div class="card shr-card" id="shr-card">
-      <div class="shr-head">
-        <h2 class="shr-title">${icon('utensils', 16)}<span>${t('shr_title')}</span></h2>
-        ${ranked.length > 3 ? `<button type="button" class="link-btn" data-shr-more>${t('show_more')}</button>` : ''}
-      </div>
-      <div class="shr-periods">${SHR_PERIODS.map((p) => `<button type="button" class="shr-period" data-shr-period="${p}" aria-pressed="${p === period}">${shrMealName(p)}</button>`).join('')}</div>
-      ${ranked.length ? `<div class="shr-rows">${ranked.slice(0, 3).map((r) => shrRowHtml(r)).join('')}</div>` : `<p class="shr-empty">${t('shr_none')}</p>`}
-    </div>`;
+// THE DOOR (v422) — the owner: «يكون فقط اسمها الاقتراحات». One full-width bar
+// on Food, where the card stood (under the water card, under the setup button
+// with no target): the glyph the card's title wore, the name, and the
+// direction-aware chevron every door row carries (Settings'). No period, no
+// row, no count: the page behind it holds those. The card surface, never an
+// accent fill — «حدّد هدفك اليومي» above it is the screen's one filled action.
+// Never '': the ready meals mean the page always has something to show.
+function shrDoorHtml() {
+  return `<button type="button" class="shr-door" data-shr-door>${icon('utensils', 20)}<span class="shr-door-name">${t('shr_title')}</span><span class="icon-mirror shr-door-chev">${icon('chevronRight', 16)}</span></button>`;
 }
-// Redraw the card alone — a period tap, the list arriving — where the
-// dashboard puts it: after the water card, or after the setup button.
-function shrRepaint(host) {
-  if (!host) return;
-  const html = sharedCardHtml(shrGauge());
-  const old = host.querySelector('#shr-card');
-  if (old) { old.outerHTML = html; return; }
-  const after = host.querySelector('.water-card') || host.querySelector('.nutri-setup');
-  if (after) after.insertAdjacentHTML('afterend', html);
-  else host.insertAdjacentHTML('beforeend', html);
+
+// ---- THE PAGE (v422) ----------------------------------------------------------
+// «اقتراحات اليوم» as a screen of its own, a child of Food (navMap keeps the
+// Food tab lit): the food log's top — the back arrow and the title in the bar,
+// and the real <h1> in the content (contract 43: the bar goes inert when it
+// tucks) — one quiet line with the calories left today when a target exists
+// (the figure the ranking fits meals to), then the four periods as an
+// accordion. An arrival opens on all four CLOSED (the owner: «ثم يضغط على
+// الفطور وتطلع معها الأكلات»); a tap opens one and closes the one open, a
+// second tap closes it. Only the open period's panel holds rows: a closed one
+// is an empty [hidden] box that its header's aria-controls still names.
+
+// Each period's glyph, every one a literal icon() call so contract 23 reads the
+// key: a steaming bowl for the morning (the ready breakfasts are bowls — فول،
+// شوفان), the knife and fork for the midday meal, a bolt for a quick bite, the
+// moon for the evening. Never `sparkle` (the AI's glyph here), `flame` (the
+// streak's) or `droplet` (the water's): each already means something else.
+function shrPeriodGlyph(p) {
+  return p === 'breakfast' ? icon('meal', 20) : p === 'lunch' ? icon('utensils', 20) : p === 'snack' ? icon('zap', 20) : icon('moon', 20);
+}
+// The one context line: what is left of today's calories, or nothing at all
+// without a target (no empty frame). Over the target it reads 0 — the figure
+// rankSuggestions fits to as well.
+function shrLeftHtml(gauge) {
+  if (!gauge || typeof gauge.calLeft !== 'number' || !Number.isFinite(gauge.calLeft)) return '';
+  return `<p class="shr-pg-left">${t('widget_remaining')} ${shrNum(Math.max(0, gauge.calLeft))} ${t('cal')}</p>`;
+}
+// One period's list: EVERY suggestion it has, ranked (rankSuggestions), in the
+// pool's three groups — mine, community, builtin — each in rank order, and each
+// under its caption only when more than one group has rows (v421 F5: a caption
+// tells groups apart; on day one a lone «اقتراحات جاهزة» over every row would
+// distinguish nothing). No cap and no «show more» — the page is the whole list.
+function shrPanelHtml(p, pool, gauge) {
+  const ranked = rankSuggestions(pool, p, gauge);
+  if (!ranked.length) return `<p class="shr-empty">${t('shr_none')}</p>`;
+  const groups = ['mine', 'community', 'builtin'].map((src) => [src, ranked.filter((r) => r.src === src)]).filter(([, g]) => g.length);
+  const captioned = groups.length > 1;
+  return groups.map(([src, g]) => `${captioned ? `<p class="shr-src shr-group" data-shr-group="${src}">${shrSrcCaption(src)}</p>` : ''}<div class="shr-rows">${g.map((r) => shrRowHtml(r)).join('')}</div>`).join('');
+}
+// One period: a card whose header is the disclosure (the shopping list's
+// sl-grp-head, v332, is the precedent) — its glyph on a tile, its name, «الآن»
+// on the clock's period alone, the arrow that turns when open — inside an <h2>,
+// so the four names are the page's outline; then its panel.
+function shrSecHtml(p, open, clock, pool, gauge) {
+  const on = open === p;
+  return `<section class="card shr-pg-sec">
+      <h2 class="shr-pg-h"><button type="button" class="shr-pg-head" data-shr-sec="${p}" aria-expanded="${on}" aria-controls="shr-pg-${p}"><span class="shr-pg-tile">${shrPeriodGlyph(p)}</span><span class="shr-pg-name">${shrMealName(p)}</span>${p === clock ? `<span class="shr-pg-now">${t('shr_now')}</span>` : ''}<span class="shr-pg-chev">${icon('arrowDown', 16)}</span></button></h2>
+      <div class="shr-pg-panel" id="shr-pg-${p}" data-settled${on ? '' : ' hidden'}>${on ? shrPanelHtml(p, pool, gauge) : ''}</div>
+    </section>`;
+}
+// The page below its top: the context line, then the four periods in the
+// order of a day. The pool is read only when a period is open.
+function shrPageHtml(gauge, clock) {
+  const open = SHR_PERIODS.includes(SHR_OPEN) ? SHR_OPEN : null;
+  const pool = open ? suggestionPool() : [];
+  return shrLeftHtml(gauge) + SHR_PERIODS.map((p) => shrSecHtml(p, open, clock, pool, gauge)).join('');
+}
+function renderSuggestions(el) {
+  // A new arrival closes every period; a re-render (a save, a sync, an Undo)
+  // and a Back to this entry — whose scroll offset the router restores — keep
+  // the one open (__shrCtx: navigate() hands each arrival its own context).
+  const ctx = typeof viewContext === 'object' ? viewContext : null;
+  if (ctx !== __shrCtx) { __shrCtx = ctx; SHR_OPEN = null; }
+  // A sheet still open over the page holds the row (or header) it was opened
+  // from as the place focus returns to (shrPagePaint says why). A WHOLE render
+  // under it — a new day on the foreground, a pull's refresh — replaces that
+  // node too; the anchor moves to the one drawn anew, as in shrPagePaint.
+  const held = typeof __modalReturnFocus !== 'undefined' && __modalReturnFocus && el.contains(__modalReturnFocus) ? __modalReturnFocus : null;
+  const heldRow = held ? held.getAttribute('data-shr-open') || (held.closest('[data-shr-open]') || { getAttribute: () => null }).getAttribute('data-shr-open') : null;
+  const heldSec = held ? (held.closest('[data-shr-sec]') || { getAttribute: () => null }).getAttribute('data-shr-sec') : null;
+  // show-title in the template, as the food log's: there is no .page-title
+  // here (the h1 is sr-only), so the bar title is never redundant.
+  el.innerHTML = `
+    <div class="detail-top show-title">
+      <button class="back-btn" data-back aria-label="${escapeHtml(t('back'))}">${icon('back', 20)}</button>
+      <div class="detail-top-title">${t('shr_title')}</div>
+    </div>
+    <h1 class="sr-only">${t('shr_title')}</h1>
+    ${shrPageHtml(shrGauge(), mealPeriodFor(new Date()))}
+  `;
+  if (held) {
+    const byAttr = (attr, v) => (v ? [...el.querySelectorAll('[' + attr + ']')].find((b) => b.getAttribute(attr) === v) : null);
+    const to = byAttr('data-shr-open', heldRow) || byAttr('data-shr-sec', heldSec) || (SHR_OPEN ? byAttr('data-shr-sec', SHR_OPEN) : null);
+    if (to) __modalReturnFocus = to;
+  }
+  // What a sheet calls once it logged, saved or reported: the page in place.
+  const rerender = () => shrPagePaint(el);
+  // onclick, not addEventListener: the <section> lives for the whole session
+  // and this runs on every render of the page.
+  el.onclick = (e) => {
+    const head = e.target.closest('[data-shr-sec]');
+    if (head) { shrToggle(el, head.getAttribute('data-shr-sec')); return; }
+    const row = e.target.closest('[data-shr-open]');
+    if (row) shrOpen(suggestionPool().find((x) => x.id === row.getAttribute('data-shr-open')), rerender);
+  };
+  // The page is painted from memory; the community list arrives (or does not)
+  // after it, throttled as ever, and only the open panel is drawn again — the
+  // headers stay, and so does a sheet opened meanwhile. Scoped to THIS render's
+  // element, never the active view looked up from inside a render.
+  loadSharedRecipes().then((changed) => { if (changed && el.classList.contains('active')) shrPagePaint(el); });
+}
+// The page repainted in place — a period opened or closed, a serving logged, a
+// copy saved, the list arriving, an approval: the context line, the «الآن»
+// chip (the clock may have moved), every header's state and the open panel's
+// rows. The headers stay the same nodes, so the one under the finger, or the
+// keyboard, keeps its focus.
+function shrPagePaint(el) {
+  if (!el || !el.isConnected) return;
+  // A row that held focus — a sheet that just closed hands it back to the row
+  // this repaint replaces — keeps it: the same row again, or its period's header.
+  const ae = document.activeElement;
+  const wasRow = ae && el.contains(ae) ? ae.closest('[data-shr-open]') : null;
+  // …and so does the row a sheet STILL OPEN over the page was opened from:
+  // openModal holds it (ui.js, __modalReturnFocus) as the place focus goes back
+  // to when the sheet closes, and a repaint under the sheet — «احفظها في
+  // وصفاتي», the community list arriving, an approval — replaces it with a
+  // node of its own, which closeModal skips (document.contains): focus fell to
+  // <body>. The anchor moves to the row drawn anew — or, gone (a saved copy
+  // stands in for it, a reported recipe left), to its period's header — and
+  // nothing is focused while the sheet is up.
+  const held = typeof __modalReturnFocus !== 'undefined' && __modalReturnFocus && el.contains(__modalReturnFocus) ? __modalReturnFocus.closest('[data-shr-open]') : null;
+  const gauge = shrGauge();
+  const clock = mealPeriodFor(new Date());
+  const line = shrLeftHtml(gauge);
+  const left = el.querySelector('.shr-pg-left');
+  if (left && line) left.outerHTML = line;
+  else if (left) left.remove();
+  else if (line) el.querySelector('.shr-pg-sec')?.insertAdjacentHTML('beforebegin', line);
+  const open = SHR_PERIODS.includes(SHR_OPEN) ? SHR_OPEN : null;
+  const pool = open ? suggestionPool() : [];
+  for (const p of SHR_PERIODS) {
+    const head = el.querySelector('[data-shr-sec="' + p + '"]');
+    const panel = el.querySelector('#shr-pg-' + p);
+    if (!head || !panel) continue;
+    const on = open === p;
+    head.setAttribute('aria-expanded', String(on));
+    panel.hidden = !on;
+    panel.innerHTML = on ? shrPanelHtml(p, pool, gauge) : '';
+    const chip = head.querySelector('.shr-pg-now');
+    if (p === clock && !chip) head.querySelector('.shr-pg-name')?.insertAdjacentHTML('afterend', `<span class="shr-pg-now">${t('shr_now')}</span>`);
+    else if (p !== clock && chip) chip.remove();
+  }
+  // The row again by its id, else the open period's header.
+  const same = (row) => {
+    const id = row.getAttribute('data-shr-open');
+    return [...el.querySelectorAll('[data-shr-open]')].find((b) => b.getAttribute('data-shr-open') === id) || (open ? el.querySelector('[data-shr-sec="' + open + '"]') : null);
+  };
+  if (wasRow && !wasRow.isConnected) {
+    const again = same(wasRow);
+    if (again) { try { again.focus({ preventScroll: true }); } catch (_) {} }
+  }
+  if (held && !held.isConnected) {
+    const to = same(held);
+    if (to) __modalReturnFocus = to;
+  }
+}
+// A tap on a period's header: it opens (closing the one open), or closes when
+// it is the one open. The header under the finger keeps its place on screen —
+// a long list closing ABOVE it would otherwise carry it off the top (the
+// sections opt out of the browser's own scroll anchoring, so this is the one
+// correction) — and a period whose first row would begin below the fold is
+// brought into view: the least scroll that shows it whole, or its header at
+// the top when it is taller than the screen (block: 'nearest' on the section).
+function shrToggle(el, p) {
+  if (!SHR_PERIODS.includes(p)) return;
+  const head = el.querySelector('[data-shr-sec="' + p + '"]');
+  if (!head) return;
+  const main = document.querySelector('.main');
+  const before = head.getBoundingClientRect().top;
+  SHR_OPEN = SHR_OPEN === p ? null : p;
+  shrPagePaint(el);
+  if (!main) return;
+  const moved = head.getBoundingClientRect().top - before;
+  if (Math.abs(moved) >= 1) main.scrollTop += moved;
+  if (SHR_OPEN !== p) return;
+  const panel = el.querySelector('#shr-pg-' + p);
+  // Its rows fade in as it opens (styles.css): every panel a render draws is
+  // [data-settled], so a re-render in place never replays it.
+  if (panel) panel.removeAttribute('data-settled');
+  const sec = head.closest('.shr-pg-sec');
+  const first = panel && (panel.querySelector('.shr-row') || panel.firstElementChild);
+  if (!sec || !first || first.getBoundingClientRect().bottom <= main.getBoundingClientRect().bottom) return;
+  const reduced = !!(window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches);
+  sec.scrollIntoView({ block: 'nearest', behavior: reduced ? 'auto' : 'smooth' });
+}
+// After an automatic approval (runAutoShare): the user's own recipe is a
+// suggestion now, so the page's open list is drawn again — when the page is
+// the screen on show. On Food there is nothing to redraw: the door names no row.
+function shrRepaint() {
+  const el = document.querySelector('.view[data-view="suggestions"]');
+  if (el && el.classList.contains('active')) shrPagePaint(el);
 }
 
 // ONE SUGGESTION'S SHEET — a community recipe, or a ready meal (a row whose
@@ -3356,8 +3504,8 @@ function openSharedRecipe(rec, date, onSave) {
     // That Undo is on the recipes slice: automatic sharing writes no marker
     // under it for its 10 s, or the Undo would answer STALE (v420).
     autoShareHold(11000);
-    // The card behind follows at once: the copy now stands in for the row it
-    // was saved from (suggestionPool), so a card still drawing that row would
+    // The list behind follows at once: the copy now stands in for the row it
+    // was saved from (suggestionPool), so a list still drawing that row would
     // hold a door that opens nothing.
     if (typeof onSave === 'function') onSave();
   });
@@ -3365,28 +3513,9 @@ function openSharedRecipe(rec, date, onSave) {
   if (reportBtn) reportBtn.addEventListener('click', () => openSharedReport(r, onSave));
 }
 
-// «show more»: every suggestion of the period, in rank order, grouped under
-// the three source captions — the groups that have rows, in the pool's order
-// (mine, community, builtin); a row under its caption carries none of its own.
-// A caption tells groups apart, so ONE group (day one: the ready meals alone)
-// is drawn bare, with no caption at all — a lone «اقتراحات جاهزة» over every
-// row would distinguish nothing and repeat the title's «اقتراحات».
-function openSharedSuggestions(rows, period, onSave) {
-  const list = (Array.isArray(rows) ? rows : []).map(cleanSuggestion).filter(Boolean);
-  const groups = ['mine', 'community', 'builtin'].map((src) => [src, list.filter((r) => r.src === src)]).filter(([, g]) => g.length);
-  const captioned = groups.length > 1;
-  const overlay = openModal(`
-    <div class="modal-header"><div><h2 class="modal-title">${t('shr_title')}</h2><div class="modal-subtitle">${shrMealName(period)}</div></div>
-      <button class="icon-btn" data-close aria-label="${escapeHtml(t('close'))}">${icon('close', 20)}</button></div>
-    <div class="shr-list">${groups.map(([src, g]) => `${captioned ? `<p class="shr-src shr-group" data-shr-group="${src}">${shrSrcCaption(src)}</p>` : ''}<div class="shr-rows">${g.map((r) => shrRowHtml(r, true)).join('')}</div>`).join('')}</div>`);
-  if (!overlay) return;
-  guardConvenienceModal(overlay);
-  overlay.querySelectorAll('[data-shr-open]').forEach((b) => b.addEventListener('click', () => shrOpen(list.find((x) => x.id === b.dataset.shrOpen), onSave)));
-}
-
 // «Report this recipe»: three reasons, sent as one feedback row whose context
 // names the recipe (`recipe-report:<id>`) — the owner's inbox reads it, and the
-// recipe leaves this user's card at once.
+// recipe leaves this user's suggestions at once.
 function openSharedReport(rec, onDone) {
   const r = cleanSharedRecipes([rec])[0];
   if (!r) return;
@@ -3417,7 +3546,7 @@ function openSharedReport(rec, onDone) {
     try { res = await Cloud.submitFeedback(reason, 'recipe-report:' + r.id); } catch (_) {}
     busy = false;
     if (Cloud.getLastUid() !== owner) return;
-    if (res && res.ok) SHR_HIDDEN[r.id] = true;   // sent: it leaves the card even if this sheet is gone
+    if (res && res.ok) SHR_HIDDEN[r.id] = true;   // sent: it leaves the list even if this sheet is gone
     if (!overlay.isConnected || overlay.classList.contains('is-out')) return;
     if (res && res.ok) { closeModal(); if (typeof onDone === 'function') onDone(); showToast(t('shr_reported')); return; }
     err.textContent = res && res.error === 'ratelimit' ? t('feedback_too_many') : res && res.error === 'offline' ? t('auth_err_network') : t('shr_report_failed');
@@ -3497,7 +3626,7 @@ function openShareRecipe(rec, onBack) {
       // recipe to be shared, so it follows its edits again like any other.
       DB.recipes.setNoAuto(cur.id, false);
       // The marker as it stands NOW (automatic sharing may have written one
-      // while this review ran): a replaced copy leaves the card, as in runAutoShare.
+      // while this review ran): a replaced copy leaves the list, as in runAutoShare.
       const prev = DB.recipes.list().find((x) => x.id === cur.id);
       const w = DB.recipes.setShared(cur.id, { id: res.id, at: new Date().toISOString(), sig });
       if (w && w.ok && prev && prev.shared && prev.shared.id && prev.shared.id !== res.id) shrForget(prev.shared.id);
@@ -3780,13 +3909,13 @@ async function runAutoShare() {
       }
       // A RE-share: the server REPLACED the old copy (one row per author and
       // recipe, migration 35), so the old id is gone there — and gone from the
-      // card now, or a stale list would draw it beside the user's own row.
+      // suggestions now, or a stale list would draw it beside the user's own row.
       if (now && now.shared && now.shared.id && now.shared.id !== res.id) shrForget(now.shared.id);
       // The user's own recipe is a suggestion now: the list is read past both
-      // caches and the card alone is drawn again. No toast per recipe.
+      // caches and the page's open list is drawn again when the page is on
+      // show (v422: Food holds only the door). No toast per recipe.
       loadSharedRecipes({ force: true, fresh: true }).then((changed) => {
-        const host = $('#nutri-host');
-        if (changed && host) shrRepaint(host);
+        if (changed) shrRepaint();
       });
       return SHR_AUTO_GAP;
     }

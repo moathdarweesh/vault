@@ -9550,43 +9550,92 @@ body[dir="rtl"] .prg-tiles { --prg-dir: -1; }
 .prg-moved.is-leaving { animation: prg-collapse 200ms var(--ease-inout) var(--dur-fast) both; }
 @keyframes prg-collapse { to { grid-template-rows: 0fr; margin-top: 0; opacity: 0; } }
 
-/* «اقتراحات» — THE SUGGESTIONS CARD (v419, js/food.js MEAL SUGGESTIONS). A
-   .card under the water card: a head (the heading, and «show more» when the
-   period holds more than three), four period buttons on the S rung — modelled
-   on .rec-reading's: a bordered rounded rectangle, the pressed one filled, a
-   44px halo — then up to three figure rows divided by the hairline, as the
-   dish chooser's (.rx-dishes). (0,2,0) on the rows beats the identity layer's
-   .data-row fill and --elev-1 at (0,1,0). */
-.card.shr-card { margin-top: 12px; padding: var(--sp-3); display: flex; flex-direction: column; gap: var(--sp-2h); }
-/* margin-bottom 2 (v421, the card is always drawn now): «show more» is a 32px
-   .link-btn whose halo reaches 44 by 6px below its box, and the period buttons'
-   halo rises 5px above theirs — 11px of halo across the card's 10px gap, so the
-   periods won the shared strip and the link measured 43. 12px clears it with 1px
-   of slack for a fractional edge. */
-.shr-head { display: flex; align-items: center; justify-content: space-between; gap: var(--sp-2); min-width: 0; margin-bottom: 2px; }
-.shr-title { display: flex; align-items: center; gap: var(--sp-2); min-width: 0; margin: 0; font-size: var(--fs-label); font-weight: 700; color: var(--text); }
-/* Pinned: the global svg { width: 100% } would stretch the glyph across the heading. */
-.shr-title svg { width: 16px; height: 16px; flex: none; }
-.shr-periods { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: var(--sp-1); }
-.shr-period {
-  position: relative; height: var(--btn-h-s); min-width: 0; padding: 0 var(--sp-1);
-  border: 1px solid var(--border-hi); border-radius: var(--radius-btn-s);
-  background: transparent; color: var(--text-mute);
-  font: inherit; font-size: var(--fs-btn-s); font-weight: 700; white-space: nowrap; cursor: pointer;
-  appearance: none; -webkit-appearance: none; -webkit-tap-highlight-color: transparent;
-  transition: color 0.15s, background 0.15s, border-color 0.15s;
+/* «اقتراحات اليوم» (v419; a door and a page since v422 — js/food.js MEAL
+   SUGGESTIONS). Food carries ONE bar (.shr-door); the suggestions are the
+   'suggestions' view: an optional context line, then four period cards, an
+   accordion. Each card's header is the disclosure (.shr-pg-head — modelled on
+   the shopping list's .sl-grp-head: the name, then what it holds, then the
+   arrow that turns), and the open card's panel lists the figure rows divided
+   by the hairline, as the dish chooser's (.rx-dishes). (0,2,0) on the rows
+   beats the identity layer's .data-row fill and --elev-1 at (0,1,0).
+
+   THE DOOR: the L rung's height (52) and its corner (16, which is also the
+   card's), the card surface and the card's edge — a bar, never an accent fill:
+   «حدّد هدفك اليومي» above it is the screen's one filled action. 12 below the
+   water card, the water card's own margin. The glyph is the old card title's,
+   a size up; the chevron is a door row's (.settings-action-chev), mirrored in
+   Arabic by .icon-mirror so it points where the reading goes. */
+.shr-door {
+  display: flex; align-items: center; gap: var(--sp-3);
+  width: 100%; min-height: var(--btn-h-l); margin-top: var(--sp-3); padding: var(--sp-2) var(--sp-4);
+  border: 0; border-radius: var(--radius-btn-l);
+  background: var(--card-bg); box-shadow: var(--elev-1); color: var(--text);
+  font: inherit; font-size: var(--fs-btn-l); font-weight: 700; text-align: start;
+  cursor: pointer; appearance: none; -webkit-appearance: none; -webkit-tap-highlight-color: transparent;
+  transition: transform var(--dur-slow) var(--ease-back);
 }
-.shr-period::after { content: ''; position: absolute; inset: -5px 0; }   /* 44px on a 36px bordered box */
-.shr-period[aria-pressed="true"] { background: var(--surface-3); border-color: var(--accent-line); color: var(--text); }
-/* Under 360px four columns cannot hold «وجبة خفيفة» / «Breakfast»: two rows of two. */
-@media (max-width: 359px) {
-  .shr-periods { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.shr-door:active { transition: transform var(--dur-tap) var(--ease-out); transform: scale(var(--press-scale)); }
+/* The glyph keeps the size icon() writes on it; flex: none so a long name
+   in «Larger text» ellipsises instead of squeezing it. */
+.shr-door > svg { flex: none; }
+.shr-door-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.shr-door-chev { flex: none; display: grid; place-items: center; color: var(--text-dim); }
+
+/* THE PAGE. The bar's own 12px below it, the context line (only with a
+   target), then the cards a --sp-3 apart: the Food screen's rhythm. */
+.shr-pg-left { margin: 0 0 var(--sp-3); font-size: var(--fs-sub); color: var(--text-mute); }
+.shr-pg-left .num { color: var(--text); font-weight: 700; }
+/* overflow-anchor: none — shrToggle keeps the tapped header where it was
+   itself; the browser's own anchoring correcting the same shift would double it. */
+.card.shr-pg-sec { padding: 0; overflow-anchor: none; scroll-margin: var(--sp-3) 0; }
+.shr-pg-sec + .shr-pg-sec { margin-top: var(--sp-3); }
+.shr-pg-h { margin: 0; font: inherit; }
+/* 56 tall: the 36px tile with 10 above and below, whatever the text size, so
+   the four headers are one height with or without «الآن». The card's corner
+   (16) on the button too, square at the bottom while its panel hangs below,
+   so a press tints exactly the header's part of the card. */
+.shr-pg-head {
+  display: flex; align-items: center; gap: var(--sp-3);
+  width: 100%; min-height: calc(var(--btn-h-s) + 2 * var(--sp-2h)); padding: var(--sp-2h) var(--sp-3);
+  border: 0; border-radius: var(--radius);
+  background: transparent; color: var(--text);
+  font: inherit; font-size: var(--fs-btn-l); font-weight: 700; text-align: start;
+  cursor: pointer; appearance: none; -webkit-appearance: none; -webkit-tap-highlight-color: transparent;
+  transition: background var(--dur) var(--ease);
 }
+.shr-pg-head[aria-expanded="true"] { border-radius: var(--radius) var(--radius) 0 0; }
+.shr-pg-head:active { background: var(--surface-3); }
+/* The tile: the leaf of the 2:1 law inside a 16px card (--radius-sm, 8), the
+   accent's own tint behind the glyph, as a Settings row's tile. */
+.shr-pg-tile {
+  flex: none; display: grid; place-items: center;
+  width: var(--btn-h-s); height: var(--btn-h-s); border-radius: var(--radius-sm);
+  background: var(--accent-soft); color: var(--accent-text);
+}
+.shr-pg-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* «الآن»: a tag, not a control — the tile's tint, the accent as text (4.85:1
+   on that tint in light, BRAND §2), centred on the row's line with the arrow. */
+.shr-pg-now {
+  flex: none; padding: 2px var(--sp-2); border-radius: var(--radius-sm);
+  background: var(--accent-soft); color: var(--accent-text);
+  font-size: var(--fs-meta); font-weight: 700; line-height: 1.5; white-space: nowrap;
+}
+/* arrowDown turned half a turn when open, never a mirrored chevron: a vertical
+   arrow reads the same in both directions (.sl-grp-chev's reason). */
+.shr-pg-chev { flex: none; display: grid; place-items: center; color: var(--text-dim); transition: transform var(--dur) var(--ease); }
+.shr-pg-head[aria-expanded="true"] .shr-pg-chev { transform: rotate(180deg); }
+/* No `display` here on purpose: an author display beats [hidden] (v332). The
+   rows fade in as a period opens and never on a re-render (data-settled is on
+   every panel a render draws; shrToggle lifts it from the one it opens) — the
+   reduced-motion clamp zeroes it. No height animation. */
+.shr-pg-panel { padding: 0 var(--sp-3) var(--sp-1); border-top: 1px solid var(--border); }
+.shr-pg-panel:not([data-settled]) { animation: shr-pg-in var(--dur) var(--ease-out) both; }
+@keyframes shr-pg-in { from { opacity: 0; transform: translateY(-4px); } }
 .shr-rows { display: flex; flex-direction: column; }
 .shr-rows > .shr-row { background: transparent; box-shadow: none; border-radius: 0; }
 .shr-rows > .shr-row + .shr-row { border-top: 1px solid var(--border); }
 .shr-rows .fig-row-main { padding-inline: 0; }
-.shr-empty { margin: 0; padding: var(--sp-2) 0; font-size: var(--fs-sub); color: var(--text-mute); text-align: center; }
+.shr-empty { margin: 0; padding: var(--sp-3) 0; font-size: var(--fs-sub); color: var(--text-mute); text-align: center; }
 /* A community recipe's sheet: one serving's figures under its name, and the
    report link under the actions. */
 .shr-figs { margin: 0; font-size: var(--fs-sub); line-height: 1.5; color: var(--text-mute); }
@@ -9597,13 +9646,11 @@ body[dir="rtl"] .prg-tiles { --prg-dir: -1; }
 .shr-terms > p { margin: 0; font-size: var(--fs-sub); line-height: 1.5; color: var(--text-dim); }
 .shr-verdict { margin: 0; font-size: var(--fs-label); font-weight: 700; color: var(--text); }
 .shr-reason { margin: var(--sp-1) 0 0; font-size: var(--fs-sub); color: var(--text-mute); overflow-wrap: anywhere; }
-/* v421, the three sources: a row's source over its name («من وصفاتي», «من
-   المستخدمين» — a ready meal says nothing), and the same line as a group
-   caption in «show more», where the groups stack under one .shr-list. */
+/* The three sources (v421): a group's caption over its rows in an open period
+   («من وصفاتي», «من المستخدمين», «اقتراحات جاهزة»), drawn only when more than
+   one group has rows. The rows carry none of their own since v422. */
 .shr-src { font-size: var(--fs-meta); font-weight: 700; color: var(--text-mute); }
-.shr-list { display: flex; flex-direction: column; }
-.shr-group { margin: var(--sp-3) 0 var(--sp-1); }
-.shr-list > .shr-group:first-child { margin-top: 0; }
+.shr-group { margin: var(--sp-3) 0 0; }
 /* A suggestion sheet's ingredients carry their figures under the amount line
    (.has-figs wraps; the figures span takes the whole second line). */
 .rec-view .cx-row.has-figs { flex-wrap: wrap; row-gap: 2px; }

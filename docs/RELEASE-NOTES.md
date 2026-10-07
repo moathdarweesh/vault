@@ -2,6 +2,79 @@
 
 One section per release since v309, newest first, moved verbatim from `CLAUDE.md` in v401 (batch 6 of the 2026-09-25 review; `docs/REVIEW-2026-09-25.md`). `CLAUDE.md` is the guide and the authority for how the app works now. A section here records what one release changed and why, in the words written at the time, so a later section — or the guide — can supersede what an earlier one says.
 
+## v422 — «اقتراحات اليوم» is a door on Food, and a page of its own
+
+**The owner, 2026-10-07, on a screenshot of v421's card: «ما تكون كذا. لا، يكون فقط اسمها
+الاقتراحات وبعدها يودّيه لصفحة ثانية يكون فيها خيارات الغدا والفطور والخ، ثم يضغط على الفطور
+وتطلع معها الأكلات بشكل منظّم متناسق سهل جميل».** He asked for Claude Design; the session
+could not reach it (DesignSync needs a one-time `/design-login` from an interactive
+terminal), and offered the three ways, he chose «صمّمها أنت»: the page is designed in the
+app's own identity. Everything v421 computes (the three sources, the ready meals, every
+ingredient in grams, copies standing in, the sheets) is unchanged; v422 changes where it is
+shown.
+
+**The door.** The Food screen draws ONE button where the card was (under the water card, or
+under «حدّد هدفك اليومي» with no target): the utensils glyph, «اقتراحات اليوم», and a chevron
+toward the reading end — no periods, no rows, no figures, his «فقط اسمها». 52 px, radius 16,
+the card surface and its elevation: an accent fill would compete with the setup button above it
+(the browser suite compares its background with `--card-bg` at every width and text size).
+
+**The page (`suggestions`, `renderSuggestions` in js/food.js).** The food log's top — the back
+arrow (`data-back`) and the bar title, `show-title`, with the real heading as an sr-only h1
+(contract 43) — then the calories left today, only when a target exists (`widget_remaining`;
+0 past the target, as the ranking reads it), then four cards in the day's order: فطور، غداء،
+وجبة خفيفة، عشاء. Each header is a 56 px button (`aria-expanded`, `aria-controls`) with a 36 px
+icon tile (meal, utensils, zap, moon — `ICONS` has no sun; sparkle means AI, flame the streak,
+droplet water), the period's name, «الآن» on the clock's period only, and a chevron that
+turns; tile, name, chip and chevron share one centre line. Radius 16 on the header, 8 on the
+tile and the chip (the 2:1 corner law; the spec's 12 was corrected by the builder).
+
+**His flow, exactly.** On arrival all four are closed. A tap unfolds that period's meals under
+its header and closes the one open; a second tap closes it. The open period survives a
+re-render (a logged serving, a save, an Undo, an approval, a new day) and a Back to the page;
+a new arrival — the door again, the Food tab — starts closed (`navigate()` gives every arrival
+its own context; `__shrCtx` notices). The open panel lists the WHOLE period (no «show more»
+any more), ranked by what fits the calories left, grouped «من وصفاتي» → «من المستخدمين» →
+«اقتراحات جاهزة», captions only when more than one group has rows. A period whose list would
+start below the fold is brought into view (smooth only without reduced motion), and a tapped
+header keeps its place when a long list above it closes. On day one every period unfolds to
+ready meals.
+
+**In place, never under a sheet.** `shrPagePaint` repaints the line, the chip, the headers'
+state and the open panel only — the headers stay the same nodes, so focus stays. The community
+list is pulled when the page opens (Food pulls nothing now) and arrives into the open period
+by itself. A repaint — or a whole render, on a new day or a pull's refresh — under an open
+sheet replaces the row the sheet was opened from; the sheet's way back
+(`__modalReturnFocus`) moves to the row drawn anew, or to its period's header, so closing it
+never drops focus to `<body>`. `suggestions` joins `DATE_DERIVED_VIEWS`: a page left on show
+overnight is drawn again for the new day.
+
+**Removed:** the card, the period buttons on Food, «عرض المزيد» and its sheet
+(`openSharedSuggestions`, gone from `scripts/fp/modals.js`), `sharedCardHtml`, `shrCardOrder`,
+`shrPeriod`, `SHR_PICK`, the per-row caption, and their CSS.
+
+**How it was built — the LARGE tier.** A written spec (`spec-v422.md`, the owner's words and
+the one-line idea first, then «what does he see on day one?») → a page builder (who measured
+the result in real Chrome at 375/320 × both languages × larger text) → a test builder → three
+review lenses with a skeptic each (his intent; logic and what v419–v421 did; layout and
+accessibility): five confirmed — the page missing from the day-change repaint (found by two
+lenses), focus dropped when a repaint under a sheet replaced its row (two lenses), and a node
+assertion that claimed to test Back and tested a re-render — fixed by a fixer; one more found
+by the checker (the same focus loss through a WHOLE render) and fixed by hand. One finding was
+refuted (the moon glyph also marks the Sleep tab: one meaning, the night).
+
+**Tests.** `scripts/test-shared-recipes.js` (11 cases: J — the door, Food and an open period's
+list; K — the page). `scripts/test-shared-recipes-ui.js`: 38 cases × two passes, every case
+that read the card rewritten to the page, plus the door and the way back (36), the scroll (37)
+and the new day (38, with the whole render under a sheet). `scripts/test-convenience-ui.js`'s
+44×44 scan now reaches the door, the four headers and an open period's rows. Every new
+assertion seen failing on an in-memory plant (141 in the list, the retired ones kept as
+comments), the repo hash-identical after each.
+
+Gate: all contracts, lint, 28 suites (pooled, 324 s, no retry). The first full run is not counted: it took 1,581 s, two suites were killed at the 300 s limit after 896 s and 411 s of wall time — the runner's own timers fired late, so the process had been suspended — and `test-startup.js`, run alone, printed nothing at all; the same suite passed alone in 63 s. The machine had gone to sleep under the run. It was held awake (the app's keep-awake) and the gate ran again from the start, green, with no lonely retry.
+
+Fingerprint net, v421 → v422: the sheets lane 122/128 — `shared-list` gone (the «show more» sheet, removed), and two later sheets (`share-recipe`, `shared-report`) renumbered by one in their title id and `aria-labelledby` only (openModal numbers titles page-wide, and a sheet before them left the list). The views lane 160/184: the eight Food cells (the door instead of the card), the eight new `suggestions` cells, and the eight Home cells whose only difference is the footer's «VAULT · v420 → v421» (each capture predates its release's marker bump). Nothing else moved. In the running app (preview, 375×812, Arabic, 15:20): the door under «حدّد هدفك اليومي»; a real tap opened the page with the Food tab lit, four 56 px headers closed, «الآن» on غداء; a tap on فطور unfolded its meals (جبن قريش بالفراولة 179، زبادي يوناني بالفراولة واللوز 247، بيض مسلوق ولبنة وخبز 437 …), the header brought to the top. The chevron is the shopping list's `arrowDown` turned 180° when open, the app's one disclosure glyph.
+
 ## v421 — «اقتراحات اليوم»: what to eat today, there from the first day
 
 **The owner, 2026-10-06, after v420 went live and the card never showed: «انت اصلا متذكر ايش

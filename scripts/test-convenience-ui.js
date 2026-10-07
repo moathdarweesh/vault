@@ -2546,8 +2546,9 @@ const designA11yCases = [
       if (!DB.recipes.list().length) DB.recipes.add({ name: 'QA a11y recipe', servings: 2, items: [{ name: 'Rice', qty: '200 g', calories: 260, protein: 5, carbs: 56, fat: 1 }] });
       if (!DB.mealBundles.list().length) DB.mealBundles.update(null, { name: 'QA a11y meal', items: [{ name: 'Eggs', calories: 140, protein: 12, carbs: 1, fat: 10, servings: 2 }] });
     }, today);
+    // Food's door to «اقتراحات اليوم» (v422, the L rung: 52 tall, no halo).
     await reset('food'); await settle();
-    await scan(['.view.active .nutri-edit', '.view.active .water-cup', '.view.active .link-btn']);
+    await scan(['.view.active .nutri-edit', '.view.active .water-cup', '.view.active .link-btn', '.view.active .shr-door']);
     await ev(() => openWeightSheet()); await settle();
     await scan(['#modal-root .weight-row-del']);
     await ev((id) => openSessionModal(id), ids[0]); await settle();
@@ -2580,6 +2581,13 @@ const designA11yCases = [
     await scan(['.view.active #cardio-goal-btn']);
     await reset('sleep'); await settle();
     await scan(['.view.active #sleep-goal-btn']);
+    // The page behind Food's door (v422): the four period headers (56 tall, no
+    // halo), and the rows of a period opened by its header. Last, so every
+    // sheet above opens over the screen it always did.
+    await reset('suggestions'); await settle();
+    await scan(['.view.active .shr-pg-head']);
+    await page.locator('.view.active .shr-pg-head').first().click(); await settle();
+    await scan(['.view.active .shr-pg-panel:not([hidden]) .shr-row']);
     await reset('home');
     assert.deepEqual([...new Set(small)], [], 'every listed control reaches 44x44 from its centre (its own box or its ::after halo): ' + JSON.stringify([...new Set(small)]));
   }],

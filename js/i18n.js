@@ -705,6 +705,8 @@ const I18N = {
     // «اقتراحات» — meal suggestions from recipes users share, reviewed by the AI before they are published (js/food.js MEAL SUGGESTIONS, v419)
     shr_title: 'Today’s suggestions',
     shr_meal_breakfast: 'Breakfast', shr_meal_lunch: 'Lunch', shr_meal_snack: 'Snack', shr_meal_dinner: 'Dinner',
+    // the page's mark on the period the clock is in (v422)
+    shr_now: 'Now',
     shr_none: 'No suggestions yet',
     shr_src_mine: 'From my recipes', shr_src_community: 'From other users', shr_src_builtin: 'Ready suggestions',
     shr_log: 'Log a serving',
@@ -1831,6 +1833,8 @@ const I18N = {
     // «اقتراحات» — وصفات يشاركها المستخدمون وتراجعها خدمة الذكاء الاصطناعي قبل نشرها (v419). الفصحى: «وجبة خفيفة» لا «سناك»، و«الغداء/العشاء» بالهمزة
     shr_title: 'اقتراحات اليوم',
     shr_meal_breakfast: 'فطور', shr_meal_lunch: 'غداء', shr_meal_snack: 'وجبة خفيفة', shr_meal_dinner: 'عشاء',
+    // علامة الصفحة على الوجبة التي يقع فيها الوقت الحالي (v422)
+    shr_now: 'الآن',
     shr_none: 'لا اقتراحات بعد',
     shr_src_mine: 'من وصفاتي', shr_src_community: 'من المستخدمين', shr_src_builtin: 'اقتراحات جاهزة',
     shr_log: 'سجّل حصّة',
