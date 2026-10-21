@@ -2,6 +2,72 @@
 
 One section per release since v309, newest first, moved verbatim from `CLAUDE.md` in v401 (batch 6 of the 2026-09-25 review; `docs/REVIEW-2026-09-25.md`). `CLAUDE.md` is the guide and the authority for how the app works now. A section here records what one release changed and why, in the words written at the time, so a later section — or the guide — can supersede what an earlier one says.
 
+## v423 — the shopping list in the supermarket's own departments, and a recipe poured once
+
+**The owner, 2026-10-17: «اخلي التطبيق يقسم المشتريات للاصناف المعروفه قسم الخضار والفواكه
+والخ» and «اخليه ما يكرر الوصفه لما احط وصفه في المشتريات عشان ما احط الوصفه 10 مرات».** A
+first draft grouped by nutrition (بقوليات، مكسرات وزيوت…); he corrected it before a line was
+built: «لا قصدي الاقسام الي بتكون عاده موجوده بالسوبر ماركت».
+
+**The departments.** The list is drawn as the store is signed, in the order a shopper walks
+it: الخضار والفواكه · اللحوم والدواجن · الأسماك والمأكولات البحرية · الألبان والأجبان والبيض ·
+المخبوزات · البقالة · المجمّدات · المشروبات · الحلويات والمقرمشات · المنظفات ومستلزمات المنزل ·
+العناية الشخصية · أخرى (`SHOPPING_SECTIONS`, `slcat_*`). Only departments with rows are
+drawn, and a heading only when MORE THAN ONE has rows — a heading over the only group names
+what he can already see. Rows keep their stored order inside a department, and a ticked row
+still never moves (the v329 law; a plant that sorted bought rows to the end is caught).
+
+**How a name finds its department (`DB.shopping.sectionOf`).** The calorie catalogue is a
+list of dishes and portions, not groceries — «دجاج», «بصل», «خبز», «بيض», «أرز», «ملح» all
+missed it by name — so `SHOPPING_LEXICON` (js/catalog.js) holds what people WRITE, by
+department, in both scripts, dialect spellings included (matched, never shown; the dialect
+scan reads the catalogue and the ready meals, not this). A name is folded (DB.search.fold,
+a leading «ال» off each word BEFORE the fold — «ألبان» and «الألبان» both reach dairy — the
+FOOD_SYNONYMS table, word breaks including «.», «-», «×», «*», «؟»), then read token by
+token: the longest lexicon window (up to three words: «حليب جوز الهند», «زبدة الفول السوداني»)
+at the FIRST matching position decides, a plural/dual suffix stripped when the bare word
+misses («بصلتين», «بيضتان», «tomatoes»); the freezer's MARKER words (مجمد/مثلج/frozen) win
+wherever they stand («دجاج مجمد» → المجمّدات), its item words do not («جبنة بيتزا» stays in
+the chiller — the review's catch); English compounds are head-final, so the common ones are
+two-word entries (garlic bread, chicken nuggets, vanilla ice cream, coconut milk, peanut
+butter); then the catalogue by whole name; then «أخرى». Decisions are written in the
+lexicon's header: eggs with the chiller, tuna and sardines in grocery unless «طازج», tea and
+coffee in grocery, dates with produce, «زعتر» in grocery but «زعتر أخضر» with produce, unit
+words («كيلو», «كيس», «علبة», «كرتون») deliberately absent so «3 أكياس حليب» reads dairy.
+Measured on 457 real list items before the review and 470 more by the reviewer; the misses
+the review found are fixed and pinned (a 100-name table in both scripts in
+`scripts/test-convenience.js`).
+
+**A recipe poured once.** Measured before this was written: pouring the same recipe twice
+added 0 rows (names merge), but NOTHING said so — the chip looked the same, the toast read
+«أُضيف 0», and bought rows were silently unticked; that is why he tapped ten times. Now a
+recipe or meal whose every ingredient is on the list and unbought (`DB.shopping.listedFrom`:
+`total > 0 && unticked === total`, by the SAME key the merge uses) shows a disabled chip with
+an accent check that reads «<name> — في القائمة»; a row bought or deleted frees it, and
+tapping a live chip pours what is missing and unticks what was bought, with a true toast:
+«أُضيف {n}», else «أُعيد {n} إلى القائمة» (`relisted`, new in `addNames`), else the generic
+«حُدّثت القائمة» for a joined amount, and no toast when nothing changed. Only the glyph node
+is swapped on a repaint — the chip's binding is made once. The identity layer's `[disabled]`
+rule dims a disabled control; `.sl-chip.added` outranks it by specificity on purpose (the
+chip is DONE, not off).
+
+**How it was built — the MEDIUM tier, with one correction.** A written spec, revised to his
+words before any code; one builder (lexicon, classifier, sheet, strings, CSS, node + browser
+tests, every assertion seen failing on an in-memory plant, 457 items measured) → two review
+lenses with a skeptic per finding (confirmed: the freezer rule too wide, the «ال» strip after
+the fold, English head-final compounds, lexicon gaps, missing word breaks, a weak aria-label
+assertion, an unproven «never moves» line; refuted: a silent pour onto a full list — v422
+behaved the same) → one fixer (all addressed, each with a plant). The session died at
+midnight with the fixer's final report half-sent; the integrator re-ran every node plant on
+the final bytes (22/22 caught), ran the gate, and — the checker agent died with the next
+session — checked the fix round himself: 66 names across the seven findings, 0 misses;
+listedFrom and relisted as specified; the exact aria-label assertion and the «never moves»
+plant in place; 2,000 classifications in 14 ms.
+
+Gate: all contracts, lint, 28 suites (pooled, 240 s, no retry), run once on the final bytes after the session restart.
+
+Fingerprint net, v422 → v423: the sheets lane 124/126 — only the `shopping` cell, in both contexts (the fixture's «Rice 1 kg» now under «البقالة» and «Eggs» under «الألبان والأجبان والبيض», two headings where one flat list was; the recipe chip whose two ingredients are on the list reads `added` and `disabled`). The views lane 176/184: the eight Home cells, whose only difference is the footer's «VAULT · v421 → v422» (each before-capture predates its own release's marker bump). Nothing else moved — Food, the Suggestions page and every other sheet identical.
+
 ## v422 — «اقتراحات اليوم» is a door on Food, and a page of its own
 
 **The owner, 2026-10-07, on a screenshot of v421's card: «ما تكون كذا. لا، يكون فقط اسمها

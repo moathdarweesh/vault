@@ -44,23 +44,61 @@ module.exports = async function testConvenienceUI(page) {
     // being empty, so open the recipes box explicitly rather than assuming.
     const recipesBox = page.locator('.sl-grp').filter({has: page.locator('#sl-grp-recipe')}).locator('.sl-grp-head');
     if (await recipesBox.getAttribute('aria-expanded') !== 'true') await recipesBox.click();
-    await page.locator('#sl-grp-recipe .sl-chip').filter({hasText:'QA rice'}).click();
+    // ---- THE AISLES, and a recipe poured once (v423) ----------------------
+    // Measured on v422: pouring the same recipe twice added 0 rows and told him
+    // nothing — the chip looked the same, the toast said «أُضيف 0» — so he tapped
+    // ten times. The chip of a recipe already on the list in full and unbought
+    // reads `added`, is disabled and says so; a bought row or a deleted row
+    // frees it. The rows stand in the supermarket's departments, captioned only
+    // when more than one department has rows.
+    const chip = page.locator('#sl-grp-recipe .sl-chip').filter({hasText:'QA rice'});
+    const chipMarked = () => chip.evaluate(b => b.classList.contains('added') && b.disabled && b.firstElementChild.localName === 'svg');
+    const chipFree = () => chip.evaluate(b => !b.classList.contains('added') && !b.disabled && !b.hasAttribute('aria-label'));
+    assert.equal(await chipFree(), true, lang+' the chip is live before the pour');
+    await chip.click();
     // The recipe's ingredient NAMES arrive, carrying the recipe's own wording as a
     // caption. Nothing is parsed, scaled or summed.
     const poured = await page.evaluate(() => DB.shopping.get().items);
     assert.equal(poured.length, 1, lang+' one ingredient poured');
     assert.equal(poured[0].name, 'Rice');
     assert.deepEqual(poured[0].amounts, ['200 g'], lang+' the recipe own words, verbatim');
-    // Ticking never moves the row and never enters undo history.
+    assert.equal(await chipMarked(), true, lang+' the poured recipe\'s chip reads added and is disabled');
+    assert.equal(await chip.getAttribute('aria-label'), 'QA rice — ' + await page.evaluate(() => t('sl_on_list')), lang+' the chip says which recipe is on the list');
+    // A forced second click adds nothing and repeats no amount.
+    await chip.evaluate(b => { b.click(); b.dispatchEvent(new MouseEvent('click', {bubbles: true})); });
+    const again = await page.evaluate(() => DB.shopping.get().items);
+    assert.equal(again.length, 1, lang+' a forced second click adds no row');
+    assert.deepEqual(again[0].amounts, ['200 g'], lang+' and repeats no amount');
+    // Ticking never moves the row and never enters undo history — and it repaints
+    // the CHIP (a bought row frees it), not the row: the same <li> stays.
     const undoBefore = await page.evaluate(() => DB.undo.list().length);
+    const rowBefore = await page.evaluateHandle(() => document.querySelector('#sl-list .sl-row'));
     await page.locator('.sl-row [data-tick]').first().check();
     assert.equal(await page.evaluate(() => DB.shopping.get().items[0].checked), true, lang+' ticked');
     assert.equal(await page.evaluate(() => DB.undo.list().length), undoBefore, lang+' a tick is not undoable');
-    // The composer adds a typed item; the footer appears only with items on it.
+    assert.equal(await page.evaluate(({row}) => row === document.querySelector('#sl-list .sl-row'), {row: rowBefore}), true, lang+' a tick redraws no row — the same <li>');
+    assert.equal(await chipFree(), true, lang+' a bought row frees the chip');
+    // The composer adds a typed item; «QA salt» lands under the grocery aisle,
+    // and with ONE department there is no heading over it.
     await page.locator('#sl-new').fill('QA salt '+lang);
     await page.locator('#sl-add').click();
     const names = await page.evaluate(() => DB.shopping.get().items.map(i=>i.name));
     assert.ok(names.includes('QA salt '+lang), lang+' typed item added');
+    assert.equal(await page.locator('#sl-list .sl-sec-h').count(), 0, lang+' one department: no heading');
+    assert.equal(await page.locator('#sl-list .sl-sec[data-sec="grocery"] .sl-row').filter({hasText:'QA salt '+lang}).count(), 1, lang+' the typed salt lands under grocery');
+    // A second department draws BOTH headings, in the store's order.
+    await page.locator('#sl-new').fill('QA eggs');
+    await page.locator('#sl-add').click();
+    assert.deepEqual(await page.locator('#sl-list .sl-sec-h').allInnerTexts(), await page.evaluate(() => [t('slcat_dairy'), t('slcat_grocery')]), lang+' two departments: both headings, dairy before grocery');
+    // Pouring again brings the bought row back, says how many, and marks the chip.
+    await chip.click();
+    assert.equal(await page.evaluate(() => DB.shopping.get().items.find(x => x.name === 'Rice').checked), false, lang+' re-pouring unticks the bought row');
+    assert.equal(await page.locator('#toast .toast-msg').textContent(), await page.evaluate(() => t('sl_relisted').replace('{n}', fmtNum(1))), lang+' the toast names what came back');
+    assert.equal(await chipMarked(), true, lang+' and the chip is marked again');
+    // Deleting the poured row frees the chip.
+    await page.locator('#sl-list .sl-row').filter({hasText:'Rice'}).locator('[data-del]').click();
+    assert.equal(await page.evaluate(() => DB.shopping.get().items.some(x => x.name === 'Rice')), false, lang+' the poured row is gone');
+    assert.equal(await chipFree(), true, lang+' deleting the poured row frees the chip');
     assert.ok(await page.locator('.sl-foot').isVisible(), lang+' the footer shows with items');
     const size = await page.locator('.modal').evaluate(el=>({width:el.clientWidth,scroll:el.scrollWidth}));
     assert.ok(size.scroll<=size.width+1,lang+' shopping overflow');
@@ -120,7 +158,7 @@ module.exports = async function testConvenienceUI(page) {
   for (const c of RECIPE_IMPORT) await c.run(page);
   await routerHome(page);
   await designA11y(page);
-  console.log('PASS convenience UI: bilingual meals, half portion, dated log + undo, recipe quantities, shopping save/check, search/date navigation, recent changes, guided-run undo, plan-only restoration, recipe regression, and the workout core (v397): undo names its write, the PR is seen, the suggestion is a target, records judged against history, the trash works unlogged, a half-typed row, the day as logged, the swap survives, the reorder write, the rest-day add, undoable remove, the template asks, sets edited not rebuilt');
+  console.log('PASS convenience UI: bilingual meals, half portion, dated log + undo, recipe quantities, shopping in aisles and a recipe poured once (v423), search/date navigation, recent changes, guided-run undo, plan-only restoration, recipe regression, and the workout core (v397): undo names its write, the PR is seen, the suggestion is a target, records judged against history, the trash works unlogged, a half-typed row, the day as logged, the swap survives, the reorder write, the rest-day add, undoable remove, the template asks, sets edited not rebuilt');
 };
 
 // ---- v397 · THE WORKOUT CORE, driven with real clicks -----------------------

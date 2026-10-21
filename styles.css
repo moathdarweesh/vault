@@ -8558,6 +8558,29 @@ body.ember-on .ember {
 /* The outstanding count on the Food header link. */
 .sl-count { color: var(--accent-text); font-weight: 700; }
 
+/* ---- The aisles (v423) -----------------------------------------------------
+   «الاقسام الي بتكون عاده موجوده بالسوبر ماركت». #sl-list is a column of
+   <section class="sl-sec"> — one per department that has rows, in the order a
+   shopper walks the store — each a caption (only when more than one department
+   has rows: a caption over the only group names what he can already see) over
+   the same .sl-list of the same .sl-row as before. The caption is the app's
+   section-caption voice (.shr-src: --fs-meta, 700, --text-mute), text-align
+   start so it sits on the reading edge in both directions, and it carries the
+   list's own 4px inline room so it lines up with the rows under it. */
+.sl-secs { display: flex; flex-direction: column; gap: var(--sp-3); min-width: 0; }
+.sl-sec { display: flex; flex-direction: column; min-width: 0; }
+.sl-sec-h { margin: 0 0 var(--sp-1); padding: 0 4px; font-size: var(--fs-meta); font-weight: 700; color: var(--text-mute); text-align: start; }
+/* A chip whose recipe is already on the list, in full and unbought: modelled on
+   .food-lib-chip.added (accent-line border, accent-soft fill) with the check in
+   --accent-text and nothing to press (cursor: default; the button is disabled).
+   The identity layer's [disabled] rule dims a disabled control to --text-dim
+   and its glyph to 45% — right for a control that is OFF, wrong here: this chip
+   is not off, it is DONE, and the check IS the state. (0,2,0) beats that
+   (0,1,0) rule by specificity, so this holds without touching source order. */
+.sl-chip.added { border-color: var(--accent-line); background: var(--accent-soft); color: var(--text); cursor: default; --icon-accent: var(--accent-text); }
+.sl-chip.added > svg { color: var(--accent-text); opacity: 1; }
+.sl-chip.added:active { border-color: var(--accent-line); background: var(--accent-soft); }
+
 /* ---- Quick log (v331) -----------------------------------------------------
    The search sheet's empty state. Everything here is an existing component:
    .cx-actions puts the two cups on one row, .cx-stack .btn already gives every

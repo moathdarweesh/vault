@@ -4652,7 +4652,7 @@ function openShoppingList() {
 
   const modal = convenienceModal(`${cxHeader('cx_shopping')}<div class="cx-stack sl-sheet">
     ${sources.length ? `<div class="sl-sources">${srcGroup('recipe', t('tab_recipes'))}${srcGroup('meal', t('tab_bundles'))}</div>` : ''}
-    <ul class="sl-list" id="sl-list"></ul>
+    <div class="sl-secs" id="sl-list"></div>
     <div class="sl-compose">
       <input class="input" id="sl-new" maxlength="120" dir="auto" enterkeyhint="done" placeholder="${escapeHtml(t('sl_add_ph'))}" aria-label="${escapeHtml(t('sl_add_ph'))}">
       <button type="button" class="btn btn-primary sl-add" id="sl-add" aria-label="${escapeHtml(t('add'))}">${icon('plus', 20)}</button>
@@ -4677,13 +4677,54 @@ function openShoppingList() {
       <button type="button" class="rec-del" data-del aria-label="${escapeHtml(t('delete') + ' — ' + it.name)}">${icon('trash', 16)}</button>
     </li>`;
 
+  // THE AISLES (v423): the rows stand in the supermarket's own departments
+  // (DB.shopping.grouped, SHOPPING_SECTIONS order, only the non-empty ones).
+  // A heading is drawn ONLY when more than one department has rows — a heading
+  // over the only group names what he can already see (the v387 rule); with one
+  // department the rows stand under no heading, and an empty list keeps
+  // .sl-empty. The <li> markup is byte-for-byte the v329 row, so the delegated
+  // handler below and the fp `shopping` cell's row shape are untouched.
   const draw = () => {
+    const groups = DB.shopping.grouped();
+    const headed = groups.length > 1;
+    host.innerHTML = groups.length ? groups.map((g) => `<section class="sl-sec" data-sec="${escapeHtml(g.section)}">${
+        headed ? `<h3 class="sl-sec-h">${t('slcat_' + g.section)}</h3>` : ''
+      }<ul class="sl-list">${g.items.map(rowHtml).join('')}</ul></section>`).join('')
+      : `<ul class="sl-list"><li class="sl-empty">${t('sl_empty')}</li></ul>`;
     const items = DB.shopping.get().items;
-    host.innerHTML = items.length ? items.map(rowHtml).join('')
-      : `<li class="sl-empty">${t('sl_empty')}</li>`;
     foot.hidden = !items.length;
     modal.querySelector('#sl-clear-done').disabled = !items.some((x) => x.checked);
     updateFoodShoppingLink();
+    paintChips();
+  };
+  // A RECIPE ALREADY ON THE LIST IS MARKED AND CANNOT BE POURED AGAIN (v423).
+  // Measured before this was written: pouring the same recipe twice added 0
+  // rows and told him nothing — the chip looked the same, the toast said
+  // «أُضيف 0» — which is why he tapped ten times. A chip whose source is on
+  // the list IN FULL and UNBOUGHT (listedFrom: total > 0 and every name
+  // unticked) reads `added`, is disabled, carries the check and says so for a
+  // screen reader; anything less — a name missing, a row bought — leaves it
+  // live with the plus, and tapping it pours what is missing and unticks what
+  // was bought. Only the GLYPH NODE is swapped, never the chip: its [data-src]
+  // binding is made once below and must survive every repaint. Both glyphs are
+  // literal icon() calls for contract 23's scanner.
+  const paintChips = () => {
+    modal.querySelectorAll('[data-src]').forEach((b) => {
+      const s = sources[Number(b.dataset.src)];
+      const on = DB.shopping.listedFrom(s.type, s.id);
+      const listed = on.total > 0 && on.unticked === on.total;
+      const was = b.classList.contains('added');
+      b.classList.toggle('added', listed);
+      b.disabled = listed;
+      if (listed) b.setAttribute('aria-label', s.name + ' — ' + t('sl_on_list'));
+      else b.removeAttribute('aria-label');
+      if (was === listed) return;   // the state is written every paint; the glyph only when it changes
+      // The glyph is the chip's FIRST child by the template above (icon, then the
+      // name) — addressed as such, not queried: contract 17 reads a bare tag query
+      // as an id.
+      const glyph = b.firstElementChild;
+      if (glyph && glyph.localName === 'svg') glyph.outerHTML = listed ? icon('check', 14) : icon('plus', 14);
+    });
   };
   draw();
 
@@ -4707,6 +4748,7 @@ function openShoppingList() {
       // point in a supermarket aisle.
       row.classList.toggle('is-done', row.querySelector('[data-tick]').checked);
       modal.querySelector('#sl-clear-done').disabled = !DB.shopping.get().items.some((x) => x.checked);
+      paintChips();   // a bought row frees its recipe's chip; the rows stay put
     }
   });
 
@@ -4742,7 +4784,15 @@ function openShoppingList() {
     const result = DB.shopping.addFrom(s.type, s.id);
     if (!result.ok) { convenienceError(result); return; }
     draw();
-    offerUndo(t('sl_added').replace('{n}', fmtNum(result.added || 0)), result);
+    // «أُضيف 0» said nothing (v423). Added rows name their count; none added but
+    // bought rows brought back name THAT count; a write that changed nothing
+    // carries no undoToken and offerUndo raises no toast at all. The one case
+    // left — a new amount joined onto a row already there — is the generic
+    // «حُدّثت القائمة». fmtNum yields digits only, so the replacement string can
+    // never hold a dollar sign.
+    const added = result.added || 0, relisted = result.relisted || 0;
+    offerUndo(added > 0 ? t('sl_added').replace('{n}', fmtNum(added))
+      : relisted > 0 ? t('sl_relisted').replace('{n}', fmtNum(relisted)) : t('sl_cleared'), result);
   }));
 
   modal.querySelector('#sl-clear-done').onclick = () => {

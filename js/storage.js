@@ -4121,7 +4121,7 @@ const DB = {
     addNames(entries, label) {
       if (!Array.isArray(entries) || !entries.length) return { ok: false, code: 'VALIDATION' };
       const items = this.get().items;
-      let added = 0;
+      let added = 0, relisted = 0;
       for (const e of entries) {
         const name = this._clean(e && e.name);
         if (!name) continue;
@@ -4129,7 +4129,10 @@ const DB = {
         const key = DB.search.normalize(name);
         const found = items.find(it => DB.search.normalize(it.name) === key);
         if (found) {
-          // Already on the list and you need it again — so it comes back unticked.
+          // Already on the list and you need it again — so it comes back unticked;
+          // a row that WAS ticked is reported as relisted (v423), so the sheet can
+          // say «أُعيد {n} إلى القائمة» where «أُضيف 0» said nothing.
+          if (found.checked) relisted++;
           found.checked = false;
           if (amount && !found.amounts.includes(amount)) found.amounts = [...found.amounts, amount].slice(0, 6);
         } else {
@@ -4139,7 +4142,7 @@ const DB = {
         }
       }
       if (!added && !entries.length) return { ok: false, code: 'VALIDATION' };
-      return { ...this._commit(items, label || 'cx_shopping_changed'), added };
+      return { ...this._commit(items, label || 'cx_shopping_changed'), added, relisted };
     },
     // A recipe contributes name + its own qty TEXT. A meal bundle has no qty field
     // at all, so it contributes names only — that is not a degraded case, it is
@@ -4168,6 +4171,181 @@ const DB = {
       return this._commit(this.get().items.filter(x => !x.checked), 'cx_shopping_changed');
     },
     clearAll() { return this._commit([], 'cx_shopping_changed'); },
+    // ---- THE AISLES (v423) -------------------------------------------------
+    // «اخلي التطبيق يقسم المشتريات للاصناف المعروفه قسم الخضار والفواكه والخ» —
+    // the list reads like the supermarket's own departments (SHOPPING_SECTIONS
+    // and SHOPPING_LEXICON in js/catalog.js, where the department decisions are
+    // written out). Both live in catalog.js, which loads before this file, and
+    // are read through a typeof guard like every other borrowed name here — the
+    // node suites load storage.js alone, and the classifier then answers `other`
+    // for everything rather than caching an empty table.
+    //
+    // THE CLASSIFIER'S OWN FOLD, and why it is not DB.search.normalize: the
+    // synonym pass works per WORD on the folded form, so «البندورة» (folded
+    // «البندوره») never meets the key «بندوره». The leading «ال» has to come off
+    // BEFORE the synonyms, which normalize cannot be asked to do; this fold is
+    // DB.search.fold → «ال» off each word → the same synonym table → tokens.
+    // Punctuation a list carries («بصل (2 كيلو)», «تونة/سردين», a full stop
+    // glued on — «بيض.», a glued hyphen or dash — «طماطم-2كيلو», «سفن-أب»,
+    // «حليب×2») is a word break; \p{Pd} is every dash a phone can type. A
+    // decimal amount («1.5 كيلو طماطم») breaks into digit tokens that match
+    // nothing, and «sugar-free gum» files by its first word, as the spaced
+    // spelling already does. The MERGE key (addNames, listedFrom) stays
+    // DB.search.normalize untouched — a classifier fold must never change
+    // which rows are the same row.
+    _fold(text) {
+      const syn = typeof FOOD_SYNONYMS !== 'undefined' ? FOOD_SYNONYMS : null;
+      return DB.search.fold(String(text || '').replace(/[،,;:/()[\]«»"'·+&?؟!.×*\p{Pd}]+/gu, ' ')).split(/\s+/).filter(Boolean)
+        // The article comes off a folded word — except «البان»: «ألبان» is the
+        // broken plural of لبن, its أل the hamza plus the root's ل, which the
+        // أ→ا fold makes look like the article. A list writes it («منتجات
+        // ألبان»), and «بان كيك» must never meet it. The exemption sits here,
+        // where the lexicon entry and the typed name both pass, so the one key
+        // «البان» meets «ألبان», «الألبان» and «إلبان» alike — and «ألطماطم»,
+        // the hamza typed onto a real article, still loses it.
+        .map(w => (w.length > 3 && w.startsWith('ال') && w !== 'البان' ? w.slice(2) : w))
+        .map(w => (syn && syn[w]) || w);
+    },
+    // The folded lexicon, built once per SHOPPING_LEXICON object and kept: a
+    // Map from the folded entry to its department, the widest entry in words
+    // (capped at three), and `mark` — the freezer's MARKER words
+    // (SHOPPING_FROZEN_MARKERS, beside the lexicon in catalog.js) put through
+    // the same fold, so «مجمّدة» meets its folded «مجمده». The first spelling
+    // of a key wins, so a word listed under two departments keeps the earlier
+    // one.
+    _lexicon() {
+      const lex = typeof SHOPPING_LEXICON !== 'undefined' ? SHOPPING_LEXICON : null;
+      if (!lex) return null;
+      if (this._lexFor !== lex) {
+        const map = new Map();
+        let width = 1;
+        for (const section of Object.keys(lex)) {
+          for (const entry of lex[section]) {
+            const words = this._fold(entry);
+            if (!words.length) continue;
+            if (words.length > width) width = words.length;
+            const key = words.join(' ');
+            if (!map.has(key)) map.set(key, section);
+          }
+        }
+        const marks = typeof SHOPPING_FROZEN_MARKERS !== 'undefined' ? SHOPPING_FROZEN_MARKERS : [];
+        this._lex = { map, width: Math.min(width, 3), mark: new Set(marks.flatMap(m => this._fold(m))) };
+        this._lexFor = lex;
+      }
+      return this._lex;
+    },
+    // A token with its plural or dual suffix stripped also matches: «بيضات»,
+    // «بيضتان» and «بصلتين» are «بيض» and «بصل»; «tomatoes» is «tomato»,
+    // «cherries» «cherry». The feminine dual («بيضتان») is tried both as the
+    // bare stem and with its ta-marbuta put back (folded, that is «ه»). A
+    // remainder shorter than two letters is not a word.
+    _variants(w) {
+      const out = [];
+      const add = v => { if (v && v.length >= 2 && v !== w && !out.includes(v)) out.push(v); };
+      if (/[؀-ۿ]/.test(w)) {
+        for (const s of ['تان', 'تين', 'ات', 'ان', 'ين', 'ه']) {
+          if (!w.endsWith(s)) continue;
+          add(w.slice(0, -s.length));
+          if (s === 'تان' || s === 'تين') add(w.slice(0, -s.length) + 'ه');
+        }
+      } else {
+        if (w.endsWith('ies')) add(w.slice(0, -3) + 'y');
+        if (w.endsWith('es')) add(w.slice(0, -2));
+        if (w.endsWith('s')) add(w.slice(0, -1));
+      }
+      return out;
+    },
+    // The last resort: the whole folded name equals a FOOD_PRESETS entry (en or
+    // ar), and its calorie category is mapped to a department. veg/fruit are the
+    // fresh hall; protein the butcher (the fish the lexicon knows already went to
+    // the counter); carbs the bakery when the entry names a bread, else the dry
+    // aisles, as legumes and fats are; meals are dishes and belong nowhere.
+    _catalogueSection(name) {
+      const fp = typeof FOOD_PRESETS !== 'undefined' ? FOOD_PRESETS : null;
+      if (!fp) return 'other';
+      if (this._catFor !== fp) {
+        const map = new Map();
+        for (const p of fp) for (const k of [this._fold(p.en).join(' '), this._fold(p.ar).join(' ')]) if (k && !map.has(k)) map.set(k, p);
+        this._cat = map;
+        this._catFor = fp;
+      }
+      const p = this._cat.get(this._fold(name).join(' '));
+      if (!p) return 'other';
+      const bread = /bread|toast|tortilla|tamees|pita/i.test(p.en) || /خبز|توست|تميس/.test(p.ar);
+      const by = { veg: 'produce', fruit: 'produce', protein: 'meat', dairy: 'dairy', carbs: bread ? 'bakery' : 'grocery', legumes: 'grocery', fats: 'grocery', drinks: 'drinks' };
+      return by[p.cat] || 'other';
+    },
+    // The department a name belongs to — one of SHOPPING_SECTIONS. At each
+    // position in reading order the longest lexicon entry starting there is
+    // tried first (three words, two, one), then the single token with a plural
+    // or dual suffix off; the FIRST position that matches decides. The one
+    // exception is the freezer's MARKER — «مجمد», «مثلج», «frozen»
+    // (SHOPPING_FROZEN_MARKERS) — which wins wherever it stands, because «دجاج
+    // مجمد» is bought from the freezer, not the butcher. The freezer's own
+    // items («بيتزا», «كبة», «ثلج», nuggets) obey the first position like any
+    // department: «جبنة بيتزا» is cheese and «لحم كبة» is mince, while the
+    // head-final compounds («chicken nuggets», «مكعبات ثلج») are two-word
+    // entries. Arabic puts the head first, which is why the first position is
+    // the rule; the English modifier-first compounds («garlic bread», «milk
+    // chocolate») are two-word entries too — reversing the rule for Latin
+    // would send every «salmon fillet» to the butcher. A typed amount («2
+    // كيلو طماطم») is tokens that match nothing and are walked past.
+    sectionOf(name) {
+      const lex = this._lexicon();
+      if (!lex) return 'other';
+      const tokens = this._fold(name);
+      let first = null;
+      for (let i = 0; i < tokens.length; i++) {
+        let hit = null;
+        for (let w = Math.min(lex.width, tokens.length - i); w >= 1 && !hit; w--) hit = lex.map.get(tokens.slice(i, i + w).join(' ')) || null;
+        if (!hit) for (const v of this._variants(tokens[i])) { hit = lex.map.get(v) || null; if (hit) break; }
+        if (hit === 'frozen' && (lex.mark.has(tokens[i]) || this._variants(tokens[i]).some(v => lex.mark.has(v)))) return 'frozen';
+        if (hit && !first) first = hit;
+      }
+      return first || this._catalogueSection(name);
+    },
+    // The list in aisles: [{ section, items }] in SHOPPING_SECTIONS order, only
+    // the sections that have rows, the rows in their stored order — a ticked row
+    // never moves (v329), and grouping does not move it either.
+    grouped() {
+      const order = typeof SHOPPING_SECTIONS !== 'undefined' ? SHOPPING_SECTIONS : ['other'];
+      const by = new Map();
+      for (const it of this.get().items) {
+        let section = this.sectionOf(it.name);
+        if (!order.includes(section)) section = 'other';
+        (by.get(section) || by.set(section, []).get(section)).push(it);
+      }
+      return order.filter(s => by.has(s)).map(s => ({ section: s, items: by.get(s) }));
+    },
+    // How much of a source (a recipe or a meal) is on the list, by the SAME key
+    // addNames merges on: `total` distinct ingredient names, `listed` of them on
+    // the list, `unticked` of those not yet bought. total === 0 for an unknown
+    // source. The sheet reads this to mark a chip whose recipe is already there
+    // in full and unbought — pouring it again would add nothing and tell nobody,
+    // which is why he tapped ten times (measured, v423).
+    listedFrom(type, id) {
+      const src = (type === 'recipe' ? STATE.recipes : STATE.mealBundles) || [];
+      const source = src.find(x => x.id === id);
+      if (!source || !Array.isArray(source.items)) return { total: 0, listed: 0, unticked: 0 };
+      const keys = new Set();
+      for (const it of source.items) {
+        const name = this._clean(it && it.name);
+        if (name) keys.add(DB.search.normalize(name));
+      }
+      const rows = new Map();
+      for (const it of this.get().items) {
+        const key = DB.search.normalize(it.name);
+        if (!rows.has(key)) rows.set(key, it);
+      }
+      let listed = 0, unticked = 0;
+      for (const key of keys) {
+        const row = rows.get(key);
+        if (!row) continue;
+        listed++;
+        if (!row.checked) unticked++;
+      }
+      return { total: keys.size, listed, unticked };
+    },
   },
 
   foods: {
