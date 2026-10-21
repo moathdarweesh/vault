@@ -1813,35 +1813,61 @@ const DB = {
         STATE.plan = next.plan; STATE.exercises = STATE.exercises.filter(e => !addedIds.has(e.id)).concat(next.additions.map(e => { defineImgAccessor(e); return e; }));
       }, {plan:nextPlan,additions,sessions:[]}, 'cx_plan_history');
     },
+    // THE SAVE NEVER DEMANDS WHAT THE USER ALREADY DID (v426). A row the review
+    // could not link — `exerciseId` '' or an id that is no exercise — is a NEW
+    // exercise named as the row, and a category outside the list is Other; a
+    // name equal to a library name by DB.search.fold (hamza, ta-marbuta,
+    // diacritics, case) reuses that exercise, so «بنش برس» and «بِنش بَرس» are
+    // one. An exercise listed twice in one workout (a superset, a finisher) is
+    // MERGED into one slot entry, never refused: sets summed — capped at the 20
+    // normalizePlanTargets keeps, or the sum would vanish on the next load —
+    // reps the first non-empty, notes joined with « · » (the review notes the
+    // repeat on the second row; the store cannot call t()), the first row's
+    // position kept. A refusal says WHERE: `at: { day, row, field }`, 1-based —
+    // the numbers the review prints — for an empty day name, an empty row name,
+    // bad sets and no training day; every other fault is the bare `invalid`.
+    // The atomic write and the `changed`/`storage` answers are as before.
     importImagePlan({ days, trainingDays, append, expectedPlan }) {
       if (JSON.stringify(STATE.plan) !== expectedPlan) return { ok: false, reason: 'changed' };
       if (STATE_LOAD_FAILED) return { ok: false, reason: 'storage' };
-      if (!Array.isArray(days) || !days.length || days.length > 14 ||
-          !Array.isArray(trainingDays) || !trainingDays.length || trainingDays.length > 7 ||
-          trainingDays.some((d) => !Number.isInteger(d) || d < 0 || d > 6) ||
-          new Set(trainingDays).size !== trainingDays.length) return { ok: false, reason: 'invalid' };
+      const invalid = (at) => (at ? { ok: false, reason: 'invalid', at } : { ok: false, reason: 'invalid' });
+      if (!Array.isArray(days) || !days.length || days.length > 14) return invalid();
+      if (!Array.isArray(trainingDays) || !trainingDays.length) return invalid({ field: 'trainingDays' });
+      if (trainingDays.length > 7 || trainingDays.some((d) => !Number.isInteger(d) || d < 0 || d > 6) ||
+          new Set(trainingDays).size !== trainingDays.length) return invalid();
+      const fold = (v) => DB.search.fold(v);
       const additions = [], cycle = [], newByName = new Map();
-      for (const day of days) {
-        if (!day || typeof day.name !== 'string' || !day.name.trim() || day.name.length > 80 ||
-            !Array.isArray(day.exercises) || !day.exercises.length || day.exercises.length > 20) return { ok: false, reason: 'invalid' };
+      for (let d = 0; d < days.length; d++) {
+        const day = days[d];
+        if (!day || typeof day.name !== 'string' || day.name.length > 80 ||
+            !Array.isArray(day.exercises) || !day.exercises.length || day.exercises.length > 20) return invalid();
+        if (!day.name.trim()) return invalid({ day: d + 1, field: 'name' });
         const exerciseIds = [], targets = {};
-        for (const row of day.exercises) {
-          if (!row || typeof row.name !== 'string' || !row.name.trim() || row.name.length > 100 ||
-              (row.sets !== null && (!Number.isInteger(row.sets) || row.sets < 1 || row.sets > 20)) ||
+        for (let r = 0; r < day.exercises.length; r++) {
+          const row = day.exercises[r];
+          if (!row || typeof row.name !== 'string' || row.name.length > 100 ||
               typeof row.reps !== 'string' || row.reps.length > 50 ||
-              typeof row.notes !== 'string' || row.notes.length > 240) return { ok: false, reason: 'invalid' };
+              typeof row.notes !== 'string' || row.notes.length > 240) return invalid();
+          if (!row.name.trim()) return invalid({ day: d + 1, row: r + 1, field: 'name' });
+          if (row.sets !== null && (!Number.isInteger(row.sets) || row.sets < 1 || row.sets > 20)) return invalid({ day: d + 1, row: r + 1, field: 'sets' });
           let ex = STATE.exercises.find((e) => e.id === row.exerciseId);
-          if (!ex && row.exerciseId === 'new' && EXERCISE_CATEGORIES.includes(row.category)) {
-            const key = row.name.trim().toLowerCase();
-            ex = STATE.exercises.find((e) => e.name.trim().toLowerCase() === key) || newByName.get(key);
+          if (!ex) {
+            const key = fold(row.name);
+            ex = STATE.exercises.find((e) => fold(e.name) === key) || newByName.get(key);
             if (!ex) {
-              ex = { id: uid(), name: row.name.trim(), category: row.category, imageSlug: null,
-                imagePath: null, imageAt: null, imageCleared: false, isCustom: true,
+              ex = { id: uid(), name: row.name.trim(), category: EXERCISE_CATEGORIES.includes(row.category) ? row.category : 'Other',
+                imageSlug: null, imagePath: null, imageAt: null, imageCleared: false, isCustom: true,
                 inMyList: true, createdAt: new Date().toISOString() };
               additions.push(ex); newByName.set(key, ex);
             }
           }
-          if (!ex || exerciseIds.includes(ex.id)) return { ok: false, reason: 'invalid' };
+          if (exerciseIds.includes(ex.id)) {
+            const p = targets[ex.id];
+            p.sets = p.sets === null ? row.sets : row.sets === null ? p.sets : Math.min(20, p.sets + row.sets);
+            p.reps = p.reps || row.reps;
+            p.notes = [p.notes, row.notes].filter(Boolean).join(' · ').slice(0, 240);
+            continue;
+          }
           exerciseIds.push(ex.id);
           Object.defineProperty(targets, ex.id, { value: { sets: row.sets, reps: row.reps, notes: row.notes }, enumerable: true });
         }

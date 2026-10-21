@@ -51,7 +51,12 @@
 // the lightbox binding dropped, the lightbox named without its number, the
 // mixed pick taken, two PDFs not refused, the view button under 44. 38
 // plants, 38 caught; the runner and its list live beside the spec, outside
-// the repo.
+// the repo. v426 (cases 14–18, the save that never demands what the user
+// already did) added its own plants the same way: an unmatched row left '',
+// the category select kept hidden, the read row's category not Other, the
+// planner not opened, the repeat's note not appended, the refusal's place
+// dropped (the general line), the number left as «{n}», the finger not moved,
+// the sets fault unplaced, the empty strip answered with the general line.
 //
 // Standalone: it runs itself behind the require.main guard and is required by
 // no other suite. QA_ONLY=<words> re-runs the cases whose name contains them.
@@ -189,6 +194,14 @@ async function openPage(browser, origin, { lang, theme }) {
       return !!b.querySelector('[data-pi-form]') || (e && !e.hidden);
     }, SHEET, { timeout: 15000 });
   };
+  // SAVE: tap «حفظ الجدول» and wait for the sheet to go (the planner opens) or
+  // for an error to show. A shown error from an earlier attempt is hidden
+  // first, so the wait reads THIS attempt's answer.
+  const save = async () => {
+    await ev((sel) => { const e = document.querySelector(sel + ' [data-pi-error]'); if (e) e.hidden = true; }, SHEET);
+    await page.click(SHEET + ' [data-pi-save]');
+    await page.waitForFunction((sel) => { const b = document.querySelector(sel); if (!b) return true; const e = b.querySelector('[data-pi-error]'); return !!(e && !e.hidden); }, SHEET, { timeout: 15000 });
+  };
   // THE SOURCE FULL SIZE: open the review's <details> if it is closed, tap the
   // tile's button, read the lightbox (its picture, its name), close it with the
   // lightbox's own button. null when the tile is no button at all.
@@ -202,7 +215,7 @@ async function openPage(browser, origin, { lang, theme }) {
     lb.closed = await ev(() => !document.querySelector('.img-lightbox'));
     return lb;
   };
-  return { ctx, page, ev, reset, errors, guard, lang, theme, worker, fresh, tr, openSheet, give, read, viewFull };
+  return { ctx, page, ev, reset, errors, guard, lang, theme, worker, fresh, tr, openSheet, give, read, save, viewFull };
 }
 
 // ── in-page readers ─────────────────────────────────────────────────────────
@@ -239,8 +252,11 @@ function readSheet() {
   const file = body.querySelector('[data-pi-file]'), cam = body.querySelector('[data-pi-cam-file]');
   const err = body.querySelector('[data-pi-error]'), rd = body.querySelector('[data-pi-read]');
   const form = body.querySelector('[data-pi-form]');
+  // Where the finger is: a field's id, a weekday button, or the element's tag.
+  const a = document.activeElement;
   return {
     title: txt(m.querySelector('.modal-title')),
+    active: a ? (a.id || (a.hasAttribute('data-pi-weekday') ? 'weekday:' + a.dataset.piWeekday : a.tagName)) : null,
     tiles: [...body.querySelectorAll(':scope > .plan-import-pages .plan-import-page')].map(tile),
     placeholder: !!body.querySelector('.plan-import-placeholder'),
     file: file ? { accept: file.getAttribute('accept'), multiple: file.multiple } : null,
@@ -252,7 +268,8 @@ function readSheet() {
     xss: window.__xss || null,
     review: form ? {
       days: [...form.querySelectorAll('[data-pi-day]')].map((s) => ({ name: s.querySelector('[data-day-name]').value,
-        rows: [...s.querySelectorAll('[data-pi-row]')].map((r) => ({ name: r.querySelector('[data-field="name"]').value, sets: r.querySelector('[data-field="sets"]').value, reps: r.querySelector('[data-field="reps"]').value, notes: r.querySelector('[data-field="notes"]').value })) })),
+        rows: [...s.querySelectorAll('[data-pi-row]')].map((r) => ({ name: r.querySelector('[data-field="name"]').value, sets: r.querySelector('[data-field="sets"]').value, reps: r.querySelector('[data-field="reps"]').value, notes: r.querySelector('[data-field="notes"]').value,
+          exerciseId: r.querySelector('[data-field="exerciseId"]').value, categoryShown: !r.querySelector('[data-pi-category]').hidden, category: r.querySelector('[data-field="category"]').value })) })),
       summary: txt(body.querySelector('.plan-import-source summary')),
       source: [...body.querySelectorAll('.plan-import-source .plan-import-page')].map(tile),
     } : null,
@@ -569,6 +586,113 @@ const CASES = [
     assert.ok(f.h >= 64, 'the row is at least 64 tall: ' + f.h);
     await page.setViewportSize({ width: 375, height: 812 });
   }],
+
+  // ── THE SAVE NEVER DEMANDS WHAT THE USER ALREADY DID (v426) ────────────────
+  // The owner saved a complete draft and read «name every day, link every
+  // exercise to the library…» — all done. A name the library does not hold
+  // now reads «new» with its category shown, Save takes it (the exercise is
+  // created, category Other, and the planner opens); an exercise listed twice
+  // in one workout saves as ONE with the sets summed and the repeat noted on
+  // the second row; and what still refuses names the day, the row and the
+  // field, and puts the finger on it.
+  ['14 an unmatched name reads «new» with its category shown; Save takes the draft: the planner opens, the exercise exists, category Other', async ({ ev, page, openSheet, give, read, save }) => {
+    await openSheet();
+    await give(photos(1));
+    await read();
+    const s = await ev(readSheet);
+    assert.ok(s.review, 'the review is up: ' + (s.error || ''));
+    const rows = s.review.days[0].rows;
+    const benchId = await ev(() => DB.exercises.list().find((e) => e.name === 'Bench Press').id);
+    assert.equal(rows[0].exerciseId, benchId, 'a name the library holds is linked to it');
+    assert.equal(rows[0].categoryShown, false, 'and shows no category select');
+    assert.equal(rows[1].exerciseId, 'new', 'a name the library does not hold reads «new» — no tap needed: ' + JSON.stringify(rows[1].exerciseId));
+    assert.equal(rows[1].categoryShown, true, 'with the category select shown');
+    assert.equal(rows[1].category, 'Other', 'at Other');
+    const before = await ev(() => DB.plan.get().cycle.length);
+    await save();
+    const after = await ev((sel) => {
+      const c = DB.plan.get().cycle, ex = DB.exercises.list().find((e) => e.name === 'Cable press') || null;
+      return { sheet: !!document.querySelector(sel), view: document.querySelector('.view.active')?.dataset.view, cycle: c.length,
+        ex: ex && { isCustom: ex.isCustom, category: ex.category }, inSlot: !!ex && c[c.length - 2].exerciseIds.includes(ex.id) };
+    }, SHEET);
+    assert.equal(after.sheet, false, 'the sheet closed — nothing was demanded');
+    assert.equal(after.view, 'planner', 'the planner opens: ' + after.view);
+    assert.equal(after.cycle, before + FIXTURE.days.length, 'the workouts joined the cycle');
+    assert.deepEqual(after.ex, { isCustom: true, category: 'Other' }, 'the exercise exists in the library, custom, category Other: ' + JSON.stringify(after.ex));
+    assert.equal(after.inSlot, true, 'and the Push workout carries it');
+  }],
+
+  ['15 an exercise listed twice in one workout saves as one: sets summed, reps from the first, the notes joined and the repeat noted', async ({ ev, tr, worker, openSheet, give, read, save }) => {
+    await openSheet();
+    await give(photos(1));
+    worker.queue.push({ status: 200, body: { plan: { days: [{ name: 'Push', exercises: [
+      { name: 'Bench Press', sets: 3, reps: '8', notes: 'heavy' },
+      { name: 'Pallof press', sets: 2, reps: '10', notes: '' },
+      { name: 'Bench Press', sets: 2, reps: '12', notes: '' },
+      { name: 'pallof press', sets: 1, reps: '', notes: 'slow' },
+    ] }] } } });
+    await read();
+    const s = await ev(readSheet);
+    assert.ok(s.review && s.review.days[0].rows.length === 4, 'the review shows the four rows as read');
+    await save();
+    const note = await tr('pi_merged_note');
+    const got = await ev((sel) => {
+      const c = DB.plan.get().cycle, slot = c[c.length - 1];
+      return { sheet: !!document.querySelector(sel), ids: slot.exerciseIds, targets: slot.targets, names: slot.exerciseIds.map((id) => DB.exercises.getById(id)?.name),
+        pallofs: DB.exercises.list().filter((e) => /pallof/i.test(e.name)).length };
+    }, SHEET);
+    assert.equal(got.sheet, false, 'saved — a repeat is never refused');
+    assert.deepEqual(got.names, ['Bench Press', 'Pallof press'], 'two slot entries, not four, each at its first position: ' + JSON.stringify(got.names));
+    assert.equal(got.pallofs, 1, 'the two spellings of the new name are one exercise');
+    assert.deepEqual(got.targets[got.ids[0]], { sets: 5, reps: '8', notes: 'heavy · ' + note }, 'the library pair: sets summed, reps from the first, the notes joined and the repeat noted: ' + JSON.stringify(got.targets[got.ids[0]]));
+    assert.deepEqual(got.targets[got.ids[1]], { sets: 3, reps: '10', notes: 'slow · ' + note }, 'the new pair likewise (same name by fold): ' + JSON.stringify(got.targets[got.ids[1]]));
+  }],
+
+  ['16 a cleared day name → «name workout 2» with its number, the finger on that field; a cleared row name → «workout 1: an exercise has no name», the finger on it; the draft stays', async ({ ev, tr, page, openSheet, give, read, save }) => {
+    await openSheet();
+    await give(photos(1));
+    await read();
+    await page.fill(SHEET + ' #pi-day-1', '');
+    await save();
+    let s = await ev(readSheet);
+    assert.ok(s && s.review, 'the review stays up with the draft');
+    const two = await ev(() => fmtNum(2)), one = await ev(() => fmtNum(1));
+    assert.equal(s.error, (await tr('pi_err_day_name')).replace('{n}', two), 'ONE line naming the workout by number, the number filled in: ' + s.error);
+    assert.equal(s.active, 'pi-day-1', 'and the finger lands on that name field: ' + s.active);
+    await page.fill(SHEET + ' #pi-day-1', 'Legs');
+    await page.fill(SHEET + ' #pi-0-1-name', '');
+    await save();
+    s = await ev(readSheet);
+    assert.equal(s.error, (await tr('pi_err_row_name')).replace('{n}', one), 'a nameless row: the line names its workout: ' + s.error);
+    assert.equal(s.active, 'pi-0-1-name', 'and the finger lands on that row\'s name: ' + s.active);
+    assert.equal(s.review.days.length, FIXTURE.days.length, 'the draft is still whole');
+  }],
+
+  ['17 sets «ab» → «workout 1, exercise 2: sets are 1–20 or blank», the finger on that field', async ({ ev, tr, page, openSheet, give, read, save }) => {
+    await openSheet();
+    await give(photos(1));
+    await read();
+    await page.fill(SHEET + ' #pi-0-1-sets', 'ab');
+    await save();
+    const s = await ev(readSheet);
+    assert.ok(s && s.review, 'the review stays up');
+    const one = await ev(() => fmtNum(1)), two = await ev(() => fmtNum(2));
+    assert.equal(s.error, (await tr('pi_err_sets')).replace('{n}', one).replace('{m}', two), 'the line names the workout and the exercise, both figures filled in: ' + s.error);
+    assert.equal(s.active, 'pi-0-1-sets', 'and the finger lands on that sets field: ' + s.active);
+  }],
+
+  ['18 no training day → «choose your training days», the finger on the strip', async ({ ev, tr, openSheet, give, read, save }) => {
+    await openSheet();
+    await give(photos(1));
+    await read();
+    await ev(() => document.querySelectorAll('#modal-root [data-pi-weekday].active').forEach((b) => b.click()));
+    assert.equal(await ev(() => document.querySelectorAll('#modal-root [data-pi-weekday].active').length), 0, 'setup: every weekday off');
+    await save();
+    const s = await ev(readSheet);
+    assert.ok(s && s.review, 'the review stays up');
+    assert.equal(s.error, await tr('pi_err_days'), 'its own line, not the general one: ' + s.error);
+    assert.ok(/^weekday:/.test(s.active || ''), 'and the finger lands on the weekday strip: ' + s.active);
+  }],
 ];
 
 async function run() {
@@ -598,7 +722,7 @@ async function run() {
     }
   } finally { await browser.close(); await srv.close(); }
   if (failures.length) { console.error(`FAIL  plan import UI: ${failures.length} failed`); failures.forEach((f) => console.error('  - ' + f)); process.exitCode = 1; return; }
-  console.log(`PASS  plan import UI (${passed} cases, AR/dark + EN/light, 375px): the schedule from several photos or one PDF (v424) — the door from Program, a picker of several files, numbered tiles in order with their remove buttons, the kinds never mixed, the seventh and the oversize PDF and the wrong kind each refused by name, a pick holding both kinds refused whole, pages in order on the wire and the old image shape for one photo, an old Worker named, the review and its source opening each page full size, the strip at 375 and 320 under «Larger text»`);
+  console.log(`PASS  plan import UI (${passed} cases, AR/dark + EN/light, 375px): the schedule from several photos or one PDF (v424) — the door from Program, a picker of several files, numbered tiles in order with their remove buttons, the kinds never mixed, the seventh and the oversize PDF and the wrong kind each refused by name, a pick holding both kinds refused whole, pages in order on the wire and the old image shape for one photo, an old Worker named, the review and its source opening each page full size, the strip at 375 and 320 under «Larger text»; and (v426) an unmatched name saved as new with no tap, a repeat merged with its note, a refusal naming the day, row and field with the finger on it`);
 }
 
 if (require.main === module) run().catch((e) => { console.error(e); process.exitCode = 1; });

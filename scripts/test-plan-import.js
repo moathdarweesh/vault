@@ -109,11 +109,89 @@ assert.equal(JSON.stringify(DB.sessions.listAll()), history, 'a swap never touch
   assert.equal(JSON.stringify([1, 2, 3].map(at)), JSON.stringify(['Legs', 'Arms', 'Push']), 'and the new day joins the sequence after the old ones');
 }
 
+// ---- THE SAVE NEVER DEMANDS WHAT THE USER ALREADY DID (v426) ---------------
+// The owner saved a complete-looking draft and was told to name every day,
+// link every exercise and never repeat one — things he had done. Now: a row
+// the review could not link ('' or an id that is no exercise) is a NEW
+// exercise named as the row, category Other (a category outside the list is
+// Other too); a new name equal to a library name by DB.search.fold reuses it
+// («بنش برس» and «بِنش بَرس» are one); an exercise listed twice in one
+// workout is MERGED (sets summed, reps the first non-empty, notes joined with
+// « · », the first position kept) and the store appends NO note of its own —
+// the sheet does that, in the UI suite; and a refusal says where, 1-based:
+// `at: { day, field: 'name' }`, `{ day, row, field: 'name' | 'sets' }`,
+// `{ field: 'trainingDays' }`. The `changed`/`storage` answers are untouched.
+{
+  const u = storeContext(), UDB = u.c.DB, fold = (v) => UDB.search.fold(v);
+  const lib = UDB.exercises.list();
+  const req = (days, trainingDays = [1, 3, 5]) => ({ expectedPlan: JSON.stringify(UDB.plan.get()), append: false, trainingDays, days });
+  const row = (name, extra = {}) => ({ name, exerciseId: '', category: 'Other', sets: 3, reps: '10', notes: '', ...extra });
+  const slot0 = () => UDB.plan.get().cycle[0];
+  // An unlinked row saves, as a custom exercise named as the row.
+  assert.equal(UDB.plan.importImagePlan(req([{ name: 'Day A', exercises: [row('Zercher squat'), row('Nope row', { exerciseId: 'nope', category: 'Bogus' })] }])).ok, true, 'an unlinked row (exerciseId \'\') saves');
+  const z = UDB.exercises.list().find((e) => e.name === 'Zercher squat');
+  assert.ok(z && z.isCustom && z.category === 'Other', 'as a custom exercise named as the row, category Other: ' + JSON.stringify(z));
+  const n = UDB.exercises.list().find((e) => e.name === 'Nope row');
+  assert.ok(n && n.isCustom, 'an id that is no exercise is new too');
+  assert.equal(n.category, 'Other', 'and a category outside the list becomes Other: ' + n.category);
+  assert.equal(JSON.stringify(slot0().exerciseIds), JSON.stringify([z.id, n.id]), 'both in the slot, in order');
+  assert.equal(slot0().targets[z.id].sets, 3, 'with their targets');
+  // A new name equal to a library name by FOLD reuses it: case, trailing space…
+  const seed = lib[0];
+  assert.equal(UDB.plan.importImagePlan(req([{ name: 'Day B', exercises: [row(seed.name.toUpperCase() + ' ', { exerciseId: 'new' })] }])).ok, true, 'a new row named as a library exercise saves');
+  assert.equal(slot0().exerciseIds[0], seed.id, 'a new name equal to a library name by fold reuses that exercise, no copy');
+  assert.equal(UDB.exercises.list().filter((e) => fold(e.name) === fold(seed.name)).length, 1, 'one exercise of that name');
+  // …and the Arabic fold: diacritics, the hamza forms, ta-marbuta.
+  assert.equal(UDB.plan.importImagePlan(req([{ name: 'Day C', exercises: [row('بنش برس'), row('إنكلاين دمبل')] }, { name: 'Day D', exercises: [row('بِنش بَرس', { exerciseId: 'new' }), row('انكلاين دمبل'), row('رفعة ميتة'), row('رفعه ميته')] }])).ok, true, 'Arabic names in two days, one of them listed twice in Day D: saves');
+  assert.equal(UDB.exercises.list().filter((e) => fold(e.name) === fold('بنش برس')).length, 1, '«بنش برس» and «بِنش بَرس» are one exercise');
+  assert.equal(UDB.exercises.list().filter((e) => fold(e.name) === fold('انكلاين دمبل')).length, 1, '«إنكلاين» and «انكلاين» are one');
+  assert.equal(UDB.exercises.list().filter((e) => fold(e.name) === fold('رفعة ميتة')).length, 1, '«رفعة» and «رفعه» are one');
+  assert.equal(UDB.plan.get().cycle[1].exerciseIds[0], slot0().exerciseIds[0], 'the second day links the first day\'s exercise');
+  assert.equal(UDB.plan.get().cycle[1].exerciseIds.length, 3, 'and the repeat within Day D folded into one slot entry');
+  // An exercise listed twice in one workout is MERGED, never refused.
+  const ex2 = lib[1];
+  const r1 = { name: ex2.name, exerciseId: ex2.id, category: ex2.category, sets: 3, reps: '8', notes: 'first' };
+  const r2 = { ...r1, sets: 2, reps: '12', notes: 'second' };
+  const r3 = { name: 'Fresh', exerciseId: 'new', category: 'Other', sets: null, reps: '', notes: '' };
+  assert.equal(UDB.plan.importImagePlan(req([{ name: 'Day E', exercises: [r1, r3, r2] }])).ok, true, 'a repeated exercise is merged, never refused');
+  assert.equal(slot0().exerciseIds.length, 2, 'one slot entry for the repeated exercise: ' + JSON.stringify(slot0().exerciseIds));
+  assert.equal(slot0().exerciseIds[0], ex2.id, 'the merged row keeps the FIRST row\'s position');
+  // The exact notes also pin that the store appends NO note of its own (it cannot call t()).
+  assert.equal(JSON.stringify(slot0().targets[ex2.id]), JSON.stringify({ sets: 5, reps: '8', notes: 'first · second' }), 'sets summed, reps from the first, notes joined with « · »: ' + JSON.stringify(slot0().targets[ex2.id]));
+  vm.runInContext('reloadState()', u.c);
+  assert.equal(JSON.stringify(slot0().targets[ex2.id]), JSON.stringify({ sets: 5, reps: '8', notes: 'first · second' }), 'and the merged target survives a reload');
+  // One number and one blank → the number; blank reps → the next non-empty; 20 is the ceiling of a sum.
+  assert.equal(UDB.plan.importImagePlan(req([{ name: 'Day F', exercises: [{ ...r1, sets: null, reps: '', notes: '' }, { ...r1, sets: 4, reps: '15', notes: '' }] }])).ok, true, 'a blank first row and a filled second: saves');
+  assert.equal(JSON.stringify(slot0().targets[ex2.id]), JSON.stringify({ sets: 4, reps: '15', notes: '' }), 'sets: the one that is a number; reps: the first non-empty');
+  assert.equal(UDB.plan.importImagePlan(req([{ name: 'Day G', exercises: [{ ...r1, sets: 12 }, { ...r1, sets: 12 }] }])).ok, true, '12 + 12: saves');
+  assert.equal(slot0().targets[ex2.id].sets, 20, 'a sum past 20 is held at 20 — the cap the load normaliser keeps (a 24 would vanish on reload)');
+  // A 'new' row whose name is a library name, beside that library row: one entry.
+  assert.equal(UDB.plan.importImagePlan(req([{ name: 'Day H', exercises: [r1, { ...r3, name: ex2.name.toLowerCase(), sets: 1 }] }])).ok, true, 'a library row and a new row of its name: saves');
+  assert.equal(JSON.stringify(slot0().exerciseIds), JSON.stringify([ex2.id]), 'a new row named as the library row merges into it');
+  assert.equal(slot0().targets[ex2.id].sets, 4, 'and the sets sum across that pair too');
+  // What still refuses says WHERE — and leaves the plan and the library as they were.
+  const before = JSON.stringify(UDB.plan.get()), libBefore = UDB.exercises.list().length;
+  const at = (res) => JSON.stringify([res.ok, res.reason, res.at === undefined ? null : res.at]);
+  assert.equal(at(UDB.plan.importImagePlan(req([{ name: 'OK', exercises: [r1] }, { name: '  ', exercises: [r1] }]))), JSON.stringify([false, 'invalid', { day: 2, field: 'name' }]), 'a nameless day is named by its number (1-based)');
+  assert.equal(at(UDB.plan.importImagePlan(req([{ name: 'OK', exercises: [r1, { ...r3, name: ' ' }] }]))), JSON.stringify([false, 'invalid', { day: 1, row: 2, field: 'name' }]), 'a nameless row: day and row');
+  assert.equal(at(UDB.plan.importImagePlan(req([{ name: 'OK', exercises: [r1, { ...r3, sets: NaN }] }]))), JSON.stringify([false, 'invalid', { day: 1, row: 2, field: 'sets' }]), 'sets that are not a number (the review\'s NaN): day, row, sets');
+  for (const sets of [0, 21, 2.5, '3']) assert.equal(at(UDB.plan.importImagePlan(req([{ name: 'OK', exercises: [{ ...r1, sets }] }]))), JSON.stringify([false, 'invalid', { day: 1, row: 1, field: 'sets' }]), 'sets ' + JSON.stringify(sets) + ' refused at the field');
+  assert.equal(at(UDB.plan.importImagePlan(req([{ name: 'OK', exercises: [r1] }], []))), JSON.stringify([false, 'invalid', { field: 'trainingDays' }]), 'no training day: the strip, no day or row');
+  assert.equal(at(UDB.plan.importImagePlan(req([{ name: 'OK', exercises: [{ ...r1, reps: 'x'.repeat(51) }] }]))), JSON.stringify([false, 'invalid', null]), 'reps over the cap: the bare invalid, as before');
+  assert.equal(at(UDB.plan.importImagePlan(req([], [1]))), JSON.stringify([false, 'invalid', null]), 'no day at all: the bare invalid');
+  assert.equal(JSON.stringify(UDB.plan.get()), before, 'every refusal leaves the plan as it was');
+  assert.equal(UDB.exercises.list().length, libBefore, 'and creates no exercise');
+  assert.equal(UDB.plan.importImagePlan({ ...req([{ name: 'OK', exercises: [r1] }]), expectedPlan: '{}' }).reason, 'changed', '`changed` as before');
+  u.fail(true);
+  assert.equal(UDB.plan.importImagePlan(req([{ name: 'OK', exercises: [r1, row('Disk-full new')] }])).reason, 'storage', '`storage` as before'); u.fail(false);
+  assert.equal(UDB.exercises.list().some((e) => e.name === 'Disk-full new'), false, 'and a failed write leaves no new exercise behind');
+}
+
 const beforeReadOnly = snapshot();
 vm.runInContext('STATE_LOAD_FAILED = true', s.c);
 assert.equal(DB.plan.importImagePlan(request()).reason, 'storage');
 assert.equal(snapshot(), beforeReadOnly);
-console.log('PASS storage: append, replace, no logged sets, reload, edit, duplicate save, validation, disk-full rollback, custom dedupe, stale-target cleanup, permanent swap, read-only');
+console.log('PASS storage: append, replace, no logged sets, reload, edit, duplicate save, validation, disk-full rollback, custom dedupe, stale-target cleanup, permanent swap, read-only, an unlinked row saved as new, the fold reuse (Arabic forms), a repeat merged in place, refusals placed by day/row/field (v426)');
 
 // Run the real Worker handler with deterministic Supabase and Gemini responses.
 async function workerTests() {

@@ -12,7 +12,7 @@
 // build. The literal below is the fallback (file://, or a stripped query) and is
 // still bumped by `npm run release` — see CLAUDE.md "CACHE WORKFLOW".
 const VAULT_BUILD = (() => {
-  const FALLBACK = 'v425';
+  const FALLBACK = 'v426';
   try {
     const src = (document.currentScript && document.currentScript.src) || '';
     const m = src.match(/[?&]v=(\d+)/);
@@ -6106,7 +6106,7 @@ function openPlanImageImport() {
       const [d, r] = b.dataset.piRowUp.split(':').map(Number), rows = days[d].exercises;
       [rows[r - 1], rows[r]] = [rows[r], rows[r - 1]]; draw();
     });
-    body.querySelectorAll('[data-pi-add]').forEach((b) => b.onclick = () => { days[Number(b.dataset.piAdd)].exercises.push({ name: '', sets: null, reps: '', notes: '', exerciseId: '', category: 'Other' }); draw(); });
+    body.querySelectorAll('[data-pi-add]').forEach((b) => b.onclick = () => { days[Number(b.dataset.piAdd)].exercises.push({ name: '', sets: null, reps: '', notes: '', exerciseId: 'new', category: 'Other' }); draw(); });
     body.querySelector('[data-pi-add-day]').onclick = () => { days.push({ name: '', exercises: [] }); draw(); };
     body.querySelectorAll('[data-pi-drop-day]').forEach((b) => b.onclick = () => { days.splice(Number(b.dataset.piDropDay), 1); draw(); });
     body.querySelectorAll('[data-pi-up]').forEach((b) => b.onclick = () => {
@@ -6202,9 +6202,13 @@ function openPlanImageImport() {
       if (!Array.isArray(result.days) || !result.days.length) throw new Error(t('pi_empty'));
       if (result.days.length > 14 || result.days.some((d) => !d || !Array.isArray(d.exercises) || d.exercises.length > 20)) throw new Error(t('pi_unavailable'));
       const text = (v, max) => typeof v === 'string' ? v.slice(0, max) : '';
+      // A name the library does not hold is a NEW exercise (category Other),
+      // preselected — most read names arrive unmatched, and each used to wait
+      // for a tap before Save would take the draft (v426). The user may still
+      // pick a library exercise in its place.
       days = result.days.map((d) => ({ name: text(d.name, 80), exercises: d.exercises.map((r) => ({
         name: text(r?.name, 100), sets: Number.isInteger(r?.sets) && r.sets > 0 && r.sets <= 20 ? r.sets : null,
-        reps: text(r?.reps, 50), notes: text(r?.notes, 240), exerciseId: match(r?.name), category: 'Other',
+        reps: text(r?.reps, 50), notes: text(r?.notes, 240), exerciseId: match(r?.name) || 'new', category: 'Other',
       })) }));
       busy = false; draw(); overlay.querySelector('.modal')?.scrollTo(0, 0);
     } catch (error) {
@@ -6214,19 +6218,64 @@ function openPlanImageImport() {
       showError(message === t('ai_error') ? t('pi_error') : message);
     } finally { clearTimeout(timer); reading = false; }
   }
+  // A refusal says WHERE (v426): the store's `at` — day and row 1-based, the
+  // numbers the review prints — becomes ONE line, and the finger lands on that
+  // field: the day's name, the row's name or sets, or the weekday strip. A
+  // fault with no place gets the one general line. The figures go in through
+  // fmtNum (digits only), so the replacement can never hold a `$`.
+  const refuse = (at) => {
+    const d = at && at.day, r = at && at.row, field = at && at.field;
+    let key = 'pi_invalid', target = null;
+    if (field === 'trainingDays') { key = 'pi_err_days'; target = body.querySelector('[data-pi-weekday]'); }
+    else if (field === 'name' && d && !r) { key = 'pi_err_day_name'; target = body.querySelector(`#pi-day-${d - 1}`); }
+    else if (field === 'name' && d && r) { key = 'pi_err_row_name'; target = body.querySelector(`#pi-${d - 1}-${r - 1}-name`); }
+    else if (field === 'sets' && d && r) { key = 'pi_err_sets'; target = body.querySelector(`#pi-${d - 1}-${r - 1}-sets`); }
+    let message = t(key);
+    if (d) message = message.replace('{n}', fmtNum(d));
+    if (r) message = message.replace('{m}', fmtNum(r));
+    showError(message);
+    if (target) target.focus();
+  };
+  // THE SAME EXERCISE TWICE IN ONE WORKOUT is merged by the store (sets summed,
+  // reps from the first, notes joined). The sheet knows the pair before Save —
+  // the same library exercise, or names that are one by DB.search.fold, the
+  // store's own rule — and notes it on the SECOND row, so the merged notes say
+  // why. On a copy of the draft: a refused save leaves the review as it was.
+  const resolveKey = (row) => {
+    if (library.some((e) => e.id === row.exerciseId)) return row.exerciseId;
+    const key = DB.search.fold(row.name);
+    const hit = library.find((e) => DB.search.fold(e.name) === key);
+    return hit ? hit.id : 'new:' + key;
+  };
+  const noted = () => days.map((day) => {
+    const seen = new Set();
+    return { name: day.name, exercises: day.exercises.map((row) => {
+      const copy = { ...row }, key = resolveKey(row);
+      if (seen.has(key)) {
+        const base = String(copy.notes || '').trim(), notes = base ? base + ' · ' + t('pi_merged_note') : t('pi_merged_note');
+        if (notes.length <= 240) copy.notes = notes;
+      }
+      seen.add(key);
+      return copy;
+    }) };
+  });
   async function saveDraft(event) {
     event.preventDefault();
     if (busy) return;
     if (hasPlan && mode === 'replace' && !confirmed) { showError(t('pi_confirm_needed')); return; }
-    if (!days.length || !weekdays.size) { showError(t('pi_invalid')); return; }
+    if (!weekdays.size) { refuse({ field: 'trainingDays' }); return; }
+    if (!days.length) { refuse(); return; }
     busy = true;
     const button = body.querySelector('[data-pi-save]'); button.disabled = true;
     try {
       if ((await Cloud.getSession())?.user?.id !== ownerId) { showError(t('ai_err_signin')); return; }
       if (!overlay.isConnected) return;
-      const result = DB.plan.importImagePlan({ days, trainingDays: [...weekdays], append: mode === 'append', expectedPlan: baseline });
+      const result = DB.plan.importImagePlan({ days: noted(), trainingDays: [...weekdays], append: mode === 'append', expectedPlan: baseline });
       if (!result.ok) {
-        showError(result.reason === 'changed' ? t('pi_changed') : result.reason === 'storage' ? t('pi_storage') : t('pi_invalid')); return;
+        if (result.reason === 'changed') showError(t('pi_changed'));
+        else if (result.reason === 'storage') showError(t('pi_storage'));
+        else refuse(result.at);
+        return;
       }
       closeModal(); navigate('planner'); showToast(t('pi_saved'));
     } catch (_) { showError(t('pi_storage')); }

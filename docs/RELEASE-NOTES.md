@@ -2,6 +2,51 @@
 
 One section per release since v309, newest first, moved verbatim from `CLAUDE.md` in v401 (batch 6 of the 2026-09-25 review; `docs/REVIEW-2026-09-25.md`). `CLAUDE.md` is the guide and the authority for how the app works now. A section here records what one release changed and why, in the words written at the time, so a later section — or the guide — can supersede what an earlier one says.
 
+## v426 — the schedule import's Save never demands what the user already did
+
+**The owner, 2026-10-21, after reading his programme from photos: «بعد ما سجلت تماريني من صور وكل
+شي كامل وصحيح بدي اعمل حفظ بتطلع لي رساله سمِّ كل يوم وكل تمرين واربطه بالمكتبه …والخ. انا عامل
+كل هذي الاشياء اصلا. راجع المشكله وحلها وما تخلي هاي الشي الزامي واذا التمرين اصلا مش موجود حطه
+جديد».** Read against the code, the refusal came from any one of: a row whose exercise was
+not linked (the review's `match()` links a library exercise only on an EXACT folded name, so
+most AI-read rows arrived unlinked and every one needed a tap — one missed anywhere refused
+the whole save); the same exercise twice in one workout (a superset, or two rows resolving to
+one library exercise); sets typed as anything but a whole number 1–20; an empty day name —
+all answered by the one generic `pi_invalid` paragraph that pointed nowhere.
+
+**Now (js/storage.js `DB.plan.importImagePlan`, js/app.js the import sheet).** An unlinked row
+is a NEW exercise: the review preselects «إضافة كتمرين جديد» (category «أخرى», the category
+select shown) for every name the library does not hold, and the store treats `''` or an
+unknown id the same way; a new name that equals a library name by `DB.search.fold`
+(hamza, ta-marbuta, diacritics, case — «بنش برس» and «بِنش بَرس» are one) reuses that
+exercise. A repeated exercise in one workout is MERGED, never refused: sets summed (capped
+at 20, the plan's own ceiling), reps the first non-empty, notes joined with « · » and the
+second occurrence noted «ورد مرتين في الجدول» (the sheet appends it to a COPY of the draft
+before Save, so a refused save leaves the review as drawn); the merged row keeps the first
+one's place. What still refuses says WHERE: the store answers `{ reason: 'invalid', at: { day,
+row, field } }` (1-based) and the sheet shows ONE line — «سمِّ يوم التمرين {n}.», «اليوم {n}:
+تمرين بلا اسم.», «اليوم {n}، التمرين {m}: المجموعات عدد من ١ إلى ٢٠، أو فارغة.», «حدد أيام
+التدريب.» — and puts the cursor on that field; the generic line is reworded to drop the two
+demands that are no longer true. The atomic write and the `changed`/`storage` answers are
+unchanged; logged sessions untouched.
+
+**Tests.** `scripts/test-plan-import.js`'s store block: unlinked rows saved as custom/Other,
+the fold reuse in three Arabic forms, the merge (sum, first reps, joined notes, position, the
+20 cap, survival of a reload), every `at` shape, refusals leaving plan and library untouched.
+`scripts/test-plan-import-ui.js` cases 14–18: the select reads «new» with no tap, Save opens
+the planner and the exercise exists, a library pair and a same-fold new pair each save as one
+row with the note, a cleared day name / a cleared row name / sets «ab» / no weekday each show
+their own line with the figure filled and the cursor on the field. 31 plants in the first
+round and 5 on the final bytes, all caught.
+
+**Built fast on the owner's word** («استعجل»): one builder, its own suites and plants, the
+gate once; the fingerprint net ran after the push (the review state it changes is not a cell
+of the net; the picker cell is untouched) and its line follows below.
+
+Gate: all contracts, lint, 29 suites (pooled, 246 s, no retry).
+
+Fingerprint net, v425 → v426: run after the push (the owner pressed for the release); its result is the line the follow-up docs commit appends here: FP426_PENDING
+
 ## v425 — real sections instead of «البقالة», a «+» on every section, and a recipe that keeps its clip
 
 **The owner, 2026-10-21, three messages on the morning v423 and v424 went live:** «بعدين قائمه
