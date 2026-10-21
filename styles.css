@@ -8018,7 +8018,33 @@ body.theme-light {
 
 .plan-import-entry { margin: -4px 0 20px; }
 .plan-import-body { min-width: 0; }
-.plan-import-photo { display: block; max-width: 100%; max-height: 320px; margin: 12px auto; object-fit: contain; border-radius: var(--radius-sm); }
+/* v424: the schedule arrives as several photos or one PDF. The strip is one tile
+   per page in reading order (flex follows the writing direction, so page 1 is at
+   the reading start in both scripts): a 96px thumbnail with its number at the
+   bottom start corner, or the PDF as a row of its own — glyph, name, size — and
+   on every tile a 36px remove button at the TOP END corner with the 44px halo
+   (inset -5: the 1px border costs 2, v373). No border on a tile: a border means
+   interactive (identity device 1); the thumbnail carries the radius itself, so
+   the tile needs no overflow clip and the halo is not cut. */
+.plan-import-pages { display: flex; flex-wrap: wrap; gap: var(--sp-2h); margin: 14px 0; }
+.plan-import-page { position: relative; flex: none; width: 96px; height: 96px; border-radius: var(--radius-sm); background: var(--surface-2); }
+.plan-import-page img { display: block; width: 100%; height: 100%; object-fit: cover; border-radius: var(--radius-sm); }
+.plan-import-page-view { display: block; width: 100%; height: 100%; padding: 0; border: 0; border-radius: var(--radius-sm); background: none; color: inherit; cursor: zoom-in; appearance: none; -webkit-appearance: none; -webkit-tap-highlight-color: transparent; overflow: hidden; }
+.plan-import-page-view:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.plan-import-page-view:active { transform: scale(var(--press-scale)); }
+.plan-import-page-num { pointer-events: none; position: absolute; bottom: 6px; left: 6px; min-width: 24px; height: 24px; padding: 0 6px; display: inline-flex; align-items: center; justify-content: center; font-size: var(--fs-caption); font-weight: 700; color: var(--text); background: var(--surface-1); border-radius: var(--radius-sm); box-shadow: var(--elev-1); }
+body[dir="rtl"] .plan-import-page-num { left: auto; right: 6px; }
+.plan-import-page-remove { position: absolute; top: 4px; right: 4px; width: var(--btn-h-s); height: var(--btn-h-s); border-radius: var(--radius-btn-s); display: inline-flex; align-items: center; justify-content: center; border: 1px solid var(--border); background: var(--surface-1); color: var(--text); cursor: pointer; appearance: none; -webkit-appearance: none; -webkit-tap-highlight-color: transparent; box-shadow: var(--elev-1); transition: color 0.15s, background 0.15s; }
+body[dir="rtl"] .plan-import-page-remove { right: auto; left: 4px; }
+.plan-import-page-remove::after { content: ''; position: absolute; inset: -5px; }
+.plan-import-page-remove svg { width: 16px; height: 16px; }
+.plan-import-page-remove:active { background: var(--surface-2); }
+.plan-import-file { width: 100%; height: auto; min-height: 64px; display: flex; align-items: center; gap: 12px; padding: 12px 52px 12px 14px; }
+body[dir="rtl"] .plan-import-file { padding: 12px 14px 12px 52px; }
+.plan-import-file > svg { flex: none; }
+.plan-import-file-text { flex: 1; min-width: 0; }
+.plan-import-file-name { display: block; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; font-size: var(--fs-label); font-weight: 600; line-height: 1.4; }
+.plan-import-file-size { display: block; margin-top: 2px; font-size: var(--fs-caption); color: var(--text-mute); line-height: 1.4; }
 .plan-import-placeholder { display: grid; place-items: center; min-height: 116px; color: var(--text-mute); background: var(--surface-2); margin: 16px 0; border-radius: var(--radius-sm); }
 .plan-import-actions { display: flex; flex-wrap: wrap; gap: 8px; margin: 14px 0; }
 .plan-import-actions > .btn { flex: 1; }

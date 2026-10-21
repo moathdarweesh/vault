@@ -12,7 +12,7 @@
 // build. The literal below is the fallback (file://, or a stripped query) and is
 // still bumped by `npm run release` — see CLAUDE.md "CACHE WORKFLOW".
 const VAULT_BUILD = (() => {
-  const FALLBACK = 'v423';
+  const FALLBACK = 'v424';
   try {
     const src = (document.currentScript && document.currentScript.src) || '';
     const m = src.match(/[?&]v=(\d+)/);
@@ -5959,7 +5959,17 @@ function openPlanImageImport() {
     const hits = q ? library.filter((e) => [e.name, EXERCISE_NAME_AR[e.name], EXERCISE_NAME_AR_FULL[e.name]].some((n) => n && norm(n) === q)) : [];
     return hits.length === 1 ? hits[0].id : ''; // ambiguous names always need a choice
   };
-  let picture = null, days = null, controller = null, serial = 0, busy = false;
+  // THE PAGES (v424): the schedule may come as several photos or ONE PDF, read
+  // as one schedule. Each page is { kind: 'image', dataUrl, thumb, image } —
+  // the full-size picture (the review's lightbox), the tile's small one, and
+  // the JPEG the Worker gets — or the one { kind: 'pdf', name, size, image }
+  // (the file whole, base64; no rendering, no library). The two kinds never
+  // mix: a PDF picked replaces the photos, a photo picked replaces the PDF, and
+  // one pick holding both is refused. Up to PI_MAX_PAGES photos; a PDF of PI_PDF_MAX bytes at most —
+  // 6 MB, which is the Worker's 8,000,000 base64 characters exactly — and
+  // its first bytes «%PDF» (JVBERi in base64, the Worker's own test).
+  const PI_MAX_PAGES = 6, PI_PDF_MAX = 6000000;
+  let pages = [], days = null, controller = null, serial = 0, busy = false, reading = false;
   let mode = hasPlan ? 'append' : 'replace', confirmed = false;
   const weekdays = new Set(DB.plan.get().trainingDays || []);
   let ownerId;
@@ -5970,7 +5980,7 @@ function openPlanImageImport() {
   const body = overlay.querySelector('.plan-import-body');
   // Back navigation, logout or another modal can remove this overlay too.
   const observer = new MutationObserver(() => {
-    if (!overlay.isConnected) { serial++; controller?.abort(); picture = null; observer.disconnect(); }
+    if (!overlay.isConnected) { serial++; controller?.abort(); pages = []; observer.disconnect(); }
   });
   observer.observe(document.getElementById('modal-root'), { childList: true });
   overlay.querySelector('[data-pi-close]').onclick = () => { serial++; controller?.abort(); closeModal(); };
@@ -6004,29 +6014,55 @@ function openPlanImageImport() {
       <textarea id="${key}-notes" data-field="notes" rows="2" maxlength="240" dir="auto">${escapeHtml(row.notes)}</textarea>
     </div>`;
   };
+  // One tile per page, in reading order: the thumbnail with its number, or the
+  // PDF's glyph, name and size (MB, one decimal, Latin digits; never «0»). With
+  // `live` the tile carries its remove button; the review's source does not —
+  // there the photo is a button that opens the page full size in the lightbox
+  // (pi_review_hint asks for every workout to be checked against the source,
+  // and a 96 px cover-cropped tile cannot be read; v309 showed the one photo
+  // at 320 px). A tile draws the small `thumb`; the full `dataUrl` is for the
+  // lightbox alone, so a redraw never re-serialises megabytes into 96 px boxes.
+  const pageTile = (p, i, live) => {
+    const n = fmtNum(i + 1);
+    const label = escapeHtml(t('pi_page').replace('{n}', n));
+    const remove = live ? `<button type="button" class="plan-import-page-remove" data-pi-drop="${i}" aria-label="${escapeHtml(t('pi_remove_page').replace('{n}', n))}" ${busy ? 'disabled' : ''}>${icon('close', 16)}</button>` : '';
+    if (p.kind === 'pdf') {
+      const mb = fmtNum(Math.max(0.1, Math.round(p.size / 1e5) / 10));
+      return `<div class="plan-import-page plan-import-file" data-pi-page="${i}">${icon('columns', 24)}<div class="plan-import-file-text"><span class="plan-import-file-name" dir="auto">${escapeHtml(p.name)}</span><span class="plan-import-file-size"><span class="num">${mb}</span> ${t('rx_mb')}</span></div>${remove}</div>`;
+    }
+    const img = live ? `<img src="${p.thumb}" alt="${label}">` : `<button type="button" class="plan-import-page-view" data-pi-view="${i}" aria-label="${label}"><img src="${p.thumb}" alt=""></button>`;
+    return `<div class="plan-import-page" data-pi-page="${i}">${img}<span class="plan-import-page-num num">${n}</span>${remove}</div>`;
+  };
+  const stripHtml = (live) => `<div class="plan-import-pages">${pages.map((p, i) => pageTile(p, i, live)).join('')}</div>`;
   function draw() {
     if (!overlay.isConnected) return;
     if (!days) {
       body.innerHTML = `<p class="modal-subtitle">${t('pi_intro')}</p>
-        ${picture ? `<img class="plan-import-photo" src="${picture.dataUrl}" alt="${t('pi_photo')}">` : `<div class="plan-import-placeholder" aria-hidden="true">${icon('camera', 40)}</div>`}
+        ${pages.length ? stripHtml(true) : `<div class="plan-import-placeholder" aria-hidden="true">${icon('camera', 40)}</div>`}
         <div class="plan-import-actions">
-          <button type="button" class="btn btn-ghost" data-pi-pick ${busy ? 'disabled' : ''}>${t('choose_image')}</button>
+          <button type="button" class="btn btn-ghost" data-pi-pick ${busy ? 'disabled' : ''}>${t('pi_pick_images')}</button>
           <button type="button" class="btn btn-ghost" data-pi-camera ${busy ? 'disabled' : ''}>${icon('camera', 20)} ${t('take_photo')}</button>
         </div>
-        <input type="file" accept="image/jpeg,image/png,image/webp" data-pi-file hidden>
+        <input type="file" accept="image/jpeg,image/png,image/webp,application/pdf,.pdf" multiple data-pi-file hidden>
         <input type="file" accept="image/jpeg,image/png,image/webp" capture="environment" data-pi-cam-file hidden>
         <p class="plan-import-hint">${t('pi_privacy')}</p><p class="plan-import-hint">${t('pi_limits')}</p>
         <p data-pi-error role="alert" tabindex="-1" class="plan-import-error" hidden></p>
         <p role="status" aria-live="polite" class="plan-import-hint">${busy ? t('pi_read_hint') : ''}</p>
-        <button type="button" class="btn btn-primary btn-block" data-pi-read ${!picture || busy ? 'disabled' : ''}>${busy ? (picture ? t('pi_reading') : t('pi_preparing')) : t('pi_read')}</button>`;
+        <button type="button" class="btn btn-primary btn-block" data-pi-read ${!pages.length || busy ? 'disabled' : ''}>${busy ? (reading ? t('pi_reading') : t('pi_preparing')) : t('pi_read')}</button>`;
       body.querySelector('[data-pi-pick]').onclick = () => body.querySelector('[data-pi-file]').click();
       body.querySelector('[data-pi-camera]').onclick = () => body.querySelector('[data-pi-cam-file]').click();
-      body.querySelectorAll('input[type=file]').forEach((input) => input.onchange = () => pick(input.files[0]));
+      body.querySelectorAll('input[type=file]').forEach((input) => input.onchange = () => pick(Array.from(input.files)));
+      body.querySelectorAll('[data-pi-drop]').forEach((b) => b.onclick = () => {
+        const i = Number(b.dataset.piDrop);
+        pages.splice(i, 1); draw();
+        // The finger stays where it was: the tile now in that place, else the picker.
+        (body.querySelector(`[data-pi-drop="${Math.min(i, pages.length - 1)}"]`) || body.querySelector('[data-pi-pick]'))?.focus();
+      });
       body.querySelector('[data-pi-read]').onclick = read;
       return;
     }
     body.innerHTML = `<p class="modal-subtitle">${t('pi_review_hint')}</p>
-      <details class="plan-import-source"><summary>${t('pi_source')}</summary><img class="plan-import-photo" src="${picture.dataUrl}" alt="${t('pi_photo')}"></details>
+      <details class="plan-import-source"><summary>${t('pi_source')}</summary>${stripHtml(false)}</details>
       <form data-pi-form novalidate>
       ${days.map((day, d) => `<section class="plan-import-day" data-pi-day="${d}">
         <div class="plan-import-day-head"><span class="num">${fmtNum(d + 1)}</span>
@@ -6045,6 +6081,11 @@ function openPlanImageImport() {
       <div class="plan-import-save"><button type="submit" class="btn btn-primary btn-block" data-pi-save>${t('pi_save')}</button></div>
       </form>`;
     overlay.querySelector('.modal-title').textContent = t('pi_review');
+    // A source tile opens its page FULL SIZE (the same bytes the Worker read).
+    body.querySelectorAll('[data-pi-view]').forEach((b) => b.onclick = () => {
+      const i = Number(b.dataset.piView), p = pages[i];
+      if (p && p.dataUrl) openImageLightbox(p.dataUrl, t('pi_page').replace('{n}', fmtNum(i + 1)));
+    });
     body.querySelector('[data-pi-form]').oninput = (event) => {
       const target = event.target;
       const section = target.closest('[data-pi-day]');
@@ -6081,36 +6122,82 @@ function openPlanImageImport() {
     if (check) check.onchange = () => { confirmed = check.checked; };
     body.querySelector('[data-pi-form]').onsubmit = saveDraft;
   }
-  async function pick(file) {
-    if (!file) return;
+  // The file whole as a data URL — a PDF is sent as it is, never rendered here.
+  const readDataUrl = (file) => new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result || ''));
+    reader.onerror = () => reject(reader.error || new Error('read failed'));
+    reader.readAsDataURL(file);
+  });
+  const isPdf = (file) => file.type === 'application/pdf' || /\.pdf$/i.test(file.name || '');
+  const isImage = (file) => ['image/jpeg', 'image/png', 'image/webp'].includes(file.type);
+  // A pick is a LIST (the file input takes several; the camera hands one), read
+  // in order, one page at a time and cancellable (the `serial` token). The
+  // whole pick is refused before any work when a file is neither a photo nor a
+  // PDF, or a PDF is over the cap, or photos and a PDF (or two PDFs) come
+  // together (pi_mixed — the loop below replaces as it goes, so it would keep
+  // whichever came last and drop the rest unsaid); photos past the sixth are
+  // left out and said so (pi_too_many) once the rest are in.
+  async function pick(list) {
+    const files = Array.isArray(list) ? list.filter(Boolean) : [];
+    if (!files.length) return;
     const token = ++serial;
-    if (!['image/jpeg', 'image/png', 'image/webp'].includes(file.type) || file.size > 15 * 1024 * 1024) { showError(t('pi_bad_file')); return; }
-    busy = true; picture = null; draw();
+    if (files.some((f) => !isPdf(f) && (!isImage(f) || f.size > 15 * 1024 * 1024))) { showError(t('pi_bad_file')); return; }
+    if (files.some((f) => isPdf(f) && f.size > PI_PDF_MAX)) { showError(t('pi_pdf_big')); return; }
+    if (files.some(isPdf) && (files.some(isImage) || files.filter(isPdf).length > 1)) { showError(t('pi_mixed')); return; }
+    busy = true; draw();
+    let over = false;
     try {
-      if (!window.FoodAI?.processImage) throw new Error(t('pi_unavailable'));
-      // Documents need more detail than a food thumbnail. Keep the existing
-      // Worker's 1.4 MB base64 limit by retrying compression locally if needed.
-      let pic = await FoodAI.processImage(file, 1800, 0.85);
-      if (pic.image.data.length > 1400000) pic = await FoodAI.processImage(file, 1600, 0.7);
-      if (pic.image.data.length > 1400000) throw new Error(t('pi_bad_file'));
-      if (token !== serial || !overlay.isConnected) return;
-      picture = pic; busy = false; draw();
+      for (const file of files) {
+        if (isPdf(file)) {
+          const dataUrl = await readDataUrl(file);
+          if (token !== serial || !overlay.isConnected) return;
+          const data = dataUrl.slice(dataUrl.indexOf(',') + 1);
+          if (!data.startsWith('JVBERi')) throw new Error(t('pi_bad_file'));
+          pages = [{ kind: 'pdf', name: String(file.name || 'PDF'), size: file.size, image: { mimeType: 'application/pdf', data } }];
+        } else {
+          if (pages.filter((p) => p.kind === 'image').length >= PI_MAX_PAGES) { over = true; continue; }
+          if (!window.FoodAI?.processImage) throw new Error(t('pi_unavailable'));
+          // Documents need more detail than a food thumbnail. Keep the existing
+          // Worker's 1.4 MB base64 limit by retrying compression locally if needed.
+          let pic = await FoodAI.processImage(file, 1800, 0.85);
+          if (pic.image.data.length > 1400000) pic = await FoodAI.processImage(file, 1600, 0.7);
+          if (pic.image.data.length > 1400000) throw new Error(t('pi_bad_file'));
+          // The tile's own picture: a second pass at 192 px (~10 KB), so the
+          // strip never carries the full-size JPEG — that one is for the
+          // lightbox and the Worker alone.
+          const small = await FoodAI.processImage(file, 192, 0.6);
+          if (token !== serial || !overlay.isConnected) return;
+          const kept = pages.filter((p) => p.kind === 'image');   // a photo replaces a PDF
+          if (kept.length >= PI_MAX_PAGES) { over = true; continue; }
+          pages = kept.concat({ kind: 'image', dataUrl: pic.dataUrl, thumb: small.dataUrl, image: pic.image });
+        }
+        draw();
+      }
+      busy = false; draw();
+      if (over) showError(t('pi_too_many'));
     } catch (_) {
       if (token !== serial || !overlay.isConnected) return;
       busy = false; draw(); showError(t('pi_bad_file'));
     }
   }
   async function read() {
-    if (!picture || busy) return;
-    busy = true; draw();
+    if (!pages.length || busy) return;
+    busy = true; reading = true; draw();
     controller = new AbortController();
     const token = ++serial;
-    const timer = setTimeout(() => controller?.abort(), 45000);
+    // One photo waits 45 s as before; several pages, or a PDF, are a longer
+    // read — 85 s: past the Worker's three attempts of 25 s each (75 s was that
+    // sum exactly, so a third attempt's answer was always thrown away), and
+    // under foodai.js's own 90 s deadline on the request. The node suite's
+    // deadline block reads both numbers from this line.
+    const long = pages.length > 1 || pages[0].kind === 'pdf';
+    const timer = setTimeout(() => controller?.abort(), long ? 85000 : 45000);
     try {
-      if (!window.FoodAI?.analyzePlanImage) throw new Error(t('pi_unavailable'));
+      if (!window.FoodAI?.analyzePlanPages) throw new Error(t('pi_unavailable'));
       ownerId = (await Cloud.getSession())?.user?.id;
       if (!ownerId) throw new Error(t('ai_err_signin'));
-      const result = await FoodAI.analyzePlanImage(picture.image, controller.signal);
+      const result = await FoodAI.analyzePlanPages(pages.map((p) => p.image), controller.signal);
       if (token !== serial || !overlay.isConnected) return;
       if (!Array.isArray(result.days) || !result.days.length) throw new Error(t('pi_empty'));
       if (result.days.length > 14 || result.days.some((d) => !d || !Array.isArray(d.exercises) || d.exercises.length > 20)) throw new Error(t('pi_unavailable'));
@@ -6125,7 +6212,7 @@ function openPlanImageImport() {
       busy = false; draw();
       const message = error.name === 'AbortError' ? t('pi_timeout') : window.FoodAI ? FoodAI.friendlyErr(error) : t('pi_unavailable');
       showError(message === t('ai_error') ? t('pi_error') : message);
-    } finally { clearTimeout(timer); }
+    } finally { clearTimeout(timer); reading = false; }
   }
   async function saveDraft(event) {
     event.preventDefault();

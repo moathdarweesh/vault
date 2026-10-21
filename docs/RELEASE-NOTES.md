@@ -2,6 +2,78 @@
 
 One section per release since v309, newest first, moved verbatim from `CLAUDE.md` in v401 (batch 6 of the 2026-09-25 review; `docs/REVIEW-2026-09-25.md`). `CLAUDE.md` is the guide and the authority for how the app works now. A section here records what one release changed and why, in the words written at the time, so a later section — or the guide — can supersede what an earlier one says.
 
+## v424 — a schedule from several photos, or a PDF
+
+**The owner, 2026-10-21: «بدي يكون في خاصيه استيراد الجدول من صوره اقدر احط مثلا اكثر من صوره
+او احط بي دي اف بحد معين طبعا».** The v309 import read ONE photo. A printed programme is
+often two or three pages, or a PDF from a coach; now the import takes up to six photos, or
+one PDF, and the AI reads them as ONE schedule.
+
+**The Worker first (commit A, deployed as 87a1e05e before the client shipped).** Mode
+`workout-plan` takes `pages` — one to six `{mimeType, data}` — or the old `image`, read as
+one page, so the live v423 client was served throughout. A PDF (`application/pdf`) travels
+whole, unparsed, straight to Google, which reads PDFs natively: it must be ALONE, start with
+`JVBERi` (the base64 of `%PDF`) and stay under 8,000,000 base64 characters — six megabytes.
+Every page is checked before the budget and the model: the count, the kind, the size, and the
+base64 rule the recipe path already uses (the head and tail against the alphabet, no quote or
+backslash anywhere, a length divisible by four) — a whole-string regex over eight million
+characters costs about 8 ms of the free plan's 10 ms CPU, measured. The model gets the text
+part and one `inline_data` per page in the order sent, under `PLAN_SYSTEM` with one new
+sentence: the pages are one schedule, read in order; a workout that continues on the next page
+is the same workout, never repeated. One budget unit per request whatever the page count.
+The log line carries the page count and the kind, never data. Pinned by P1–P11 in
+`scripts/test-plan-import.js` (21 plants). The Worker README documents the mode.
+
+**The sheet (js/app.js `openPlanImageImport`).** The file input takes several photos, or a
+PDF; the camera adds one photo at a time. Each page lands as a 96 × 96 numbered tile in a
+wrapping strip — a PDF as a full-width file row with its name and size — each with a 36 px
+remove button on the reading-end corner (a 44 px halo), and the review's «عرض المصدر» shows
+every page in order as a tile that opens the page FULL SIZE in the app's lightbox (the tiles
+themselves are 192 px copies; the full picture is kept for the lightbox alone). Limits on the phone, before any upload: six photos (the seventh and
+after are skipped and said once, `pi_too_many`), a PDF of 6,000,000 bytes — exactly the
+Worker's 8,000,000 base64 characters (`pi_pdf_big`); a file that is not a photo or a PDF, or a
+«.pdf» whose first bytes are not `%PDF`, refuses the whole pick (`pi_bad_file`); a PDF and
+photos replace each other across picks, and ONE pick holding both kinds, or two PDFs, is
+refused whole with «اختر صورًا أو ملف PDF واحدًا، لا الاثنين معًا» (nothing half-taken). Each photo still goes
+through `processImage` (1800/0.85, then 1600/0.7, ≤ 1,400,000); the PDF is read whole with
+`FileReader` — no PDF library, no new dependency. «قراءة الجدول» posts the OLD shape for one
+photo (an old Worker still serves it) and `pages` for more or a PDF; a 400 «no input» with no
+code on `pages` is an old Worker, read as «غير متاحة حاليًا» with no retry. The sheet's
+abort is 45 s for one photo and 85 s for more or a PDF — past the Worker's three attempts of
+25 s, under foodai's 90 s deadline (pinned from the three sources by test-plan-import.js). The hint reads «حتى ٦ صور أو ملف PDF واحد (حتى ٦ ميغابايت)
+في كل مرة: حتى ١٤ يوم تمرين، و٢٠ تمرينًا في كل يوم.» `pi_photo` and `.plan-import-photo`
+are gone (no reader left).
+
+**Tests.** `scripts/test-plan-import-ui.js` is new (13 cases × AR/dark + EN/light, ~11 s): the
+input takes several files, the numbered tiles, remove and re-add keeping order, seven files
+→ six tiles and the message, a PDF row with its escaped name and size, a 7 MB PDF refused, a
+«.txt» and a fake «.pdf» refused, the source showing every page, the wire shape for one
+photo (`image`), two photos (`pages`, each tile's JPEG in strip order) and a PDF, an old
+Worker's refusal read as «not available», the strip at 375 px (tiles wrap, 44 px remove
+targets, ellipsised file name, the RTL corners). Every assertion seen failing on an in-memory
+plant (29 plants; two RTL plants fail in the Arabic pass only, as they should). The PNGs and
+the PDF are built in memory by the suite.
+
+**How it was built.** A written spec; the Worker builder and the client builder in parallel on
+disjoint files (the protocol fixed by the spec); the Worker deployed between the two commits;
+one reviewer over the whole, read-only; the gate once.
+
+**The review (one reader over both halves, read-only) confirmed four things, all fixed before the
+release:** the review's «عرض المصدر» had become 96 px cover-cropped tiles nobody could check a
+schedule against — v309 showed the photo at 320 px — so a tile now opens the page full size in
+the lightbox; the sheet's 75 s abort for pages equalled the Worker's 3 × 25 s of model time, so a
+third-attempt answer was always thrown away (85 s now, pinned against the Worker's own constants);
+a single pick holding photos AND a PDF, or two PDFs, dropped pages silently (refused whole now);
+every review redraw re-serialised up to 8.4 M characters of full-size pictures into 96 px tiles
+(192 px copies now). Accepted and recorded: a page's base64 is checked the recipe way (head,
+tail, no quote, length % 4) rather than whole — a photo corrupted only in its middle now spends
+a unit and reads «تعذّرت القراءة» instead of being refused first; a second pick ADDS a tile (a
+re-taken blurry photo is two pages until one is removed).
+
+Gate: all contracts, lint, 29 suites (pooled, 239 s, no retry, on the final bytes after the review fixes) — the new suite joined the pool.
+
+Fingerprint net, v423 → v424: the sheets lane 124/126 — the `plan-image-import` sheet in both contexts (its new title, hint and pick button), nothing else; the views lane 168/184 — the eight planner cells, where the import entry's text became «استيراد الجدول من صور أو PDF» / "Import a schedule from photos or a PDF" (and its glyph moved with the longer label), and the eight Home cells whose only difference is the footer's «VAULT · v422 → v423». Nothing else moved.
+
 ## v423 — the shopping list in the supermarket's own departments, and a recipe poured once
 
 **The owner, 2026-10-17: «اخلي التطبيق يقسم المشتريات للاصناف المعروفه قسم الخضار والفواكه

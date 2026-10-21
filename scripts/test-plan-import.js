@@ -1014,6 +1014,19 @@ async function clientDeadline() {
   assert.ok(deadline >= linkMs + 10000, `the client waits longer than a link request can (${linkMs} ms, plus the auth and budget trips): ${deadline} ms would cut off a slow but valid answer`);
   assert.equal((fa.match(/const WORKER_DEADLINE_MS =/g) || []).length, 1, 'one constant');
   assert.equal((fa.match(/fetch\(PROXY_URL/g) || []).length, 1, 'and ONE door to the Worker, so the deadline covers every call — v397 had four fetches, none with a deadline');
+  // THE SHEET'S OWN ABORT (js/app.js read(), `long ? N : M`): one photo waits
+  // 45 s as v309 did; several pages or a PDF wait past the Worker's every
+  // attempt (MODELS × ATTEMPT_MS, plus the auth and budget trips) and under
+  // foodai's deadline, so the sheet's own timeout, not the network one, names
+  // it. v424's first cut was 75 s = 3 × 25 s exactly: a third attempt's
+  // answer was always thrown away.
+  const app = read('js/app.js');
+  assert.equal((app.match(/long \? \d+ : \d+/g) || []).length, 1, 'ONE `long ? N : M` abort timer in the plan import');
+  const sheet = app.match(/long \? (\d+) : (\d+)/);
+  const longMs = Number(sheet[1]), oneMs = Number(sheet[2]);
+  assert.equal(oneMs, 45000, 'one photo waits 45 s, as v309 did: ' + oneMs);
+  assert.ok(longMs >= nModels * attempt + 5000, `several pages wait past every Worker attempt (${nModels} × ${attempt} ms + 5 s): ${longMs} ms throws a late attempt's answer away`);
+  assert.ok(longMs < deadline, `and under foodai's own deadline (${deadline} ms): ${longMs}`);
   // A 200 whose body is not an object is «something went wrong» (features:food#8).
   c.fetch = async () => ({ ok: true, status: 200, json: async () => null });
   let nullErr = null;
@@ -1029,7 +1042,7 @@ async function clientDeadline() {
     await c.FoodAI.analyze('a link, ' + code, { skipLocal: true }).catch((e) => { linkErr = e; });
     assert.equal(c.FoodAI.friendlyErr(linkErr), want, code + ' reaches the user as its own sentence (' + want + '), not the service one: ' + (linkErr && linkErr.message));
   }
-  console.log('PASS client deadline: a hung Worker call ends and is named, a caller\'s cancel stays its own, the deadline outlasts every Worker attempt, a null 200 is not a network error, the recipe link codes are named');
+  console.log('PASS client deadline: a hung Worker call ends and is named, a caller\'s cancel stays its own, the deadline outlasts every Worker attempt, the sheet\'s own abort outlasts them too and stays under it, a null 200 is not a network error, the recipe link codes are named');
 }
 // ---- «استخراج وصفة» · the client half (commit B) ------------------------------
 // The REAL js/foodai.js in a vm against a fetch that records every request:

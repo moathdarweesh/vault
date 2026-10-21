@@ -568,14 +568,31 @@
 
   // Separate protocol on the existing authenticated proxy. Never use the food
   // parser/cache for a training plan, and never persist the source photograph.
-  async function analyzePlanImage(image, signal) {
-    const { res, data } = await workerPost({ mode: 'workout-plan', image }, signal);
-    if (!res.ok) throw workerError(res, data, 'pi_daily_limit');
+  // ONE schedule from several pages (v424): `pages` is the sheet's list of
+  // { mimeType, data } — up to six photos, or exactly one PDF. One photo still
+  // travels in the OLD shape ({ image }), which a Worker from before v424
+  // serves unchanged; more than one page, or a PDF, is the new `pages` shape,
+  // which that old Worker refuses as 400 'no input' before its budget — the
+  // one sentence for that is «not available right now», never «صار خطأ».
+  // The deadline below (WORKER_DEADLINE_MS, 90 s) is the floor under the
+  // sheet's own abort timer (45 s for one photo, 85 s for more or a PDF).
+  async function analyzePlanPages(pages, signal) {
+    const list = Array.isArray(pages) ? pages.filter((p) => p && typeof p.data === 'string') : [];
+    if (!list.length) throw new Error(tr('pi_unavailable'));
+    const one = list.length === 1 && list[0].mimeType !== 'application/pdf';
+    const payload = one ? { mode: 'workout-plan', image: list[0] } : { mode: 'workout-plan', pages: list };
+    const { res, data } = await workerPost(payload, signal);
+    if (!res.ok) {
+      if (!one && res.status === 400 && data && data.error === 'no input' && !data.code) throw noRetry(new Error(tr('pi_unavailable')));
+      throw workerError(res, data, 'pi_daily_limit');
+    }
     // A client ahead of the Worker receives {items:[]}. Fail explicitly rather
     // than passing an old food response off as an empty workout image.
     if (!data.plan || !Array.isArray(data.plan.days)) throw new Error(tr('pi_unavailable'));
     return data.plan;
   }
+  // The one-photo door, kept for its readers (scripts/test-plan-import.js).
+  const analyzePlanImage = (image, signal) => analyzePlanPages([image], signal);
 
   // Downscale a picked image file to a JPEG (max 1024px, q0.7) so the upload
   // stays small. Returns { dataUrl (for the thumbnail), image: { mimeType, data } }.
@@ -1525,6 +1542,6 @@
   // openVoiceCapture): ONE answer to «can a second try help, and when?» and one
   // sentence beside the button, for all three ways of asking. shareRecipe is
   // the recipe view's «شاركها» (js/food.js openShareRecipe).
-  window.FoodAI = { open, openPhoto, analyze, analyzeImage, analyzeAudio, ask, friendlyErr, canRetry, retryWait, errText, analyzePlanImage, processImage,
+  window.FoodAI = { open, openPhoto, analyze, analyzeImage, analyzeAudio, ask, friendlyErr, canRetry, retryWait, errText, analyzePlanImage, analyzePlanPages, processImage,
                     parseText: parseMacroText, analyzeRecipe, decomposeVideo, recipeImage, rxLinkKind, shareRecipe };
 })();
