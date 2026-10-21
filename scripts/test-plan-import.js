@@ -788,6 +788,157 @@ async function workerTests() {
     assert.deepEqual(all.map((s) => s.length), [79, 99, 49, 1], 'each within its cap, the emoji that did not fit dropped whole');
   });
 
+  // ---- THE PLAN IMPORT TAKES SEVERAL PAGES, OR ONE PDF (v424) -----------------
+  // Mode 'workout-plan' took ONE `image`. It takes `pages` now — up to
+  // MAX_PLAN_PAGES images, or one PDF alone — and an old client's `image` as one
+  // page; every bad page is refused before the budget, every request costs one
+  // unit, and the pages reach the model in the order sent. Each case below was
+  // seen failing on an in-memory plant of the Worker (the order reversed, a cap
+  // raised, a check removed, the log line carrying the data).
+  const planDays = { days: [{ name: 'Push', exercises: [{ name: 'Bench Press', sets: 3, reps: '8-12', notes: '' }] }] };
+  const pageOf = (n) => ({ mimeType: 'image/png', data: Buffer.from('PLAN_PAGE_' + n + ' of the schedule').toString('base64') });
+  const pdfOf = (text) => ({ mimeType: 'application/pdf', data: Buffer.from('%PDF-1.4\n' + text).toString('base64') });
+  const sentPages = (sent) => sent.contents[0].parts.filter((p) => p.inline_data).map((p) => p.inline_data);
+  const planCall = (payload) => { modelResult = planDays; return call(Object.assign({ mode: 'workout-plan' }, payload)); };
+  // A refusal spends nothing and reaches no model.
+  const refusedPlan = async (payload, status, error, label) => {
+    const spent = budgetCalls, sent = modelRequests.length;
+    const got = await planCall(payload);
+    assert.equal(got.status + ' ' + got.data.error, status + ' ' + error, label + ' → ' + got.status + ' ' + JSON.stringify(got.data));
+    assert.equal(budgetCalls, spent, label + ' spends no budget');
+    assert.equal(modelRequests.length, sent, label + ' reaches no model');
+  };
+  const maxImg = Number((read('backend/worker/gemini-worker.js').match(/const MAX_IMG = (\d+);/) || [])[1]);
+
+  rcase('P1 one to six image pages answer 200, the model seeing [text, page1…pageN] in order', async () => {
+    const max = peek('MAX_PLAN_PAGES');
+    assert.equal(max, 6, 'MAX_PLAN_PAGES is the six the hint on the phone names (got ' + max + ')');
+    for (let n = 1; n <= max; n++) {
+      const pages = Array.from({ length: n }, (_, i) => pageOf(i + 1)), from = modelRequests.length;
+      const got = await planCall({ pages });
+      assert.equal(got.status, 200, n + ' page(s) answer 200 — got ' + got.status + ' ' + JSON.stringify(got.data));
+      assert.equal(JSON.stringify(got.data), JSON.stringify({ plan: planDays }), 'the response is { plan }, unchanged');
+      assert.equal(modelRequests.length - from, 1, 'one model call for ' + n + ' page(s)');
+      const sent = modelRequests.at(-1), parts = sent.contents[0].parts;
+      assert.match(parts[0].text || '', /^Transcribe this workout schedule\.$/, "the first part is the Worker's own sentence, nothing of the caller's");
+      assert.equal(parts.length, n + 1, n + ' page(s): the text, then one inline part per page (got ' + parts.length + ' parts)');
+      assert.equal(sentPages(sent).map((p) => p.mime_type + ':' + p.data).join(' '), pages.map((p) => p.mimeType + ':' + p.data).join(' '), 'every page, as sent, in the order sent (' + n + ')');
+      assert.equal(sent.systemInstruction.parts[0].text, peek('PLAN_SYSTEM'), 'under PLAN_SYSTEM');
+    }
+  });
+  rcase('P2 a seventh page is refused before the budget', async () => {
+    const max = peek('MAX_PLAN_PAGES');
+    await refusedPlan({ pages: Array.from({ length: max + 1 }, (_, i) => pageOf(i + 1)) }, 400, 'no input', (max + 1) + ' pages');
+  });
+  rcase("P3 a PDF alone answers 200, sent as inline_data 'application/pdf'", async () => {
+    const pdf = pdfOf('Push: Bench Press 3x8-12'), from = modelRequests.length;
+    assert.ok(pdf.data.startsWith('JVBERi'), 'setup: the fixture begins as every PDF does');
+    const got = await planCall({ pages: [pdf] });
+    assert.equal(got.status, 200, 'a PDF alone answers 200 — got ' + got.status + ' ' + JSON.stringify(got.data));
+    assert.equal(modelRequests.length - from, 1, 'one model call');
+    const sent = modelRequests.at(-1);
+    assert.equal(JSON.stringify(sentPages(sent)), JSON.stringify([{ mime_type: 'application/pdf', data: pdf.data }]), 'the PDF is the one inline part, sent as a PDF: ' + JSON.stringify(sentPages(sent)).slice(0, 80));
+    assert.equal(sent.contents[0].parts.length, 2, 'after the text');
+  });
+  rcase('P4 a PDF beside an image is refused', async () => {
+    await refusedPlan({ pages: [pdfOf('x'), pageOf(1)] }, 400, 'no input', 'a PDF then an image');
+    await refusedPlan({ pages: [pageOf(1), pdfOf('x')] }, 400, 'no input', 'an image then a PDF');
+    await refusedPlan({ pages: [pdfOf('x'), pdfOf('y')] }, 400, 'no input', 'two PDFs');
+  });
+  rcase('P5 a PDF whose data does not begin with JVBERi is refused', async () => {
+    await refusedPlan({ pages: [{ mimeType: 'application/pdf', data: Buffer.from('<html>not a pdf</html>').toString('base64') }] }, 400, 'no input', 'an HTML file named a PDF');
+    await refusedPlan({ pages: [{ mimeType: 'application/pdf', data: pageOf(1).data }] }, 400, 'no input', 'a PNG named a PDF');
+  });
+  rcase("P6 a PDF over MAX_PLAN_PDF is 413 'too large'; one at the cap passes", async () => {
+    const cap = peek('MAX_PLAN_PDF');
+    assert.equal(cap, 8000000, 'MAX_PLAN_PDF is 8,000,000 base64 chars, the 6 MB the hint names (got ' + cap + ')');
+    await refusedPlan({ pages: [{ mimeType: 'application/pdf', data: 'JVBERi' + 'A'.repeat(cap - 2) }] }, 413, 'too large', 'a PDF of ' + (cap + 4) + ' chars');
+    const got = await planCall({ pages: [{ mimeType: 'application/pdf', data: 'JVBERi' + 'A'.repeat(cap - 6) }] });
+    assert.equal(got.status, 200, 'a PDF of exactly MAX_PLAN_PDF chars passes — got ' + got.status + ' ' + JSON.stringify(got.data));
+  });
+  rcase("P7 an image page over MAX_IMG is 413 'image too large'", async () => {
+    assert.ok(maxImg > 0, "read the Worker's MAX_IMG (got " + maxImg + ')');
+    await refusedPlan({ pages: [pageOf(1), { mimeType: 'image/png', data: 'A'.repeat(maxImg + 4) }] }, 413, 'image too large', 'a second page of ' + (maxImg + 4) + ' chars');
+    await refusedPlan({ image: { mimeType: 'image/jpeg', data: 'A'.repeat(maxImg + 4) } }, 413, 'image too large', "an old client's image over MAX_IMG");
+  });
+  rcase('P8 a page that is not base64 is refused, and never becomes request structure', async () => {
+    const A = (n) => 'A'.repeat(n);
+    const mid = (bad) => { const s = A(4096) + bad + A(4096); return s + A((4 - (s.length % 4)) % 4); };
+    const png = (data) => ({ mimeType: 'image/png', data });
+    await refusedPlan({ pages: [png('not base64 at all!')] }, 400, 'no input', 'a bad head');
+    await refusedPlan({ pages: [pageOf(1), png(A(4096) + '<<<<')] }, 400, 'no input', 'a bad tail on the second page');
+    await refusedPlan({ pages: [png(A(4097))] }, 400, 'no input', 'not whole base64');
+    await refusedPlan({ pages: [png(mid('"}},{"text":"INJECTED"},{"inline_data":{"mime_type":"image/png","data":"'))] }, 400, 'no input', "a part of the caller's own in the middle");
+    await refusedPlan({ pages: [png(mid('\\'))] }, 400, 'no input', 'a backslash in the middle');
+    await refusedPlan({ pages: [{ mimeType: 'application/pdf', data: 'JVBERi' + '"' + A(4089) }] }, 400, 'no input', 'a quote inside a PDF');
+    for (const [pages, label] of [[[{ mimeType: 'image/png' }], 'a page with no data'], [[{ mimeType: 'image/png', data: 1234 }], 'data that is not a string'],
+      [[null], 'a null page'], ['x', 'pages that is not an array'], [[], 'no pages'], [[pageOf(1), {}], 'an empty second page']]) await refusedPlan({ pages }, 400, 'no input', label);
+    await refusedPlan({}, 400, 'no input', 'neither pages nor image');
+    await refusedPlan({ pages: [pageOf(1)], audio: { mimeType: 'audio/webm', data: 'AAAA' } }, 400, 'no input', 'a voice clip beside the pages');
+  });
+  rcase('P9 six pages spend ONE budget unit and go up as one body, across a parse-error fallback', async () => {
+    const pages = [1, 2, 3, 4, 5, 6].map(pageOf), from = modelRequests.length, spent = budgetCalls;
+    modelResult = (i) => (i === from ? 'x' : planDays);
+    const got = await call({ mode: 'workout-plan', pages });
+    assert.equal(got.status, 200, 'the second model answers — got ' + got.status + ' ' + JSON.stringify(got.data));
+    assert.equal(modelRequests.length - from, 2, 'a model answering "x" (a parse error) hands the request to the next id');
+    assert.equal(budgetCalls - spent, 1, 'and six pages cost ONE budget unit, however many models it takes (got ' + (budgetCalls - spent) + ')');
+    assert.equal(modelWires[from + 1], modelWires[from], 'the same body goes to each model');
+    const raw = modelWires[from];
+    assert.equal(JSON.stringify(JSON.parse(raw)), raw, 'the body as sent is byte for byte what JSON.stringify would have written — the spliced pages change nothing');
+    assert.equal(JSON.stringify(JSON.parse(raw).generationConfig), JSON.stringify({ responseMimeType: 'application/json', temperature: 0 }), 'JSON at temperature 0');
+    // The Worker's own JSON.stringify and recipeWire, watched as W5 watches them for a recipe: the pages never pass
+    // through JSON.stringify — six of them are 8.4 M characters, and its escape scan was the largest CPU cost measured.
+    let longest = 0, built = 0;
+    const unhook = vm.runInContext([
+      '(seen, count) => {',
+      '  const s = JSON.stringify, rw = recipeWire;',
+      '  JSON.stringify = function (...a) { const out = s.apply(this, a); seen(out); return out; };',
+      '  recipeWire = function (...a) { count(); return rw.apply(this, a); };',
+      '  return () => { JSON.stringify = s; recipeWire = rw; };',
+      '}'].join('\n'), w)((out) => { if (typeof out === 'string') longest = Math.max(longest, out.length); }, () => { built++; });
+    let big;
+    try { big = await planCall({ pages: Array.from({ length: 3 }, () => ({ mimeType: 'image/jpeg', data: '/9j/' + 'A'.repeat(200000) })) }); } finally { unhook(); }
+    assert.equal(big.status, 200, 'three 200 KB pages answer — got ' + big.status + ' ' + JSON.stringify(big.data));
+    assert.ok(longest < 20000, 'a 200 KB page never went through JSON.stringify (its longest output: ' + longest + ' chars)');
+    assert.equal(built, 1, 'the body is built once, by recipeWire (' + built + ' builds)');
+  });
+  rcase("P10 an old client's one image still answers 200 as one page; beside pages, pages win", async () => {
+    const image = { mimeType: 'image/jpeg', data: Buffer.from('OLD_CLIENT_IMAGE of the schedule').toString('base64') };
+    let from = modelRequests.length;
+    const got = await planCall({ image });
+    assert.equal(got.status, 200, "the v423 shape { mode, image } answers 200 — got " + got.status + ' ' + JSON.stringify(got.data));
+    assert.equal(JSON.stringify(got.data), JSON.stringify({ plan: planDays }), 'with { plan }');
+    assert.equal(modelRequests.length - from, 1, 'one model call');
+    assert.equal(JSON.stringify(sentPages(modelRequests.at(-1))), JSON.stringify([{ mime_type: 'image/jpeg', data: image.data }]), 'the image is the one page, sent once');
+    assert.equal(modelRequests.at(-1).contents[0].parts.length, 2, 'the text and the one page, nothing else');
+    const bmp = await planCall({ image: { mimeType: 'image/bmp', data: image.data } });
+    assert.equal(bmp.status + ' ' + sentPages(modelRequests.at(-1))[0].mime_type, '200 image/jpeg', 'a type outside OK_MIME is sent as jpeg, as before');
+    from = modelRequests.length;
+    const pages = [pageOf(1), pageOf(2)];
+    const both = await planCall({ pages, image });
+    assert.equal(both.status + ' ' + (modelRequests.length - from), '200 1', 'both present: served, once');
+    assert.equal(sentPages(modelRequests.at(-1)).map((p) => p.data).join(' '), pages.map((p) => p.data).join(' '), 'pages win: the model saw the pages, and never the image');
+  });
+  rcase('P11 PLAN_SYSTEM reads the pages as one schedule; the log line names the count and the kind, never the data', async () => {
+    const sentence = 'The schedule may arrive as several images or as one PDF of several pages: read them IN ORDER as ONE schedule; a workout continued on the next page is the same workout, never repeated.';
+    assert.ok(String(peek('PLAN_SYSTEM')).includes(sentence), 'PLAN_SYSTEM carries the pages sentence, word for word');
+    let mark = logs.length;
+    const pages = [1, 2, 3].map(pageOf);
+    await planCall({ pages });
+    let lines = logs.slice(mark).map(([, l]) => l), pl = lines.find((l) => l.startsWith('[gemini-worker] plan'));
+    assert.ok(pl, 'one plan log line, for measuring (got: ' + JSON.stringify(lines) + ')');
+    assert.match(pl, /\b3 pages\b/, 'it names the page count: ' + pl);
+    assert.match(pl, /\bimage\b/, 'and the kind: ' + pl);
+    for (const p of pages) assert.ok(!lines.some((l) => l.includes(p.data.slice(0, 24))), "and no log line carries a page's data: " + JSON.stringify(lines));
+    mark = logs.length;
+    const pdf = pdfOf('Legs: Squat 5x5');
+    await planCall({ pages: [pdf] });
+    lines = logs.slice(mark).map(([, l]) => l); pl = lines.find((l) => l.startsWith('[gemini-worker] plan'));
+    assert.ok(pl && /\b1 pages?\b/.test(pl) && /\bpdf\b/.test(pl), 'a PDF is logged as one page of kind pdf: ' + pl);
+    assert.ok(!lines.some((l) => l.includes(pdf.data.slice(0, 24))), "and never the PDF's data");
+  });
+
   const recipeFailures = [];
   for (const [name, fn] of recipeCases) {
     // Every call in this file is one user, and the in-isolate burst limiter
@@ -797,7 +948,7 @@ async function workerTests() {
     pages = {};
   }
   if (recipeFailures.length) throw new Error(recipeFailures.length + ' of ' + recipeCases.length + ' recipe cases failed:\n  ' + recipeFailures.join('\n  '));
-  console.log('PASS Worker recipe mode: ' + recipeCases.map(([name]) => name.split(' ')[0]).join(' '));
+  console.log('PASS Worker recipe mode and plan pages: ' + recipeCases.map(([name]) => name.split(' ')[0]).join(' '));
 
   // ---- a model answer of JSON null is a parse error, not a crash ---------------
   // An exception out of fetch() reaches the browser as a CORS-less 500, which

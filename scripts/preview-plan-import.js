@@ -1,6 +1,10 @@
 // Isolated browser QA for the real UI + FoodAI + Worker protocol. No production
 // accounts, network AI calls or user storage. Run, then open 127.0.0.1:8097.
 // All mock code is served from this loopback-only development server.
+// The Worker below is the REAL one (only Gemini and Supabase are stubbed), so
+// it takes `pages` — several photos, or one PDF — as the v424 protocol does, and
+// the console names what each request carried (counts and kinds, never data).
+// The 'old' scenario answers `pages` as a pre-v424 Worker would: 400 'no input'.
 'use strict';
 const http = require('node:http'), fs = require('node:fs'), path = require('node:path'), vm = require('node:vm');
 const root = path.resolve(__dirname, '..');
@@ -14,9 +18,11 @@ const fixture = { days: [
   { name: 'Legs / أرجل', exercises: [{ name: 'Squat', sets: null, reps: '10 / 8 / 6', notes: 'Sets unclear' }] },
 ] };
 const workerContext = { Request, Response, Headers, console, setTimeout, clearTimeout, AbortController,
-  fetch: async (url) => {
+  fetch: async (url, opts) => {
     if (url.includes('/auth/v1/user')) return Response.json({ id: 'fixture-user' });
     if (url.includes('/rpc/ai_budget_take')) return Response.json({ allowed: scenario !== 'quota' });
+    let parts = []; try { parts = JSON.parse(opts.body).contents[0].parts; } catch (_) {}
+    console.log('  Gemini request:', parts.filter((p) => p.inline_data).map((p) => p.inline_data.mime_type).join(', ') || 'no media', '· text parts', parts.filter((p) => typeof p.text === 'string').length);
     const data = scenario === 'empty' ? { days: [] } : fixture;
     return Response.json({ candidates: [{ content: { parts: [{ text: JSON.stringify(data) }] } }] });
   },
@@ -41,7 +47,7 @@ const setup = `
     add('QA English',()=>{DB.prefs.setLang('en');applyLang('en');navigate('planner')});
     add('QA Light',()=>{DB.prefs.setTheme('light');applyTheme('light')});
     add('QA Run',()=>navigate('session-run',{date:todayISO(),runOnly:DB.plan.get().cycle[0].exerciseIds}));
-    for(const name of ['success','empty','quota','error','slow']) add('QA '+name,()=>qaFetch('/__case?'+name));
+    for(const name of ['success','empty','quota','error','slow','old']) add('QA '+name,()=>qaFetch('/__case?'+name));
     add('QA State',()=>{let p=document.getElementById('qa-state');if(!p){p=document.createElement('pre');p.id='qa-state';p.style.cssText='position:fixed;inset:110px 8px 80px;background:white;color:black;overflow:auto;z-index:30000;font:12px monospace;white-space:pre-wrap';document.body.append(p);p.onclick=()=>p.remove();}p.textContent=JSON.stringify({plan:DB.plan.get(),sessions:DB.sessions.listAll(),customs:DB.exercises.list().filter(e=>e.name==='Test cable press')},null,2)});
     document.body.append(bar);navigate('planner');
   });`;
@@ -50,8 +56,11 @@ const server = http.createServer(async (req, res) => {
   if (url.pathname === '/__case') { scenario = url.search.slice(1); res.end(scenario); return; }
   if (url.pathname === '/__analyze') {
     requests++; let body = ''; for await (const chunk of req) body += chunk;
-    console.log('Analysis request', requests, 'scenario', scenario);
+    let shape = 'unreadable';
+    try { const b = JSON.parse(body); shape = Array.isArray(b.pages) ? b.pages.length + ' pages (' + b.pages.map((p) => p && p.mimeType).join(', ') + ')' : b.image ? 'image (the v423 shape)' : 'neither pages nor image'; } catch (_) {}
+    console.log('Analysis request', requests, 'scenario', scenario, '·', shape);
     if (scenario === 'error') { res.writeHead(502, { 'Content-Type': 'application/json' }); res.end('{"error":"service unavailable"}'); return; }
+    if (scenario === 'old' && /^\d+ pages/.test(shape)) { res.writeHead(400, { 'Content-Type': 'application/json' }); res.end('{"error":"no input"}'); return; }
     if (scenario === 'slow') await new Promise((r) => setTimeout(r, 4000));
     const result = await workerContext.worker.fetch(new Request('https://worker.test', { method: 'POST', headers: req.headers, body }),
       { GEMINI_KEY: 'fixture-key', RATE_LIMITER: { limit: async () => ({ success: true }) } });
