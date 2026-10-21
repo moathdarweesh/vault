@@ -45,7 +45,7 @@ of the net; the picker cell is untouched) and its line follows below.
 
 Gate: all contracts, lint, 29 suites (pooled, 246 s, no retry).
 
-Fingerprint net, v425 → v426: run after the push (the owner pressed for the release); its result is the line the follow-up docs commit appends here: FP426_PENDING
+Fingerprint net, v425 → v426 (run after the push — the owner pressed for the release): the sheets lane 126/126 identical; the views lane 176/184, the eight Home cells whose only difference is the footer version label. Nothing moved — the change lives in the review state the net does not capture, and in storage.
 
 ## v425 — real sections instead of «البقالة», a «+» on every section, and a recipe that keeps its clip
 
