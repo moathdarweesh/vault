@@ -808,11 +808,19 @@ const SERVING_WEIGHTS = {
 // «لا قصدي الاقسام الي بتكون عاده موجوده بالسوبر ماركت». So these are the
 // departments a Saudi hypermarket signs (Panda, Danube, Tamimi, Carrefour), in
 // the order a shopper walks them: the fresh hall first, the chillers, the
-// bakery, the dry aisles, the freezers, the drinks, the sweets, then the
+// bakery, the four dry aisles (rice and pasta, oils and spices, cans and
+// pulses, nuts and dates), the freezers, the drinks, the sweets, then the
 // non-food at the far end. Shown through t('slcat_' + id); `other` is where an
 // unrecognised name goes.
+//
+// v425: «البقالة» is GONE — «بعدين قائمه المشتريات ايش البقاله؟ احذفها». The
+// word names a corner shop, not a department, and told him nothing about what
+// stood under it (rice, sugar, oil, pasta, spices, cans, pulses, nuts, tea).
+// Its entries were redistributed, none dropped, into the four aisles a store
+// actually signs; tea and coffee joined the drinks; the dates left the fresh
+// hall for the nuts aisle. Fifteen, of which a list shows only those with rows.
 // ===========================================================================
-const SHOPPING_SECTIONS = ['produce', 'meat', 'fish', 'dairy', 'bakery', 'grocery', 'frozen', 'drinks', 'snacks', 'household', 'personal', 'other'];
+const SHOPPING_SECTIONS = ['produce', 'meat', 'fish', 'dairy', 'bakery', 'grains', 'pantry', 'canned', 'nuts', 'frozen', 'drinks', 'snacks', 'household', 'personal', 'other'];
 // WHAT PEOPLE WRITE, by department. The calorie catalogue (FOOD_PRESETS) is a
 // list of DISHES AND PORTIONS, not groceries — probed before this was written:
 // «دجاج», «بصل», «خبز», «بيض», «أرز», «سمك», «ثوم», «ليمون», «ملح», «سكر» all
@@ -825,22 +833,40 @@ const SHOPPING_SECTIONS = ['produce', 'meat', 'fish', 'dairy', 'bakery', 'grocer
 // typed name (DB.search.fold, a leading «ال» off each word, the food synonyms)
 // at first use and caches the result, so «الطماطم», «طماطة» and «بندورة» all
 // land on one key. An entry is one to three words; at a given position the
-// longest entry wins («حليب جوز الهند» is a can on the grocery shelf, «حليب» is
+// longest entry wins («حليب جوز الهند» is a can on the canned shelf, «حليب» is
 // the chiller), and the first matching position in reading order decides —
 // except the freezer's MARKER (SHOPPING_FROZEN_MARKERS below), which wins
 // wherever it stands («دجاج مجمد»); the freezer's own items obey the first
 // position like any department («جبنة بيتزا» is cheese).
 //
 // WHERE A SHOPPER FINDS IT is the only rule, and the doubtful cases are decided
-// here, in writing:
+// here, in writing (v425 took «البقالة» apart into grains, pantry, canned and
+// nuts — the decisions below say where each of its shelves went):
 //   · eggs → dairy: the egg trays stand in the dairy chiller.
-//   · tuna, sardines → grocery (a can) unless «طازج»/fresh; «تونة» in the
-//     catalogue is also a can.
-//   · tea, coffee, cocoa, powdered and condensed milk, plant milks (UHT cartons),
-//     peanut butter → grocery: ambient shelves, not the chiller.
-//   · dates → produce: the date tables stand in the fresh hall beside the fruit.
-//   · olives, pickles → grocery: jarred or at the pickle counter, never produce.
-//   · «زعتر» → grocery (the dried mix); «زعتر أخضر» → produce.
+//   · tuna, sardines → canned (a can) unless «طازج»/fresh, which is the fish
+//     counter; «تونة» in the catalogue is also a can.
+//   · tea, coffee, «بن», Nescafé, cocoa, the infusions («بابونج», «كركديه») and
+//     the drink powders and cordials («تانج», «فيمتو», «قمر الدين», «تمر هندي»)
+//     → drinks: one aisle for everything that is poured into a cup.
+//   · powdered, condensed and coconut milk, and the UHT plant milks → canned:
+//     the ambient milks — tins and cartons — stand together, never in the
+//     chiller.
+//   · dates («تمر», «تمور», «رطب») → nuts: a Saudi store signs «التمور» beside
+//     the nuts, not in the fresh hall; «تمر محشي» stays a sweet and «تمر هندي»
+//     a drink (two-word entries win), «دبس»/«date syrup» is a pantry jar.
+//   · peanut butter («زبدة فول سوداني», «زبدة فستق» — in Saudi فستق is the
+//     peanut, and the jar says so), tahini, halawa, honey, jams, molasses,
+//     Nutella → pantry: the spreads shelf beside the oils and the sauces.
+//   · olives, pickles, vine leaves → pantry: jarred or at the pickle counter,
+//     never produce.
+//   · «زعتر» → pantry (the dried mix is a spice); «زعتر أخضر» → produce.
+//   · the baking shelf sits with the flour: yeast, baking powder, «صودا الخبز»
+//     (baking soda, never a drink), vanilla, rose and blossom water, bread
+//     crumbs and the dessert packets («جيلي», «كاسترد», «مهلبية», «كريم
+//     كراميل») → grains.
+//   · soups and the instant noodles («إندومي», ramen) → canned, beside the
+//     pulses; plain noodles, «شعيرية» and vermicelli → grains, with the pasta.
+//   · nuts, seeds, raisins → nuts: the nuts-and-dried-fruit aisle.
 //   · «فيليه» → meat (the chicken-fillet packs); «فيليه سمك» → fish.
 //   · «موزات» → meat (shanks, Gulf usage), never a plural of «موز».
 //   · «برجر», «شاورما», «كباب» → meat (the butcher makes them fresh); «مجمد»
@@ -857,11 +883,10 @@ const SHOPPING_SECTIONS = ['produce', 'meat', 'fish', 'dairy', 'bakery', 'grocer
 //     meat). What no entry names («beef samosas», «cookie dough») files by its
 //     first word — the known limit of a head-first rule on English.
 //   · the Saudi words beside the formal ones: «صابون مواعين» → household (the
-//     dish soap), «زبدة فستق» → grocery (in Saudi فستق is the peanut, and the
-//     jar says so), «نيدو»/«حليب نيدو» → grocery (the powdered-milk tin everyone
-//     names), «فلفل أبيض» → grocery (a spice, like «فلفل أسود»), «صودا الخبز»
-//     → grocery (baking soda, never a drink). «لومي» stays produce: in the Gulf
-//     it is the fresh lime, and the dried one is «ليمون أسود»/«ليمون مجفف».
+//     dish soap), «نيدو»/«حليب نيدو» → canned (the powdered-milk tin everyone
+//     names), «فلفل أبيض» → pantry (a spice, like «فلفل أسود»). «لومي» stays
+//     produce: in the Gulf it is the fresh lime, and the dried one is «ليمون
+//     أسود»/«ليمون مجفف» (a spice, pantry).
 //   · infant formula → personal: the baby aisle, beside the nappies.
 //   · units are NOT entries («كيلو», «علبة», «كيس», «حبة», «كرتون», «لتر»):
 //     «3 أكياس حليب» must read «حليب»; the bin bag is «أكياس قمامة».
@@ -881,8 +906,8 @@ const SHOPPING_LEXICON = {
     'بروكلي', 'فطر', 'مشروم', 'ذرة', 'ذرة حلوة', 'بامية', 'ملوخية', 'فاصوليا خضراء', 'لوبيا خضراء', 'بازلاء خضراء',
     'فول أخضر', 'كرفس', 'شمندر', 'بنجر', 'فجل', 'لفت', 'كراث', 'قرع', 'يقطين', 'سلق', 'خبيزة', 'بقلة', 'سلطة',
     'زنجبيل', 'زنجبيل طازج', 'ليمون', 'ليمون أخضر', 'لومي', 'لمون',
-    // the fresh hall — fruit, and the date tables beside it
-    'فواكه', 'فاكهة', 'موز', 'تفاح', 'برتقال', 'يوسفي', 'كلمنتينا', 'جريب فروت', 'تمر', 'تمور', 'رطب', 'عنب',
+    // the fresh hall — fruit (the dates stand with the nuts since v425)
+    'فواكه', 'فاكهة', 'موز', 'تفاح', 'برتقال', 'يوسفي', 'كلمنتينا', 'جريب فروت', 'عنب',
     'فراولة', 'بطيخ', 'حبحب', 'جح', 'شمام', 'مانجو', 'مانجا', 'رمان', 'أناناس', 'توت', 'كيوي', 'كمثرى', 'إجاص',
     'خوخ', 'دراق', 'مشمش', 'تين', 'أفوكادو', 'جوافة', 'بابايا', 'جوز الهند', 'كرز', 'برقوق', 'نكتارين',
     'vegetables', 'vegetable', 'veg', 'tomato', 'tomatoes', 'onion', 'onions', 'spring onion', 'garlic', 'cucumber',
@@ -892,7 +917,7 @@ const SHOPPING_LEXICON = {
     'mushroom', 'mushrooms', 'corn', 'sweet corn', 'okra', 'molokhia', 'green beans', 'celery', 'beetroot', 'beet',
     'radish', 'turnip', 'leek', 'leeks', 'pumpkin', 'squash', 'salad', 'ginger', 'lemon', 'lemons', 'lime', 'limes',
     'fruit', 'fruits', 'banana', 'bananas', 'apple', 'apples', 'orange', 'oranges', 'mandarin', 'clementine',
-    'grapefruit', 'dates', 'grapes', 'strawberry', 'strawberries', 'watermelon', 'melon', 'mango', 'mangoes',
+    'grapefruit', 'grapes', 'strawberry', 'strawberries', 'watermelon', 'melon', 'mango', 'mangoes',
     'pomegranate', 'pineapple', 'berry', 'berries', 'blueberries', 'raspberries', 'kiwi', 'pear', 'pears', 'peach',
     'peaches', 'apricot', 'apricots', 'fig', 'figs', 'avocado', 'guava', 'papaya', 'coconut', 'cherry', 'cherries',
     'plum', 'plums', 'nectarine',
@@ -936,31 +961,28 @@ const SHOPPING_LEXICON = {
     'chocolate cake', 'tortilla', 'baguette', 'manakish', 'manakeesh', 'pita', 'samoli', 'tamees', 'donut',
     'donuts', 'doughnut', 'muffin', 'muffins', 'cupcake', 'brioche', 'rusk', 'bagel', 'bagels', 'flatbread', 'naan',
   ],
-  grocery: [
-    // the dry aisles — grains and pasta
-    'أرز', 'رز', 'مكرونة', 'معكرونة', 'باستا', 'سباغيتي', 'لازانيا', 'شعيرية', 'نودلز', 'إندومي', 'دقيق', 'طحين',
+  grains: [
+    // the rice, pasta and grains aisle — and the baking shelf, which sits with
+    // the flour (yeast, baking powder and soda, vanilla, the dessert packets)
+    'أرز', 'رز', 'مكرونة', 'معكرونة', 'باستا', 'سباغيتي', 'لازانيا', 'شعيرية', 'نودلز', 'دقيق', 'طحين',
     'سميد', 'نشا', 'شوفان', 'برغل', 'فريك', 'كينوا', 'كسكس', 'حبوب الإفطار', 'كورن فليكس', 'كورنفليكس', 'جرانولا',
-    // sugar, salt, oil, vinegar
+    'خميرة', 'بيكنج', 'بيكنج باودر', 'صودا الخبز', 'فانيليا', 'ماء ورد', 'ماء زهر', 'جيلي', 'كاسترد', 'مهلبية', 'كريم كراميل',
+    'rice', 'basmati', 'pasta', 'spaghetti', 'macaroni', 'lasagna', 'noodles', 'egg noodles',
+    'vermicelli', 'flour', 'semolina', 'starch', 'cornstarch', 'oats', 'oatmeal', 'bulgur', 'quinoa', 'couscous',
+    'cereal', 'cereals', 'cornflakes', 'corn flakes', 'granola',
+    'yeast', 'baking powder', 'baking soda', 'vanilla', 'breadcrumbs', 'bread crumbs', 'jelly', 'custard', 'rose water',
+  ],
+  pantry: [
+    // the oils, spices and sauces aisle — sugar, salt, oil, vinegar
     'سكر', 'ملح', 'زيت', 'زيت زيتون', 'زيت ذرة', 'سمن', 'سمنة', 'خل', 'خل تفاح',
     // spices and herbs, dried
     'بهارات', 'بهار', 'توابل', 'كمون', 'كركم', 'قرفة', 'هيل', 'فلفل أسود', 'فلفل أبيض', 'فلفل مطحون', 'كاري', 'بابريكا', 'زعفران',
     'زعتر', 'سماق', 'قرنفل', 'ورق غار', 'شطة', 'هريسة', 'كزبرة ناشفة', 'كزبرة مطحونة', 'نعناع مجفف', 'نعناع ناشف',
-    'زنجبيل مطحون', 'ثوم بودرة', 'بصل بودرة', 'ليمون أسود', 'ليمون مجفف', 'حلبة', 'يانسون', 'بابونج', 'كركديه',
-    // sauces, pastes, spreads
-    'صلصة', 'صوص', 'معجون طماطم', 'طماطم معلبة', 'كاتشب', 'مايونيز', 'خردل', 'صويا', 'مرق', 'مكعبات', 'ماجي',
-    'عسل', 'طحينة', 'حلاوة', 'دبس', 'مربى', 'نوتيلا', 'زبدة فول سوداني', 'زبدة فستق', 'زبدة لوز', 'كريم كراميل',
-    // pulses, cans, pickles
-    'عدس', 'حمص', 'فول', 'فاصوليا', 'لوبيا', 'بازلاء', 'معلبات', 'معلب', 'تونة', 'سردين', 'ذرة معلبة', 'زيتون',
-    'مخلل', 'مخللات', 'طرشي', 'ورق عنب',
-    // nuts and seeds
-    'مكسرات', 'لوز', 'جوز', 'فستق', 'كاجو', 'بندق', 'فول سوداني', 'سمسم', 'بذور', 'زبيب',
-    // tea, coffee, baking, packets, powders
-    'شاي', 'قهوة', 'بن', 'نسكافيه', 'كابتشينو', 'كاكاو', 'خميرة', 'بيكنج', 'بيكنج باودر', 'صودا الخبز', 'فانيليا', 'شوربة',
-    'حليب مجفف', 'حليب بودرة', 'نيدو', 'حليب نيدو', 'حليب مكثف', 'حليب جوز الهند', 'حليب لوز', 'حليب شوفان', 'حليب صويا', 'لبن بودرة',
-    'جيلي', 'كاسترد', 'مهلبية', 'تانج', 'فيمتو', 'قمر الدين', 'تمر هندي', 'ماء ورد', 'ماء زهر',
-    'rice', 'basmati', 'pasta', 'spaghetti', 'macaroni', 'lasagna', 'noodles', 'egg noodles', 'ramen', 'indomie',
-    'vermicelli', 'flour', 'semolina', 'starch', 'cornstarch', 'oats', 'oatmeal', 'bulgur', 'quinoa', 'couscous',
-    'cereal', 'cereals', 'cornflakes', 'corn flakes', 'granola',
+    'زنجبيل مطحون', 'ثوم بودرة', 'بصل بودرة', 'ليمون أسود', 'ليمون مجفف', 'حلبة', 'يانسون',
+    // sauces, pastes, stock, spreads, and the jars (olives, pickles, vine leaves)
+    'صلصة', 'صوص', 'معجون طماطم', 'كاتشب', 'مايونيز', 'خردل', 'صويا', 'مرق', 'مكعبات', 'ماجي',
+    'عسل', 'طحينة', 'حلاوة', 'دبس', 'مربى', 'نوتيلا', 'زبدة فول سوداني', 'زبدة فستق', 'زبدة لوز',
+    'زيتون', 'مخلل', 'مخللات', 'طرشي', 'ورق عنب',
     'sugar', 'salt', 'oil', 'olive oil', 'corn oil', 'sunflower oil', 'coconut oil', 'ghee', 'vinegar', 'apple vinegar',
     'apple cider',
     'spices', 'spice', 'cumin', 'turmeric', 'cinnamon', 'cardamom', 'black pepper', 'curry', 'paprika', 'saffron',
@@ -969,12 +991,24 @@ const SHOPPING_LEXICON = {
     'mustard', 'stock', 'chicken stock', 'chicken broth', 'chicken cubes', 'broth', 'bouillon', 'maggi', 'honey', 'tahini',
     'halawa', 'molasses', 'syrup', 'dates syrup', 'date syrup', 'jam', 'strawberry jam', 'peanut butter', 'almond butter',
     'chocolate spread', 'nutella', 'lemon juice',
-    'lentils', 'lentil', 'chickpeas', 'hummus', 'beans', 'peas', 'canned', 'can', 'tin', 'tuna', 'sardines', 'sardine',
     'olives', 'olive', 'pickles', 'pickle', 'vine leaves', 'grape leaves',
-    'nuts', 'almonds', 'walnuts', 'pistachios', 'cashews', 'peanuts', 'hazelnuts', 'sesame', 'seeds', 'raisins',
-    'tea', 'mint tea', 'coffee', 'nescafe', 'cocoa', 'yeast', 'baking powder', 'baking soda', 'vanilla', 'soup', 'tomato soup', 'chicken soup', 'breadcrumbs',
-    'bread crumbs', 'powdered milk', 'milk powder', 'condensed milk', 'coconut milk', 'almond milk', 'oat milk',
-    'soy milk', 'jelly', 'custard', 'rose water',
+  ],
+  canned: [
+    // the canned goods and legumes aisle — tins, pulses, soups, the instant
+    // noodles, and the ambient milks (powdered, condensed, coconut, the UHT
+    // plant cartons)
+    'عدس', 'حمص', 'فول', 'فاصوليا', 'لوبيا', 'بازلاء', 'معلبات', 'معلب', 'تونة', 'سردين', 'ذرة معلبة', 'طماطم معلبة',
+    'شوربة', 'إندومي',
+    'حليب مجفف', 'حليب بودرة', 'نيدو', 'حليب نيدو', 'حليب مكثف', 'حليب جوز الهند', 'حليب لوز', 'حليب شوفان', 'حليب صويا', 'لبن بودرة',
+    'lentils', 'lentil', 'chickpeas', 'hummus', 'beans', 'peas', 'canned', 'can', 'tin', 'tuna', 'sardines', 'sardine',
+    'soup', 'tomato soup', 'chicken soup', 'ramen', 'indomie',
+    'powdered milk', 'milk powder', 'condensed milk', 'coconut milk', 'almond milk', 'oat milk', 'soy milk',
+  ],
+  nuts: [
+    // the nuts and dates aisle — every nut and seed, the raisins, and the
+    // date tables («التمور» is signed beside the nuts, not in the fresh hall)
+    'مكسرات', 'لوز', 'جوز', 'فستق', 'كاجو', 'بندق', 'فول سوداني', 'سمسم', 'بذور', 'زبيب', 'تمر', 'تمور', 'رطب',
+    'nuts', 'almonds', 'walnuts', 'pistachios', 'cashews', 'peanuts', 'hazelnuts', 'sesame', 'seeds', 'raisins', 'dates',
   ],
   frozen: [
     // the freezers — the marker words win wherever they stand; every other
@@ -991,10 +1025,12 @@ const SHOPPING_LEXICON = {
     'ماء', 'مياه', 'موية', 'مويه', 'ماي', 'ماء زمزم', 'عصير', 'عصائر', 'نكتار', 'صودا', 'كولا', 'كوكاكولا', 'بيبسي',
     'سفن أب', 'سفن', 'ميرندا', 'فانتا', 'سبرايت', 'مشروب', 'مشروبات', 'غازي', 'غازية', 'مشروب غازي', 'مشروب طاقة',
     'ريد بول', 'شراب', 'ليمونادة',
+    // the tea and coffee shelf, the infusions, the drink powders and cordials (v425)
+    'شاي', 'قهوة', 'بن', 'نسكافيه', 'كابتشينو', 'كاكاو', 'بابونج', 'كركديه', 'تانج', 'فيمتو', 'قمر الدين', 'تمر هندي',
     'water', 'mineral water', 'sparkling water', 'coconut water', 'juice', 'juices', 'orange juice', 'apple juice',
     'mango juice', 'grape juice', 'pineapple juice', 'mixed juice', 'fruit juice', 'nectar', 'soda', 'cola', 'pepsi',
     'coke', 'sprite', 'fanta', 'drink', 'drinks', 'soft drink', 'energy drink', 'red bull', 'lemonade', 'iced tea',
-    'iced coffee',
+    'iced coffee', 'tea', 'mint tea', 'coffee', 'nescafe', 'cocoa',
   ],
   snacks: [
     // sweets, biscuits and crisps

@@ -343,7 +343,7 @@ test('F FoodAI.shareRecipe', async () => {
   const said = async (status, body) => { reply = answer(status, body); const r = await share(rec); return r.err ? FA.friendlyErr(r.err) : 'resolved ' + json(r.out); };
   // A recipe exactly as DB.recipes stores it, plus what must never leave the phone.
   const rec = { id: 'rcp_QA1', name: '  QA Bowl  ', servings: 2, createdAt: '2026-10-01T08:00:00.000Z', updatedAt: '2026-10-01T09:00:00.000Z',
-    shared: { id: 'old-copy', at: '2026-10-01T08:00:00.000Z' },
+    shared: { id: 'old-copy', at: '2026-10-01T08:00:00.000Z' }, link: 'https://youtu.be/dQw4w9WgXcQ',   // v425: the source link stays on the phone too
     items: [ingredient({ id: 'i1', _auto: true, _src: 'ai' }), ingredient({ id: 'i2', name: 'دجاج', qty: '150 غ', calories: 248, protein: 46.5, carbs: 0, fat: 5 })] };
   const approve = { verdict: 'approve', id: '3f2a9c1e-0b7d-4c55-9a1e-2b6f0d8c7e41', name: 'QA Bowl' };
   reply = answer(200, approve);
@@ -353,9 +353,10 @@ test('F FoodAI.shareRecipe', async () => {
   assert.equal(Object.keys(b).join(','), 'mode,lang,shareRecipe', 'the payload is share-only — an OLD Worker answers 400 no input: ' + Object.keys(b));
   assert.equal(b.mode, 'share-recipe');
   assert.equal(b.lang, 'en');
+  assert.equal('link' in b.shareRecipe, false, 'the source link (v425) is never sent: a published copy has no link');
   deq(b.shareRecipe, { name: 'QA Bowl', servings: 2, sourceId: 'rcp_QA1', items: [
     { name: 'رز', qty: '200 غ', calories: 260, protein: 5, carbs: 56, fat: 0.6 },
-    { name: 'دجاج', qty: '150 غ', calories: 248, protein: 46.5, carbs: 0, fat: 5 }] }, 'built field by field — no createdAt, no marker, no item id, no _ key: ' + json(b.shareRecipe));
+    { name: 'دجاج', qty: '150 غ', calories: 248, protein: 46.5, carbs: 0, fat: 5 }] }, 'built field by field — no createdAt, no marker, no link, no item id, no _ key: ' + json(b.shareRecipe));
   for (const it of b.shareRecipe.items) assert.equal(Object.keys(it).sort().join(','), 'calories,carbs,fat,name,protein,qty', 'exactly six keys per ingredient');
   assert.equal(sent[sent.length - 1].headers.Authorization, 'Bearer qa-token', "the caller's own token rides the request");
   c.DB = { prefs: { get: () => ({ lang: 'ar' }) } };

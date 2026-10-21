@@ -52,6 +52,34 @@ const totals = json(db.recipes.totals(recipe)); const priorCalls = calls;
 const edited = db.recipes.update(recipe.id,{name:'rice edited'});
 assert.equal(calls,priorCalls+1,'recipe edit writes once');
 assert.equal(json(db.recipes.totals(edited)),totals,'quantity does not multiply nutrition');
+// ---- THE SOURCE LINK (v425): a recipe «استخراج وصفة» read from a link keeps it —
+// taken at creation only, as the exact string, and only one the import accepts
+// (storage's recipeLinkOk parses with URL, which this vm context does not have).
+c.URL = URL;
+const yt = 'https://youtu.be/dQw4w9WgXcQ', tt = 'https://vm.tiktok.com/ZMabc123/', ig = 'https://www.instagram.com/reel/Cabc123/';
+const linked = db.recipes.add({name:'QA linked',servings:2,items:[{...food,qty:'100 غ'}],link:yt});
+assert.equal(linked.link, yt, 'a valid https YouTube link is kept exactly');
+assert.equal(db.recipes.add({name:'QA linked tt',servings:1,items:[{...food}],link:tt}).link, tt, 'a TikTok link too');
+assert.equal(db.recipes.add({name:'QA linked ig',servings:1,items:[{...food}],link:ig}).link, ig, 'and an Instagram link — the hosts the import accepts, no more');
+const edge = 'https://youtu.be/' + 'a'.repeat(283);
+assert.equal(edge.length, 300, 'setup: 300 characters');
+assert.equal(db.recipes.add({name:'QA linked 300',servings:1,items:[{...food}],link:edge}).link, edge, '300 characters is the ceiling, kept');
+for (const [bad, why] of [['http://youtu.be/dQw4w9WgXcQ','http:'], ['javascript:alert(1)','javascript:'], ['https://example.com/recipe','another host'], ['https://youtube.com.evil.com/x','a lookalike host'], [edge+'a','301 characters'], [42,'a number'], [['https://youtu.be/x'],'an array'], ['','an empty string']]) {
+  const made = db.recipes.add({name:'QA unlinked',servings:1,items:[{...food}],link:bad});
+  assert.ok(made && !('link' in made), why+' is dropped — the recipe saves with no link at all: '+json(made && made.link));
+  db.recipes.remove(made.id);
+}
+assert.equal(db.recipes.update(linked.id,{name:'QA linked edited',link:tt}).link, yt, 'an edit keeps the ORIGINAL link, never a patch\'s');
+assert.equal(db.recipes.update(linked.id,{name:'QA linked again',link:'javascript:alert(1)'}).link, yt, 'nor a tampered one');
+assert.equal(db.recipes.update(linked.id,{name:'QA linked thrice'}).link, yt, 'and an edit without one keeps it');
+const unlinked = db.recipes.add({name:'QA no link',servings:1,items:[{...food}]});
+assert.equal('link' in unlinked, false, 'a copy made without a link has none');
+// The blob's doors leave it alone: the validator admits it and loadState keeps it.
+const withLink = run('JSON.stringify(STATE)');
+assert.equal(db._validateBlob(JSON.parse(withLink)), true, 'the validator admits a recipe with a link');
+const reloaded = context({values:new Map([[state.keys.store, withLink]])});
+assert.equal(reloaded.c.DB.recipes.list().find(x=>x.id===linked.id).link, yt, 'loadState keeps the link exactly');
+db.recipes.list().filter(x=>/^QA (linked|no link)/.test(x.name)).forEach(x=>db.recipes.remove(x.id));
 // ---- THE ONE RUNNING SHOPPING LIST (v329) --------------------------------
 // An empty list is NEVER materialised: hasUserData() counts shoppingLists.length,
 // so a list created on first render would make a fresh install read as "has data"
@@ -384,39 +412,44 @@ assert.equal(db.undo.apply(restore.undoToken).ok,true); assert.equal(json(db.pla
   const TABLE = [
     ['طماطم','produce'], ['الطماطم','produce'], ['بندورة','produce'], ['2 كيلو طماطم','produce'], ['بصل','produce'], ['بصلتين','produce'],
     ['ثوم','produce'], ['خيار','produce'], ['بطاطس','produce'], ['فلفل رومي','produce'], ['كزبرة','produce'], ['تفاحات','produce'],
-    ['موز','produce'], ['تمر','produce'], ['حبحب','produce'], ['جوز الهند','produce'], ['Tomatoes','produce'], ['onions','produce'],
-    ['dates','produce'], ['cherries','produce'], ['sweet potato','produce'],
+    ['موز','produce'], ['حبحب','produce'], ['جوز الهند','produce'], ['Tomatoes','produce'], ['onions','produce'],
+    ['cherries','produce'], ['sweet potato','produce'],
     ['دجاج','meat'], ['فراخ','meat'], ['صدر دجاج مشوي','meat'], ['لحم مفروم','meat'], ['موزات','meat'], ['1 كغ دجاج','meat'],
     ['Chicken breast','meat'], ['ground beef','meat'], ['sausages','meat'],
     ['سمك','fish'], ['روبيان','fish'], ['تونة طازجة','fish'], ['فيليه سمك','fish'], ['salmon','fish'], ['shrimp','fish'],
     ['حليب','dairy'], ['حليب طويل الأجل','dairy'], ['لبن','dairy'], ['جبنة','dairy'], ['بيض','dairy'], ['بيضة','dairy'],
     ['بيضتان','dairy'], ['كرتون بيض','dairy'], ['3 أكياس حليب','dairy'], ['Eggs','dairy'], ['milk','dairy'], ['cream cheese','dairy'],
     ['خبز','bakery'], ['عيش','bakery'], ['توست','bakery'], ['صامولي','bakery'], ['bread','bakery'], ['croissant','bakery'],
-    ['أرز','grocery'], ['رز','grocery'], ['ملح','grocery'], ['سكر','grocery'], ['زيت زيتون','grocery'], ['فلفل أسود','grocery'],
-    ['تونة','grocery'], ['عدس','grocery'], ['شاي','grocery'], ['قهوة','grocery'], ['حليب جوز الهند','grocery'], ['حليب مجفف','grocery'],
-    ['زبدة الفول السوداني','grocery'], ['معجون طماطم','grocery'], ['Rice 1 kg','grocery'], ['salt','grocery'], ['QA salt','grocery'],
-    ['peanut butter','grocery'], ['coconut milk','grocery'], ['black pepper','grocery'], ['canned tuna','grocery'],
+    // v425: «البقالة» is gone («ايش البقاله؟ احذفها») — its shelves are the four
+    // aisles a store signs; the tea and coffee stand with the drinks, the dates
+    // with the nuts
+    ['أرز','grains'], ['رز','grains'], ['شعيرية','grains'], ['دقيق','grains'], ['صودا الخبز','grains'], ['Rice 1 kg','grains'], ['oats','grains'], ['baking soda','grains'],
+    ['ملح','pantry'], ['سكر','pantry'], ['زيت','pantry'], ['زيت زيتون','pantry'], ['كمون','pantry'], ['فلفل أسود','pantry'], ['صلصة طماطم','pantry'], ['زيتون','pantry'],
+    ['زبدة الفول السوداني','pantry'], ['معجون طماطم','pantry'], ['salt','pantry'], ['QA salt','pantry'], ['peanut butter','pantry'], ['black pepper','pantry'],
+    ['تونة','canned'], ['عدس','canned'], ['حليب جوز الهند','canned'], ['حليب مجفف','canned'], ['إندومي','canned'], ['coconut milk','canned'], ['canned tuna','canned'], ['lentils','canned'],
+    ['لوز','nuts'], ['مكسرات','nuts'], ['تمر','nuts'], ['رطب','nuts'], ['dates','nuts'], ['almonds','nuts'],
+    ['شاي','drinks'], ['قهوة','drinks'], ['نسكافيه','drinks'], ['tea','drinks'], ['coffee','drinks'],
     ['دجاج مجمد','frozen'], ['خضار مجمدة','frozen'], ['آيس كريم','frozen'], ['ناجتس دجاج','frozen'], ['frozen peas','frozen'], ['ice cream','frozen'],
     ['ماء','drinks'], ['مياه','drinks'], ['عصير برتقال','drinks'], ['مشروب غازي','drinks'], ['water','drinks'], ['orange juice','drinks'],
     ['شوكولاتة','snacks'], ['شيبس','snacks'], ['بسكويت','snacks'], ['chocolate','snacks'], ['chips','snacks'],
     ['مناديل','household'], ['منظفات','household'], ['أكياس قمامة','household'], ['كلوركس','household'], ['tissues','household'], ['dish soap','household'],
     ['شامبو','personal'], ['معجون أسنان','personal'], ['حفاضات','personal'], ['صابون','personal'], ['toothpaste','personal'], ['shampoo','personal'],
-    ['Tabbouleh','produce'], ['Whey Protein (scoop)','meat'], ['Jameed','dairy'], ['Cooked Edamame','grocery'], ['Mansaf','other'],
+    ['Tabbouleh','produce'], ['Whey Protein (scoop)','meat'], ['Jameed','dairy'], ['Cooked Edamame','canned'], ['Mansaf','other'],
     ['xyz','other'], ['QA breakfast ar','other'], ['هدية','other'], ['','other'],
     // The review of v423 — each finding's rows, seen failing on the tree before
     // its fix, beside the neighbours that must not move. Only the freezer's
     // MARKER is absolute; its item-words obey the first position, and the
     // head-final compounds are two-word entries.
-    ['جبنة بيتزا','dairy'], ['جبن بيتزا','dairy'], ['صوص بيتزا','grocery'], ['صلصة بيتزا','grocery'], ['لحم كبة','meat'],
-    ['chicken nuggets','frozen'], ['دجاج ناجتس','frozen'], ['مكعبات ثلج','frozen'], ['pizza sauce','grocery'], ['pizza cheese','dairy'], ['شاي مثلج','frozen'], ['vanilla ice cream','frozen'],
+    ['جبنة بيتزا','dairy'], ['جبن بيتزا','dairy'], ['صوص بيتزا','pantry'], ['صلصة بيتزا','pantry'], ['لحم كبة','meat'],
+    ['chicken nuggets','frozen'], ['دجاج ناجتس','frozen'], ['مكعبات ثلج','frozen'], ['pizza sauce','pantry'], ['pizza cheese','dairy'], ['شاي مثلج','frozen'], ['vanilla ice cream','frozen'],
     // English puts the head last: the modifier-first compounds are entries; the rule stays first-position (the fish counter)
-    ['garlic bread','bakery'], ['banana bread','bakery'], ['apple pie','bakery'], ['mint tea','grocery'], ['strawberry jam','grocery'], ['tomato soup','grocery'],
-    ['chicken soup','grocery'], ['tomato ketchup','grocery'], ['milk chocolate','snacks'], ['body cream','personal'], ['baby oil','personal'], ['salmon fillet','fish'], ['fish fillets','fish'],
+    ['garlic bread','bakery'], ['banana bread','bakery'], ['apple pie','bakery'], ['mint tea','drinks'], ['strawberry jam','pantry'], ['tomato soup','canned'],
+    ['chicken soup','canned'], ['tomato ketchup','pantry'], ['milk chocolate','snacks'], ['body cream','personal'], ['baby oil','personal'], ['salmon fillet','fish'], ['fish fillets','fish'],
     // «ألبان» is lam-rooted, not the article: its key is «البان», «بان كيك» never meets it, and the hamza on a real article still comes off
     ['بان كيك','bakery'], ['الألبان','dairy'], ['ألبان','dairy'], ['منتجات الألبان','dairy'], ['ألطماطم','produce'],
     // the Saudi words a weekly list writes
-    ['صابون مواعين','household'], ['زبدة فستق','grocery'], ['زبدة الفستق','grocery'], ['فلفل أبيض','grocery'], ['صودا الخبز','grocery'], ['حليب نيدو','grocery'], ['نيدو','grocery'],
-    ['كلور','household'], ['tide','household'], ['maggi','grocery'], ['nutella','grocery'], ['شوكلاته','snacks'], ['بسكوت','snacks'], ['شبس','snacks'], ['بذنجان','produce'], ['hamburger','meat'], ['لومي','produce'],
+    ['صابون مواعين','household'], ['زبدة فستق','pantry'], ['زبدة الفستق','pantry'], ['فلفل أبيض','pantry'], ['حليب نيدو','canned'], ['نيدو','canned'],
+    ['كلور','household'], ['tide','household'], ['maggi','pantry'], ['nutella','pantry'], ['شوكلاته','snacks'], ['بسكوت','snacks'], ['شبس','snacks'], ['بذنجان','produce'], ['hamburger','meat'], ['لومي','produce'],
     // a full stop, a glued hyphen or dash, «×» and «*» are word breaks; a decimal amount and a hyphenated catalogue name keep their aisle
     ['بيض.','dairy'], ['طماطم-2كيلو','produce'], ['حليب×2','dairy'], ['بيض*2','dairy'], ['سفن-أب','drinks'], ['coca-cola','drinks'], ['ice-cream','frozen'],
     ['Low-Fat Milk','dairy'], ['High-Protein Bread','bakery'], ['1.5 كيلو طماطم','produce'],
@@ -430,11 +463,42 @@ assert.equal(db.undo.apply(restore.undoToken).ok,true); assert.equal(json(db.pla
   same(db.shopping.grouped(), [], 'an empty list has no groups');
   db.shopping.addNames([{name:'شامبو'},{name:'طماطم'},{name:'ملح'},{name:'بصل'},{name:'xyz'}]);
   let groups = db.shopping.grouped();
-  same(groups.map(g => g.section), ['produce','grocery','personal','other'], 'section order, only the non-empty ones');
+  same(groups.map(g => g.section), ['produce','pantry','personal','other'], 'section order, only the non-empty ones');
   same(groups.find(g => g.section === 'produce').items.map(x => x.name), ['طماطم','بصل'], 'stored order within a department');
   db.shopping.toggle(groups.find(g => g.section === 'produce').items[0].id);
   groups = db.shopping.grouped();
   same(groups.find(g => g.section === 'produce').items.map(x => x.name + (x.checked ? ' ✓' : '')), ['طماطم ✓','بصل'], 'a ticked row never moves');
+  // FIFTEEN departments (v425), in the store's order — one row in each, added
+  // in no order, and grouped() walks them as SHOPPING_SECTIONS does.
+  same(SECTIONS, ['produce','meat','fish','dairy','bakery','grains','pantry','canned','nuts','frozen','drinks','snacks','household','personal','other'], 'the fifteen departments, in the store order');
+  db.shopping.clearAll();
+  db.shopping.addNames(['xyz','شامبو','مناديل','شوكولاتة','ماء','آيس كريم','لوز','تونة','ملح','أرز','خبز','حليب','سمك','دجاج','طماطم'].map(name => ({name})));
+  same(db.shopping.grouped().map(g => g.section), SECTIONS, 'grouped() walks the fifteen departments in the store order, whatever order the rows were added in');
+  // The catalogue fallback's map, by the entry's category — and for `fats` by
+  // its name: an oil or a butter is a pantry jar, a nut or a seed stands in
+  // the nuts aisle, the avocado is produce.
+  for (const [name, want] of [['Arabic Bread','bakery'], ['Pasta','grains'], ['Cooked Edamame','canned'], ['Olive Oil','pantry'], ['Peanut Butter','pantry'], ['Ground Flaxseed','nuts'], ['Avocado','produce'], ['Cola','drinks'], ['Mansaf','other']]) {
+    assert.equal(db.shopping._catalogueSection(name), want, `the catalogue files «${name}» under ${want}`);
+  }
+  // A ROW PINNED TO A DEPARTMENT (v425: the «+» on a heading adds INTO it).
+  // addNames stores a valid `section` on a NEW row; an unknown one is dropped,
+  // never refused; grouped() honours the stored section over the classifier;
+  // a row merged by name keeps what it had — an add never moves a row.
+  db.shopping.clearAll();
+  const pin = db.shopping.addNames([{name:'ملح', section:'produce'}, {name:'QA pin', section:'nope'}, {name:'بصل'}]);
+  assert.equal(pin.ok, true); assert.equal(pin.added, 3, 'an unknown section is dropped, never refused');
+  let pinned = db.shopping.get().items;
+  assert.equal(pinned.find(x => x.name === 'ملح').section, 'produce', 'a new row stores its section');
+  assert.equal('section' in pinned.find(x => x.name === 'QA pin'), false, 'an unknown section leaves no field');
+  assert.equal('section' in pinned.find(x => x.name === 'بصل'), false, 'a classified row carries no field');
+  groups = db.shopping.grouped();
+  same(groups.find(g => g.section === 'produce').items.map(x => x.name), ['ملح','بصل'], '«ملح» pinned to produce stands in produce, not the pantry');
+  assert.equal(groups.some(g => g.section === 'pantry'), false, 'and the pantry is empty');
+  db.shopping.addNames([{name:'ملح', section:'drinks'}, {name:'بصل', section:'drinks'}]);
+  pinned = db.shopping.get().items;
+  assert.equal(pinned.find(x => x.name === 'ملح').section, 'produce', 'a second add of the same name with another section does not move it');
+  assert.equal('section' in pinned.find(x => x.name === 'بصل'), false, 'a merge keeps the old row as it was: unpinned stays unpinned');
+  same(db.shopping.grouped().map(g => g.section), ['produce','other'], 'nothing moved: the two pinned rows in produce, «QA pin» in «other» by the classifier');
   // listedFrom() before a pour, after it, after a tick, after a delete — by the
   // SAME key addNames merges on, so a name a recipe repeats is one row and one
   // count; and `relisted` is the bought rows a pour brings back.
@@ -470,4 +534,4 @@ assert.equal(db.undo.apply(restore.undoToken).ok,true); assert.equal(json(db.pla
 run(`STATE.foodLogs['${date}']=Array.from({length:10000},(_,i)=>({id:'food_'+i,name:'Test meal '+i,calories:1,servings:1}))`);
 const start = performance.now(); const hits = db.search.query('Test meal 99'); const elapsed = performance.now()-start;
 assert.ok(hits.length>0 && hits.length<=60);
-console.log(`PASS convenience: atomic meals, quota rollback, scoped undo, account/tab isolation, recipes, units, snapshots, Arabic dates, legacy round-trip, plan restoration, one reading of an amount (decimal comma, thousands, fraction), no negative figure through either add door, a meal portion's named ceiling, the aisles (v423: a table of names in both scripts, the store's order, listedFrom, relisted); 10k search ${elapsed.toFixed(1)}ms`);
+console.log(`PASS convenience: atomic meals, quota rollback, scoped undo, account/tab isolation, recipes, units, snapshots, Arabic dates, legacy round-trip, plan restoration, one reading of an amount (decimal comma, thousands, fraction), no negative figure through either add door, a meal portion's named ceiling, the aisles (v423: a table of names in both scripts, the store's order, listedFrom, relisted; v425: fifteen departments, the catalogue map, a row pinned to its department; a recipe keeps the link it was extracted from — creation only, the import's hosts only); 10k search ${elapsed.toFixed(1)}ms`);

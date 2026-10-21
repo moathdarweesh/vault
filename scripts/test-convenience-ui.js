@@ -49,8 +49,8 @@ module.exports = async function testConvenienceUI(page) {
     // nothing — the chip looked the same, the toast said «أُضيف 0» — so he tapped
     // ten times. The chip of a recipe already on the list in full and unbought
     // reads `added`, is disabled and says so; a bought row or a deleted row
-    // frees it. The rows stand in the supermarket's departments, captioned only
-    // when more than one department has rows.
+    // frees it. The rows stand in the supermarket's departments, each under a
+    // heading row with a «+» of its own (v425).
     const chip = page.locator('#sl-grp-recipe .sl-chip').filter({hasText:'QA rice'});
     const chipMarked = () => chip.evaluate(b => b.classList.contains('added') && b.disabled && b.firstElementChild.localName === 'svg');
     const chipFree = () => chip.evaluate(b => !b.classList.contains('added') && !b.disabled && !b.hasAttribute('aria-label'));
@@ -78,18 +78,25 @@ module.exports = async function testConvenienceUI(page) {
     assert.equal(await page.evaluate(() => DB.undo.list().length), undoBefore, lang+' a tick is not undoable');
     assert.equal(await page.evaluate(({row}) => row === document.querySelector('#sl-list .sl-row'), {row: rowBefore}), true, lang+' a tick redraws no row — the same <li>');
     assert.equal(await chipFree(), true, lang+' a bought row frees the chip');
-    // The composer adds a typed item; «QA salt» lands under the grocery aisle,
-    // and with ONE department there is no heading over it.
+    // EVERY department with rows carries a heading ROW (v425: «وخلي العنوان
+    // لكل قائمه اوضح وخلي علامه زائد») — one department STILL has its heading
+    // (the v423 «only with more than one» rule is withdrawn): the name, and a
+    // «+» labelled with the department's name.
+    const headings = () => page.locator('#sl-list .sl-sec-h .sl-sec-name').allInnerTexts();
+    assert.deepEqual(await headings(), await page.evaluate(() => [t('slcat_grains')]), lang+' one department: still a heading (the rice stands in the grains aisle)');
+    assert.equal(await page.locator('#sl-list .sl-sec[data-sec="grains"] [data-sec-add="grains"]').getAttribute('aria-label'), await page.evaluate(() => t('sl_add_to').replace('{section}', t('slcat_grains'))), lang+' the «+» is labelled with the department\'s name');
+    // The bottom composer adds a typed item; «QA salt» lands under the pantry
+    // (oils, spices and sauces — «البقالة» is gone, v425), a second department.
     await page.locator('#sl-new').fill('QA salt '+lang);
     await page.locator('#sl-add').click();
     const names = await page.evaluate(() => DB.shopping.get().items.map(i=>i.name));
     assert.ok(names.includes('QA salt '+lang), lang+' typed item added');
-    assert.equal(await page.locator('#sl-list .sl-sec-h').count(), 0, lang+' one department: no heading');
-    assert.equal(await page.locator('#sl-list .sl-sec[data-sec="grocery"] .sl-row').filter({hasText:'QA salt '+lang}).count(), 1, lang+' the typed salt lands under grocery');
-    // A second department draws BOTH headings, in the store's order.
+    assert.equal(await page.locator('#sl-list .sl-sec[data-sec="pantry"] .sl-row').filter({hasText:'QA salt '+lang}).count(), 1, lang+' the typed salt lands under pantry');
+    assert.deepEqual(await headings(), await page.evaluate(() => [t('slcat_grains'), t('slcat_pantry')]), lang+' two departments: both headings, grains before pantry');
+    // A third department draws its heading in the store's order.
     await page.locator('#sl-new').fill('QA eggs');
     await page.locator('#sl-add').click();
-    assert.deepEqual(await page.locator('#sl-list .sl-sec-h').allInnerTexts(), await page.evaluate(() => [t('slcat_dairy'), t('slcat_grocery')]), lang+' two departments: both headings, dairy before grocery');
+    assert.deepEqual(await headings(), await page.evaluate(() => [t('slcat_dairy'), t('slcat_grains'), t('slcat_pantry')]), lang+' three departments: the headings in the store\'s order, dairy before grains before pantry');
     // Pouring again brings the bought row back, says how many, and marks the chip.
     await chip.click();
     assert.equal(await page.evaluate(() => DB.shopping.get().items.find(x => x.name === 'Rice').checked), false, lang+' re-pouring unticks the bought row');
@@ -99,6 +106,81 @@ module.exports = async function testConvenienceUI(page) {
     await page.locator('#sl-list .sl-row').filter({hasText:'Rice'}).locator('[data-del]').click();
     assert.equal(await page.evaluate(() => DB.shopping.get().items.some(x => x.name === 'Rice')), false, lang+' the poured row is gone');
     assert.equal(await chipFree(), true, lang+' deleting the poured row frees the chip');
+    // ---- THE «+» ON A DEPARTMENT, and its inline composer (v425) ----------
+    // «علامه زائد انو اضيف في مثلا قائمه الخضار». Every heading row carries the
+    // «+» at its end, 36px drawn and 44px effective through the halo, labelled
+    // with the department's name. The «+» on produce opens ONE composer at the
+    // END of produce, focused; Enter adds the name INTO produce (the classifier
+    // would have said pantry) and keeps the composer open with the cursor in
+    // it; Escape closes it and hands focus back to the «+»; the bottom composer
+    // still asks the classifier.
+    await page.locator('#sl-new').fill('QA tomato');
+    await page.locator('#sl-add').click();
+    assert.deepEqual(await headings(), await page.evaluate(() => [t('slcat_produce'), t('slcat_dairy'), t('slcat_pantry')]), lang+' the tomato opens the produce department');
+    const heads = await page.locator('#sl-list .sl-sec').evaluateAll((secs) => secs.map((s) => {
+      const b = s.querySelector('[data-sec-add]'), r = b.getBoundingClientRect(), cx = r.left + r.width / 2, cy = r.top + r.height / 2;
+      const hits = [[-21.5, -21.5], [21.5, -21.5], [-21.5, 21.5], [21.5, 21.5]].filter(([dx, dy]) => { const el = document.elementFromPoint(cx + dx, cy + dy); return !!el && (el === b || b.contains(el)); }).length;
+      return { sec: s.dataset.sec, name: s.querySelector('.sl-sec-h .sl-sec-name').textContent, label: b.getAttribute('aria-label'), drawn: Math.round(r.width) + 'x' + Math.round(r.height), hits };
+    }));
+    const wantHeads = await page.evaluate((secs) => secs.map((sec) => ({ sec, name: t('slcat_' + sec), label: t('sl_add_to').replace('{section}', t('slcat_' + sec)), drawn: '36x36', hits: 4 })), heads.map((h) => h.sec));
+    assert.deepEqual(heads, wantHeads, lang+' every department with rows has a heading row: its name, and a 36px «+» labelled with the name, 44px effective at all four corners');
+    await page.locator('#sl-list [data-sec-add="produce"]').click();
+    const composerState = () => page.evaluate(() => {
+      const c = document.querySelectorAll('#sl-list .sl-sec-compose');
+      const f = c[0] && c[0].querySelector('.sl-sec-new');
+      return { count: c.length, under: c[0] ? c[0].closest('.sl-sec').dataset.sec : null, last: !!c[0] && c[0] === c[0].closest('.sl-sec').lastElementChild, focused: !!f && document.activeElement === f, value: f ? f.value : null };
+    });
+    assert.deepEqual(await composerState(), { count: 1, under: 'produce', last: true, focused: true, value: '' }, lang+' «+» on produce opens one inline composer at the end of produce, focused');
+    await page.keyboard.type('QA salt');
+    await page.keyboard.press('Enter');
+    assert.equal(await page.evaluate(() => DB.shopping.get().items.find((x) => x.name === 'QA salt').section), 'produce', lang+' Enter stores the row pinned to produce');
+    assert.equal(await page.locator('#sl-list .sl-sec[data-sec="produce"] .sl-row .sl-name').filter({hasText: /^QA salt$/}).count(), 1, lang+' «QA salt» typed under produce lands under produce, not the pantry');
+    assert.equal(await page.locator('#sl-list .sl-sec[data-sec="pantry"] .sl-row .sl-name').filter({hasText: /^QA salt$/}).count(), 0, lang+' and not in the pantry');
+    assert.deepEqual(await composerState(), { count: 1, under: 'produce', last: true, focused: true, value: '' }, lang+' after Enter the composer is still open, empty and focused: several items in a row');
+    await page.keyboard.press('Escape');
+    assert.deepEqual(await composerState(), { count: 0, under: null, last: false, focused: false, value: null }, lang+' Escape closes the composer');
+    assert.equal(await page.locator('.modal-overlay:not(.is-out)').count(), 1, lang+' and only the composer: the sheet stays open');
+    assert.equal(await page.evaluate(() => document.activeElement && document.activeElement.getAttribute('data-sec-add')), 'produce', lang+' Escape hands focus to the «+» it came from');
+    await page.locator('#sl-new').fill('QA black pepper');
+    await page.locator('#sl-add').click();
+    assert.equal(await page.locator('#sl-list .sl-sec[data-sec="pantry"] .sl-row').filter({hasText:'QA black pepper'}).count(), 1, lang+' the bottom composer still classifies: «QA black pepper» lands under pantry');
+    // The heading row fits a 320px phone with «خطّ أكبر»: the name ellipsises
+    // before the «+» moves. A fish and a canned department for the two longest
+    // names, then every heading row measured in normal and larger text.
+    for (const n of ['QA salmon', 'QA tuna']) { await page.locator('#sl-new').fill(n); await page.locator('#sl-add').click(); }
+    const vp = page.viewportSize();
+    const lgBefore = await page.evaluate(() => document.body.classList.contains('text-lg'));
+    const fonts = {};
+    try {
+      await page.setViewportSize({ width: 320, height: 740 });
+      for (const lg of [false, true]) {
+        await page.evaluate((lg) => document.body.classList.toggle('text-lg', lg), lg);
+        const m = await page.locator('#sl-list .sl-sec-h').evaluateAll((rows) => rows.map((h) => {
+          const r = h.getBoundingClientRect(), b = h.querySelector('[data-sec-add]').getBoundingClientRect(), n = h.querySelector('.sl-sec-name'), nr = n.getBoundingClientRect(), cs = getComputedStyle(h);
+          return { sec: h.parentElement.dataset.sec, fits: h.scrollWidth <= h.clientWidth, plusIn: b.left >= r.left + parseFloat(cs.paddingLeft) - 0.5 && b.right <= r.right - parseFloat(cs.paddingRight) + 0.5, apart: nr.right <= b.left + 0.5 || nr.left >= b.right - 0.5, nameIn: nr.left >= r.left - 0.5 && nr.right <= r.right + 0.5, font: parseFloat(getComputedStyle(n).fontSize) };
+        }));
+        assert.equal(m.length, 5, lang+' setup: five heading rows measured');
+        for (const x of m) assert.ok(x.fits && x.plusIn && x.apart && x.nameIn, lang+` the «${x.sec}» heading row fits 320px${lg ? ' with «خطّ أكبر»' : ''}: the name ellipsises before the «+» moves — ${JSON.stringify(x)}`);
+        assert.ok(m.every((x) => x.font >= 11), lang+' nothing under 11px');
+        fonts[lg] = m[0].font;
+        // The safety net itself — no department's name overflows 320px, so a
+        // name far longer than the row is written into the first heading, and
+        // the row must still hold: the name clipped (its text wider than its
+        // box) and the «+» exactly where it was. Seen failing on a plant that
+        // dropped the name's min-width:0 and overflow.
+        const long = await page.locator('#sl-list .sl-sec-h').first().evaluate((h, lg) => {
+          const n = h.querySelector('.sl-sec-name');
+          n.textContent = (lg ? 'خطّ أكبر ' : 'larger text ') + 'الأسماك والمأكولات البحرية والمعلبات والبقوليات '.repeat(4);
+          const r = h.getBoundingClientRect(), b = h.querySelector('[data-sec-add]').getBoundingClientRect(), nr = n.getBoundingClientRect(), cs = getComputedStyle(h);
+          return { fits: h.scrollWidth <= h.clientWidth, plusIn: b.left >= r.left + parseFloat(cs.paddingLeft) - 0.5 && b.right <= r.right - parseFloat(cs.paddingRight) + 0.5, apart: nr.right <= b.left + 0.5 || nr.left >= b.right - 0.5, clipped: n.scrollWidth > n.clientWidth };
+        }, lg);
+        assert.ok(long.fits && long.plusIn && long.apart && long.clipped, lang+` a name longer than the row ellipsises before the «+» moves${lg ? ' with «خطّ أكبر»' : ''} — the heading row fits 320px: ${JSON.stringify(long)}`);
+      }
+      assert.ok(fonts[true] > fonts[false], lang+' setup: «خطّ أكبر» enlarged the heading');
+    } finally {
+      await page.evaluate((lg) => document.body.classList.toggle('text-lg', lg), lgBefore);
+      await page.setViewportSize(vp);
+    }
     assert.ok(await page.locator('.sl-foot').isVisible(), lang+' the footer shows with items');
     const size = await page.locator('.modal').evaluate(el=>({width:el.clientWidth,scroll:el.scrollWidth}));
     assert.ok(size.scroll<=size.width+1,lang+' shopping overflow');
@@ -1719,6 +1801,110 @@ const RECIPE_IMPORT = [
     assert.equal(got.wellFormed, true, 'every stored string is well-formed: ' + JSON.stringify(got));
     assert.equal(got.items[0][0], 'chili 🔥', 'a whole emoji is kept');
     assert.equal(got.name, 'QA surrogate a', 'the lone half is dropped, nothing else');
+  } },
+  { name: 'B29 a recipe extracted from a link keeps it (v425): the view opens the clip, labelled for its platform; a text import has none; a tampered link draws no row; «احفظ الكل» keeps it; the row fits 320px with «خطّ أكبر»', async run(page) {
+    const kit = await rxKit(page);
+    const live = (sel) => page.locator('#modal-root .modal-overlay:not(.is-out) ' + sel);
+    const yt = 'https://youtu.be/dQw4w9WgXcQ', tt = 'https://vm.tiktok.com/ZMabc123/';
+    const vp = page.viewportSize();
+    const lgBefore = await page.evaluate(() => document.body.classList.contains('text-lg'));
+    const langBefore = await page.evaluate(() => DB.prefs.get().lang);
+    // The saved recipe's view, read again by id — as the picker opens it.
+    const view = (id) => page.evaluate((id) => { closeModal(); openRecipeView(null, DB.recipes.list().find((r) => r.id === id), () => {}); }, id);
+    const row = () => live('a.rec-view-link');
+    // A stored link rewritten through DB internals — what an imported or synced blob could carry.
+    const store = (id, link) => page.evaluate(({ id, link }) => { STATE.recipes.find((r) => r.id === id).link = link; save(); }, { id, link });
+    try {
+      // A link import, the Worker answering one dish: the editor's save stores the link exactly as typed (trimmed).
+      await rxOpen(page, 'link');
+      await page.locator('#rx-link').fill('  ' + yt + '  ');
+      await page.locator('[data-rx-go]').click();
+      await live('#rec-rows .rec-row').first().waitFor({ timeout: 15000 });
+      const before = await page.evaluate(() => DB.recipes.list().length);
+      await live('#rec-save').click();
+      await page.waitForTimeout(600);
+      assert.equal(await page.evaluate(() => DB.recipes.list().length), before + 1, 'one recipe saved');
+      const rec = await page.evaluate((n) => DB.recipes.list().filter((r) => r.name === n).pop(), RX_STUB.name);
+      assert.equal(rec.link, yt, 'the saved recipe holds the link exactly as typed: ' + JSON.stringify(rec.link));
+      // The view: ONE <a> row above the scaler, to the clip, outside the app, labelled for YouTube — not among the actions.
+      await view(rec.id);
+      assert.equal(await row().count(), 1, 'the view draws one .rec-view-link');
+      assert.equal(await row().getAttribute('href'), yt, 'its href is the link');
+      assert.equal(await row().getAttribute('target'), '_blank', 'it opens outside the app (target _blank)');
+      assert.ok(/\bnoopener\b/.test((await row().getAttribute('rel')) || ''), 'rel carries noopener: ' + JSON.stringify(await row().getAttribute('rel')));
+      assert.equal((await row().innerText()).trim(), await tr(page, 'rec_watch_yt'), 'labelled for YouTube');
+      assert.equal(await live('.rec-view-link > svg').count(), 1, 'with the play glyph');
+      const order = await live('.cx-stack').evaluate((s) => [...s.children].slice(0, 2).map((e) => e.className.split(' ')[0]).join(','));
+      assert.equal(order, 'rec-view-link,rt-serv', 'the row sits ABOVE the servings scaler: ' + order);
+      assert.equal(await live('.cx-actions .rec-view-link').count(), 0, 'and not among the three actions');
+      // The label names the platform: the same recipe with a TikTok link.
+      await store(rec.id, tt);
+      await view(rec.id);
+      assert.equal((await row().innerText()).trim(), await tr(page, 'rec_watch_tt'), 'a TikTok link is labelled for TikTok');
+      assert.equal(await row().getAttribute('href'), tt, 'and opens it');
+      // A stored link tampered to javascript: (or http:, or another host) draws NO row: the view re-checks, never trusts the blob.
+      for (const bad of ['javascript:alert(1)', 'http://youtu.be/dQw4w9WgXcQ', 'https://example.com/x']) {
+        await store(rec.id, bad);
+        await view(rec.id);
+        assert.equal(await row().count(), 0, 'a stored link of ' + JSON.stringify(bad) + ' draws no row');
+        assert.equal(await live('.modal').evaluate((m) => [...m.querySelectorAll('a[href]')].filter((a) => /^\s*javascript:/i.test(a.getAttribute('href') || '')).length), 0, 'and no javascript: href anywhere in the sheet');
+      }
+      await store(rec.id, yt);
+      // Fits a 320px phone with «خطّ أكبر», beside the scaler: no sideways overflow, a 44px target, the glyph on the reading edge in both directions.
+      await page.setViewportSize({ width: 320, height: 740 });
+      for (const lang of ['ar', 'en']) {
+        await page.evaluate((l) => { DB.prefs.setLang(l); applyLang(l); }, lang);
+        for (const lg of [false, true]) {
+          await page.evaluate((lg) => document.body.classList.toggle('text-lg', lg), lg);
+          await view(rec.id);
+          const m = await live('.modal').evaluate((modal) => {
+            const a = modal.querySelector('a.rec-view-link'), stack = a.parentElement, ar = a.getBoundingClientRect(), sr = stack.getBoundingClientRect();
+            const svg = a.querySelector('svg').getBoundingClientRect(), txt = a.querySelector('span').getBoundingClientRect();
+            const rtl = getComputedStyle(a).direction === 'rtl';
+            return { dir: rtl ? 'rtl' : 'ltr', fits: modal.scrollWidth <= modal.clientWidth + 1 && stack.scrollWidth <= stack.clientWidth + 1,
+              inside: ar.left >= sr.left - 0.5 && ar.right <= sr.right + 0.5, height: Math.round(ar.height), font: parseFloat(getComputedStyle(a).fontSize),
+              glyphFirst: rtl ? svg.left >= txt.right - 0.5 : svg.right <= txt.left + 0.5, atStart: rtl ? Math.abs(ar.right - sr.right) < 1 : Math.abs(ar.left - sr.left) < 1 };
+          });
+          const where = lang + ' at 320px' + (lg ? ' with «خطّ أكبر»' : '');
+          assert.ok(m.fits && m.inside, where + ': the link row fits beside the scaler, no sideways overflow: ' + JSON.stringify(m));
+          assert.ok(m.height >= 44, where + ': a 44px target: ' + JSON.stringify(m));
+          assert.ok(m.font >= 11, where + ': nothing under 11px: ' + JSON.stringify(m));
+          assert.ok(m.glyphFirst && m.atStart, where + ': the glyph on the reading edge and the row at the start: ' + JSON.stringify(m));
+        }
+      }
+      await page.setViewportSize(vp);
+      await page.evaluate(({ lg, l }) => { document.body.classList.toggle('text-lg', lg); DB.prefs.setLang(l); applyLang(l); closeModal(); }, { lg: lgBefore, l: langBefore });
+      // A recipe imported from TEXT has no link, and its view no row.
+      await rxOpen(page, 'text');
+      await page.locator('#rx-text').fill('Garlic pasta: 200 g spaghetti, 2 tbsp olive oil, salt');
+      await page.locator('[data-rx-go]').click();
+      await live('#rec-rows .rec-row').first().waitFor({ timeout: 15000 });
+      await live('#rec-save').click();
+      await page.waitForTimeout(600);
+      const text = await page.evaluate((n) => DB.recipes.list().filter((r) => r.name === n).pop(), RX_STUB.name);
+      assert.equal('link' in text, false, 'a recipe imported from text has no link: ' + JSON.stringify(text.link));
+      await view(text.id);
+      assert.equal(await row().count(), 0, 'and its view draws no link row');
+      // Two dishes from one link, «احفظ الكل»: each saved recipe keeps the link.
+      await page.evaluate((names) => { closeModal(); DB.recipes.list().filter((r) => names.includes(r.name)).forEach((r) => DB.recipes.remove(r.id)); }, [RX_STUB.name, RX_SOUP.name]);
+      kit.reply = () => ({ status: 200, body: { recipe: RX_STUB, recipes: [RX_STUB, RX_SOUP] } });
+      await rxOpen(page, 'link');
+      await page.locator('#rx-link').fill(tt);
+      await page.locator('[data-rx-go]').click();
+      await live('#rx-pick-all').waitFor({ timeout: 15000 });
+      await live('#rx-pick-all').click();
+      await page.waitForTimeout(600);
+      for (const d of [RX_STUB, RX_SOUP]) {
+        const got = await page.evaluate((n) => DB.recipes.list().find((r) => r.name === n), d.name);
+        assert.ok(got, d.name + ' saved by «احفظ الكل»');
+        assert.equal(got.link, tt, '«احفظ الكل» keeps the link on ' + d.name + ': ' + JSON.stringify(got.link));
+      }
+    } finally {
+      await page.setViewportSize(vp);
+      await page.evaluate(({ lg, l }) => { closeModal(); hideToast(); document.body.classList.toggle('text-lg', lg); DB.prefs.setLang(l); applyLang(l); }, { lg: lgBefore, l: langBefore });
+      await rxCleanup(page);
+      await kit.done();
+    }
   } },
 ];
 // The dish chooser the two-dish cases start from.

@@ -1255,9 +1255,22 @@ function openRecipeView(date, rec, onSave, opts) {
   const canShare = !!(window.FoodAI && typeof FoodAI.shareRecipe === 'function');
   // What the share button is DRAWN as: read again at the tap (see its handler).
   const drewShared = !!r.shared;
+  // THE SOURCE LINK (v425): a recipe «استخراج وصفة» read from a link keeps it
+  // (DB.recipes.update, at creation only), and this sheet is the one door to
+  // the clip — the picker's rows and the suggestions page show nothing of it.
+  // Re-checked here, never trusted from the blob (a blob can be imported): the
+  // href is only ever an https link to a host the import accepts, and the
+  // label names the platform so the user knows what opens. A plain <a
+  // target=_blank>, as privacy.html is opened — no onclick, no window.open; in
+  // the APK's WebView an external https link opens the system browser. Its own
+  // row above the scaler, not in .cx-actions: three actions already fill 320px.
+  const link = recipeLinkOk(r.link) ? r.link : '';
+  const linkHost = link ? new URL(link).hostname : '';
+  const linkLabel = !link ? '' : /(^|\.)tiktok\.com$/.test(linkHost) ? t('rec_watch_tt') : /(^|\.)instagram\.com$/.test(linkHost) ? t('rec_watch_ig') : t('rec_watch_yt');
   const modal = openModal(`
     <div class="modal-header"><h2 class="modal-title">${escapeHtml(r.name)}</h2><button class="icon-btn" data-close aria-label="${escapeHtml(t('close'))}">${icon('close', 20)}</button></div>
     <div class="cx-stack">
+      ${link ? `<a class="rec-view-link" href="${escapeHtml(link)}" target="_blank" rel="noopener noreferrer">${icon('play', 16)}<span>${linkLabel}</span></a>` : ''}
       <div class="rt-serv"><span class="rt-serv-k">${t('rec_servings')}</span>
         <span class="rt-step">
           <button type="button" data-step="-1" aria-label="${escapeHtml(t('rec_serv_less'))}">${icon('minus', 16)}</button>
@@ -2140,6 +2153,10 @@ function openRecipeEditor(date, existing, onDone, opts) {
       return;
     }
     var payload = { name: nm, servings: n, items: kept.map(recStoredItem) };
+    // The source link (v425) rides along as it is: only DB.recipes.update
+    // decides whether it is kept — a draft being ADDED keeps it, an edit of a
+    // saved recipe keeps the old one anyway.
+    payload.link = existing && typeof existing.link === 'string' ? existing.link : undefined;
     // A draft has no id: it is ADDED. (It used to work only because
     // update(undefined) happens to create a recipe.)
     var made = existing && existing.id ? DB.recipes.update(existing.id, payload) : DB.recipes.add(payload);
@@ -2305,7 +2322,7 @@ function openRecipeImport(date, onDone) {
   // copies every extra field of an item into storage. A row whose four figures
   // are all 0 (salt, water) is seeded as entered by hand (_manual), or the
   // named-zero guard would refuse almost every imported recipe on its first save.
-  function draftOf(r, notes) {
+  function draftOf(r, notes, link) {
     const num = (v, dec) => { const n = Number(v); return Number.isFinite(n) && n > 0 ? (dec ? Math.round(n * 10) / 10 : Math.round(n)) : 0; };
     const txt = (v, max) => String(v == null ? '' : v).replace(/\s+/g, ' ').trim().slice(0, max);
     const items = (Array.isArray(r.items) ? r.items : []).slice(0, 30).map((it) => {
@@ -2315,8 +2332,13 @@ function openRecipeImport(date, onDone) {
       return row;
     }).filter((row) => row.name);
     const s = Math.round(Number(r.servings));
-    return { name: txt(r.name, 60), servings: s >= 1 ? Math.min(99, s) : 1, items,
+    const draft = { name: txt(r.name, 60), servings: s >= 1 ? Math.min(99, s) : 1, items,
       note: (notes || []).map((n) => t(n.key).replace('{n}', fmtNum(n.n || 0))).join(' ') };
+    // THE SOURCE LINK (v425): the link the user typed and rxLinkKind accepted —
+    // never anything from the Worker's answer. DB.recipes.update takes it at
+    // creation (recipeLinkOk), so the saved recipe can open its clip again.
+    if (typeof link === 'string' && link) draft.link = link;
+    return draft;
   }
   // THE HELD SHEET. dismissible:false holds it: the backdrop, Escape and Back do
   // not close it, and no timer-raised sheet may replace it. Closing it any other
@@ -2383,7 +2405,7 @@ function openRecipeImport(date, onDone) {
         if (token !== serial || !held.isConnected) return;
         // EVERY dish the source held, each its own draft — never merged (v411).
         const recipes = got && Array.isArray(got.recipes) ? got.recipes : [];
-        const drafts = recipes.map((r) => draftOf(r || {}, kept ? kept.notes : [])).filter((d) => d.items.length);
+        const drafts = recipes.map((r) => draftOf(r || {}, kept ? kept.notes : [], job.link)).filter((d) => d.items.length);
         if (!drafts.length) throw new Error(t('rx_empty'));
         // Another account signed in while this was out: hand it nothing.
         if (owner !== Cloud.getLastUid()) { leave(); return; }
@@ -2499,7 +2521,8 @@ function openRecipeChooser(date, drafts, onDone) {
       // In order, every one attempted: a refused write leaves its card unmarked.
       list.forEach((d, i) => {
         if (d._saved) return;
-        const made = DB.recipes.add({ name: nameOf(d, i), servings: Math.max(1, Number(d.servings) || 1), items: d.items.map(recStoredItem) });
+        // v425: a dish from a link keeps its link (DB.recipes.update judges it).
+        const made = DB.recipes.add({ name: nameOf(d, i), servings: Math.max(1, Number(d.servings) || 1), items: d.items.map(recStoredItem), link: d.link });
         if (made) { d._saved = true; d._savedId = made.id; madeIds.push(made.id); ok++; } else bad++;
       });
       // Automatic sharing (v420), trigger 2 of 3: the recipes THIS tap made.
@@ -4677,25 +4700,76 @@ function openShoppingList() {
       <button type="button" class="rec-del" data-del aria-label="${escapeHtml(t('delete') + ' — ' + it.name)}">${icon('trash', 16)}</button>
     </li>`;
 
-  // THE AISLES (v423): the rows stand in the supermarket's own departments
-  // (DB.shopping.grouped, SHOPPING_SECTIONS order, only the non-empty ones).
-  // A heading is drawn ONLY when more than one department has rows — a heading
-  // over the only group names what he can already see (the v387 rule); with one
-  // department the rows stand under no heading, and an empty list keeps
-  // .sl-empty. The <li> markup is byte-for-byte the v329 row, so the delegated
-  // handler below and the fp `shopping` cell's row shape are untouched.
-  const draw = () => {
+  // THE AISLES (v423, reshaped v425): the rows stand in the supermarket's own
+  // departments (DB.shopping.grouped, SHOPPING_SECTIONS order, only the
+  // non-empty ones), and EVERY department with rows carries a heading ROW —
+  // its name, and at the row's end a «+» that adds straight into it: «وخلي
+  // العنوان لكل قائمه اوضح وخلي علامه زائد انو اضيف في مثلا قائمه الخضار». The
+  // v423 rule (a heading only when more than one department has rows — the
+  // v387 law, nothing on screen names what he can already see) is withdrawn
+  // by the owner's words: the heading carries a control now, so it is never
+  // redundant. An empty list keeps .sl-empty and the bottom composer. The <li>
+  // markup is byte-for-byte the v329 row, so the delegated handler below is
+  // untouched.
+  //
+  // THE INLINE COMPOSER (v425). A tap on a department's «+» opens one composer
+  // row at the END of that department — one at a time (another «+» closes the
+  // first), the field focused, its text kept across the repaints the other
+  // controls cause. Enter or «✓» adds the name INTO THAT DEPARTMENT (addNames
+  // carries `section`; the classifier is not asked) and keeps the composer
+  // open with the cursor in it — several items in a row; Escape, or leaving
+  // the field empty, closes it. The bottom composer is unchanged: there the
+  // classifier decides. `composing` is the open department or null, and
+  // draw() is the only thing that paints the composer. The label and the
+  // placeholder carry the department's name through a FUNCTION replacer, so a
+  // «$» in a dictionary string could never be read as a pattern.
+  let composing = null;
+  const secName = (section) => t('slcat_' + section);
+  const secLabel = (key, section) => t(key).replace('{section}', () => secName(section));
+  const secHeadHtml = (section) => `<div class="sl-sec-h"><h3 class="sl-sec-name">${escapeHtml(secName(section))}</h3><button type="button" class="icon-btn icon-btn-tile sl-sec-add" data-sec-add="${escapeHtml(section)}" aria-label="${escapeHtml(secLabel('sl_add_to', section))}">${icon('plus', 18)}</button></div>`;
+  const secComposeHtml = (section, text) => `<div class="sl-sec-compose" data-sec-compose="${escapeHtml(section)}"><input class="input sl-sec-new" maxlength="120" dir="auto" enterkeyhint="done" value="${escapeHtml(text)}" placeholder="${escapeHtml(secLabel('sl_sec_ph', section))}" aria-label="${escapeHtml(secLabel('sl_add_to', section))}"><button type="button" class="btn btn-primary sl-sec-ok" data-sec-ok aria-label="${escapeHtml(t('add'))}">${icon('check', 18)}</button></div>`;
+  const composer = () => host.querySelector('.sl-sec-new');
+  const draw = (opts = {}) => {
     const groups = DB.shopping.grouped();
-    const headed = groups.length > 1;
-    host.innerHTML = groups.length ? groups.map((g) => `<section class="sl-sec" data-sec="${escapeHtml(g.section)}">${
-        headed ? `<h3 class="sl-sec-h">${t('slcat_' + g.section)}</h3>` : ''
-      }<ul class="sl-list">${g.items.map(rowHtml).join('')}</ul></section>`).join('')
+    // The composer belongs to a department that has rows: the last row deleted
+    // takes the department, and its composer, with it.
+    if (composing && !groups.some((g) => g.section === composing)) composing = null;
+    const live = composer();
+    const text = opts.text !== undefined ? opts.text : (live ? live.value : '');
+    host.innerHTML = groups.length ? groups.map((g) => `<section class="sl-sec" data-sec="${escapeHtml(g.section)}">${secHeadHtml(g.section)}<ul class="sl-list">${g.items.map(rowHtml).join('')}</ul>${
+        composing === g.section ? secComposeHtml(g.section, text) : ''}</section>`).join('')
       : `<ul class="sl-list"><li class="sl-empty">${t('sl_empty')}</li></ul>`;
     const items = DB.shopping.get().items;
     foot.hidden = !items.length;
     modal.querySelector('#sl-clear-done').disabled = !items.some((x) => x.checked);
     updateFoodShoppingLink();
     paintChips();
+    if (opts.focus) { const f = composer(); if (f) f.focus(); }
+  };
+  const openComposer = (section) => {
+    if (composing === section) { const f = composer(); if (f) f.focus(); return; }
+    composing = section;
+    draw({ text: '', focus: true });
+  };
+  // Escape hands focus to the «+» it came from — never to <body>.
+  const closeComposer = (refocus) => {
+    const was = composing;
+    if (!was) return;
+    composing = null;
+    draw({ text: '' });
+    if (refocus) { const b = host.querySelector('[data-sec-add="' + was + '"]'); if (b) b.focus(); }
+  };
+  // Enter or «✓»: the name goes INTO the open department, and the composer
+  // stays open and focused for the next one. A «✓» on an empty field is an
+  // empty blur, and closes it.
+  const addInto = () => {
+    const f = composer();
+    if (!f || !composing) return;
+    const name = f.value.trim();
+    if (!name) { closeComposer(false); return; }
+    const result = DB.shopping.addNames([{ name, section: composing }]);
+    if (!result.ok) { convenienceError(result); return; }
+    draw({ text: '', focus: true });
   };
   // A RECIPE ALREADY ON THE LIST IS MARKED AND CANNOT BE POURED AGAIN (v423).
   // Measured before this was written: pouring the same recipe twice added 0
@@ -4729,9 +4803,13 @@ function openShoppingList() {
   draw();
 
   // ONE delegated listener for the whole list: rows are replaced on every
-  // structural change, so a per-row binding would be rebound constantly.
+  // structural change, so a per-row binding would be rebound constantly. The
+  // department «+» and the composer's «✓» ride on it too (neither is in a row).
   host.addEventListener('click', (e) => {
     if (!mine()) { convenienceError({ code: 'STALE' }); return; }
+    const add = e.target.closest('[data-sec-add]');
+    if (add) { openComposer(add.dataset.secAdd); return; }
+    if (e.target.closest('[data-sec-ok]')) { addInto(); return; }
     const row = e.target.closest('.sl-row');
     if (!row) return;
     if (e.target.closest('[data-del]')) {
@@ -4763,6 +4841,43 @@ function openShoppingList() {
   };
   modal.querySelector('#sl-add').onclick = addTyped;
   field.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); addTyped(); } });
+
+  // The inline composer's keys. Enter is read on the host (keydown bubbles;
+  // the composer is redrawn, so nothing is bound to the field itself). Escape
+  // inside it closes the COMPOSER, not the sheet: openModal's own Escape
+  // listener is a capture on document, so this one is a capture on window,
+  // which runs first — and it leaves with the sheet (the observer below), the
+  // recipe editor's own pattern.
+  host.addEventListener('keydown', (e) => {
+    if (e.key !== 'Enter' || !e.target.classList.contains('sl-sec-new')) return;
+    e.preventDefault(); addInto();
+  });
+  const onEscape = (e) => {
+    if (e.key !== 'Escape' || !modal.isConnected) return;
+    const f = composer();
+    if (!f || e.target !== f) return;
+    e.preventDefault(); e.stopImmediatePropagation();
+    closeComposer(true);
+  };
+  window.addEventListener('keydown', onEscape, true);
+  // An EMPTY field that loses focus closes its composer — decided a tick later
+  // (focusout bubbles where blur does not), so a tap that lands on another
+  // department's «+», or on this one's «✓», is read first, and a field that
+  // took focus back is left alone.
+  host.addEventListener('focusout', (e) => {
+    if (!e.target.classList.contains('sl-sec-new')) return;
+    setTimeout(() => {
+      const f = composer();
+      if (!f || f.value.trim() || document.activeElement === f) return;
+      closeComposer(false);
+    }, 0);
+  });
+  const watch = new MutationObserver(() => {
+    if (modal.isConnected && !modal.classList.contains('is-out')) return;
+    watch.disconnect();
+    window.removeEventListener('keydown', onEscape, true);
+  });
+  watch.observe(document.getElementById('modal-root'), { childList: true, subtree: true, attributes: true, attributeFilter: ['class'] });
 
   // ONE OPEN BOX AT A TIME. Two open boxes is the 212px blob again with two
   // headings stacked on top of it — the thing being fixed. The panel is the

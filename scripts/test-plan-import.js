@@ -1177,7 +1177,11 @@ function clientRecipeHelpers() {
   const client = hostsIn(fa, 'rxLinkKind', '\n  }\n'), server = hostsIn(read('backend/worker/gemini-worker.js'), 'readLink', '\n}\n');
   assert.equal(client.join(' '), server.join(' '), "js/foodai.js rxLinkKind names the Worker's readLink hosts exactly");
   assert.equal(client.length, 11, 'eleven hosts: ' + client.join(' '));
-  console.log('PASS client recipe helpers: rxWav header and samples, rxAudioPlan steps 16/12/8 kHz and truncates, rxFrameTimes, rxMono, rxResample, rxPeak, rxLinkKind, the eleven hosts mirrored');
+  // v425: a recipe keeps the link it was extracted from only for a host the import
+  // accepts — js/storage.js recipeLinkOk is the third copy of the list, held to the same one.
+  const stored = hostsIn(read('js/storage.js'), 'recipeLinkOk', '\n}\n');
+  assert.equal(stored.join(' '), server.join(' '), "js/storage.js recipeLinkOk names the Worker's readLink hosts exactly (v425: the three lists are one)");
+  console.log('PASS client recipe helpers: rxWav header and samples, rxAudioPlan steps 16/12/8 kHz and truncates, rxFrameTimes, rxMono, rxResample, rxPeak, rxLinkKind, the eleven hosts mirrored (and storage\'s recipeLinkOk on the same list, v425)');
 }
 // The two recipe blocks run whatever the other says, so a failure names every
 // block it is in rather than hiding the second behind the first.

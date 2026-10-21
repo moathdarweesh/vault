@@ -2,6 +2,66 @@
 
 One section per release since v309, newest first, moved verbatim from `CLAUDE.md` in v401 (batch 6 of the 2026-09-25 review; `docs/REVIEW-2026-09-25.md`). `CLAUDE.md` is the guide and the authority for how the app works now. A section here records what one release changed and why, in the words written at the time, so a later section — or the guide — can supersede what an earlier one says.
 
+## v425 — real sections instead of «البقالة», a «+» on every section, and a recipe that keeps its clip
+
+**The owner, 2026-10-21, three messages on the morning v423 and v424 went live:** «بعدين قائمه
+المشتريات ايش البقاله؟ احذفها» — what is «البقالة»? delete it; «وخلي العنوان لكل قائمه اوضح وخلي
+علامه زائد انو اضيف في مثلا قائمه الخضار» — clearer headings, and a plus to add straight into,
+say, the vegetables; and «لما اكون داخل على الوصفات ويكون فيه وصفه طلعتها بالذكاء الاصطناعي من
+رابط خلي الرابط هذا بالوصفه عشان اقدر اشوف الوصفه من المقطع» — a recipe read from a link keeps
+the link.
+
+**«البقالة» is gone.** The word means a corner shop, not a department, and it hid rice, sugar,
+oil, pasta, spices, cans, legumes, nuts and tea under one sign that told him nothing. Its items
+now sit under four signs a store actually hangs, in the walking order after the bakery: «الأرز
+والمكرونة والحبوب» (rice, pasta, flour, oats, the baking shelf), «الزيوت والبهارات والصلصات»
+(oils, sugar, salt, every spice, sauces, honey, tahini, jams, olives and pickles, peanut
+butter), «المعلبات والبقوليات» (cans, ambient milks and coconut milk, dry legumes, soups,
+instant noodles) and «المكسرات والتمور» (nuts, seeds, raisins — and dates, which leave the
+produce aisle: a Saudi store signs «التمور» beside the nuts). Tea, coffee and the hot-drink
+shelf join «المشروبات». Fifteen departments; a list shows only those with rows. The lexicon's
+header writes down every placement the spec left open; the classifier was re-measured on the
+same 457 real list items (0 disagreements) and the 100-name table in
+`scripts/test-convenience.js` re-expected.
+
+**Clearer headings, and a «+» on each.** Every department with rows now has a heading ROW —
+its name at the section-title voice (`--fs-label`, 700, `--text`, the identity layer's bar
+tick) and a 36 px «+» at the end (a 44 px halo, labelled «إضافة إلى {القسم}») — drawn for a
+lone department too: v423's «no heading over the only group» rule is withdrawn by the owner's
+words, because the heading now carries a control. Tapping the «+» opens an inline line at the
+end of THAT department — «أضف إلى الخضار والفواكه…» — Enter or «✓» adds the name INTO it and
+keeps the line open and focused (several items in a row); Escape closes it and hands focus
+back to the «+»; an empty line losing focus closes itself. The row carries `section` (one of
+the fifteen, taken by name; an unknown one is dropped, never a refusal); `grouped()` honours
+it over the classifier, a merge never moves a row, and the bottom composer still lets the
+classifier decide. The fp `shopping` cell changes with it (declared).
+
+**A recipe keeps its clip.** A recipe «استخراج وصفة» read from a YouTube, TikTok or Instagram
+link now remembers that link: the draft carries it from the link the user typed (never from
+the Worker's answer), `DB.recipes.update` stores it AT CREATION ONLY and only when it passes
+`recipeLinkOk` — `https:`, one of the eleven hosts the importer accepts (one list, held equal
+to foodai's and the Worker's by `test-plan-import.js`), at most 300 characters; an edit keeps
+the original and takes none from a patch; a copy saved from the community or a ready meal has
+none; the share payload never carries it (pinned). The recipe's view draws one row above the
+servings scaler — the play glyph and «شاهد المقطع على يوتيوب» / «… تيك توك» / «… إنستغرام» by
+the host — an `<a target="_blank" rel="noopener noreferrer">` with the escaped link, re-checked
+at draw so a synced or imported blob can never put anything but `https://` + those hosts in
+the href; a 44 px target, the app's link voice, nothing new in the editor or the picker rows.
+«احفظ الكل» on a two-dish link import keeps the link on both. The link survives the v309
+client's round trip, the undo ledger and the validator, and `shrSig` ignores it, so a stored
+link never makes automatic sharing re-publish.
+
+**How it was built.** Two specs in the owner's words; two builders in sequence (the shopping
+list, then the recipe link — they share storage.js, food.js and the convenience suites), each
+with every new assertion seen failing on an in-memory plant (23 and 24), each running the
+hosting browser suite once on its final bytes; then the gate once. No separate review round
+this time — the owner asked for speed («خلصه بسرعه خلال 10 دقائق») — so the next change to
+these sheets should start with a reader over this diff.
+
+Gate: all contracts, lint, 29 suites (pooled, 245 s, no retry).
+
+Fingerprint net, v424 → v425: the sheets lane 124/126 — the `shopping` cell in both contexts (the heading rows with their «+» on every department, «Rice» under «الأرز والمكرونة والحبوب») and nothing else — the recipe view is identical because the fixture's recipe has no link; the views lane 176/184 — the eight Home cells whose only difference is the footer's «VAULT · v423 → v424». Nothing else moved.
+
 ## v424 — a schedule from several photos, or a PDF
 
 **The owner, 2026-10-21: «بدي يكون في خاصيه استيراد الجدول من صوره اقدر احط مثلا اكثر من صوره

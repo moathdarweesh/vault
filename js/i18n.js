@@ -56,8 +56,10 @@ const I18N = {
     sl_clear_done: 'Clear bought', sl_clear_all: 'Empty the list', sl_clear_all_q: 'Empty the whole list?',
     sl_added: '{n} added', sl_cleared: 'List updated',
     sl_relisted: '{n} back on the list', sl_on_list: 'On the list',
+    sl_add_to: 'Add to {section}', sl_sec_ph: 'Add to {section}…',
     slcat_produce: 'Fruit & vegetables', slcat_meat: 'Meat & poultry', slcat_fish: 'Fish & seafood', slcat_dairy: 'Dairy, cheese & eggs',
-    slcat_bakery: 'Bakery', slcat_grocery: 'Grocery', slcat_frozen: 'Frozen', slcat_drinks: 'Drinks', slcat_snacks: 'Sweets & crisps',
+    slcat_bakery: 'Bakery', slcat_grains: 'Rice, pasta & grains', slcat_pantry: 'Oils, spices & sauces', slcat_canned: 'Canned goods & legumes',
+    slcat_nuts: 'Nuts & dates', slcat_frozen: 'Frozen', slcat_drinks: 'Drinks', slcat_snacks: 'Sweets & crisps',
     slcat_household: 'Cleaning & household', slcat_personal: 'Personal care', slcat_other: 'Other',
     cardio_sched: 'Cardio schedule', cardio_sched_add: 'Add cardio', cardio_sched_days: 'Days',
     cardio_sched_today: "Today's cardio", cardio_sched_more: '+{n} more',
@@ -706,6 +708,8 @@ const I18N = {
     rec_empty_add_sub: 'Its figures fill in by themselves',
     rec_empty_import: 'Extract from a video or an image', rec_empty_import_sub: 'Or from a link or pasted text',
     rec_row_done: 'Done', rec_view_group: 'Which figures to show',
+    // the recipe view's door to the clip a recipe was extracted from — the label names the platform (v425)
+    rec_watch_yt: 'Watch the clip on YouTube', rec_watch_tt: 'Watch the clip on TikTok', rec_watch_ig: 'Watch the clip on Instagram',
     // «اقتراحات» — meal suggestions from recipes users share, reviewed by the AI before they are published (js/food.js MEAL SUGGESTIONS, v419)
     shr_title: 'Today’s suggestions',
     shr_meal_breakfast: 'Breakfast', shr_meal_lunch: 'Lunch', shr_meal_snack: 'Snack', shr_meal_dinner: 'Dinner',
@@ -1208,8 +1212,10 @@ const I18N = {
     sl_clear_done: 'امسح المشترى', sl_clear_all: 'أفرغ القائمة', sl_clear_all_q: 'هل تريد إفراغ القائمة كلها؟',
     sl_added: 'أُضيف {n}', sl_cleared: 'حُدّثت القائمة',
     sl_relisted: 'أُعيد {n} إلى القائمة', sl_on_list: 'في القائمة',
+    sl_add_to: 'إضافة إلى {section}', sl_sec_ph: 'أضف إلى {section}…',
     slcat_produce: 'الخضار والفواكه', slcat_meat: 'اللحوم والدواجن', slcat_fish: 'الأسماك والمأكولات البحرية', slcat_dairy: 'الألبان والأجبان والبيض',
-    slcat_bakery: 'المخبوزات', slcat_grocery: 'البقالة', slcat_frozen: 'المجمّدات', slcat_drinks: 'المشروبات', slcat_snacks: 'الحلويات والمقرمشات',
+    slcat_bakery: 'المخبوزات', slcat_grains: 'الأرز والمكرونة والحبوب', slcat_pantry: 'الزيوت والبهارات والصلصات', slcat_canned: 'المعلبات والبقوليات',
+    slcat_nuts: 'المكسرات والتمور', slcat_frozen: 'المجمّدات', slcat_drinks: 'المشروبات', slcat_snacks: 'الحلويات والمقرمشات',
     slcat_household: 'المنظفات ومستلزمات المنزل', slcat_personal: 'العناية الشخصية', slcat_other: 'أخرى',
     cardio_sched: 'جدول الكارديو', cardio_sched_add: 'إضافة كارديو', cardio_sched_days: 'الأيام',
     cardio_sched_today: 'كارديو اليوم', cardio_sched_more: '+{n} غيرها',
@@ -1843,6 +1849,8 @@ const I18N = {
     rec_empty_add_sub: 'وأرقامه تُحسب تلقائيًا',
     rec_empty_import: 'استخرج من مقطع أو صورة', rec_empty_import_sub: 'أو من رابط أو نصّ',
     rec_row_done: 'تم', rec_view_group: 'الأرقام المعروضة',
+    // رابط المقطع الذي استُخرجت منه الوصفة، في صفحة عرضها — التسمية تذكر المنصّة (v425)
+    rec_watch_yt: 'شاهد المقطع على يوتيوب', rec_watch_tt: 'شاهد المقطع على تيك توك', rec_watch_ig: 'شاهد المقطع على إنستغرام',
     // «اقتراحات» — وصفات يشاركها المستخدمون وتراجعها خدمة الذكاء الاصطناعي قبل نشرها (v419). الفصحى: «وجبة خفيفة» لا «سناك»، و«الغداء/العشاء» بالهمزة
     shr_title: 'اقتراحات اليوم',
     shr_meal_breakfast: 'فطور', shr_meal_lunch: 'غداء', shr_meal_snack: 'وجبة خفيفة', shr_meal_dinner: 'عشاء',

@@ -8133,6 +8133,19 @@ body[dir="rtl"] .plan-import-file { padding: 12px 14px 12px 52px; }
 .cx-row input[type=number] { max-width:120px; }
 /* The recipe view's rows: the amount is a figure, not a column — it hugs the end. */
 .rec-view-qty { flex: none; color: var(--text-mute); }
+/* THE SOURCE LINK (v425): the clip a recipe was extracted from, one row of its
+   own above the scaler (openRecipeView). The app's link voice — --accent-text,
+   700, the label size — on a 44px target by min-height; the glyph is first in
+   the row, so it sits on the reading edge in both directions. align-self keeps
+   the target the width of its words, not the sheet, so a tap beside them opens
+   nothing. The global svg { width: 100% } would stretch the glyph: pinned to
+   16px. Tokens only; no circle; nothing under 11px. */
+.rec-view-link {
+  display: inline-flex; align-items: center; gap: var(--sp-2); align-self: flex-start; max-width: 100%;
+  min-height: 44px; font-size: var(--fs-label); font-weight: 700; color: var(--accent-text);
+  text-decoration: none; text-align: start; overflow-wrap: anywhere; -webkit-tap-highlight-color: transparent;
+}
+.rec-view-link > svg { flex: none; width: 16px; height: 16px; }
 .cx-item { border:1px solid var(--border); border-radius: var(--radius); padding:12px; display:flex; flex-direction:column; gap:10px; }
 .cx-result { display:flex; flex-direction:column; align-items:flex-start; white-space:normal; text-align:start; gap:4px; }
 .cx-result span { font-size:var(--fs-meta); color:var(--text-mute); }
@@ -8584,18 +8597,46 @@ body.ember-on .ember {
 /* The outstanding count on the Food header link. */
 .sl-count { color: var(--accent-text); font-weight: 700; }
 
-/* ---- The aisles (v423) -----------------------------------------------------
+/* ---- The aisles (v423; the heading row and its «+» v425) ------------------
    «الاقسام الي بتكون عاده موجوده بالسوبر ماركت». #sl-list is a column of
    <section class="sl-sec"> — one per department that has rows, in the order a
-   shopper walks the store — each a caption (only when more than one department
-   has rows: a caption over the only group names what he can already see) over
-   the same .sl-list of the same .sl-row as before. The caption is the app's
-   section-caption voice (.shr-src: --fs-meta, 700, --text-mute), text-align
-   start so it sits on the reading edge in both directions, and it carries the
-   list's own 4px inline room so it lines up with the rows under it. */
-.sl-secs { display: flex; flex-direction: column; gap: var(--sp-3); min-width: 0; }
+   shopper walks the store — each a heading ROW over the same .sl-list of the
+   same .sl-row as before. v425 («وخلي العنوان لكل قائمه اوضح وخلي علامه زائد
+   انو اضيف في مثلا قائمه الخضار»): the row is the department's name at the
+   app's section-title voice (--fs-label, 700, --text — v423's muted --fs-meta
+   caption read as a label, not a title) with the identity layer's bar tick
+   stamped ahead of it (device 5: one bar of the mark, --bar-w wide, in
+   --text-faint — the same tick .section-title carries, drawn here rather than
+   by borrowing that class, whose uppercase letter-spaced caption voice is not
+   this one's), and at its END a 36px «+» (.icon-btn.icon-btn-tile at the S
+   rung; .icon-btn::after already draws the 44px halo centred on it). The row
+   is 44px tall so that halo stays inside it and never overlaps the first row's
+   tick target; a hairline above each department after the first; the list's
+   own 4px inline room, so the halo stays inside the sheet and the name lines
+   up with the rows. The name ellipsises before the «+» moves — measured at
+   320px with «خطّ أكبر» (test-convenience-ui). */
+.sl-secs { display: flex; flex-direction: column; gap: var(--sp-2); min-width: 0; }
 .sl-sec { display: flex; flex-direction: column; min-width: 0; }
-.sl-sec-h { margin: 0 0 var(--sp-1); padding: 0 4px; font-size: var(--fs-meta); font-weight: 700; color: var(--text-mute); text-align: start; }
+.sl-sec + .sl-sec { border-top: 1px solid var(--border); padding-top: var(--sp-2); }
+.sl-sec-h { display: flex; align-items: center; gap: var(--sp-2); min-height: var(--btn-h-m); margin: 0; padding: 0 4px; min-width: 0; }
+.sl-sec-h::before { content: ''; flex: 0 0 auto; width: var(--bar-w, 2px); height: 12px; background: var(--text-faint); }
+.sl-sec-name {
+  flex: 1; min-width: 0; margin: 0;
+  font-size: var(--fs-label); font-weight: 700; color: var(--text); text-align: start;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.sl-sec-add { flex: none; width: var(--btn-h-s); height: var(--btn-h-s); border-radius: var(--radius-btn-s); color: var(--text); }
+.sl-sec-add svg { width: 18px; height: 18px; }
+/* The inline composer under a department (v425): the same .input as the bottom
+   composer and a 36px «✓» — .cx-stack .btn (0,2,0) sets height:auto and a 44px
+   min-height on every button in the stack, so the S size is restated at the
+   same specificity, and the 44px target comes from the ::after halo (inset
+   -4px on a 36px box, as .rec-del). 4px of inline room, as the rows have. */
+.sl-sec-compose { display: flex; align-items: center; gap: var(--sp-2); padding: var(--sp-2) 4px 0; min-width: 0; }
+.sl-sec-compose .input { flex: 1; min-width: 0; }
+.cx-stack .sl-sec-ok { position: relative; flex: none; width: var(--btn-h-s); height: var(--btn-h-s); min-height: 0; padding: 0; border-radius: var(--radius-btn-s); }
+.sl-sec-ok::after { content: ''; position: absolute; inset: -4px; }
+.sl-sec-ok svg { width: 18px; height: 18px; }
 /* A chip whose recipe is already on the list, in full and unbought: modelled on
    .food-lib-chip.added (accent-line border, accent-soft fill) with the check in
    --accent-text and nothing to press (cursor: default; the button is disabled).

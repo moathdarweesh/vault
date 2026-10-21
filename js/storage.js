@@ -1364,6 +1364,24 @@ function cleanRecipeShared(r) {
   delete r.shared;
   return true;
 }
+// A RECIPE'S SOURCE LINK (v425): the YouTube / TikTok / Instagram link that
+// «استخراج وصفة» read the recipe from, kept on the recipe so its view can open
+// the clip again. Accepted only as the exact string the user typed, and only
+// when the import itself would have taken it: https, at most 300 characters,
+// and a host FoodAI.rxLinkKind names — the SAME list, host for host
+// (scripts/test-plan-import.js holds this list, foodai's and the Worker's
+// equal). Nothing else: no javascript:, no http:, no other host. The view
+// re-checks at draw (a blob can be imported), so an href is never anything
+// but one of these.
+function recipeLinkOk(url) {
+  if (typeof url !== 'string' || !url || url.length > 300) return false;
+  let u;
+  try { u = new URL(url); } catch (_) { return false; }
+  if (u.protocol !== 'https:') return false;
+  return ['youtube.com', 'www.youtube.com', 'm.youtube.com', 'youtu.be',
+    'tiktok.com', 'www.tiktok.com', 'm.tiktok.com', 'vm.tiktok.com', 'vt.tiktok.com',
+    'instagram.com', 'www.instagram.com'].indexOf(u.hostname) !== -1;
+}
 
 const DB = {
   search: {
@@ -3989,6 +4007,11 @@ const DB = {
       // own. Taken at CREATION only, and only as those two literals; an edit
       // keeps whatever `old` holds ({...old}) and takes none from a patch.
       if (!id && patch && (patch.origin === 'shared' || patch.origin === 'builtin')) entity.origin = patch.origin;
+      // THE SOURCE LINK (v425): the clip «استخراج وصفة» read the recipe from.
+      // The `origin` pattern — taken at CREATION only, by name, and only the
+      // exact string recipeLinkOk accepts; an edit keeps whatever `old` holds
+      // ({...old}) and takes none from a patch.
+      if (!id && patch && recipeLinkOk(patch.link)) entity.link = patch.link;
       const result = changeSlice(() => STATE.recipes || [], next => { STATE.recipes = next; },
         old ? list.map(x => x.id === id ? entity : x) : [...list,entity], 'cx_meal_changed');
       return result.ok ? copyData(entity) : null;
@@ -4118,6 +4141,13 @@ const DB = {
     // is wrong unless you know the two rows are the same substance. Joining text
     // computes nothing, so «أرز · 200 غ + كوب» is true either way and a name match
     // becomes safe for the first time.
+    //
+    // An entry may name its `section` (v425: the «+» on a department's heading
+    // adds INTO that department — «أضيف في مثلا قائمه الخضار»). A NEW row stores
+    // it when it is one of SHOPPING_SECTIONS, and grouped() draws the row there
+    // whatever the classifier would have said; an unknown section is dropped
+    // (the classifier decides), never a refusal. A row merged by name keeps
+    // whatever it had — an add never moves a row.
     addNames(entries, label) {
       if (!Array.isArray(entries) || !entries.length) return { ok: false, code: 'VALIDATION' };
       const items = this.get().items;
@@ -4126,6 +4156,7 @@ const DB = {
         const name = this._clean(e && e.name);
         if (!name) continue;
         const amount = this._clean(e && e.amount);
+        const section = this._section(e && e.section);
         const key = DB.search.normalize(name);
         const found = items.find(it => DB.search.normalize(it.name) === key);
         if (found) {
@@ -4137,7 +4168,9 @@ const DB = {
           if (amount && !found.amounts.includes(amount)) found.amounts = [...found.amounts, amount].slice(0, 6);
         } else {
           if (items.length >= this.MAX) break;
-          items.push({ id: uid(), name, amounts: amount ? [amount] : [], checked: false });
+          const row = { id: uid(), name, amounts: amount ? [amount] : [], checked: false };
+          if (section) row.section = section;   // only when pinned: a classified row carries no field
+          items.push(row);
           added++;
         }
       }
@@ -4193,6 +4226,13 @@ const DB = {
     // spelling already does. The MERGE key (addNames, listedFrom) stays
     // DB.search.normalize untouched — a classifier fold must never change
     // which rows are the same row.
+    // A department id, or null: one of SHOPPING_SECTIONS and nothing else — a
+    // row's stored `section` and an add's `e.section` both pass through here, so
+    // a department a later build retires falls back to the classifier.
+    _section(s) {
+      const order = typeof SHOPPING_SECTIONS !== 'undefined' ? SHOPPING_SECTIONS : null;
+      return order && typeof s === 'string' && order.includes(s) ? s : null;
+    },
     _fold(text) {
       const syn = typeof FOOD_SYNONYMS !== 'undefined' ? FOOD_SYNONYMS : null;
       return DB.search.fold(String(text || '').replace(/[،,;:/()[\]«»"'·+&?؟!.×*\p{Pd}]+/gu, ' ')).split(/\s+/).filter(Boolean)
@@ -4258,8 +4298,10 @@ const DB = {
     // The last resort: the whole folded name equals a FOOD_PRESETS entry (en or
     // ar), and its calorie category is mapped to a department. veg/fruit are the
     // fresh hall; protein the butcher (the fish the lexicon knows already went to
-    // the counter); carbs the bakery when the entry names a bread, else the dry
-    // aisles, as legumes and fats are; meals are dishes and belong nowhere.
+    // the counter); carbs the bakery when the entry names a bread, else the rice
+    // and grains aisle; legumes the cans and pulses; fats by the entry's own name
+    // (an oil, a butter, tahini, halawa → pantry; a nut or a seed → nuts; the
+    // avocado → produce); drinks the drinks; meals are dishes and belong nowhere.
     _catalogueSection(name) {
       const fp = typeof FOOD_PRESETS !== 'undefined' ? FOOD_PRESETS : null;
       if (!fp) return 'other';
@@ -4272,7 +4314,13 @@ const DB = {
       const p = this._cat.get(this._fold(name).join(' '));
       if (!p) return 'other';
       const bread = /bread|toast|tortilla|tamees|pita/i.test(p.en) || /خبز|توست|تميس/.test(p.ar);
-      const by = { veg: 'produce', fruit: 'produce', protein: 'meat', dairy: 'dairy', carbs: bread ? 'bakery' : 'grocery', legumes: 'grocery', fats: 'grocery', drinks: 'drinks' };
+      // `fats` is two shelves (v425). The spreads are read FIRST: «Peanut Butter»
+      // names a nut too, and it is a pantry jar.
+      const named = p.en + ' ' + p.ar;
+      const fats = /oil|butter|tahini|halawa|زيت|زبدة|طحين|حلاوة/i.test(named) ? 'pantry'
+        : /nut|seed|لوز|كاجو|جوز|فستق|مكسرات|بذور/i.test(named) ? 'nuts'
+        : /avocado|أفوكادو/i.test(named) ? 'produce' : 'pantry';
+      const by = { veg: 'produce', fruit: 'produce', protein: 'meat', dairy: 'dairy', carbs: bread ? 'bakery' : 'grains', legumes: 'canned', fats, drinks: 'drinks' };
       return by[p.cat] || 'other';
     },
     // The department a name belongs to — one of SHOPPING_SECTIONS. At each
@@ -4306,12 +4354,14 @@ const DB = {
     },
     // The list in aisles: [{ section, items }] in SHOPPING_SECTIONS order, only
     // the sections that have rows, the rows in their stored order — a ticked row
-    // never moves (v329), and grouping does not move it either.
+    // never moves (v329), and grouping does not move it either. A row that
+    // carries a valid `section` (added under a department's own «+», v425)
+    // stands there whatever its name says; every other row asks the classifier.
     grouped() {
       const order = typeof SHOPPING_SECTIONS !== 'undefined' ? SHOPPING_SECTIONS : ['other'];
       const by = new Map();
       for (const it of this.get().items) {
-        let section = this.sectionOf(it.name);
+        let section = this._section(it.section) || this.sectionOf(it.name);
         if (!order.includes(section)) section = 'other';
         (by.get(section) || by.set(section, []).get(section)).push(it);
       }
