@@ -12,6 +12,17 @@
 // (b) Home's stat strip says what period each figure counts — training DAYS
 //     this week, cardio minutes this week, today's sleep — and every label fits
 //     its cell at 375 and 340 px, at the normal and the larger text size.
+// (c) v427 — THE QUICK-ADJUST BAR AND THE PLATE CALCULATOR. A set input taking
+//     focus brings ONE bar directly under its row: «−1» «+1» for reps, the
+//     five unit steps and «الأقراص» for weight; a tap adds to the figure or to
+//     the GHOST when the field is empty, keeps the focus and commits nothing
+//     (the ✓ is the writer); the bar follows the focus and leaves on a blur to
+//     elsewhere; pounds get the pound steps. «الأقراص» opens the sheet on the
+//     field's weight: 65 reads «20 + 2.5» a side, 61 the nearest 60 (1 short),
+//     15 is lighter than the bar, nothing is the bar only, the 15 kg bar can be
+//     chosen, and «استخدم هذا الوزن» writes the LOADED weight back and commits
+//     nothing. Both fit 375 and 320 px with larger text: no sideways scroll,
+//     every button at least 44 px effective.
 //
 // Same harness as scripts/test-cardio-sleep-ui.js (scripts/fp/server.js): the
 // repo over loopback on a free port, js/cloud.js replaced by an offline stub,
@@ -31,6 +42,14 @@
 // `.home-stats .stat-cell-label` wrap rule disabled («375px: «أيام التمرين هذا
 // الأسبوع» is cut (ellipsis)»). The Arabic labels take two lines at most, the
 // upper-case English «TRAINING DAYS THIS WEEK» three.
+// The v427 cases were each seen failing on an in-memory plant of js/app.js or
+// styles.css (the file on disk never written): the reps bar given the weight
+// steps, the plate button dropped, the ghost ignored, the pointerdown guard
+// removed (the focus left), a commit added to the bar's writer, the clamp
+// dropped, the bar left in place, the leave timer's remove dropped, the pound
+// steps replaced by the kg ones, the nearest line dropped, the typed target
+// written instead of the loaded weight, the greedy walk reversed, flex-wrap
+// set to nowrap, the 44 px halo removed.
 'use strict';
 const assert = require('node:assert/strict');
 const { chromium } = require('playwright');
@@ -106,6 +125,34 @@ const cleanup = (kit, s) => kit.ev(({ id }) => {
   DB.sessions.listByExercise(id).forEach((x) => DB.sessions.remove(x.id));
   navigate('home');
 }, s);
+
+// ── the quick-adjust kit (v427) ──────────────────────────────────────────────
+const focusField = (kit, i, f) => kit.page.locator(row(i) + ` [data-field="${f}"]`).focus();
+const fieldNow = (kit, i, f) => kit.ev(({ i, f }) => {
+  const x = document.querySelector(`.view.active .run-set-row[data-set="${i}"] [data-field="${f}"]`);
+  return { value: x.value, focused: document.activeElement === x };
+}, { i, f });
+// The bar as it stands: under which row, its buttons' faces, the plate button.
+const barNow = (kit) => kit.ev(() => {
+  const bars = document.querySelectorAll('.view.active .run-adjust');
+  if (!bars.length) return null;
+  const bar = bars[0], prev = bar.previousElementSibling;
+  return { n: bars.length, row: prev && prev.matches('.run-set-row') ? Number(prev.dataset.set) : null,
+    labels: [...bar.querySelectorAll('button')].map((b) => b.textContent.trim()), plates: !!bar.querySelector('[data-plates]') };
+});
+const tapAdj = (kit, d) => kit.page.locator(`.view.active .run-adjust [data-adj="${d}"]`).click();
+// A dictionary line with its figures filled, in the page's language.
+const say = (kit, key, vars) => kit.ev(({ key, vars }) => Object.entries(vars || {}).reduce((x, [k, v]) => x.replace('{' + k + '}', () => v), t(key)), { key, vars });
+const sheetNow = (kit) => kit.ev(() => {
+  const o = document.querySelector('#modal-root .modal-overlay:not(.is-out)');
+  if (!o) return null;
+  const q = (sel) => o.querySelector(sel);
+  const chosen = q('[data-plate-bar][aria-checked="true"]');
+  return { title: q('.modal-title').textContent.trim(), target: q('[data-plate-target]').value, bar: chosen ? chosen.dataset.plateBar : null,
+    line: q('.plate-line').textContent.trim(), nearest: q('.plate-nearest') ? q('.plate-nearest').textContent.trim() : '', total: q('.plate-total').textContent.trim(),
+    plates: [...o.querySelectorAll('.plate')].map((p) => p.textContent.trim()), heights: [...o.querySelectorAll('.plate')].map((p) => Math.round(p.getBoundingClientRect().height)) };
+});
+const plateTarget = (kit, v) => kit.page.locator('#modal-root [data-plate-target]').fill(String(v));
 
 // ── the cases ───────────────────────────────────────────────────────────────
 const straight = [{ reps: 8, weight: 60 }, { reps: 8, weight: 60 }, { reps: 8, weight: 60 }];
@@ -294,6 +341,184 @@ const CASES = [
       await kit.ev(() => { DB.prefs.setTextLg(false); document.body.classList.remove('text-lg'); const q = window.__qaHome; DB.sessions.listByExercise(q.ex).filter((s) => s.date === q.today).forEach((s) => DB.sessions.remove(s.id)); DB.cardio.list().forEach((c) => DB.cardio.remove(c.id)); navigate('home'); });
     }
   }],
+  ['quick-adjust: the bar sits under the focused row — «−1» «+1» for reps, the five unit steps and «الأقراص» for weight', async (kit) => {
+    const s = await openRun(kit, straight);
+    try {
+      assert.equal(await barNow(kit), null, 'setup: no bar before a field has focus');
+      await focusField(kit, 1, 'reps');
+      let b = await barNow(kit);
+      assert.ok(b, 'a focused reps input brings the bar');
+      assert.equal(b.row, 1, 'under THAT row');
+      assert.deepEqual(b.labels, ['−1', '+1'], 'reps: −1 and +1 only');
+      await focusField(kit, 1, 'weight');
+      b = await barNow(kit);
+      assert.deepEqual(b.labels, ['−2.5', '−1', '+1', '+2.5', '+5', await say(kit, 'plates')], 'weight: the five kg steps and «الأقراص»');
+      assert.equal(b.plates, true, 'the plate button');
+      assert.equal(b.row, 1, 'still under row 2');
+      assert.equal(b.n, 1, 'ONE bar');
+    } finally { await cleanup(kit, s); }
+  }],
+  ['quick-adjust: a tap reads the ghost on an empty field, keeps the focus and commits nothing; the ✓ then logs it; «−1» at 0 stays 0', async (kit) => {
+    const s = await openRun(kit, straight);
+    try {
+      await focusField(kit, 0, 'weight');
+      await tapAdj(kit, 2.5);
+      const f = await fieldNow(kit, 0, 'weight');
+      assert.equal(f.value, '62.5', '«+2.5» on an empty field is the ghost 60 + 2.5');
+      assert.equal(f.focused, true, 'the input keeps its focus (the keyboard stays)');
+      assert.ok(await barNow(kit), 'and the bar stays');
+      await kit.page.waitForTimeout(250);
+      assert.deepEqual(await stored(kit, s), [], 'the bar committed nothing — no row in the database');
+      await tick(kit, 0);
+      assert.deepEqual(await stored(kit, s), [[8, 62.5, true]], 'the ✓ is the writer: 62.5, with the reps from the ghost');
+      await kit.ev(() => hideToast());
+      await type(kit, 1, 'weight', '0');
+      await tapAdj(kit, -1);
+      assert.equal((await fieldNow(kit, 1, 'weight')).value, '0', '«−1» at 0 stays 0');
+      await focusField(kit, 1, 'reps');
+      await tapAdj(kit, 1);
+      assert.equal((await fieldNow(kit, 1, 'reps')).value, '9', '«+1» on empty reps is the ghost 8 + 1');
+    } finally { await cleanup(kit, s); }
+  }],
+  ['quick-adjust: the bar follows the focus to the next row and leaves on a blur to elsewhere', async (kit) => {
+    const s = await openRun(kit, straight);
+    try {
+      await focusField(kit, 0, 'weight');
+      assert.equal((await barNow(kit)).row, 0, 'setup: under row 1');
+      await focusField(kit, 2, 'reps');
+      await kit.page.waitForTimeout(200);
+      const b = await barNow(kit);
+      assert.ok(b && b.row === 2, 'the bar moved under row 3');
+      assert.deepEqual(b.labels, ['−1', '+1'], 'and shows the reps steps now');
+      assert.equal(b.n, 1, 'ONE bar, moved — not a second one');
+      await kit.ev(() => document.activeElement.blur());
+      await kit.page.waitForTimeout(250);
+      assert.equal(await barNow(kit), null, 'focus elsewhere: the bar is gone');
+    } finally { await cleanup(kit, s); }
+  }],
+  ['quick-adjust: a pound user gets the pound steps', async (kit) => {
+    await kit.ev(() => DB.prefs.setUnit('lb'));
+    const s = await openRun(kit, [{ reps: 5, weight: 61.23 }]);   // 135 lb
+    try {
+      await focusField(kit, 0, 'weight');
+      const b = await barNow(kit);
+      assert.deepEqual(b.labels.slice(0, 5), ['−5', '−2.5', '+2.5', '+5', '+10'], 'lb: the pound steps');
+      await tapAdj(kit, 5);
+      assert.equal((await fieldNow(kit, 0, 'weight')).value, '140', 'the ghost 135 lb + 5');
+      await kit.ev(() => hideToast());
+      await tick(kit, 0);
+      const st = await stored(kit, s);
+      assert.equal(st.length, 1);
+      assert.equal(st[0][1], await kit.ev(() => toStoredKg(140, 'lb')), 'stored in kilograms through the one rule');
+    } finally { await cleanup(kit, s); await kit.ev(() => DB.prefs.setUnit('kg')); }
+  }],
+  ['plates: «الأقراص» opens the sheet on the field\'s weight, 65 reads «20 + 2.5», 61 the nearest 60, «استخدم هذا الوزن» writes 60 and commits nothing', async (kit) => {
+    const s = await openRun(kit, [{ reps: 8, weight: 65 }, { reps: 8, weight: 65 }]);
+    try {
+      await focusField(kit, 0, 'weight');
+      await kit.page.locator('.view.active .run-adjust [data-plates]').click();
+      await kit.page.waitForSelector('#modal-root .modal-overlay');
+      const u = await say(kit, 'unit_kg');
+      let sh = await sheetNow(kit);
+      assert.equal(sh.title, await say(kit, 'plates'), 'titled «الأقراص»');
+      assert.equal(sh.target, '65', 'opened on the field\'s weight — the ghost, the field being empty');
+      assert.equal(sh.bar, '20', 'the 20 kg bar by default');
+      assert.equal(sh.line, await say(kit, 'plates_per_side', { list: '20 + 2.5' }), '65 kg: a 20 and a 2.5 a side');
+      assert.deepEqual(sh.plates, ['20', '2.5'], 'drawn as two plates');
+      assert.ok(sh.heights[0] > sh.heights[1], 'the 20 taller than the 2.5: ' + sh.heights.join('/'));
+      assert.equal(sh.nearest, '', 'exact: no nearest line');
+      assert.equal(sh.total, await say(kit, 'plates_total', { w: '65', u }), 'the total under it');
+      await plateTarget(kit, 61);
+      sh = await sheetNow(kit);
+      assert.equal(sh.line, await say(kit, 'plates_per_side', { list: '20' }), '61: a 20 a side…');
+      assert.equal(sh.nearest, await say(kit, 'plates_nearest', { w: '60', u, d: '1' }), '…and the nearest line: 60, 1 short');
+      assert.equal(sh.total, await say(kit, 'plates_total', { w: '60', u }), 'the total is the loadable 60');
+      await plateTarget(kit, 15);
+      sh = await sheetNow(kit);
+      assert.equal(sh.line, await say(kit, 'plates_under_bar'), '15 kg: lighter than the bar');
+      assert.deepEqual(sh.plates, [], 'and no plate drawn');
+      await plateTarget(kit, '');
+      assert.equal((await sheetNow(kit)).line, await say(kit, 'plates_bar_only'), 'nothing: the bar only');
+      await plateTarget(kit, 65);
+      await kit.page.locator('#modal-root [data-plate-bar="15"]').click();
+      sh = await sheetNow(kit);
+      assert.equal(sh.bar, '15', 'the 15 kg bar chosen (aria-checked moved with the class)');
+      assert.equal(sh.line, await say(kit, 'plates_per_side', { list: '25' }), '65 over a 15 bar: a 25 a side');
+      await kit.page.locator('#modal-root [data-plate-bar="20"]').click();
+      await plateTarget(kit, 61);
+      await kit.page.locator('#modal-root [data-plate-use]').click();
+      await kit.page.waitForFunction(() => !document.querySelector('#modal-root .modal-overlay:not(.is-out)'), null, { timeout: 2000 });
+      const f = await fieldNow(kit, 0, 'weight');
+      assert.equal(f.value, '60', '«استخدم هذا الوزن» wrote the loadable 60, not the 61 typed');
+      assert.equal(f.focused, true, 'and the field has its focus back');
+      assert.ok(await barNow(kit), 'with the bar under it');
+      assert.deepEqual(await stored(kit, s), [], 'nothing committed by the sheet');
+      await tick(kit, 0);
+      assert.deepEqual(await stored(kit, s), [[8, 60, true]], 'the ✓ logs 60');
+    } finally { await cleanup(kit, s); }
+  }],
+  ['quick-adjust + plates: the bar and the sheet fit 375 and 320 px with larger text — no sideways scroll, every button at least 44 px effective', async (kit) => {
+    const s = await openRun(kit, straight);
+    const bad = [];
+    try {
+      for (const width of [375, 320]) {
+        for (const lg of [false, true]) {
+          await kit.page.setViewportSize({ width, height: 812 });
+          await kit.ev((lg) => { DB.prefs.setTextLg(lg); document.body.classList.toggle('text-lg', lg); }, lg);
+          await focusField(kit, 0, 'weight');
+          const where = `${width}px${lg ? ' text-lg' : ''}`;
+          // A control's effective height: its padding box plus the ::after halo the
+          // button scale gives a sub-44 control (inset from the padding box).
+          const m = await kit.ev(() => {
+            const bar = document.querySelector('.view.active .run-adjust');
+            bar.scrollIntoView({ block: 'center' });
+            const br = bar.getBoundingClientRect();
+            const hit = (x, y, b) => { const e = document.elementFromPoint(x, y); return !!(e && (e === b || b.contains(e))); };
+            const eff = (b) => { const ps = getComputedStyle(b, '::after'); const halo = ps.content !== 'none' && ps.position === 'absolute' ? -(parseFloat(ps.top) || 0) - (parseFloat(ps.bottom) || 0) : 0; return b.clientHeight + halo; };
+            return {
+              doc: document.documentElement.scrollWidth <= window.innerWidth,
+              barFits: bar.scrollWidth <= bar.clientWidth + 1 && br.right <= window.innerWidth,
+              buttons: [...bar.querySelectorAll('button')].map((b) => {
+                const r = b.getBoundingClientRect(), cx = r.left + r.width / 2;
+                return { text: b.textContent.trim(), w: Math.round(r.width), h: eff(b), inside: r.left >= br.left - 0.5 && r.right <= br.right + 0.5,
+                  cut: b.scrollWidth > b.clientWidth + 1, reach: hit(cx, r.top - 3, b) && hit(cx, r.bottom + 3, b) };
+              }),
+            };
+          });
+          if (!m.doc) bad.push(`${where}: the page scrolls sideways`);
+          if (!m.barFits) bad.push(`${where}: the bar overflows`);
+          for (const b of m.buttons) {
+            if (!b.inside) bad.push(`${where}: «${b.text}» runs out of the bar`);
+            if (b.cut) bad.push(`${where}: «${b.text}» is cut`);
+            if (b.w < 44 || b.h < 44 || !b.reach) bad.push(`${where}: «${b.text}» is under 44 px effective (${b.w}×${b.h}, halo reachable: ${b.reach})`);
+          }
+          // the sheet, on a weight that takes five plates a side
+          await kit.ev(() => openPlateCalc(200, 'kg'));
+          await kit.page.waitForSelector('#modal-root .modal-overlay');
+          const sm = await kit.ev(() => {
+            const o = document.querySelector('#modal-root .modal-overlay:not(.is-out)'), md = o.querySelector('.modal'), mr = md.getBoundingClientRect();
+            const eff = (b) => { const ps = getComputedStyle(b, '::after'); const halo = ps.content !== 'none' && ps.position === 'absolute' ? -(parseFloat(ps.top) || 0) - (parseFloat(ps.bottom) || 0) : 0; return b.clientHeight + halo; };
+            return {
+              fits: md.scrollWidth <= md.clientWidth + 1,
+              plates: [...o.querySelectorAll('.plate')].map((p) => { const r = p.getBoundingClientRect(); return { text: p.textContent.trim(), inside: r.left >= mr.left - 0.5 && r.right <= mr.right + 0.5, cut: p.scrollWidth > p.clientWidth + 1 }; }),
+              buttons: [...o.querySelectorAll('[data-plate-bar], [data-plate-use]')].map((b) => { const r = b.getBoundingClientRect(); return { text: b.textContent.trim(), w: Math.round(r.width), h: eff(b), inside: r.left >= mr.left - 0.5 && r.right <= mr.right + 0.5, cut: b.scrollWidth > b.clientWidth + 1 }; }),
+            };
+          });
+          if (!sm.fits) bad.push(`${where}: the sheet scrolls sideways`);
+          if (sm.plates.length !== 4) bad.push(`${where}: 200 kg draws ${sm.plates.length} plates a side, not four`);
+          for (const p of sm.plates) { if (!p.inside) bad.push(`${where}: plate «${p.text}» runs out of the sheet`); if (p.cut) bad.push(`${where}: plate «${p.text}» is cut`); }
+          for (const b of sm.buttons) { if (!b.inside) bad.push(`${where}: «${b.text}» runs out of the sheet`); if (b.cut) bad.push(`${where}: «${b.text}» is cut`); if (b.w < 44 || b.h < 44) bad.push(`${where}: «${b.text}» is under 44 px (${b.w}×${b.h})`); }
+          await kit.ev(() => closeModal());
+          await kit.page.waitForFunction(() => !document.querySelector('#modal-root .modal-overlay:not(.is-out)'), null, { timeout: 2000 });
+        }
+      }
+      assert.deepEqual(bad, [], 'the bar and the sheet fit');
+    } finally {
+      await kit.page.setViewportSize({ width: 375, height: 812 });
+      await kit.ev(() => { try { closeModal(); } catch (_) {} DB.prefs.setTextLg(false); document.body.classList.remove('text-lg'); });
+      await cleanup(kit, s);
+    }
+  }],
 ];
 
 async function run() {
@@ -316,7 +541,7 @@ async function run() {
     }
   } finally { await browser.close(); await srv.close(); }
   if (failures.length) { console.error(`FAIL  run + home UI: ${failures.length} failure(s)`); failures.forEach((f) => console.error('  - ' + f)); process.exitCode = 1; return; }
-  console.log(`PASS  run + home UI (${passed} cases, AR/dark + EN/light, 375px): a new figure ticked on one set becomes the hint of the later untouched straight sets (weight and reps each on its own, in pounds too), a pyramid keeps its hints, a typed un-ticked figure and a row with its own numbers are left alone, a correction carries again, nothing is written before a set's own ✓ and that ✓ names where its numbers came from per field (an earlier set only when both did, a mix as a mix) with Undo; the suggestion fills every open set and writes nothing; Home's strip names its periods with new keys and every label fits its cell at 375/340 px, normal and larger text`);
+  console.log(`PASS  run + home UI (${passed} cases, AR/dark + EN/light, 375px): a new figure ticked on one set becomes the hint of the later untouched straight sets (weight and reps each on its own, in pounds too), a pyramid keeps its hints, a typed un-ticked figure and a row with its own numbers are left alone, a correction carries again, nothing is written before a set's own ✓ and that ✓ names where its numbers came from per field (an earlier set only when both did, a mix as a mix) with Undo; the suggestion fills every open set and writes nothing; Home's strip names its periods with new keys and every label fits its cell at 375/340 px, normal and larger text; v427: the quick-adjust bar under the focused row (reps ±1, the five unit steps + «الأقراص», the ghost as the base, focus kept, nothing committed, follows the focus and leaves on blur, pound steps) and the plate sheet (65 → 20 + 2.5, 61 → nearest 60, lighter than the bar, the bar only, the bar choice, «استخدم هذا الوزن» writes the loaded weight), both fitting 375/320 px with larger text at ≥ 44 px a button`);
 }
 
 if (require.main === module) run().catch((e) => { console.error(e); process.exitCode = 1; });

@@ -131,6 +131,11 @@ const ENTRIES = [
          "{ name: 'زيت زيتون', qty: 'ملعقة', calories: 120, protein: 0, carbs: 0, fat: 14 }]; };" },
   { id: 'share-recipe', name: 'openShareRecipe', args: ['$recipe', '$noop'], host: 'food' },
   { id: 'shared-report', name: 'openSharedReport', args: [{ v: SHR_ROWS[0] }, '$noop'], host: 'food' },
+  // «الأقراص» (v427, openPlateCalc): the plate calculator the guided run's
+  // quick-adjust bar opens — 60 kg over the default 20 kg bar, one 20 a side.
+  // Its host is the guided screen in its fallback state (fp/views.js); the
+  // sheet reads nothing from it.
+  { id: 'plate-calc', name: 'openPlateCalc', args: [60, 'kg'], host: 'session-run' },
 ];
 
 /* Named, with the reason, so contract 36 can tell "left out on purpose" from

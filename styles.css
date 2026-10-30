@@ -3686,6 +3686,51 @@ body[data-view="session-run"] .bottom-nav { display: none; }
 .run-set-done::after { content: ''; position: absolute; inset: -10px; }
 .run-addset { margin-top: 12px; font-size: var(--fs-sub); }
 
+/* ── v427: the quick-adjust bar ───────────────────────────────────────── */
+/* One element, moved under the set being typed (renderSessionRun). In the
+   flow, so it never sits over the keyboard or on the sticky rest bar; the rest
+   bar's card and its ±15 are the precedent for a control strip on this screen.
+   The S rung with the 44px halo; a flex row that WRAPS, so at 320px with «خطّ
+   أكبر» the plate button takes a second line rather than cutting a step.
+   dir="ltr" is set in the markup: a group of figures, the «−» steps first in
+   both languages. */
+.run-adjust {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sp-2h) var(--sp-2);   /* 10px between ROWS: two 4px halos (below) never meet when the bar wraps */
+  padding: var(--sp-2);
+  background: var(--surface-1);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+.run-adjust-btn {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--sp-1);
+  min-width: 44px;
+  height: var(--btn-h-s);
+  padding: 0 var(--sp-2h);
+  border-radius: var(--radius-btn-s);
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  color: var(--text);
+  font-size: var(--fs-btn-s);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  transition: transform var(--dur-press) var(--ease), background 0.15s;
+}
+/* -5px: a bordered 36 measured from its padding box (the v373 arithmetic);
+   vertical only, so neighbours' halos never meet sideways — each button is
+   at least 44 wide by itself. */
+.run-adjust-btn::after { content: ''; position: absolute; inset: -5px 0; }
+.run-adjust-btn:active { transform: scale(var(--press-scale)); background: var(--surface-3); }
+/* The plate button: the glyph and the word, pushed to the row's end. */
+.run-adjust-plates { margin-inline-start: auto; }
+.run-adjust-plates svg { width: 16px; height: 16px; }
+
 .run-nav { display: flex; gap: 10px; margin-top: 22px; }
 .run-nav .btn { flex: 1; height: var(--btn-h-l); font-size: var(--fs-btn-l); font-weight: 700;
   border-radius: var(--radius-btn-l);
@@ -3834,6 +3879,44 @@ body[dir="rtl"] .calendar-nav-btn svg { transform: scaleX(-1); }
   transition: transform var(--dur-press) var(--ease), filter 0.15s;
 }
 .rest-timer-skip:active { transform: scale(var(--press-scale)); }
+
+/* ── v427: the plate calculator (openPlateCalc) ──────────────────────── */
+/* The bar as a segmented choice on the unit-toggle's grid, one column per bar
+   (the toggle itself is declared later in the file, hence the two-class
+   selector); then the answer: one ltr row — a sleeve, then each plate a
+   rounded rectangle whose height the markup sets from its weight (no circles:
+   device 4) — the per-side line a reader gets (aria-live), the nearest
+   loadable weight when the set falls short, and the total. The row wraps
+   inside the sheet; nothing scrolls sideways. */
+.unit-toggle.plate-bars { grid-template-columns: repeat(auto-fit, minmax(0, 1fr)); }
+.plate-answer { margin: var(--sp-2) 0 var(--sp-4); text-align: center; }
+.plate-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: var(--sp-1);
+  min-height: 72px;
+  padding: var(--sp-2) 0;
+}
+.plate-sleeve { width: 28px; height: 8px; background: var(--text-dim); flex-shrink: 0; }
+.plate {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 36px;
+  padding: 0 var(--sp-1h);
+  border-radius: var(--radius-sm);
+  background: var(--accent-soft);
+  border: 1px solid var(--accent-line);
+  color: var(--text);
+  font-size: var(--fs-sub);
+  font-weight: 700;
+}
+.plate-line { font-size: var(--fs-body); font-weight: 700; color: var(--text); }
+.plate-nearest { margin-top: var(--sp-1); font-size: var(--fs-sub); font-weight: 700; color: var(--accent-text); }
+.plate-total { margin-top: var(--sp-1); font-size: var(--fs-sub); font-weight: 700; color: var(--text-mute); }
+.plate-use { width: 100%; }   /* the sheet's one action on the M rung (.btn), full width */
 
 /* Day editor: exercise picker */
 .picker-list {

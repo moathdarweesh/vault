@@ -12,7 +12,7 @@
 // build. The literal below is the fallback (file://, or a stripped query) and is
 // still bumped by `npm run release` — see CLAUDE.md "CACHE WORKFLOW".
 const VAULT_BUILD = (() => {
-  const FALLBACK = 'v426';
+  const FALLBACK = 'v427';
   try {
     const src = (document.currentScript && document.currentScript.src) || '';
     const m = src.match(/[?&]v=(\d+)/);
@@ -7550,6 +7550,136 @@ function runSwapAllowed(ids, oldId, newId) {
   return a.includes(oldId) && !a.includes(newId);
 }
 
+// ---- v427: THE QUICK-ADJUST BAR'S ARITHMETIC AND THE PLATE CALCULATOR -----
+// The owner's line: at the gym a set is logged with taps, not typing — and the
+// bar is loaded without arithmetic. The two sums are top-level and pure so
+// scripts/test-plates.js pins them without a browser; the sheet is a top-level
+// opener so the fingerprint net captures it (scripts/fp/modals.js).
+
+// The step a weight tap rounds to, per unit — the input's own 0.5 in both. One
+// table, so a 1.25 kg micro-plate step would be a one-line change here.
+const RUN_WEIGHT_STEP = { kg: 0.5, lb: 0.5 };
+
+// A tap on the bar: `base` is the figure in the field, or its ghost when the
+// field is empty (so «+2.5» on an untouched set means last time + 2.5), plus
+// `delta`, both in the unit on screen. Never below 0; reps a whole number; a
+// weight on the unit's step.
+function runAdjustValue(base, delta, field, unit) {
+  const b = Number(base), d = Number(delta);
+  const sum = (Number.isFinite(b) ? b : 0) + (Number.isFinite(d) ? d : 0);
+  if (field === 'reps') return Math.max(0, Math.round(sum));
+  const step = RUN_WEIGHT_STEP[unit] || 0.5;
+  return Math.max(0, Math.round(sum / step) * step);
+}
+
+// The gym's iron, per unit: the bars a lifter may pick (the first is the
+// default) and the plates, heaviest first. All in the unit — plate masses are
+// not conversions, so nothing here converts (contract 66: ui.js does).
+const PLATE_SETS = { kg: { bars: [20, 15, 10], plates: [25, 20, 15, 10, 5, 2.5, 1.25] }, lb: { bars: [45, 35], plates: [45, 35, 25, 10, 5, 2.5] } };
+
+// The plates ONE SIDE takes to load `target` on a bar weighing `bar`, greedy
+// from the largest of `plates` — all three in one unit. Answers
+// { side, loaded, remainder }: `side` the plates per side, `loaded` what the
+// bar then weighs, `remainder` = target − loaded: 0 when exact, positive when
+// the set cannot reach the target (`loaded` is then the nearest loadable
+// weight below), NEGATIVE when the target is lighter than the bar. Zero or
+// nothing is the bar alone. Integer hundredths: 82.5 − 20 − 2 × 31.25 in
+// floats leaves debris that reads as «0 short».
+function platesPerSide(target, bar, plates) {
+  const tgt = Math.round((Number(target) || 0) * 100), bH = Math.round((Number(bar) || 0) * 100);
+  const side = [];
+  if (tgt <= 0) return { side, loaded: bH / 100, remainder: 0 };
+  if (tgt < bH) return { side, loaded: bH / 100, remainder: (tgt - bH) / 100 };
+  const share = Math.floor((tgt - bH) / 2);
+  let left = share;
+  for (const p of plates || []) {
+    const q = Math.round(Number(p) * 100);
+    if (!(q > 0)) continue;
+    while (left >= q) { side.push(Number(p)); left -= q; }
+  }
+  const on = 2 * (share - left);
+  return { side, loaded: (bH + on) / 100, remainder: (tgt - bH - on) / 100 };
+}
+
+// The bar chosen on the sheet, remembered for the session only — a module
+// variable, no pref: a gym has one bar, and the choice dies with the tab.
+let __plateBar = { kg: PLATE_SETS.kg.bars[0], lb: PLATE_SETS.lb.bars[0] };
+
+// ---- v427: THE PLATE CALCULATOR -------------------------------------------
+// One sheet: the target weight (editable, so it works standalone), the bar as
+// a segmented choice, and THE ANSWER — the plates per side drawn as rounded
+// rectangles that grow with their weight (no circles: device 4, contract 42),
+// said as a line for a reader (aria-live), the nearest loadable weight below
+// when the set falls short, and the total. `kg` is the STORED figure (the
+// field's, or its ghost; 0 = nothing); everything on the sheet is in `unit`
+// through ui.js's one rule. «استخدم هذا الوزن» closes the sheet FIRST and then
+// hands onPick the shown weight in the unit, which the bar writes through its
+// own path. Opened from the bar's plate button only — the set row carries no
+// extra icon (the box fits its content).
+function openPlateCalc(kg, unit, onPick) {
+  const u = unit === 'lb' ? 'lb' : 'kg';
+  const set = PLATE_SETS[u];
+  const unitWord = t(u === 'lb' ? 'unit_lb' : 'unit_kg');
+  const start = Number(kg) > 0 ? toDisplayWeight(Number(kg), u) : '';
+  // Figures by FUNCTION, never a replacement string (a `$` in one is a pattern).
+  const fill = (key, vars) => Object.entries(vars).reduce((txt, [k, v]) => txt.replace('{' + k + '}', () => v), t(key));
+  const overlay = openModal(`
+    <div class="modal-header">
+      <div class="modal-title">${t('plates')}</div>
+      <button class="icon-btn icon-btn-tile" data-close>${icon('close', 20)}</button>
+    </div>
+    <div class="form-group">
+      <label class="form-label">${t('plates_target')}</label>
+      <input type="number" inputmode="decimal" step="0.5" min="0" class="form-input num" data-plate-target value="${numAttr(start)}">
+    </div>
+    <div class="form-group">
+      <label class="form-label" id="plate-bar-label">${t('plates_bar')}</label>
+      <div class="unit-toggle plate-bars" role="radiogroup" aria-labelledby="plate-bar-label">
+        ${set.bars.map((b) => `<button type="button" class="unit-option ${b === __plateBar[u] ? 'active' : ''}" role="radio" aria-checked="${b === __plateBar[u]}" data-plate-bar="${b}"><span class="num">${fmtNum(b)}</span> ${unitWord}</button>`).join('')}
+      </div>
+    </div>
+    <div class="plate-answer" data-plate-answer aria-live="polite"></div>
+    <button type="button" class="btn btn-primary plate-use" data-plate-use>${t('plates_use')}</button>
+  `);
+  if (!overlay) return;
+  const target = overlay.querySelector('[data-plate-target]');
+  const answer = overlay.querySelector('[data-plate-answer]');
+  const heavy = set.plates[0];
+  let shown = set.bars[0];   // what «استخدم هذا الوزن» writes: the LOADED weight
+  const draw = () => {
+    const want = Number(target.value);
+    const r = platesPerSide(want, __plateBar[u], set.plates);
+    shown = r.loaded;
+    let line, row = '';
+    if (!(want > 0) || (r.remainder >= 0 && !r.side.length)) line = t('plates_bar_only');
+    else if (r.remainder < 0) line = t('plates_under_bar');
+    else {
+      line = fill('plates_per_side', { list: r.side.map((p) => fmtNum(p)).join(' + ') });
+      // The drawing: one ltr row, a sleeve, then each plate a rounded rectangle
+      // whose height follows its weight (the set's heaviest 64 px, the lightest
+      // about 30). The line above says the same figures, so the row is hidden
+      // from a reader.
+      row = `<div class="plate-row" dir="ltr" aria-hidden="true"><span class="plate-sleeve"></span>${r.side.map((p) =>
+        `<span class="plate" style="height:${Math.round(28 + 36 * (p / heavy))}px"><span class="num">${fmtNum(p)}</span></span>`).join('')}</div>`;
+    }
+    const nearest = r.remainder > 0 ? `<div class="plate-nearest">${fill('plates_nearest', { w: fmtNum(r.loaded), u: unitWord, d: fmtNum(r.remainder) })}</div>` : '';
+    answer.innerHTML = `${row}<div class="plate-line">${line}</div>${nearest}<div class="plate-total">${fill('plates_total', { w: fmtNum(r.loaded), u: unitWord })}</div>`;
+  };
+  target.addEventListener('input', draw);
+  const bars = [...overlay.querySelectorAll('[data-plate-bar]')];
+  bars.forEach((b) => b.addEventListener('click', () => {
+    __plateBar[u] = Number(b.dataset.plateBar);
+    bars.forEach((x) => setChosen(x, x === b));
+    draw();
+  }));
+  overlay.querySelector('[data-plate-use]').addEventListener('click', () => {
+    const v = shown;
+    closeModal();   // first: focus goes back to the field, and the bar's writer wants it there
+    if (typeof onPick === 'function') onPick(v);
+  });
+  draw();
+}
+
 function renderSessionRun(el) {
   // Resolve the workout by DATE (continuous rotation), like session-day. The
   // day arrives on ctx.date and the unit on ctx.unit (contract 67).
@@ -8328,12 +8458,90 @@ function renderSessionRun(el) {
     }));
   }
 
+  // ---- v427: THE QUICK-ADJUST BAR ------------------------------------------
+  // At the gym a set is logged with taps, not typing. ONE bar per screen, made
+  // here and MOVED: a set input taking focus puts it directly after that row
+  // (in the flow — nothing fixed, nothing over the keyboard, nothing on the
+  // sticky rest bar); losing focus takes it away ~120 ms later unless the
+  // focus went into the bar or onto another set input (then it moves). Its
+  // buttons cancel pointerdown/mousedown so the input KEEPS focus and the
+  // keyboard stays — a tap here never fires the blur commit. A tap adds its
+  // step to the figure in the field, or to the GHOST when the field is empty
+  // («+2.5» on an untouched set is last time + 2.5), writes the value and
+  // dispatches `input` so the listeners below see it; it COMMITS nothing —
+  // the ✓ and the blur commit stay the writers (v296's law, through runCtx).
+  // The plate button opens the calculator on the same figure, in kg through
+  // ui.js's rule; the sheet hands back the unit's figure the same way.
+  const adjust = document.createElement('div');
+  adjust.className = 'run-adjust';
+  adjust.setAttribute('dir', 'ltr');   // a group of figures: the «−» steps first in both languages
+  let adjustFor = null;     // the input the bar serves
+  let adjustLeave = null;   // the focusout timer
+  const unitWord = t(runCtx.unit === 'lb' ? 'unit_lb' : 'unit_kg');
+  const weightSteps = runCtx.unit === 'lb' ? [-5, -2.5, 2.5, 5, 10] : [-2.5, -1, 1, 2.5, 5];
+  const adjustHtml = (field) => {
+    const steps = field === 'reps' ? [-1, 1] : weightSteps;
+    const btns = steps.map((d) => {
+      const label = field === 'reps' ? t(d > 0 ? 'adj_rep_up' : 'adj_rep_down')
+        : t(d > 0 ? 'adj_up' : 'adj_down').replace('{x}', () => fmtNum(Math.abs(d))).replace('{u}', () => unitWord);
+      return `<button type="button" class="run-adjust-btn num" data-adj="${d}" aria-label="${escapeHtml(label)}">${d > 0 ? '+' : '−'}${fmtNum(Math.abs(d))}</button>`;
+    });
+    if (field === 'weight') btns.push(`<button type="button" class="run-adjust-btn run-adjust-plates" data-plates>${icon('dumbbell', 16)} ${t('plates')}</button>`);
+    return btns.join('');
+  };
+  const adjustBase = (inp) => {
+    const n = parseFloat(inp.value !== '' ? inp.value : inp.placeholder);
+    return Number.isFinite(n) ? n : 0;
+  };
+  // The bar's one writer: the value, an `input` event for the listeners below,
+  // focus kept and the text selected so the next tap or key replaces it.
+  const adjustApply = (inp, value) => {
+    inp.value = String(value);
+    inp.dispatchEvent(new Event('input', { bubbles: true }));
+    try { inp.focus({ preventScroll: true }); inp.select(); } catch (_) {}
+  };
+  const inSets = (node) => !!(node && node.matches && node.matches('.run-set-row input') && el.contains(node));
+  const adjustShow = (inp, row) => {
+    if (adjustLeave) { clearTimeout(adjustLeave); adjustLeave = null; }
+    const field = inp.dataset.field;
+    if (adjust.dataset.field !== field) { adjust.dataset.field = field; adjust.innerHTML = adjustHtml(field); }
+    adjustFor = inp;
+    if (row.nextElementSibling !== adjust) row.insertAdjacentElement('afterend', adjust);
+  };
+  const adjustHide = (e) => {
+    const to = e.relatedTarget;
+    if (to && (adjust.contains(to) || inSets(to))) return;
+    if (adjustLeave) clearTimeout(adjustLeave);
+    adjustLeave = setTimeout(() => {
+      adjustLeave = null;
+      const now = document.activeElement;
+      if (adjust.contains(now) || inSets(now)) return;
+      adjustFor = null;
+      adjust.remove();
+    }, 120);
+  };
+  adjust.addEventListener('pointerdown', (e) => e.preventDefault());
+  adjust.addEventListener('mousedown', (e) => e.preventDefault());
+  adjust.addEventListener('focusout', adjustHide);
+  adjust.addEventListener('click', (e) => {
+    const inp = adjustFor;
+    if (!inp || !inp.isConnected) return;
+    const step = e.target.closest('[data-adj]');
+    if (step) { adjustApply(inp, runAdjustValue(adjustBase(inp), Number(step.dataset.adj), inp.dataset.field, runCtx.unit)); return; }
+    if (e.target.closest('[data-plates]')) {
+      openPlateCalc(convToKg(adjustBase(inp)), runCtx.unit, (v) => { if (inp.isConnected) adjustApply(inp, v); });
+    }
+  });
+
   // Set inputs → write to state as the user types. Tapping an input selects its
   // content so a new number REPLACES the old one (no manual deleting).
   el.querySelectorAll('.run-set-row').forEach((row) => {
     const i = Number(row.dataset.set);
     row.querySelectorAll('input').forEach((inp) => {
       inp.addEventListener('focus', () => { try { inp.select(); } catch (_) {} });
+      // The quick-adjust bar under THIS row while the field has focus (v427).
+      inp.addEventListener('focusin', () => adjustShow(inp, row));
+      inp.addEventListener('focusout', adjustHide);
       inp.addEventListener('input', () => {
         const v = inp.value;
         if (inp.dataset.field === 'weight') {

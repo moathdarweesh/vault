@@ -2,6 +2,56 @@
 
 One section per release since v309, newest first, moved verbatim from `CLAUDE.md` in v401 (batch 6 of the 2026-09-25 review; `docs/REVIEW-2026-09-25.md`). `CLAUDE.md` is the guide and the authority for how the app works now. A section here records what one release changed and why, in the words written at the time, so a later section — or the guide — can supersede what an earlier one says.
 
+## v427 — the guided run: a quick-adjust bar under the set you are typing, and a plate calculator
+
+**The owner, 2026-10-30, pasted a generic «UX overhaul» prompt and asked what was worth
+taking from it.** Read against the app, most of its twelve items already existed (the
+floating rest bar that follows you, the ghost figures of last time, Undo on every delete, the
+save centre's sync states, the portion multiplier on every AI card, the one buzzer and its
+Settings switch, the PR toast) or contradicted the app's own laws (a gold badge against the one
+accent colour; floating «pills» against the no-capsule contract; meal slots the food log does
+not have; a staged «calculating…» progress for a single request). Two were real and he chose
+them: «خطط لها بشكل صحيح ونفذها».
+
+**The quick-adjust bar.** Focus a set's reps or weight field in the guided run and one bar
+slides in directly UNDER that row — in the page's flow, never fixed over the keyboard, never
+colliding with the sticky rest bar: for weight, five S-size buttons in the bar's own unit
+(kg: −2.5 −1 +1 +2.5 +5; lb: −5 −2.5 +2.5 +5 +10) and «الأقراص»; for reps, «−1» «+1» alone.
+A tap adds to the field's value — or to its GHOST when the field is empty, so «+2.5» on an
+untouched set means «last time plus 2.5», which is what a lifter means — clamped at zero,
+weight on the unit's 0.5 step, reps whole; the field keeps focus and the keyboard stays
+(`pointerdown`/`mousedown` are prevented on the bar), and NOTHING is committed: the ✓ and the
+blur-commit stay the only writers (v296's law). The bar moves to the next row you focus and
+leaves 120 ms after focus goes elsewhere. The gaps between its buttons are 10 px, not 8: two
+4 px halos meeting at exactly 8 px made the 44 px hit-test a matter of pixel snapping.
+
+**The plate calculator (`openPlateCalc`).** From the bar's «الأقراص»: a sheet with the target
+weight (editable), the bar as a segmented choice (kg 20/15/10, lb 45/35; remembered for the
+session, no new pref), and the plates PER SIDE walked greedily from the largest (kg 25, 20, 15,
+10, 5, 2.5, 1.25; lb 45, 35, 25, 10, 5, 2.5) drawn as rounded RECTANGLES whose height grows
+with the weight — the app has no circles — with the line «لكل جهة: 20 + 2.5» for a screen
+reader, the total under the bar, and, when the weight cannot be loaded exactly, the NEAREST
+loadable weight below with the shortfall named («الأقرب: ٦٠ كغ (ناقص ١)»); lighter than the
+bar and the bar alone each have their line. «استخدم هذا الوزن» writes the loaded weight into
+the focused field through the same path as the bar. `platesPerSide` and `runAdjustValue` are
+pure top-level functions, pinned by a new node suite (`scripts/test-plates.js`, 39 rows: the
+greedy walk over both racks — 200 kg over a 20 bar is 25+25+25+15, which the suite corrected
+in the builder's own expectation — the nearest-below rule, the bar-only and under-bar cases,
+the clamp and the 0.5 step). The sheet joins the fingerprint net (`plate-calc`, the end of the
+list). `unit_kg`/`unit_lb` are new keys: the aria-labels needed a unit WORD the dictionary
+lacked.
+
+**Tests.** `scripts/test-run-home-ui.js` gains six cases (the bar's contents per field and per
+unit, the ghost as the base, focus kept and nothing committed, the clamp, the bar moving
+between rows and leaving on blur, the sheet's per-side line, the nearest line, «استخدم هذا
+الوزن», 375/320 with «خطّ أكبر» at ≥ 44 px a button); 18 plants in memory, all caught — two of
+them the project's own contracts caught on the way (66 refused a comment naming the
+conversion constant).
+
+Gate: all contracts, lint, 30 suites (pooled, 240 s, no retry) — `scripts/test-plates.js` joined the pool.
+
+Fingerprint net, v426 → v427: the sheets lane 126/128 — the two cells are the NEW `plate-calc` sheet (one per context), nothing else; the views lane 184/184 identical — the run screen is captured in its fallback state and the bar exists only while a set field has focus.
+
 ## v426 — the schedule import's Save never demands what the user already did
 
 **The owner, 2026-10-21, after reading his programme from photos: «بعد ما سجلت تماريني من صور وكل
