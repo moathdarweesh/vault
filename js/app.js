@@ -12,7 +12,7 @@
 // build. The literal below is the fallback (file://, or a stripped query) and is
 // still bumped by `npm run release` — see CLAUDE.md "CACHE WORKFLOW".
 const VAULT_BUILD = (() => {
-  const FALLBACK = 'v427';
+  const FALLBACK = 'v428';
   try {
     const src = (document.currentScript && document.currentScript.src) || '';
     const m = src.match(/[?&]v=(\d+)/);
@@ -3189,11 +3189,15 @@ function renderProgram(el) {
   const sevenDaysAgo = new Date(now); sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 6); sevenDaysAgo.setHours(0, 0, 0, 0);
   const exIdToCat = Object.fromEntries(DB.exercises.list().map((e) => [e.id, e.category]));
   const catCounts = Object.fromEntries(EXERCISE_CATEGORIES.map((c) => [c, 0]));
+  // v428: the day each muscle was LAST trained — the whole history, not the
+  // window — is what its readiness word reads (muscleReadiness). ISO days
+  // compare as strings.
+  const lastByCat = {};
   allSessions.forEach((s) => {
-    if (new Date(s.date + 'T00:00:00') >= sevenDaysAgo) {
-      const cat = exIdToCat[s.exerciseId];
-      if (cat && catCounts[cat] !== undefined) catCounts[cat] += 1;
-    }
+    const cat = exIdToCat[s.exerciseId];
+    if (!cat || catCounts[cat] === undefined) return;
+    if (s.date && (!lastByCat[cat] || s.date > lastByCat[cat])) lastByCat[cat] = s.date;
+    if (new Date(s.date + 'T00:00:00') >= sevenDaysAgo) catCounts[cat] += 1;
   });
   const heatTotal = EXERCISE_CATEGORIES.reduce((sum, c) => sum + (catCounts[c] || 0), 0);
   const wellCats = EXERCISE_CATEGORIES.filter((c) => c !== 'Other');
@@ -3202,11 +3206,17 @@ function renderProgram(el) {
     const count = catCounts[cat] || 0;
     const lvl = count >= 8 ? 4 : count >= 5 ? 3 : count >= 3 ? 2 : count >= 1 ? 1 : 0;
     const pct = Math.round(count / topCount * 1000) / 10;
+    // The state answers «when» (the count and the fill answer «how much»):
+    // one word under the name, in the mute token, the accent for the one
+    // actionable state. No line at all for a muscle never trained.
+    const state = muscleReadiness(lastByCat[cat] || null, now);
+    const word = muscleReadinessWord(state);
     return `
-          <button type="button" class="prg-mw" data-muscle="${escapeHtml(cat)}" aria-label="${escapeHtml(`${categoryLabel(cat)} — ${count ? prgCount(count, 'prg_sess_1', 'prg_sess_2', 'prg_sess_n', 'prg_sess_many') : t('prg_sess_0')}`)}">
+          <button type="button" class="prg-mw" data-muscle="${escapeHtml(cat)}" aria-label="${escapeHtml(`${categoryLabel(cat)} — ${count ? prgCount(count, 'prg_sess_1', 'prg_sess_2', 'prg_sess_n', 'prg_sess_many') : t('prg_sess_0')}${word ? ` — ${word}` : ''}`)}">
             <span class="prg-mw-n num${count ? '' : ' is-zero'}">${fmtNum(count)}</span>
             <span class="prg-mw-well">${count ? `<span class="prg-mw-fill lvl-${lvl}" style="--v:${pct}%;--k:${k}"></span>` : ''}</span>
             <span class="prg-mw-name">${escapeHtml(categoryLabel(cat))}</span>
+            ${word ? `<span class="prg-mw-state${state === 'fresh' ? ' is-fresh' : ''}">${escapeHtml(word)}</span>` : ''}
           </button>`;
   }).join('');
 
@@ -7601,6 +7611,38 @@ function platesPerSide(target, bar, plates) {
   return { side, loaded: (bH + on) / 100, remainder: (tgt - bH - on) / 100 };
 }
 
+// ---- v428: MUSCLE READINESS ------------------------------------------------
+// The owner's line: one look at the body plate says which muscle is ready to
+// train. Three states from the day of the muscle's LAST session — a calendar
+// day, not a timestamp (a session carries an ISO day; «I trained yesterday» is
+// what a lifter means, whatever the hour): `fatigued` when it is today
+// (< 24 h), `recovering` when yesterday (24–48 h), `fresh` from two days on
+// (> 48 h), `none` with no session ever. A future day reads as today
+// (defensive). Pure and top-level so scripts/test-muscle-readiness.js pins it
+// without a browser.
+function muscleReadiness(lastDate, now) {
+  if (!lastDate) return 'none';
+  const last = new Date(lastDate + 'T00:00:00');
+  if (Number.isNaN(last.getTime())) return 'none';
+  const day = new Date(now === undefined ? Date.now() : now);
+  if (Number.isNaN(day.getTime())) return 'none';
+  day.setHours(0, 0, 0, 0);
+  const days = Math.round((day - last) / 86400000);
+  if (days <= 0) return 'fatigued';
+  if (days === 1) return 'recovering';
+  return 'fresh';
+}
+
+// The word a state is shown as — '' for `none`: a never-trained muscle draws
+// no line (an empty well already reads as a hole, and «جاهزة» with no history
+// would be a claim).
+function muscleReadinessWord(state) {
+  if (state === 'fresh') return t('mr_fresh');
+  if (state === 'recovering') return t('mr_recovering');
+  if (state === 'fatigued') return t('mr_fatigued');
+  return '';
+}
+
 // The bar chosen on the sheet, remembered for the session only — a module
 // variable, no pref: a gym has one bar, and the choice dies with the tab.
 let __plateBar = { kg: PLATE_SETS.kg.bars[0], lb: PLATE_SETS.lb.bars[0] };
@@ -10449,6 +10491,15 @@ function renderMuscleSessions(el) {
   // ONE formatter for every day label: toLocaleDateString builds a new one per
   // call (45 µs against 0.5 µs), same locale, same options, same words.
   const dayFmt = new Intl.DateTimeFormat(lang === 'ar' ? 'ar-u-nu-latn' : 'en-US', { weekday: 'long', day: 'numeric', month: 'long' });
+  // v428: under the count line, the readiness word and the day of the last
+  // session (the newest is first) — nothing with no session (the empty state
+  // already says it). The day's label is a function replacement: never a
+  // replacement STRING that could hold a dollar sign.
+  const readiness = muscleReadiness(sessions.length ? sessions[0].date : null, new Date());
+  const readyWord = muscleReadinessWord(readiness);
+  const readyHtml = readyWord
+    ? `<p class="page-subtitle ms-ready"><span class="ms-ready-state${readiness === 'fresh' ? ' is-fresh' : ''}">${escapeHtml(readyWord)}</span> · ${escapeHtml(t('mr_last').replace('{d}', () => dayFmt.format(new Date(sessions[0].date + 'T00:00:00'))))}</p>`
+    : '';
 
   const groupHtml = (date) => {
     const label = dayFmt.format(new Date(date + 'T00:00:00'));
@@ -10487,6 +10538,7 @@ function renderMuscleSessions(el) {
       <div class="page-eyebrow">${t('muscle_focus')}</div>
       <h1 class="page-title">${escapeHtml(categoryLabel(cat))}</h1>
       <p class="page-subtitle"><span class="num">${fmtNum(sessions.length)}</span> ${escapeHtml(t('ms_sessions_logged'))}</p>
+      ${readyHtml}
     </div>
 
     ${sessions.length === 0

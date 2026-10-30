@@ -472,6 +472,102 @@ const CASES = [
     assert.deepEqual(await ev(() => [currentView, viewContext.muscleCat]), ['muscle-sessions', 'Legs']);
   }],
 
+  ['each well says when its muscle is ready: one word under the name (today, yesterday, two days or more, never none), in the label, in one token, fitting its cell at 340 px with larger text, and the muscle screen\'s line with the last day', async ({ page, ev, back }) => {
+    // Chest trained today (fatigued), Back yesterday (recovering), Legs four
+    // days ago (fresh), Arms two days ago (fresh — 48 h is the edge), Core ten
+    // days ago (fresh, with a ZERO count: the state reads the whole history,
+    // the count only its window), Shoulders never (no word at all).
+    const s = await ev(() => {
+      const r = seedAll();
+      // Legs keeps its 21 Sep row (outside the window, older than the last):
+      // the muscle screen must name the LAST day, not the oldest.
+      DB.sessions.listAll().filter((x) => x.exerciseId === r.ex.squat && x.date === '2026-09-28').forEach((x) => DB.sessions.remove(x.id));
+      const plank = DB.exercises.add({ name: 'QA Plank', category: 'Core' }).id;
+      DB.sessions.add({ exerciseId: r.ex.bench, date: '2026-09-30', sets: [{ weight: 100, reps: 5 }] });
+      DB.sessions.add({ exerciseId: r.ex.dead, date: '2026-09-29', sets: [{ weight: 100, reps: 5 }] });
+      DB.sessions.add({ exerciseId: r.ex.squat, date: '2026-09-26', sets: [{ weight: 100, reps: 5 }] });
+      DB.sessions.add({ exerciseId: plank, date: '2026-09-20', sets: [{ weight: 5, reps: 5 }] });
+      const dayFmt = new Intl.DateTimeFormat(DB.prefs.get().lang === 'ar' ? 'ar-u-nu-latn' : 'en-US', { weekday: 'long', day: 'numeric', month: 'long' });
+      return {
+        ...r,
+        muscles: { Chest: 2, Back: 2, Legs: 1, Shoulders: 0, Arms: 1, Core: 0 },
+        words: { fatigued: t('mr_fatigued'), recovering: t('mr_recovering'), fresh: t('mr_fresh') },
+        legsLine: t('mr_fresh') + ' · ' + t('mr_last').replace('{d}', () => dayFmt.format(new Date('2026-09-26T00:00:00'))),
+        sess0: t('prg_sess_0'),
+      };
+    });
+    await back();
+    const g = await ev(() => {
+      const tok = (name) => { const p = document.createElement('span'); p.style.color = `var(${name})`; document.body.appendChild(p); const c = getComputedStyle(p).color; p.remove(); return c; };
+      const accent = tok('--accent-text'), mute = tok('--text-mute');
+      return [...document.querySelectorAll('.view.active .prg-mw')].map((b) => {
+        const st = b.querySelector('.prg-mw-state');
+        return { cat: b.dataset.muscle, n: b.querySelector('.prg-mw-n')?.textContent.trim(), word: st ? st.textContent.trim() : null, fresh: !!(st && st.classList.contains('is-fresh')), states: b.querySelectorAll('.prg-mw-state').length, aria: b.getAttribute('aria-label') || '', color: st ? getComputedStyle(st).color : null, accent, mute, under: !!(st && st.previousElementSibling && st.previousElementSibling.classList.contains('prg-mw-name')) };
+      });
+    });
+    const by = Object.fromEntries(g.map((x) => [x.cat, x]));
+    assert.equal(by.Chest.word, s.words.fatigued, 'Chest, trained today: «fatigued»');
+    assert.equal(by.Back.word, s.words.recovering, 'Back, trained yesterday: «recovering»');
+    assert.equal(by.Legs.word, s.words.fresh, 'Legs, four days ago: «ready»');
+    assert.equal(by.Arms.word, s.words.fresh, 'Arms, two days ago: «ready» — 48 h is the edge');
+    assert.equal(by.Core.word, s.words.fresh, 'Core, ten days ago: «ready» with a zero count — the state reads the whole history, the count its window');
+    assert.equal(by.Shoulders.states, 0, 'a muscle never trained has no state line at all');
+    assert.ok(g.filter((x) => x.word).every((x) => x.under), 'the word sits under the name');
+    assert.deepEqual(g.map((x) => x.fresh), [false, false, true, false, true, true], 'only the ready state carries is-fresh');
+    assert.deepEqual(Object.fromEntries(g.map((x) => [x.cat, Number(x.n)])), s.muscles, 'the 7-day count line is unchanged by the state');
+    assert.ok(by.Legs.aria.endsWith(' — ' + s.words.fresh) && by.Chest.aria.endsWith(' — ' + s.words.fatigued) && by.Back.aria.endsWith(' — ' + s.words.recovering), 'the label ends with the state word: ' + by.Legs.aria);
+    assert.ok(by.Shoulders.aria.endsWith(s.sess0), 'a never-trained muscle\'s label ends at its count: ' + by.Shoulders.aria);
+    assert.ok(by.Legs.color === by.Legs.accent && by.Core.color === by.Core.accent, 'the ready word in the accent (--accent-text): ' + by.Legs.color + ' vs ' + by.Legs.accent);
+    assert.ok(by.Chest.color === by.Chest.mute && by.Back.color === by.Back.mute, 'the waiting states in the mute token (--text-mute): ' + by.Chest.color + ' vs ' + by.Chest.mute);
+    // The hard case: «تتعافى» in a 41px cell at 340px under «Larger text». A
+    // word fits its cell whole, on one line, and no two words touch; the
+    // caption and its hint still share one line where the hint is shown.
+    const fit = [];
+    try {
+      for (const w of [340, 375]) for (const lg of [false, true]) {
+        await page.setViewportSize({ width: w, height: 812 });
+        await ev((lg) => { DB.prefs.setTextLg(lg); document.body.classList.toggle('text-lg', lg); }, lg);
+        await back();
+        const p = await ev(() => {
+          const out = [];
+          const v = document.querySelector('.view.active'), plate = v.querySelector('.prg-body'), pr = plate.getBoundingClientRect();
+          if (pr.left < -0.5 || pr.right > innerWidth + 0.5) out.push('the body plate leaves the screen');
+          const boxes = [];
+          for (const b of v.querySelectorAll('.prg-mw')) {
+            const st = b.querySelector('.prg-mw-state');
+            if (!st) continue;
+            const rg = document.createRange(); rg.selectNodeContents(st);
+            const r = rg.getBoundingClientRect(), c = b.getBoundingClientRect(), word = st.textContent.trim();
+            if (r.left < c.left - 0.5 || r.right > c.right + 0.5) out.push('«' + word + '» is wider than its cell (' + Math.round(r.width) + ' in ' + Math.round(c.width) + ')');
+            // Lines from the element's own box (the glyph box of the Arabic
+            // face overhangs its line box by design, so the Range's height
+            // says nothing about lines).
+            if (st.getBoundingClientRect().height > parseFloat(getComputedStyle(st).lineHeight) * 1.5) out.push('«' + word + '» is not on one line inside its well');
+            boxes.push(r);
+          }
+          for (let i = 1; i < boxes.length; i++) if (Math.min(boxes[i - 1].right, boxes[i].right) - Math.max(boxes[i - 1].left, boxes[i].left) > -1) out.push('two state words touch');
+          const hint = v.querySelector('.prg-body .prg-hint'), cap = hint && hint.parentElement.querySelector('.trk-cap-lab');
+          if (hint && cap && hint.getClientRects().length && Math.abs(hint.getBoundingClientRect().top - cap.getBoundingClientRect().top) > 4) out.push('the muscle hint wrapped under its caption');
+          return out;
+        });
+        fit.push(...p.map((x) => `${w}px${lg ? ' larger' : ''}: ${x}`));
+      }
+    } finally {
+      await page.setViewportSize({ width: 375, height: 812 });
+      await ev(() => { DB.prefs.setTextLg(false); document.body.classList.remove('text-lg'); });
+    }
+    assert.deepEqual([...new Set(fit)], [], 'every state word fits its cell whole at 340/375 px, normal and larger text');
+    // The muscle screen: the word and the last session's day under the count line.
+    await back();
+    await page.locator('.view.active .prg-mw[data-muscle="Legs"]').click();
+    const ms = await ev(() => ({ view: currentView, line: document.querySelector('.view.active .ms-ready')?.textContent.replace(/\s+/g, ' ').trim() ?? null, fresh: !!document.querySelector('.view.active .ms-ready .ms-ready-state.is-fresh'), under: !!document.querySelector('.view.active .ms-ready')?.previousElementSibling?.classList.contains('page-subtitle') }));
+    assert.equal(ms.view, 'muscle-sessions');
+    assert.equal(ms.line, s.legsLine, 'the muscle screen says the state and the last day');
+    assert.ok(ms.fresh && ms.under, 'the ready word in the accent, under the count line');
+    await ev(() => navigate('muscle-sessions', { muscleCat: 'Shoulders' }));
+    assert.equal(await ev(() => document.querySelectorAll('.view.active .ms-ready').length), 0, 'no readiness line with no session (the empty state says it)');
+  }],
+
   ['the records are the top three by estimated 1RM; «all records» and each record open their pages', async ({ page, ev, back }) => {
     const s = await ev(seedAll); await back();
     const g = await ev(() => [...document.querySelectorAll('.view.active .prg-rec')].map((b) => ({ id: b.dataset.exerciseId, name: b.querySelector('.prg-rec-name')?.textContent.trim(), orm: b.querySelector('.prg-rec-orm')?.textContent.trim(), html: b.querySelector('.prg-rec-name')?.innerHTML })));
@@ -796,7 +892,7 @@ async function run() {
     }
   } finally { await browser.close(); await srv.close(); }
   if (failures.length) { console.error(`FAIL  program UI: ${failures.length} of ${ran} cases failed`); failures.forEach((f) => console.error('  - ' + f)); process.exitCode = 1; return; }
-  console.log(`PASS  program UI (${passed} cases, AR/dark + EN/light, 375px (340px for size), the clock fixed at Wed 30 Sep 2026 and moved to Thu/Fri/Sat where a case says so): three plates, every caption and legend word in both languages, the week figure (days trained / planned, one delta vs last week, the days left in their count form, no delta without last week), the seven wells (a trained day rises by its sets, today ringed, planned outlined, a missed floor and its legend word, every training or session day a door to its date, past and future), the ribbon (current slot marked, not a control) and the labelled edit button to the planner, the upcoming tiles by workoutForDate each opening its day, the pulled-forward line and its exact undo, the cardio lane (0:30, spoken; add and edit sheets), the six muscle wells with their 7-day counts opening muscle-sessions, the top three records by 1RM (escaped) with «all records» and each record opening its page, the no-plan state (build my program, the cardio lane kept), no overflow or clipping at 375/340 × normal/larger text, every control at 44x44, the rep moment (back from a workout only today's well moves, the figure crossfades), and the reduced-motion final frame; and from the review: an equal week prints no delta, the days-left line only while the calendar allows it, the planned outline and every ribbon/tile text at contrast, «N — name» for a reader, no «rest» without a plan, one and two as words with no plan and the plural after a fraction, the undo moving only the day labels, seven slots scrolling from the ribbon's edge with whole focus rings and a hostile name as text, foreign-script names in their own direction, the record weights on one line, pounds, a rest-day / pulled-forward / declined today, and the 7-day window`);
+  console.log(`PASS  program UI (${passed} cases, AR/dark + EN/light, 375px (340px for size), the clock fixed at Wed 30 Sep 2026 and moved to Thu/Fri/Sat where a case says so): three plates, every caption and legend word in both languages, the week figure (days trained / planned, one delta vs last week, the days left in their count form, no delta without last week), the seven wells (a trained day rises by its sets, today ringed, planned outlined, a missed floor and its legend word, every training or session day a door to its date, past and future), the ribbon (current slot marked, not a control) and the labelled edit button to the planner, the upcoming tiles by workoutForDate each opening its day, the pulled-forward line and its exact undo, the cardio lane (0:30, spoken; add and edit sheets), the six muscle wells with their 7-day counts opening muscle-sessions, the top three records by 1RM (escaped) with «all records» and each record opening its page, the no-plan state (build my program, the cardio lane kept), no overflow or clipping at 375/340 × normal/larger text, every control at 44x44, the rep moment (back from a workout only today's well moves, the figure crossfades), and the reduced-motion final frame; and from the review: an equal week prints no delta, the days-left line only while the calendar allows it, the planned outline and every ribbon/tile text at contrast, «N — name» for a reader, no «rest» without a plan, one and two as words with no plan and the plural after a fraction, the undo moving only the day labels, seven slots scrolling from the ribbon's edge with whole focus rings and a hostile name as text, foreign-script names in their own direction, the record weights on one line, pounds, a rest-day / pulled-forward / declined today, and the 7-day window; and (v428) the readiness word under each muscle well — today fatigued, yesterday recovering, two days or more ready, a word for a muscle trained outside the window, none for one never trained — in the label, the mute token with the accent on «ready», whole in its 41px cell at 340px under larger text, and the muscle screen's line with the last session's day`);
 }
 
 if (require.main === module) run().catch((e) => { console.error(e); process.exitCode = 1; });

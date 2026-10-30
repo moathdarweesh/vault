@@ -2,6 +2,45 @@
 
 One section per release since v309, newest first, moved verbatim from `CLAUDE.md` in v401 (batch 6 of the 2026-09-25 review; `docs/REVIEW-2026-09-25.md`). `CLAUDE.md` is the guide and the authority for how the app works now. A section here records what one release changed and why, in the words written at the time, so a later section — or the guide — can supersede what an earlier one says.
 
+## v428 — THE BODY plate says which muscles are ready
+
+**From the same pasted UX prompt as v427, the third item the owner kept:** a three-tier
+readiness per muscle (fatigued under 24 h, recovering 24–48 h, fresh after), with the last
+session a tap away. Left out on purpose: the prompt's «recommended exercises» — the app
+records and transcribes, it does not advise, and the muscle screen already lists what he did.
+
+**The word under each well.** THE BODY plate's six muscle wells keep their last-7-days
+count and fill (they answer «how much»); under the name each gains ONE word that answers
+«when»: «متعبة» when the muscle's last session is today, «تتعافى» when yesterday, «جاهزة»
+from two days on — read by the CALENDAR DAY, not the hour (sessions carry a day; «I trained
+yesterday» means yesterday at 20:00 as much as at 08:00), from the whole history, not the
+window (a muscle trained ten days ago reads «جاهزة» beside a zero count). A muscle never
+trained shows nothing — an empty well is already a hole, and «جاهزة» for a muscle with no
+history would be a claim. No legend: three words that explain themselves. The state is a
+word and a token, never a traffic-light palette: the waiting states in `--text-mute`, the
+one actionable state in `--accent-text`; the well's `aria-label` ends with it. The muscle
+screen gains one line under «n sessions logged»: the word and «آخر جلسة: الأحد ٢٧ سبتمبر».
+`muscleReadiness(lastDate, now)` and `muscleReadinessWord(state)` are pure, top-level, and
+pinned by a new node suite (`scripts/test-muscle-readiness.js`).
+
+**Measured before the words were chosen.** At 340 px under «خطّ أكبر» a well is 41 px wide
+and the word is 12 px bold: Arabic «تتعافى» measures 34.1 px — it fits with 7 px to spare.
+The spec's English did not fit anywhere: «Fatigued» 47.8 px and «Recovering» 61.4 px (43.8 /
+56.2 even at the 11 px floor), over the cell at 340 AND at 375 (46.8 px), neighbours touching
+— so the English words are «Tired / Sore / Ready» (the dictionary line carries the figures).
+The suite pins every word whole in its cell at 340 and 375, normal and larger, one line, no
+two words touching, and the caption/hint still on one line.
+
+**Tests.** `scripts/test-program-ui.js` gains the readiness case at its fixed clock (Chest
+today, Back yesterday, Legs four days, Arms the 48-hour edge, Core ten days with a zero count,
+Shoulders never) and the muscle screen's line; 16 plants in memory, all caught (the day start
+dropped, a future day as fresh, the state read inside the window only, the count windowed
+by mistake, the word in the wrong token, the word one size too big).
+
+Gate: all contracts, lint, 31 suites (pooled, 240 s, no retry) — `scripts/test-muscle-readiness.js` joined the pool.
+
+Fingerprint net, v427 → v428: the sheets lane 128/128 identical; the views lane 176/184 — the eight Home cells whose only difference is the footer version label. The matrix renders the EMPTY state, where no muscle has a session and so no well draws a word; the word is pinned by the Program suite at its fixed clock instead.
+
 ## v427 — the guided run: a quick-adjust bar under the set you are typing, and a plate calculator
 
 **The owner, 2026-10-30, pasted a generic «UX overhaul» prompt and asked what was worth

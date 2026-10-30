@@ -562,6 +562,9 @@ const I18N = {
     // The three plates' captions and legend (the owner: words on every drawn thing)
     prg_cycle: 'Your cycle', prg_next: 'Coming workouts', prg_cardio: 'Scheduled cardio',
     prg_muscles: 'Muscles · last 7 days', prg_muscles_hint: 'The number is sessions',
+    // v428: one word under a muscle well — measured: «Fatigued»/«Recovering»
+    // are 48/61px at the caption size, the well is 41px at 340px. Five letters.
+    mr_fatigued: 'Tired', mr_recovering: 'Sore', mr_fresh: 'Ready', mr_last: 'Last session: {d}',
     prg_records: 'Your best lifts', prg_all_records: 'All records',
     prg_lg_trained: 'Trained', prg_lg_planned: 'Planned', prg_lg_missed: 'Missed',
     prg_wells_hint: 'Each day rises with its sets', prg_wells_num: 'Number = sets',
@@ -1719,6 +1722,7 @@ const I18N = {
     program_new_prs: 'أرقام جديدة',
     prg_cycle: 'دورتك', prg_next: 'التمارين القادمة', prg_cardio: 'الكارديو المجدول',
     prg_muscles: 'العضلات · آخر ٧ أيام', prg_muscles_hint: 'الرقم = جلسات العضلة',
+    mr_fatigued: 'متعبة', mr_recovering: 'تتعافى', mr_fresh: 'جاهزة', mr_last: 'آخر جلسة: {d}',
     prg_records: 'أفضل أرقامك', prg_all_records: 'كل الأرقام',
     prg_lg_trained: 'تمرّنت', prg_lg_planned: 'مخطّط', prg_lg_missed: 'فاتك',
     prg_wells_hint: 'ارتفاع كل يوم بعدد مجموعاته', prg_wells_num: 'الرقم = المجموعات',

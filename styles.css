@@ -9596,6 +9596,18 @@ body.theme-light .prg-seg.is-current .prg-seg-n { color: var(--text); }
 /* A one-word name may be wider than its well («Shoulders»): it stays one
    line, centred over the gap, rather than shrinking. */
 .prg-mw-name { display: flex; justify-content: center; font-size: var(--fs-meta); color: var(--text-mute); white-space: nowrap; }
+/* v428: the readiness word under the name — «متعبة» (trained today), «تتعافى»
+   (yesterday), «جاهزة» (two days or more). A state is a WORD and one token:
+   the mute ink for the two waiting states, the accent for the one that is
+   actionable — never a traffic-light palette. A muscle never trained draws no
+   line, so the well grows only when it has something to say (the box fits
+   what is in it). Centred like the name; a word wider than its 41px cell at
+   340px stays whole over the gap, never cut. */
+.prg-mw-state { display: flex; justify-content: center; font-size: var(--fs-caption); font-weight: 700; line-height: 1.2; color: var(--text-mute); white-space: nowrap; }
+.prg-mw-state.is-fresh, .ms-ready-state.is-fresh { color: var(--accent-text); }
+/* The muscle screen's line under «n sessions logged»: the same word, then
+   «آخر جلسة: <day>» in the subtitle's own voice. */
+.ms-ready-state { font-weight: 700; color: var(--text-mute); }
 
 .prg-muscles + .prg-rec-head { position: relative; margin-top: var(--sp-3); padding-top: var(--sp-3); }
 .prg-muscles + .prg-rec-head::before { content: ''; position: absolute; top: 0; inset-inline: 0; height: 1px; background: var(--border); }
