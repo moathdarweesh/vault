@@ -1373,19 +1373,19 @@ const RECIPE_IMPORT = [
       assert.equal((await page.locator('#rec-rows .rec-door .fig-row-num').innerText()).trim(), await page.evaluate(() => fmtNum(300)), 'the row now leads with its kcal');
     } finally { kit.hold = null; await kit.done(); }
   } },
-  { name: 'B13 the bar: the reading appears only past one serving, and its height never moves; the last row removed leaves the tiles, and undo brings it back', async run(page) {
+  { name: 'B13 the bar: the caption says per serving and, past one serving, the whole recipe beside it; its height never moves; the last row removed leaves the tiles, and undo brings it back', async run(page) {
     await fresh(page);
     await page.evaluate(() => openRecipeEditor(null, { name: 'QA bar', servings: 1, items: [{ name: 'rice', qty: '100 g', calories: 130, protein: 2.7, carbs: 28, fat: 0.3 }] }, () => {}));
-    const seg = page.locator('#rec-totals .rec-reading');
-    assert.equal(await seg.isVisible(), false, 'one serving: nothing to choose, nothing named — v405 painted two readings of one number');
+    const cap = page.locator('#rec-bar-cap');
+    assert.equal((await cap.innerText()).trim(), await page.evaluate(() => t('rec_bar_per')), 'one serving: the caption says per serving and nothing more');
+    assert.equal((await page.locator('#rec-totals .rec-bar-serv-k').innerText()).trim(), await page.evaluate(() => t('rec_servings')), 'the stepper is captioned «عدد الحصص» — v411 drew it bare');
+    assert.equal(await page.locator('#rec-totals [data-reading]').count(), 0, 'no reading toggle: both figures are on screen at once');
     const h1 = await page.locator('#rec-totals').evaluate((el) => el.getBoundingClientRect().height);
     await page.locator('#rec-totals [data-step="1"]').click();
-    assert.equal(await seg.isVisible(), true, 'two servings: the reading is offered');
+    assert.equal((await cap.innerText()).trim(), await page.evaluate(() => t('rec_bar_per') + ' · ' + t('rec_bar_whole').replace('{n}', fmtNum(130))), 'two servings: the whole recipe\'s kcal beside it');
     assert.equal(await page.locator('#rec-totals').evaluate((el) => el.getBoundingClientRect().height), h1, 'and the bar kept its height');
-    assert.equal((await page.locator('.rec-bar-kcal').innerText()).trim(), await page.evaluate(() => fmtNum(65)), 'per serving by default — what logging writes');
-    await seg.locator('[data-reading="total"]').click();
-    assert.equal(await seg.locator('[data-reading="total"]').getAttribute('aria-pressed'), 'true');
-    assert.equal((await page.locator('.rec-bar-kcal').innerText()).trim(), await page.evaluate(() => fmtNum(130)), 'the whole recipe on request');
+    assert.equal((await page.locator('.rec-bar-kcal').innerText()).trim(), await page.evaluate(() => fmtNum(65)), 'the grid reads per serving — what logging writes');
+    assert.equal((await page.locator('#rec-totals [data-show="carbs"]').innerText()).trim(), await page.evaluate(() => fmtNum(14)), 'every cell per serving');
     await page.locator('#rec-rows .rec-door').click();
     await page.locator('#rec-rows [data-del]').click();
     await page.locator('#rec-add-first').waitFor({ timeout: 2000 });
@@ -1395,22 +1395,35 @@ const RECIPE_IMPORT = [
     assert.equal((await page.locator('#rec-rows .rec-door .fig-row-title').innerText()).trim(), 'rice', 'undo brings the row back');
     await page.evaluate(() => { closeModal(); hideToast(); });
   } },
-  { name: 'B14 the bar\'s first line fits a 340px phone past one serving, in normal and «Larger text»', async run(page) {
+  { name: 'B14 the bar fits 340 and 320 px with four-digit figures, in normal and «Larger text»: nothing outside the bar, no figure out of its cell, the caption on one line', async run(page) {
     await fresh(page);
     const vp = page.viewportSize();
     const lgBefore = await page.evaluate(() => document.body.classList.contains('text-lg'));
     try {
-      await page.setViewportSize({ width: 340, height: 740 });
-      await page.evaluate(() => openRecipeEditor(null, { name: 'QA bar', servings: 4, items: [{ name: 'rice', qty: '100 g', calories: 130, protein: 2.7, carbs: 28, fat: 0.3 }] }, () => {}));
-      for (const lg of [false, true]) {
-        await page.evaluate((lg) => document.body.classList.toggle('text-lg', lg), lg);
-        const m = await page.locator('#rec-totals').evaluate((bar) => {
-          const top = bar.querySelector('.rec-bar-top'), b = bar.getBoundingClientRect(), cs = getComputedStyle(bar);
-          const out = [...top.querySelectorAll('button, input')].filter((el) => { const r = el.getBoundingClientRect(); return r.left < b.left + parseFloat(cs.paddingLeft) - 0.5 || r.right > b.right - parseFloat(cs.paddingRight) + 0.5; }).length;
-          return { scroll: top.scrollWidth, client: top.clientWidth, out, shown: !bar.querySelector('.rec-reading').hidden };
-        });
-        assert.ok(m.shown, 'setup: four servings offer the two readings');
-        assert.ok(m.scroll <= m.client && m.out === 0, `line 1 fits inside the bar at 340px${lg ? ' with «Larger text»' : ''} — the unreviewed build ran «Whole» out of it: ${JSON.stringify(m)}`);
+      for (const width of [340, 320]) {
+        await page.setViewportSize({ width, height: 740 });
+        await page.evaluate(() => openRecipeEditor(null, { name: 'QA bar', servings: 4, items: [{ name: 'feast', qty: '4 kg', calories: 4936, protein: 493.6, carbs: 493.6, fat: 493.6 }] }, () => {}));
+        for (const lg of [false, true]) {
+          await page.evaluate((lg) => document.body.classList.toggle('text-lg', lg), lg);
+          const m = await page.locator('#rec-totals').evaluate((bar) => {
+            const b = bar.getBoundingClientRect(), cs = getComputedStyle(bar);
+            const L = b.left + parseFloat(cs.paddingLeft) - 0.5, Rt = b.right - parseFloat(cs.paddingRight) + 0.5;
+            const out = [...bar.querySelectorAll('.rec-bar-serv-k, .rec-bar-serv button, .rec-bar-serv input, .rec-bar-cap, .rec-bar-cell')]
+              .filter((el) => { const r = el.getBoundingClientRect(); return r.left < L || r.right > Rt; }).map((el) => el.className || el.tagName);
+            const spill = [...bar.querySelectorAll('.rec-bar-cell')].flatMap((c) => {
+              const cr = c.getBoundingClientRect();
+              return [...c.children].filter((x) => { const r = x.getBoundingClientRect(); return r.left < cr.left - 0.5 || r.right > cr.right + 0.5; }).map((x) => x.textContent);
+            });
+            const capEl = bar.querySelector('.rec-bar-cap');
+            return { out, spill, capFits: capEl.scrollWidth <= capEl.clientWidth + 1, kcal: bar.querySelector('.rec-bar-kcal').textContent };
+          });
+          const where = width + 'px' + (lg ? ' with «Larger text»' : '');
+          assert.equal(m.kcal, await page.evaluate(() => fmtNum(1234)), 'setup: a four-digit kcal per serving');
+          assert.deepEqual(m.out, [], 'nothing runs out of the bar at ' + where);
+          assert.deepEqual(m.spill, [], 'no figure or name runs out of its cell at ' + where);
+          assert.ok(m.capFits, 'the caption, with the whole recipe\'s kcal, stays on one line at ' + where);
+        }
+        await page.evaluate(() => closeModal());
       }
     } finally {
       await page.evaluate((lg) => { document.body.classList.toggle('text-lg', lg); closeModal(); }, lgBefore);

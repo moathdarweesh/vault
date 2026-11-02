@@ -2,6 +2,28 @@
 
 One section per release since v309, newest first, moved verbatim from `CLAUDE.md` in v401 (batch 6 of the 2026-09-25 review; `docs/REVIEW-2026-09-25.md`). `CLAUDE.md` is the guide and the authority for how the app works now. A section here records what one release changed and why, in the words written at the time, so a later section — or the guide — can supersede what an earlier one says.
 
+## v430 — the recipe editor's totals bar, in order
+
+**The owner, on the bar under the ingredients, with a screenshot: «عيد تصميم هذي الواجهة
+اجعلها أرتب وأسهل للاستخدام».** v411's bar put a bare servings stepper («− ١ +», nothing saying
+what it counts) at one edge with empty room beside it, a two-reading toggle («للحصّة» /
+«للوصفة») beside it past one serving, and the four figures as one run of text under it.
+
+**Three lines now, the same height in every state.** The SERVINGS ROW: the caption «عدد الحصص»
+at the start and ONE joined stepper at the end (v429's strip language: one border, hairlines
+inside, the field borderless between the buttons). One CAPTION line: «لكلّ حصّة», and past one
+serving «· الوصفة كاملة ٥٢٠ سعرة» beside it. The GRID: four cells, each figure over its name —
+kcal wider and in the accent (the number logging writes), protein, carbs, fat — on one line
+box so the four names sit level. The toggle is gone: per serving and the whole recipe's kcal
+are on screen at once (`rec_total` and `rec_view_group` deleted; `rec_bar_per`,
+`rec_bar_whole` new). With the keyboard up the bar folds to the grid (`.rec-tight`).
+
+**Tests.** `scripts/test-convenience-ui.js` B13 now pins the caption at one serving and with
+the whole recipe past it, the visible «عدد الحصص», no toggle, the height kept, every cell per
+serving; B14 pins the bar at 340 and 320 px, normal and larger text, with four-digit figures
+(1,234 kcal, 123.4 g): nothing out of the bar, no figure out of its cell, the caption on one
+line. Gate: contracts, ESLint and 31 suites green (257 s, --jobs 3).
+
 ## v429 — the quick-adjust bar rebuilt: one joined strip, no card
 
 **The owner, on v427's bar with two screenshots: «عيد التصميم جذريا».** Both pictures showed

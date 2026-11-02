@@ -1413,7 +1413,6 @@ function openRecipeEditor(date, existing, onDone, opts) {
   var servings = (existing && existing.servings) || 1;
   var saveWanted = false;
   var openId = null;      // the one row whose edit strip is open
-  var view = 'per';       // the bar's reading while servings > 1: 'per' | 'total'
   var saved = false;      // set before a closeModal that hands the screen on (a save, the import): opts.onClose stays quiet
   var lastPer = null;     // the per-serving kcal last painted, for the one colour step
   var reduced = function () { return !!(window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches); };
@@ -1532,7 +1531,8 @@ function openRecipeEditor(date, existing, onDone, opts) {
 
   // The bar's four visible figures follow the chosen reading; the eight
   // [data-t]/[data-p] cells hold both readings, every one of them in the DOM.
-  var shown = function (f, key) { return '<span class="num" data-show="' + f + '">0</span>\u00a0' + key; };
+  // v430: one figure CELL of the bar's grid — the number over its name.
+  var figCell = function (f, key, extra) { return '<div class="rec-bar-cell"><span class="num rec-bar-n' + (extra || '') + '" data-show="' + f + '">0</span><span class="rec-bar-k">' + key + '</span></div>'; };
   var cells = ['calories', 'protein', 'carbs', 'fat'].map(function (f) { return '<span data-t="' + f + '">0</span><span data-p="' + f + '">0</span>'; }).join('');
   var overlay = openModal('' +
     '<div class="modal-header">' +
@@ -1546,23 +1546,23 @@ function openRecipeEditor(date, existing, onDone, opts) {
     '<div id="rec-rows" class="rec-list"></div>' +
     '<button type="button" class="ledger-add rec-add" id="rec-add">' + icon('plus', 14) + ' <span>' + t('rec_add_ing') + '</span></button>' +
     '<div class="rec-foot">' +
-      // ONE bar: the servings stepper, the reading (only when it has two), and
-      // the figure the food log will receive. No border: the bar is not a control.
+      // ONE bar (v430, the owner: «عيد تصميم هذي الواجهة اجعلها أرتب وأسهل»):
+      // a captioned servings row with ONE joined stepper; one caption line that
+      // says the figures are per serving (and, past one serving, the whole
+      // recipe's kcal); the four figures in four cells, each over its name.
+      // Its height is the same in every state. No border: the bar is not a control.
       '<div class="rec-bar" id="rec-totals">' +
-        '<div class="rec-bar-top">' +
-          '<span class="rt-step">' +
+        '<div class="rec-bar-serv">' +
+          '<span class="rec-bar-serv-k">' + t('rec_servings') + '</span>' +
+          '<span class="rt-step rec-bar-step">' +
             '<button type="button" data-step="-1" aria-label="' + escapeHtml(t('rec_serv_less')) + '">' + icon('minus', 16) + '</button>' +
             '<input type="number" id="rec-servings" class="num" inputmode="numeric" min="1" max="99" step="1" value="' + numAttr(servings) + '" aria-label="' + escapeHtml(servLabel(servings)) + '">' +
             '<button type="button" data-step="1" aria-label="' + escapeHtml(t('rec_serv_more')) + '">' + icon('plus', 16) + '</button>' +
           '</span>' +
-          '<div class="rec-reading" role="group" aria-label="' + escapeHtml(t('rec_view_group')) + '" hidden>' +
-            '<button type="button" data-reading="per" aria-pressed="true">' + t('rec_per') + '</button>' +
-            '<button type="button" data-reading="total" aria-pressed="false">' + t('rec_total') + '</button>' +
-          '</div>' +
         '</div>' +
-        '<div class="rec-bar-figs">' +
-          '<span class="rec-bar-val"><span class="num rec-bar-kcal" data-show="calories">0</span><span class="rec-bar-unit">' + t('cal') + '</span></span>' +
-          '<span class="rec-bar-macros">' + recJoin([shown('protein', t('protein_label')), shown('carbs', t('carbs_label')), shown('fat', t('fat_label'))]) + '</span>' +
+        '<div class="rec-bar-cap" id="rec-bar-cap">' + t('rec_bar_per') + '</div>' +
+        '<div class="rec-bar-grid">' +
+          figCell('calories', t('cal'), ' rec-bar-kcal') + figCell('protein', t('protein_label')) + figCell('carbs', t('carbs_label')) + figCell('fat', t('fat_label')) +
         '</div>' +
         '<div class="rec-bar-data" hidden>' + cells + '</div>' +
       '</div>' +
@@ -1736,21 +1736,15 @@ function openRecipeEditor(date, existing, onDone, opts) {
     put('[data-p="protein"]', per.protein);
     put('[data-p="carbs"]', per.carbs);
     put('[data-p="fat"]', per.fat);
-    // At one serving the two readings are the same number, so the choice is
-    // not offered and nothing names it. Per serving is the default: it is what
-    // logging the recipe writes.
-    var seg = overlay.querySelector('.rec-reading');
-    seg.hidden = n === 1;
-    if (n === 1) view = 'per';
-    seg.querySelectorAll('[data-reading]').forEach(function (b) { b.setAttribute('aria-pressed', b.dataset.reading === view ? 'true' : 'false'); });
-    var whole = view === 'total';
-    ['calories', 'protein', 'carbs', 'fat'].forEach(function (f) {
-      put('[data-show="' + f + '"]', whole ? (f === 'calories' ? Math.round(tot[f]) : Math.round(tot[f] * 10) / 10) : per[f]);
-    });
+    // v430: the grid always reads PER SERVING — what logging the recipe writes —
+    // and the caption says so; past one serving it adds the whole recipe's kcal
+    // (v411's two-reading toggle is gone: both figures are on screen at once).
+    var cap = overlay.querySelector('#rec-bar-cap');
+    if (cap) cap.textContent = t('rec_bar_per') + (n > 1 ? ' · ' + t('rec_bar_whole').replace('{n}', function () { return fmtNum(Math.round(tot.calories)); }) : '');
+    ['calories', 'protein', 'carbs', 'fat'].forEach(function (f) { put('[data-show="' + f + '"]', per[f]); });
     var kc = overlay.querySelector('.rec-bar-kcal');
-    kc.classList.toggle('is-whole', whole);
     // One colour step when a reply moves the logged figure — no counting, no bounce.
-    if (fromReply && !whole && lastPer !== null && per.calories !== lastPer && !reduced()) {
+    if (fromReply && lastPer !== null && per.calories !== lastPer && !reduced()) {
       kc.classList.remove('is-bump'); void kc.offsetWidth; kc.classList.add('is-bump');
     }
     lastPer = per.calories;
@@ -2068,8 +2062,6 @@ function openRecipeEditor(date, existing, onDone, opts) {
     drawTotals();
   });
   overlay.querySelector('#rec-totals').addEventListener('click', function (e) {
-    var pick = e.target.closest ? e.target.closest('[data-reading]') : null;
-    if (pick) { view = pick.dataset.reading === 'total' ? 'total' : 'per'; drawTotals(); return; }
     var b = e.target.closest ? e.target.closest('[data-step]') : null;
     if (!b) return;
     var v = Math.min(99, Math.max(1, (parseInt(servInput.value, 10) || 1) + Number(b.dataset.step)));

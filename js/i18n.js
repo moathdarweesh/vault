@@ -706,7 +706,7 @@ const I18N = {
     rec_auto_fail: 'Could not work out {name} — type its figures by hand',
     rec_auto_signin: 'Automatic figures need you to be signed in (the AI); saved foods still work',
 
-    rec_total: 'Whole',   // the totals bar's two readings (v411): short, they share a line with the stepper
+    rec_bar_per: 'Per serving', rec_bar_whole: 'whole recipe {n} kcal',   // the totals bar's caption line (v430)
     rec_per: 'Serving',
     rec_save: 'Save recipe',
     rec_saved: 'Recipe saved',
@@ -719,7 +719,7 @@ const I18N = {
     // the ledger's empty state (two tiles), the row strip's end control and the totals segment (v411)
     rec_empty_add_sub: 'Its figures fill in by themselves',
     rec_empty_import: 'Extract from a video or an image', rec_empty_import_sub: 'Or from a link or pasted text',
-    rec_row_done: 'Done', rec_view_group: 'Which figures to show',
+    rec_row_done: 'Done',
     // the recipe view's door to the clip a recipe was extracted from — the label names the platform (v425)
     rec_watch_yt: 'Watch the clip on YouTube', rec_watch_tt: 'Watch the clip on TikTok', rec_watch_ig: 'Watch the clip on Instagram',
     // «اقتراحات» — meal suggestions from recipes users share, reviewed by the AI before they are published (js/food.js MEAL SUGGESTIONS, v419)
@@ -1862,7 +1862,7 @@ const I18N = {
     rec_auto_fail: 'تعذّر حساب {name} — اكتب أرقامه يدويًا',
     rec_auto_signin: 'الحساب التلقائي يحتاج تسجيل الدخول (الذكاء الاصطناعي)؛ الأطعمة المحفوظة تعمل بدونه',
 
-    rec_total: 'للوصفة',   // قراءتا شريط المجاميع (v411): قصيرتان لأنهما تجاوران عدّاد الحصص
+    rec_bar_per: 'لكلّ حصّة', rec_bar_whole: 'الوصفة كاملة {n} سعرة',   // سطر شرح شريط المجاميع (v430)
     rec_per: 'للحصّة',
     rec_save: 'احفظ الوصفة',
     rec_saved: 'حُفظت الوصفة',
@@ -1875,7 +1875,7 @@ const I18N = {
     // الحالة الفارغة (بلاطتان)، زر إنهاء شريط الصفّ، ومقطع المجاميع (v411)
     rec_empty_add_sub: 'وأرقامه تُحسب تلقائيًا',
     rec_empty_import: 'استخرج من مقطع أو صورة', rec_empty_import_sub: 'أو من رابط أو نصّ',
-    rec_row_done: 'تم', rec_view_group: 'الأرقام المعروضة',
+    rec_row_done: 'تم',
     // رابط المقطع الذي استُخرجت منه الوصفة، في صفحة عرضها — التسمية تذكر المنصّة (v425)
     rec_watch_yt: 'شاهد المقطع على يوتيوب', rec_watch_tt: 'شاهد المقطع على تيك توك', rec_watch_ig: 'شاهد المقطع على إنستغرام',
     // «اقتراحات» — وصفات يشاركها المستخدمون وتراجعها خدمة الذكاء الاصطناعي قبل نشرها (v419). الفصحى: «وجبة خفيفة» لا «سناك»، و«الغداء/العشاء» بالهمزة
