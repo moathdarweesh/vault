@@ -3686,50 +3686,70 @@ body[data-view="session-run"] .bottom-nav { display: none; }
 .run-set-done::after { content: ''; position: absolute; inset: -10px; }
 .run-addset { margin-top: 12px; font-size: var(--fs-sub); }
 
-/* ── v427: the quick-adjust bar ───────────────────────────────────────── */
-/* One element, moved under the set being typed (renderSessionRun). In the
-   flow, so it never sits over the keyboard or on the sticky rest bar; the rest
-   bar's card and its ±15 are the precedent for a control strip on this screen.
-   The S rung with the 44px halo; a flex row that WRAPS, so at 320px with «خطّ
-   أكبر» the plate button takes a second line rather than cutting a step.
-   dir="ltr" is set in the markup: a group of figures, the «−» steps first in
-   both languages. */
+/* ── v427 → v429: the quick-adjust bar ───────────────────────────────── */
+/* One element, moved under the set being typed (renderSessionRun), in the
+   flow — never over the keyboard or on the sticky rest bar. v429 rebuilt it
+   (the owner: «عيد التصميم جذريا»): v427 was a card holding loose buttons —
+   the reps bar two 44 px buttons in a 340 px box, the weight bar wrapping so
+   «الأقراص» sat alone on a second line. Now there is no card: the steps are
+   ONE joined strip that fills the row, equal cells split by hairlines (the
+   border is the strip's, so the whole strip reads as one control), the
+   lowering steps in the dim ink and the raising ones in full; the plate
+   button is a square of the same height beside it. Cells are 44 px tall
+   inside the 1 px border (no halo needed) and at least 46 px wide at 320 px
+   with «خطّ أكبر» (five cells + the square + one gap). dir="ltr" is set in
+   the markup: «−» steps first in both languages. */
 .run-adjust {
   display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: var(--sp-2h) var(--sp-2);   /* 10px between ROWS: two 4px halos (below) never meet when the bar wraps */
-  padding: var(--sp-2);
-  background: var(--surface-1);
+  align-items: stretch;
+  gap: var(--sp-2);
+}
+.run-adjust-steps {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  height: calc(var(--btn-h-m) + 2px);
+  background: var(--surface-2);
   border: 1px solid var(--border);
-  border-radius: var(--radius);
+  border-radius: var(--radius-btn-m);
+  overflow: hidden;
 }
 .run-adjust-btn {
-  position: relative;
+  flex: 1 1 0;
+  min-width: 0;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: var(--sp-1);
-  min-width: 44px;
-  height: var(--btn-h-s);
-  padding: 0 var(--sp-2h);
-  border-radius: var(--radius-btn-s);
-  background: var(--surface-2);
-  border: 1px solid var(--border);
-  color: var(--text);
-  font-size: var(--fs-btn-s);
+  padding: 0;
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+  color: var(--text-dim);
+  font-size: var(--fs-btn-m);
   font-weight: 700;
   font-variant-numeric: tabular-nums;
+  transition: background 0.15s, color 0.15s;
+}
+.run-adjust-btn.is-up { color: var(--text); }
+.run-adjust-btn + .run-adjust-btn { border-inline-start: 1px solid var(--border); }
+.run-adjust-btn:active { background: var(--surface-3); color: var(--text); }
+.run-adjust-btn:focus-visible { outline: 2px solid var(--accent-text); outline-offset: -3px; }
+.run-adjust-plates {
+  flex: 0 0 auto;
+  width: calc(var(--btn-h-m) + 2px);
+  height: calc(var(--btn-h-m) + 2px);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-btn-m);
+  color: var(--text);
   transition: transform var(--dur-press) var(--ease), background 0.15s;
 }
-/* -5px: a bordered 36 measured from its padding box (the v373 arithmetic);
-   vertical only, so neighbours' halos never meet sideways — each button is
-   at least 44 wide by itself. */
-.run-adjust-btn::after { content: ''; position: absolute; inset: -5px 0; }
-.run-adjust-btn:active { transform: scale(var(--press-scale)); background: var(--surface-3); }
-/* The plate button: the glyph and the word, pushed to the row's end. */
-.run-adjust-plates { margin-inline-start: auto; }
-.run-adjust-plates svg { width: 16px; height: 16px; }
+.run-adjust-plates svg { width: 20px; height: 20px; }
+.run-adjust-plates:active { transform: scale(var(--press-scale)); background: var(--surface-3); }
 
 .run-nav { display: flex; gap: 10px; margin-top: 22px; }
 .run-nav .btn { flex: 1; height: var(--btn-h-l); font-size: var(--fs-btn-l); font-weight: 700;

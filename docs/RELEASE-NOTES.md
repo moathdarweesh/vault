@@ -2,6 +2,26 @@
 
 One section per release since v309, newest first, moved verbatim from `CLAUDE.md` in v401 (batch 6 of the 2026-09-25 review; `docs/REVIEW-2026-09-25.md`). `CLAUDE.md` is the guide and the authority for how the app works now. A section here records what one release changed and why, in the words written at the time, so a later section — or the guide — can supersede what an earlier one says.
 
+## v429 — the quick-adjust bar rebuilt: one joined strip, no card
+
+**The owner, on v427's bar with two screenshots: «عيد التصميم جذريا».** Both pictures showed
+the complaint this app keeps getting — the box did not fit what was in it: the reps bar was
+two 44 px buttons in the corner of a 340 px card, and the weight bar wrapped so «الأقراص» sat
+alone on a second line under five steps.
+
+**Now there is no card.** The steps are ONE joined strip that fills the row — equal cells
+split by hairlines, the strip's own border making it one control, the lowering steps in the
+dim ink and the raising ones in full. Reps: two halves, «−1» and «+1», each half the row.
+Weight: five cells and, beside them, the plate button as a square of the strip's height (the
+barbell glyph, named «الأقراص» by its label and title) — one line at 320 px with «خطّ أكبر».
+Cells are 44 px tall inside the 1 px border, so no halo is needed; behaviour is unchanged
+(the same steps, the ghost as the base, focus kept, nothing committed).
+
+**Tests.** `scripts/test-run-home-ui.js` reads a glyph-only button's face from its label and
+accepts a cell 44 px tall by itself as reachable; its fit case (375 and 320 px, normal and
+larger text: nothing cut, nothing out of the bar, every button ≥ 44 px) passes on the new
+layout. Gate: contracts, ESLint and 31 suites green (259 s, --jobs 3).
+
 ## v428 — THE BODY plate says which muscles are ready
 
 **From the same pasted UX prompt as v427, the third item the owner kept:** a three-tier

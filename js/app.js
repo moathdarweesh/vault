@@ -12,7 +12,7 @@
 // build. The literal below is the fallback (file://, or a stripped query) and is
 // still bumped by `npm run release` — see CLAUDE.md "CACHE WORKFLOW".
 const VAULT_BUILD = (() => {
-  const FALLBACK = 'v428';
+  const FALLBACK = 'v429';
   try {
     const src = (document.currentScript && document.currentScript.src) || '';
     const m = src.match(/[?&]v=(\d+)/);
@@ -8526,10 +8526,15 @@ function renderSessionRun(el) {
     const btns = steps.map((d) => {
       const label = field === 'reps' ? t(d > 0 ? 'adj_rep_up' : 'adj_rep_down')
         : t(d > 0 ? 'adj_up' : 'adj_down').replace('{x}', () => fmtNum(Math.abs(d))).replace('{u}', () => unitWord);
-      return `<button type="button" class="run-adjust-btn num" data-adj="${d}" aria-label="${escapeHtml(label)}">${d > 0 ? '+' : '−'}${fmtNum(Math.abs(d))}</button>`;
+      return `<button type="button" class="run-adjust-btn num${d > 0 ? ' is-up' : ''}" data-adj="${d}" aria-label="${escapeHtml(label)}">${d > 0 ? '+' : '−'}${fmtNum(Math.abs(d))}</button>`;
     });
-    if (field === 'weight') btns.push(`<button type="button" class="run-adjust-btn run-adjust-plates" data-plates>${icon('dumbbell', 16)} ${t('plates')}</button>`);
-    return btns.join('');
+    // v429: the steps are ONE joined strip that fills the row (equal cells, a
+    // hairline between them); the plate button is a square of the strip's
+    // height beside it — glyph only, named by its label — so the weight bar is
+    // one line at 320 px with larger text and never leaves a button alone.
+    const plates = field === 'weight'
+      ? `<button type="button" class="run-adjust-plates" data-plates aria-label="${escapeHtml(t('plates'))}" title="${escapeHtml(t('plates'))}">${icon('dumbbell', 20)}</button>` : '';
+    return `<div class="run-adjust-steps">${btns.join('')}</div>${plates}`;
   };
   const adjustBase = (inp) => {
     const n = parseFloat(inp.value !== '' ? inp.value : inp.placeholder);

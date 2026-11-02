@@ -138,7 +138,7 @@ const barNow = (kit) => kit.ev(() => {
   if (!bars.length) return null;
   const bar = bars[0], prev = bar.previousElementSibling;
   return { n: bars.length, row: prev && prev.matches('.run-set-row') ? Number(prev.dataset.set) : null,
-    labels: [...bar.querySelectorAll('button')].map((b) => b.textContent.trim()), plates: !!bar.querySelector('[data-plates]') };
+    labels: [...bar.querySelectorAll('button')].map((b) => b.textContent.trim() || b.getAttribute('aria-label')), plates: !!bar.querySelector('[data-plates]') };
 });
 const tapAdj = (kit, d) => kit.page.locator(`.view.active .run-adjust [data-adj="${d}"]`).click();
 // A dictionary line with its figures filled, in the page's language.
@@ -480,8 +480,8 @@ const CASES = [
               barFits: bar.scrollWidth <= bar.clientWidth + 1 && br.right <= window.innerWidth,
               buttons: [...bar.querySelectorAll('button')].map((b) => {
                 const r = b.getBoundingClientRect(), cx = r.left + r.width / 2;
-                return { text: b.textContent.trim(), w: Math.round(r.width), h: eff(b), inside: r.left >= br.left - 0.5 && r.right <= br.right + 0.5,
-                  cut: b.scrollWidth > b.clientWidth + 1, reach: hit(cx, r.top - 3, b) && hit(cx, r.bottom + 3, b) };
+                return { text: b.textContent.trim() || b.getAttribute('aria-label'), w: Math.round(r.width), h: eff(b), inside: r.left >= br.left - 0.5 && r.right <= br.right + 0.5,
+                  cut: b.scrollWidth > b.clientWidth + 1, reach: b.clientHeight >= 44 || (hit(cx, r.top - 3, b) && hit(cx, r.bottom + 3, b)) };
               }),
             };
           });
