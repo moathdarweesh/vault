@@ -2847,6 +2847,10 @@ button.schedule-prev-row { width: 100%; min-height: var(--btn-h-m); font: inheri
 /* Clears the sticky rest bar at its stuck position: anchor + measured height +
    a gap. It used to be measured from --nav-h, which the guided screen hides. */
 body.rest-active .toast { bottom: calc(var(--safe-b) + var(--rest-h, 72px) + 28px); }
+/* v431: on the guided screen the floor bar is under it too. 16px clears Undo's
+   downward halo (-14px, below) off the bar's top edge, so it never steals Next. */
+body[data-view="session-run"] .toast { bottom: calc(var(--run-nav-h) + 16px); }
+body.rest-active[data-view="session-run"] .toast { bottom: calc(var(--run-nav-h) + var(--rest-h, 72px) + 24px); }
 .toast .toast-msg { padding-inline-start: 10px; }
 .toast.show .toast-action { pointer-events: auto; }
 .toast-action {
@@ -3751,7 +3755,55 @@ body[data-view="session-run"] .bottom-nav { display: none; }
 .run-adjust-plates svg { width: 20px; height: 20px; }
 .run-adjust-plates:active { transform: scale(var(--press-scale)); background: var(--surface-3); }
 
-.run-nav { display: flex; gap: 10px; margin-top: 22px; }
+/* v431 (the owner: «خليها ثابتة بأسفل الصفحة لا تتحرك بتحريك الصفحة»): the
+   guided screen's Prev/Next is a bar on the page's FLOOR. STICKY in the view,
+   not fixed: it stays a block in the flow, so the rest bar still sits above it
+   by source order and nothing needs a reserved padding. Three things make the
+   floor the same floor on every exercise. The view is a column at least as
+   tall as the scroller, and margin-top: auto drops the bar to its end on a
+   short exercise (a bottom-sticky element only ever pulls UP, it never pushes
+   down). The scroller's and the view's bottom padding go: Chrome measures
+   sticky from the padding edge, so 28px of it left the bar floating over a
+   strip of scrolling rows and made it jump at the end of the scroll. And the
+   bar paints its own ground, edge to edge, so rows pass BEHIND it.
+   --run-nav-h is the bar's whole height: everything that must clear it (the
+   live rest bar, the toast, a focused field) reads this one figure. It lives
+   on body, like --accent-text, so the tokens it reads resolve where they do.
+   The :has() rules degrade on a WebView under 105: the bar still sticks, it
+   just follows a short exercise instead of reaching the floor. */
+body[data-view="session-run"] {
+  --run-nav-h: calc(var(--btn-h-l) + 2 * var(--sp-2h) + 1px + var(--safe-b));
+}
+.main:has(> .view.active > .run-nav) { padding-bottom: 0; }
+.view.active[data-view="session-run"]:has(> .run-nav) {
+  display: flex; flex-direction: column; min-height: 100%; padding-bottom: 0;
+}
+.run-nav {
+  position: sticky; bottom: 0; z-index: 6;
+  display: flex; gap: 10px;
+  margin-top: auto;
+  margin-left: calc(-1 * max(16px, env(safe-area-inset-left, 0px)));
+  margin-right: calc(-1 * max(16px, env(safe-area-inset-right, 0px)));
+  padding: var(--sp-2h) max(16px, env(safe-area-inset-right, 0px)) calc(var(--sp-2h) + var(--safe-b)) max(16px, env(safe-area-inset-left, 0px));
+  background: var(--bg);
+  border-top: 1px solid var(--border);
+}
+/* The live rest bar stops just above the floor bar, and rests there in the flow
+   at the end of the scroll: the same 8px both ways, so it never moves. */
+body[data-view="session-run"] .rest-timer:not(.floating) { bottom: calc(var(--run-nav-h) + 8px); margin-bottom: 8px; }
+/* A field brought into view must land above the floor bar (and a running rest),
+   not behind it: scrollIntoView honours this, and setupKeyboardHandling reads it. */
+body[data-view="session-run"] .main { scroll-padding-bottom: calc(var(--run-nav-h) + 8px); }
+body.rest-active[data-view="session-run"] .main { scroll-padding-bottom: calc(var(--run-nav-h) + var(--rest-h, 72px) + 16px); }
+/* THE KEYBOARD (the owner: «مشكلة التزاحم لما يفتح الكيبورد»). It leaves about
+   half a screen; the floor bar and a stuck rest bar would take 150px of that and
+   sit on the row being typed in. So while it is up the floor bar steps aside,
+   as the tab bar does, and the rest bar goes back to its place in the flow —
+   the clock keeps running there. Only the set, its strip and the keyboard. */
+body.keyboard-open[data-view="session-run"] .run-nav { display: none; }
+body.keyboard-open[data-view="session-run"] .rest-timer:not(.floating) { position: static; }
+body.keyboard-open[data-view="session-run"] .main { scroll-padding-bottom: 8px; }
+body.keyboard-open .view.active[data-view="session-run"]:has(> .run-nav) { padding-bottom: 8px; }
 .run-nav .btn { flex: 1; height: var(--btn-h-l); font-size: var(--fs-btn-l); font-weight: 700;
   border-radius: var(--radius-btn-l);
 }
@@ -3816,7 +3868,7 @@ body[dir="rtl"] .calendar-nav-btn svg { transform: scaleX(-1); }
      (a scale) overrode for its whole duration: the bar jumped sideways every
      time it appeared. In the flow it is centred by its own box, so it does not. */
   position: sticky;
-  bottom: calc(var(--safe-b) + 12px);
+  bottom: calc(var(--safe-b) + 12px);   /* the guided screen's own anchor is above .run-nav since v431 */
   z-index: 5;
   width: 100%;
   display: flex;
@@ -8822,7 +8874,8 @@ body.ember-on .ember {
    `.enter` at the end of the timer changes nothing. `.detail-top` is the same
    shape of persistent chrome on the child screens and gets the same answer. */
 .enter > .vault-bar,
-.enter > .detail-top {
+.enter > .detail-top,
+.enter > .run-nav {
   animation: none;
   opacity: 1;
   transform: none;

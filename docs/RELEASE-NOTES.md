@@ -2,6 +2,43 @@
 
 One section per release since v309, newest first, moved verbatim from `CLAUDE.md` in v401 (batch 6 of the 2026-09-25 review; `docs/REVIEW-2026-09-25.md`). `CLAUDE.md` is the guide and the authority for how the app works now. A section here records what one release changed and why, in the words written at the time, so a later section — or the guide — can supersede what an earlier one says.
 
+## v431 — the guided run's Prev/Next on the page floor; the keyboard no longer crowds it
+
+**The owner, on `.run-nav` with a screenshot: «خليها ثابتة بأسفل الصفحة لا تتحرك بتحريك الصفحة،
+وحل مشكلة التزاحم اللي بتصير لما يفتح الكيبورد».** Prev/Next sat at the end of the content, so
+they scrolled away on a long exercise and landed somewhere else on every short one.
+
+**The floor bar.** `.run-nav` is STICKY in the view, not fixed: still a block in the flow, so
+the rest bar stays above it by source order, the DOM and contract 25 are untouched, and nothing
+reserves padding. On top of that: the view is a column at least as tall as the scroller and
+`margin-top: auto` takes the bar to its end on a short exercise (a bottom-sticky element only
+pulls up, never pushes down); the scroller's and the view's bottom padding go, because Chrome
+measures sticky from the padding edge and those 28 px left a strip under the bar and a jump at
+the end of the scroll; the bar paints `--bg` edge to edge under a hairline, so rows pass behind
+it. `--run-nav-h` is its whole height, and the three things that must clear it read that one
+figure: the live rest bar (stuck and at rest in the same place, 8 px above), the toast (16 px
+keeps Undo's downward halo off Next) and `scroll-padding-bottom` on the scroller. The bar
+refuses the arrival stagger as chrome does. `:has()` degrades under WebView 105: the bar still
+sticks, it just follows a short exercise.
+
+**The keyboard.** Measured at 375×460: the floor bar and a pinned rest bar would take 150 px of
+what is left. While `body.keyboard-open` the bar steps aside as the tab bar does, and the rest
+bar returns to its place in the flow with its clock running. The second defect was older: the
+quick-adjust strip is drawn UNDER the row on focus, and the focus handler measured only the
+field, so a field just clear of the keyboard left the strip behind it (506 px of 460 on the last
+row). `keepFieldInView` now brings the strip with its field, counts the scroller's reserved
+floor, and runs again when the keyboard lands, because a slow keyboard arrives after the 320 ms
+timer has already looked.
+
+**Tests.** `scripts/test-run-home-ui.js` gains two cases: the floor (on the floor, edge to edge,
+unmoved scrolled and at the end of the scroll, a short exercise at 375×1100, the rest bar above
+it in one place, a toast above both) and the keyboard (bar gone, rest in the flow, the last row's
+strip above the fold, the bar back on the floor after). Seven plants in memory, all caught: the
+bar not sticky, no `margin-top: auto`, the scroller's padding kept, the rest bar on its old
+anchor, the bar or the pinned rest left up with the keyboard, the strip not followed. Gate:
+contracts, ESLint and 31 suites green (248 s, --jobs 3). Fingerprint against v428a: views 176/184
+with Home's version label the only change, sheets 124/128 with only v430's recipe editor; no other screen moved.
+
 ## v430 — the recipe editor's totals bar, in order
 
 **The owner, on the bar under the ingredients, with a screenshot: «عيد تصميم هذي الواجهة

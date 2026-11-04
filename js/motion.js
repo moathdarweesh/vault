@@ -79,7 +79,7 @@ window.VltMotion = (function () {
     const kids = el.children;
     let n = 0;
     for (let i = 0; i < kids.length; i++) {
-      if (kids[i].classList.contains('vault-bar') || kids[i].classList.contains('detail-top')) {
+      if (kids[i].classList.contains('vault-bar') || kids[i].classList.contains('detail-top') || kids[i].classList.contains('run-nav')) {
         kids[i].style.removeProperty('--i');
         continue;
       }

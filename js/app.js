@@ -12,7 +12,7 @@
 // build. The literal below is the fallback (file://, or a stripped query) and is
 // still bumped by `npm run release` — see CLAUDE.md "CACHE WORKFLOW".
 const VAULT_BUILD = (() => {
-  const FALLBACK = 'v430';
+  const FALLBACK = 'v431';
   try {
     const src = (document.currentScript && document.currentScript.src) || '';
     const m = src.match(/[?&]v=(\d+)/);
@@ -10976,7 +10976,10 @@ function setupKeyboardHandling() {
     // sight is exactly that.
     const open = shrunk && typing();
     root.style.setProperty('--vvh', h + 'px');
+    const opened = open && !document.body.classList.contains('keyboard-open');
     document.body.classList.toggle('keyboard-open', open);
+    // A slow keyboard lands after the focus timer below has already looked.
+    if (opened) setTimeout(keepFieldInView, 80);
     // With no field focused, whatever height we are at IS the true baseline.
     // Re-anchoring here lets the baseline SHRINK again, so the app can never get
     // stuck believing a keyboard it cannot see is still open.
@@ -11004,20 +11007,30 @@ function setupKeyboardHandling() {
   document.addEventListener('focusin', (e) => {
     const el = e.target;
     if (!el || !el.matches || !el.matches('input, textarea, [contenteditable="true"]')) return;
-    setTimeout(() => {
-      try {
-        // Only when the field is really out of view (under the keyboard or off
-        // screen). 'center' scrolled EVERY tap into a visible set row by about
-        // one row, so the guided screen glided under the thumb between sets.
-        const r = el.getBoundingClientRect();
-        const vv = window.visualViewport;
-        const top = (vv && vv.offsetTop) || 0;
-        const vh = (vv && vv.height) || window.innerHeight;
-        if (r.top >= top + 8 && r.bottom <= top + vh - 8) return;
-        el.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
-      } catch (_) {}
-    }, 320);
+    setTimeout(keepFieldInView, 320);
   });
+  function keepFieldInView() {
+    const el = document.activeElement;
+    if (!el || !el.matches || !el.matches('input, textarea, [contenteditable="true"]')) return;
+    try {
+      // Only when the field is really out of view (under the keyboard or off
+      // screen). 'center' scrolled EVERY tap into a visible set row by about
+      // one row, so the guided screen glided under the thumb between sets.
+      // A set field brings its quick-adjust strip with it (v431): the strip is
+      // drawn UNDER the row on focus, so a field just clear of the keyboard left
+      // the buttons it had come for behind it. The floor the scroller reserves
+      // (scroll-padding-bottom) counts too: a bar pinned there hides what it covers.
+      const after = el.closest('.run-set-row')?.nextElementSibling;
+      const box = after && after.classList.contains('run-adjust') ? after : el;
+      const vv = window.visualViewport;
+      const top = (vv && vv.offsetTop) || 0;
+      const vh = (vv && vv.height) || window.innerHeight;
+      const scroller = el.closest('.main');
+      const floor = Math.max(8, (scroller && parseFloat(getComputedStyle(scroller).scrollPaddingBottom)) || 0);
+      if (el.getBoundingClientRect().top >= top + 8 && box.getBoundingClientRect().bottom <= top + vh - floor) return;
+      box.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+    } catch (_) {}
+  }
 }
 
 // ==========================================================================

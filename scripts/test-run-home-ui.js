@@ -457,6 +457,77 @@ const CASES = [
       assert.deepEqual(await stored(kit, s), [[8, 60, true]], 'the ✓ logs 60');
     } finally { await cleanup(kit, s); }
   }],
+  ['floor bar: Prev/Next stay on the page floor — scrolled, at the end of the scroll and on a short exercise; a live rest stops above them in the same place', async (kit) => {
+    const many = Array.from({ length: 9 }, () => ({ reps: 8, weight: 60 }));
+    const navBox = () => kit.ev(() => {
+      const n = document.querySelector('.view.active .run-nav'), m = document.querySelector('.main');
+      const r = n.getBoundingClientRect(), mr = m.getBoundingClientRect(), g = n.querySelector('[data-next]').getBoundingClientRect();
+      return { top: Math.round(r.top), bottom: Math.round(r.bottom), floor: Math.round(mr.bottom), left: Math.round(r.left), right: Math.round(r.right), btn: Math.round(g.bottom), moved: m.scrollHeight > m.clientHeight };
+    });
+    const scrollTo = (y) => kit.ev((y) => { const m = document.querySelector('.main'); m.scrollTop = y === 'end' ? m.scrollHeight : y; }, y);
+    let s = await openRun(kit, many);
+    try {
+      await kit.settled();
+      const a = await navBox();
+      assert.ok(a.moved, 'setup: nine sets scroll at 375×812');
+      assert.equal(a.bottom, a.floor, 'the bar sits on the floor of the page');
+      assert.deepEqual([a.left, a.right], [0, 375], 'edge to edge, so rows pass behind it');
+      await scrollTo(200);
+      assert.equal((await navBox()).top, a.top, 'scrolling does not move it');
+      await scrollTo('end');
+      assert.equal((await navBox()).top, a.top, 'nor does reaching the end — no padding left to jump across');
+      await scrollTo(0);
+      await type(kit, 0, 'weight', 60); await type(kit, 0, 'reps', 8);
+      await tick(kit, 0);
+      const rest = () => kit.ev(() => { const b = document.querySelector('.view.active .rest-timer').getBoundingClientRect(); return Math.round(b.bottom); });
+      await kit.page.locator('body').click({ position: { x: 2, y: 2 } }).catch(() => {});
+      const stuck = await rest();
+      assert.ok(stuck <= a.top - 8, `a live rest stops above the bar, not on it (${stuck} against ${a.top})`);
+      await kit.ev(() => { hideToast(); showToast('qa'); });
+      await kit.page.waitForTimeout(350);
+      const clear = await kit.ev(() => { const x = document.querySelector('.toast.show').getBoundingClientRect(), r = document.querySelector('.view.active .rest-timer').getBoundingClientRect(); return [Math.round(x.bottom), Math.round(r.top)]; });
+      assert.ok(clear[0] <= clear[1], `a toast clears the rest bar on the floor bar (${clear[0]} against ${clear[1]})`);
+      await kit.ev(() => hideToast());
+      await scrollTo('end');
+      assert.equal(await rest(), stuck, 'and rests in the same place at the end of the scroll');
+    } finally { await cleanup(kit, s); }
+    await kit.page.setViewportSize({ width: 375, height: 1100 });   // the exercise card alone is 412 px: one set overflows 812
+    s = await openRun(kit, [{ reps: 8, weight: 60 }]);
+    try {
+      await kit.settled();
+      const b = await navBox();
+      assert.equal(b.moved, false, 'setup: one set does not scroll');
+      assert.equal(b.bottom, b.floor, 'a short exercise reaches the same floor');
+    } finally { await kit.page.setViewportSize({ width: 375, height: 812 }); await cleanup(kit, s); }
+  }],
+  ['keyboard: up, the floor bar steps aside, a live rest leaves its pinned place, and the last row\'s strip is above it; down, the bar is back on the floor', async (kit) => {
+    const many = Array.from({ length: 9 }, () => ({ reps: 8, weight: 60 }));
+    const s = await openRun(kit, many);
+    try {
+      await kit.settled();
+      await type(kit, 0, 'weight', 60); await type(kit, 0, 'reps', 8);
+      await tick(kit, 0);
+      await focusField(kit, 8, 'weight');
+      await kit.page.setViewportSize({ width: 375, height: 460 });
+      await kit.page.waitForFunction(() => document.body.classList.contains('keyboard-open'), null, { timeout: 2000 });
+      await kit.page.waitForTimeout(900);
+      const m = await kit.ev(() => {
+        const q = (x) => document.querySelector('.view.active ' + x);
+        const bar = q('.run-adjust').getBoundingClientRect(), f = document.activeElement.getBoundingClientRect();
+        return { nav: getComputedStyle(q('.run-nav')).display, rest: getComputedStyle(q('.rest-timer')).position, live: q('.rest-timer').classList.contains('live'), barBottom: Math.round(bar.bottom), fieldTop: Math.round(f.top), h: window.innerHeight };
+      });
+      assert.equal(m.live, true, 'setup: a rest is running');
+      assert.equal(m.nav, 'none', 'the floor bar steps aside');
+      assert.equal(m.rest, 'static', 'the rest bar goes back into the flow, still running');
+      assert.ok(m.barBottom <= m.h, `the strip under the last row is above the keyboard (${m.barBottom} of ${m.h})`);
+      assert.ok(m.fieldTop >= 0, 'and the field is on screen');
+      await kit.ev(() => document.activeElement.blur());
+      await kit.page.setViewportSize({ width: 375, height: 812 });
+      await kit.page.waitForFunction(() => !document.body.classList.contains('keyboard-open'), null, { timeout: 2000 });
+      const back = await kit.ev(() => { const n = document.querySelector('.view.active .run-nav'); return { d: getComputedStyle(n).display, b: Math.round(n.getBoundingClientRect().bottom), f: Math.round(document.querySelector('.main').getBoundingClientRect().bottom) }; });
+      assert.deepEqual([back.d, back.b], ['flex', back.f], 'keyboard down: the bar is back on the floor');
+    } finally { await kit.page.setViewportSize({ width: 375, height: 812 }); await cleanup(kit, s); }
+  }],
   ['quick-adjust + plates: the bar and the sheet fit 375 and 320 px with larger text — no sideways scroll, every button at least 44 px effective', async (kit) => {
     const s = await openRun(kit, straight);
     const bad = [];
