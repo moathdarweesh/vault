@@ -2187,7 +2187,14 @@ function openRecipeEditor(date, existing, onDone, opts) {
   drawRows();
   // A new recipe wants the name; an existing one must NOT pop a keyboard over
   // figures the user came to read — nor must a draft that already has a name.
-  if (!existing || (isDraft && !name)) setTimeout(function () { var el = overlay.querySelector('#rec-name'); if (el) el.focus(); }, 60);
+  // Deferred past openModal's focus on the dialog, and it takes the caret ONLY
+  // from there: a sheet handed over in place (v432) does not rise, so it is
+  // tappable at once, and a row opened in those 60 ms had its field's caret
+  // stolen by this timer (the editor's own B12 case).
+  if (!existing || (isDraft && !name)) setTimeout(function () {
+    var el = overlay.querySelector('#rec-name'), a = document.activeElement;
+    if (el && (!a || a === document.body || a === overlay.querySelector('.modal'))) el.focus();
+  }, 60);
 }
 // ===========================================================================
 // «استخراج وصفة» — a recipe from a gallery clip, a link, a photo or pasted

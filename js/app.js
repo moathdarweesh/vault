@@ -12,7 +12,7 @@
 // build. The literal below is the fallback (file://, or a stripped query) and is
 // still bumped by `npm run release` — see CLAUDE.md "CACHE WORKFLOW".
 const VAULT_BUILD = (() => {
-  const FALLBACK = 'v431';
+  const FALLBACK = 'v432';
   try {
     const src = (document.currentScript && document.currentScript.src) || '';
     const m = src.match(/[?&]v=(\d+)/);
@@ -1083,6 +1083,12 @@ let __vltEnterDir = 0;
 // there would make the screen jump under your thumb while you work. So the flag
 // is set by navigate() alone, and a re-render in place stays still.
 let __vltArriving = false;
+// v432: the arrival is a RETURN (Back) or a REPEAT (the lit tab tapped again),
+// so it takes the fast step — a return is not a deliberate opening. Carried as
+// its own intent (`opts.fast`, set by goBack and the bottom-nav tap), never
+// read off `fromPop`: the boot and the widget quick action pass fromPop only
+// to keep the history flat, and those are deliberate openings.
+let __vltFast = false;
 let viewContext = {};
 // In-app navigation history so the Android hardware back button steps back one
 // screen instead of quitting the app. Each entry is { view, context }.
@@ -1166,6 +1172,7 @@ function navigate(view, context = {}, opts = {}) {
   // stagger IS the arrival, and the direction is all it needs from here.
   __vltEnterDir = enterDir;
   __vltArriving = true;
+  __vltFast = !!opts.fast;
   // Publish the active view on <body>: .bottom-nav is a SIBLING of <main>, so
   // nothing rooted at .view can select it, and the guided-run screen needs to
   // opt out of the keyboard-open nav hide (see styles.css).
@@ -1275,7 +1282,7 @@ function goBack() {
   if (navStack.length > 1) {
     navStack.pop();
     const prev = navStack[navStack.length - 1];
-    navigate(prev.view, prev.context, { fromPop: true });
+    navigate(prev.view, prev.context, { fromPop: true, fast: true });
     return true;
   }
   return false; // at the root (home)
@@ -1813,7 +1820,7 @@ function renderView(view) {
       // transition now. Clearing the guard is what replays it; stagger() sets it
       // again itself, so a re-render that is NOT an arrival still stands down.
       delete host.dataset.entered;
-      VltMotion.stagger(host, __vltEnterDir);
+      VltMotion.stagger(host, __vltEnterDir, false, __vltFast);
     } else if (VltMotion.cancelStagger) {
       // NOT an arrival — a save, a sync, a tick re-rendering the screen you are
       // already on. If an entrance is still in flight it was introducing content
@@ -1825,12 +1832,14 @@ function renderView(view) {
     // Spent either way: a render that stood down must not leave a direction
     // behind for the next one to pick up.
     __vltEnterDir = 0;
+    __vltFast = false;
   }
 }
 
 $('#bottom-nav').addEventListener('click', (e) => {
   const btn = e.target.closest('.nav-btn');
-  if (btn) navigate(btn.dataset.view);
+  // The lit tab tapped again is a repeat, not an opening: the fast step (v432).
+  if (btn) navigate(btn.dataset.view, {}, { fast: btn.dataset.view === currentView });
 });
 
 document.addEventListener('click', (e) => {
@@ -2452,12 +2461,23 @@ function renderHome(el) {
     <div style="text-align:center;opacity:.4;font-size:var(--fs-meta);margin:24px 0 8px;letter-spacing:.5px">VAULT · ${VAULT_BUILD}</div>
   `;
 
-  // Count-up the hero/stat numerals (sleep is stored ×10 for one decimal)
-  el.querySelectorAll('.anim[data-count]').forEach((n) => {
+  // Count-up the hero/stat numerals (sleep is stored ×10 for one decimal) —
+  // ONCE PER ARRIVAL (v432). This ran on every renderHome: a water tap, a
+  // sync, a tick re-drew the screen and the figures read 0 and climbed for
+  // 600ms on a screen that had not changed. A re-render writes the figure.
+  // Behind the splash door the figures are written at once and the count is
+  // handed to the door (window.__vltSplashCount, played by motion.js at the
+  // drop) — counting while the door is shut plays to nobody.
+  const counters = [...el.querySelectorAll('.anim[data-count]')].map((n) => {
     const target = parseInt(n.dataset.count, 10) || 0;
     const fixed = n.dataset.fixed === '1';
-    animateNum(n, target, fixed ? { fmt: (v) => (v / 10).toFixed(1) } : undefined);
+    return { n, target, fixed, fmt: fixed ? (v) => (v / 10).toFixed(1) : fmtNum };
   });
+  const play = () => counters.forEach(({ n, target, fixed, fmt }) => animateNum(n, target, fixed ? { fmt } : undefined));
+  const write = () => counters.forEach(({ n, target, fmt }) => { n.textContent = fmt(target); });
+  if (window.__vltSplash) { write(); window.__vltSplashCount = play; }
+  else if (__vltArriving) play();
+  else write();
 
   bindVaultAction(() => navigate('settings'), el);
 
@@ -11023,8 +11043,12 @@ function setupKeyboardHandling() {
       const after = el.closest('.run-set-row')?.nextElementSibling;
       const box = after && after.classList.contains('run-adjust') ? after : el;
       const vv = window.visualViewport;
-      const top = (vv && vv.offsetTop) || 0;
-      const vh = (vv && vv.height) || window.innerHeight;
+      // The shell pays the status-bar inset as its own padding (v432), so the
+      // scrollport starts BELOW it: a field above that edge is clipped, not shown.
+      const shell = document.querySelector('.app');
+      const inset = (shell && parseFloat(getComputedStyle(shell).paddingTop)) || 0;
+      const top = ((vv && vv.offsetTop) || 0) + inset;
+      const vh = ((vv && vv.height) || window.innerHeight) - inset;
       const scroller = el.closest('.main');
       const floor = Math.max(8, (scroller && parseFloat(getComputedStyle(scroller).scrollPaddingBottom)) || 0);
       if (el.getBoundingClientRect().top >= top + 8 && box.getBoundingClientRect().bottom <= top + vh - floor) return;

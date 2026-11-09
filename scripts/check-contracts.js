@@ -2713,5 +2713,51 @@ const cssOwner = (i) => CSS_BLOCKS.reduce((best, b) => (b.open < i && b.close > 
   contract(`no client file selects a column of shared_recipes it is not granted (${chains} chain(s) in ${[...readers].join(', ') || 'no file'}, held to the ${granted.size} column(s) ${m35.length ? m35[0].replace(/^backend\//, '') : 'NO migration 35'} grants; never author, source_id or *; no client write)`, problems);
 }
 
+// ---------------------------------------------------------------- 79. the arrival rests inside half a second
+// v432. Measured before the change, in the running app: a child screen rested
+// at 5 × 140 + 400 = 1,100ms after it was opened, a tab switch at 700, and the
+// last card was invisible (hit-testable, opacity 0) for the first 0.6 s. The
+// budget the design literature agrees on — 30–80ms a step, the group under
+// about 300ms, a plain UI entrance under 300ms — is held here as ARITHMETIC
+// over the tokens, so a token edited on taste cannot put the wait back: five
+// steps and one card inside 600ms for a deliberate opening, inside 500 for a
+// tab tap, a Back or the lit tab tapped again (motion.js takes the fast step
+// for all three), the tab glyph's press on a token rather than a literal, and
+// a sheet that hands over to another swapping in place.
+{
+  const problems = [];
+  const css = read('styles.css');
+  // The tokens are read from the `:root, body.theme-dark {` block ONLY: the
+  // reduced-motion clamp spells `--stagger: 0ms` too, and a first-match read
+  // would pass the budget vacuously if the blocks ever swapped order.
+  const rootAt = css.indexOf(':root, body.theme-dark {');
+  const rootBlock = rootAt < 0 ? '' : css.slice(rootAt, css.indexOf('\n}', rootAt));
+  const tok = (name) => { const m = rootBlock.match(new RegExp('^[ \\t]*' + name + ':\\s*([\\d.]+)ms;', 'm')); return m ? parseFloat(m[1]) : NaN; };
+  if (!rootBlock) problems.push('styles.css has no `:root, body.theme-dark {` token block');
+  const stagger = tok('--stagger'), fast = tok('--stagger-fast');
+  const enter = css.match(/\.enter > \*\s*\{([^}]*)\}/);
+  const durTok = enter && enter[1].match(/animation:\s*vlt-enter\s+var\((--dur-[a-z]+)\)/);
+  const dur = durTok ? tok(durTok[1]) : NaN;
+  if (!(stagger > 0)) problems.push('styles.css declares no --stagger token');
+  if (!(fast > 0)) problems.push('styles.css declares no --stagger-fast token');
+  if (!durTok) problems.push('`.enter > *` does not run vlt-enter for a --dur-* token');
+  if (stagger > 80) problems.push(`--stagger is ${stagger}ms — over the 80ms a step the arrival budget allows`);
+  if (fast > 60) problems.push(`--stagger-fast is ${fast}ms — over the 60ms a step the tab/Back budget allows`);
+  if (Number.isFinite(dur) && dur > 300) problems.push(`the arrival card runs ${durTok[1]} = ${dur}ms — a UI entrance stays under 300ms (the sheets keep --dur-base)`);
+  if (Number.isFinite(dur) && 5 * stagger + dur > 600) problems.push(`a deliberate opening rests at 5 × ${stagger} + ${dur} = ${5 * stagger + dur}ms — over the 600ms budget`);
+  if (Number.isFinite(dur) && 5 * fast + dur > 500) problems.push(`a tab switch rests at 5 × ${fast} + ${dur} = ${5 * fast + dur}ms — over the 500ms budget`);
+  const motion = src['js/motion.js'];
+  if (!/\(d \|\| fast\) \? 'var\(--stagger-fast\)'/.test(motion)) problems.push("js/motion.js no longer takes the fast step for a Back or a repeat arrival (`(d || fast) ? 'var(--stagger-fast)'`)");
+  if (!/__vltFast = !!opts\.fast;/.test(src['js/app.js'])) problems.push('js/app.js no longer carries the fast intent (__vltFast = !!opts.fast)');
+  if (!/navigate\(prev\.view, prev\.context, \{ fromPop: true, fast: true \}\)/.test(src['js/app.js'])) problems.push('goBack() no longer asks for the fast step');
+  if (!/navigate\(btn\.dataset\.view, \{\}, \{ fast: btn\.dataset\.view === currentView \}\)/.test(src['js/app.js'])) problems.push('the bottom-nav tap no longer asks for the fast step on the lit tab');
+  if (!/VltMotion\.stagger\(host, __vltEnterDir, false, __vltFast\)/.test(src['js/app.js'])) problems.push('js/app.js renderView does not hand __vltFast to VltMotion.stagger');
+  const pulse = css.match(/\.nav-btn \.home-center-icon > svg \{ transition: transform ([^;]+);/);
+  if (!pulse || !/var\(--dur-/.test(pulse[1])) problems.push('the tab pulse transition is not a --dur-* token (it was a literal 500ms)');
+  if (!/setTimeout\(\(\) => btn\.classList\.remove\('vlt-pulse'\), token\('--dur-fast', \d+\)\)/.test(motion)) problems.push("js/motion.js drops .vlt-pulse on a literal timer, not token('--dur-fast', …)");
+  if (!/\.modal-overlay\.vlt-swap \{ animation: none; \}/.test(css) || !/const swapping = !!root\.querySelector\('\.modal-overlay'\);/.test(src['js/ui.js'])) problems.push('a sheet handover no longer swaps in place (.vlt-swap in styles.css + `swapping` in js/ui.js openModal, counting a LEAVING overlay too — closeModal() then open*() is the handover)');
+  contract(`the arrival rests inside its budget: --stagger ${stagger}ms × 5 + the ${durTok ? durTok[1] : '?'} card ${dur}ms = ${5 * stagger + dur}ms (≤ 600), the tab/Back step ${fast}ms (≤ 500 in all), the pulse and the handover on tokens`, problems);
+}
+
 console.log(failures.length ? `\ncheck-contracts: ${failures.length} broken contract(s)` : '\ncheck-contracts: all contracts hold');
 process.exit(failures.length ? 1 : 0);

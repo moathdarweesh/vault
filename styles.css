@@ -251,18 +251,24 @@
   --dur-fast:  260ms;
   --dur-base:  400ms;
   --dur-open:  700ms;
-  /* A SECOND STEP, for the arrival you make forty times a day. The 140ms
-     below is ceremonial — right for a screen you opened deliberately, too
-     slow for a tab tap, where it put the last card at 1100ms against the
-     550ms the frame slide used to take. First content is at 0ms either way;
-     this is about when the screen stops assembling. */
-  --stagger-fast: 60ms;
-  /* The stagger step is a TOKEN and not the spec's literal 140ms, because the
-     global reduced-motion clamp below flattens animation-DURATION and never
+  /* A SECOND STEP, for the arrival you make forty times a day: a tab tap, a
+     Back, a tap on the tab you are already on. First content is at 0ms either
+     way; this is about when the screen stops assembling.
+     v432: 60 → 30ms. Measured 2026-11-09 in the running app: a tab switch
+     rested at 5 x 60 + 400 = 700ms. It rests at 5 x 30 + 260 = 410ms now. */
+  --stagger-fast: 30ms;
+  /* The stagger step is a TOKEN and not a literal, because the global
+     reduced-motion clamp below flattens animation-DURATION and never
      animation-DELAY. Left as a literal, a reduced-motion user would still wait
-     6 x 140ms = 840ms for a list to finish appearing, each item snapping in at
-     0.01ms — motion removed, but the WAIT kept, which is the worse half. */
-  --stagger:   140ms;
+     6 steps for a list to finish appearing, each item snapping in at 0.01ms —
+     motion removed, but the WAIT kept, which is the worse half.
+     v432: 140 → 50ms. The spec's 140ms was ceremonial — right on paper for a
+     screen opened deliberately — and measured as the slowest thing in the app:
+     a child screen rested at 5 x 140 + 400 = 1,100ms, its last card invisible
+     for the first 0.6 s (hit-testable, but not there). The budget the design
+     literature agrees on is 30–80ms a step and under ~300ms for the group;
+     5 x 50 + 260 = 510ms, contract 79 holds the arithmetic. */
+  --stagger:   50ms;
   /* The instrument's bars (v405): one step per column of the seven-well track,
      so the last bar starts 216ms after its card lands. A token for the same
      reason --stagger is — the clamp flattens durations, never delays, so it
@@ -646,13 +652,19 @@ img { display: block; max-width: 100%; }
   position: relative;
   background: var(--bg-grad);
   overflow: hidden;
+  /* v432: the status-bar inset is paid HERE, outside the scroller. It used to
+     be .main's padding-top, which put the inset INSIDE the scrollport: Chrome
+     measures position:sticky from the padding edge, so a sticky .detail-top,
+     once scrolled past the inset, pinned at y=0 — under the clock on a phone
+     that reports a top inset (the APK from Android 15, an iPhone home-screen
+     install). On the shell the scrollport itself starts below the bar. */
+  padding-top: var(--safe-t);
 }
 
 .main {
   flex: 1;
   overflow-y: auto;
   overflow-x: hidden;
-  padding-top: var(--safe-t);
   /* No --nav-h term any more: the bar is a sibling row in the flex column, so
      the scroller already ends where the bar begins. Only the breathing gap. */
   padding-bottom: 20px;
@@ -1111,11 +1123,15 @@ input[type="number"]::-webkit-outer-spin-button {
 }
 input[type="number"] { -moz-appearance: textfield; }
 
-/* The native picker chrome follows the mode. This was an unconditional
-   `color-scheme: dark`, so every date and time field — including the reminder
-   time inputs — rendered a dark picker on a light page. */
-body.theme-dark  input[type="date"], body.theme-dark  input[type="time"] { color-scheme: dark; }
-body.theme-light input[type="date"], body.theme-light input[type="time"] { color-scheme: light; }
+/* The native chrome follows the mode — the date and time pickers, and (v432)
+   every unstyled native box too: an EMPTY native checkbox (#mf-keep, the meal
+   editor's favourite, the import's keep-exceptions) fell back to the browser's
+   white and read as a foreign control on the dark surface. Declared PER THEME
+   on body: an unconditional root `color-scheme: dark` once rendered a dark
+   picker on a light page, which is why it was limited to the two input types
+   until now. */
+body.theme-dark  { color-scheme: dark; }
+body.theme-light { color-scheme: light; }
 
 /* Search bar with icon */
 .search-wrap {
@@ -2269,6 +2285,14 @@ button.schedule-prev-row { width: 100%; min-height: var(--btn-h-m); font: inheri
   from { transform: translateY(100%); }
   to { transform: translateY(0); }
 }
+/* v432: a sheet that HANDS OVER to another (the import's review → the editor,
+   a picker → a view, a dialog over a sheet) swaps in place. openModal rewrites
+   #modal-root, so the new overlay used to play overlayIn from 0 and the new
+   sheet sheetUp from the floor while the old one was destroyed mid-exit: the
+   scrim blinked clear and dark and the content rose twice. The class is set
+   only when an open overlay is being replaced; a fresh sheet still rises. */
+.modal-overlay.vlt-swap { animation: none; }
+.modal-overlay.vlt-swap > .modal { animation: none; }
 
 .sheet-handle {
   width: 40px;
@@ -6472,10 +6496,24 @@ body:has(> .auth-gate) .modal-overlay { z-index: 1001; }
 }
 
 /* --- Global press feedback: one scale, everywhere tappable --- */
+/* v432: the second line onward is the 23 pressables that had NO press at all
+   (measured by walking every <button>/<a> class against the :active rules):
+   picker rows, the last-set card, the option pills, the auth and onboarding
+   buttons, the lightbox close. A tap must be answered before the screen
+   changes; a state flip 400ms later is not an answer. `button.schedule-prev-row`
+   by tag, as fig-row: the planner's seven preview rows wear the same class as
+   plain <div>s and must not answer a press. The colour swatch is left out:
+   its selected state is a 1.08 scale, and a press would drop it to .98. */
 .nav-btn:active, .btn:active,
 .session-card:active, .heat-cell:active,
 .calendar-cell:active, .bento-card:active, .compare-card:active,
-.filter-pill:active, .settings-action-row:active, button.fig-row:active {
+.filter-pill:active, .settings-action-row:active, button.fig-row:active,
+.last-set-card:active, .picker-row:active, .unit-option:active, .lang-option:active,
+.compare-tab:active, .sfp-tab:active, .ntfs-opt:active, .ntfs-add:active, .ntfs-switch:active,
+.seg-btn:active, .bundle-main:active, .nutri-edit:active, button.schedule-prev-row:active,
+.supp-preset:active, .time-chip-x:active, .cardio-icon-chip:active,
+.onb-unit:active, .auth-lang-btn:active, .auth-toggle:active, .auth-legal:active,
+.auth-dev-skip:active, .rec-view-link:active, .img-lightbox-close:active {
   /* §5: FAST down, SPRINGY back. The base rules carry the 300ms --ease-back
      return; this shortens the way DOWN to --dur-tap, so the two directions
      differ — which is the whole feel the spec asks for. */
@@ -8845,11 +8883,14 @@ body.ember-on .ember {
    from the side you moved toward and --ey small, because the motion is
    sideways; every other arrival keeps the defaults and they simply rise.
    One keyframe serves both, and the RTL flip is applied in JS where the
-   direction is decided — translate is physical, the decision is logical. */
+   direction is decided — translate is physical, the decision is logical.
+   v432: each card runs --dur-fast (260ms), not --dur-base (400ms) — a plain
+   UI entrance, not a sheet; the sheets keep 400. Contract 79 pins the budget
+   (5 steps + one card inside 600ms; the tab step inside 500ms). */
 .enter > * {
   opacity: 0;
   transform: translate(var(--ex, 0px), var(--ey, 24px));
-  animation: vlt-enter var(--dur-base) var(--ease-out) both;
+  animation: vlt-enter var(--dur-fast) var(--ease-out) both;
   animation-delay: calc(min(var(--i, 0), 5) * var(--step, var(--stagger)));
 }
 @keyframes vlt-enter { to { opacity: 1; transform: none; } }
@@ -8979,15 +9020,16 @@ body.ember-on .ember {
    entrance, one vocabulary, and nothing is ever displaced off the screen. */
 
 
-/* The tab that was just chosen answers the touch itself — 500ms --ease-back,
-   which is why it is still going when the cards land.
+/* The tab that was just chosen answers the touch itself — --dur-fast on the
+   --ease-back curve (v432: it was a literal 500ms, a press that outlived the
+   arrival it answered; press feedback is a 100–260ms thing).
 
    ⚠️ THE HOME TAB NEEDS THE SECOND SELECTOR AND HAS SINCE v340. Its glyph is
    wrapped in `.home-center-icon` (index.html's static nav), so `.nav-btn > svg`
    never matched it — the middle tab, the one under the thumb, was the only one
    that did not answer the touch. */
 .nav-btn > svg,
-.nav-btn .home-center-icon > svg { transition: transform 500ms var(--ease-back); }
+.nav-btn .home-center-icon > svg { transition: transform var(--dur-fast) var(--ease-back); }
 .nav-btn.vlt-pulse > svg,
 .nav-btn.vlt-pulse .home-center-icon > svg { transform: scale(1.16); }
 

@@ -2,6 +2,79 @@
 
 One section per release since v309, newest first, moved verbatim from `CLAUDE.md` in v401 (batch 6 of the 2026-09-25 review; `docs/REVIEW-2026-09-25.md`). `CLAUDE.md` is the guide and the authority for how the app works now. A section here records what one release changed and why, in the words written at the time, so a later section — or the guide — can supersede what an earlier one says.
 
+## v432 — the arrival rests inside half a second
+
+**The owner, after the two vendored UI skills were applied to the app rule by rule and every
+verdict re-derived by an independent skeptic: «كمل بشرط الأحسن اللي تنفّذه».** The best of the
+motion findings, in one release; the data-safety ones (a dirty sheet dismissed without a
+question; three silent deletes) follow in v433.
+
+**What was measured before.** In the running app (375 px, normal motion, real clock): a child
+screen rested at 5 × 140 + 400 = 1,100 ms after it was opened, a tab switch at 700, Back to
+Home at 1,100 (a return took the ceremonial step because only a move between two tabs carried
+a direction), and the last card of a screen was hit-testable at 15 ms while invisible — half
+visible at 404–658 ms, fully at 623–894. The synchronous render was 35–230 ms: the wait was
+written in the tokens, not in the work. The tab glyph's press pulse was a literal 500 ms, so
+it was still swelling after the screen had landed; Home's three figures counted up from 0 for
+600 ms on EVERY render (a water tap, a sync); a sheet that handed over to another replayed the
+scrim from clear and the rise from the floor; 24 pressables had no press feedback at all.
+
+**The numbers.** `--stagger` 140 → 50 ms, `--stagger-fast` 60 → 30 ms, the arrival card on
+`--dur-fast` (260 ms) instead of `--dur-base` (400) — the design literature's budget is 30–80 ms a
+step, the group under about 300 ms, a plain UI entrance under 300 ms; the sheets keep 400 (a
+drawer's band is 200–500). The spec's 140 ms was the owner's own design document; it was kept
+as his decision until he asked for smoothness and the measurement put the slowest thing in the
+app on that one token. A Back (`goBack()`) and a tap on the lit tab now take the fast step
+(`VltMotion.stagger(el, dir, drop, fast)`; the intent travels as `opts.fast`, set by `goBack()` and
+the bottom-nav tap, never read off `fromPop` — the boot and the widget quick action pass
+`fromPop` only to keep the history flat and those are deliberate openings). The pulse runs
+`--dur-fast` in CSS and in its timer. `openModal` marks an overlay that replaces one still in the
+root — open OR leaving — `.vlt-swap` (no `overlayIn`, no `sheetUp`; a fresh sheet still rises):
+the app's own handovers call `closeModal()` first and open in the same tick, so a leaving overlay
+has to count, which the review caught. The count-up runs once per arrival (`__vltArriving`); a
+re-render writes the figure; behind the splash door Home writes the figures and hands the count
+to the drop (`window.__vltSplashCount`, played by `stagger()` on the drop) — the cold launch is
+the one arrival the user watches, and it counted to nobody. 23 classes joined the global
+`:active` rule (`button.schedule-prev-row` by tag: the planner's preview rows wear the class as
+plain divs; the colour swatch left out, its selected state being a 1.08 scale). The keyboard
+handler's «already visible» guard now counts the shell's inset (the scrollport starts below it).
+
+**Two findings from the other skill rode along.** The status-bar inset moved from `.main` to
+`.app`: inside the scroller, Chrome measured a sticky top bar from the padding edge, so a
+`.detail-top` scrolled past the inset pinned at y=0 — under the clock on a phone that reports a
+top inset (the APK from Android 15, an iPhone home-screen install); on the shell the scrollport
+itself starts below the bar. And `color-scheme` is declared per theme on `body` (the two
+input-only lines are gone): an EMPTY native checkbox (#mf-keep, the meal editor's favourite,
+the import's keep-exceptions) fell back to the browser's white on the dark surface.
+
+**Measured after.** A child screen rests at 410–510 ms, a tab switch at 410–546, Back to Home at
+410; the last card is half-visible at 173–280 ms and fully at 279–414. The ✓ on a set, the
+add-set and Next re-renders, the toasts and the sheets are unchanged.
+
+**Tests.** Contract 79 holds the budget as arithmetic over the tokens (5 steps + one card ≤ 600 ms
+for a deliberate opening, ≤ 500 for the fast step; the fast branch in motion.js and app.js; the
+pulse and the handover on tokens). `scripts/test-arrival-ui.js` (new, 18 cases) reads the delay
+and duration the arriving cards were given at the instant they arrived: a deliberate opening,
+Back, the lit tab, a tab switch with the glyph's press, the handover swap (open over open, and
+closeModal() then open) against a fresh rise, the count-up once per arrival and behind the door,
+the inset on the shell with a sticky bar below it, color-scheme following the theme. Fourteen
+plants in memory, every one caught by the contract and/or the suite (the step back to 140, the
+card back to 400, the fast branch dropped in motion.js and in app.js and in goBack, the swap class,
+the swap rule, the swap blind to a leaving overlay, the count-up on every render, the count behind
+the shut door, the drop not playing it, the inset back in the scroller, color-scheme off the body,
+the pulse back to a literal). Three independent reviewers read the diff before the gate
+(correctness, the app's laws, accessibility/RTL/both themes); their confirmed findings — the swap
+that never fired on the app's own handover, the count behind the door, the press on the planner's
+preview divs and on the selected swatch, the inset the keyboard guard ignored, `fromPop` read as
+intent — are the fixes above. The gate then caught a fourth in the editor's own B12 case: the recipe
+editor's deferred name focus (60 ms past the open) stole the caret from a row opened at once over a
+swapped-in sheet — a sheet that does not rise is tappable at once — and it now takes the caret only
+from the dialog.
+
+**Gate.** `npm run verify`: the 79 contracts hold, ESLint clean, 32 suites passed · 0 failed (16 node, 15 browser pooled three at a time, test-startup alone; wall 209 s). The fourteen plants in memory were each caught by the contract and/or the suite with the repo bytes unchanged; the focus guard's own proof is the gate run that failed before it (B12: `f: undefined, caret: 0`).
+
+**Fingerprint against v431a** (`node scripts/fingerprint-net.js diff v431a v432b`): sheets 128/128 cells identical (9,484 elements compared); views 176/184 identical (17,020 elements) with the 24 differences all Home's version label «VAULT · v431» and the four whole-page accessible-name cells that carry it. No other screen, sheet or dialog moved.
+
 ## v431 — the guided run's Prev/Next on the page floor; the keyboard no longer crowds it
 
 **The owner, on `.run-nav` with a screenshot: «خليها ثابتة بأسفل الصفحة لا تتحرك بتحريك الصفحة،

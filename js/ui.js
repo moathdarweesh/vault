@@ -468,6 +468,15 @@ function openModal(innerHtml, { variant = 'sheet', dismissible = true, hold = !d
   if (opener instanceof HTMLElement && opener !== document.body && !root.contains(opener)) {
     __modalReturnFocus = opener;
   }
+  // v432: a HANDOVER — an overlay is still in the root, open OR leaving (the
+  // import's review closes first and then opens the editor in the same tick;
+  // a picker opens a view over itself; a dialog is raised over a sheet). The
+  // new overlay then swaps in place (.vlt-swap: no overlayIn, no sheetUp —
+  // see styles.css) instead of fading the scrim from clear and raising the
+  // sheet from the floor a second time over a sheet destroyed mid-exit. A
+  // leaving overlay counts: `.is-out` is added synchronously by closeModal,
+  // and the rewrite below destroys it either way.
+  const swapping = !!root.querySelector('.modal-overlay');
   root.innerHTML = `
     <div class="modal-overlay ${variant === 'confirm' ? 'confirm-overlay' : ''}">
       <div class="${variant === 'confirm' ? 'confirm-dialog' : 'modal'}" role="dialog" aria-modal="true" tabindex="-1">
@@ -479,6 +488,7 @@ function openModal(innerHtml, { variant = 'sheet', dismissible = true, hold = !d
   const overlay = root.querySelector('.modal-overlay');
   overlay.dataset.dismissible = dismissible ? '1' : '0';
   if (hold) overlay.dataset.hold = '1';
+  if (swapping) overlay.classList.add('vlt-swap');
 
   // ⚠️ NO DIALOG IN THIS APP HAD AN ACCESSIBLE NAME. The element above
   // carries role="dialog" aria-modal="true" and neither aria-labelledby nor

@@ -36,12 +36,28 @@ window.VltMotion = (function () {
      is the whole difference between "this screen just arrived" and "this screen
      was always here".
 
-     The cap is expressed in CSS as calc(min(var(--i), 5) * 140ms): past the
+     The cap is expressed in CSS as calc(min(var(--i), 5) * step): past the
      sixth child everything lands together. Without a cap a twenty-row list
-     makes the reader wait three seconds for a list that is already there. */
-  function stagger(el, dir, drop) {
+     makes the reader wait seconds for a list that is already there. */
+  /* `fast` (v432): the arrival is a RETURN or a REPEAT — Back to a screen you
+     left seconds ago, or a tap on the tab you are already on. Both took the
+     ceremonial --stagger (140ms then; 50ms now) because only a move between
+     two tabs carries a direction, and only a direction chose --stagger-fast:
+     Back to Home rested at 1,100ms while the tab tap that shows the same
+     screen rested at 700. A return is not a deliberate opening. */
+  function stagger(el, dir, drop, fast) {
     if (!el || el.dataset.entered) return;
     el.dataset.entered = '1';
+    // THE DROP PLAYS THE COUNT THE DOOR HELD BACK (v432). Home writes its
+    // figures statically while the splash is shut and hands the count-up here,
+    // so it plays with the drop instead of behind a closed door. Before the
+    // reduced-motion return on purpose: animateNum writes the final figure
+    // itself under reduced motion, and the hand-off must be spent once.
+    if (drop && typeof window.__vltSplashCount === 'function') {
+      const play = window.__vltSplashCount;
+      window.__vltSplashCount = null;
+      try { play(); } catch (_) {}
+    }
     if (reduced()) return;            // nothing to animate; the guard is still set
 
     /* A TAB SWITCH ARRIVES FROM THE SIDE; THE DOOR'S REVEAL DROPS; EVERY OTHER
@@ -69,7 +85,7 @@ window.VltMotion = (function () {
     const d = dir ? (dir < 0 ? -1 : 1) * (document.body.dir === 'rtl' ? -1 : 1) : 0;
     el.style.setProperty('--ex', d * 26 + 'px');
     el.style.setProperty('--ey', d ? '6px' : (drop ? '-24px' : '24px'));
-    el.style.setProperty('--step', d ? 'var(--stagger-fast)' : 'var(--stagger)');
+    el.style.setProperty('--step', (d || fast) ? 'var(--stagger-fast)' : 'var(--stagger)');
 
     /* PERSISTENT CHROME IS SKIPPED, NOT JUST EXEMPTED. The CSS above refuses to
        animate `.vault-bar` / `.detail-top`, but they are still CHILDREN — and
@@ -99,10 +115,14 @@ window.VltMotion = (function () {
 
        The window is the real one: the last child starts at min(n-1,5) steps and
        runs for one duration. */
-    // The window is the one the cards actually use: the cap, the step the host
-    // chose, and one duration.
+    // The window: the cap, the step the host chose, and ONE --dur-base — which
+    // since v432 is longer than the card (--dur-fast) on purpose: the
+    // instrument's bars, the sleep ring and the Program plates settle on
+    // --stagger-bar offsets past their card (contract 73 holds them inside
+    // --dur-base + 120), so the window is theirs, not the cards'. `.enter`
+    // simply outlives the last card by a few frames.
     const steps = Math.min(Math.max(n - 1, 0), 5);
-    const step = d ? token('--stagger-fast', 60) : token('--stagger', 140);
+    const step = (d || fast) ? token('--stagger-fast', 30) : token('--stagger', 50);
     const total = steps * step + token('--dur-base', 400) + 120;
     const done = () => {
       el.classList.remove('enter');
@@ -262,10 +282,11 @@ window.VltMotion = (function () {
     o = o || {};
     const btn = o.btn;
     if (!btn) return;
-    // 500ms --ease-back, so the tab is still answering while the cards land.
+    // --dur-fast on --ease-back (v432: a literal 500ms before — the glyph was
+    // still swelling a second after the tap, longer than the arrival itself).
     btn.classList.add('vlt-pulse');
     clearTimeout(btn.__vltPulse);
-    btn.__vltPulse = setTimeout(() => btn.classList.remove('vlt-pulse'), 500);
+    btn.__vltPulse = setTimeout(() => btn.classList.remove('vlt-pulse'), token('--dur-fast', 260));
   }
   return { stagger, cancelStagger, dragToDismiss, switchTab, reduced, token };
 })();
