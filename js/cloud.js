@@ -922,8 +922,16 @@ window.VAULT_KEYS = Object.freeze({
     if (!recoveryOwnedByCurrent(rec)) return false;
     // Swap: the blob we are about to replace becomes the new snapshot, so an
     // accidental restore is itself undoable.
+    let prev = null;
+    try { prev = localStorage.getItem(RECOVERY_KEY); } catch (_) {}
     snapshotLocal('pre-restore', rec.uid || undefined);   // the rescue being restored belongs to this account (guarded above)
-    if (!importRaw(rec.raw)) return false;
+    if (!importRaw(rec.raw)) {
+      // A restore that did NOT happen must not cost the copy it was restoring
+      // (v433): the swap above had already overwritten the one slot, so a
+      // second tap «restored» the current data and called it a rescue.
+      try { if (prev != null) localStorage.setItem(RECOVERY_KEY, prev); } catch (_) {}
+      return false;
+    }
     const s = await getSession();
     let r = 'nosession';
     if (s) { setDirty(s.user.id, true); try { r = await push({ force: true }); } catch (_) { r = 'error'; } }

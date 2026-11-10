@@ -379,6 +379,7 @@ function hideToast() {
   clearTimeout(toastTimeout);
   tEl.classList.remove('show');
   tEl.classList.remove('has-action');
+  tEl.classList.remove('holds-sheet');
   // `.toast.show .toast-action` already drops pointer-events, and showToast's own
   // `spent` flag refuses the handler — measured: a click after expiry fires
   // nothing. But a hidden toast is opacity:0, not display:none, so the button
@@ -429,7 +430,11 @@ function showToast(msg, opts) {
   } else {
     tEl.textContent = msg;
     tEl.classList.add('show');
-    toastTimeout = setTimeout(() => tEl.classList.remove('show'), 1800);
+    // A plain toast may ask for a longer life (v433): a sentence that carries its
+    // next step. `sticky` has NO timer at all — the dirty-sheet instruction stands
+    // until it is answered or withdrawn (dirtyUnsay), because a clock the user
+    // cannot pause is a trap for anyone slower than it.
+    if (!(opts && opts.sticky)) toastTimeout = setTimeout(() => tEl.classList.remove('show'), (opts && opts.duration) || 1800);
   }
 }
 
@@ -447,7 +452,9 @@ let __modalExit = null;
 // `hold` marks a dialog no lesser sheet may REPLACE. It follows dismissible:false
 // by default, and a caller can hold a dialog the user may still dismiss (the
 // unreadable-storage rescue). Returns the overlay, or null when refused.
-function openModal(innerHtml, { variant = 'sheet', dismissible = true, hold = !dismissible } = {}) {
+// `guardDirty` (v433) is a sheet's own answer to «do you hold typing that is not
+// saved?»: every USER dismissal asks it through requestClose() / dirtyRefusal().
+function openModal(innerHtml, { variant = 'sheet', dismissible = true, hold = !dismissible, guardDirty = null } = {}) {
   const root = $('#modal-root');
   // A DIALOG THAT MUST BE ANSWERED IS NEVER REPLACED BY ONE THAT NEED NOT BE.
   // There is one #modal-root and the write below destroys whatever is in it, so
@@ -477,6 +484,7 @@ function openModal(innerHtml, { variant = 'sheet', dismissible = true, hold = !d
   // leaving overlay counts: `.is-out` is added synchronously by closeModal,
   // and the rewrite below destroys it either way.
   const swapping = !!root.querySelector('.modal-overlay');
+  dirtyUnsay();   // a dialog that replaces a warned sheet takes the warning's subject with it
   root.innerHTML = `
     <div class="modal-overlay ${variant === 'confirm' ? 'confirm-overlay' : ''}">
       <div class="${variant === 'confirm' ? 'confirm-dialog' : 'modal'}" role="dialog" aria-modal="true" tabindex="-1">
@@ -489,6 +497,21 @@ function openModal(innerHtml, { variant = 'sheet', dismissible = true, hold = !d
   overlay.dataset.dismissible = dismissible ? '1' : '0';
   if (hold) overlay.dataset.hold = '1';
   if (swapping) overlay.classList.add('vlt-swap');
+  // v433. The guard lives ON THE OVERLAY NODE: it dies with the sheet, and a
+  // dialog that replaces the sheet cannot inherit it. A warning is about the
+  // sheet as it was when it was given — more typing, or a press on any control
+  // that is not a way out, withdraws it, so a later slip is warned afresh. Only
+  // a CONTROL withdraws it: the click that ends a refused drag lands on the
+  // sheet's own body, and must leave the warning standing for the next throw.
+  if (typeof guardDirty === 'function') {
+    overlay.__dirty = guardDirty;
+    const disarm = (e) => {
+      const ctl = e.type === 'click' && e.target.closest ? e.target.closest('button, a, input, select, textarea, label, [role="button"]') : null;
+      if (e.type === 'input' || (ctl && !ctl.closest('[data-close]'))) { overlay.__dirtyAt = 0; dirtyUnsay(); }
+    };
+    overlay.addEventListener('input', disarm, true);
+    overlay.addEventListener('click', disarm, true);
+  }
 
   // ⚠️ NO DIALOG IN THIS APP HAD AN ACCESSIBLE NAME. The element above
   // carries role="dialog" aria-modal="true" and neither aria-labelledby nor
@@ -498,7 +521,9 @@ function openModal(innerHtml, { variant = 'sheet', dismissible = true, hold = !d
   // written after this one; doing it at the call sites would be 38 chances to
   // forget. A sheet with no title keeps no name rather than gaining a wrong one.
   const dlg = overlay.querySelector('[role="dialog"]');
-  const title = dlg && dlg.querySelector('.modal-title');
+  // A confirm dialog's question is its name too (v433): it opened on a dialog a
+  // screen reader announced as «dialog» and nothing else.
+  const title = dlg && (dlg.querySelector('.modal-title') || dlg.querySelector('.confirm-title'));
   if (title) {
     if (!title.id) title.id = 'vlt-modal-title-' + (++__modalTitleSeq);
     dlg.setAttribute('aria-labelledby', title.id);
@@ -522,7 +547,9 @@ function openModal(innerHtml, { variant = 'sheet', dismissible = true, hold = !d
       const sheet = overlay.querySelector('.modal');
       // The drag only REPORTS a dismissal; closeModal still owns closing, so
       // there is one answer to "what is on screen" and not two.
-      VltMotion.dragToDismiss(sheet, closeModal);
+      // A dirty sheet refuses the throw (v433): the third argument is asked
+      // first, and a refusal springs the sheet back instead of closing it.
+      VltMotion.dragToDismiss(sheet, closeModal, () => !dirtyRefusal(overlay));
     }
   }
   // A BACKDROP TAP IN THE SHEET'S FIRST 350 ms IS THE TAP BEFORE IT, LANDING
@@ -533,12 +560,12 @@ function openModal(innerHtml, { variant = 'sheet', dismissible = true, hold = !d
   const openedAt = performance.now();
   overlay.addEventListener('click', (e) => {
     if (!dismissible) return;
-    if (e.target === overlay && performance.now() - openedAt >= 350) closeModal();
+    if (e.target === overlay && performance.now() - openedAt >= 350) requestClose();
   });
   overlay.querySelectorAll('[data-close]').forEach((el) => {
     // Every icon-only close button gets a screen-reader name in one place.
     if (!el.getAttribute('aria-label')) el.setAttribute('aria-label', t('close'));
-    el.addEventListener('click', () => closeModal());
+    el.addEventListener('click', () => requestClose());
   });
   // Move focus into the dialog so keyboard/SR users start inside it: onto the
   // [autofocus] field when the sheet names one, else onto the dialog itself.
@@ -558,10 +585,16 @@ function openModal(innerHtml, { variant = 'sheet', dismissible = true, hold = !d
   // listening; closeModal removes only the current one.
   if (__modalKeydown) { document.removeEventListener('keydown', __modalKeydown, true); __modalKeydown = null; }
   __modalKeydown = (e) => {
+    // A HELD key is ONE press (v433): the OS repeat arrives past DIRTY_REFLEX
+    // and would be read as the confirming second press — Escape held for half
+    // a second, or Enter held on the X / Cancel (whose repeat is a repeat click).
+    if (e.repeat && (e.key === 'Escape' || (e.key === 'Enter' && e.target && e.target.closest && e.target.closest('[data-close]')))) { e.preventDefault(); return; }
     if (e.key === 'Escape') {
       // A dialog that must be answered ignores Escape as well as the backdrop.
       if (overlay.dataset.dismissible === '0') { e.preventDefault(); return; }
-      e.preventDefault(); closeModal(); return;
+      // preventDefault even when the close is refused: the global Escape
+      // handler in app.js is the second door and must not be reached.
+      e.preventDefault(); requestClose(); return;
     }
     if (e.key === 'Tab') trapTab(e, overlay);
   };
@@ -676,7 +709,60 @@ function holdSheetFocus(overlay, { onEscape } = {}) {
   };
 }
 
+// ── THE DIRTY-SHEET GUARD (v433) ────────────────────────────────────────────
+// A sheet holding typed, unsaved content used to be thrown away without a word
+// by six doors: the backdrop, the X (and a labelled Cancel), Escape (two
+// handlers), the drag, and Back. Each now asks here first. A question in a
+// dialog is NOT possible: there is one #modal-root, so the dialog would destroy
+// the sheet it asks about. So the first press is REFUSED and says why in a
+// toast, and a second press — while that toast is still what the screen shows —
+// closes. Code closes (a Save, a hand-over, an owner change) call closeModal()
+// and are never asked.
+//   · DIRTY_REFLEX: a second press sooner than this is the SAME press arriving
+//     twice (a double Back, a double tap) and is ignored — the backdrop's own
+//     350 ms rule. It never discards.
+//   · NO CLOCK on the answer. The instruction is a sticky toast: it stands until
+//     the second press, until the sheet changes (typing, a control: the warning
+//     was about the sheet as it was), or until the sheet leaves. A first draft
+//     gave it 5 s — a window a screen-reader or switch user could miss every
+//     time, re-warned for ever. The second press counts only while the
+//     instruction is what the toast shows: another toast (or a navigation's
+//     hideToast) in between means the user no longer has the warning in front
+//     of them, and is warned again.
+//   · The toast `holds-sheet`: the sheet makes room for it as it does for an
+//     Undo (styles.css), so it never lies on the Save it is the alternative to.
+//   · A guard that throws reads as clean: a sheet must never be un-closable.
+const DIRTY_REFLEX = 400;
+// The instruction off the screen, if it is what the toast shows.
+function dirtyUnsay() {
+  const tEl = $('#toast');
+  if (tEl && tEl.classList.contains('show') && tEl.textContent === t('sheet_dirty_close')) hideToast();
+}
+// true = this dismissal is refused, and said.
+function dirtyRefusal(overlay) {
+  let dirty = false;
+  try { dirty = !!(overlay && typeof overlay.__dirty === 'function' && overlay.__dirty()); } catch (_) {}
+  if (!dirty) return false;
+  const now = performance.now(), at = overlay.__dirtyAt || 0, tEl = $('#toast');
+  const said = !!tEl && tEl.classList.contains('show') && tEl.textContent === t('sheet_dirty_close');
+  if (at && said) return now - at < DIRTY_REFLEX;   // the same press twice: refused. Otherwise it is the answer (closeModal withdraws the instruction).
+  overlay.__dirtyAt = now;
+  showToast(t('sheet_dirty_close'), { sticky: true });
+  if (tEl) tEl.classList.add('holds-sheet');
+  return true;
+}
+// Every USER dismissal of a #modal-root sheet. Returns whether it closed.
+// Parameterless on purpose: it is handed to listeners, and an Event must never
+// be read as an argument.
+function requestClose() {
+  const overlay = $('#modal-root .modal-overlay:not(.is-out)');
+  if (overlay && dirtyRefusal(overlay)) return false;
+  closeModal();
+  return true;
+}
+
 function closeModal() {
+  dirtyUnsay();   // the instruction is spent with the sheet it was about (a second press, a Save, a hand-over)
   if (__modalKeydown) { document.removeEventListener('keydown', __modalKeydown, true); __modalKeydown = null; }
   if (__modalFieldWatch) { __modalFieldWatch.disconnect(); __modalFieldWatch = null; }
   const root = $('#modal-root');

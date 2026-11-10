@@ -2759,5 +2759,76 @@ const cssOwner = (i) => CSS_BLOCKS.reduce((best, b) => (b.open < i && b.close > 
   contract(`the arrival rests inside its budget: --stagger ${stagger}ms × 5 + the ${durTok ? durTok[1] : '?'} card ${dur}ms = ${5 * stagger + dur}ms (≤ 600), the tab/Back step ${fast}ms (≤ 500 in all), the pulse and the handover on tokens`, problems);
 }
 
+// ---------------------------------------------------------------- 80. typed work and stored rows are not lost to one press
+// v433. Three losses, each one press wide, found when the two vendored UI
+// skills were applied to the app: a sheet holding unsaved typing was thrown
+// away by any of six doors (backdrop, X or a labelled Cancel, Escape twice
+// over, the drag, Back) without a word; a weight entry and an exercise on a
+// plan day were erased with no Undo; the notification log with no question.
+// What is held here is the WIRING — every door reaches the one guard, the two
+// deletes are changeSlice writes with handlers that offer the Undo, the clear
+// asks first — because each of these is one edited line away from silent
+// again. scripts/test-data-safety-ui.js holds the behaviour.
+{
+  const problems = [];
+  const ui = src['js/ui.js'], app = src['js/app.js'], food = src['js/food.js'], body = src['js/body.js'], store = src['js/storage.js'], motion = src['js/motion.js'];
+  // The four doors in openModal, by their exact spelling.
+  if (!/VltMotion\.dragToDismiss\(sheet, closeModal, \(\) => !dirtyRefusal\(overlay\)\);/.test(ui)) problems.push('js/ui.js: the drag no longer asks dirtyRefusal before it closes (dragToDismiss needs its third argument)');
+  if (!/performance\.now\(\) - openedAt >= 350\) requestClose\(\);/.test(ui)) problems.push('js/ui.js: the backdrop tap no longer goes through requestClose()');
+  if (!/el\.addEventListener\('click', \(\) => requestClose\(\)\);/.test(ui)) problems.push('js/ui.js: [data-close] no longer goes through requestClose()');
+  if (!/e\.preventDefault\(\); requestClose\(\); return;/.test(ui)) problems.push('js/ui.js: the sheet Escape no longer goes through requestClose() with its preventDefault');
+  if (!/typeof mayDismiss === 'function' && mayDismiss\(\) === false/.test(motion)) problems.push('js/motion.js: dragToDismiss no longer lets its caller refuse a throw (mayDismiss)');
+  // The two doors in app.js. Back must answer true even when the close was refused.
+  if (!/\.modal-overlay:not\(\.is-out\)'\)\) \{ requestClose\(\); return true; \}/.test(app)) problems.push('js/app.js: goBack() no longer closes a sheet through requestClose() and answers true (a refused close would exit the app)');
+  if (!/\.modal-overlay:not\(\.is-out\)'\)\) \{ requestClose\(\); return; \}/.test(app)) problems.push('js/app.js: the global Escape no longer closes a sheet through requestClose()');
+  // The guard itself: the instruction is a dictionary key, and a throwing guard reads as clean.
+  if (!/function requestClose\(\) \{/.test(ui) || !/showToast\(t\('sheet_dirty_close'\), \{ sticky: true \}\);/.test(ui)) problems.push('js/ui.js: requestClose() or its instruction toast (sheet_dirty_close, sticky: no clock on the answer) is gone');
+  if (!/function closeModal\(\) \{\s*dirtyUnsay\(\);/.test(ui)) problems.push('js/ui.js: closeModal() no longer withdraws the dirty-sheet instruction (a sticky toast would be stranded)');
+  if (!/if \(e\.repeat && \(e\.key === 'Escape' \|\| /.test(ui)) problems.push('js/ui.js: a held Escape / Enter is read as a second press again (the e.repeat guard in the sheet trap)');
+  if (!/body:has\(\.toast\.holds-sheet\.show\) \.modal \{ padding-bottom:/.test(read('styles.css'))) problems.push('styles.css: the sheet no longer makes room for the dirty-sheet instruction (.toast.holds-sheet)');
+  if (!/try \{ dirty = !!\(overlay && typeof overlay\.__dirty === 'function' && overlay\.__dirty\(\)\); \} catch \(_\) \{\}/.test(ui)) problems.push('js/ui.js: dirtyRefusal no longer fails open (a guard that throws must read as clean)');
+  // The four sheets that hold typing say so.
+  const guards = (s) => (s.match(/\bguardDirty:/g) || []).length;
+  if (guards(app) < 1) problems.push('js/app.js: the session sheet no longer passes guardDirty');
+  if (guards(food) < 3) problems.push(`js/food.js: ${guards(food)} of the 3 guarded sheets (recipe editor, meal editor, manual food) pass guardDirty`);
+  if (!/function convenienceModal\(html, opts\) \{ return guardConvenienceModal\(openModal\(html, opts\)\); \}/.test(app)) problems.push('js/app.js: convenienceModal no longer passes its options through to openModal');
+  // The two deletes are undoable writes, and their handlers offer the Undo.
+  if (!/removeExerciseFromSlot\(i, exId\) \{[\s\S]{0,700}?return changeSlice\([^\n]*'exercise_removed'\);/.test(store)) problems.push('js/storage.js: DB.plan.removeExerciseFromSlot is not a changeSlice write labelled exercise_removed');
+  if (!/remove\(date\) \{\s*return changeSlice\(\(\) => \(STATE\.bodyweight \|\| \[\]\)\.find\([\s\S]{0,400}?'weight_deleted'\);/.test(store)) problems.push('js/storage.js: DB.bodyweight.remove is not a one-row changeSlice write labelled weight_deleted');
+  if (!/offerUndo\(t\('weight_deleted'\), result\)/.test(body)) problems.push('js/body.js: the weight trash no longer offers its Undo');
+  if (!/if \(!offerUndo\(t\('exercise_removed'\), result\)\) showToast\(t\('exercise_removed'\)\);/.test(app)) problems.push('js/app.js: removing an exercise from a day no longer offers its Undo');
+  // An Undo that touches no session leaves the typed sets alone.
+  if (!/const keepDrafts = !!undone && undone\.token === token && \(undone\.label === 'exercise_removed' \|\| undone\.label === 'weight_deleted'\);/.test(app) || !/if \(!keepDrafts\) \{/.test(app)) problems.push('js/app.js: applyConvenienceUndo wipes the typed sets on an Undo that touches no session (keepDrafts)');
+  // The log is cleared only after a question.
+  if (!/\$\('#ntfa-clear', el\)\?\.addEventListener\('click', \(\) => \{\s*confirmDialog\(\{[\s\S]{0,600}?DB\.notif\.logClear\(\);/.test(app)) problems.push('js/app.js: #ntfa-clear clears the log without asking (confirmDialog must come first)');
+  // An edit does not raise the keyboard: the name takes focus on a NEW item only.
+  for (const id of ['ex-name', 'supp-name']) {
+    const tag = (app.match(new RegExp('<input type="text" id="' + id + '"[^\\n]*')) || [''])[0];
+    if (!/\$\{existing \? '' : ' autofocus'\}>/.test(tag)) problems.push(`js/app.js: #${id} takes [autofocus] on an edit too (it belongs behind \`existing ? '' : ' autofocus'\`)`);
+  }
+  if (/setTimeout\(\(\) => \$\('#(?:ex|food)-name'\)\?\.focus\(\), \d+\);/.test(app + food)) problems.push('an unconditional deferred focus on #ex-name / #food-name is back (it raises the keyboard on an edit and steals a caret)');
+  // A plain toast honours the life it is given, and the failed copy offers its retry on the toast itself.
+  if (!/toastTimeout = setTimeout\(\(\) => tEl\.classList\.remove\('show'\), \(opts && opts\.duration\) \|\| 1800\);/.test(ui)) problems.push('js/ui.js: a plain toast ignores opts.duration again (the sentences that carry a next step are back at 1.8 s)');
+  if (!/showToast\(t\('export_failed'\), \{ actionLabel: t\('ai_retry'\), onAction: \(\) => \{ exportBackupFile\(\); \} \}\)/.test(app)) problems.push('js/app.js: the failed backup copy no longer offers «try again» on its toast');
+  // The reminder test leaves the gate's own refusal on screen.
+  if (!/if \(res\.ok\) showToast\(t\('remind_test_sent'\)\);\s*else if \(res\.reason !== 'denied'\) showToast\(t\('remind_test_failed'\), \{ duration: 4000 \}\);/.test(app)) problems.push('js/app.js: the reminder test paints «could not send» over the gate\'s own refusal again');
+  // The attribute batch: one deleted attribute each, and no suite opens these surfaces to notice.
+  const foodai = src['js/foodai.js'], css = read('styles.css');
+  for (const [f, s, id] of [['js/app.js', app, 'workout-search'], ['js/app.js', app, 'swap-search'], ['js/app.js', app, 'auth-email'], ['js/app.js', app, 'auth-password'], ['js/app.js', app, 'uname-input'], ['js/app.js', app, 'reset-email'], ['js/food.js', food, 'bc-manual-input'], ['js/foodai.js', foodai, 'ai-input'], ['js/foodai.js', foodai, 'ai-send']]) {
+    if (!new RegExp('id="' + id + '"[^>]*\\baria-label=').test(s)) problems.push(`${f}: #${id} has no aria-label (a placeholder or an icon is not a name)`);
+  }
+  if (!/class="ai-note-input"[^>]*\baria-label=/.test(foodai)) problems.push('js/foodai.js: the photo note field has no aria-label');
+  for (const id of ['reset-err', 'cpw-err', 'fb-err']) if (!new RegExp('id="' + id + '" role="alert"').test(app)) problems.push(`js/app.js: #${id} is no longer role="alert" (the error is written and never announced)`);
+  for (const [f, s, id, n] of [['js/app.js', app, 'day-name', 80], ['js/food.js', food, 'mf-name', 80], ['js/body.js', body, 'cardio-type-name', 40]]) {
+    if (!new RegExp('id="' + id + '" maxlength="' + n + '"').test(s)) problems.push(`${f}: #${id} lost maxlength="${n}"`);
+  }
+  if (!/id="cx-log-portion" type="number" inputmode="decimal"/.test(food)) problems.push('js/food.js: #cx-log-portion lost inputmode="decimal"');
+  for (const [f, s, k] of [['js/app.js', app, 'img_error'], ['js/app.js', app, 'sync_restore_failed'], ['js/body.js', body, 'cardio_sched_limit']]) {
+    if (!s.includes("showToast(t('" + k + "'), { duration: 4000 })")) problems.push(`${f}: ${k} carries a next step and is back on the 1.8 s toast`);
+  }
+  if (!/\.ai-edit-f > input:focus \{[^}]*border-color: var\(--border-focus\);/.test(css)) problems.push('styles.css: .ai-edit-f > input:focus left --border-focus');
+  contract(`typed work and stored rows are not lost to one press: 6 doors reach requestClose()/dirtyRefusal(), ${guards(app) + guards(food)} sheets say when they are dirty, 2 deletes are undoable writes, the log clear asks first, an edit opens on the dialog`, problems);
+}
+
 console.log(failures.length ? `\ncheck-contracts: ${failures.length} broken contract(s)` : '\ncheck-contracts: all contracts hold');
 process.exit(failures.length ? 1 : 0);

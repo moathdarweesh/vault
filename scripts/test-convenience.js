@@ -530,6 +530,52 @@ assert.equal(db.undo.apply(restore.undoToken).ok,true); assert.equal(json(db.pla
   db.shopping.clearAll();
 }
 
+// v433. Two deletes that were silent and permanent are ONE undoable write each.
+// (a) A weight entry: the ledger holds that one row, never the whole array.
+{
+  const p = context(), pdb = p.c.DB, prun = code => vm.runInContext(code, p.c);
+  const d = n => prun(`addDaysISO(todayISO(), ${n})`);
+  pdb.bodyweight.log(d(-2), 80); pdb.bodyweight.log(d(-1), 81); pdb.bodyweight.log(d(0), 82);
+  // Compared through list(), which sorts: the raw array's order is not kept by a rollback or an Undo.
+  const listed = () => json(pdb.bodyweight.list());
+  const before = listed(), ledger = pdb.undo.list().length;
+  const none = pdb.bodyweight.remove('1999-01-01');
+  assert.equal(json([none.ok, none.changed]), json([true, false]), 'removing a day that holds no weight is an unchanged write');
+  assert.equal(pdb.undo.list().length, ledger, 'and it adds nothing to the ledger');
+  const r = pdb.bodyweight.remove(d(-1));
+  assert.equal(json([r.ok, r.changed, typeof r.undoToken]), json([true, true, 'string']), 'bodyweight.remove answers with its write and a token');
+  assert.equal(pdb.bodyweight.list().length, 2, 'the entry is gone');
+  assert.equal(pdb.undo.list()[0].label, 'weight_deleted', 'the ledger names it by a dictionary key');
+  assert.ok(json(prun('undoEntries[undoEntries.length - 1].before')).length < 80, 'the ledger holds ONE row, not the array');
+  assert.equal(pdb.undo.apply(r.undoToken).ok, true, 'the deletion can be undone');
+  assert.equal(listed(), before, 'and the entry is back');
+  const again = pdb.bodyweight.remove(d(-1));
+  pdb.bodyweight.log(d(-1), 90);
+  assert.equal(pdb.undo.apply(again.undoToken).ok, false, 'an Undo after the same day was logged again is refused');
+  assert.equal(pdb.bodyweight.list().find(e => e.date === d(-1)).kg, 90, 'the newer figure stands');
+  const mid = listed();
+  p.fail('QuotaExceededError');
+  assert.equal(pdb.bodyweight.remove(d(0)).ok, false, 'a refused save refuses the removal');
+  assert.equal(listed(), mid, 'and the entry is still there');
+  p.fail('');
+}
+// (b) An exercise taken off a plan day: the id and its prescription leave together and come back together.
+{
+  const p = context(), pdb = p.c.DB, prun = code => vm.runInContext(code, p.c);
+  const [A, B] = pdb.exercises.list().map(e => e.id);
+  pdb.plan.setRotation({cycle:[{name:'QA day',exerciseIds:[A,B]},{name:'QA two',exerciseIds:[B]}],trainingDays:[0,1,2,3,4,5,6],anchor:prun('todayISO()')});
+  assert.equal(pdb.plan.setSlotTargets(0, {[A]:{sets:3,reps:'8',notes:''},[B]:{sets:4,reps:'10',notes:''}}, json(pdb.plan.get())).ok, true);
+  const before = json(pdb.plan.get());
+  assert.equal(pdb.plan.removeExerciseFromSlot(9, A).code, 'VALIDATION', 'a slot that does not exist is refused, not ignored');
+  const r = pdb.plan.removeExerciseFromSlot(0, A);
+  assert.equal(json([r.ok, r.changed, typeof r.undoToken]), json([true, true, 'string']), 'removeExerciseFromSlot answers with its write and a token');
+  assert.equal(json(pdb.plan.get().cycle[0].exerciseIds), json([B]), 'the exercise left the day');
+  assert.equal(pdb.plan.get().cycle[0].targets[A], undefined, 'and its prescription left with it');
+  assert.equal(pdb.undo.list()[0].label, 'exercise_removed');
+  assert.equal(pdb.undo.apply(r.undoToken).ok, true, 'the removal can be undone');
+  assert.equal(json(pdb.plan.get()), before, 'byte for byte: the order, the prescription, the anchor');
+  assert.equal(pdb.undo.apply(r.undoToken).ok, false, 'and only once');
+}
 // Search includes 10k records without a persistent index or query log.
 run(`STATE.foodLogs['${date}']=Array.from({length:10000},(_,i)=>({id:'food_'+i,name:'Test meal '+i,calories:1,servings:1}))`);
 const start = performance.now(); const hits = db.search.query('Test meal 99'); const elapsed = performance.now()-start;

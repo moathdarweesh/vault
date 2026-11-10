@@ -2,6 +2,94 @@
 
 One section per release since v309, newest first, moved verbatim from `CLAUDE.md` in v401 (batch 6 of the 2026-09-25 review; `docs/REVIEW-2026-09-25.md`). `CLAUDE.md` is the guide and the authority for how the app works now. A section here records what one release changed and why, in the words written at the time, so a later section — or the guide — can supersede what an earlier one says.
 
+## v433 — typed work and stored rows are not lost to one press
+
+**The owner: «كمل بشرط الأحسن اللي تنفّذه».** The data-safety half of what the two vendored UI
+skills found when they were applied to the app (v432 was the motion half). Three losses, each one
+press wide, and a batch of names, caps and error sentences.
+
+**A sheet that holds unsaved typing is no longer thrown away without a word.** Six doors closed
+it: the backdrop, the X (and the session sheet's labelled Cancel), Escape (the sheet's trap and
+the global handler behind it), the drag, and Back. Each now asks `requestClose()` /
+`dirtyRefusal()` in js/ui.js, and a sheet says whether it is dirty through `openModal(html,
+{ guardDirty })`. A question in a dialog was not possible — there is one `#modal-root`, so the
+dialog would destroy the sheet it asks about — so the FIRST press is refused and says why in a
+toast (`sheet_dirty_close`), and a second press, while that toast is still what the screen
+shows, closes. Code closes (a Save, a hand-over, an owner change) call `closeModal()` and are
+never asked. Four sheets say so: the session sheet (dirty = differs from what it opened with — it
+is PRE-FILLED from the last session), the recipe editor (what a Save would store; a saved recipe
+or a chooser's dish opened untouched is clean, a lone import draft is dirty from the start), the
+meal editor, and the manual-food sheet (anything typed).
+
+**What the review changed in that design** (four lenses, each finding re-derived by a skeptic: 31
+findings, 23 confirmed, 8 refuted). The warning had a 5 s clock: a screen-reader or switch user
+could miss it every time and be warned for ever, so the instruction is now a STICKY toast with no
+timer, withdrawn when it is answered, when the sheet changes (typing, or a control pressed — the
+warning was about the sheet as it was) or when the sheet leaves (`dirtyUnsay()`; it also used to
+stay on screen for seconds after the sheet it spoke of had gone). A press sooner than
+`DIRTY_REFLEX` (400 ms) is the same press twice and is ignored; so is the auto-repeat of a HELD
+Escape or Enter, which arrived past the reflex window and answered its own warning. The toast
+`holds-sheet`: the sheet makes room for it as it does for an Undo, because a toast that stands
+until answered must not lie on the Save it is the alternative to. A refused drag springs back
+through `.settling` (`dragToDismiss(el, onDismiss, mayDismiss)`), and the rise is pinned off
+inline once a finger has moved the sheet — on a fresh sheet dropping `.settling` replayed the
+whole 400 ms entrance. A refused close also cancels a recipe Save that was waiting on a figure:
+since v420 a saved recipe is published, and it must not land by itself a second after the user
+pressed a way out. `goBack()` answers true after a refusal (false would exit the APK).
+
+**Two deletes are one undoable write each.** The trash on a weight entry (`DB.bodyweight.remove`:
+the ledger holds that ONE row, never the array) and the trash on an exercise of a plan day
+(`DB.plan.removeExerciseFromSlot`: the whole plan, as `removeSlot` is) are `changeSlice` writes;
+their handlers offer the Undo. `applyConvenienceUndo` keeps the typed sets for these two labels
+(`keepDrafts`): the Undo sits on the page where sets are being typed, and it wiped them — the
+cards beside it, and (the review) the removed card's own draft, which the handler now keeps while
+the removal is undoable. **The notification log** is device-local, outside the blob, so no Undo
+can bring it back: its clear asks through `confirmDialog`, and a confirm dialog is now NAMED by
+its question (`.confirm-title` → `aria-labelledby`; every confirm opened as «dialog» and nothing
+else).
+
+**Names, caps, keyboards, focus.** `aria-label` on nine placeholder-only inputs and the chat's
+icon-only send; `inputmode="decimal"` on the two portion fields; `maxlength` on eight free-text
+names (exercise 100, workout 80, supplement and dose 40 — the reminder's dose name is 40 —
+manual and saved food 80, unit 24, cardio type 40); `role="alert"` on three error regions, which
+are cleared before each write so a repeated error is announced; `[autofocus]` on a NEW exercise
+or supplement only — an edit opens on the dialog and raises no keyboard — with the exercise
+editor's unconditional 60 ms focus removed and the food editor's kept for a new food and guarded
+(it takes the caret only from the dialog: v432's lesson); the AI edit fields' focus on
+`--border-focus` with the app-wide ring back (their `outline: none` outranked it);
+`<html translate="no">`.
+
+**Errors that say what to do next.** `img_error`, `ai_err_too_large`, `cardio_sched_limit`,
+`voice_no_mic`, `remind_test_failed` and `sync_restore_failed` carry a cause and one step, and
+the long ones stay 4 s (a plain toast honours `opts.duration`). The failed backup copy offers
+«أعد المحاولة» ON its toast: the Settings row a first draft named exists only while the last
+write is still failed. The reminder test no longer paints «could not send» over the gate's own
+refusal. And «تعذّرت الاستعادة. بياناتك لم تتغيّر» is now true: `Cloud.restoreRecovery()` swapped
+the rescue slot BEFORE the import, so a restore that failed had already overwritten the one copy
+it was restoring, and a second tap «restored» the current data — the slot is written back.
+
+**Accepted limits, recorded.** A dialog that REPLACES a dirty sheet still destroys it (the
+save-failed alert, a held dialog, the meal editor's own Delete confirm then Cancel). The Undo of a
+weight delete closes the weight sheet, as the shopping list's does. A plan Undo goes STALE after
+any raw plan write. An Undo raised over an open sheet is not reachable by Tab (the sheet's focus
+trap; true of the shopping list's since it shipped). On the web the reminder test's own toast
+still follows the gate's.
+
+**Tests.** Contract 80 holds the wiring (the six doors, the fail-open guard, the sticky
+instruction and its withdrawal, the held-key rule, the four guarded sheets, the two changeSlice
+writes and their handlers, `keepDrafts`, the question before the log clear, focus on new only,
+the attribute batch, the toast lives). `scripts/test-data-safety-ui.js` (new, 22 cases) drives
+the doors the way a thumb does — a click, a key, Back, a mouse drag on a fresh sheet. Node cases
+in `test-convenience.js` (the weight row and the plan removal: write, Undo byte for byte, STALE,
+quota) and `test-multi-window.js` (a failed restore keeps the rescue copy); B23 now asserts both
+ways a waiting Save must die (a refused close, and a close by code).
+
+**Fail first.** 56 plants in memory over two rounds (33 on the first build, 23 on the review fixes), every one caught by contract 80 and/or a suite with the repo bytes unchanged. One assertion was found VACUOUS by its own plant and rewritten: «the toast does not lie on Save» was a hit-test, and a plain toast lets taps through — it is now a rectangle overlap (measured without the room: the toast at y 691–732 on Save at 694–738).
+
+**Gate.** `npm run verify`: the 80 contracts hold, ESLint clean, 33 suites passed · 0 failed (wall 239 s, --jobs 3).
+
+**Fingerprint against v432b** (`diff v432b v433a`): views 176/184 identical, the differences all the version label; sheets 90/128, every difference one this release declares — the confirm dialogs named by their question (and the title ids after them renumbered), `role="alert"` on three error regions, `inputmode` on the two portion fields, and the focus styles of the edit sheets that no longer open on their name field.
+
 ## v432 — the arrival rests inside half a second
 
 **The owner, after the two vendored UI skills were applied to the app rule by rule and every

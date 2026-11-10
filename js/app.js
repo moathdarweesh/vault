@@ -12,7 +12,7 @@
 // build. The literal below is the fallback (file://, or a stripped query) and is
 // still bumped by `npm run release` — see CLAUDE.md "CACHE WORKFLOW".
 const VAULT_BUILD = (() => {
-  const FALLBACK = 'v432';
+  const FALLBACK = 'v433';
   try {
     const src = (document.currentScript && document.currentScript.src) || '';
     const m = src.match(/[?&]v=(\d+)/);
@@ -564,11 +564,21 @@ function renderNotifications(el) {
     notifOpen(r.dataset.openCh);
   }));
   $('#ntfa-more', el)?.addEventListener('click', () => { notifLogExpanded = true; renderNotifications(el); });
+  // The log lives on this device alone, outside the blob: no Undo can bring it
+  // back, so the one tap that erases it asks first (v433).
   $('#ntfa-clear', el)?.addEventListener('click', () => {
-    DB.notif.logClear();
-    notifLogExpanded = false;
-    try { showToast(t('notif_cleared')); } catch (_) {}
-    renderNotifications(el);
+    confirmDialog({
+      title: t('notif_clear_log_confirm'), text: '', confirmLabel: t('notif_clear_log'), variant: 'danger',
+      onConfirm: () => {
+        DB.notif.logClear();
+        notifLogExpanded = false;
+        renderNotifications(el);
+        // The row that asked left with the history it cleared — land on the
+        // page's own way back, not <body>.
+        el.querySelector('[data-back]')?.focus({ preventScroll: true });
+        try { showToast(t('notif_cleared')); } catch (_) {}
+      },
+    });
   });
   // The ONLY way back to the OS prompt after "not now". Without it that button
   // is a one-way door: the sheet never reopens by itself, so a user who
@@ -1274,7 +1284,9 @@ function goBack() {
   // A dialog opened with dismissible:false MUST be answered (the duplicate-account
   // hold is one): Back is swallowed the way the splash swallows it, never closed.
   if (document.querySelector('#modal-root .modal-overlay[data-dismissible="0"]:not(.is-out)')) return true;
-  if (document.querySelector('#modal-root .modal-overlay:not(.is-out)')) { closeModal(); return true; }
+  // true even when a dirty sheet REFUSED the close (v433): Back was handled —
+  // answering false here would let the Android handler exit the app.
+  if (document.querySelector('#modal-root .modal-overlay:not(.is-out)')) { requestClose(); return true; }
   // A sheet on `.app` sits UNDER #modal-root, so it goes second — Back takes the
   // top-most layer — and before the view: it closes, the screen stays.
   if (closeAppSheet()) return true;
@@ -1422,7 +1434,10 @@ async function exportBackupFile() {
         try {
           await navigator.clipboard.writeText(json);
           showToast(t(raw ? 'export_corrupt_saved' : 'export_copied'));
-        } catch (_) { showToast(t('export_failed')); }
+        // The way to try again is ON the toast: the Settings row that exports
+        // exists only while the last write is still failed, so naming it sent
+        // the user to a control that may not be there.
+        } catch (_) { showToast(t('export_failed'), { actionLabel: t('ai_retry'), onAction: () => { exportBackupFile(); } }); }
       },
     });
     return;
@@ -1861,6 +1876,7 @@ document.addEventListener('click', (e) => {
 // keyboard parity with tapping the backdrop / hardware back.
 document.addEventListener('keydown', (e) => {
   if (e.key !== 'Escape') return;
+  if (e.repeat) return;   // a held key is one press (v433; see the sheet trap in ui.js)
   const lb = document.querySelector('.img-lightbox');
   if (lb) { lb.remove(); return; }
   // ONE ESCAPE CLOSES ONE SHEET. A sheet's own trap (openModal's, capture phase)
@@ -1874,7 +1890,7 @@ document.addEventListener('keydown', (e) => {
   // Both tests skip a LEAVING sheet: it is already closing, so it must neither
   // veto Escape with its stale data-dismissible nor be closed a second time.
   if (root && root.querySelector('.modal-overlay[data-dismissible="0"]:not(.is-out)')) return;
-  if (root && root.querySelector('.modal-overlay:not(.is-out)')) { closeModal(); return; }
+  if (root && root.querySelector('.modal-overlay:not(.is-out)')) { requestClose(); return; }
   // …then a sheet on `.app`, which sits under the modal root. Only when no
   // modal answered this key: a modal's own trap runs first, in the capture
   // phase, and spends the event — without this test one Escape closed both.
@@ -3382,7 +3398,7 @@ function renderExercises(el) {
       ${searchOpen ? `
         <div class="search-wrap" style="flex:1">
           ${icon('search', 20)}
-          <input type="search" id="workout-search" placeholder="${t('search_exercises')}" value="${escapeHtml(query)}">
+          <input type="search" id="workout-search" placeholder="${t('search_exercises')}" aria-label="${escapeHtml(t('search_exercises'))}" value="${escapeHtml(query)}">
         </div>
         <button class="icon-square" id="workout-search-close" aria-label="${escapeHtml(t('cancel'))}">${icon('close', 20)}</button>
       ` : `
@@ -3872,7 +3888,7 @@ function openNewExerciseModal(exerciseId = null, opts = {}) {
 
     <div class="form-group">
       <label class="form-label">${t('name')}</label>
-      <input type="text" id="ex-name" placeholder="${t('ph_exercise_name')}" value="${existing ? escapeHtml(existing.name) : ''}" autofocus>
+      <input type="text" id="ex-name" maxlength="100" placeholder="${t('ph_exercise_name')}" value="${existing ? escapeHtml(existing.name) : ''}"${existing ? '' : ' autofocus'}>
     </div>
 
     <div class="form-group">
@@ -3959,7 +3975,7 @@ function openNewExerciseModal(exerciseId = null, opts = {}) {
       pickedImage = dataUrl;
       refreshPreview();
     } catch (err) {
-      showToast(t('img_error'));
+      showToast(t('img_error'), { duration: 4000 });
     }
   }
   $('#ex-image-pick').addEventListener('click', () => $('#ex-image-file').click());
@@ -4004,8 +4020,10 @@ function openNewExerciseModal(exerciseId = null, opts = {}) {
       });
     }
   });
-
-  setTimeout(() => $('#ex-name')?.focus(), 60);
+  // No deferred focus (v433). A NEW exercise takes the caret through [autofocus],
+  // which openModal focuses itself; an EDIT opens on the dialog, so no keyboard
+  // rises over what the user came to read. The 60 ms timer that stood here took
+  // the caret unconditionally — on an edit, and from any field tapped first.
 }
 
 // ==========================================================================
@@ -4273,6 +4291,11 @@ function openSessionModal(exerciseId, sessionId = null) {
     renderSetsEditor();
   }
 
+  // What the sheet held when it opened (v433). A new session is PRE-FILLED from
+  // the last one, so «dirty» is «differs from this», never «is not empty».
+  const sessionSnap = () => JSON.stringify([$('#session-date')?.value || initialDate, sets.map((s) => [s.reps, s.weight])]);
+  const sessionSnap0 = JSON.stringify([initialDate, sets.map((s) => [s.reps, s.weight])]);
+
   const ex = DB.exercises.getById(exerciseId);
   const lastPreview = lastSession ? `
     <div class="prev-session">
@@ -4325,7 +4348,7 @@ function openSessionModal(exerciseId, sessionId = null) {
       <button type="button" class="btn btn-ghost" data-close>${t('cancel')}</button>
       <button type="button" class="btn btn-primary" id="save-session-btn">${existing ? t('update') : t('save')}</button>
     </div>
-  `);
+  `, { guardDirty: () => sessionSnap() !== sessionSnap0 });
 
   renderSetsEditor();
 
@@ -5195,6 +5218,9 @@ function applyConvenienceUndo(token) {
   // as the engine's own rollbacks are, and no toast: the Undo's own stands.
   // Deleting a recipe by hand is another matter: its copy stays (shr_del_note).
   const recipesBefore = DB.recipes.list();
+  // Read BEFORE the apply pops it: which write this Undo takes back.
+  const undone = DB.undo.list()[0];
+  const keepDrafts = !!undone && undone.token === token && (undone.label === 'exercise_removed' || undone.label === 'weight_deleted');
   const result = DB.undo.apply(token);
   if (!result.ok) { convenienceError(result); return; }
   if (window.Cloud && typeof Cloud.withdrawSharedRecipe === 'function' && typeof shrOrphanedIds === 'function') {
@@ -5209,8 +5235,13 @@ function applyConvenienceUndo(token) {
   }
   // Guided-run drafts are derived from sessions. A stale draft must not write
   // the just-undone values back into persistence when leaving the screen.
-  if (viewContext.runState) viewContext.runState = {};
-  if (viewContext.sdState) viewContext.sdState = {};
+  // …but an Undo that touches no session leaves them alone (v433): a plan
+  // exercise put back, or a weight entry, sits on the very page where sets are
+  // being typed, and must not wipe the cards beside it.
+  if (!keepDrafts) {
+    if (viewContext.runState) viewContext.runState = {};
+    if (viewContext.sdState) viewContext.sdState = {};
+  }
   closeModal();
   renderView(currentView);
   showToast(t('updated'));
@@ -5233,7 +5264,7 @@ function guardConvenienceModal(modal) {
   }, true);
   return modal;
 }
-function convenienceModal(html) { return guardConvenienceModal(openModal(html)); }
+function convenienceModal(html, opts) { return guardConvenienceModal(openModal(html, opts)); }
 function openUnifiedSearch() {
   const owner = Cloud.getLastUid();
   // ---- QUICK LOG: the sheet's empty state ---------------------------------
@@ -6706,7 +6737,7 @@ function openSlotEditorModal(slotIdx, onAdd) {
 
       <div class="form-group">
         <label class="form-label">${t('name')}</label>
-        <input type="text" id="day-name" placeholder="${t('workout_name_ph')}" value="${escapeHtml(dayLabel)}">
+        <input type="text" id="day-name" maxlength="80" placeholder="${t('workout_name_ph')}" value="${escapeHtml(dayLabel)}">
       </div>
 
       <div class="form-group" id="chosen-wrap"></div>
@@ -7085,11 +7116,20 @@ function renderSessionDay(el) {
   el.querySelectorAll('[data-remove-ex]').forEach((b) =>
     b.addEventListener('click', () => {
       const exId = b.dataset.removeEx;
+      // The view-level selection is not a write: nothing to undo, the plain toast
+      // stands. A removal from the PLAN is one undoable write (v433).
+      let result = null;
       if (sdOnly) viewContext.sdOnly = sdOnly.filter((id) => id !== exId);
-      else DB.plan.removeExerciseFromSlot(slotIdx, exId);
-      delete viewContext.sdState[exId];
-      showToast(t('exercise_removed'));
+      else {
+        result = DB.plan.removeExerciseFromSlot(slotIdx, exId);
+        if (!result.ok) { convenienceError(result); return; }
+      }
+      // An undoable removal KEEPS the card's draft: the Undo redraws the card,
+      // and the sets typed on it come back with it (nothing reads the draft of
+      // an exercise that is not on the day).
+      if (!result || !result.undoToken) delete viewContext.sdState[exId];
       renderSessionDay(el);
+      if (!offerUndo(t('exercise_removed'), result)) showToast(t('exercise_removed'));
     })
   );
 
@@ -8300,7 +8340,7 @@ function renderSessionRun(el) {
         <button class="icon-btn icon-btn-tile" data-close>${icon('close', 20)}</button>
       </div>
       <div class="search-wrap" style="margin-bottom:10px">${icon('search', 20)}
-        <input type="search" id="swap-search" placeholder="${escapeHtml(t('search_exercises'))}"></div>
+        <input type="search" id="swap-search" placeholder="${escapeHtml(t('search_exercises'))}" aria-label="${escapeHtml(t('search_exercises'))}"></div>
       <div class="picker-list" id="swap-list"></div>
     `);
     const list = overlay.querySelector('#swap-list');
@@ -9175,7 +9215,11 @@ function openRemindersModal() {
     $('#rem-test')?.addEventListener('click', once(async () => {
       if (window.Notify) await Notify.gate();
       const res = window.Notify ? await Notify.test() : { ok: false, reason: 'unsupported' };
-      showToast(res.ok ? t('remind_test_sent') : t('remind_test_failed'));
+      // A refused permission was explained by the gate a moment ago (and, when
+      // the OS will not ask again, with the way to fix it); «could not send»
+      // used to paint over that sentence.
+      if (res.ok) showToast(t('remind_test_sent'));
+      else if (res.reason !== 'denied') showToast(t('remind_test_failed'), { duration: 4000 });
       // The test lands in the log, so re-read the status: `pending` moved.
       paintStatus();
     }));
@@ -9224,12 +9268,12 @@ function openSupplementModal(id = null) {
 
     <div class="form-group">
       <label class="form-label">${t('supplement_name')}</label>
-      <input type="text" id="supp-name" placeholder="${t('ph_supplement_name')}" value="${existing ? escapeHtml(existing.name) : ''}" autofocus>
+      <input type="text" id="supp-name" maxlength="40" placeholder="${t('ph_supplement_name')}" value="${existing ? escapeHtml(existing.name) : ''}"${existing ? '' : ' autofocus'}>
     </div>
 
     <div class="form-group">
       <label class="form-label">${t('dose')}</label>
-      <input type="text" id="supp-dose" placeholder="5 g" value="${existing ? escapeHtml(existing.dose || '') : ''}">
+      <input type="text" id="supp-dose" maxlength="40" placeholder="5 g" value="${existing ? escapeHtml(existing.dose || '') : ''}">
     </div>
 
     <div class="form-group">
@@ -9493,7 +9537,9 @@ function authSheetKit(root, { errSel, btn, captchaSel } = {}) {
     }
   } catch (_) {}
   return {
-    err: (msg) => { const e = root.querySelector(errSel); if (e) e.textContent = msg || ''; },
+    // Cleared first: writing the SAME sentence again changes nothing in a
+    // role="alert" region, and a repeated error would not be announced.
+    err: (msg) => { const e = root.querySelector(errSel); if (!e) return; e.textContent = ''; e.textContent = msg || ''; },
     busy: (on) => { if (!btn) return; btn.disabled = !!on; btn.textContent = on ? t('auth_signing') : label; },
     token: async () => (armed() ? Cloud.captcha.token() : null),
     reset: () => { if (armed()) Cloud.captcha.reset(); },
@@ -9525,8 +9571,8 @@ function showAuthGate(mode) {
       </div>
       <div class="auth-title">${brandLockup('splash')}</div>
       <div class="auth-sub">${up ? t('auth_sub_up') : t('auth_sub_in')}</div>
-      <input type="email" id="auth-email" class="auth-input" placeholder="${t('auth_email')}" autocomplete="email" inputmode="email">
-      <input type="password" id="auth-password" class="auth-input" placeholder="${t('auth_password')}" autocomplete="${up ? 'new-password' : 'current-password'}">
+      <input type="email" id="auth-email" class="auth-input" placeholder="${t('auth_email')}" aria-label="${escapeHtml(t('auth_email'))}" autocomplete="email" inputmode="email">
+      <input type="password" id="auth-password" class="auth-input" placeholder="${t('auth_password')}" aria-label="${escapeHtml(t('auth_password'))}" autocomplete="${up ? 'new-password' : 'current-password'}">
       <div class="auth-captcha" id="auth-captcha"></div>
       <div class="auth-err" id="auth-err" role="alert"></div>
       <button class="btn btn-primary btn-block" id="auth-submit">${up ? t('auth_signup') : t('auth_signin')}</button>
@@ -9911,7 +9957,7 @@ function showUsernameGate() {
       <div class="auth-sub">${t('username_sub')}</div>
       <div class="uname-field">
         <span class="uname-at">@</span>
-        <input type="text" id="uname-input" class="auth-input" placeholder="${t('username_ph')}"
+        <input type="text" id="uname-input" class="auth-input" placeholder="${t('username_ph')}" aria-label="${escapeHtml(t('username_title'))}"
                autocomplete="off" autocapitalize="off" spellcheck="false" maxlength="20">
       </div>
       <div class="uname-rules">${t('username_rules')}</div>
@@ -9969,9 +10015,9 @@ function showForgotPassword(prefillEmail) {
       <button class="icon-btn icon-btn-tile" data-close>${icon('close', 20)}</button>
     </div>
     <div class="confirm-text" style="margin-bottom:12px">${t('auth_reset_sub')}</div>
-    <input type="email" id="reset-email" class="auth-input" placeholder="${t('auth_email')}" value="${escapeHtml(prefillEmail || '')}" autocomplete="email" inputmode="email">
+    <input type="email" id="reset-email" class="auth-input" placeholder="${t('auth_email')}" aria-label="${escapeHtml(t('auth_email'))}" value="${escapeHtml(prefillEmail || '')}" autocomplete="email" inputmode="email">
     <div class="auth-captcha" id="reset-captcha"></div>
-    <div class="auth-err" id="reset-err"></div>
+    <div class="auth-err" id="reset-err" role="alert"></div>
     <button class="btn btn-primary btn-block" id="reset-send">${t('auth_reset_send')}</button>
   `, { variant: 'confirm' });
   const btn = overlay.querySelector('#reset-send');
@@ -10173,7 +10219,7 @@ function showChangePassword(recovery, confirmed) {
          proved the mailbox and never calls signInWithPassword. The slot reserves
          no height — Turnstile is invisible here as it is on the login card. -->
     ${recovery ? '' : '<div id="cpw-captcha"></div>'}
-    <div class="auth-err" id="cpw-err"></div>
+    <div class="auth-err" id="cpw-err" role="alert"></div>
     <button class="btn btn-primary btn-block" id="cpw-save">${t('save')}</button>
   `, { variant: 'confirm' });
   // A recovery link can land while a dialog that must be answered is up; that
@@ -10214,7 +10260,7 @@ function showFeedback() {
     </div>
     <div class="confirm-text" style="margin-bottom:12px">${t('feedback_sub')}</div>
     <textarea id="fb-msg" class="auth-input" rows="4" style="resize:vertical;min-height:96px" placeholder="${t('feedback_ph')}" aria-label="${escapeHtml(t('feedback_ph'))}"></textarea>
-    <div class="auth-err" id="fb-err"></div>
+    <div class="auth-err" id="fb-err" role="alert"></div>
     <button class="btn btn-primary btn-block" id="fb-send">${t('feedback_send')}</button>
   `, { variant: 'confirm' });
   const btn = overlay.querySelector('#fb-send');
@@ -10373,7 +10419,8 @@ async function populateAccount(el) {
           // Two halves, two messages: a restore that stays on this device is half
           // a rescue, and «restored» would have promised the cloud copy too.
           const restored = !!(r && r.restored);
-          showToast(!restored ? t('sync_restore_failed') : r.uploaded ? t('sync_restored') : t('sync_restored_local'));
+          if (!restored) showToast(t('sync_restore_failed'), { duration: 4000 });
+          else showToast(r.uploaded ? t('sync_restored') : t('sync_restored_local'));
           if (restored) { refreshAfterSync(); renderView(currentView); }
         },
       });

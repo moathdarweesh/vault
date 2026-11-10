@@ -5102,9 +5102,12 @@ button.bundle-main {
      numbers rather than four separate left-aligned form fields. */
   text-align: center;
 }
+/* v433: --accent-soft is a FILL (13% alpha) and read as no focus at all; the
+   field focus colour is --border-focus, as the global field rule uses. No
+   `outline: none` here: it outranked the app-wide :focus-visible ring and left
+   a keyboard user a 1px border to find. */
 .ai-edit-f > input:focus {
-  outline: none;
-  border-color: var(--accent-soft, var(--border-hi));
+  border-color: var(--border-focus);
 }
 .ai-edit-done { grid-column: 1 / -1; height: 40px; font-weight: 700; }
 
@@ -8372,7 +8375,9 @@ body[dir="rtl"] .plan-import-file { padding: 12px 14px 12px 52px; }
    It fires for ANY shown toast, not just action ones: the rule this replaced moved
    every toast clear of the sheet, and narrowing it to action toasts left plain ones
    («saved», «deleted») covering the same buttons. */
-body:has(.toast.has-action.show) .modal { padding-bottom: calc(var(--nav-h) + var(--safe-b) + 16px + 76px); }
+/* v433: …and for the dirty-sheet instruction (`.holds-sheet`, js/ui.js), which
+   stands until it is answered and must not lie on the sheet's Save meanwhile. */
+body:has(.toast.has-action.show) .modal, body:has(.toast.holds-sheet.show) .modal { padding-bottom: calc(var(--nav-h) + var(--safe-b) + 16px + 76px); }
 .cx-stack label.cx-row { flex-direction:row; }
 
 /* One focus ring for the whole app. Six controls declared one and about a

@@ -1673,12 +1673,36 @@ const RECIPE_IMPORT = [
       await live('#rec-add').click();
       await live('#rec-rows .rec-strip [data-f="name"]').fill('QA milk');
       await live('#rec-save').click();
+      // v433: the editor holds a typed row, so the first press is REFUSED and
+      // says why — and it cancels the Save that was waiting. The second closes.
+      await live('.modal-header [data-close]').click();
+      assert.equal(await toastText(page), await page.evaluate(() => t('sheet_dirty_close')), 'a dirty dish editor refuses the first close and says why');
+      // Past the ~0.9 s the waiting Save needed: a refused way out must not be
+      // followed by a save (and, since v420, a publication) landing by itself.
+      await page.waitForTimeout(1500);
+      assert.equal(await live('#rec-save').count(), 1, 'the editor is still on screen 1.5 s later');
+      assert.equal(await page.evaluate(() => DB.recipes.list().length), before, 'and the Save that was waiting did not land after the refused close');
       await live('.modal-header [data-close]').click();
       await page.waitForTimeout(1500);
       const got = await page.evaluate(() => { const o = document.querySelector('#modal-root .modal-overlay:not(.is-out)');
         return { rows: o ? o.querySelectorAll('.rx-dish').length : 0, done: o ? o.querySelectorAll('.rx-dish.is-done').length : -1 }; });
       assert.equal(await page.evaluate(() => DB.recipes.list().length), before, 'the dish closed without its save is not saved ~0.9 s later');
       assert.deepEqual(got, { rows: 2, done: 0 }, 'the chooser is still up, no card marked');
+      // A close nobody is asked about (a hand-over, the import door, an owner
+      // change) while the Save waits: the Save must die with the sheet
+      // (finishSaveIfWanted's leave-guard and the leave observer's reset).
+      await live('.rx-dish').nth(1).click();
+      await live('#rec-rows .rec-row').first().waitFor({ timeout: 4000 });
+      await live('#rec-add').click();
+      await live('#rec-rows .rec-strip [data-f="name"]').fill('QA milk');
+      await live('#rec-save').click();
+      assert.equal(await live('#rec-save.is-waiting').count(), 1, 'setup: the Save is waiting on a figure');
+      await page.evaluate(() => closeModal());
+      await page.waitForTimeout(1500);
+      const got2 = await page.evaluate(() => { const o = document.querySelector('#modal-root .modal-overlay:not(.is-out)');
+        return { rows: o ? o.querySelectorAll('.rx-dish').length : 0, done: o ? o.querySelectorAll('.rx-dish.is-done').length : -1 }; });
+      assert.equal(await page.evaluate(() => DB.recipes.list().length), before, 'a dish closed by code while its Save waited is not saved ~0.9 s later');
+      assert.deepEqual(got2, { rows: 2, done: 0 }, 'the chooser is back, no card marked');
     } finally {
       await page.evaluate(() => { DB.foods.list().filter((f) => f.name === 'QA milk').forEach((f) => DB.foods.remove(f.id)); });
       await rxCleanup(page); await kit.done();

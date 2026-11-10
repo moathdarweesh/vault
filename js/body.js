@@ -191,9 +191,13 @@ function openWeightSheet() {
     input?.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); doSave(); } });
     host.querySelectorAll('[data-del-weight]').forEach((b) =>
       b.addEventListener('click', () => {
-        DB.bodyweight.remove(b.getAttribute('data-del-weight'));
+        // One undoable write (v433): the trash used to erase a day's weight
+        // with no way back and no word.
+        const result = DB.bodyweight.remove(b.getAttribute('data-del-weight'));
+        if (!result.ok) { convenienceError(result); return; }
         host.innerHTML = body(); bind();
         refreshCaller();
+        offerUndo(t('weight_deleted'), result);   // after the repaint, as every other caller orders it
       })
     );
   };
@@ -849,8 +853,9 @@ function openCardioScheduleModal(id = null) {
     const payload = { type: selectedType, days: [...days], duration };
     const result = existing ? DB.cardioPlan.update(existing.id, payload) : DB.cardioPlan.add(payload);
     if (!result.ok) {
-      showToast(result.code === 'LIMIT' ? t('cardio_sched_limit')
-        : result.code === 'STALE' ? t('cx_stale') : t('cardio_sched_need'));
+      // The limit's sentence carries its way out, so it stays long enough to be read.
+      if (result.code === 'LIMIT') showToast(t('cardio_sched_limit'), { duration: 4000 });
+      else showToast(result.code === 'STALE' ? t('cx_stale') : t('cardio_sched_need'));
       return;
     }
     closeModal();
@@ -923,7 +928,7 @@ function openNewCardioTypeModal(onCreated) {
         <!-- for= by hand: this sub-sheet is appended to #modal-root beside the
              cardio sheet, not through openModal, so labelSheetFields never sees it. -->
         <label class="form-label" for="cardio-type-name">${t('name')}</label>
-        <input type="text" id="cardio-type-name" placeholder="${t('cardio_type_name_ph')}">
+        <input type="text" id="cardio-type-name" maxlength="40" placeholder="${t('cardio_type_name_ph')}">
       </div>
 
       <div class="form-group">

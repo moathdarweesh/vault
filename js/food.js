@@ -388,7 +388,7 @@ function openBarcodeScanner(date, onSave) {
     <div class="voice-status" id="bc-status">${canScan ? t('barcode_hint') : t('barcode_manual_hint')}</div>
     <div class="bc-manual">
       <input type="text" inputmode="numeric" id="bc-manual-input" autocomplete="off"
-        placeholder="${escapeHtml(t('barcode_number_ph'))}">
+        placeholder="${escapeHtml(t('barcode_number_ph'))}" aria-label="${escapeHtml(t('barcode_number_ph'))}">
       <button type="button" class="btn btn-primary" id="bc-manual-go">${t('barcode_lookup')}</button>
     </div>
     <div class="ai-results" id="bc-result"></div>
@@ -1002,7 +1002,7 @@ function openManualFoodEntry(date, onSave) {
       <textarea id="mf-quick" rows="2" placeholder="${escapeHtml(t('mf_quick_ph'))}"></textarea>
       <div class="form-hint" id="mf-quick-hint">${t('mf_quick_hint')}</div></div>
     <div class="form-group"><label class="form-label">${t('name')}</label>
-      <input type="text" id="mf-name" placeholder="${t('manual_food_ph')}" autofocus></div>
+      <input type="text" id="mf-name" maxlength="80" placeholder="${t('manual_food_ph')}" autofocus></div>
     <div class="calc-grid calc-grid-2">
       <div class="form-group"><label class="form-label">${t('calories')}</label>
         <input type="number" inputmode="numeric" id="mf-cal" min="0" placeholder="250"></div>
@@ -1016,7 +1016,11 @@ function openManualFoodEntry(date, onSave) {
     <label class="mf-keep"><input type="checkbox" id="mf-keep" checked>
       <span>${t('mf_keep_label')}</span></label>
     <button class="btn btn-primary btn-block" id="mf-save">${icon('plus', 20)} ${t('ai_add_to_log')}</button>
-  `);
+  `, {
+    // Dirty (v433) = anything typed in the six fields. The «keep» box is a
+    // preference with a default, not content.
+    guardDirty: () => ['mf-quick', 'mf-name', 'mf-cal', 'mf-pro', 'mf-carb', 'mf-fat'].some((id) => String(document.getElementById(id)?.value || '').trim() !== ''),
+  });
 
   const $q = overlay.querySelector('#mf-quick');
   const $hint = overlay.querySelector('#mf-quick-hint');
@@ -1421,6 +1425,19 @@ function openRecipeEditor(date, existing, onDone, opts) {
   // import could not use) stays under the title, and its save is an ADD.
   var isDraft = !!(existing && !existing.id);
   var draftNote = isDraft && existing.note ? String(existing.note) : '';
+  // A draft NOTHING ELSE HOLDS (v433): the single-dish import hands its one
+  // recipe here and keeps no copy (no opts.onClose) — the chooser's drafts stay
+  // in its list. Such a draft is unsaved work from the moment it opens.
+  var draftOnly = isDraft && !(opts && typeof opts.onClose === 'function');
+  // What a Save would store, as text (v433, the dirty-sheet guard): the name, the
+  // servings, and the rows that count as ingredients (the same filter trySave
+  // applies), without the editor's transient flags.
+  var recSnap0 = null;
+  var recSnap = function () {
+    var n = overlay && overlay.querySelector('#rec-name'), s = overlay && overlay.querySelector('#rec-servings');
+    return JSON.stringify([n ? n.value.trim() : '', s ? Math.max(1, parseInt(s.value, 10) || 1) : 1,
+      items.filter(function (it) { return String(it.name || '').trim() || hasFigures(it); }).map(recStoredItem)]);
+  };
 
   // The servings input's aria-label — the one place the number is SPOKEN beside
   // a noun. It is not painted a second time: the digit is already on screen.
@@ -1569,7 +1586,20 @@ function openRecipeEditor(date, existing, onDone, opts) {
       '<div class="form-actions sticky-actions">' +
         '<button type="button" class="btn btn-primary" id="rec-save">' + t('rec_save') + '</button>' +
       '</div>' +
-    '</div>');
+    '</div>', {
+      // v433. Dirty = differs from what the sheet held once drawn (recSnap0,
+      // taken below): a saved recipe, or a draft the chooser still holds, opened
+      // and closed untouched is clean — a lone import draft (draftOnly) is dirty
+      // from the start. A dismissal that is refused also CANCELS a Save that
+      // is waiting on a figure — the user pressed a way out, and since v420 a
+      // saved recipe is published; it must not land by itself a second later.
+      // The same rule any keystroke already applies (the delegated input handler).
+      guardDirty: function () {
+        if (saved || (!draftOnly && recSnap() === recSnap0)) return false;
+        saveWanted = false; setWaiting(false);
+        return true;
+      },
+    });
 
   if (!overlay) return;   // a dialog that must be answered is up
   var host = overlay.querySelector('#rec-rows');
@@ -2185,6 +2215,7 @@ function openRecipeEditor(date, existing, onDone, opts) {
   watch.observe(document.getElementById('modal-root'), { childList: true, subtree: true, attributes: true, attributeFilter: ['class'] });
 
   drawRows();
+  recSnap0 = recSnap();
   // A new recipe wants the name; an existing one must NOT pop a keyboard over
   // figures the user came to read — nor must a draft that already has a name.
   // Deferred past openModal's focus on the dialog, and it takes the caret ONLY
@@ -4317,7 +4348,7 @@ function openFoodModal(foodId = null) {
 
     <div class="form-group">
       <label class="form-label">${t('name')}</label>
-      <input type="text" id="food-name" placeholder="${t('ph_food_name')}" value="${existing ? escapeHtml(existing.name) : ''}">
+      <input type="text" id="food-name" maxlength="80" placeholder="${t('ph_food_name')}" value="${existing ? escapeHtml(existing.name) : ''}">
     </div>
 
     <div class="form-row">
@@ -4327,7 +4358,7 @@ function openFoodModal(foodId = null) {
       </div>
       <div class="form-group">
         <label class="form-label">${t('serving_unit_label')}</label>
-        <input type="text" id="food-unit" value="${escapeHtml(baseUnit)}" placeholder="${t('unit_hint')}">
+        <input type="text" id="food-unit" maxlength="24" value="${escapeHtml(baseUnit)}" placeholder="${t('unit_hint')}">
       </div>
     </div>
 
@@ -4391,7 +4422,14 @@ function openFoodModal(foodId = null) {
     renderView(currentView);
   });
 
-  setTimeout(() => $('#food-name')?.focus(), 60);
+  // A NEW food wants its name; an edit must not raise the keyboard over the
+  // figures the user came to read (v433). And it takes the caret ONLY from the
+  // dialog (v432's lesson): this sheet is handed over in place, so it is
+  // tappable at once, and a field tapped inside these 60 ms keeps its caret.
+  if (!existing) setTimeout(() => {
+    const a = document.activeElement;
+    if (!a || a === document.body || (a.matches && a.matches('#modal-root .modal'))) $('#food-name')?.focus();
+  }, 60);
 }
 
 // Quick-add picker: the built-in food catalog shown as small rectangular
@@ -4511,11 +4549,16 @@ function openMealEditor(existing = null, onSave = () => {}) {
     <label>${t('cx_saved_food')}<select id="cx-food" class="input"><option value="">—</option>${foods.map((f,i) => `<option value="${i}">${escapeHtml(f.name)}</option>`).join('')}</select></label>
     <button class="btn btn-ghost" id="cx-food-add">${t('add')}</button>
     <button class="btn btn-primary" id="cx-meal-save">${t('save')}</button>
-    ${existing ? `<button class="btn btn-danger" id="cx-meal-delete">${t('delete')}</button>` : ''}</div>`);
+    ${existing ? `<button class="btn btn-danger" id="cx-meal-delete">${t('delete')}</button>` : ''}</div>`,
+    { guardDirty: () => mealSnap0 !== null && mealSnap() !== mealSnap0 });
+  // What the sheet held once drawn (v433, the dirty-sheet guard): an existing
+  // meal opened and closed untouched is clean.
+  let mealSnap0 = null;
+  const mealSnap = () => JSON.stringify([modal.querySelector('#cx-meal-name').value, modal.querySelector('#cx-favorite').checked, items]);
   const draw = () => {
     const kcal = (it) => `<span class="num">${escapeHtml(fmtNum(Math.round(Number(it.calories || 0) * Number(it.servings || 1))))}</span> ${escapeHtml(t('cal'))}`;
     modal.querySelector('#cx-meal-items').innerHTML = items.map((it,i) => `<div class="cx-row"><span>${escapeHtml(it.name)}<br><small data-kcal="${i}">${kcal(it)}</small></span>
-      <label>${t('cx_portion')}<input class="input" type="number" min="0.25" max="20" step="0.25" data-portion="${i}" value="${Number(it.servings || 1)}"></label>
+      <label>${t('cx_portion')}<input class="input" type="number" inputmode="decimal" min="0.25" max="20" step="0.25" data-portion="${i}" value="${Number(it.servings || 1)}"></label>
       <button class="icon-btn danger" data-remove="${i}" aria-label="${escapeHtml(t('delete'))}">${icon('trash',18)}</button></div>`).join('');
     // Patched in place rather than redrawn: a redraw on every keystroke would
     // take the caret out of the field being typed in.
@@ -4545,6 +4588,7 @@ function openMealEditor(existing = null, onSave = () => {}) {
     modal.querySelectorAll('[data-remove]').forEach(b => b.onclick = () => { items.splice(Number(b.dataset.remove),1); draw(); });
   };
   draw();
+  mealSnap0 = mealSnap();
   modal.querySelector('#cx-food-add').onclick = () => {
     const index = modal.querySelector('#cx-food').value;
     if (index === '' || items.length >= 30) return;
@@ -4583,7 +4627,7 @@ function openMealPortion(bundle, date, onSave) {
   const capText = () => t('cx_portion_cap').replace('{n}', fmtNum(cap));
   const modal = convenienceModal(`${cxHeader('cx_meals')}<div class="cx-stack"><strong>${escapeHtml(bundle.name)}</strong>
     <label>${t('cx_date')}<input class="input" id="cx-log-date" type="date" max="${todayISO()}" value="${escapeHtml(date || todayISO())}"></label>
-    <label>${t('cx_portion')}<input class="input" id="cx-log-portion" type="number" min="0.25" max="${cap}" step="0.25" value="1"></label>
+    <label>${t('cx_portion')}<input class="input" id="cx-log-portion" type="number" inputmode="decimal" min="0.25" max="${cap}" step="0.25" value="1"></label>
     <p id="cx-log-total" class="settings-hint"></p><button class="btn btn-primary" id="cx-log-meal">${t('add')}</button></div>`);
   const amount = modal.querySelector('#cx-log-portion');
   const preview = () => {

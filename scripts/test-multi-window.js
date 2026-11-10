@@ -355,6 +355,14 @@ async function restoreSaysWhichHalf() {
   values.set(keys.recovery, JSON.stringify({ at: '2026-09-15T00:00:00.000Z', reason: 'test', raw: values.get(keys.store), uid: 'alice' }));
   const r2 = await c.Cloud.restoreRecovery();
   assert.equal(r2.uploaded, true, 'uploaded when the push lands');
+  // v433. A restore that FAILS (the copy is not a blob the app can load) leaves
+  // the rescue slot as it was: the swap used to overwrite it first.
+  const broken = JSON.stringify({ at: '2026-09-15T00:00:00.000Z', reason: 'test', raw: '{"not":"a vault blob"}', uid: 'alice' });
+  values.set(keys.recovery, broken);
+  const stored = values.get(keys.store);
+  assert.equal(await c.Cloud.restoreRecovery(), false, 'a copy that cannot be loaded is not restored');
+  assert.equal(values.get(keys.store), stored, 'the device store is unchanged');
+  assert.equal(values.get(keys.recovery), broken, 'and the rescue copy is still the one that was there');
 }
 
 // ── TWO WINDOWS PUSHING AT ONCE ARE ONE ACCOUNT, NOT A CONFLICT ──────────────

@@ -216,7 +216,7 @@ whole and dead credential material should not keep travelling to the cloud.
 | `sleep` | `list`, `latest`, `add`, `update`, `remove`, `importFromHealth` |
 | `supplements` | `list`, `add`, `update`, `setTimes`, `remove`, `isTaken`, `setTaken`, `streak` |
 | `water` | `get`, `goal`, `add` |
-| `bodyweight` | `list`, `latest`, `log`, `remove` |
+| `bodyweight` | `list`, `log`, `remove` (a one-row `changeSlice` write since v433: returns `{ok, changed, undoToken}`) |
 | `nutrition` | `get`, `hasTargets`, `compute`, `setProfile`, `setTargets`, `clear` |
 | `notif` | **`scheduleForDate(iso, opts)`**, `scheduleAll`, **`scheduleAhead(days)`**, **`text(item, mode)`**, `destFor`, `get`, `setWindow`, `setChannel`, `setCap`, `syncSuppDoses`, `dailyCap`, `inWindow`, `day`, `markSent`, `alreadySent`, `logAdd`, `logList`, `logForDate`, `unseenCount`, `logClear`, `armedSet`, `armedGet`, `migrateFromReminders` |
 | `reminders` | `get` only — read-only legacy (v254). Its setters and `schedule()` were removed; `get()` survives because `sound` picks the OS channel and `migrateFromReminders()` still reads the pre-v210 shape. |

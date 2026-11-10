@@ -1072,8 +1072,8 @@
     return `${live}
       <div class="ai-results" id="ai-results"></div>
       <div class="ai-input-row">
-        <input type="text" id="ai-input" placeholder="${tr('ai_chat_placeholder')}" autocomplete="off">
-        <button class="btn btn-primary" id="ai-send">${ic('arrowUp', 18)}</button>
+        <input type="text" id="ai-input" placeholder="${tr('ai_chat_placeholder')}" aria-label="${esc(tr('ai_chat_sub'))}" autocomplete="off">
+        <button class="btn btn-primary" id="ai-send" aria-label="${esc(tr('feedback_send'))}">${ic('arrowUp', 18)}</button>
       </div>`;
   }
 
@@ -1350,7 +1350,7 @@
             box.insertAdjacentHTML('beforeend',
               `<div class="ai-pending ai-photo-ask" id="${id}-p">${qHtml}
                  <div class="ai-note-wrap">
-                   <input type="text" class="ai-note-input" id="${id}-note" placeholder="${esc(tr('ai_photo_note_ph'))}" maxlength="400">
+                   <input type="text" class="ai-note-input" id="${id}-note" placeholder="${esc(tr('ai_photo_note_ph'))}" maxlength="400" aria-label="${esc(tr('ai_photo_note_ph'))}">
                    <button class="ai-note-go" id="${id}-go">${esc(tr('ai_photo_analyze'))}</button>
                  </div>
                  <div class="ai-note-hint">${esc(tr('ai_photo_note_hint'))}</div>

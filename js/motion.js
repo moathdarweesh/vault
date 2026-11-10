@@ -163,7 +163,10 @@ window.VltMotion = (function () {
      Downward only: an upward drag is a scroll gesture, and the sheets in this
      app scroll. It also refuses to start inside a scrolled region, so dragging
      a long list does not close the sheet under it. */
-  function dragToDismiss(el, onDismiss) {
+  // `mayDismiss` (v433, optional): asked at the moment of a throw past the
+  // threshold. Answering false REFUSES it — the sheet holds unsaved typing —
+  // and the throw is then an abandoned drag: it springs back through .settling.
+  function dragToDismiss(el, onDismiss, mayDismiss) {
     if (!el || typeof onDismiss !== 'function') return;
     const THRESHOLD = 120;                      // the spec's number
     let y0 = 0, dy = 0, down = false, id = null;
@@ -190,6 +193,12 @@ window.VltMotion = (function () {
       if (dy === 0 && d < 6) return;            // let a tap stay a tap
       if (dy === 0) {
         el.classList.add('dragging');
+        // The entrance is over for good once a finger has moved the sheet (v433):
+        // pinned off INLINE, so dropping .dragging / .settling later (the settle
+        // timer, a drag taken back above its start, a throw a dirty sheet refused)
+        // cannot hand the node back to the bare `.modal { animation: sheetUp }`
+        // rule and replay the rise. openModal builds a new node for every sheet.
+        el.style.animation = 'none';
         // setPointerCapture throws on a pointer the element does not own — a
         // synthetic event, or a pointer already released. Unguarded it aborted
         // the rest of this handler, leaving `.dragging` on with no transform:
@@ -203,7 +212,7 @@ window.VltMotion = (function () {
     const release = (e) => {
       if (!down || (e && e.pointerId !== id)) return;
       down = false;
-      if (dy > THRESHOLD) {
+      if (dy > THRESHOLD && !(typeof mayDismiss === 'function' && mayDismiss() === false)) {
         el.classList.remove('dragging');
         el.style.transform = '';
         onDismiss();

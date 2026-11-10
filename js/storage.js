@@ -1951,9 +1951,17 @@ const DB = {
       const s = STATE.plan.cycle && STATE.plan.cycle[i];
       if (s && s.exerciseIds.indexOf(exId) === -1) { s.exerciseIds.push(exId); save(); }
     },
+    // One undoable write over the plan (v433), as removeSlot is: the id leaves
+    // the slot and its prescription leaves with it; the Undo puts both back, in
+    // place. The WHOLE plan is the slice — a slot has no id, and an
+    // index-addressed slice could be undone onto another slot after a reorder.
     removeExerciseFromSlot(i, exId) {
-      const s = STATE.plan.cycle && STATE.plan.cycle[i];
-      if (s) { s.exerciseIds = s.exerciseIds.filter((id) => id !== exId); if (s.targets) s.targets = normalizePlanTargets(s.targets, s.exerciseIds); save(); }
+      const cycle = STATE.plan && Array.isArray(STATE.plan.cycle) ? STATE.plan.cycle : null;
+      if (!cycle || !cycle[i] || !Array.isArray(cycle[i].exerciseIds)) return { ok: false, code: 'VALIDATION' };
+      const next = copyData(STATE.plan), slot = next.cycle[i];
+      slot.exerciseIds = slot.exerciseIds.filter((id) => id !== exId);
+      if (slot.targets) slot.targets = normalizePlanTargets(slot.targets, slot.exerciseIds);
+      return changeSlice(() => STATE.plan, (value) => { STATE.plan = value; }, next, 'exercise_removed');
     },
     clearAll() {
       STATE.plan = { mode: 'rotation', cycle: [], trainingDays: [], anchor: todayISO(), ...RESET_PLAN_TAIL() };
@@ -2261,10 +2269,15 @@ const DB = {
       else STATE.bodyweight.push({ date, kg: v });
       save();
     },
+    // One row, so the ledger holds one row (v433): the entry of that date, or
+    // null — never the whole array (years of daily weights would evict every
+    // other undoable change). An Undo after the same day was logged again is
+    // refused (STALE): the newer figure is not the deletion's to overwrite.
+    // The raw array's ORDER is not kept; every reader goes through list(), which sorts.
     remove(date) {
-      if (!STATE.bodyweight) return;
-      STATE.bodyweight = STATE.bodyweight.filter((e) => e.date !== date);
-      save();
+      return changeSlice(() => (STATE.bodyweight || []).find((e) => e.date === date) || null,
+        (next) => { STATE.bodyweight = (STATE.bodyweight || []).filter((e) => e.date !== date); if (next) STATE.bodyweight.push(next); },
+        null, 'weight_deleted');
     },
   },
 
