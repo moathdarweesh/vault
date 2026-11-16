@@ -457,6 +457,13 @@ const CASES = [
       };
     }, sel);
     const good = { missing: null, inside: true, cut: false, oneLineOnly: false, sideways: false };
+    // The page's own toolbar (the date field + KG/LB): every child inside the toolbar's box. Measured
+    // by rectangles — a scrollWidth would count the toggle's tap halo. Before v435 the toggle sat
+    // 14 px outside it here, and under a wider fallback font the page scrolled sideways.
+    const toolbarHolds = () => kit.ev(() => {
+      const tb = document.querySelector('.view.active .sd-toolbar'), box = tb.getBoundingClientRect();
+      return [...tb.children].map((n) => { const r = n.getBoundingClientRect(); return [Math.max(0, Math.round(box.left - r.left)), Math.max(0, Math.round(r.right - box.right))]; });
+    });
     try {
       await kit.page.setViewportSize({ width: 320, height: 700 });
       await kit.ev(() => { DB.prefs.setTextLg(true); document.body.classList.add('text-lg'); });
@@ -476,6 +483,7 @@ const CASES = [
         assert.equal(await textOf(kit, '.run-nxt'), await want(), `setup: this history reaches «${state}», and the line is its longest form`);
         assert.deepEqual(await fit('.run-nxt'), good, `the run's line fits at 320 px with larger text («${state}»)`);
         await dayOf(kit, [a]);
+        assert.deepEqual(await toolbarHolds(), [[0, 0], [0, 0]], `the date field and the unit toggle stay inside the toolbar's own box at 320 px with larger text («${state}»)`);
         assert.deepEqual(await fit(`[data-ex-card="${a}"] .sd-nxt`), good, `the card's line fits at 320 px with larger text («${state}»)`);
         if (state !== 'first') {
           assert.deepEqual(await kit.ev((sel) => { const b = document.querySelector('.view.active ' + sel), row = b.parentElement; return { label: b.scrollWidth <= b.clientWidth + 1, row: row.scrollWidth <= row.clientWidth + 1 }; }, `[data-ex-card="${a}"] [data-like-last]`),

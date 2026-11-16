@@ -2888,6 +2888,8 @@ const cssOwner = (i) => CSS_BLOCKS.reduce((best, b) => (b.open < i && b.close > 
   if (!app.includes('${exObjs.length ? `<button type="button" class="btn btn-ghost btn-block rot-slot-targets" data-edit-targets="${i}">')) problems.push('the planner offers «edit sets, reps and notes» only on some slots again — a plan built by hand could not declare a rep range');
   const actions = (css.match(/^\.sd-card-actions \{[^}]*\}/m) || [''])[0];
   if (!/flex-wrap:\s*wrap;/.test(actions)) problems.push('styles.css: .sd-card-actions no longer wraps (its two buttons ran 25–39 px past a 320 px card)');
+  const toolbar = (css.match(/^\.sd-toolbar \{[^}]*\}/m) || [''])[0];
+  if (!/flex-wrap:\s*wrap;/.test(toolbar)) problems.push('styles.css: .sd-toolbar no longer wraps — at 320 px with larger text the KG/LB toggle sat 14 px outside it, and a wider fallback font scrolled the page sideways (v435)');
   const line = (css.match(/^\.run-nxt, \.sd-nxt \{[^}]*\}/m) || [''])[0];
   if (!line || /white-space:\s*nowrap|text-overflow/.test(line) || !/overflow-wrap:\s*anywhere;/.test(line)) problems.push('styles.css: the reason line (.run-nxt, .sd-nxt) must wrap and never be ellipsised — a reason cut short is no reason');
   contract(`both logging screens hint the ONE next target: the run and the day card ask nxtFor(), ${STATES.length} states each with its own line, the rule pure and sliceable, the old suggestion card gone, the planner's door to the range on every slot`, problems);

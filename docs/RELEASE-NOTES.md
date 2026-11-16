@@ -2,6 +2,39 @@
 
 One section per release since v309, newest first, moved verbatim from `CLAUDE.md` in v401 (batch 6 of the 2026-09-25 review; `docs/REVIEW-2026-09-25.md`). `CLAUDE.md` is the guide and the authority for how the app works now. A section here records what one release changed and why, in the words written at the time, so a later section — or the guide — can supersede what an earlier one says.
 
+## v435 — the day page's toolbar never leaves its box
+
+**Found by v434's own suite, on CI.** The push of v434 turned `test-next-target-ui.js` red on
+GitHub while it was green on the owner's machine: its 320 px case reported the day page scrolling
+SIDEWAYS. The line the case was written for was fine (inside its card, not cut). Reproduced
+locally by giving the page a font as wide as CI's Linux fallback (Verdana and Tahoma standing in
+for DejaVu Sans): the element pushing the page was the toolbar above the cards — the date field
+and the KG/LB toggle.
+
+**It was wrong in the app's own font too, only less.** Measured at 320 px with «خطّ أكبر»: a flex
+item's `min-width` is `auto`, so the date group could not shrink below its intrinsic 187 px, and
+the toggle sat 14 px outside the toolbar's box — 2 px from the screen edge, and out of line with
+the «الوضع الموجّه» button under it. Under Tahoma it was 26 px out and the page scrolled.
+
+**The fix is two declarations.** The date group may narrow to 160 px (the field still shows its
+date whole — looked at in a real screenshot), and the row wraps if even that does not fit, so no
+font can push the toggle out. Measured after: the toggle's edge is on the toolbar's edge in the
+app font and in both wide fonts, on one row; 375 px is unchanged to the pixel (231/102 and
+228/105).
+
+**Tests.** The 320 px case now measures every child of the toolbar against the toolbar's own box,
+by rectangles — a `scrollWidth` would count the toggle's tap halo. It was written before the fix
+and seen failing on the unfixed stylesheet. Contract 81 holds the wrap. Two plants in memory, both
+caught.
+
+**Gate.** `npm run verify`: the 81 contracts hold, ESLint clean, 35 suites passed · 0 failed (wall 237 s, --jobs 3).
+
+**Fingerprint against v434a** (`diff v434a v435a`): sheets 128/128 identical; views 168/184 — the version label, and `flex-wrap: nowrap → wrap` on the day page's toolbar in its eight cells, with no box moved at 375 or 412 px.
+
+**Not claimed.** GitHub CI stays red for the five suites whose text-fit cases are measured in
+Linux system fonts (since v415); that is its own task. This release removes the one failure v434
+added there and fixes the defect it pointed at.
+
 ## v434 — «البرنامج الذي يتقدّم وحده»: the grey figure is the next target
 
 **The owner asked for a feature that sets the app apart — «بدي اضيف ميزه جديده تميزني عن

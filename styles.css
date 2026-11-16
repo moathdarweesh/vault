@@ -3157,12 +3157,21 @@ body.rest-active[data-view="session-run"] .toast { bottom: calc(var(--run-nav-h)
 /* =========================================================================
    SESSION DAY VIEW — log all the day's exercises in one page
    ========================================================================= */
+/* The date field and the KG/LB toggle share one row, and the row is NEVER wider
+   than its box (v435). Measured at 320 px with «خطّ أكبر»: the date group could
+   not shrink below its intrinsic 187 px (a flex item's min-width is `auto`), so
+   the toggle sat 14 px outside the toolbar, 2 px from the screen edge — and
+   under a wider fallback font (CI's Linux one) 26 px out, which scrolled the
+   page sideways. The group may now narrow to 160 px (the field still shows its
+   date whole), and past that the toggle WRAPS under it: no font can push it out. */
 .sd-toolbar {
   display: flex;
+  flex-wrap: wrap;
   align-items: flex-end;
   gap: 10px;
   margin-bottom: 14px;
 }
+.sd-toolbar > .form-group { min-width: 160px; }
 
 .sd-list {
   display: flex;
