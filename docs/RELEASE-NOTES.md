@@ -35,6 +35,20 @@ caught.
 Linux system fonts (since v415); that is its own task. This release removes the one failure v434
 added there and fixes the defect it pointed at.
 
+**After the push: a second one, measured and left open.** With the toolbar fixed, CI failed the
+same case one step later, on the GUIDED RUN. The same local method (the whole app forced into a
+wide font) named the element: the two stat cells above the set rows (`.run-stats`, «أعلى وزن» /
+«آخر وزن») cannot shrink below their figures. Measured at 320 px with larger text: the second
+cell sits 9 px outside its row in Arabic (3 px in English) in the app's OWN font — inside the
+page gutter, so nothing scrolls — and 31–55 px out under Verdana or Tahoma, which scrolls the
+page. It is NOT fixed here: the plain remedy (stack the two cells) moves the set rows, and that
+screen promises to keep them still between exercises, so the shape of the fix is a design
+decision with its own measurements. The suite's case was asking the whole page a question about
+one line; on the run it now holds the line itself (inside its parent, on the screen, wrapping,
+not cut) and keeps the page-wide measure on the day page. With that, the case holds locally under
+four wide fonts (Verdana, Tahoma, Courier New, Arial Black) — a stand-in for CI that the five red
+suites can be worked through with.
+
 ## v434 — «البرنامج الذي يتقدّم وحده»: the grey figure is the next target
 
 **The owner asked for a feature that sets the app apart — «بدي اضيف ميزه جديده تميزني عن
