@@ -2830,5 +2830,68 @@ const cssOwner = (i) => CSS_BLOCKS.reduce((best, b) => (b.open < i && b.close > 
   contract(`typed work and stored rows are not lost to one press: 6 doors reach requestClose()/dirtyRefusal(), ${guards(app) + guards(food)} sheets say when they are dirty, 2 deletes are undoable writes, the log clear asks first, an edit opens on the dialog`, problems);
 }
 
+// ---------------------------------------------------------------- 81. both logging screens hint the ONE next target
+// v434 «البرنامج الذي يتقدّم وحده». The grey figure in an open set row is the
+// next target, computed by ONE pure rule (nextTarget) and asked for through ONE
+// door (nxtFor) by the guided run and by the day card. What can silently
+// regress is the agreement: a screen that goes back to reading «last time»
+// (two answers for one exercise, as v281's card and the rows were), the rule
+// reaching for the database or the screen (the node suite runs it bare), a
+// state the rule can return with no line to say it, the old tap-to-apply card
+// coming back beside the ghosts, or the planner's door to the rep range closing
+// again on a plan built by hand. scripts/test-next-target.js holds the rule,
+// scripts/test-next-target-ui.js the two screens.
+{
+  const problems = [];
+  const app = src['js/app.js'], css = read('styles.css');
+  const run = topFn('js/app.js', 'renderSessionRun'), dayFn = topFn('js/app.js', 'renderSessionDay');
+  if (!run.includes('nxtFor(exId, runCtx.date, runCtx.unit, day?.targets?.[exId])')) problems.push('renderSessionRun no longer builds its rows from nxtFor(exId, runCtx.date, runCtx.unit, day?.targets?.[exId])');
+  if (!dayFn.includes('nxtFor(exId, viewContext.date, viewContext.unit, day?.targets?.[exId])')) problems.push('renderSessionDay no longer builds its rows from nxtFor(exId, viewContext.date, viewContext.unit, day?.targets?.[exId])');
+  for (const [name, body] of [['renderSessionRun', run], ['renderSessionDay', dayFn]]) {
+    if (/lastForExercise\(/.test(body)) problems.push(`${name} reads DB.sessions.lastForExercise again — a ghost from «last time» beside one from the rule is two answers on one screen`);
+  }
+  if (/\brunSuggest/.test(app)) problems.push('js/app.js: runSuggest is back — the tap-to-apply card beside rows that already hint the target');
+  if (/\.run-suggest\b/.test(css)) problems.push('styles.css: .run-suggest is back');
+  if ((app.match(/\.\.\.\(g\.sug \? \{ phSug: true \} : \{\}\)/g) || []).length < 2) problems.push('a prescribed row is no longer marked phSug on both screens — its ✓ would say «last time\'s numbers» for a figure nobody lifted');
+  if (!run.includes('${st.nx ? `<p class="run-nxt">${escapeHtml(nxtWhy(st.nx, !!day?.targets?.[ex.id]?.reps))}</p>` : \'\'}')) problems.push('the run no longer draws the reason line for every result — with OR without a plan target (v281\'s card went silent wherever the plan had one)');
+  if (!dayFn.includes('const firstSaid = new Set();') || !dayFn.includes('if (!said || !firstSaid.has(said)) lineHtml = escapeHtml(nxtWhy(st.nx, false));')) problems.push('the day page no longer says the first-time sentence ONCE per range (firstSaid)');
+  if (!dayFn.includes('if (sdState[exId] && !sdState[exId].dirty && !sdState[exId].savedSessionId) delete sdState[exId];')) problems.push('an untouched day card is no longer asked again on every render — its target would outlive a history change or the unit switch (62.5 kg re-printed as 138 lb)');
+  // The rule is pure, top-level, and one line of constants: the node suite slices it out and runs it bare.
+  if (!/^const NXT = \{[^\n]*\};$/m.test(app)) problems.push('js/app.js: `const NXT = {…};` is not one top-level line');
+  const STATES = ['first', 'back', 'bw', 'up', 'confirm', 'deload', 'hold', 'stretch', 'rep'];
+  const rule = topFn('js/app.js', 'nextTarget'), why = topFn('js/app.js', 'nxtWhy');
+  for (const name of ['nxtRange', 'nxtDayGap', 'nextTarget', 'nxtWhy', 'nxtReps', 'nxtFigure']) {
+    const body = topFn('js/app.js', name);
+    if (!body) { problems.push(`js/app.js has no top-level ${name}()`); continue; }
+    const reach = body.match(/\bDB\.|\bviewContext\b|\brunCtx\b|\bdocument\b|\bwindow\b|\blocalStorage\b|\btodayISO\(/);
+    if (reach) problems.push(`${name}() reaches «${reach[0]}» — the rule takes what it needs as arguments`);
+  }
+  for (const s of STATES) {
+    if (!rule.includes(`'${s}'`)) problems.push(`nextTarget() no longer returns the state «${s}» the contract lists — update the list and nxtWhy together`);
+    if (!why.includes(`nx.state === '${s}'`)) problems.push(`nxtWhy() has no line for the state «${s}»: a result the rule can return would print nothing`);
+  }
+  for (const m of why.matchAll(/\bt\(([^)]*)\)/g)) {
+    if (!/^'nxt_[a-z_]+'$/.test(m[1].trim())) problems.push(`nxtWhy() calls t(${m[1].trim()}) — whole literal keys only (a t('nxt_' + state) family would make every nxt_* key «reachable» for contract 38)`);
+  }
+  if (!rule.includes('!(s.date < o.today)')) problems.push('nextTarget() no longer drops the day on screen and later ones from the history');
+  if (!topFn('js/app.js', 'nxtFor').includes('.filter((s) => s.date < date)')) problems.push('nxtFor() no longer hands the rule only the sessions BEFORE the day on screen (today\'s own row would become «last time» mid-workout)');
+  // The isolate around a cited range is WRITTEN as an escape in the source. A literal one is
+  // invisible in every editor and diff (and an editing tool can turn the escape into it without a
+  // word — that happened three times while this release was written); nothing a test can see
+  // changes, so only a contract can hold it. Built from code points so this line carries none.
+  const BIDI = new RegExp('[' + [0x202a, 0x202e].map((c) => String.fromCharCode(c)).join('-') + [0x2066, 0x2069].map((c) => String.fromCharCode(c)).join('-') + ']');
+  for (const f of [...JS, 'styles.css', ...PAGE_FILES]) {
+    const hit = (src[f] || read(f)).match(BIDI);
+    if (hit) problems.push(`${f} carries a literal bidi control character (U+${hit[0].charCodeAt(0).toString(16).toUpperCase()}) — write it as an escape, so a reader can see it`);
+  }
+  // The door to the range, and the two CSS facts the 320 px case measures.
+  if (!app.includes('${exObjs.length ? `<button type="button" class="btn btn-ghost btn-block rot-slot-targets" data-edit-targets="${i}">')) problems.push('the planner offers «edit sets, reps and notes» only on some slots again — a plan built by hand could not declare a rep range');
+  const actions = (css.match(/^\.sd-card-actions \{[^}]*\}/m) || [''])[0];
+  if (!/flex-wrap:\s*wrap;/.test(actions)) problems.push('styles.css: .sd-card-actions no longer wraps (its two buttons ran 25–39 px past a 320 px card)');
+  const line = (css.match(/^\.run-nxt, \.sd-nxt \{[^}]*\}/m) || [''])[0];
+  if (!line || /white-space:\s*nowrap|text-overflow/.test(line) || !/overflow-wrap:\s*anywhere;/.test(line)) problems.push('styles.css: the reason line (.run-nxt, .sd-nxt) must wrap and never be ellipsised — a reason cut short is no reason');
+  contract(`both logging screens hint the ONE next target: the run and the day card ask nxtFor(), ${STATES.length} states each with its own line, the rule pure and sliceable, the old suggestion card gone, the planner's door to the range on every slot`, problems);
+}
+
 console.log(failures.length ? `\ncheck-contracts: ${failures.length} broken contract(s)` : '\ncheck-contracts: all contracts hold');
 process.exit(failures.length ? 1 : 0);

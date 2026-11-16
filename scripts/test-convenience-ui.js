@@ -298,15 +298,15 @@ async function workoutCore(page) {
     assert.equal((await toastNow() || {}).undo || false, false, 'so there is nothing to undo');
   }
 
-  // The suggestion is a TARGET. Its tap used to commit it as a performed set —
-  // phantom history, the streak, and a PR for a lift never done.
+  // The next target is a GHOST (v434: it is there when the run opens, with no
+  // card to tap). The old suggestion's tap once committed it as a performed
+  // set — phantom history, the streak, and a PR for a lift never done.
   {
-    const id = ids[1];   // history: three sets of 10 × 40, so today's suggestion is 40 × 11
+    const id = ids[1];   // history: three sets of 10 × 40, so today's target is 40 × 11
     await ev(({ id, today }) => { hideToast(); navigate('session-run', { date: today, runOnly: [id] }); }, { id, today });
-    await page.locator('.view.active .run-suggest').click();
-    assert.deepEqual(await setsOf(id, today), [], 'tapping the suggestion writes no set');
+    assert.deepEqual(await setsOf(id, today), [], 'opening the run on a prescribed exercise writes no set');
     assert.deepEqual(await ev(() => [...document.querySelectorAll('.view.active .run-set-row[data-set="0"] input')].map((i) => [i.value, i.placeholder])),
-      [['', '11'], ['', '40']], 'it fills the row the way a ghost does');
+      [['', '11'], ['', '40']], 'the target is the row\'s ghost: nothing in the fields');
     await ev(() => hideToast());
     await page.locator(row(0) + ' [data-done]').click();
     assert.deepEqual(await setsOf(id, today), [[11, 40]], 'the ✓ is what logs it');

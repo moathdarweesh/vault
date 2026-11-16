@@ -8,7 +8,13 @@
 //     hinting 60, so the change cost a tap + typing on every set. A pyramid's
 //     sets keep their own hints (theirs differ). Nothing is written before a
 //     set's own ✓; the ✓ that takes a carried hint says where the numbers came
-//     from, with Undo. The suggestion fills EVERY open set, not only the first.
+//     from, with Undo.
+//     v434: a row's ghost is the NEXT TARGET now (scripts/test-next-target-ui.js
+//     holds that). These cases drive the ghost MECHANICS — the carry, the ✓, the
+//     quick-adjust bar — and seed their one session 30 days back on purpose:
+//     past the rule's 21-day layoff the ghost of a row is last time's own figure,
+//     unprescribed, which is the plain ghost every case here was written against.
+//     The «Suggested today» card and its case left with v434.
 // (b) Home's stat strip says what period each figure counts — training DAYS
 //     this week, cardio minutes this week, today's sleep — and every label fits
 //     its cell at 375 and 340 px, at the normal and the larger text size.
@@ -88,10 +94,12 @@ async function openPage(browser, origin, { lang, theme }) {
 // ── the run kit ─────────────────────────────────────────────────────────────
 const row = (i) => `.view.active .run-set-row[data-set="${i}"]`;
 
-// One exercise that today's plan does not carry (no targets, so the
-// suggestion shows and the rows come from last time), its history replaced by
-// ONE earlier session with the given sets, then the run opened on it.
-async function openRun(kit, sets, { daysAgo = 3 } = {}) {
+// One exercise that today's plan does not carry (no targets), its history
+// replaced by ONE earlier session with the given sets, then the run opened on
+// it. 30 days back by default: past NXT.gap (21) the rows hint last time's own
+// figures and nothing is prescribed — the header says why. It fails loudly if
+// that gap is ever raised past 30.
+async function openRun(kit, sets, { daysAgo = 30 } = {}) {
   return kit.ev(({ sets, daysAgo }) => {
     try { closeModal(); } catch (_) {}
     try { clearRestTimer(); } catch (_) {}
@@ -262,25 +270,13 @@ const CASES = [
       assert.equal(st[1][1], st[0][1], 'the ✓ on set 2 stores exactly the kilograms set 1 stored');
     } finally { await cleanup(kit, s); await kit.ev(() => DB.prefs.setUnit('kg')); }
   }],
-  ['the suggestion fills every open set and writes nothing', async (kit) => {
+  ['past the layoff gap the rows hint last time\'s own figures and nothing is prescribed (what every case above stands on)', async (kit) => {
     const s = await openRun(kit, [{ reps: 10, weight: 40 }, { reps: 10, weight: 40 }, { reps: 10, weight: 40 }]);
     try {
-      await type(kit, 0, 'reps', '10'); await type(kit, 0, 'weight', '40');
-      await tick(kit, 0);                                                   // set 1 done at last time's figures
-      await kit.ev(() => hideToast());
-      const sug = kit.page.locator('.view.active .run-suggest');
-      assert.equal(await sug.count(), 1, 'setup: a suggestion is offered');
-      const want = await sug.evaluate((b) => [b.dataset.sugR, b.dataset.sugW]);
-      await sug.click();
-      const g = await ghosts(kit);
-      assert.deepEqual([g[0][0], g[0][2]], ['10', '40'], 'the done set is left as it is');
-      assert.deepEqual(g.slice(1).map((x) => [x[0], x[1], x[2], x[3]]), [['', want[0], '', want[1]], ['', want[0], '', want[1]]], 'BOTH open sets hint the suggestion, not only the first');
-      assert.deepEqual(await stored(kit, s), [[10, 40, true]], 'the tap wrote nothing');
-      const tt = await toastNow(kit);
-      assert.equal(tt && tt.msg, await kit.ev(() => t('sug_applied_all')), 'the toast says it went into the open sets');
-      await kit.ev(() => hideToast());
-      await tick(kit, 2);
-      assert.equal((await toastNow(kit) || {}).msg, await kit.ev(() => t('run_sug_updated')), 'a ✓ on a later set names the suggestion');
+      assert.deepEqual(await ghosts(kit), [['', '10', '', '40'], ['', '10', '', '40'], ['', '10', '', '40']], 'thirty days on, each row hints exactly what it did');
+      await tick(kit, 0);
+      assert.equal((await toastNow(kit) || {}).msg, await kit.ev(() => t('run_filled_saved')), 'and its ✓ says «last time\'s numbers», not «suggested»');
+      assert.equal(await kit.page.locator('.view.active .run-suggest').count(), 0, 'the old suggestion card is gone');
     } finally { await cleanup(kit, s); }
   }],
   ['Home: the strip says what period each figure counts', async (kit) => {
@@ -612,7 +608,7 @@ async function run() {
     }
   } finally { await browser.close(); await srv.close(); }
   if (failures.length) { console.error(`FAIL  run + home UI: ${failures.length} failure(s)`); failures.forEach((f) => console.error('  - ' + f)); process.exitCode = 1; return; }
-  console.log(`PASS  run + home UI (${passed} cases, AR/dark + EN/light, 375px): a new figure ticked on one set becomes the hint of the later untouched straight sets (weight and reps each on its own, in pounds too), a pyramid keeps its hints, a typed un-ticked figure and a row with its own numbers are left alone, a correction carries again, nothing is written before a set's own ✓ and that ✓ names where its numbers came from per field (an earlier set only when both did, a mix as a mix) with Undo; the suggestion fills every open set and writes nothing; Home's strip names its periods with new keys and every label fits its cell at 375/340 px, normal and larger text; v427: the quick-adjust bar under the focused row (reps ±1, the five unit steps + «الأقراص», the ghost as the base, focus kept, nothing committed, follows the focus and leaves on blur, pound steps) and the plate sheet (65 → 20 + 2.5, 61 → nearest 60, lighter than the bar, the bar only, the bar choice, «استخدم هذا الوزن» writes the loaded weight), both fitting 375/320 px with larger text at ≥ 44 px a button`);
+  console.log(`PASS  run + home UI (${passed} cases, AR/dark + EN/light, 375px): a new figure ticked on one set becomes the hint of the later untouched straight sets (weight and reps each on its own, in pounds too), a pyramid keeps its hints, a typed un-ticked figure and a row with its own numbers are left alone, a correction carries again, nothing is written before a set's own ✓ and that ✓ names where its numbers came from per field (an earlier set only when both did, a mix as a mix) with Undo; past the layoff gap a row hints last time's own figure; Home's strip names its periods with new keys and every label fits its cell at 375/340 px, normal and larger text; v427: the quick-adjust bar under the focused row (reps ±1, the five unit steps + «الأقراص», the ghost as the base, focus kept, nothing committed, follows the focus and leaves on blur, pound steps) and the plate sheet (65 → 20 + 2.5, 61 → nearest 60, lighter than the bar, the bar only, the bar choice, «استخدم هذا الوزن» writes the loaded weight), both fitting 375/320 px with larger text at ≥ 44 px a button`);
 }
 
 if (require.main === module) run().catch((e) => { console.error(e); process.exitCode = 1; });

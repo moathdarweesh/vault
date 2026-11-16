@@ -12,7 +12,7 @@
 // build. The literal below is the fallback (file://, or a stripped query) and is
 // still bumped by `npm run release` — see CLAUDE.md "CACHE WORKFLOW".
 const VAULT_BUILD = (() => {
-  const FALLBACK = 'v433';
+  const FALLBACK = 'v434';
   try {
     const src = (document.currentScript && document.currentScript.src) || '';
     const m = src.match(/[?&]v=(\d+)/);
@@ -5909,7 +5909,7 @@ function renderPlanner(el) {
                 ? exObjs.map((ex) => `<span class="today-plan-chip">${escapeHtml(exDisplayName(ex))}</span>`).join('')
                 : `<span class="planner-empty-hint">${t('empty_day_drop')}</span>`
             }</div>
-            ${slot.targets && Object.keys(slot.targets).length ? `<button type="button" class="btn btn-ghost btn-block" data-edit-targets="${i}">${t('pi_targets_edit')}</button>` : ''}
+            ${exObjs.length ? `<button type="button" class="btn btn-ghost btn-block rot-slot-targets" data-edit-targets="${i}">${t('pi_targets_edit')}</button>` : ''}
           </div>`;
       }).join('')
     : `<div class="planner-empty-hint" style="padding:16px 2px">${t('no_plan_today_sub')}</div>`;
@@ -6856,10 +6856,17 @@ function renderSessionDay(el) {
       .find((s) => s.date === viewContext.date);
   }
 
-  // Initialize state for an exercise the first time it's rendered. Pre-fills
-  // sets from today's session (if already started) → otherwise from the most
-  // recent session → otherwise three blank rows.
+  // Initialize state for an exercise the first time it's rendered: today's
+  // session when it is already logged → otherwise EMPTY rows hinting the next
+  // target (nxtFor, v434) → otherwise blank rows, as many as the plan says.
   function initState(exId) {
+    // An untouched, unlogged card is asked AGAIN on every render (v434): its
+    // ghosts are a computed target, and the history under them can change while
+    // the page is up — a session logged or deleted on the exercise page and
+    // reached by Back — and so can the unit (a target is computed in the unit
+    // the bar is loaded in: 62.5 kg is 137.8 lb, the next pound plate is 140).
+    // A card with typing on it (`dirty`) or a logged one keeps its state.
+    if (sdState[exId] && !sdState[exId].dirty && !sdState[exId].savedSessionId) delete sdState[exId];
     if (sdState[exId]) {
       const cached = sdState[exId];
       // Re-validate a cached savedSessionId: the session may have been deleted
@@ -6887,21 +6894,24 @@ function renderSessionDay(el) {
       return cached;
     }
     const today = todaySessionFor(exId);
-    const last = DB.sessions.lastForExercise(exId);
-    let sets;
     // `saved` carries the stored set, so a save EDITS it (see the Save handler).
-    if (today) sets = today.sets.map((s) => ({ reps: s.reps, weight: s.weight, saved: { ...s } }));
-    // LAST TIME'S NUMBERS ARE A SUGGESTION, NOT A RECORD. They used to arrive as
-    // real input values, so one tap on Save logged every row as a performed set:
-    // measured in the tap probe, typing ONE set and saving wrote TWO, the second
-    // being last week's, and nothing on the screen distinguished the two. They
-    // are ghosts now - the same shape the guided run has always used - and the
-    // save path already drops a row with no reps and no weight, so confirming
-    // the whole card is a deliberate tap on "same as last time" rather than a
-    // side effect of saving.
-    else if (last) sets = last.sets.map((s) => ({ reps: '', weight: '', phReps: s.reps, phWeight: s.weight }));
-    else sets = [{ reps: '', weight: '' }]; // start with one empty set (faint "0" placeholders)
-    sdState[exId] = { sets, savedSessionId: today ? today.id : null, dirty: false };
+    if (today) {
+      sdState[exId] = { sets: today.sets.map((s) => ({ reps: s.reps, weight: s.weight, saved: { ...s } })), savedSessionId: today.id, dirty: false };
+      return sdState[exId];
+    }
+    // THE GHOSTS ARE THE NEXT TARGET (v434), and they are still GHOSTS, never
+    // values (v375): last time's numbers once arrived as real input values, so
+    // one tap on Save logged every row as a performed set — typing ONE set and
+    // saving wrote TWO. The save path drops a row with no reps and no weight, so
+    // taking the whole card is a deliberate tap on its fill button, never a side
+    // effect of saving. The rows follow the plan's set count, as the run does;
+    // `nx` is what the card's one line reads (null: no rule applies and the
+    // ghosts are last time's own figures; state `first`: no ghosts at all).
+    const got = nxtFor(exId, viewContext.date, viewContext.unit, day?.targets?.[exId]);
+    sdState[exId] = {
+      sets: got.rows.map((g) => ({ reps: '', weight: '', phReps: g.reps, phWeight: g.weight, ...(g.sug ? { phSug: true } : {}) })),
+      savedSessionId: null, dirty: false, nx: got.nx,
+    };
     return sdState[exId];
   }
 
@@ -6923,6 +6933,11 @@ function renderSessionDay(el) {
   // has none. Its session is edited or deleted like any other.
   const onDay = (id) => planIds.includes(id) || (!!sdOnly && sdOnly.includes(id));
 
+  // The first-time sentence is said ONCE per page for each range it names, on
+  // the first card that needs it: three new exercises must not print the same
+  // two lines three times, but a card whose plan says 6–8 is not answered by a
+  // sentence about 8–12.
+  const firstSaid = new Set();
   function renderExerciseCard(ex) {
     const st = initState(ex.id);
     const url = exerciseImgSrc(ex);
@@ -6937,6 +6952,19 @@ function renderSessionDay(el) {
     // zero-effort path the pre-filled values used to provide by accident.
     const hasGhosts = !isLogged && !hasValues && st.sets.some((s) => (Number(s.phReps) || 0) > 0 || (Number(s.phWeight) || 0) > 0);
     const showSave = st.dirty || (!isLogged && hasValues);
+    // THE CARD'S ONE LINE (v434). Unlogged: why the grey figures are what they
+    // are. Logged: the next target — a figure the card cannot show otherwise,
+    // and what a first day ends on. Never a figure the rows already print.
+    let lineHtml = '';
+    if (isLogged) {
+      const after = nxtAfter(ex.id, viewContext.date, viewContext.unit, day?.targets?.[ex.id]);
+      if (after && after.w > 0) lineHtml = escapeHtml(t('nxt_after')).replace('{f}', () => `<span class="num" dir="ltr">${escapeHtml(nxtFigure(after, viewContext.unit))}</span>`);
+      else if (after && after.r > 0) lineHtml = escapeHtml(t('nxt_after_bw')).replace('{r}', () => `<span class="num" dir="ltr">${escapeHtml(nxtReps(after, viewContext.unit))}</span>`);
+    } else if (st.nx) {
+      const said = st.nx.state !== 'first' ? '' : st.nx.bare ? 'bare' : st.nx.lo + '-' + st.nx.hi;
+      if (!said || !firstSaid.has(said)) lineHtml = escapeHtml(nxtWhy(st.nx, false));
+      if (said) firstSaid.add(said);
+    }
 
     let bgHtml;
     if (machineSvg) {
@@ -6949,7 +6977,7 @@ function renderSessionDay(el) {
 
     const setsRows = st.sets.map((s, i) => {
       const wDisplay = (s.weight === '' || s.weight == null) ? '' : modalConvertForDisplay(Number(s.weight));
-      // The ghost is last time's figure. A number input's placeholder must carry
+      // The ghost is the next target (or last time's figure). A number input's placeholder must carry
       // RAW digits - it is not localized - which is the same rule the guided run
       // records on its own rows.
       const phReps = (s.phReps === '' || s.phReps == null) ? '0' : String(s.phReps);
@@ -6974,6 +7002,7 @@ function renderSessionDay(el) {
           ${isLogged ? `<div class="sd-status-pill">${icon('check', 16)} ${t('logged')}</div>` : ''}
           ${onDay(ex.id) ? `<button type="button" class="icon-btn danger sd-remove-ex" data-remove-ex="${escapeHtml(ex.id)}" aria-label="${escapeHtml(t('remove_from_day'))}">${icon('trash', 20)}</button>` : ''}
         </div>
+        ${lineHtml ? `<p class="sd-nxt">${lineHtml}</p>` : ''}
 
         <div class="sd-sets-head">
           <div>${t('set_n')}</div>
@@ -6984,7 +7013,7 @@ function renderSessionDay(el) {
         <div class="sd-sets" data-ex-sets="${escapeHtml(ex.id)}">${setsRows}</div>
 
         <div class="sd-card-actions">
-          ${hasGhosts ? `<button type="button" class="btn btn-ghost sd-like-last" data-like-last="${escapeHtml(ex.id)}">${icon('refresh', 18)} ${t('sd_like_last')}</button>` : ''}
+          ${hasGhosts ? `<button type="button" class="btn btn-ghost sd-like-last" data-like-last="${escapeHtml(ex.id)}">${icon('refresh', 18)} ${st.sets.some((s) => s.phSug) ? t('sd_take_sug') : t('sd_like_last')}</button>` : ''}
           <button type="button" class="btn btn-ghost sd-add-set-btn" data-add-set="${escapeHtml(ex.id)}">${icon('plus', 20)} ${t('add_set')}</button>
           <button type="button" class="btn btn-primary sd-save-btn${showSave ? '' : ' sd-hidden'}" data-save-ex="${escapeHtml(ex.id)}">${isLogged ? t('update') : t('save')}</button>
         </div>
@@ -7142,7 +7171,7 @@ function renderSessionDay(el) {
   el.querySelectorAll('[data-sd-unit]').forEach((b) =>
     b.addEventListener('click', () => {
       viewContext.unit = b.dataset.sdUnit === 'lb' ? 'lb' : 'kg';
-      renderSessionDay(el);
+      renderSessionDay(el);   // untouched cards are asked again in the new unit (initState)
     })
   );
 
@@ -7189,7 +7218,7 @@ function renderSessionDay(el) {
     })
   );
 
-  // "Same as last time" — every ghost becomes a real figure in one tap, which
+  // «Use suggested» / «Same as last time» — every ghost becomes a real figure in one tap, which
   // is the whole point: the effort stays zero for the ordinary case while the
   // screen stops claiming you performed sets you never confirmed.
   el.querySelectorAll('[data-like-last]').forEach((b) =>
@@ -7631,7 +7660,7 @@ function runSwapAllowed(ids, oldId, newId) {
 const RUN_WEIGHT_STEP = { kg: 0.5, lb: 0.5 };
 
 // A tap on the bar: `base` is the figure in the field, or its ghost when the
-// field is empty (so «+2.5» on an untouched set means last time + 2.5), plus
+// field is empty (so «+2.5» on an untouched set means its target + 2.5), plus
 // `delta`, both in the unit on screen. Never below 0; reps a whole number; a
 // weight on the unit's step.
 function runAdjustValue(base, delta, field, unit) {
@@ -7701,6 +7730,282 @@ function muscleReadinessWord(state) {
   if (state === 'recovering') return t('mr_recovering');
   if (state === 'fatigued') return t('mr_fatigued');
   return '';
+}
+
+// ==========================================================================
+// THE NEXT TARGET (v434) — «البرنامج الذي يتقدّم وحده»
+// ==========================================================================
+// The grey figure on every open set is no longer last time's: it is the NEXT
+// TARGET, computed from the lifter's own sessions, with one line saying why.
+// A ✓ accepts it; typing changes it. NOTHING IS STORED: the rule is replayed
+// from DB.sessions each time a card or a run screen opens, so an Undo, a sync
+// or an older build can never disagree with it.
+//
+// The rule is DOUBLE PROGRESSION, on what the literature the owner asked for
+// in v281 says. That release's «Suggested today» card was this rule judged on
+// the top set only, behind a tap, and silent wherever the plan had a target;
+// this is the rule as the default, on both logging screens.
+//
+//  WHEN — raise the load only when the target was reached on TWO CONSECUTIVE
+//  sessions (ACSM position stand 2009, PMID 19204579; the NSCA's 2-for-2),
+//  and on EVERY working set, not the best one: 12, 8, 7 is not twelve reps.
+//
+//  HOW MUCH — ACSM: 2–10%, the low end for small and upper-body lifts, the
+//  high end for large ones. Here, the table shipped since v281: +2.5 kg, +5 kg
+//  for legs from 50 kg; +5 lb, +10 lb for legs from 110 lb — computed in the
+//  unit the bar is loaded in and rounded to its plate, so a pound user is
+//  never asked for 137.8. Where one step is MORE than 10% of the weight (a
+//  10 kg curl), the bar to clear first is two reps past the range (`over`):
+//  ACSM's «one to two repetitions over».
+//
+//  ONE REP AT A TIME — at an unchanged weight no row is ever asked for more
+//  than ONE rep over the weakest working set, whatever the range says. The
+//  first draft asked every set for the bottom of the range, which prescribed
+//  8 reps at a weight the lifter had just done for 5 — or for a single (the
+//  v434 review, both critical). Under the range the line still says the weight
+//  stays until every set reaches it; the figure beside it is the next step.
+//
+//  ZONE — 8–12, unless the plan declares another range (its rep target, read
+//  by nxtRange) or the lifter plainly runs a scheme of their own: with NO
+//  range declared, three or more working sets within one rep of each other,
+//  all under the zone (5×5 — or 5,5,5,5,4: one missed rep is not a new plan),
+//  and the session before it not in the zone either (a first session after a
+//  raise, or one bad day, is not a scheme). The range is then what was done.
+//  Schoenfeld's meta-analyses (2017 PMID 28834797; 2021 PMID 33671664) show
+//  growth across a broad loading spectrum, so the zone is an anchor, not dogma.
+//
+//  STALL — three sessions running with the best set under the range at one
+//  weight: about 10% lighter, on the plate grid, and ONLY where the grid has
+//  a lighter weight (a fixed «one plate lighter» was −50% at 5 kg). The reps
+//  asked for there are two over the best set, the range's bottom at most: by
+//  Epley's estimate a 10% cut is worth at least that, and never eight reps at
+//  nine tenths of a single. Product documentation only (StrongLifts); the rest
+//  is judgement.
+//
+//  LAYOFF — 21 days or more since the exercise: repeat your own figures. No
+//  source gives a percent to cut, so nothing is cut and nothing is prescribed.
+//
+// WHAT COUNTS AS HISTORY: sessions BEFORE the day on screen (today's own row
+// must never become «last time» mid-workout — v369); rows sharing a date are
+// one session; a «minimum» session's sets count (they are working sets); so
+// does a set typed and never ticked (`done:false` counts in the records too,
+// v298). WORKING SETS are the sets at a session's heaviest weight, compared in
+// the unit on screen — the plan's count of them at most, in the order done; a
+// lighter row (a warm-up, a back-off set) keeps its own figures.
+//
+// Judgement with no source: `own`, `gap`, `sane`, the one-rep step, the reps
+// of a deload. scripts/test-next-target.js pins NXT and runs these functions
+// bare, so each stays a top-level function closing at column 0, and NXT one line.
+const NXT = { lo: 8, hi: 12, over: 2, cap: 0.1, stall: 3, cut: 0.1, gap: 21, own: 3, sane: 1000 };
+
+// The plan's rep target as a range — «8-12», «١٠», «3x10», «8 to 12» — or null
+// when it is not a count of reps: a time, a distance, a load, AMRAP, a per-set
+// list «10 / 8 / 6», a count of SETS. Null means THE PLAN STAYS THE
+// INSTRUCTION: nothing is prescribed against a target this cannot read.
+// `sets` is the slot's planned set count, which settles «12×3» (reps × sets, as
+// Arabic sheets write it) against «3x10».
+function nxtRange(text, sets) {
+  if (typeof text !== 'string') return null;
+  let s = text.replace(/[٠-٩۰-۹]/g, (c) => String(c.charCodeAt(0) - (c <= '٩' ? 0x660 : 0x6f0))).toLowerCase().trim();
+  if (!s) return null;
+  if (/amrap|failure|max|rpe|rir|%|٪|فشل|أقصى|اقصى/.test(s)) return null;
+  if (/sets?(?![\p{L}])|rounds?(?![\p{L}])|مجموع|جول/u.test(s)) return null;
+  if (/\d\s*:\s*\d/.test(s) || /\d\s*[″"'′]/.test(s)) return null;
+  // `\b` does not work after Arabic letters, so a unit ends where no letter follows.
+  if (/\d\s*(?:s|sec|secs|seconds?|min|mins|minutes?|h|hr|hrs|hours?|m|km|kg|kgs|lb|lbs|cal|cals|kcal|ث|ثانية|ثانيه|ثوان|ثواني|د|دقيقة|دقيقه|دقائق|دقايق|ساعة|ساعه|ساعات|م|متر|كم|كغ|كغم|كجم|كيلو|رطل|باوند)(?![\p{L}])/u.test(s)) return null;
+  const ab = /^(\d+)\s*[x×*]\s*(\d+)$/.exec(s);
+  if (ab) {
+    const a = Number(ab[1]), b = Number(ab[2]);
+    if (sets && b === sets && a !== sets) s = String(a);
+    else if (a <= b || (sets && a === sets)) s = String(b);
+    else return null;
+  } else s = s.replace(/^\d+\s*[x×*]\s*(?=\d)/, '');
+  const nums = s.match(/\d+/g) || [];
+  let lo, hi;
+  if (nums.length === 1) lo = hi = Number(nums[0]);
+  else if (nums.length === 2) {
+    const m = /(\d+)\s*(?:-|–|—|~|to|الى|إلى|حتى)\s*(\d+)/.exec(s);
+    if (!m) return null;
+    lo = Math.min(Number(m[1]), Number(m[2]));
+    hi = Math.max(Number(m[1]), Number(m[2]));
+  } else return null;
+  return lo >= 1 && hi <= 50 ? { lo, hi } : null;
+}
+
+// Whole days between two ISO days, in UTC so a clock change is not a day. A
+// date that is not one answers 0 — never a layoff.
+function nxtDayGap(from, to) {
+  const at = (iso) => { const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(iso)); return m ? Date.UTC(Number(m[1]), Number(m[2]) - 1, Number(m[3])) : NaN; };
+  const d = Math.round((at(to) - at(from)) / 86400000);
+  return Number.isFinite(d) ? d : 0;
+}
+
+// PURE. `sessions`: what DB.sessions.listByExercise returns (any order, never
+// mutated). `o`: { today, unit, legs, lo, hi, sets, open } — the ISO day on
+// screen, the unit on screen, whether the exercise is a leg lift, the range,
+// the plan's set count (or null), and whether NO range was declared. Returns
+// null (no rule applies), { state: 'first', rows: null } with no history, or
+// { state, lo, hi, w, r, rows }: the working weight in kg, the target reps,
+// and one row per set — { reps, weight, sug }, a number or '' each, `sug` true
+// where the row is prescribed rather than repeated.
+function nextTarget(sessions, o) {
+  const unit = o && o.unit === 'lb' ? 'lb' : 'kg';
+  let lo = o.lo, hi = o.hi;
+  const du = (kg) => toDisplayWeight(kg, unit);
+  const planned = Number.isInteger(o.sets) && o.sets >= 1 ? o.sets : 0;
+  const byDay = new Map();
+  for (const s of Array.isArray(sessions) ? sessions : []) {
+    if (!s || typeof s.date !== 'string' || !(s.date < o.today)) continue;
+    const sets = byDay.get(s.date) || [];
+    for (const x of Array.isArray(s.sets) ? s.sets : []) {
+      const r = Math.round(Number(x && x.reps)), w = Number(x && x.weight);
+      if (!(r >= 0 && r <= NXT.sane) || !(w >= 0 && w <= NXT.sane) || (r === 0 && w === 0)) continue;
+      sets.push({ r, w });
+    }
+    if (sets.length) byDay.set(s.date, sets);
+  }
+  const days = [...byDay.keys()].sort().reverse().map((date) => ({ date, sets: byDay.get(date) }));
+  if (!days.length) return { state: 'first', lo, hi, w: 0, r: 0, rows: null };
+  // A session judged: its heaviest weight (in the unit on screen), and the
+  // weakest and the best rep count among the working sets AT that weight — the
+  // plan's count of them at most: a set the plan does not ask for is not what
+  // the plan is judged on.
+  const judge = (sets) => {
+    let top = -1;
+    for (const x of sets) if (x.r > 0 && du(x.w) > top) top = du(x.w);
+    const at = sets.filter((x) => x.r > 0 && du(x.w) === top);
+    const reps = (planned ? at.slice(0, planned) : at).map((x) => x.r);
+    return { top, n: reps.length, weak: reps.length ? Math.min(...reps) : 0, best: reps.length ? Math.max(...reps) : 0, kg: at.length ? at[0].w : 0 };
+  };
+  const last = days[0].sets, v1 = judge(last);
+  if (!v1.n) return null;
+  const W = v1.top, v2 = days[1] ? judge(days[1].sets) : null;
+  if (o.open && W > 0 && v1.n >= NXT.own && v1.best < lo && v1.best - v1.weak <= 1 && !(v2 && v2.best >= lo)) { lo = v1.weak; hi = v1.best; }
+  let state, w2 = W, kg = v1.kg, R, top = hi;
+  if (nxtDayGap(days[0].date, o.today) >= NXT.gap) { state = 'back'; R = v1.weak; }
+  else if (W === 0) {
+    // Bodyweight: the reps are all there is to progress. Under a DECLARED range
+    // its top is the end of what this rule can say — the next step is added
+    // load, which is the lifter's call — so nothing is prescribed there.
+    if (!o.open && v1.weak >= hi) return null;
+    state = 'bw'; R = v1.weak + 1;
+  } else {
+    const lb = unit === 'lb', plate = lb ? 5 : 2.5;
+    const inc = lb ? (o.legs && W >= 110 ? 10 : 5) : (o.legs && W >= 50 ? 5 : 2.5);
+    const onPlate = (x) => Math.round(x / plate) * plate;
+    top = inc > NXT.cap * W ? hi + NXT.over : hi;
+    const full = (v) => v.weak >= top;
+    if (full(v1) && v2 && v2.top === W && full(v2)) { state = 'up'; w2 = onPlate(W + inc); R = lo; }
+    else if (full(v1)) { state = 'confirm'; R = top; }
+    else if (v1.best < lo) {
+      let stuck = 0;
+      for (const d of days) { const v = judge(d.sets); if (v.top !== W || v.best >= lo) break; stuck++; }
+      const down = onPlate(W * (1 - NXT.cut));
+      if (stuck >= NXT.stall && down > 0 && down < W) { state = 'deload'; w2 = down; R = Math.min(lo, v1.best + 2); }
+      else { state = 'hold'; R = v1.weak + 1; }
+    } else {
+      R = v1.weak + 1;
+      state = R < lo ? 'hold' : top > hi && v1.weak >= hi ? 'stretch' : 'rep';
+    }
+    if (w2 !== W) kg = toStoredKg(w2, unit);
+  }
+  // The rows: last time's, in order. Under a plan's count, the rows BEFORE the
+  // first working set (a warm-up, a ramp) are kept and the count is of working
+  // sets after them; a lone top set (a pyramid) counts its ramp inside the plan's count.
+  const lead = last.findIndex((x) => x.r > 0 && du(x.w) === W);
+  const count = !planned ? last.length : v1.n >= 2 ? lead + planned : Math.max(planned, lead + 1);
+  const rows = [];
+  for (let i = 0; i < count; i++) {
+    const L = last[i];
+    if (state === 'back') rows.push({ reps: L && L.r ? L.r : '', weight: L && L.w ? L.w : '', sug: false });
+    else if (L && du(L.w) !== W) {
+      // A lighter row keeps its own figures — unless a deload now puts the
+      // working weight UNDER it: it comes down with it, and that is prescribed.
+      const lower = state === 'deload' && du(L.w) > w2;
+      rows.push({ reps: L.r || '', weight: (lower ? kg : L.w) || '', sug: lower });
+    } else rows.push({ reps: L && w2 === W ? Math.max(L.r, R) : R, weight: kg || '', sug: true });
+  }
+  return { state, lo, hi, w: kg, r: R, rows };
+}
+
+// The one line a screen prints for a result. Whole literal keys, never
+// t('nxt_' + state): a prefix family would count every nxt_* key as reachable
+// for contract 38. The lines that speak of «the range» CITE it — «(8–12)», in
+// a left-to-right isolate so an Arabic line cannot print it as 12–8 — unless
+// `rangeShown`: the run's plan block already prints it, and nothing on screen
+// names what the user can see. `nx.bare`: a first time where «sets of 8–12»
+// would be a guess (nxtFor sets it).
+function nxtWhy(nx, rangeShown) {
+  if (!nx) return '';
+  if (nx.state === 'first') {
+    if (rangeShown || nx.bare) return t('nxt_first_then');
+    const pick = nx.lo === nx.hi ? t('nxt_first_pick_one') : t('nxt_first_pick');
+    return pick.replace('{lo}', () => fmtNum(nx.lo)).replace('{hi}', () => fmtNum(nx.hi)) + ' ' + t('nxt_first_then');
+  }
+  const span = '\u2066' + (nx.lo === nx.hi ? fmtNum(nx.lo) : fmtNum(nx.lo) + '–' + fmtNum(nx.hi)) + '\u2069';
+  const cite = (line) => line.replace(' ({range})', () => (rangeShown ? '' : ' (' + span + ')'));
+  if (nx.state === 'up') return cite(t('nxt_up'));
+  if (nx.state === 'stretch') return cite(t('nxt_stretch'));
+  if (nx.state === 'confirm') return cite(t('nxt_confirm'));
+  if (nx.state === 'rep') return t('nxt_rep');
+  if (nx.state === 'hold') return cite(t('nxt_hold'));
+  if (nx.state === 'deload') return cite(t('nxt_deload'));
+  if (nx.state === 'back') return t('nxt_back');
+  if (nx.state === 'bw') return t('nxt_bw');
+  return '';
+}
+
+// The reps of the working rows as they will be asked: «10» when every row
+// asks the same, «12 · 12 · 10» when they differ — a lifter who just did
+// twelves must not read «× 10» as being asked for fewer.
+function nxtReps(nx, unit) {
+  if (!nx || !nx.rows) return '';
+  const at = nx.w > 0 ? toDisplayWeight(nx.w, unit) : 0;
+  const reps = nx.rows.filter((x) => x.reps > 0 && (x.weight === '' ? 0 : toDisplayWeight(x.weight, unit)) === at).map((x) => fmtNum(x.reps));
+  return reps.every((x) => x === reps[0]) ? (reps[0] || '') : reps.join(' · ');
+}
+
+// «62.5 KG × 8» — a Latin measurement, drawn as one ltr group by its caller.
+// '' when there is no weight × reps to state (bodyweight, first time, no rule).
+function nxtFigure(nx, unit) {
+  if (!nx || !nx.rows || !(nx.w > 0) || !(nx.r > 0)) return '';
+  return fmtNum(toDisplayWeight(nx.w, unit)) + ' ' + (unit === 'lb' ? 'LB' : 'KG') + ' × ' + nxtReps(nx, unit);
+}
+
+// What a card or a run screen asks for one exercise on one day: the result
+// (`nx`, for the line) and the rows to hint. Where no rule applies — a plan
+// target nxtRange cannot read, an assisted machine (lower is better there, and
+// the logging convention is not ours to guess), a first time — the rows are
+// last time's own figures, exactly as before v434, and never marked `sug`.
+function nxtFor(exId, date, unit, target) {
+  const before = DB.sessions.listByExercise(exId).filter((s) => s.date < date);
+  const planned = target && Number.isInteger(target.sets) && target.sets >= 1 ? target.sets : null;
+  const text = target && typeof target.reps === 'string' ? target.reps.trim() : '';
+  const range = text ? nxtRange(text, planned) : { lo: NXT.lo, hi: NXT.hi };
+  const ex = DB.exercises.getById(exId);
+  const group = String((ex && ex.category) || '').toLowerCase();
+  const nx = range && !(ex && ex.machineType === 'assisted_pullup')
+    ? nextTarget(before, { today: date, unit, legs: group === 'legs', lo: range.lo, hi: range.hi, sets: planned, open: !text })
+    : null;
+  // A first time on a core exercise with no declared target: a plank is held,
+  // not counted, so «sets of 8–12» would be a guess — only what happens next.
+  if (nx && nx.state === 'first' && !text && group === 'core') nx.bare = true;
+  if (nx && nx.rows) return { nx, rows: nx.rows };
+  const last = before[0] || null;
+  const count = planned || (last && last.sets.length) || 1;
+  return { nx, rows: Array.from({ length: count }, (_, i) => ({ reps: last?.sets[i]?.reps ?? '', weight: last?.sets[i]?.weight ?? '', sug: false })) };
+}
+
+// After a session is logged on `date`: the target the NEXT session will open
+// on — the figure a logged card prints, so a first day ends on a computed
+// number and not on a promise. Only while that session is the exercise's
+// newest: an older day edited later does not speak for what comes next.
+function nxtAfter(exId, date, unit, target) {
+  const newest = DB.sessions.listByExercise(exId)[0];
+  if (!newest || newest.date !== date) return null;
+  const next = addDaysISO(date, 1), now = todayISO();
+  const got = nxtFor(exId, next > now ? next : now, unit, target);
+  return got.nx && got.nx.rows ? got.nx : null;
 }
 
 // The bar chosen on the sheet, remembered for the session only — a module
@@ -7831,15 +8136,19 @@ function renderSessionRun(el) {
   function convDisplay(kg) { return toDisplayWeight(kg, runCtx.unit); }
   function convToKg(value) { return toStoredKg(value, runCtx.unit); }
 
-  // Lazily init per-exercise sets. A FRESH log starts with EMPTY inputs and last
-  // session's numbers as a ghost placeholder (`ph*`) — so there's nothing to
-  // delete, tapping ✓ fills them in ("same as last time"), and an exercise you
-  // don't touch logs nothing. Re-opening today's already-logged session shows
-  // its real values for editing.
+  // Lazily init per-exercise sets. A FRESH log starts with EMPTY inputs and the
+  // NEXT TARGET as a ghost placeholder (`ph*`; last time's own numbers where no
+  // rule applies) — so there's nothing to delete, tapping ✓ takes it, and an
+  // exercise you don't touch logs nothing. Re-opening today's already-logged
+  // session shows its real values for editing.
   function runInit(exId) {
     if (runCtx.runState[exId]) return runCtx.runState[exId];
     const today = DB.sessions.listByExercise(exId).find((s) => s.date === runCtx.date);
-    const last = DB.sessions.lastForExercise(exId);
+    // THE GHOSTS ARE THE NEXT TARGET (v434): nxtFor answers with one row per set
+    // to hint — the plan's count, else last time's — each prescribed (`sug`) or
+    // repeated, and with `nx`, which the one line under the name reads.
+    const got = nxtFor(exId, runCtx.date, runCtx.unit, day?.targets?.[exId]);
+    const open = (g) => ({ reps: '', weight: '', done: false, phReps: g.reps, phWeight: g.weight, ...(g.sug ? { phSug: true } : {}) });
     let sets, savedId = null;
     if (today) {
       // A set that reached the database is shown ticked UNLESS it was saved
@@ -7859,30 +8168,21 @@ function renderSessionRun(el) {
       // three rows became one. Empty rows can never invent history, because
       // commitExercise drops every row with no reps and no weight.
       //
-      // The previous session is read with today's row EXCLUDED. `last` above
-      // is sorted by date descending and today's own session is the newest,
-      // so inside this branch it IS today - and padding to its own length is
-      // a no-op that looks like a fix.
-      const prev = DB.sessions.lastForExercise(exId, today.id);
-      const planned = day?.targets?.[exId]?.sets || prev?.sets.length || 0;
-      for (let i = sets.length; i < planned; i++) {
-        sets.push({ reps: '', weight: '', done: false, phReps: prev?.sets[i]?.reps ?? '', phWeight: prev?.sets[i]?.weight ?? '' });
-      }
-    } else if (day?.targets?.[exId]?.sets) {
-      // Planned sets are EMPTY until performed; targets never become history.
-      sets = Array.from({ length: day.targets[exId].sets }, (_, i) => ({
-        reps: '', weight: '', done: false, phReps: last?.sets[i]?.reps ?? '', phWeight: last?.sets[i]?.weight ?? '',
-      }));
-    } else if (last) {
-      sets = last.sets.map((s) => ({ reps: '', weight: '', done: false, phReps: s.reps, phWeight: s.weight }));
+      // The rows still ahead are read from the history BEFORE today (nxtFor
+      // excludes the run date): today's own session is the newest row there
+      // is, and padding to its own length is a no-op that looks like a fix.
+      for (let i = sets.length; i < got.rows.length; i++) sets.push(open(got.rows[i]));
     } else {
-      sets = [{ reps: '', weight: '', done: false, phReps: '', phWeight: '' }];
+      // Planned and prescribed sets are EMPTY until performed: a target never
+      // becomes history by itself. A first-ever exercise has no ghosts at all —
+      // a reps ghost there would let one ✓ log «8 × 0».
+      sets = got.rows.map(open);
     }
     // A rest that is still running from BEFORE this (re-)entry points at a set
     // object that no longer exists; re-point it at its successor so un-ticking
     // that set still ends the rest (the check is by identity, on purpose).
     if (__restTimer && __restTimer.exId === exId && !sets.includes(__restTimer.setRef)) __restTimer.setRef = sets[__restTimer.setIndex] || null;
-    runCtx.runState[exId] = { sets, savedSessionId: savedId };
+    runCtx.runState[exId] = { sets, savedSessionId: savedId, nx: got.nx };
     return runCtx.runState[exId];
   }
 
@@ -7985,100 +8285,8 @@ function renderSessionRun(el) {
     }, null);
   }
 
-  // ---- Next-weight suggestion — rebuilt on the literature (v281) ----------
-  // The owner asked for the studies, then the rules. What they say:
-  //
-  //  WHEN — the 2-for-2 rule (NSCA; ACSM position stand 2009, PMID 19204579):
-  //  raise the load only after beating the rep target on TWO CONSECUTIVE
-  //  sessions. So the answer to 'how many sessions at one weight' is: at
-  //  least two at the top of the range, usually more while reps climb.
-  //
-  //  HOW MUCH — ACSM: 2–10%, small/upper muscle groups at the low end,
-  //  large/lower at the high end; NSCA's absolute form: upper ≈ +1–2.5 kg,
-  //  lower ≈ +2.5–5 kg. Here: legs +5 kg once the lift is ≥50 kg (5–10%
-  //  territory), otherwise +2.5 kg — the smallest real plate pair.
-  //
-  //  ZONE — 8–12 stays the working range. Schoenfeld's meta-analyses (2017
-  //  PMID 28834797; 2021 PMID 33671664) show hypertrophy across a broad
-  //  loading spectrum, so the zone is a practical anchor, not dogma.
-  //
-  //  STALL — plateau guidance: ~3 sessions stuck under the range at one
-  //  weight → deload 5–10% and rebuild. Grinding forward instead is how
-  //  people end up stuck at the same triple for months.
-  //
-  // All judged on the TOP set of each session (same topSet as the cells
-  // above), so a drop set cannot fool any branch.
-  function runSuggest(exId) {
-    // HISTORY MEANS BEFORE THIS RUN. Today's own row lands in the database on
-    // the first ✓, and without this filter it became hist[0] — so after one
-    // set the box read "2-for-2 confirmed, add weight" against today's own
-    // numbers, and the advice changed between sets of one workout.
-    const hist = DB.sessions.listByExercise(exId).filter((s) => s.date !== runCtx.date);   // sorted date desc
-    if (!hist.length) return null;
-    const s1 = topSet(hist[0].sets);
-    if (!s1) return null;
-    // Bodyweight (pull-ups, dips): no load to progress, so progress the reps.
-    if (!(s1.w > 0)) return s1.r > 0 ? { w: 0, r: s1.r + 1, key: 'sug_rep_reason', vars: {} } : null;
-    if (!(s1.r > 0)) return null;
-    const LO = 8, HI = 12;
-    const ex = DB.exercises.getById(exId);
-    // Stored categories are capitalised ('Legs'); this compared against 'legs',
-    // so the +5 kg lower-body step the v281 rules promise was never taken.
-    const legs = !!(ex && String(ex.category || '').toLowerCase() === 'legs');
-    // WORK IN THE UNIT THE BAR IS LOADED IN. Rounding to 2.5 kg plates and
-    // then showing lb produced 143.5 lb — a number no bar can be loaded to.
-    // In lb: 5-lb steps (10 for legs from 110 lb), rounded to 5-lb plates.
-    const lb = runCtx.unit === 'lb';
-    const toU = (kg) => kgToUnit(kg, runCtx.unit);   // unrounded: the plates round
-    const fromU = (u) => toStoredKg(u, runCtx.unit);
-    const plate = lb ? 5 : 2.5;
-    const w1 = toU(s1.w);
-    const inc = lb ? ((legs && w1 >= 110) ? 10 : 5) : ((legs && s1.w >= 50) ? 5 : 2.5);
-    const toPlate = (x) => Math.round(x / plate) * plate;
-
-    if (s1.r >= HI) {
-      // 2-for-2: the increase needs the SECOND consecutive session at this
-      // weight to also top the range. One great day is not a new baseline.
-      const s2 = hist[1] ? topSet(hist[1].sets) : null;
-      const confirmed = !!(s2 && s2.w === s1.w && s2.r >= HI);
-      if (confirmed) return { w: fromU(toPlate(w1 + inc)), r: LO, key: 'sug_up_reason', vars: { t: LO } };
-      return { w: s1.w, r: HI, key: 'sug_confirm_reason', vars: {} };
-    }
-    if (s1.r >= LO) return { w: s1.w, r: s1.r + 1, key: 'sug_rep_reason', vars: { t: s1.r + 1 } };
-
-    // Under the range. Count how many CONSECUTIVE recent sessions sat under
-    // it at this same weight; three is the stall signal the deload evidence
-    // keys on.
-    let stuck = 0;
-    for (const s of hist) {
-      const tp = topSet(s.sets);
-      if (!tp || tp.w !== s1.w || tp.r >= LO) break;
-      stuck++;
-    }
-    if (stuck >= 3) {
-      let dw = Math.max(plate, toPlate(w1 * 0.9));
-      if (dw >= w1) dw = Math.max(plate, w1 - plate);   // rounding must not undo the deload
-      return { w: fromU(dw), r: LO, key: 'sug_deload_reason', vars: { n: stuck } };
-    }
-    return { w: s1.w, r: LO, key: 'sug_hold_reason', vars: { t: LO } };
-  }
-
-  function runSuggestHtml(exId) {
-    if (day?.targets?.[exId]) return ''; // the reviewed plan is the instruction for this slot
-    const g = runSuggest(exId);
-    if (!g) return '';
-    const u = runCtx.unit.toUpperCase();
-    const reason = Object.entries(g.vars).reduce((txt, [k, v]) => txt.replace('{' + k + '}', fmtNum(v)), t(g.key));
-    return `
-      <button type="button" class="run-suggest" data-sug-w="${g.w}" data-sug-r="${g.r}">
-        <span class="run-suggest-label">${t('sug_label')}</span>
-        <span class="run-suggest-figure num" dir="ltr">${g.w > 0 ? `${fmtNum(convDisplay(g.w))}<b>${u}</b> × ${fmtNum(g.r)}` : `${fmtNum(g.r)} ${t('reps')}`}</span>
-        <span class="run-suggest-why">${reason}</span>
-      </button>`;
-  }
-
   function runStatsHtml(exId) {
-    // Same rule as runSuggest: the cells describe the PAST. Today's own row
+    // Same rule as the next target (nxtFor): the cells describe the PAST. Today's own row
     // made "Last" flip to today's set 1 after the first ✓.
     const all = DB.sessions.listByExercise(exId).filter((s) => s.date !== runCtx.date);
     // Rendered ONLY when there is history — on a first-ever exercise two cells
@@ -8397,7 +8605,7 @@ function renderSessionRun(el) {
   const setsRows = st.sets.map((s, i) => {
     const wDisplay = (s.weight === '' || s.weight == null) ? '' : convDisplay(Number(s.weight));
     const repsVal = (s.reps === '' || s.reps == null) ? '' : s.reps;
-    // Ghost hint = last time's numbers (raw digits — a <input type=number>
+    // Ghost hint = the next target, or last time's numbers (raw digits — a <input type=number>
     // placeholder must not carry localized digits). Fallback to 0.
     const phReps = (s.phReps === '' || s.phReps == null) ? '0' : String(s.phReps);
     const phW = (s.phWeight === '' || s.phWeight == null) ? '0' : String(convDisplay(Number(s.phWeight)));
@@ -8428,7 +8636,7 @@ function renderSessionRun(el) {
       <h1 class="run-ex-name">${escapeHtml(exDisplayName(ex))}</h1>
       ${runStatsHtml(ex.id)}
       ${planTargetHtml(day?.targets?.[ex.id])}
-      ${runSuggestHtml(ex.id)}
+      ${st.nx ? `<p class="run-nxt">${escapeHtml(nxtWhy(st.nx, !!day?.targets?.[ex.id]?.reps))}</p>` : ''}
     </div>
 
     <div class="run-sets-head">
@@ -8485,36 +8693,10 @@ function renderSessionRun(el) {
   if (statsBtn) statsBtn.addEventListener('click', () =>
     navigate('exercise-detail', { exerciseId: statsBtn.dataset.openDetail }));
 
-  // Tapping the suggestion makes it the TARGET of every open set: their GHOST,
-  // the same placeholder last time's numbers use, and it writes nothing. It
-  // used to fill the fields and commit them — a performed set the user never
-  // lifted, counted in the streak, the week and the records (the "add weight"
-  // branch is by definition a new best). The ✓ is what logs it, and says where
-  // the numbers came from, with Undo; typing over it is what changes it. It
-  // reached only the FIRST open set until the carried hint (below): a
-  // suggestion is one weight for the sets still ahead, and sets 2 and 3 kept
-  // hinting last time's. Every set already has numbers or is done: the target
-  // is for a new one.
-  const sugBtn = $('.run-suggest', el);
-  if (sugBtn) sugBtn.addEventListener('click', () => {
-    const w = parseFloat(sugBtn.dataset.sugW);
-    const r = parseInt(sugBtn.dataset.sugR, 10);
-    if (!isFinite(w) || !isFinite(r)) return;
-    let open = st.sets.filter(runSetUntouched);
-    if (!open.length) { st.sets.push({ reps: '', weight: '', done: false }); open = [st.sets[st.sets.length - 1]]; }
-    open.forEach((x) => {
-      x.phReps = r;
-      x.phWeight = w > 0 ? w : '';       // kg, like every ghost; 0 = bodyweight, no weight to hint
-      x.phSug = true;                    // so the ✓ that takes it names the suggestion
-      x.phCarry = {};                    // per field: which ghosts an earlier set handed on
-    });
-    renderSessionRun(el);
-    showToast(t(open.length > 1 ? 'sug_applied_all' : 'sug_applied'));
-  });
-
-  // A NEW FIGURE CARRIES TO THE SETS STILL AHEAD. Each row's pale hint is the
-  // same set LAST time, so going from 60 to 62.5 on set 1 of three left sets 2
-  // and 3 hinting 60: the change cost a tap and the keyboard on every set.
+  // A NEW FIGURE CARRIES TO THE SETS STILL AHEAD. Each row's pale hint is its
+  // own target (v434; the same set last time before that), so going from 60 to
+  // 62.5 on set 1 of three left sets 2 and 3 hinting 60: the change cost a tap
+  // and the keyboard on every set.
   // When a ✓ lands on figures that differ from the set's own hint, every LATER
   // row the user has not touched, whose hint was that same old figure, takes
   // the new one as its hint — the straight-sets case. A pyramid's rows hinted
@@ -8569,7 +8751,7 @@ function renderSessionRun(el) {
   // buttons cancel pointerdown/mousedown so the input KEEPS focus and the
   // keyboard stays — a tap here never fires the blur commit. A tap adds its
   // step to the figure in the field, or to the GHOST when the field is empty
-  // («+2.5» on an untouched set is last time + 2.5), writes the value and
+  // («+2.5» on an untouched set is its target + 2.5), writes the value and
   // dispatches `input` so the listeners below see it; it COMMITS nothing —
   // the ✓ and the blur commit stay the writers (v296's law, through runCtx).
   // The plate button opens the calculator on the same figure, in kg through
@@ -8686,7 +8868,8 @@ function renderSessionRun(el) {
       inp.addEventListener('blur', commitOnce);
     });
     // ✓ Done → mark the set complete + start the rest timer. If the row is still
-    // empty, fill it from the "last time" ghost — one tap = "same as last time".
+    // empty, fill it from the ghost — one tap takes the next target (v434), or
+    // «same as last time» where no rule applies.
     row.querySelector('[data-done]')?.addEventListener('click', () => {
       const set = st.sets[i];
       // Did this ✓ INVENT the numbers? Ticking an untouched row fills it from
@@ -8780,6 +8963,12 @@ function renderSessionRun(el) {
       reps: '', weight: '', done: false,
       phReps: prev ? hint(prev.reps, prev.phReps) : '',
       phWeight: prev ? hint(prev.weight, prev.phWeight) : '',
+      // A row added under an untouched one hints the same figures FROM THE SAME
+      // SOURCE, so its ✓ names it truly (v434): the suggestion — or an earlier
+      // set of this workout, where carryHint had replaced the target (a typed 60
+      // under a 62.5 target is the lifter's own number, not «the suggested» one).
+      ...(prev && prev.phSug && runSetUntouched(prev) ? { phSug: true } : {}),
+      ...(prev && prev.phCarry && runSetUntouched(prev) ? { phCarry: { ...prev.phCarry } } : {}),
     });
     renderSessionRun(el);
   });

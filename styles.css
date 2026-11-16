@@ -3139,6 +3139,12 @@ body.rest-active[data-view="session-run"] .toast { bottom: calc(var(--run-nav-h)
 }
 .rot-slot-actions { flex-shrink: 0; display: flex; gap: 4px; }
 .rot-slot-ex { display: flex; flex-wrap: wrap; gap: 4px; }
+/* v434: the door to a slot's sets, reps and notes is on EVERY slot that has
+   exercises (it used to appear only after a photo import, so a plan built by
+   hand could never declare a rep range — and the next target reads that range).
+   It sat flush against the chips above it; it keeps a gap now, and its label
+   wraps instead of running past a 320 px card. */
+.rot-slot-targets { margin-top: 10px; height: auto; min-height: var(--btn-h-m); padding-top: 8px; padding-bottom: 8px; font-size: var(--fs-btn-m); border-radius: var(--radius-btn-m); white-space: normal; text-align: center; }
 
 .planner-empty-hint {
   font-size: var(--fs-meta);
@@ -3315,8 +3321,13 @@ body.rest-active[data-view="session-run"] .toast { bottom: calc(var(--run-nav-h)
 .sd-set-remove:active { transform: scale(var(--press-scale)); }
 .sd-set-remove svg { width: 16px; height: 16px; }
 
+/* v434: the row WRAPS. Measured at 320 px: the row is 258 px wide and «كالمرّة
+   السابقة» + «أضف مجموعة» needed 283 (295 with larger text; English 285/297),
+   so since v375 the pair ran 25–39 px past the card and the page scrolled
+   sideways. A narrow card takes two lines; at 375 px nothing changes. */
 .sd-card-actions {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
   gap: 10px;
@@ -3445,43 +3456,6 @@ body[data-view="session-run"] .bottom-nav { display: none; }
 }
 .run-stats:active .run-stat { border-color: var(--border-hi); }
 
-/* ── "Suggested today" — double progression, one tap to apply ──────────── */
-.run-suggest {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 2px;
-  width: 100%;
-  padding: 10px 12px;
-  border: 1px dashed var(--accent-soft, var(--border-hi));
-  border-radius: var(--radius);
-  background: var(--surface-2);
-  color: var(--text);
-}
-.run-suggest:active { transform: scale(var(--press-scale)); }
-.run-suggest-label {
-  font-size: var(--fs-caption);
-  font-weight: 700;
-  letter-spacing: 0.04em;
-  color: var(--accent-text);
-}
-.run-suggest-figure {
-  font-size: calc(18px * var(--fs-scale));
-  font-weight: 700;
-  line-height: 1.1;
-  font-variant-numeric: tabular-nums;
-}
-.run-suggest-figure b {
-  font-size: var(--fs-caption);
-  font-weight: 700;
-  color: var(--text-mute);
-  margin: 0 2px;
-}
-.run-suggest-why {
-  font-size: var(--fs-meta);
-  font-weight: 700;
-  color: var(--text-dim);
-}
 .run-stat {
   background: var(--surface-2);
   border: 1px solid var(--border);
@@ -9959,6 +9933,18 @@ body[dir="rtl"] .prg-tiles { --prg-dir: -1; }
    (.has-figs wraps; the figures span takes the whole second line). */
 .rec-view .cx-row.has-figs { flex-wrap: wrap; row-gap: 2px; }
 .rec-view .cx-row > .rec-view-figs { flex: 0 0 100%; font-size: var(--fs-meta); color: var(--text-mute); }
+
+/* ── v434: THE NEXT TARGET'S ONE LINE ─────────────────────────────────────
+   Why the grey figures in the rows are what they are («الوزن نفسه — تكرار
+   إضافي في أضعف مجموعاتك»). Text, never a control: it wraps and is never
+   ellipsised — a reason cut short is no reason. In the run it reserves two
+   lines, because focus mode means nothing moves between exercises (the rule
+   .run-ex-name keeps); on a day card it sits under the head, and after a save
+   it carries the one figure the card cannot show: the next target. */
+.run-nxt, .sd-nxt { font-size: var(--fs-meta); font-weight: 600; line-height: 1.5; color: var(--text-dim); overflow-wrap: anywhere; }
+.run-nxt { margin: 0; min-height: 3em; }
+.sd-nxt { margin: -4px 0 12px; text-align: start; }
+.sd-nxt .num { color: var(--text); font-weight: 700; }
 
 /* =========================================================================
    ^^^ EVERYTHING ABOVE, THEN THE IDENTITY LAYER BELOW. ^^^

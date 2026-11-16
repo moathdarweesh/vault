@@ -2,6 +2,133 @@
 
 One section per release since v309, newest first, moved verbatim from `CLAUDE.md` in v401 (batch 6 of the 2026-09-25 review; `docs/REVIEW-2026-09-25.md`). `CLAUDE.md` is the guide and the authority for how the app works now. A section here records what one release changed and why, in the words written at the time, so a later section — or the guide — can supersede what an earlier one says.
 
+## v434 — «البرنامج الذي يتقدّم وحده»: the grey figure is the next target
+
+**The owner asked for a feature that sets the app apart — «بدي اضيف ميزه جديده تميزني عن
+المنافسين … ميزه جذريه اخرى وليس تحسين» — and of five ideas kept two: «3و5 حلوه».** Number 5 is
+this release: a program that progresses by itself. (Number 3, «ماذا آكل؟», is next.)
+
+**What existed, read before a line was written.** Since v281 the guided run drew a «Suggested
+today» card (`runSuggest`): double progression judged on the BEST set only, applied by a tap,
+absent from the day card, and silent on every exercise whose plan slot carried a target. The grey
+figures in the rows were last time's numbers (v375). So one screen gave two answers for one
+exercise — the ghost said «60 × 12 again», the card said «62.5 × 8» — and the other screen gave
+none.
+
+**What it is now.** The grey figure in every open set row, on the guided run AND on the day card,
+IS the next target, and one line under the exercise says why (`.run-nxt` / `.sd-nxt`). It is
+still a ghost (v375): a ✓, or the card's «اعتمد المقترح», takes it and says so with Undo; typing
+overrides it; nothing is written by opening a screen. NOTHING IS STORED — both screens ask one
+door, `nxtFor(exId, date, unit, target)`, which hands the sessions BEFORE the day on screen to one
+pure function, `nextTarget(sessions, o)`, each time a card or a run opens. An Undo, a sync or an
+older build cannot disagree with a figure that is replayed from `DB.sessions`. A logged card ends
+on the next figure («المرّة القادمة: 62.5 KG × 8»), so a first day ends on a computed number.
+
+**The rule is double progression, on what the literature says.** WHEN: raise the load only when
+the top of the range was reached on TWO CONSECUTIVE sessions (ACSM position stand 2009, PMID
+19204579; the NSCA's 2-for-2), and on EVERY working set, not the best one — 12, 8, 7 is not twelve
+reps. HOW MUCH: ACSM gives 2–10%; here it is the step table shipped since v281 (+2.5 kg, +5 kg for
+legs from 50 kg, +5 lb, +10 lb for legs from 110 lb), computed in the unit the bar is loaded in and
+rounded to its plate, so a pound user is never asked for 137.8. Where one step is MORE than 10% of
+the weight (a 10 kg curl), the bar to clear first is two reps past the range — ACSM's «one to two
+repetitions over». THE ZONE: 8–12 unless the plan declares another range, or the lifter plainly
+runs a scheme of their own (Schoenfeld's meta-analyses, 2017 PMID 28834797 and 2021 PMID 33671664,
+show growth across a broad loading spectrum, so the zone is an anchor, not dogma). STALL: three
+sessions running under the range at one weight — about 10% lighter, on the plate grid, and only
+where the grid HAS a lighter weight (product documentation only; the rest is judgement). LAYOFF:
+21 days or more — repeat your own figures; no source gives a percent to cut, so nothing is cut.
+Nine states: `first, up, confirm, rep, stretch, hold, deload, back, bw`. Judgement with no source,
+named as such in the code: `own`, `gap`, `sane`, the one-rep step, the reps of a deload.
+
+**How it was designed.** A three-phase workflow at tiered models (the owner's order of
+2026-11-11: the fitting model for the fewest tokens): five read-only maps of the code and the
+literature, three independent proposals (rule-first, screen-first, engineering-first) merged into
+one spec, then one writer with a strict hunk applier — every edit must match exactly once.
+
+**What the review changed** (four lenses, one skeptic per lens: 28 findings, 22 confirmed, 6
+refuted).
+
+- **Two critical, both the same mistake.** A row under the range was asked for the BOTTOM of the
+  range at once: a 5×5 at 100 kg with one missed rep read «100 × 8», and a heavy single over
+  back-off sets read «140 × 8». The rule is now ONE REP AT A TIME — at an unchanged weight no row
+  is asked for more than one rep over the weakest working set — and the line still says the weight
+  stays until every set reaches the range. A scheme of the lifter's own becomes the range (no
+  range declared, three or more working sets within one rep of each other under the zone, the
+  session before it not in the zone: 5,5,5,5,4 is one missed rep, not a new plan; the first
+  session after a raise is not a scheme). A deload asks two reps over the best set, the bottom of
+  the range at most — never eight reps at nine tenths of a single.
+- **The plan's rep target was misread.** «3 sets» was three reps; «12×3» (reps × sets, as Arabic
+  sheets write it) was three reps — the slot's set count now settles it and it is refused without
+  one; «RIR 2», «10 max», «30٪», a load («20kg», «10 كيلو»), a time in either script («30 ثانيه»,
+  «1 hour», «30″») and a calorie count now read as «not a count of reps», where nothing is
+  prescribed and the plan stays the instruction; «8~12» and «8 حتى 12» are ranges.
+- **The plan's set count is a count of WORKING sets.** Warm-up rows pushed planned sets off the
+  card; a set the plan does not ask for decided whether the plan was met.
+- **Bodyweight** under a DECLARED range stops at its top: the next step is added load, which is
+  the lifter's call, so nothing is prescribed. With no declared range it keeps climbing.
+- **The day card kept a stale target.** A session logged or deleted on the exercise page and
+  reached by Back, or the unit switch, left the old figure: an untouched, unlogged card is now
+  asked again on every render (a card with typing on it, or a logged one, keeps its state).
+- **Sources are named truly.** A deload's back-off row that would now be heavier comes down with it
+  and is marked prescribed; a set added under rows that hint a figure the lifter TYPED keeps that
+  source (`phCarry`) — its ✓ said «the suggested numbers» of a weight the lifter chose.
+- **The lines cite the range they speak of** — «(8–12)» — except on the run when the plan block
+  above already prints it. In a left-to-right isolate, written `\u2066…\u2069` in the source and
+  never as the invisible character: measured in the Arabic line, a bare «8–12» is drawn «12–8».
+  An editing tool turned the escape into the invisible character three times while this was
+  written, and nothing a test can see changes — so contract 81 refuses a literal bidi control
+  character in any shipped file.
+- **«Next time» states each row** when they differ («60 KG × 12 · 12 · 10»: a lifter who did
+  twelves must not read «× 10»), reps alone at bodyweight, and is asked about TODAY when the
+  newest session is old (three weeks on: repeat).
+- **The first-time sentence** names no weight (it is also said of a push-up), is said once per
+  RANGE per page (a 6–8 card is not answered by a sentence about 8–12), and names no count for a
+  core exercise with no declared target (a plank is held, not counted).
+
+Refuted, no action: a pair of «top» sessions a year apart still raises (the newest is recent, and
+no source gives a window); a half-typed Save taking its other figure from the ghost (v375's rule,
+unchanged — the ghost is now the target); the session sheet still prefills last time; «first
+time» on a past day; `NXT` being reassignable; a determinism property.
+
+**Beside the rule.** The planner offers «تعديل المجموعات والتكرارات» on every slot that has
+exercises — until now only an imported plan could carry a rep range, so a plan built by hand could
+not declare one. `.sd-card-actions` wraps: a pre-existing overflow, measured at 320 px (the row
+258 px, its content 283–297 px). Eight `sug_*` keys left both dictionaries with the card;
+`sd_take_sug` and thirteen `nxt_*` keys arrived. Three dead guards found while writing the plants
+were removed rather than left untestable.
+
+**Tests.** Contract 81 holds the agreement (both screens ask `nxtFor`, neither reads «last time»,
+nine states each with its line, the rule pure and sliceable, the old card gone, the planner's
+door, the two CSS facts, no literal bidi control character in a shipped file). `scripts/test-next-target.js` (new) runs the rule bare: 87 histories to
+their target, 79 rep targets read or refused, and a 49,600-case grid of properties — a raise is
+one step, on the plate grid and loadable with real plates; a deload is 8.3–16.7% and needs three
+sessions; a hold returns the stored kilograms untouched; one rep at a time. Both dictionaries are
+checked with the real words (the citation present, isolated, and gone where the range is on
+screen). `scripts/test-next-target-ui.js` (new, 25 cases in AR/dark and EN/light) drives the two
+screens the way a thumb does. Re-pinned: `test-run-home-ui.js`, `test-convenience-ui.js`,
+`test-i18n.js`.
+
+**Fail first.** 51 plants on the first build and 109 on the review fixes (63 against the rule, its
+dictionary lines and the source text, 46 against the two screens), every one in memory with the
+repo bytes unchanged, every one caught. One was MISSED on its first run, and that was the finding: the «timed
+plan target» case used a bodyweight history, where the review's own rule (nothing prescribed at
+the top of a declared range) made the wrong reading print the same rows — the check could no
+longer fail, and its history is now a loaded one. One check exists only because of a measurement:
+a string comparison cannot see bidi reordering, so the DRAWN order of the cited range is measured
+on the glyphs; its plant removes the isolates from the app AND from the expected string, and only
+that measurement fails, in Arabic only.
+
+**Gate.** `npm run verify`: the 81 contracts hold, ESLint clean, 35 suites passed · 0 failed (wall 237 s, --jobs 3).
+
+**Fingerprint against v433a** (`diff v433a v434a`): sheets 128/128 identical; views 176/184, the differences all the version label. The net's cells are an EMPTY install — no card on the day page, no slot in the planner — so the surfaces this release changes are held by the new suite, and were looked at in real screenshots (375 px AR/dark, 320 px EN/light).
+
+**Accepted limits, recorded.** The guided run's own state is not re-asked while the run is up (it
+is rebuilt from the sessions on entry; only the day card is asked again on every render). There
+is no switch to turn the targets off: the figure is a ghost, and typing is the override. The
+session sheet opened from the exercise page still prefills last time's numbers. The rule knows
+nothing of RPE or RIR, tempo or supersets, and an exercise logged under a plan target it cannot
+read gets no target at all. At 320 px the day card's two buttons sit on two rows.
+
 ## v433 — typed work and stored rows are not lost to one press
 
 **The owner: «كمل بشرط الأحسن اللي تنفّذه».** The data-safety half of what the two vendored UI
