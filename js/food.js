@@ -130,6 +130,8 @@ function renderFood(el) {
     // end: it sits outside .nutri-hero, and this branch returns first so no
     // edit to that test can ever turn a tap on it into opening the log.
     if (e.target.closest('[data-shr-door]')) { navigate('suggestions'); return; }
+    // «ماذا آكل الآن؟» (v436): the same rule — a sheet, never the log behind the ring.
+    if (e.target.closest('[data-wte-door]')) { openWhatToEat(rerender); return; }
     const setup = e.target.closest('[data-setup-goal]');
     if (setup) { openCalculatorModal(rerender); return; }
     const edit = e.target.closest('[data-edit-goal]');
@@ -212,7 +214,7 @@ function nutritionDashboardHtml(date) {
           <div class="nutri-setup-title">${t('nutri_setup_title')}</div>
         </div>
       </button>
-      ${shrDoorHtml()}
+      ${shrDoorHtml()}${wteDoorHtml()}
     `;
   }
 
@@ -273,7 +275,7 @@ function nutritionDashboardHtml(date) {
       </div>
     </div>
 
-    ${waterCard}${shrDoorHtml()}
+    ${waterCard}${shrDoorHtml()}${wteDoorHtml()}
   `;
 }
 
@@ -708,8 +710,9 @@ function openRepeatYesterday(date, onChange) {
     const picked = [...overlay.querySelectorAll('[data-ry]:checked')]
       .map((c) => prev[Number(c.dataset.ry)])
       .filter(Boolean)
+      // sourceId rides along when there is one: «eaten today» (wteEatenKeys) knows a bundle only by its id.
       .map((e) => ({ name: e.name, servings: e.servings || 1, calories: e.calories, protein: e.protein,
-        carbs: e.carbs, fat: e.fat || 0, source: e.source || 'saved' }));
+        carbs: e.carbs, fat: e.fat || 0, source: e.source || 'saved', ...(typeof e.sourceId === 'string' && e.sourceId ? { sourceId: e.sourceId } : {}) }));
     if (!picked.length) { showToast(t('fl_repeat_none')); return; }
     // ONE write for the whole selection, and the day is resolved again here:
     // the sheet can stand open across midnight.
@@ -826,8 +829,9 @@ function openAddSheet(date, onChange) {
       if (overlay.__closed) return;
       const r = recent[Number(again.dataset.recent)];
       if (!r) return;
+      // sourceId rides along when there is one: «eaten today» (wteEatenKeys) knows a bundle only by its id.
       const result = DB.foodLogs.addMany(date || todayISO(), [{ name: r.name, servings: r.servings || 1, calories: r.calories,
-        protein: r.protein, carbs: r.carbs, fat: r.fat || 0, source: r.source || 'saved' }]);
+        protein: r.protein, carbs: r.carbs, fat: r.fat || 0, source: r.source || 'saved', ...(typeof r.sourceId === 'string' && r.sourceId ? { sourceId: r.sourceId } : {}) }]);
       if (!result.ok) { convenienceError(result); return; }
       close();
       if (typeof onChange === 'function') onChange();
@@ -3247,6 +3251,522 @@ function shrRowHtml(r) {
 // Never '': the ready meals mean the page always has something to show.
 function shrDoorHtml() {
   return `<button type="button" class="shr-door" data-shr-door>${icon('utensils', 20)}<span class="shr-door-name">${t('shr_title')}</span><span class="icon-mirror shr-door-chev">${icon('chevronRight', 16)}</span></button>`;
+}
+
+// ---- «ماذا آكل الآن؟» (v436) ---------------------------------------------------
+// ONE MEAL, its calories worked out and its portion fitted on a quarter-serving
+// step to what is left of the day for the meal of the hour, from any source
+// the device holds: the ready meals, the catalogue's dishes (WTE_CAT), the
+// user's own recipes and meal bundles. Never the community feed (it needs the
+// network), never a saved or recent food (it cannot be told from an
+// ingredient). The rule is the pure functions below, run bare by
+// scripts/test-what-to-eat.js; wtePool and wteAsk are the only readers of the
+// store. Every figure on the answer is an integer, every portion a quarter
+// from ½ to 2, and no portion that would push the ring past the target is
+// ever offered (the hard cap in wtePortion).
+// The budget's constants on ONE line (contract 82 and the node suite read it):
+// the day's shares per period (a snack never takes more than its own share),
+// the night (00–04 is a late snack), the floor, the ceiling (half the target),
+// «done» under 50 kcal, the tolerance (10 %, at least 50), the 25 % window of
+// the cycle's fallback, the portion steps in quarters (2..8 = ½..2), the
+// protein aim (0.4 g per kg, else 30, compared in 5 g steps) and the 150 kcal
+// logged in the clock's period that moves the question one period on.
+const WTE = { share: { breakfast: 18, lunch: 23, snack: 23, dinner: 36 }, night: 5, floor: 150, ceil: 0.5, done: 50, tolMin: 50, tol: 0.1, near: 0.25, minQ: 2, maxQ: 8, aimKg: 0.4, aim: 30, aimStep: 5, moved: 150 };
+// The periods each catalogue MEAL may answer, keyed by its exact `en` in
+// FOOD_PRESETS (cat: 'meals'). One dish per line, in this form (contract 82
+// reads every line and refuses a key the catalogue does not carry). Left out
+// on purpose — a side or a sweet is not a meal: French Fries, Sago Dessert,
+// Luqaimat, Kunafa, Basbousa. «جمرية» and «مراصيع» are a breakfast or an
+// afternoon bite, «معصوب» a breakfast and, widely, a dinner (the integrator's
+// decision on local habits).
+const WTE_CAT = {
+  'Shawarma Wrap': ['lunch', 'dinner'],
+  'Burger': ['lunch', 'dinner'],
+  'Pizza Slice': ['lunch', 'dinner'],
+  'Areekah': ['breakfast', 'dinner'],
+  'Southern Aseedah': ['breakfast', 'dinner'],
+  'Jamriyah': ['breakfast', 'snack'],
+  'Mansaf': ['lunch', 'dinner'],
+  'Marasee': ['breakfast', 'snack'],
+  'Hininy': ['breakfast', 'snack'],
+  'Masoub': ['breakfast', 'dinner'],
+  'Sayadiyah': ['lunch', 'dinner'],
+  'Mantu': ['lunch', 'dinner'],
+  'Mutabbaq': ['snack', 'dinner'],
+  'Lamb Kabsa': ['lunch', 'dinner'],
+  'Hasawi Rice with Meat': ['lunch', 'dinner'],
+  'Hail Kibbeh': ['lunch', 'dinner'],
+  'Shish Barak': ['lunch', 'dinner'],
+  'Madoos': ['lunch', 'dinner'],
+  'Haneeth with Rice': ['lunch', 'dinner'],
+  'Jareesh': ['lunch', 'dinner'],
+  'Temmn Rice Dish': ['lunch', 'dinner'],
+  'Raqsh': ['lunch', 'dinner'],
+  'Saleeg': ['lunch', 'dinner'],
+  'Chicken Kabsa': ['lunch', 'dinner'],
+  'Lamb Mandi': ['lunch', 'dinner'],
+  'Chicken Mandi': ['lunch', 'dinner'],
+  'Tharid': ['lunch', 'dinner'],
+  'Margoog': ['lunch', 'dinner'],
+  'Harees': ['lunch', 'dinner'],
+  'Chicken Shawarma Sandwich': ['lunch', 'dinner'],
+  'Beef Shawarma Sandwich': ['lunch', 'dinner'],
+  'Falafel Sandwich': ['breakfast', 'dinner'],
+  'Falafel Pieces': ['breakfast', 'snack'],
+  'Cheese Manakish': ['breakfast', 'dinner'],
+  'Zaatar Manakish': ['breakfast', 'dinner'],
+  'Shakshuka': ['breakfast', 'dinner'],
+  'Chicken Samosa': ['snack'],
+  'Cheese Samosa': ['snack'],
+  'Fried Kibbeh': ['snack'],
+  'Chicken over Rice': ['lunch', 'dinner'],
+  'Lamb over Rice': ['lunch', 'dinner'],
+  'Mixed Grilled Kebab Plate': ['lunch', 'dinner'],
+  'Chicken Burger': ['lunch', 'dinner'],
+  'Cheeseburger': ['lunch', 'dinner'],
+  'Fried Chicken Breast Piece': ['lunch', 'dinner'],
+  'Fried Chicken Drumsticks': ['lunch', 'dinner'],
+  'Fried Chicken Wings': ['lunch', 'dinner'],
+  'Pepperoni Pizza Slice': ['lunch', 'dinner'],
+  'Margherita Pizza Slice': ['lunch', 'dinner'],
+  'Chicken Wrap': ['lunch', 'dinner'],
+  'Club Sandwich': ['lunch', 'dinner'],
+};
+// «وجبة أخرى»'s cursor: the inputs it was drawn for (sig) and the index. In
+// memory only; a new sig (a logged meal, another hour) starts again at 0.
+let WTE_CUR = { sig: '', i: 0 };
+
+// An hour as the rule reads it: an integer 0–23, anything else noon.
+function wteHour(x) {
+  return Number.isInteger(x) && x >= 0 && x <= 23 ? x : 12;
+}
+// THE PERIOD THE QUESTION ANSWERS. The night (00–04) is a late snack. Otherwise
+// the clock's period — unless 150 kcal or more were logged today inside that
+// period's own hours, up to now: then the next one (breakfast → lunch → snack
+// → dinner), and after dinner a late snack, never a second dinner. `ate` is
+// [{h, kcal}], one entry per log row (wteAsk), h the hour it was added.
+function wtePeriod(hour, ate) {
+  const H = wteHour(hour);
+  if (H < WTE.night) return 'snack';
+  const p = mealPeriodFor({ getHours: () => H });
+  let k = 0;
+  for (const a of Array.isArray(ate) ? ate : []) {
+    if (!a || typeof a !== 'object' || !Number.isInteger(a.h) || a.h < WTE.night || a.h > H) continue;
+    if (mealPeriodFor({ getHours: () => a.h }) !== p || !Number.isFinite(a.kcal) || !(a.kcal > 0)) continue;
+    k += a.kcal;
+  }
+  if (k < WTE.moved) return p;
+  return p === 'dinner' ? 'snack' : SHR_PERIODS[SHR_PERIODS.indexOf(p) + 1];
+}
+// THE MEAL'S BUDGET. o = { target, eaten, hour, ate, kg, proteinLeft }.
+// notarget (no valid target: the protein aim and the period only), done (fewer
+// than 50 kcal left, the ring's rounding), else meal: what is left spread over
+// the periods still to come by their shares (the whole day's 100 at night or
+// after dinner), at least min(150, left), at most half the target and never
+// above what is left; a snack at most 23 % of the target unless the floor
+// needs more. `aim` ranks only: it is never shown.
+function wteBudget(o) {
+  const x = o && typeof o === 'object' ? o : {};
+  const H = wteHour(x.hour);
+  const period = wtePeriod(H, x.ate);
+  const kg = Number(x.kg);
+  let aim = Number.isFinite(kg) && kg >= 30 && kg <= 300 ? Math.round(WTE.aimKg * kg) : WTE.aim;
+  if (x.proteinLeft !== null && x.proteinLeft !== undefined && Number.isFinite(Number(x.proteinLeft))) {
+    aim = Math.max(0, Math.min(aim, Math.round(Number(x.proteinLeft))));
+  }
+  const target = Number(x.target);
+  if (!(Number.isFinite(target) && target > 0)) return { state: 'notarget', period, aim };
+  const e = Number(x.eaten);
+  const eaten = Number.isFinite(e) ? Math.max(0, e) : 0;
+  const exact = target - eaten;
+  const L = Math.round(exact);
+  if (L < WTE.done) return { state: 'done', period, left: L };
+  const late = period === 'snack' && (H < WTE.night || mealPeriodFor({ getHours: () => H }) === 'dinner');
+  let rem = 0;
+  if (late) rem = 100;
+  else for (let i = SHR_PERIODS.indexOf(period); i < SHR_PERIODS.length; i++) rem += WTE.share[SHR_PERIODS[i]];
+  const low = Math.min(WTE.floor, L);
+  let k = Math.min(Math.max(L * WTE.share[period] / rem, low), target * WTE.ceil, L);
+  if (period === 'snack') k = Math.min(k, Math.max(low, target * WTE.share.snack / 100));
+  const kcal = Math.round(k);
+  return { state: 'meal', period, late, left: L, target, eaten, exact, kcal, tol: Math.max(WTE.tolMin, Math.round(WTE.tol * kcal)), aim };
+}
+// THE PORTION closest to the budget, on the quarter grid from ½ to 2 (or the
+// row's own ceiling, a bundle's maxPortion), never one that passes the target.
+// A tie goes to the smaller portion. null when none fits.
+function wtePortion(per, b, maxPor) {
+  if (!(Number.isFinite(per) && per > 0) || !b || b.state !== 'meal') return null;
+  const top = Math.min(WTE.maxQ, Math.floor((Number.isFinite(maxPor) ? maxPor : 2) * 4));
+  let best = null;
+  for (let q = WTE.minQ; q <= top; q++) {
+    const p = q / 4;
+    if (b.eaten + per * p > b.target + 1e-9) continue;
+    const K = Math.round(per * p);
+    const err = Math.abs(K - b.kcal);
+    if (!best || err < best.err) best = { p, kcal: K, err };
+  }
+  return best;
+}
+// THE RANKED LIST «وجبة أخرى» walks. A new array; no row is touched. With a
+// target: fit (within tolerance) first, then in the period, then not eaten
+// today, then (outside tolerance) the closer, then the protein shortfall in
+// 5 g steps, then the portion nearest one serving, then the closer, then more
+// protein, then the id (code point). Only the in-period picks within
+// tolerance are kept; when there are none, the in-period picks within 25 % of
+// the budget and the out-of-period ones within tolerance; when still none,
+// every in-period pick, else every pick. With no target: one serving each,
+// in the period first, not eaten, densest in protein, the id.
+function wteRank(pool, b, eaten) {
+  if (!b || typeof b !== 'object' || (b.state !== 'meal' && b.state !== 'notarget')) return [];
+  const E = new Set(Array.isArray(eaten) ? eaten : []);
+  const rows = (Array.isArray(pool) ? pool : []).filter((r) => r && typeof r === 'object' && typeof r.id === 'string'
+    && Array.isArray(r.meals) && Number.isFinite(Number(r.kcal)) && Number(r.kcal) > 0);
+  const num = (v) => { const n = Number(v); return Number.isFinite(n) ? n : 0; };
+  const cp = (a, c) => (a < c ? -1 : a > c ? 1 : 0);
+  const oOf = (r) => (r.meals.includes(b.period) ? 0 : 1);
+  const eOf = (r) => (Array.isArray(r.keys) && r.keys.some((k) => E.has(k)) ? 1 : 0);
+  if (b.state === 'notarget') {
+    const dense = (r) => num(r.protein) / Number(r.kcal);
+    const all = rows.map((row) => ({ id: row.id, row, p: 1, kcal: Math.round(Number(row.kcal)), protein: Math.round(num(row.protein)),
+      carbs: Math.round(num(row.carbs)), fat: Math.round(num(row.fat)), tier: 0, o: oOf(row), e: eOf(row) }))
+      .sort((x, y) => (x.o - y.o) || (x.e - y.e) || (dense(y.row) - dense(x.row)) || cp(x.id, y.id));
+    const inP = all.filter((x) => x.o === 0);
+    return inP.length ? inP : all;
+  }
+  const picks = [];
+  for (const row of rows) {
+    const x = wtePortion(Number(row.kcal), b, Number(row.maxPor));
+    if (!x) continue;
+    const P = Math.round(num(row.protein) * x.p);
+    picks.push({ id: row.id, row, p: x.p, kcal: x.kcal, protein: P, carbs: Math.round(num(row.carbs) * x.p), fat: Math.round(num(row.fat) * x.p),
+      err: x.err, tier: x.err <= b.tol ? 0 : 1, o: oOf(row), e: eOf(row), ps: Math.ceil(Math.max(0, b.aim - P) / WTE.aimStep), pd: Math.abs(x.p - 1) });
+  }
+  picks.sort((x, y) => (x.tier - y.tier) || (x.o - y.o) || (x.e - y.e) || (x.tier === 1 ? x.err - y.err : 0)
+    || (x.ps - y.ps) || (x.pd - y.pd) || (x.err - y.err) || (y.protein - x.protein) || cp(x.id, y.id));
+  const A = picks.filter((x) => x.tier === 0 && x.o === 0);
+  if (A.length) return A;
+  const win = Math.max(b.tol, Math.round(WTE.near * b.kcal));
+  const BC = picks.filter((x) => x.o === 0 && x.err <= win).concat(picks.filter((x) => x.o === 1 && x.tier === 0));
+  if (BC.length) return BC;
+  const inP = picks.filter((x) => x.o === 0);
+  return inP.length ? inP : picks;
+}
+// The four adapters: one candidate per source, or null. A candidate is
+// { id, kind, srcId, name, meals, servings, kcal, protein, carbs, fat (per ONE
+// serving), items, grams, maxPor, keys }; `keys` are what «eaten today» is
+// matched by (the source and the folded name). A field-by-field copy of the
+// items: the ingredient rows are drawn from these, never from the store's.
+function wteItemCopy(it) {
+  const x = it && typeof it === 'object' ? it : {};
+  return { name: String(x.name || ''), qty: String(x.qty || ''), calories: Number(x.calories) || 0, protein: Number(x.protein) || 0, carbs: Number(x.carbs) || 0, fat: Number(x.fat) || 0 };
+}
+// A READY MEAL (SUGGESTION_PRESETS), priced by the shell: `items` is
+// suggestionItems' answer, `per` its one serving (DB.recipes.perServing).
+function wteReadyRow(p, items, per, ar, fold) {
+  if (!p || typeof p !== 'object' || typeof p.id !== 'string' || !p.id) return null;
+  if (!Array.isArray(items) || !items.length || !per || !(Number(per.calories) > 0)) return null;
+  const name = String((ar ? p.ar : p.en) || '').trim();
+  const meals = SHR_PERIODS.filter((q) => Array.isArray(p.meals) && p.meals.includes(q));
+  if (!name || !meals.length) return null;
+  return { id: 'builtin:' + p.id, kind: 'builtin', srcId: p.id, name, meals, servings: 1,
+    kcal: Number(per.calories), protein: Number(per.protein) || 0, carbs: Number(per.carbs) || 0, fat: Number(per.fat) || 0,
+    items: items.map(wteItemCopy), grams: null, maxPor: 2, keys: ['builtin:' + p.id, 'n:' + fold(name)] };
+}
+// AN OWN RECIPE: one serving's figures by `per` (DB.recipes.perServing), the
+// WHOLE recipe's items, and the same divisor perServing uses, so the figures
+// and the ingredient lines can never divide by two different counts.
+function wteRecipeRow(rec, per, fold) {
+  if (!rec || typeof rec !== 'object' || typeof rec.id !== 'string' || !rec.id) return null;
+  const name = String(rec.name || '').trim();
+  const items = (Array.isArray(rec.items) ? rec.items : []).filter((it) => it && typeof it === 'object').map(wteItemCopy);
+  if (!name || !items.length || !per || !(Number(per.calories) > 0)) return null;
+  return { id: 'recipe:' + rec.id, kind: 'recipe', srcId: rec.id, name, meals: SHR_PERIODS.slice(), servings: Math.max(1, Number(rec.servings) || 1),
+    kcal: Number(per.calories), protein: Number(per.protein) || 0, carbs: Number(per.carbs) || 0, fat: Number(per.fat) || 0,
+    items, grams: null, maxPor: 2, keys: ['recipe:' + rec.id, 'n:' + fold(name)] };
+}
+// A CATALOGUE DISH (FOOD_PRESETS, cat 'meals', named in WTE_CAT): one serving
+// as the catalogue states it, no ingredients, its weight from the English
+// serving text (null for «1 wrap», «1 burger», «1 slice»).
+function wteCatRow(fp, ar, fold) {
+  if (!fp || typeof fp !== 'object' || fp.cat !== 'meals' || typeof fp.en !== 'string') return null;
+  if (!Object.prototype.hasOwnProperty.call(WTE_CAT, fp.en) || !(Number(fp.cal) > 0)) return null;
+  const name = String((ar ? fp.ar : fp.en) || '').trim();
+  if (!name) return null;
+  return { id: 'catalog:' + fp.en, kind: 'catalog', srcId: fp.en, name, meals: WTE_CAT[fp.en].slice(), servings: 1,
+    kcal: Number(fp.cal), protein: Number(fp.pro) || 0, carbs: Number(fp.carb) || 0, fat: Number(fp.f) || 0,
+    items: [], grams: servingGrams(fp.s), maxPor: 2, keys: ['catalog:' + fp.en, 'n:' + fold(name)] };
+}
+// A MEAL BUNDLE: its items at their own servings (n), summed unrounded; its
+// portion capped by `max` (DB.mealBundles.maxPortion) and by 2.
+function wteBundleRow(b, max) {
+  if (!b || typeof b !== 'object' || typeof b.id !== 'string' || !b.id) return null;
+  const name = String(b.name || '').trim();
+  const items = (Array.isArray(b.items) ? b.items : []).filter((it) => it && typeof it === 'object').map((it) => {
+    const n = Number(it.servings) || 1;
+    return { name: String(it.name || ''), n, calories: (Number(it.calories) || 0) * n, protein: (Number(it.protein) || 0) * n,
+      carbs: (Number(it.carbs) || 0) * n, fat: (Number(it.fat) || 0) * n };
+  });
+  const sum = (k) => items.reduce((s, it) => s + it[k], 0);
+  const kcal = sum('calories');
+  if (!name || !(kcal > 0) || !(Number(max) >= 0.5)) return null;
+  return { id: 'bundle:' + b.id, kind: 'bundle', srcId: b.id, name, meals: SHR_PERIODS.slice(), servings: 1,
+    kcal, protein: sum('protein'), carbs: sum('carbs'), fat: sum('fat'), items, grams: null, maxPor: Math.min(2, Number(max)), keys: ['bundle:' + b.id] };
+}
+// The next index of the cycle: after the last, the first.
+function wteNext(n, i) {
+  return n > 0 ? (i + 1) % n : 0;
+}
+// The portion as words — a literal ternary, never a key built by concatenation: each key
+// stays a whole quoted literal that contracts 5, 38 and 82 can see.
+function wteWord(p) {
+  return p === 0.5 ? t('wte_por_050') : p === 0.75 ? t('wte_por_075') : p === 1 ? t('rec_serv_1') : p === 1.25 ? t('wte_por_125')
+    : p === 1.5 ? t('wte_por_150') : p === 1.75 ? t('wte_por_175') : p === 2 ? t('rec_serv_2') : '';
+}
+// What the ring will read once the pick is logged: round(target − (eaten +
+// per × p)), the ring's own arithmetic; under 50 it completes the goal.
+function wteAfter(b, pick) {
+  if (!b || b.state !== 'meal' || !pick || !pick.row) return null;
+  const d = Math.round(b.target - (b.eaten + Number(pick.row.kcal) * pick.p));
+  if (!Number.isFinite(d)) return null;
+  return d < WTE.done ? { done: true, n: Math.max(0, d) } : { done: false, n: d };
+}
+// What today's log rows say was eaten, as candidate keys: the source and its
+// id (a row this sheet, a bundle or a recipe sheet wrote), and the folded name.
+function wteEatenKeys(rows, fold) {
+  const out = [];
+  const add = (k) => { if (!out.includes(k)) out.push(k); };
+  for (const r of Array.isArray(rows) ? rows : []) {
+    if (!r || typeof r !== 'object') continue;
+    if (['builtin', 'bundle', 'recipe', 'catalog'].includes(r.source) && typeof r.sourceId === 'string' && r.sourceId) add(r.source + ':' + r.sourceId);
+    const nk = typeof fold === 'function' ? String(fold(r.name) || '') : '';
+    if (nk) add('n:' + nk);
+  }
+  return out;
+}
+// The ingredient rows for recViewRowsHtml at portion p: a recipe's whole-
+// recipe items at p / servings, a ready meal's at p, a bundle's items as
+// «× n·p», a catalogue dish none.
+function wteItems(row, p) {
+  if (!row || typeof row !== 'object' || row.kind === 'catalog' || !Array.isArray(row.items)) return [];
+  if (row.kind === 'bundle') {
+    return row.items.map((it) => ({ name: it.name, qty: '× ' + fmtNum(Math.round(it.n * p * 100) / 100), calories: it.calories * p,
+      protein: it.protein * p, carbs: it.carbs * p, fat: it.fat * p }));
+  }
+  const f = p / Math.max(1, Number(row.servings) || 1);
+  return row.items.map((it) => ({ name: it.name, qty: recScaleQty(it.qty, f), calories: (Number(it.calories) || 0) * f,
+    protein: (Number(it.protein) || 0) * f, carbs: (Number(it.carbs) || 0) * f, fat: (Number(it.fat) || 0) * f }));
+}
+// The log row for a pick: one serving's figures, the PORTION in `servings`,
+// the source and its id. A bundle logs through DB.mealBundles.log instead.
+function wteEntry(pick) {
+  if (!pick || !pick.row || pick.row.kind === 'bundle') return null;
+  const row = pick.row;
+  return { name: row.name, servings: pick.p, calories: row.kcal, protein: row.protein, carbs: row.carbs, fat: row.fat, source: row.kind, sourceId: row.srcId };
+}
+// The sheet's header: the title as text, and the close button (contract 60).
+function wteHeadHtml(title) {
+  return `<div class="modal-header"><h2 class="modal-title" dir="auto">${escapeHtml(title)}</h2><button type="button" class="icon-btn" data-close aria-label="${escapeHtml(t('close'))}">${icon('close', 20)}</button></div>`;
+}
+// THE ANSWER: the line (the period — only for an in-period pick — the portion
+// in the strong voice, a catalogue dish's weight), the four figures, and with
+// a target what the ring will read after it. Never the budget, the source or
+// the calories already left.
+function wteAnswerHtml(pick, b) {
+  // TOTAL, like every function of the rule: no pick, no row or no budget draws
+  // nothing, and a figure that is not a number is drawn as 0 — never «NaN».
+  if (!pick || !pick.row || typeof pick.row !== 'object' || !b || typeof b !== 'object') return '';
+  const fig = (v) => fmtNum(Number.isFinite(Number(v)) ? Number(v) : 0);
+  const a = wteAfter(b, pick);
+  const k = fig(pick.kcal);
+  const cls = k.length >= 6 ? ' is-xlong' : k.length === 5 ? ' is-long' : '';
+  const g = pick.row.kind === 'catalog' && pick.row.grams > 0 ? '<span class="num">' + fig(Math.round(pick.row.grams * pick.p)) + ' ' + t('unit_g') + '</span>' : '';
+  const line = recJoin([pick.o === 0 ? shrMealName(b.period) : '', '<span class="shr-figs-k">' + wteWord(pick.p) + '</span>', g]);
+  const cell = (v, cap, extra) => `<div class="rec-bar-cell"><span class="num rec-bar-n${extra}">${v}</span><span class="rec-bar-k">${cap}</span></div>`;
+  const after = a ? `<p class="shr-figs">${a.done ? t('wte_after_done') : t('wte_after').replace('{n}', () => '<span class="num">' + fmtNum(a.n) + '</span>')}</p>` : '';
+  return `<p class="shr-figs">${line}</p><div class="rec-bar wte-bar"><div class="rec-bar-grid">${cell(k, t('cal'), ' rec-bar-kcal' + cls)}${cell(fig(pick.protein), t('protein_label'), '')}${cell(fig(pick.carbs), t('carbs_label'), '')}${cell(fig(pick.fat), t('fat_label'), '')}</div></div>${after}`;
+}
+// EVERY MEAL THE QUESTION MAY ANSWER, read from the four sources directly —
+// never suggestionPool(), the community feed or allFoodPresets(): no row can
+// depend on whether the feed was loaded. Each source row priced inside its own
+// try, so one that cannot be read is skipped and never blanks the sheet. A
+// ready meal's saved copy (origin 'builtin', one serving, as many items, the
+// same four figures) is left out: the ready meal answers for it. 76 on day one.
+function wtePool() {
+  const fold = (s) => DB.search.fold(s);
+  const ar = (DB.prefs.get().lang || 'en') === 'ar';
+  const ready = [], out = [];
+  for (const p of SUGGESTION_PRESETS) {
+    try {
+      const items = suggestionItems(p);
+      if (!items) continue;
+      const row = wteReadyRow(p, items, DB.recipes.perServing({ servings: 1, items }), ar, fold);
+      if (row) ready.push(row);
+    } catch (_) { /* skipped: its figures cannot be read */ }
+  }
+  for (const rec of DB.recipes.list()) {
+    try {
+      const row = wteRecipeRow(rec, DB.recipes.perServing(rec), fold);
+      if (!row) continue;
+      if (rec.origin === 'builtin' && row.servings === 1 && ready.some((r) => r.items.length === row.items.length
+        && r.kcal === row.kcal && r.protein === row.protein && r.carbs === row.carbs && r.fat === row.fat)) continue;
+      out.push(row);
+    } catch (_) { /* skipped: its figures cannot be read */ }
+  }
+  for (const fp of FOOD_PRESETS) {
+    const row = wteCatRow(fp, ar, fold);
+    if (row) out.push(row);
+  }
+  for (const b of DB.mealBundles.list()) {
+    try {
+      const row = wteBundleRow(b, DB.mealBundles.maxPortion(b.id));
+      if (row) out.push(row);
+    } catch (_) { /* skipped: its figures cannot be read */ }
+  }
+  return ready.concat(out);
+}
+// THE QUESTION ASKED NOW: today, the budget from the ring's own figures (the
+// target, what the log holds, the clock's hour, each row's hour, the body
+// weight and the protein left), the pool itself and its size (0 = the pricing
+// failed) and the ranked list. The day is read here; the tap asks again.
+function wteAsk() {
+  const day = todayISO();
+  const has = DB.nutrition.hasTargets();
+  const g = has ? nutritionGauge(day) : null;
+  const rows = DB.foodLogs.listForDate(day);
+  const num = (v) => { const x = Number(v); return Number.isFinite(x) && x > 0 ? x : 0; };
+  const ate = rows.map((r) => {
+    const at = r && r.addedAt ? new Date(r.addedAt) : null;
+    return { h: at && !Number.isNaN(at.getTime()) ? at.getHours() : -1, kcal: num(r && r.calories) * (num(r && r.servings) || 1) };
+  });
+  const bw = DB.bodyweight.list();
+  const kg = bw.length ? bw[bw.length - 1].kg : (DB.nutrition.get().profile || {}).weightKg;
+  const b = wteBudget({ target: has ? g.tgt.calories : 0, eaten: has ? DB.foodLogs.totalsForDate(day).calories : 0, hour: new Date().getHours(), ate, kg,
+    proteinLeft: has && g.tgt.protein > 0 ? g.macros.protein.left : null });
+  let pool = [];
+  try { pool = wtePool(); } catch (_) { pool = []; }
+  return { day, b, n: pool.length, pool, list: wteRank(pool, b, wteEatenKeys(rows, (s) => DB.search.fold(s))) };
+}
+// THE DOOR: the suggestions door's shape whole (.shr-door: 52 px, the card
+// surface), the bowl glyph, the question and the chevron. In BOTH states it is
+// the dashboard's LAST box, under «اقتراحات اليوم» — where the owner put this
+// family («تحت المي», v421). NOTHING IS ADDED ABOVE THE WATER CARD: the first
+// build drew the door directly under the ring, and measured at scroll 0 that
+// (1) pushed the water steppers under the bottom nav at 360×740–780 (the harm
+// renderFood's header comment records for the two slabs that once sat above
+// the calories), and (2) put the door's glyph and first word under the
+// floating «+», which sits at the inline START of the lane just above the nav.
+// As the last box it is clear of both at the end of the scroll on every size
+// measured (320×640 with larger text to 412×915).
+// Never a data-shr-* attribute: it is not that door.
+function wteDoorHtml() {
+  return `<button type="button" class="shr-door" data-wte-door>${icon('meal', 20)}<span class="shr-door-name">${t('wte_title')}</span><span class="icon-mirror shr-door-chev">${icon('chevronRight', 16)}</span></button>`;
+}
+// THE SHEET. One meal of the hour: its name as the title, the line (the
+// period, the portion, a catalogue dish's weight), the four figures, what the
+// ring will read after it (with a target) or the way to a fitted portion
+// (without), the ingredients at this portion, and on the sheet's floor
+// «سجّلها» and «وجبة أخرى». The goal met, no meal (the pricing failed), or
+// too little left for the smallest half portion each say so in one line, with
+// no figure and no button. «وجبة أخرى» rewrites the title, the answer and the
+// ingredients in place and leaves the floor alone, so focus and the button stay
+// where they are; the cursor (WTE_CUR) survives a close and a reopen of the
+// same question. The question is asked again at the tap (a stale answer
+// writes nothing); the op id is minted per paint, so a double tap writes one
+// row and another meal writes its own.
+function openWhatToEat(onSave) {
+  const ask = wteAsk();
+  const b = ask.b;
+  const list = ask.list;
+  const note = (text) => {
+    const o = openModal(`${wteHeadHtml(t('wte_title'))}<div class="cx-stack"><p class="shr-empty">${text}</p></div>`);
+    // null under a dialog that must be answered (openModal's hold).
+    if (!o) return;
+    guardConvenienceModal(o);
+  };
+  if (b.state === 'done') { note(t('wte_done')); return; }
+  if (ask.n === 0) { note(t('wte_none')); return; }
+  if (!list.length) { note(b.state === 'meal' ? t('wte_small') : t('wte_none')); return; }
+  const sig = [ask.day, b.state, b.period, b.left, list.map((x) => x.id + '@' + x.p).join(',')].join('|');
+  if (WTE_CUR.sig !== sig) WTE_CUR = { sig, i: 0 };
+  if (WTE_CUR.i >= list.length) WTE_CUR.i = 0;
+  let pick = list[WTE_CUR.i];
+  // The ingredient rows at the pick's portion. ONE row draws no figures line:
+  // its four figures ARE the grid's, and nothing on screen names what the
+  // user can already see (the amount still shows). Both paints call this.
+  const itemsHtml = (x) => { const items = wteItems(x.row, x.p); return recViewRowsHtml(items, items.length > 1); };
+  // No whitespace between #wte-items' tags: :empty hides it for a catalogue dish.
+  const overlay = openModal(`${wteHeadHtml(pick.row.name)}
+    <div class="cx-stack">
+      <div class="cx-stack" id="wte-body" aria-live="polite">${wteAnswerHtml(pick, b)}</div>
+      ${b.state === 'notarget' ? `<button type="button" class="link-btn wte-goal" data-wte-goal>${t('wte_goal')}</button>` : ''}
+      <div class="cx-list rec-view wte-list" id="wte-items">${itemsHtml(pick)}</div>
+    </div>
+    <div class="wte-foot"><div class="cx-actions"><button type="button" class="btn btn-primary" data-wte-log>${t('wte_log')}</button>${list.length > 1 ? `<button type="button" class="btn btn-ghost" data-wte-next>${t('wte_next')}</button>` : ''}</div></div>`);
+  // null under a dialog that must be answered (openModal's hold).
+  if (!overlay) return;
+  guardConvenienceModal(overlay);
+  let op = uid();
+  const sheet = overlay.querySelector('.modal');
+  const nextBtn = overlay.querySelector('[data-wte-next]');
+  if (nextBtn) nextBtn.addEventListener('click', () => {
+    WTE_CUR.i = wteNext(list.length, WTE_CUR.i);
+    pick = list[WTE_CUR.i];
+    op = uid();
+    // textContent, never markup: the name is user data (an own recipe, a bundle).
+    overlay.querySelector('.modal-title').textContent = pick.row.name;
+    overlay.querySelector('#wte-body').innerHTML = wteAnswerHtml(pick, b);
+    overlay.querySelector('#wte-items').innerHTML = itemsHtml(pick);
+    if (sheet) sheet.scrollTop = 0;
+  });
+  // The recipe view's 800 ms guard against a double tap: a flag, because
+  // `disabled` on the focused button would drop focus to <body> on a refusal.
+  let busy = false;
+  // THE QUESTION IS ASKED AGAIN AT THE TAP, before any write. The store can
+  // move under an open sheet (a pull on resume, another tab, midnight): an
+  // answer is STALE when the day is another, the target or what the log holds
+  // changed, or the meal shown is gone from the pool, priced otherwise, or no
+  // longer allowed this portion (a bundle edited elsewhere, a recipe edited or
+  // deleted). Then nothing is written — cx_stale, the sheet stays — so a row
+  // is never logged with figures other than the ones shown, on a day other
+  // than the one shown, or past the target because of rows that arrived under
+  // the sheet. The period, the list and the rest of the pool are NOT compared:
+  // the clock passing an hour, or an unrelated new recipe, leaves the meal
+  // shown exactly as true as it was.
+  overlay.querySelector('[data-wte-log]').addEventListener('click', () => {
+    if (busy) return;
+    busy = true; setTimeout(() => { busy = false; }, 800);
+    const row = pick.row;
+    const day = todayISO();
+    const now = wteAsk();
+    const cur = now.pool.find((r) => r.id === row.id) || null;
+    let result;
+    if (now.day !== ask.day || now.b.eaten !== b.eaten || now.b.target !== b.target || !cur || cur.kcal !== row.kcal || !(cur.maxPor >= pick.p)) result = { ok: false, code: 'STALE' };
+    else if (row.kind === 'bundle') result = DB.mealBundles.log(row.srcId, day, pick.p, op);
+    else result = DB.foodLogs.addMany(day, [wteEntry(pick)], op);
+    if (!result || !result.ok) { convenienceError(result); return; }
+    const logged = pick;
+    closeModal();
+    if (typeof onSave === 'function') onSave();
+    // closeModal() handed focus to the old door, which onSave() replaced.
+    $('#nutri-host [data-wte-door]')?.focus();
+    // Functions, never strings, as the replacements: a name may hold «$&».
+    // The name in a first-strong isolate (FSI … PDI, written as escapes:
+    // contract 81 refuses the literal control): an Arabic name in the English
+    // sentence pulled the portion's digit across the dash, measured
+    // «1 — <name> serving in today's log».
+    offerUndo(t('wte_logged').replace('{name}', () => '\u2068' + logged.row.name + '\u2069').replace('{portion}', () => wteWord(logged.p)), result);
+  });
+  const goal = overlay.querySelector('[data-wte-goal]');
+  if (goal) goal.addEventListener('click', () => {
+    closeModal();
+    // The calculator calls its onSave after its own closeModal(): the fitted
+    // answer opens the moment the goal exists, its return focus the new door.
+    openCalculatorModal(() => {
+      if (typeof onSave === 'function') onSave();
+      $('#nutri-host [data-wte-door]')?.focus();
+      openWhatToEat(onSave);
+    });
+  });
 }
 
 // ---- THE PAGE (v422) ----------------------------------------------------------

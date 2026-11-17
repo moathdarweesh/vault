@@ -781,6 +781,16 @@ const I18N = {
     shr_auto_notice: 'Your recipes are now published to Suggestions without your name.',
     shr_auto_stop: 'Turn off', shr_auto_stopped: 'Automatic sharing is off',
     shr_term_follow: 'Its published copy is updated when you edit it.',
+    // «ماذا آكل الآن؟» — one meal fitted to what is left of the day (js/food.js, v436): the door, the portion words (wteWord), the after-line, the goal link, the three empty states, the two actions and the toast
+    wte_title: 'What to eat now?',
+    wte_por_050: '½ serving', wte_por_075: '¾ serving', wte_por_125: '1¼ servings', wte_por_150: '1½ servings', wte_por_175: '1¾ servings',
+    wte_after: '{n} cal left after it', wte_after_done: 'Completes your daily goal',
+    wte_goal: 'Set a daily goal to fit the portion to what\'s left',
+    wte_done: 'Today\'s calorie goal is complete.',
+    wte_small: 'What is left of today\'s goal is less than the smallest meal.',
+    wte_none: 'Could not prepare a meal right now.',
+    wte_log: 'Log it', wte_next: 'Another meal',
+    wte_logged: '{name} — {portion} in today\'s log',
     // «استخراج وصفة» — a recipe from a video, a link, an image or text (js/food.js openRecipeImport)
     rx_title: 'Extract a recipe',
     rx_src_video: 'Video', rx_src_video_sub: 'A clip saved on your phone',
@@ -1947,6 +1957,16 @@ const I18N = {
     shr_auto_notice: 'تُنشر وصفاتك الآن في الاقتراحات دون اسمك.',
     shr_auto_stop: 'أوقِفها', shr_auto_stopped: 'أُوقفت المشاركة التلقائية',
     shr_term_follow: 'تُحدَّث نسختها المنشورة حين تعدّلها.',
+    // «ماذا آكل الآن؟» — وجبة واحدة تناسب ما تبقّى من اليوم (v436): الباب، وكلمات الحصّة، وسطر ما يبقى بعدها، ورابط الهدف، والحالات الثلاث الخالية، والزرّان، والإشعار
+    wte_title: 'ماذا آكل الآن؟',
+    wte_por_050: 'نصف حصّة', wte_por_075: 'ثلاثة أرباع حصّة', wte_por_125: 'حصّة وربع', wte_por_150: 'حصّة ونصف', wte_por_175: 'حصّة وثلاثة أرباع',
+    wte_after: 'يبقى بعدها {n} سعرة', wte_after_done: 'تُكمل بها هدفك اليومي',
+    wte_goal: 'حدّد هدفك اليومي لتُضبط الحصّة على ما تبقّى',
+    wte_done: 'اكتمل هدفك من السعرات لهذا اليوم.',
+    wte_small: 'لم يبقَ من هدفك اليوم ما يكفي لأصغر وجبة.',
+    wte_none: 'تعذّر تجهيز وجبة الآن.',
+    wte_log: 'سجّلها', wte_next: 'وجبة أخرى',
+    wte_logged: '{name} — {portion} في سجلّ اليوم',
     // «استخراج وصفة» — بالفصحى، كبقية القاموس
     rx_title: 'استخراج وصفة',
     rx_src_video: 'مقطع فيديو', rx_src_video_sub: 'مقطعٌ محفوظ على هاتفك',

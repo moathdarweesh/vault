@@ -136,6 +136,9 @@ const ENTRIES = [
   // Its host is the guided screen in its fallback state (fp/views.js); the
   // sheet reads nothing from it.
   { id: 'plate-calc', name: 'openPlateCalc', args: [60, 'kg'], host: 'session-run' },
+  // «ماذا آكل الآن؟» (v436, openWhatToEat): the one meal of the hour, fitted to
+  // what is left of the day — the fixture's own target and clock decide which.
+  { id: 'what-to-eat', name: 'openWhatToEat', args: ['$noop'], host: 'food' },
 ];
 
 /* Named, with the reason, so contract 36 can tell "left out on purpose" from

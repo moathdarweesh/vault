@@ -8309,8 +8309,14 @@ body[dir="rtl"] .plan-import-file { padding: 12px 14px 12px 52px; }
 .cx-row { display:flex; align-items:center; justify-content:space-between; gap:10px; min-width:0; }
 .cx-row > span, .cx-row > label { flex:1; min-width:0; overflow-wrap:anywhere; }
 .cx-row input[type=number] { max-width:120px; }
-/* The recipe view's rows: the amount is a figure, not a column — it hugs the end. */
-.rec-view-qty { flex: none; color: var(--text-mute); }
+/* The recipe view's rows: the amount is a figure, not a column — it hugs the
+   end, in both directions. `.cx-row > span { flex: 1 }` above outranks a bare
+   .rec-view-qty, which is why the amount floated mid-row in English; this
+   selector outranks it back. A long free-text amount («ملعقة كبيرة من زيت
+   الزيتون البكر الممتاز») wraps inside half the row and never squeezes the
+   name to nothing. */
+.rec-view-qty { color: var(--text-mute); }
+.cx-row > .rec-view-qty { flex: 0 1 auto; max-width: 50%; }
 /* THE SOURCE LINK (v425): the clip a recipe was extracted from, one row of its
    own above the scaler (openRecipeView). The app's link voice — --accent-text,
    700, the label size — on a 44px target by min-height; the glyph is first in
@@ -9954,6 +9960,34 @@ body[dir="rtl"] .prg-tiles { --prg-dir: -1; }
 .run-nxt { margin: 0; min-height: 3em; }
 .sd-nxt { margin: -4px 0 12px; text-align: start; }
 .sd-nxt .num { color: var(--text); font-weight: 700; }
+
+/* «ماذا آكل الآن؟» (v436). THE FLOOR: the two actions are the sheet's last box,
+   flush with its bottom edge whether the sheet scrolls or not. The negative
+   bottom margin takes the sheet's own 22px, and a sticky box stops at the
+   scrollport's padding edge, so bottom is the same amount (the .rec-foot
+   measurement). «وجبة أخرى» then stays under the thumb at every press while
+   the meal above it grows or shrinks. */
+.wte-foot {
+  position: sticky; bottom: calc(-22px - var(--safe-b)); z-index: 2;
+  margin: var(--sp-3) -18px calc(-22px - var(--safe-b));
+  padding: var(--sp-3) 18px calc(var(--sp-3) + var(--safe-b));
+  background: var(--surface-1); border-top: 1px solid var(--border);
+}
+/* The no-target link: a sentence, centred under the figures and free to wrap;
+   the halo is .link-btn's own (6px over the box), and the 4px block margin keeps
+   it 12px clear of the figures above and the list below (the stack's gap is 14). */
+.wte-goal { align-self: center; max-width: 100%; justify-content: center; text-align: center; margin-block: var(--sp-1); }
+/* A catalogue dish has no ingredient rows: the empty list takes no gap. */
+.wte-list:empty { display: none; }
+/* The kcal figure keeps its full size wherever it fits. Measured: at 360 px
+   and wider «1,050» fits its cell at the full size, with «خطّ أكبر» too; at
+   320 px with «خطّ أكبر» it needs 70.2 px of the cell's 70. So five characters
+   step down only on a narrow screen; six («12,345») step down at every width
+   (at the full size they would need about 87 px against 82 even at 360 px). */
+@media (max-width: 359px) {
+  .wte-bar .rec-bar-kcal.is-long { font-size: calc(18px * var(--fs-scale)); }
+}
+.wte-bar .rec-bar-kcal.is-xlong { font-size: calc(15px * var(--fs-scale)); }
 
 /* =========================================================================
    ^^^ EVERYTHING ABOVE, THEN THE IDENTITY LAYER BELOW. ^^^

@@ -2,6 +2,121 @@
 
 One section per release since v309, newest first, moved verbatim from `CLAUDE.md` in v401 (batch 6 of the 2026-09-25 review; `docs/REVIEW-2026-09-25.md`). `CLAUDE.md` is the guide and the authority for how the app works now. A section here records what one release changed and why, in the words written at the time, so a later section — or the guide — can supersede what an earlier one says.
 
+## v436 — «ماذا آكل الآن؟»: one meal, its portion fitted to what is left
+
+**The second of the two features the owner kept** when he asked for something that sets the app
+apart («بدي اضيف ميزه جديده تميزني عن المنافسين … ميزه جذريه اخرى وليس تحسين»; «3و5 حلوه» — v434 was
+number 5). His own framing, corrected twice: «مو لازم يكون من مطاعم … وجبات عاديه من البيت», then «مش
+لازم يكون شي من بيت او من مطعم يكون اكلمه محسوب سعراتها وبس». In one line: one meal, its calories
+worked out, fitted to what is left of the day, from any source.
+
+**What existed, read before a line was designed.** «اقتراحات اليوم» (v419–v422) lists meals by
+period and sorts them; its only use of «what is left» was a yes or no (does ONE unscaled serving
+fit), macros were not read, every log was exactly one serving, and nothing picked a meal. A prose
+«coach» that sent the remaining macros to the AI has sat unreachable in the file since v219.
+
+**What it is.** A second door on Food, «ماذا آكل الآن؟», opens ONE sheet with ONE meal: its name;
+one line «غداء · حصّة واحدة · 180 غ» (the meal of the hour, the portion, a catalogue dish's weight);
+four cells, one figure each (kcal in the accent, protein, carbs, fat); with a target «يبقى بعدها
+1,070 سعرة», which is what the ring will read after it; the ingredients at that portion; and on the
+sheet's floor «سجّلها» and «وجبة أخرى», which never move under the thumb. One tap logs it, with an
+Undo. It answers on day one, offline and signed out: with no target it names a meal of the hour
+at one serving and says once how to get a fitted portion. With the goal met it says so and offers
+nothing.
+
+**The rule** (pure functions `wte*` in js/food.js, run bare by the node suite):
+- THE MEAL OF THE HOUR is the clock's period, and the night (00–04) a late snack. Once 150 kcal
+  are logged inside the current period's hours the question moves on: after lunch to the snack,
+  after dinner to a late snack, never a second dinner.
+- ITS BUDGET is what is left, spread over the periods still to come by the shares of a large
+  dietary survey (USDA WWEIA, adults: breakfast 18 %, lunch 23 %, snacks 23 %, dinner 36 %): at
+  least min(150, left), at most half the target, never above what is left, and a snack never more
+  than its own 23 % of the day. The split is chosen for comfort: at an equal total, meal
+  distribution does not change weight loss (ISSN nutrient timing 2017, PMID 28919842).
+- THE PORTION is the quarter step from ½ to 2 closest to the budget, and NEVER one that would push
+  the ring past the target.
+- THE CHOICE is ordered: within tolerance (10 %, at least 50 kcal: food figures themselves carry
+  about ±20 %, 21 CFR 101.9), a meal of this period, not eaten today, the protein aim met (0.4 g
+  per kg per meal, Schoenfeld & Aragon 2018, PMID 29497353; 30 g with no body weight), nearest one
+  serving, nearest the budget. «وجبة أخرى» walks only meals as defensible as the first.
+- THE POOL is every meal the device holds with worked-out figures: the 25 ready meals, 51
+  catalogue dishes (`WTE_CAT` gives each the periods it is eaten in), the user's recipes and meal
+  bundles: 76 on day one. THE SOURCE IS NEVER SHOWN, as he asked. No AI, no network, no new field
+  in the blob.
+
+**How it was made.** Six read-only maps (one of them the literature and the vendors' own pages);
+three independent proposals, one synthesis, three critics and a revised specification (12 blockers,
+each answered with a measurement); four builders in sequence (the engine and its node suite, the
+sheet, the browser suite and contract 82, the in-memory plants); a review by five lenses with a
+skeptic re-deriving every finding (28 findings, 21 stood, all minor); one fix pass; the plants again.
+
+**What the integrator changed after the specification.**
+1. THE DOOR'S PLACE. The specification put it directly under the ring. Measured at scroll 0 on
+   360×740 and 360×780, that pushed the water steppers under the nav — the harm `renderFood`'s own
+   comment records for two slabs that once sat above the calories — and put the door's glyph and
+   the first 20 px of its label under the floating «+», which sits at the inline START of the lane
+   above the nav. The door is the dashboard's LAST box in both states, under «اقتراحات اليوم» («تحت
+   المي», his words for this family in v421): whole and clear of the «+» at the end of the scroll on
+   every size measured (320×640 with larger text to 412×915), and the first screen is v435's.
+2. THREE DISHES of `WTE_CAT`: «مراصيع» and «جمرية» are a breakfast or an afternoon bite, «معصوب» a
+   breakfast and a dinner.
+
+**What the review changed.**
+- A log is refused as stale (`cx_stale`, the sheet stays) when the day, the eaten total, the
+  target or the meal's own figures moved under the open sheet. Before, rows pulled from another
+  device let the tap pass the target, an edited bundle logged figures other than the ones shown,
+  and midnight logged the old day's answer to the new day. The clock passing an hour, or an
+  unrelated new recipe, refuses nothing.
+- A row repeated by «كرّر الأمس» or a recent chip keeps its `sourceId`: a bundle is known as «eaten
+  today» only by it.
+- A one-ingredient meal draws no figures line under its grid: it repeated the grid.
+- The toast isolates the meal's name: in English an Arabic name reordered the sentence («1 — كبسة
+  البيت serving in today's log», measured on the glyphs).
+- The kcal figure steps down a size only where it must (under 360 px).
+- AN OLDER DEFECT of every recipe sheet: in English an ingredient's amount floated mid-row; it
+  hugs the row's end in both languages now.
+- The rule's last function is total too: no budget, or a figure that is not a number, draws
+  nothing or 0, never «NaN».
+
+**Honest positioning** (the vendors' own pages, read 2026-11-17). Portion scaling to the day's
+budget exists elsewhere: Fitia Premium adjusts servings to the day's progress, Eat This Much
+regenerates a day and uses custom recipes, Cronometer Gold suggests foods by AI. No vendor page
+read offers together: ONE answer, the portion scaled to what is left, from the user's own recipes
+and ready meals, Arabic-first, offline, free, one tap to log.
+
+**Tests.** Contract 82 (the purity list, the constants on one line, the door's place, the log's
+row, the device's own pool, every `WTE_CAT` key a catalogue meal, the actions on a sticky floor).
+`scripts/test-what-to-eat.js` (new): 57 cases and a grid of 103,680 budgets asserting fifteen
+properties — never past the target, the quarter grid, the same answer under any order of the pool,
+an honest cycle, the snack cap, the after-line equal to the ring after a real log.
+`scripts/test-what-to-eat-ui.js` (new): 30 cases in Arabic/dark and English/light; it also holds
+with the whole app forced into Verdana, Tahoma, Courier New and Arial Black, the local stand-in for
+CI's Linux font.
+
+**Fail first.** 213 in-memory plants on the final tree, the repo bytes unchanged: 212 caught by
+every check they name, and one that must NOT be caught (js/food.js served with CRLF line endings
+leaves the node suite green). On the way 24 plants first showed a check that could not fail, and
+those checks were strengthened.
+
+**Gate.** `npm run verify`: the 82 contracts hold, ESLint clean, 37 suites passed · 0 failed (wall 253 s, --jobs 3).
+
+**Fingerprint against v435a** (`diff v435a v436a`): sheets 124/130 — two new cells (this sheet), and the ingredient rows of the two older recipe sheets, where the amount now takes its own width at the row's end (in Arabic its drawn text stays at x 19; in English it moved from mid-row to the end); views 168/184 — the Food tab's eight cells (the new door, 64 px more) and the version label on Home.
+
+**The owner's open decisions** (each ships with a default; each is one line to change).
+1. No «تقدير» word on the answer, as the recipe sheets.
+2. The `WTE_CAT` table: which dish answers which meal.
+3. A late dinner (22:00–23:59) keeps the dinner budget.
+4. A dish counted in pieces can be asked for a fraction of a piece («قطعة صدر دجاج مقلي · حصّة وربع ·
+   225 غ»), and «شاورما», «برجر» and «بيتزا» print no weight: the quarter step is uniform.
+
+**Accepted limits.** With a target the door is below the fold on short phones, as «اقتراحات اليوم»
+is. The same answer most days at the same hour: the rule is deterministic, and «وجبة أخرى» — forward
+only, its place forgotten on reload — is the way to variety. An own recipe or a bundle answers in
+every period. The printed kcal and the after-line can sum to one more than what is left (both are
+correct roundings; the after-line is the ring's own figure). With 50–57 kcal left the answer is
+«too little for the smallest meal». Every toast on Food sits over the floating «+» (older; its own
+task).
+
 ## v435 — the day page's toolbar never leaves its box
 
 **Found by v434's own suite, on CI.** The push of v434 turned `test-next-target-ui.js` red on

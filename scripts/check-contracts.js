@@ -2895,5 +2895,105 @@ const cssOwner = (i) => CSS_BLOCKS.reduce((best, b) => (b.open < i && b.close > 
   contract(`both logging screens hint the ONE next target: the run and the day card ask nxtFor(), ${STATES.length} states each with its own line, the rule pure and sliceable, the old suggestion card gone, the planner's door to the range on every slot`, problems);
 }
 
+// ---------------------------------------------------------------- 82. «ماذا آكل الآن؟» stays pure, in its place, and logs the portion it shows
+// v436 «ماذا آكل الآن؟». One meal of the hour, its portion fitted on a quarter
+// step to what is left of the day, logged in one tap. The rule is a set of pure
+// top-level functions in js/food.js that scripts/test-what-to-eat.js slices out
+// and runs bare over the whole budget grid; scripts/test-what-to-eat-ui.js holds
+// the door, the sheet and the log. What can silently regress is what neither
+// suite sees on its own: the rule reaching for the store or the clock (the grid
+// would then measure a different function from the one the sheet runs), the
+// constants spread over lines the node suite cannot read, the door moved from
+// its place as the dashboard's last box (under «اقتراحات اليوم», in both
+// states; nothing added above the water card) or turned into a second
+// «اقتراحات» door, the log writing one
+// serving where the sheet showed another portion, a portion key built by
+// concatenation (contract 38 would then call every wte_por_* key reachable as a
+// family), the community feed or the server catalogue reaching the pool (the
+// answer would depend on the network), a catalogue meal the catalogue no longer
+// carries, and the actions leaving the sheet's floor.
+{
+  const problems = [];
+  const food = src['js/food.js'], css = read('styles.css');
+  const fn = (name) => topFn('js/food.js', name);
+  // (a) the rule is pure: no store, no page, no clock, no chance, no network, no router.
+  const PURE = ['wtePeriod', 'wteBudget', 'wtePortion', 'wteRank', 'wteNext', 'wteWord', 'wteAfter', 'wteEatenKeys', 'wteReadyRow', 'wteRecipeRow', 'wteCatRow', 'wteBundleRow', 'wteItems', 'wteEntry', 'wteHeadHtml', 'wteAnswerHtml',
+    // the two helpers the rule's own bodies call (an impure one would make every caller impure)
+    'wteHour', 'wteItemCopy'];
+  for (const name of PURE) {
+    const body = fn(name);
+    if (!body) { problems.push(`js/food.js has no top-level ${name}()`); continue; }
+    // Date( without new, performance and a bare STATE read the clock or the raw store too.
+    const reach = body.match(/\bDB\.|\bdocument\b|\bwindow\b|localStorage|todayISO\(|new Date|\bDate\(|Date\.now|\bperformance\b|\bSTATE\b|Math\.random|\bCloud\b|navigate\(/);
+    if (reach) problems.push(`${name}() reaches «${reach[0]}» — the rule takes what it needs as arguments (the node suite runs it bare)`);
+  }
+  // (b) the constants on ONE line: the node suite and this contract read it whole.
+  if (!/^const WTE = \{[^\n]*\};\r?$/m.test(food)) problems.push('js/food.js: `const WTE = {…};` is not one top-level line');
+  // (c) the door's place: the dashboard's LAST box, under «اقتراحات اليوم», in both states.
+  const dash = fn('nutritionDashboardHtml');
+  const count = (hay, needle) => hay.split(needle).length - 1;
+  if (count(dash, '${shrDoorHtml()}${wteDoorHtml()}') !== 2) problems.push('nutritionDashboardHtml no longer draws ${shrDoorHtml()}${wteDoorHtml()} exactly twice — once per state, the door directly under «اقتراحات اليوم» in both');
+  if (count(dash, '${waterCard}${shrDoorHtml()}${wteDoorHtml()}') !== 1) problems.push('nutritionDashboardHtml: the target return no longer draws ${waterCard}${shrDoorHtml()}${wteDoorHtml()} exactly once (the door LAST, after the suggestions door: nothing may be added above the water card — a bar there pushed the water steppers under the nav and sat under the floating «+»)');
+  if (count(dash, 'wteDoorHtml()') !== 2) problems.push(`nutritionDashboardHtml draws wteDoorHtml() ${count(dash, 'wteDoorHtml()')} times, not twice (once per state)`);
+  // (d) it is its own door, never a second suggestions door.
+  const door = fn('wteDoorHtml');
+  if (!door.includes('data-wte-door')) problems.push('wteDoorHtml() no longer carries data-wte-door');
+  if (door.includes('data-shr-')) problems.push('wteDoorHtml() carries a data-shr-* attribute — the suggestions door\'s tests and its listener would take it for theirs');
+  // (e) its tap is caught before the hero's catch-all (which opens the log).
+  const render = fn('renderFood');
+  const iDoor = render.indexOf("'[data-wte-door]'"), iHero = render.indexOf(".nutri-hero')");
+  if (iDoor < 0 || iHero < 0 || iDoor > iHero) problems.push('renderFood: the [data-wte-door] branch is missing or comes after the .nutri-hero catch-all');
+  // (f) the log writes the portion shown, on the day of the tap, with Undo under its own words.
+  const entry = fn('wteEntry'), open = fn('openWhatToEat');
+  if (!entry.includes('servings: pick.p') || entry.includes('servings: 1')) problems.push('wteEntry() no longer logs `servings: pick.p` — the row would not be the portion the sheet showed');
+  if (!open) problems.push('js/food.js has no top-level openWhatToEat()');
+  else {
+    const iLog = open.indexOf('[data-wte-log]'), iDay = open.indexOf('const day = todayISO();');
+    if (iLog < 0 || iDay < iLog) problems.push('openWhatToEat: the day is no longer read with todayISO() inside the [data-wte-log] handler (a sheet open across midnight would log to the old day)');
+    if (!open.includes('DB.mealBundles.log(')) problems.push('openWhatToEat no longer logs a bundle through DB.mealBundles.log( (its items at their own servings, its cap)');
+    if (!open.includes("offerUndo(t('wte_logged')")) problems.push("openWhatToEat no longer offers Undo under t('wte_logged') (the toast that names the portion)");
+    if (open.includes("t('rec_logged')")) problems.push("openWhatToEat uses t('rec_logged'), which says «one serving» whatever was logged");
+  }
+  // (g) every portion word is a whole literal key.
+  const word = fn('wteWord');
+  for (const k of ['wte_por_050', 'wte_por_075', 'wte_por_125', 'wte_por_150', 'wte_por_175', 'rec_serv_1', 'rec_serv_2']) {
+    if (!word.includes(`t('${k}')`)) problems.push(`wteWord() no longer names t('${k}')`);
+  }
+  if (food.includes("t('wte_' +") || food.includes('t(`wte_')) problems.push('js/food.js builds a wte_* key by concatenation — contract 38 would read every wte_* key as reachable');
+  // (h) the pool is the device's own four sources, never the feed or the server catalogue.
+  const pool = fn('wtePool');
+  for (const need of ['SUGGESTION_PRESETS', 'FOOD_PRESETS', 'DB.recipes.list()', 'DB.mealBundles.list()']) {
+    if (!pool.includes(need)) problems.push(`wtePool() no longer reads ${need}`);
+  }
+  for (const banned of ['suggestionPool(', 'sharedPool(', 'SHARED_RECIPES', 'Cloud', 'allFoodPresets(']) {
+    if (pool.includes(banned)) problems.push(`wtePool() reads ${banned} — the answer would depend on the community feed or the server's catalogue`);
+  }
+  // (i) WTE_CAT: one dish per line, each a cat: 'meals' row of the catalogue, its periods by name.
+  const lines = food.split('\n');
+  const head = lines.findIndex((l) => /^const WTE_CAT = \{\r?$/.test(l));
+  if (head < 0) problems.push('js/food.js: no `const WTE_CAT = {` line');
+  else {
+    const end = lines.findIndex((l, i) => i > head && /^\};\r?$/.test(l));
+    const body = end < 0 ? [] : lines.slice(head + 1, end);
+    if (!body.length) problems.push('js/food.js: WTE_CAT has no entries, or no column-0 `};`');
+    const seen = new Set(), cat = src['js/catalog.js'];
+    for (const l of body) {
+      const m = l.match(/^ {2}'([^']+)': \[('(breakfast|lunch|snack|dinner)'(, )?)+\],\r?$/);
+      if (!m) { problems.push(`WTE_CAT: «${l.trim()}» is not one dish in the form «  'En name': ['lunch', 'dinner'],»`); continue; }
+      if (seen.has(m[1])) problems.push(`WTE_CAT names «${m[1]}» twice (the second silently wins)`);
+      seen.add(m[1]);
+      if (!cat.includes(`cat: 'meals', en: '${m[1]}'`)) problems.push(`WTE_CAT names «${m[1]}», which js/catalog.js does not carry as cat: 'meals' — the dish would silently leave the pool`);
+    }
+  }
+  // (j) the actions are the sheet's floor: after the ingredients, and sticky.
+  if (open) {
+    const iItems = open.indexOf('id="wte-items"'), iFoot = open.indexOf('class="wte-foot"');
+    if (iItems < 0 || iFoot < iItems) problems.push('openWhatToEat: class="wte-foot" no longer comes after id="wte-items" — the actions would sit above a list that changes length, and move under the thumb');
+  }
+  const foot = (css.match(/^\.wte-foot \{[^}]*\}/m) || [''])[0];
+  if (!/position:\s*sticky/.test(foot)) problems.push('styles.css: .wte-foot is missing or not position: sticky');
+  contract(`«ماذا آكل الآن؟» stays pure, in its place, and logs the portion it shows: ${PURE.length} pure functions, WTE on one line, the door last under «اقتراحات اليوم» in both states and never a data-shr-* door, servings: pick.p on the day of the tap, whole portion keys, the device's own pool, every WTE_CAT dish a catalogue meal, the actions on a sticky floor`, problems);
+}
+
 console.log(failures.length ? `\ncheck-contracts: ${failures.length} broken contract(s)` : '\ncheck-contracts: all contracts hold');
 process.exit(failures.length ? 1 : 0);
