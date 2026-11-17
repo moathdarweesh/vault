@@ -11,7 +11,7 @@
 //
 // Since v437 a toast on Food sits ABOVE the «+», and this suite holds the whole
 // of that sentence, because each half of it was a way to get it wrong:
-//   · above the «+», by rectangles, for a plain toast, a long one and an Undo —
+//   · above the «+», by rectangles, for a plain toast, a long one, a wrapped one and an Undo —
 //     and Undo's tap halo (it reaches below the toast) stays off the button;
 //   · from its FIRST frame: a food logged from the add sheet, or saved from a
 //     sheet, raises its toast while that sheet is still leaving the document;
@@ -156,11 +156,11 @@ const small = async (kit) => {
 // measures a toast and not its absence. Its place does not depend on its life.
 const plain = (kit, key, name) => kit.ev(({ key, name }) => showToast(t(key).replace('{name}', name), { duration: 8000 }), { key, name: name || '' });
 // The app's own Undo: one real write through the one meal write, announced by offerUndo.
-const undo = (kit) => kit.ev((row) => {
+const undo = (kit, name) => kit.ev((row) => {
   const r = DB.foodLogs.addMany(todayISO(), [row]);
   if (!r || !r.ok) throw new Error('setup: the row was refused');
   if (!offerUndo(t('fl_recent_logged').replace('{name}', row.name), r)) throw new Error('setup: no Undo was offered');
-}, ROW(kit.name));
+}, ROW(name || kit.name));
 // The same Undo toast, given a minute instead of its ten seconds: for the case that opens and closes two sheets under ONE toast.
 const standingUndo = (kit) => kit.ev((name) => showToast(t('fl_recent_logged').replace('{name}', name), { duration: 60000, actionLabel: t('undo'), onAction: () => {} }), kit.name);
 // A food eaten yesterday: what the add sheet offers again as a «recent» chip.
@@ -306,9 +306,12 @@ const CASES = [
       await kit.ev((sel) => { const m = document.querySelector(sel); m.scrollTop = m.scrollHeight; }, LIVE + ' .modal');
       g = await still(kit, LIVE + ' #mf-save');
       assert.ok(g.extra && !hits(g.toast, g.extra), `${at}: the instruction ${fmt(g.toast)} lies on the sheet's Save ${fmt(g.extra)}`);
-      // An Undo over the same sheet, clean again.
+      // An Undo over the same sheet, clean again. A SHORT name: the sheet makes room for a toast of
+      // two lines (styles.css says so), and a long name under a wide fallback font (a CI machine's)
+      // needs three — seen with the whole app forced into Courier New. That limit is the sheet's and
+      // is older than this suite; what is held here is the toast's place.
       await kit.page.locator(LIVE + ' #mf-name').fill('');
-      await undo(kit);
+      await undo(kit, 'QA');
       g = await still(kit, LIVE + ' #mf-save');
       assert.ok(g.modal && g.act, `setup: an Undo over the open sheet (${at})`);
       oldPlace(g, `an Undo over a sheet (${at})`);
@@ -367,16 +370,24 @@ const CASES = [
     assert.ok(onHome.rest && onHome.view === 'home', 'setup: the same rest bar floats over Home');
     assert.deepEqual(onFood.toast, onHome.toast, 'with a rest running the toast sits on Food exactly where it sits on Home');
   }],
-  ['at 320 px with larger text a two-line toast sits above the «+»', async (kit) => {
+  ['at 320 px with larger text a wrapped toast sits above the «+»', async (kit) => {
     await small(kit);
     await food(kit);
-    await plain(kit, 'fl_recent_logged', kit.name);
+    // «Wrapped» is measured, not assumed: against a one-line toast on this same page, with a name
+    // long enough (the name twice) to wrap in ANY font — the app's own, or a CI machine's fallback,
+    // where the Arabic sentence with the name once fits one line.
+    const tall = (g) => g.toast[3] - g.toast[1];
+    const long = kit.name + ' ' + kit.name;
+    await plain(kit, 'sc_saved');
+    const one = await still(kit);
+    await plain(kit, 'fl_recent_logged', long);
     let g = await still(kit);
-    assert.ok(g.toast[3] - g.toast[1] > 50, `setup: at this width the toast wraps to two lines (${Math.round(g.toast[3] - g.toast[1])} px tall)`);
-    aboveFab(g, 'a two-line toast');
-    await undo(kit);
+    assert.ok(tall(g) > tall(one) * 1.4, `setup: at this width the toast wraps (${Math.round(tall(g))} px tall; one line is ${Math.round(tall(one))})`);
+    aboveFab(g, 'a wrapped toast');
+    await undo(kit, long);
     g = await still(kit);
-    aboveFab(g, 'a two-line Undo');
+    assert.ok(tall(g) > tall(one) * 1.4, `setup: the Undo wraps too (${Math.round(tall(g))} px tall)`);
+    aboveFab(g, 'a wrapped Undo');
   }],
 ];
 
@@ -402,7 +413,7 @@ async function main() {
     }
   } finally { await browser.close(); await srv.close(); }
   if (failures.length) { console.error(`FAIL  toast place UI: ${failures.length} failure(s)`); failures.forEach((f) => console.error('  - ' + f)); process.exitCode = 1; return; }
-  console.log(`PASS  toast place UI (${passed} cases, AR/dark + EN/light, 375px and 320px with larger text, ${Math.round((Date.now() - t0) / 1000)} s): on Food a toast sits above the «+» and never on it — plain, long, an error, an Undo with its tap halo, two lines at 320 px — from its first frame when a sheet closes under it, and a standing one follows a sheet down and up again; the end of the Food page keeps its last box clear of it; Home, the food log and the suggestions page keep the old place; over a sheet or the add sheet the toast stays where the sheet made room for it, off its Save; with a rest running the rest bar's rule places it on Food as on Home`);
+  console.log(`PASS  toast place UI (${passed} cases, AR/dark + EN/light, 375px and 320px with larger text, ${Math.round((Date.now() - t0) / 1000)} s): on Food a toast sits above the «+» and never on it — plain, long, an error, an Undo with its tap halo, wrapped at 320 px — from its first frame when a sheet closes under it, and a standing one follows a sheet down and up again; the end of the Food page keeps its last box clear of it; Home, the food log and the suggestions page keep the old place; over a sheet or the add sheet the toast stays where the sheet made room for it, off its Save; with a rest running the rest bar's rule places it on Food as on Home`);
 }
 
 if (require.main === module) main().catch((e) => { console.error(e); process.exitCode = 1; });

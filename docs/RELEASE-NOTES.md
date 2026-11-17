@@ -60,6 +60,20 @@ line; the second is a decision about where the «+» goes while a rest floats. T
 both as they were, on purpose: with a rest running, the toast on Food is exactly where it is on
 Home (the suite holds that).
 
+**After the push: CI, and two setups made independent of the font.** On GitHub the new suite
+passed as pushed (20 cases). The run stays red for the five suites that have been red since v415
+(33 passed · 5 failed); this release adds none. The suite was then run locally with the whole app
+forced into four wide fonts, the stand-in for CI that v435 recorded, and it failed in three of
+them: in the SUITE's own setups, not in the app's rule. The 320 px case assumed that its Arabic
+toast wraps (under a Latin-only font the fallback Arabic face fits it on one line), and the sheet
+case compared the sheet's Save with an Undo that carried a long name, which under Courier New
+needs three lines where the sheet makes room for two (that limit is the sheet's own, and older).
+Now «wrapped» is measured against a one-line toast of the same page, with a name long enough to
+wrap in any font, and the Save is compared with a toast of the size the sheet made room for.
+After: 20 cases hold in the app's font and in Verdana, Tahoma, Courier New and Arial Black, and
+the thirteen plants were run again on that suite, each caught in both languages. A test-only
+commit; no shipped file changed.
+
 ## v436 — «ماذا آكل الآن؟»: one meal, its portion fitted to what is left
 
 **The second of the two features the owner kept** when he asked for something that sets the app
