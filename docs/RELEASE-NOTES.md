@@ -2,6 +2,64 @@
 
 One section per release since v309, newest first, moved verbatim from `CLAUDE.md` in v401 (batch 6 of the 2026-09-25 review; `docs/REVIEW-2026-09-25.md`). `CLAUDE.md` is the guide and the authority for how the app works now. A section here records what one release changed and why, in the words written at the time, so a later section — or the guide — can supersede what an earlier one says.
 
+## v437 — a toast on Food sits above the «+»
+
+**Measured on v436, and older than it.** The toast and the Food tab's floating «+» shared ONE
+anchor, the nav + 16 px. So every toast on Food (a logged food, an error, an Undo) lay on the
+button for its whole life, ten seconds for an Undo, with the button's edge showing past the
+toast's round corner. English at 375 px: the toast [19,671,356,732] on the «+» [16,672,84,732].
+English at 320 px with larger text: [16,496,304,560] on [16,500,84,560]. Arabic the same, on the
+other side.
+
+**The fix.** On Food the toast is lifted by the button's height and a 12 px gap (`--fab-clear`;
+the button's own height now reads `--fab-h`, so the two cannot drift apart). Its bottom edge sits
+12 px above the «+», and Undo's tap halo ends 9 px short of it. Looked at in real pictures, before
+and after: Arabic and English at 375 px, Arabic at 320 px with larger text.
+
+**The end of the page moves with it.** Lifted alone, the toast lay on the page's last box at the
+end of the scroll: 45 px of the «ماذا آكل الآن؟» door's 52 at 375 px in English, 37 in Arabic,
+where before it stood 27 px clear of it. So the Food page keeps the same 72 px more room at its end, and the last
+box is 27 px clear of the toast again. The cost is stated: the empty band above the «+» at the
+very end of the page is 100 px where it was 28.
+
+**The plain rule was wrong in two places, both found before it was written.**
+`body[data-view="food"] .toast` also matches while a sheet opened FROM Food is up (the body keeps
+its view), and there the «+» is under the sheet and the sheet has already made room for the toast
+at its OLD place: lifted, the unsaved-changes instruction lay on the manual entry's «Add to log»
+(618–660 on 622–674). And a selector that carries the conditions it needs outranks
+`body.rest-active .toast`, so source order cannot keep the rest bar's rule in charge. The selector
+names both: not while `.rest-active`, and not while a sheet of either kind is OPEN
+(`.modal-overlay:not(.is-out)`, `.sheet-overlay.open`). A leaving sheet does not count, so the
+toast a Save raises as its sheet closes is above the «+» from its first frame, with no jump when
+the node goes. An engine without `:has()` drops the rule and keeps the old place.
+
+**Tests.** `scripts/test-toast-place-ui.js`: 10 cases in Arabic/dark and English/light, every place
+read off the screen and compared with the things around it (the «+», the nav, the page's last box,
+the sheet's Save), never with a figure copied from the stylesheet. Written before the fix and run
+on v436 as shipped: 5 of its first 9 failed in each language, naming the rectangles above; the
+other four hold what must not move. A tenth holds a toast ALREADY on screen: it goes back to its
+old place when a sheet opens under it, and above the «+» again when the sheet has closed. Then thirteen plants in memory (the file on disk never written, its
+bytes hashed before and after), each caught in both languages by every case it names: no lift at
+all; the plain rule (caught by the sheet, the add sheet and the rest); a running rest not
+excluded; an open sheet not excluded; the open add sheet not excluded; a leaving sheet counted as
+open, and a leaving add sheet (the first-frame cases); the page's end keeping room for the «+»
+alone; the lift on every view; a lift 40 px short; a lift 60 px too far; the «+» made taller by a
+literal the lift does not follow; the gap closed.
+
+**Gate.** `npm run verify`: the 82 contracts hold, ESLint clean, 38 suites passed · 0 failed (wall 266 s, --jobs 3). Run twice: once before the tenth case was added, once on the final tree.
+
+**Fingerprint against v436a** (`diff v436a v437a`): sheets 130/130 identical (9,606 elements, 0 differences); views 168/184: the version label on Home in its eight cells (v436a was recorded before that release's bump), and the Food view 72 px taller at its end in its eight cells (its box [0,0,375,471] → [0,0,375,543]), with nothing inside it moved.
+
+**Known and open, measured the same day, older, and not this release.** While a rest bar FLOATS
+(a rest started in the guided run, then another tab) the toast lies on that bar on every view:
+`body.rest-active .toast` is still measured from the screen floor (100 px), while the floating bar
+stands on the nav (from 80 to 152 px above the floor). English at 375 px: a toast [49,671,326,712]
+wholly inside the bar [12,660,363,732]. And on Food that bar covers the «+» [16,672,84,732]
+whole, so food cannot be added from that tab until the rest ends or is skipped. The first is one
+line; the second is a decision about where the «+» goes while a rest floats. This release leaves
+both as they were, on purpose: with a rest running, the toast on Food is exactly where it is on
+Home (the suite holds that).
+
 ## v436 — «ماذا آكل الآن؟»: one meal, its portion fitted to what is left
 
 **The second of the two features the owner kept** when he asked for something that sets the app

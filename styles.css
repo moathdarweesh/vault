@@ -150,6 +150,12 @@
   --nav-h: 64px;
   --safe-b: env(safe-area-inset-bottom, 0px);
   --safe-t: env(safe-area-inset-top, 0px);
+  /* v437: the Food tab's floating «+» (.food-fab), and what clearing it costs
+     a toast: its height and a 12px gap. One figure for the three rules that
+     must agree: the button's height, the toast's lift over it, and the room
+     the end of the Food page keeps for that toast. */
+  --fab-h: 60px;
+  --fab-clear: calc(var(--fab-h) + 12px);
 
   --radius:      14px;
   --radius-sm:   10px;
@@ -2875,6 +2881,29 @@ body.rest-active .toast { bottom: calc(var(--safe-b) + var(--rest-h, 72px) + 28p
    downward halo (-14px, below) off the bar's top edge, so it never steals Next. */
 body[data-view="session-run"] .toast { bottom: calc(var(--run-nav-h) + 16px); }
 body.rest-active[data-view="session-run"] .toast { bottom: calc(var(--run-nav-h) + var(--rest-h, 72px) + 24px); }
+/* v437: ON FOOD THE TOAST SITS ABOVE THE «+». The floating add button
+   (.food-fab) lives at the toast's own anchor, the nav + 16px, so every toast
+   on Food lay on it for its whole life, ten seconds for an Undo (measured in
+   both languages; English at 375px: the toast [19,671,356,732] on the «+»
+   [16,672,84,732]). It is lifted by --fab-clear, the button's height and a
+   12px gap: Undo's downward halo (-14px, below) ends 9px short of the button.
+   Each :not() names a state where the «+» is NOT what the toast would land
+   on, and where lifting it breaks something that works:
+   · .rest-active: the floating rest bar covers the «+», and the bar's own rule
+     above places the toast on every view. This selector outranks that rule, so
+     it steps aside BY NAME; source order cannot do it.
+   · an OPEN sheet of either kind (#modal-root's, or the add sheet in .app): the
+     «+» is under it, and the sheet has made room for the toast at its old
+     place («the SHEET makes room», further down). A lifted toast lies on the
+     sheet's Save (measured: 618–660 on «Add to log» at 622–674).
+     A LEAVING sheet (.is-out, or the add sheet without .open) is not an open
+     one: a toast raised as its sheet closes is above the «+» from its first
+     frame, not after a jump when the node goes.
+   An engine without :has() drops the whole rule and keeps the old place.
+   scripts/test-toast-place-ui.js holds every clause. */
+body[data-view="food"]:not(.rest-active):not(:has(.modal-overlay:not(.is-out), .sheet-overlay.open)) .toast {
+  bottom: calc(var(--nav-h) + var(--safe-b) + 16px + var(--fab-clear));
+}
 .toast .toast-msg { padding-inline-start: 10px; }
 .toast.show .toast-action { pointer-events: auto; }
 .toast-action {
@@ -5432,7 +5461,7 @@ button.data-row.fig-row {
   display: none;
   position: absolute; inset-inline-start: 16px;
   bottom: calc(var(--nav-h) + var(--safe-b) + 16px);
-  width: 68px; height: 60px; border-radius: var(--radius-lg); z-index: 20;
+  width: 68px; height: var(--fab-h); border-radius: var(--radius-lg); z-index: 20;
   align-items: center; justify-content: center;
   background: var(--accent); color: var(--accent-ink); border: none;
   box-shadow: 0 6px 18px rgba(0, 0, 0, 0.35), 0 0 0 1px rgba(255,255,255,0.06);
@@ -6878,8 +6907,11 @@ body:has(> .auth-gate) .modal-overlay { z-index: 1001; }
   white-space: nowrap;
 }
 
-/* Give the food list room so its last row clears the floating bar */
-.view[data-view="food"] { padding-bottom: 84px; }
+/* Give the food list room so its last row clears the floating bar, and since
+   v437 the toast that sits above that bar (+ --fab-clear, the toast's own
+   lift): at the end of the page the last box stays as far above the toast as
+   it was before the toast moved (27px under a two-line Undo at 375px). */
+.view[data-view="food"] { padding-bottom: calc(84px + var(--fab-clear)); }
 body[data-view="food"] .food-fab { display: inline-flex; }
 
 /* --- Food library picker: catalog shown as small rectangular chips --- */
