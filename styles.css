@@ -7263,15 +7263,27 @@ body[dir="rtl"] .ntf-bar { text-align: right; }
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-/* One line, always. The spec caps the body at a single line because the bar is
-   a glance, not a document — the detail is on the screen it opens. */
+/* TWO LINES AT MOST (v440; the owner, shown v438's «…»: «Two body lines»). The
+   spec capped the body at one line, a bar being a glance and not a document,
+   and until v438 that cap did nothing (see above). The day it became real a
+   long body ended in «…» with its point unsaid: the missed-workout sentence at
+   every width. With a second line every Arabic body the app writes is whole
+   from 320 to 430 px at both text sizes (measured in the app's own font), and
+   so is every English one but the missed-workout sentence, which is 585 px of
+   words and still ends in «…» on a phone of 375 px or less. A bar whose body
+   takes its second line is 79.7 px tall (84.8 with larger text); a body that
+   fits in one keeps 60.9. The title keeps its single line.
+   `overflow: hidden` here is for an engine that does not know `clip-path`: it
+   is what keeps a third line from being painted under the box. */
 .ntf-body {
   font-size: calc(12.5px * var(--fs-scale));
   line-height: 1.5;
   color: var(--text-mute);
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
   overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  overflow-wrap: anywhere;
 }
 /* CUT SIDEWAYS ONLY (v438). The day the two lines became boxes their
    `overflow: hidden` began to cut for the first time, and it cuts on all four
@@ -7280,9 +7292,22 @@ body[dir="rtl"] .ntf-bar { text-align: right; }
    compared by pixels with the cut on and off, in the app's own font). `clip`
    on the inline axis alone keeps the one-line cap and its ellipsis (the same
    comparison: the long title's pixels are identical inside its line) and lets
-   the ink stand. An engine that does not know `clip` keeps the rule above. */
+   the ink stand. An engine that does not know `clip` keeps the rule above.
+   The TITLE alone since v440: the body has two lines and a cut of its own. */
 @supports (overflow: clip) {
-  .ntf-title, .ntf-body { overflow-x: clip; overflow-y: visible; }
+  .ntf-title { overflow-x: clip; overflow-y: visible; }
+}
+/* THE BODY IS CUT AT ITS FLOOR ONLY (v440). Two lines need a cut under them:
+   with none, the third line is painted below the box (measured). `hidden`
+   gives that cut and three more nobody asked for; compared by pixels in the
+   app's own font, it took the top of the shadda in «ومتبقٍّ» (the food
+   reminder's first word) and the flag of the «ك» that opens the missed-workout
+   sentence, at the line's start. A clip path whose bottom edge is the box's
+   own and whose other three stand a --sp-1 outside it cuts the third line and
+   nothing else: every body the app writes is then, pixel for pixel, the
+   picture with no cut at all. The clamp and its «…» do not need `hidden`. */
+@supports (clip-path: inset(0)) {
+  .ntf-body { overflow: visible; clip-path: inset(calc(var(--sp-1) * -1) calc(var(--sp-1) * -1) 0); }
 }
 
 /* Entry: down from above the screen edge, not merely from above the bar, so it

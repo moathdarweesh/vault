@@ -2,6 +2,86 @@
 
 One section per release since v309, newest first, moved verbatim from `CLAUDE.md` in v401 (batch 6 of the 2026-09-25 review; `docs/REVIEW-2026-09-25.md`). `CLAUDE.md` is the guide and the authority for how the app works now. A section here records what one release changed and why, in the words written at the time, so a later section — or the guide — can supersede what an earlier one says.
 
+## v440 — the reminder bar's body takes a second line
+
+**The owner's answer to v438's open question.** v438 made the bar's title and body two boxes, and
+with that its one-line cap became real for the first time: a long body no longer ran out of the
+capsule, it ended in «…». Asked how such bodies should fit (a second line, or shorter words), the
+owner answered: **«Two body lines»**.
+
+**Measured before, on v439's stylesheet, in the app's own fonts** (IBM Plex Sans Arabic loaded;
+the text box is 316 px wide at 430 px, 261 at 375, 246 at 360 and 206 at 320). The width a body
+needs on ONE line, normal text / «خطّ أكبر»:
+
+| body | Arabic | English |
+|---|---|---|
+| water («بقي 2,500 مل — نحو 10 أكواب.») | 156 / 172 px | 180 / 199 px |
+| first session | 144 / 158 px | 203 / 223 px |
+| streak | 194 / 213 px | 241 / 266 px |
+| missed workout, plan day «أرجل» / «Legs» | 331 / 364 px | 585 / 644 px |
+| missed workout, a plan day of four words | 448 / 492 px | 719 / 791 px |
+
+So the missed-workout sentence was cut at every width in both languages, the streak body at
+320 px in English (in Arabic too with larger text), and the first-session body at 320 px in
+English with larger text.
+
+**The fix.** `.ntf-body` is a two-line clamp (`display: -webkit-box`, `-webkit-line-clamp: 2`,
+the stylesheet's fourth) and may break inside a long word (`overflow-wrap: anywhere`); the title
+keeps its single line. A bar whose body takes its second line is 79.7 px tall (84.8 with larger
+text); a body that fits in one keeps v438's 60.9 (64.1), a title alone its 58. At the text's
+corners the words stay 9.1 px or more inside the capsule's arc.
+
+**Measured after, the same matrix** (two languages, 430 / 375 / 360 / 320 px, larger text at 375
+and 320, seven real reminders each): every title on one line and none cut, both nodes inside the
+capsule everywhere, the gap between them 2 px. **Every Arabic body the app writes is whole**, at
+every width and both text sizes, when the plan day's name is short; with a name of four words
+(«الصدر والكتفان وثلاثية الرؤوس») the missed-workout body is whole from 360 px up and still ends
+in «…» at 320 px. In English the streak and first-session bodies are whole everywhere, and **the
+missed-workout sentence is whole only at 430 px**: it is 585 px of words, and two lines hold 522
+at 375 px and 412 at 320.
+
+**The cut is at the body's floor only.** Two lines need a cut under them: with none, the third
+line is painted below the box (compared by pixels: it is). `overflow: hidden` gives that cut and
+three more. At 320 px and 3× density, the same bar drawn with `hidden`, with the stylesheet as
+shipped, and with no cut at all, for the app's own Arabic bodies at both text sizes: `hidden`
+took 30 pixels off the top of the shadda in «ومتبقٍّ» (the food reminder's first word), 20 off
+the flag of the «ك» that opens the missed-workout sentence and 6 off the «آ» of «آخر مرة», the
+last two at the line's start, where a glyph overhangs its box. The body is therefore
+`overflow: visible` under a clip path whose bottom edge is the box's own and whose other three
+stand a `--sp-1` outside it (`clip-path: inset(-4px -4px 0)`, inside `@supports`; an engine
+without `clip-path` keeps `hidden`): **the shipped picture equals the uncut one, pixel for pixel,
+for every body the app writes**, and differs from `hidden` under the box by nothing, so no third
+line is painted. v438's sideways-only rule now names the title alone. What the floor still
+takes, and must: a sentence built to hang kasratan under the last word of the last line («…
+عميقٍ») loses 28 of its pixels there at that density; no reminder the app writes has ink there.
+
+**Tests.** Half five of `scripts/test-notif-events.js`, rewritten. In Arabic and English at 375
+and 320 px, four bars each, every figure read off rectangles: the app's own water words (whole,
+on two lines at most); a one-word body (one line: the height the others are read against); **the
+first body that needs a second line, found a word at a time through the bar's own in-place
+swap** (two lines, whole, the bar exactly one body line taller, nothing under its box); and words
+far too long (the title one line, the body two and no more, the rest unseen, **nothing painted
+under the body's box**, asked of the page with `elementFromPoint`, the bar no taller than for
+exactly two). Last, off the computed style, the two cuts. No case assumes how wide a word is, so
+the suite holds in whatever font the fence leaves: it passes with the whole app forced into
+Verdana, Tahoma, Courier New and Arial Black (the stand-ins for CI's Linux fonts).
+
+**Fail first: thirteen plants, each in memory (the file on disk never written, its bytes hashed
+before and after), each caught by the assertion it names.** v439's stylesheet («a body that needs
+a second line takes it»); v437's («apart», 0 px); three lines allowed, and the cap dropped («two
+and no more», 3 and 6); the body uncut, and the floor of the cut opened by 4 px («no third line
+is painted under the body's box», both); the `@supports` block removed, and the clip path drawn
+on the box's own four edges («cut at its floor only», both); the title allowed to wrap («the
+title is one line»); the title's sideways cut removed; the column's gap closed; the two rows with
+a physical margin (v438's).
+
+**Gate.** `npm run verify` on the final tree: all contracts hold, ESLint clean, 38 suites
+passed · 0 failed (wall 265 s, --jobs 3).
+
+**Known and open.** The English missed-workout sentence still ends in «…» at 375 px and under;
+it needs a shorter sentence, not a taller bar. A plan day named in four words does the same in
+Arabic at 320 px. The bar still leaves after five seconds, whatever the length of its body.
+
 ## v439 — the run's two stat cells never leave their row
 
 **Left open by v435, and wider than v435 knew.** v435 measured the two cells above the set rows
