@@ -13,6 +13,11 @@
 // PROPERTY OF THE GLOBAL OBJECT. `const`/`let` are not — they live in the
 // declarative record and cannot be replaced from outside. So this technique
 // covers function declarations only, which is what these five names are.
+//
+// Half five (v438) holds the in-app bar's two lines: the title and the body
+// apart and inside the capsule, in both directions, at 375 and 320 px. It was
+// seen failing on v437's stylesheet and on six more defects, each planted in
+// memory (the file on disk never written): docs/RELEASE-NOTES.md, v438.
 'use strict';
 const assert = require('node:assert');
 const fs = require('node:fs');
@@ -210,6 +215,84 @@ const ROOT = path.resolve(__dirname, '..');
     'a reminder whose reason is gone by the time it fires is dropped without spending its tag (a ticked dose, a met target, a streak kept), and one still due arrives: ' + JSON.stringify(dv));
   await page2.clock.runFor(6000);
 
+  // ── half five: the bar's title and body are TWO LINES, and apart ──────────
+  // From v231 to v437 both were inline <span>s written with no space between
+  // them, and nothing in the stylesheet made them boxes: ONE run, the last
+  // letter of the title touching the first of the body («0 من 2,500 ملبقي
+  // 2,500 مل — نحو 10 أكواب.»). Measured on v437 in both languages, at 375 and
+  // 320 px: the gap between the two boxes 0, and at 320 px the body past the
+  // capsule's end (in Arabic at −1.4 px, off the screen), because the one-line
+  // cap and its ellipsis mean nothing on an inline box.
+  // The words are the app's own water reminder, the one the defect was seen on.
+  // Every figure is read off the two nodes' rectangles and compared with the
+  // bar's own; the fence keeps the web font out, so this holds the STRUCTURE
+  // (the same words in the app's font were measured by hand, v438's notes).
+  const lines = () => page2.evaluate(() => {
+    const bar = document.querySelector('.ntf-bar');
+    if (!bar) return null;
+    const box = (el) => { if (!el) return null; const r = el.getBoundingClientRect(); return [r.left, r.top, r.right, r.bottom].map((n) => Math.round(n * 10) / 10); };
+    const cut = (el) => { if (!el) return ''; const s = getComputedStyle(el); return s.overflowX + ' ' + s.overflowY; };
+    const tEl = bar.querySelector('.ntf-title'), bEl = bar.querySelector('.ntf-body');
+    return { dir: document.body.getAttribute('dir'), bar: box(bar), title: box(tEl), body: box(bEl), cut: [cut(tEl), cut(bEl)], clipKnown: CSS.supports('overflow', 'clip') };
+  });
+  // The distance between the two boxes in the order they are READ: along the
+  // line when they share one (from the title's end to the body's start, so a
+  // margin on a physical side reads as nothing in one of the two directions),
+  // down the bar when the body stands under the title.
+  const apart = (g) => {
+    const [tl, tt, tr, tb] = g.title, [bl, bt, br, bb] = g.body;
+    const oneLine = Math.min(tb, bb) - Math.max(tt, bt) > 0.5;
+    return Math.round((oneLine ? (g.dir === 'rtl' ? tl - br : bl - tr) : bt - tb) * 10) / 10;
+  };
+  const within = (a, b) => a[0] >= b[0] - 0.5 && a[1] >= b[1] - 0.5 && a[2] <= b[2] + 0.5 && a[3] <= b[3] + 0.5;
+  const raise = async (words) => {
+    await page2.evaluate(() => document.querySelectorAll('.ntf-bar').forEach((b) => b.remove()));
+    await page2.clock.runFor(6000);
+    await page2.evaluate((p) => showNotifBar({ channel: 'water', title: p.title, body: p.body }), words);
+    await page2.clock.runFor(400);                      // the entrance is over: the bar is at rest
+    return lines();
+  };
+  for (const lang of ['ar', 'en']) {
+    for (const [w, h] of [[375, 812], [320, 640]]) {
+      await page2.setViewportSize({ width: w, height: h });
+      const at = lang + ' ' + w + ' px';
+      const words = await page2.evaluate((lang) => {
+        DB.prefs.setLang(lang); applyLang(lang);
+        return DB.notif.text({ channel: 'water', date: todayISO(), at: '08:00', tag: 'qa:lines', payload: {} }, 'live');
+      }, lang);
+      assert.ok(words.title && words.body, at + ': the water reminder has a title and a body: ' + JSON.stringify(words));
+
+      const g = await raise(words);
+      const say = at + ' «' + words.title + '» / «' + words.body + '»: ' + JSON.stringify(g);
+      assert.ok(g && g.title && g.body, at + ': the bar is up with both nodes: ' + JSON.stringify(g));
+      assert.equal(g.dir, lang === 'ar' ? 'rtl' : 'ltr', at + ': the page reads in the language under test');
+      assert.ok(g.title[2] - g.title[0] > 20 && g.body[2] - g.body[0] > 20 && g.title[3] - g.title[1] > 8 && g.body[3] - g.body[1] > 8,
+        'the title and the body each have a box to measure — ' + say);
+      assert.ok(apart(g) >= 1,
+        'the bar\'s title and body are apart (the gap between their boxes, in reading order, is ' + apart(g) + ' px; v437: 0, one run) — ' + say);
+      assert.ok(within(g.title, g.bar) && within(g.body, g.bar),
+        'the bar\'s title and body both lie inside the capsule (v437 at 320 px: the body ran past its end) — ' + say);
+      // The cap cuts SIDEWAYS only: a cut on all four sides takes the top of a
+      // tanwin and the tail of a «ي» with it (compared by pixels, v438's notes).
+      // Read off the computed style, the only place a clip can be read.
+      assert.ok(g.clipKnown, 'this Chrome knows `overflow: clip`, or the next line proves nothing');
+      assert.deepEqual(g.cut, ['clip visible', 'clip visible'],
+        'the title and the body are cut along the line only, never above or below it (overflow-x overflow-y) — ' + say);
+
+      // Words four times as long: still one line each, still inside, the bar no taller.
+      const long = { title: [1, 2, 3, 4].map(() => words.title).join(' — '), body: [1, 2, 3, 4].map(() => words.body).join(' ') };
+      const L = await raise(long);
+      const sayL = at + ', words four times as long: ' + JSON.stringify(L);
+      assert.ok(L && L.title && L.body, at + ': the bar is up with both long nodes: ' + JSON.stringify(L));
+      assert.ok(within(L.title, L.bar) && within(L.body, L.bar), 'long words stay inside the capsule — ' + sayL);
+      assert.ok(apart(L) >= 1, 'long words keep the two lines apart (' + apart(L) + ' px) — ' + sayL);
+      assert.equal(Math.round((L.bar[3] - L.bar[1]) * 10) / 10, Math.round((g.bar[3] - g.bar[1]) * 10) / 10,
+        'long words take one line each: the bar is as tall as it is for short ones — ' + sayL);
+    }
+  }
+  await page2.evaluate(() => document.querySelectorAll('.ntf-bar').forEach((b) => b.remove()));
+  await page2.clock.runFor(6000);
+
   assert.deepEqual(errors, [], 'page errors:\n  ' + errors.join('\n  '));
   seen.assertContained();
   seen2.assertContained();
@@ -218,5 +301,6 @@ const ROOT = path.resolve(__dirname, '..');
 
   console.log('PASS notif events: no domain calls the reminder system by name; vault:session-saved and '
     + 'vault:reminders-changed each reach it synchronously, in order, and an unrelated event does not; '
-    + 'three bars in one minute show one at a time and leave nothing; a reminder is re-asked at fire time');
+    + 'three bars in one minute show one at a time and leave nothing; a reminder is re-asked at fire time; '
+    + 'the bar\'s title and body are two lines, apart and inside the capsule, in Arabic and English at 375 and 320 px');
 })();

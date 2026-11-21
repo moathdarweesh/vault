@@ -2,6 +2,64 @@
 
 One section per release since v309, newest first, moved verbatim from `CLAUDE.md` in v401 (batch 6 of the 2026-09-25 review; `docs/REVIEW-2026-09-25.md`). `CLAUDE.md` is the guide and the authority for how the app works now. A section here records what one release changed and why, in the words written at the time, so a later section — or the guide — can supersede what an earlier one says.
 
+## v438 — the reminder bar's title and body are two lines
+
+**Seen on 2026-11-16, and as old as the bar (v231).** The in-app reminder bar printed its bold
+title and its dim body as ONE run with nothing between them: «0 من 2,500 ملبقي 2,500 مل — نحو 10
+أكواب.», the last letter of the title touching the first of the body. Both are `<span>`s written
+with no space between them, and nothing in the stylesheet made them boxes, so the three rules each
+carried (`overflow: hidden`, `text-overflow: ellipsis`, the one-line cap) meant nothing: those
+apply to a box, never to an inline run.
+
+**Measured before the fix** (real Chrome, the app's own fonts loaded, the water reminder's own
+words, Arabic and English, 375 and 320 px): the gap between the two nodes' rectangles was 0 in all
+four, both on one line. At 320 px the run was 240 px (Arabic) and 250 px (English) in a 206 px box
+and left the capsule; without the web font the Arabic body began at −1.4 px, past the screen's own
+edge. By the same arithmetic a longer body left the bar at every width (the missed-workout one:
+116 + 331 px of words on one line in a 261 px box).
+
+**The fix, styles.css only.** `.ntf-text` is a column with a gap of half a `--sp-1` (2 px, the
+reminder log's own gap between its title and body): the title over the body, each a box of the
+column's width, so the cap and the ellipsis now do what their comments always said, in either
+direction, with no margin to mirror. After: the gap is 2 px and both nodes lie inside the capsule
+in all four cells; a bar with a body is 60.9 px tall where it was 58 (64.1 with larger text); a
+bar with a title alone is unchanged at 58.
+
+**A second cut, made and removed in the same release.** The day the two lines became boxes their
+`overflow: hidden` began to cut on all four sides, and at these line heights Arabic ink leaves its
+line box. Compared by pixels with the cut on and off (320 px, 3× density, the app's font): the
+tanwin of «يوماً» lost 3 px above the title and the tail of «بقي» 1 px below it. So where the
+engine knows `overflow: clip` the two lines are cut along the line only (`overflow-x: clip;
+overflow-y: visible`, inside `@supports`, the stylesheet's first): the same comparison shows no
+pixel lost above or below, and a long title's pixels identical inside its line, ellipsis included.
+An older engine keeps `overflow: hidden`.
+
+**Tests.** `scripts/test-notif-events.js`, half five: the app's own water reminder raised in
+Arabic and English at 375 and 320 px; the two nodes' rectangles read against each other and
+against the bar's; then the same words four times as long. It holds: a gap of at least 1 px in
+READING order (along the line when the two share one, down the bar otherwise), both inside the
+capsule, cut sideways only, one line each however long. The fence keeps the web font out of the
+suite, so it holds the structure; the figures above are the hand measurement in the app's font.
+Seen failing on seven plants in memory (the file on disk never written, its bytes hashed before
+and after), each by the assertion it names: v437's stylesheet (gap 0, one run); the column with
+its gap closed; one line with a physical `margin-left` (caught in Arabic) and with a physical
+`margin-right` (Arabic passes all four of its cases, caught in English); one line with a logical
+margin and nothing that shrinks (long words leave the capsule); the `@supports` block removed;
+the body's one-line cap dropped (under the long words the bar grows to 98 px).
+
+**Gate.** `npm run verify`: the 82 contracts hold, ESLint clean, 38 suites passed · 0 failed
+(wall 264 s, --jobs 3). Run twice: once before a figure in the stylesheet's comment was corrected,
+once on the final tree. No contract was added: the defect is a layout, held by the suite.
+
+**Known and open, by the bar's own design and not this release.** The body is capped at one line
+(v231: «a glance, not a document»), so a body longer than the bar now ends in «…» where before
+it ran out of the capsule. Of the seven reminders' words measured in the app's font: the
+missed-workout body at every width in both languages (331 px of Arabic words, 585 of English, in
+261 at 375 px); the streak body in English at 320 px (241 in 206) and in Arabic at 320 px with
+larger text (213 in 206); the first-session body in English at 320 px with larger text (223 in
+206). No title was cut. Whether those sentences are shortened or the bar takes a second body
+line is a decision about the bar, not part of this fix.
+
 ## v437 — a toast on Food sits above the «+»
 
 **Measured on v436, and older than it.** The toast and the Food tab's floating «+» shared ONE

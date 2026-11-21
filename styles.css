@@ -7214,7 +7214,18 @@ body[dir="rtl"] .ntf-bar { text-align: right; }
 .ntf-icon svg { width: 22px; height: 22px; }
 .ntf-bar.is-error .ntf-icon { background: var(--red-bg); color: var(--red); --icon-accent: var(--red); }
 
-.ntf-text { min-width: 0; flex: 1 1 auto; }
+/* THE TITLE OVER THE BODY, each a line of its own (v438). Both are <span>s
+   written with no space between them, and from v231 nothing here made them
+   boxes: two inline runs on ONE line, the last letter of the title touching the
+   first of the body («0 من 2,500 ملبقي 2,500 مل — نحو 10 أكواب.»). Measured in
+   both languages at 375 and 320 px, in the app's own font: the gap between the
+   two was 0, and at 320 px a run of 240 px (250 in English) left its 206 px
+   box and the capsule with it, because `overflow`, `text-overflow` and the
+   one-line cap below mean nothing on an inline box. A column makes each child a
+   box of the column's width, so every one of those rules now does what its
+   comment says, in either direction, with no margin to mirror. The gap is the
+   reminder log's own (.ntfa-main), half a --sp-1. */
+.ntf-text { min-width: 0; flex: 1 1 auto; display: flex; flex-direction: column; gap: calc(var(--sp-1) / 2); }
 .ntf-title {
   font-size: var(--fs-label);
   font-weight: 600;
@@ -7233,6 +7244,17 @@ body[dir="rtl"] .ntf-bar { text-align: right; }
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+/* CUT SIDEWAYS ONLY (v438). The day the two lines became boxes their
+   `overflow: hidden` began to cut for the first time, and it cuts on all four
+   sides: at these line heights Arabic ink leaves its line box (the tanwin of
+   «يوماً» by 3 px above the title, the tail of «بقي» by 1 px below it —
+   compared by pixels with the cut on and off, in the app's own font). `clip`
+   on the inline axis alone keeps the one-line cap and its ellipsis (the same
+   comparison: the long title's pixels are identical inside its line) and lets
+   the ink stand. An engine that does not know `clip` keeps the rule above. */
+@supports (overflow: clip) {
+  .ntf-title, .ntf-body { overflow-x: clip; overflow-y: visible; }
 }
 
 /* Entry: down from above the screen edge, not merely from above the bar, so it
