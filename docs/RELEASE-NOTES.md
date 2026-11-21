@@ -116,6 +116,14 @@ release.
 session released v438 from the same tree. Nothing of this one was written to the repo until its
 push had landed and the tree was clean; the «before» fingerprint was recorded on v438 itself.
 
+**After the push.** The live `version.json` read back 439, and the deployed `styles.css?v=439`
+carries `.run-stat-part`. GitHub CI on this commit: 33 passed · 5 failed, the same five suites
+as on the commit before it (their fit cases are measured in Linux system fonts; red since v415,
+its own task). `test-next-target-ui.js` passes there, in CI's wide fallback font, with the
+page-wide measure back on the run and the new cell checks: the case v435 had to narrow.
+`test-run-home-ui.js` is one of the five, for its old Home-label case alone; its new case
+passes there in both languages.
+
 ## v438 — the reminder bar's title and body are two lines
 
 **Seen on 2026-11-16, and as old as the bar (v231).** The in-app reminder bar printed its bold
