@@ -23,7 +23,9 @@
 //
 // Each check was seen failing on an in-memory plant of js/app.js or styles.css
 // (the file on disk never written); they are named in docs/RELEASE-NOTES.md
-// under v434.
+// under v434. Since v439 the 320 px case also holds the run's two stat cells —
+// inside their row, every piece of a figure inside its cell, the page-wide
+// measure asked of the run again; its plants are named there under v439.
 'use strict';
 
 const assert = require('node:assert/strict');
@@ -444,16 +446,15 @@ const CASES = [
     assert.deepEqual(await runRows(kit), x(3, ['', '5', '', '102.5']), 'three fives at 100, twice, against a declared «5»: 102.5 × 5');
     assert.equal(await textOf(kit, '.run-nxt'), await uncited(kit, 'nxt_up'), 'the plan block prints the «5» just saved, so the line does not repeat it');
   }],
-  ['at 320 px with larger text the line wraps inside its card and is never cut, in the run and on the day card', async (kit) => {
+  ['at 320 px with larger text the line wraps inside its card and is never cut, in the run and on the day card, and the run\'s two stat cells stay in their row', async (kit) => {
     const { a } = kit.ids;
-    // `wholePage`: also refuse the PAGE scrolling sideways. Asked of the day page only. On the guided
-    // run that measure answers for an older element, not for this line: the two stat cells above the
-    // rows (.run-stats, «أعلى وزن» / «آخر وزن») cannot shrink below their figures — measured
-    // 2026-11-17 at 320 px with larger text, the second cell sits 9 px outside its row in Arabic in
-    // the app's own font, and 31–55 px under a wider fallback font (CI's Linux one), which scrolls
-    // the page. That is a defect of its own with a design decision in it (stacking the cells moves
-    // the rows the screen promises to keep still), so on the run this case holds the LINE: inside
-    // its parent, on the screen, wrapping, not cut.
+    // `wholePage`: also refuse the PAGE scrolling sideways. Asked of BOTH screens again since v439.
+    // From v435 to v438 the guided run was excused, because there that measure answered for an older
+    // element and not for this line: the two stat cells above the rows (.run-stats, «أعلى وزن» /
+    // «آخر وزن») could not shrink below their figures. With the 60 kg history of this case the
+    // second cell sat 9 px outside its row in the app's own font; with a weight of five characters
+    // in both cells, 91–101 px — and under a wider fallback font (CI's Linux one) far enough to
+    // scroll the page. `statsHold` below measures those cells themselves.
     const fit = (sel, wholePage) => kit.ev(({ sel, wholePage }) => {
       const el = document.querySelector('.view.active ' + sel);
       if (!el) return { missing: sel };
@@ -473,6 +474,28 @@ const CASES = [
       const tb = document.querySelector('.view.active .sd-toolbar'), box = tb.getBoundingClientRect();
       return [...tb.children].map((n) => { const r = n.getBoundingClientRect(); return [Math.max(0, Math.round(box.left - r.left)), Math.max(0, Math.round(r.right - box.right))]; });
     });
+    // The run's two stat cells: each cell inside the strip's own box, and every piece of its figure
+    // inside the cell that holds it. By rectangles again, and with no word about how the figure is
+    // built, so the same question was put to the tree of v438 first: it answered «3 px outside the
+    // row» for this case's own 60 kg history, in this fenced page's fallback font.
+    const statsHold = () => kit.ev(() => {
+      const strip = document.querySelector('.view.active .run-stats');
+      if (!strip) return null;
+      const box = strip.getBoundingClientRect();
+      return [...strip.children].map((cell) => {
+        const r = cell.getBoundingClientRect();
+        const pieces = [...cell.querySelectorAll('.run-stat-figure > *')].map((p) => p.getBoundingClientRect());
+        return { cell: [Math.max(0, Math.round(box.left - r.left)), Math.max(0, Math.round(r.right - box.right))], figure: Math.max(0, ...pieces.map((p) => Math.round(Math.max(r.left - p.left, p.right - r.right)))) };
+      });
+    });
+    const HELD = [{ cell: [0, 0], figure: 0 }, { cell: [0, 0], figure: 0 }];
+    // Which lines a figure stands on: the weight with its unit, the × with its reps, and whether
+    // the second pair is a line below the first.
+    const figureLines = () => kit.ev(() => [...document.querySelectorAll('.view.active .run-stat-figure')].map((fig) => {
+      const mid = (el) => { const r = el.getBoundingClientRect(); return (r.top + r.bottom) / 2; };
+      const nums = fig.querySelectorAll('.num');
+      return { weightWithUnit: Math.abs(mid(nums[0]) - mid(fig.querySelector('.run-stat-unit'))) < 10, timesWithReps: Math.abs(mid(fig.querySelector('.run-stat-x')) - mid(nums[1])) < 10, broken: mid(nums[1]) - mid(nums[0]) > 14 };
+    }));
     try {
       await kit.page.setViewportSize({ width: 320, height: 700 });
       await kit.ev(() => { DB.prefs.setTextLg(true); document.body.classList.add('text-lg'); });
@@ -490,7 +513,8 @@ const CASES = [
         await seed(kit, a, history);
         await run(kit, a);
         assert.equal(await textOf(kit, '.run-nxt'), await want(), `setup: this history reaches «${state}», and the line is its longest form`);
-        assert.deepEqual(await fit('.run-nxt', false), good, `the run's line fits at 320 px with larger text («${state}»)`);
+        assert.deepEqual(await fit('.run-nxt', true), good, `the run's line fits at 320 px with larger text, and the run does not scroll sideways («${state}»)`);
+        if (state !== 'first') assert.deepEqual(await statsHold(), HELD, `the run's two stat cells stay inside their row, and each figure inside its cell («${state}»)`);
         await dayOf(kit, [a]);
         assert.deepEqual(await toolbarHolds(), [[0, 0], [0, 0]], `the date field and the unit toggle stay inside the toolbar's own box at 320 px with larger text («${state}»)`);
         assert.deepEqual(await fit(`[data-ex-card="${a}"] .sd-nxt`, true), good, `the card's line fits at 320 px with larger text, and the day page does not scroll sideways («${state}»)`);
@@ -499,8 +523,29 @@ const CASES = [
             { label: true, row: true }, `«اعتمد المقترح» fits its button and the card's action row («${state}»)`);
         }
       }
+      // The figures that left the row before v439: a weight of five characters in BOTH cells, in
+      // either unit. And one too long for two cells on any phone this narrow, which has to break —
+      // before its ×, the one place a figure may — and still stay inside its cell.
+      for (const [face, unit, kg, breaks] of [['142.5KG×12', 'kg', 142.5, false], ['402.5LB×12', 'lb', 182.57, false], ['1,012.5LB×12', 'lb', 459.26, true]]) {
+        await kit.ev((unit) => DB.prefs.setUnit(unit), unit);
+        await seed(kit, a, [[3, S(3, 12, kg)], [6, S(3, 12, kg)]]);
+        await run(kit, a);
+        const faces = await kit.ev(() => [...document.querySelectorAll('.view.active .run-stat-figure')].map((f) => f.textContent.replace(/\s+/g, '')));
+        assert.ok(faces.length === 2 && faces.every((f) => f.startsWith(face)), `setup: both cells read «${face}» (${faces.join(' | ')})`);
+        assert.deepEqual(await fit('.run-nxt', true), good, `«${face}» in both cells: the run does not scroll sideways`);
+        assert.deepEqual(await statsHold(), HELD, `«${face}» in both cells: each cell inside the row, each figure inside its cell, at 320 px with larger text`);
+        if (breaks) assert.deepEqual(await figureLines(), x(2, { weightWithUnit: true, timesWithReps: true, broken: true }), `«${face}» cannot share one line here: it breaks before the ×, the weight keeps its unit and the × its reps`);
+      }
+      // Under 360 px the figure is set at 19 px, not 22 (× 1.1 with larger text). Measured in the
+      // app's own fonts, which this fenced page cannot load: at 22 px «142.5 KG × 12» is 137 px in a
+      // 126 px cell here and would break in every such cell — the height of the strip would then
+      // depend on the exercise, and the rows under it would move on Next.
+      await kit.ev(() => DB.prefs.setUnit('kg'));
+      await seed(kit, a, [[3, S(3, 12, 142.5)]]);
+      await run(kit, a);
+      assert.deepEqual(await kit.ev(() => [...document.querySelectorAll('.view.active .run-stat-figure')].map((f) => Math.round(parseFloat(getComputedStyle(f).fontSize) * 10) / 10)), [20.9, 20.9], 'under 360 px the stat figure is 19 px × the larger-text scale');
     } finally {
-      await kit.ev(() => { DB.prefs.setTextLg(false); document.body.classList.remove('text-lg'); });
+      await kit.ev(() => { DB.prefs.setUnit('kg'); DB.prefs.setTextLg(false); document.body.classList.remove('text-lg'); });
       await kit.page.setViewportSize({ width: 375, height: 812 });
     }
   }],
@@ -527,7 +572,7 @@ async function main() {
     }
   } finally { await browser.close(); await srv.close(); }
   if (failures.length) { console.error(`FAIL  next target UI: ${failures.length} failure(s)`); failures.forEach((f) => console.error('  - ' + f)); process.exitCode = 1; return; }
-  console.log(`PASS  next target UI (${passed} cases, AR/dark + EN/light, 375px): every open row of the run and of the day card hints the next target with one line saying why, the range cited where no plan block prints it; no row is asked for more than one rep over the weakest set; a ✓ or «اعتمد المقترح» takes it, names the suggestion and can be undone, and a typed figure is handed on as the lifter's own; a first-ever exercise has no ghost, is told its own range once and ends its first day on a computed figure; the plan's range and set count steer it and its block stays; a timed target, bodyweight at the top of the plan's range and an assisted machine silence it; pounds land on a pound plate; three weeks away repeats, row by row; the run resumes with the target; the unit switch and a changed history re-ask an untouched card; the planner opens the range for a hand-built plan; every line fits at 320 px with larger text`);
+  console.log(`PASS  next target UI (${passed} cases, AR/dark + EN/light, 375px): every open row of the run and of the day card hints the next target with one line saying why, the range cited where no plan block prints it; no row is asked for more than one rep over the weakest set; a ✓ or «اعتمد المقترح» takes it, names the suggestion and can be undone, and a typed figure is handed on as the lifter's own; a first-ever exercise has no ghost, is told its own range once and ends its first day on a computed figure; the plan's range and set count steer it and its block stays; a timed target, bodyweight at the top of the plan's range and an assisted machine silence it; pounds land on a pound plate; three weeks away repeats, row by row; the run resumes with the target; the unit switch and a changed history re-ask an untouched card; the planner opens the range for a hand-built plan; every line fits at 320 px with larger text, where neither screen scrolls sideways and the run's two stat cells stay inside their row with every figure inside its cell — one too long for two cells breaking before its ×`);
 }
 
 if (require.main === module) main().catch((e) => { console.error(e); process.exitCode = 1; });

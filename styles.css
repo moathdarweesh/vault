@@ -3478,9 +3478,26 @@ body[data-view="session-run"] .bottom-nav { display: none; }
    not four: this sits between the exercise name and the input rows the user
    came here to fill, and anything more turns the working screen into a
    dashboard. Rounded rectangles per the identity rule — no circles. */
+/* TWO CELLS THAT STAY IN THEIR ROW (v439). The tracks were `1fr 1fr`, and a
+   bare 1fr is minmax(auto, 1fr): a track cannot go below its content. The
+   figure was one unbreakable line («142.5 KG × 12 تكرار», 151–168 px) in a
+   cell with 22 px of padding and border, so two of them asked for more than
+   the row had on every phone under 400 px, and the second cell left the row:
+   10–19 px at 375 px and 25–34 px at 360 at NORMAL text, 91–101 px at 320
+   with larger text (measured in the app's own fonts; a 60 kg history hid it).
+   Three things hold it now, and each is measured:
+     · the figure is «142.5 KG × 12» — no «reps» word after the × (app.js);
+     · it is two unbreakable parts that may wrap between them, so no figure in
+       any font can push its cell out; minmax(0, 1fr) is the same promise for a
+       single part wider than a cell;
+     · the cell's side padding is 6 px, and under 360 px the figure is 19 px.
+   With those, every weight of up to five characters sits on ONE line at every
+   width from 320 px, at both text sizes — the strip is the height it always
+   was and the rows under it do not move on Next. A weight of six characters
+   or more («142.88 KG», «1,012.5 LB») breaks before its × on a narrow phone. */
 .run-stats {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
   gap: 8px;
   width: 100%;
   margin: 2px 0 2px;
@@ -3498,7 +3515,7 @@ body[data-view="session-run"] .bottom-nav { display: none; }
   background: var(--surface-2);
   border: 1px solid var(--border);
   border-radius: var(--radius);
-  padding: 9px 10px;
+  padding: 9px 6px;
   text-align: center;
 }
 /* The all-time best is the one number worth an accent; giving both an accent
@@ -3515,9 +3532,10 @@ body[data-view="session-run"] .bottom-nav { display: none; }
 /* Weight and reps on ONE baseline — the same figure the Home card uses. */
 .run-stat-figure {
   display: flex;
+  flex-wrap: wrap;
   align-items: baseline;
   justify-content: center;
-  gap: 2px;
+  gap: 6px 5px;
   font-size: calc(22px * var(--fs-scale));
   font-weight: 700;
   line-height: 1;
@@ -3536,10 +3554,20 @@ body[data-view="session-run"] .bottom-nav { display: none; }
   color: var(--text-mute);
   letter-spacing: 0;
 }
+/* «142.5 KG» and «× 12»: each is ONE item of the figure's flex line, so the
+   figure's wrap can fall between the two and nowhere else. */
+.run-stat-part { display: inline-flex; align-items: baseline; gap: 2px; }
 /* The × is the only thing separating two numbers that mean different things —
-   it needs air on both sides or "80KG×6" reads as one token. */
-.run-stat-x { margin: 0 5px; }
+   it needs air on both sides or "80KG×6" reads as one token. 5 px each side:
+   the gap between the two parts before it, this margin and the part's own
+   2 px after it (the figure is dir="ltr" in both languages). */
+.run-stat-x { margin: 0 3px 0 0; }
 .run-stat-empty { color: var(--text-dim); font-weight: 700; }
+/* At 22 px «142.5 KG × 12» is 126 px (137 with larger text) and a cell holds
+   126 px at 320 px, 136 px at 340: it would break in every cell there. */
+@media (max-width: 359px) {
+  .run-stat-figure { font-size: calc(19px * var(--fs-scale)); }
+}
 
 .run-ex {
   display: flex;

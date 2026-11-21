@@ -2890,6 +2890,15 @@ const cssOwner = (i) => CSS_BLOCKS.reduce((best, b) => (b.open < i && b.close > 
   if (!/flex-wrap:\s*wrap;/.test(actions)) problems.push('styles.css: .sd-card-actions no longer wraps (its two buttons ran 25–39 px past a 320 px card)');
   const toolbar = (css.match(/^\.sd-toolbar \{[^}]*\}/m) || [''])[0];
   if (!/flex-wrap:\s*wrap;/.test(toolbar)) problems.push('styles.css: .sd-toolbar no longer wraps — at 320 px with larger text the KG/LB toggle sat 14 px outside it, and a wider fallback font scrolled the page sideways (v435)');
+  // The run's two stat cells (v439). The suite measures them in a fenced page that cannot load the
+  // app's fonts; what was measured in those fonts is held here.
+  const strip = (css.match(/^\.run-stats \{[^}]*\}/m) || [''])[0];
+  if (!/grid-template-columns:\s*minmax\(0, 1fr\) minmax\(0, 1fr\);/.test(strip)) problems.push('styles.css: .run-stats must keep two minmax(0, 1fr) tracks — a bare 1fr cannot go below its content, and two long figures put the second stat cell outside its row (10–19 px at 375 px at normal text, v439)');
+  const figure = (css.match(/^\.run-stat-figure \{[^}]*\}/m) || [''])[0];
+  if (!/flex-wrap:\s*wrap;/.test(figure)) problems.push('styles.css: .run-stat-figure no longer wraps — a figure too long for its cell must break before its ×, not leave the cell (v439)');
+  if (!/@media \(max-width: 359px\) \{\s*\.run-stat-figure \{ font-size: calc\(19px \* var\(--fs-scale\)\); \}\s*\}/.test(css)) problems.push('styles.css: under 360 px the run\'s stat figure must be 19 px — at 22 px «142.5 KG × 12» does not fit two cells on one line there, and the strip\'s height would depend on the exercise (v439)');
+  const cell = topFn('js/app.js', 'renderSessionRun');
+  if (!cell.includes('part(`<span class="run-stat-x" aria-hidden="true">×</span><span class="num">${fmtNum(ts.r)}</span>`)')) problems.push('js/app.js: the run\'s stat figure must end «× 12» — the word «reps» after the × is what made two cells too wide for a 375 px phone (v439)');
   const line = (css.match(/^\.run-nxt, \.sd-nxt \{[^}]*\}/m) || [''])[0];
   if (!line || /white-space:\s*nowrap|text-overflow/.test(line) || !/overflow-wrap:\s*anywhere;/.test(line)) problems.push('styles.css: the reason line (.run-nxt, .sd-nxt) must wrap and never be ellipsised — a reason cut short is no reason');
   contract(`both logging screens hint the ONE next target: the run and the day card ask nxtFor(), ${STATES.length} states each with its own line, the rule pure and sliceable, the old suggestion card gone, the planner's door to the range on every slot`, problems);

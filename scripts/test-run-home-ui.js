@@ -29,6 +29,14 @@
 //     chosen, and «استخدم هذا الوزن» writes the LOADED weight back and commits
 //     nothing. Both fit 375 and 320 px with larger text: no sideways scroll,
 //     every button at least 44 px effective.
+// (d) v439 — HOW THE RUN'S TWO STAT CELLS READ. «أعلى وزن» and «آخر وزن» each
+//     print «142.5 KG × 12»: no «reps» word after the × (with it, two cells
+//     were wider than a 375 px phone at normal text), in two groups — the only
+//     place the figure may break — on one line at 375 px; a bodyweight set has
+//     no × and keeps its word. Seen failing on the v438 tree («142.5KG×12reps»)
+//     and on four in-memory plants (the word back, the groups removed, the
+//     bodyweight word dropped, a 34 px figure). That the cells stay INSIDE
+//     their row at 320 px is measured in scripts/test-next-target-ui.js.
 //
 // Same harness as scripts/test-cardio-sleep-ui.js (scripts/fp/server.js): the
 // repo over loopback on a free port, js/cloud.js replaced by an offline stub,
@@ -277,6 +285,24 @@ const CASES = [
       await tick(kit, 0);
       assert.equal((await toastNow(kit) || {}).msg, await kit.ev(() => t('run_filled_saved')), 'and its ✓ says «last time\'s numbers», not «suggested»');
       assert.equal(await kit.page.locator('.view.active .run-suggest').count(), 0, 'the old suggestion card is gone');
+    } finally { await cleanup(kit, s); }
+  }],
+  ['the two stat cells read «weight unit × reps» — no «reps» word after the ×, two unbreakable parts, one line at 375 px — and a bodyweight set keeps its word', async (kit) => {
+    // How each cell's figure reads, the pieces it may break between, and whether its numbers share a line.
+    const cells = () => kit.ev(() => [...document.querySelectorAll('.view.active .run-stats .run-stat-figure')].map((fig) => {
+      const mid = (el) => { const r = el.getBoundingClientRect(); return (r.top + r.bottom) / 2; };
+      const nums = [...fig.querySelectorAll('.num')];
+      return { reads: fig.textContent.replace(/\s+/g, ''), parts: [...fig.children].map((p) => p.textContent.replace(/\s+/g, '')), oneLine: nums.every((n) => Math.abs(mid(n) - mid(nums[0])) < 4) };
+    }));
+    let s = await openRun(kit, [{ reps: 12, weight: 142.5 }, { reps: 10, weight: 142.5 }]);
+    try {
+      assert.deepEqual(await cells(), Array.from({ length: 2 }, () => ({ reads: '142.5KG×12', parts: ['142.5KG', '×12'], oneLine: true })),
+        'best and last both read «142.5 KG × 12»: the × says what the second number is, and the column under it is headed «reps»');
+      await cleanup(kit, s);
+      s = await openRun(kit, [{ reps: 12, weight: 0 }, { reps: 9, weight: 0 }]);
+      const word = await kit.ev(() => t('reps'));
+      assert.deepEqual(await cells(), Array.from({ length: 2 }, () => ({ reads: '12' + word, parts: ['12' + word], oneLine: true })),
+        'a bodyweight set has no × to speak for its number, so it keeps the word');
     } finally { await cleanup(kit, s); }
   }],
   ['Home: the strip says what period each figure counts', async (kit) => {
@@ -608,7 +634,7 @@ async function run() {
     }
   } finally { await browser.close(); await srv.close(); }
   if (failures.length) { console.error(`FAIL  run + home UI: ${failures.length} failure(s)`); failures.forEach((f) => console.error('  - ' + f)); process.exitCode = 1; return; }
-  console.log(`PASS  run + home UI (${passed} cases, AR/dark + EN/light, 375px): a new figure ticked on one set becomes the hint of the later untouched straight sets (weight and reps each on its own, in pounds too), a pyramid keeps its hints, a typed un-ticked figure and a row with its own numbers are left alone, a correction carries again, nothing is written before a set's own ✓ and that ✓ names where its numbers came from per field (an earlier set only when both did, a mix as a mix) with Undo; past the layoff gap a row hints last time's own figure; Home's strip names its periods with new keys and every label fits its cell at 375/340 px, normal and larger text; v427: the quick-adjust bar under the focused row (reps ±1, the five unit steps + «الأقراص», the ghost as the base, focus kept, nothing committed, follows the focus and leaves on blur, pound steps) and the plate sheet (65 → 20 + 2.5, 61 → nearest 60, lighter than the bar, the bar only, the bar choice, «استخدم هذا الوزن» writes the loaded weight), both fitting 375/320 px with larger text at ≥ 44 px a button`);
+  console.log(`PASS  run + home UI (${passed} cases, AR/dark + EN/light, 375px): a new figure ticked on one set becomes the hint of the later untouched straight sets (weight and reps each on its own, in pounds too), a pyramid keeps its hints, a typed un-ticked figure and a row with its own numbers are left alone, a correction carries again, nothing is written before a set's own ✓ and that ✓ names where its numbers came from per field (an earlier set only when both did, a mix as a mix) with Undo; past the layoff gap a row hints last time's own figure; Home's strip names its periods with new keys and every label fits its cell at 375/340 px, normal and larger text; v427: the quick-adjust bar under the focused row (reps ±1, the five unit steps + «الأقراص», the ghost as the base, focus kept, nothing committed, follows the focus and leaves on blur, pound steps) and the plate sheet (65 → 20 + 2.5, 61 → nearest 60, lighter than the bar, the bar only, the bar choice, «استخدم هذا الوزن» writes the loaded weight), both fitting 375/320 px with larger text at ≥ 44 px a button; v439: the two stat cells read «weight unit × reps» in two parts on one line, a bodyweight set keeping its word`);
 }
 
 if (require.main === module) run().catch((e) => { console.error(e); process.exitCode = 1; });

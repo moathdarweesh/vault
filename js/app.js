@@ -12,7 +12,7 @@
 // build. The literal below is the fallback (file://, or a stripped query) and is
 // still bumped by `npm run release` — see CLAUDE.md "CACHE WORKFLOW".
 const VAULT_BUILD = (() => {
-  const FALLBACK = 'v438';
+  const FALLBACK = 'v439';
   try {
     const src = (document.currentScript && document.currentScript.src) || '';
     const m = src.match(/[?&]v=(\d+)/);
@@ -8305,9 +8305,19 @@ function renderSessionRun(el) {
     const last = lastSession ? topSet(lastSession.sets) : null;
     const u = runCtx.unit.toUpperCase();
     // ONE figure, not a stack: weight and reps belong side by side because they
-    // describe a single set. This is the SAME shape the Home screen's "last set"
-    // card already uses (.last-set-figure at app.js:3716) — "80 KG × 6 reps" —
-    // so the two screens speak with one vocabulary instead of two.
+    // describe a single set — «142.5 KG × 12», the form the next-target line
+    // already writes (nxtFigure).
+    //
+    // TWO PARTS, AND NO «reps» WORD AFTER THE × (v439). The figure used to end
+    // «× 12 تكرار» — the Home card's «80 KG × 6 reps», which has a whole card to
+    // itself — and two of those cannot share a phone: measured in the app's own
+    // fonts at NORMAL text, «142.5 KG × 12 تكرار» in both cells put the second
+    // cell 10–19 px outside its row at 375 px, 25–34 px at 360 (cut by the
+    // screen edge) and 65–74 px at 320. The × already says what the second
+    // number is, and the column right under it is headed «تكرار». Each part is
+    // one unbreakable group, so a figure still too long for its cell (a weight
+    // of six characters on a narrow phone) breaks BEFORE the × and nowhere
+    // else. A bodyweight set has no × to speak for its number: it keeps the word.
     //
     // dir="ltr" on the figure: it is a numeric expression, and in an RTL page a
     // bare "80 KG × 6" lets the bidi algorithm reorder the run around the
@@ -8315,13 +8325,13 @@ function renderSessionRun(el) {
     // which is what the label above it promises.
     // Bodyweight sets (weight 0, reps > 0) are a supported input everywhere
     // else in the app; here they read "—" forever. Show the reps.
+    const part = (html) => `<span class="run-stat-part">${html}</span>`;
     const cell = (label, ts, cls) => {
       const has = !!(ts && (ts.w > 0 || ts.r > 0));
       const figure = !has ? '<span class="run-stat-empty">—</span>'
-        : ts.w > 0 ? `
-          <span class="num">${fmtNum(convDisplay(ts.w))}</span><span class="run-stat-unit">${u}</span>
-          ${ts.r > 0 ? `<span class="run-stat-x" aria-hidden="true">×</span><span class="num">${fmtNum(ts.r)}</span><span class="run-stat-unit">${t('reps')}</span>` : ''}
-        ` : `<span class="num">${fmtNum(ts.r)}</span><span class="run-stat-unit">${t('reps')}</span>`;
+        : ts.w > 0 ? part(`<span class="num">${fmtNum(convDisplay(ts.w))}</span><span class="run-stat-unit">${u}</span>`)
+          + (ts.r > 0 ? part(`<span class="run-stat-x" aria-hidden="true">×</span><span class="num">${fmtNum(ts.r)}</span>`) : '')
+        : part(`<span class="num">${fmtNum(ts.r)}</span><span class="run-stat-unit">${t('reps')}</span>`);
       return `
       <div class="run-stat ${cls}">
         <div class="run-stat-label">${label}</div>

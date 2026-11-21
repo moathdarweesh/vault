@@ -2,6 +2,120 @@
 
 One section per release since v309, newest first, moved verbatim from `CLAUDE.md` in v401 (batch 6 of the 2026-09-25 review; `docs/REVIEW-2026-09-25.md`). `CLAUDE.md` is the guide and the authority for how the app works now. A section here records what one release changed and why, in the words written at the time, so a later section — or the guide — can supersede what an earlier one says.
 
+## v439 — the run's two stat cells never leave their row
+
+**Left open by v435, and wider than v435 knew.** v435 measured the two cells above the set rows
+(`.run-stats`, «أعلى وزن» / «آخر وزن») with a 60 kg history and wrote «9 px outside the row at
+320 px with larger text». Measured again on 2026-11-21 with the figures a lifter over 100 kg
+actually has, in the app's own fonts (IBM Plex Sans Arabic and JetBrains Mono loaded, checked
+with `document.fonts.check`): how far the second cell sat OUTSIDE its row, Arabic–English.
+
+| viewport | «102.5 KG × 10» or «142.5 KG × 12» in both cells, normal text | the same, «خطّ أكبر» |
+|---|---|---|
+| 320 px | 65–74 px | 91–101 px |
+| 340 px | 45–54 px | 71–81 px |
+| 360 px | 25–34 px (9–18 px of it past the screen edge, cut) | 51–61 px |
+| 375 px | 10–19 px (inside the page gutter) | 36–46 px |
+| 412 px | 0 | 0–9 px |
+
+A pound figure of the same length («132.5 LB», «402.5 LB») was 4 px better; «142.88 KG» (a set
+logged in pounds and read in kilograms) and «1,012.5 LB» were 26 and 49 px worse. Of the 160
+cells of the matrix (5 widths × 2 text sizes × 2 languages × 8 figures) 117 had a cell outside
+its row in the app's fonts, by up to 154 px. Under Verdana every heavy figure was another
+33–41 px out, under Tahoma 5–17 px (the two stand-ins for CI's Linux fallback font). The cause
+is the one v435 named: `grid-template-columns: 1fr 1fr` is `minmax(auto, 1fr)` twice, a track
+cannot go below its content, and the figure was ONE unbreakable line («142.5 KG × 12 تكرار»,
+151–155 px, 164–168 with larger text) in a cell with 22 px of padding and border.
+
+**So «stack them under 360 px with larger text» was never the answer:** the defect was on the
+360 and 375 px phones at normal text. Three shapes were built as in-memory style sheets (no file
+written), measured on the same matrix in all three fonts, and put to the owner as real
+screenshots at 375 px and at 320 px with larger text. In all three nothing leaves its box and no
+page scrolls, in any of the three fonts.
+
+| shape | strip height, normal / larger text (it was 62.5 / 66.2 px) | what changes | the rows move between two exercises when |
+|---|---|---|---|
+| (أ) two ledger rows, the label beside its figure | 86 / 90.4 px | the cells stack on every phone, +23.5 px | «1,012.5 LB» in English at 320 px with larger text |
+| (ب) two columns as today, «142.5 KG × 12» | 62.5 / 66.2 px (64 under 360 px with larger text) | the word «تكرار» / «reps» after the × goes; the figure is 19 px under 360 px | a weight of six characters or more on a narrow phone: it breaks before its × |
+| (ج) two columns, the figure always in two lines | 84.5 / 90.4 px | the weight over «× 12 تكرار», +22 px | never, in any font |
+
+**The owner chose (ب):** it takes nothing from the height of the working screen, and the strip
+stays the one he knows.
+
+**The fix.** `cell()` in `renderSessionRun` builds the figure as two `.run-stat-part` groups,
+«142.5 KG» and «× 12», and prints no «reps» word after the × (the form `nxtFigure` already
+writes; the column under the strip is headed «تكرار»). A bodyweight set has no × and keeps its
+word; Home's «80 KG × 6 reps» has a card to itself and is not touched. In `styles.css` the tracks
+are `minmax(0, 1fr)`, the figure wraps (between its two parts, the only items of its line), the
+cell's side padding is 6 px where it was 10, the × keeps 5 px of air on each side, and under
+360 px the figure is 19 px where it is 22 (at 22 px «142.5 KG × 12» is 126 px, 137 with larger
+text, and a cell holds 126 px at 320 px and 136 at 340).
+
+**Measured after, on the files themselves.** The same matrix: no cell outside its row, no piece
+of a figure outside its cell and no sideways scroll, in the app's fonts, Verdana and Tahoma (480
+cells). Then every width from 320 to 430 px, both text sizes, both languages, six realistic
+figures («60 KG × 12», «102.5 KG × 10», «142.5 KG × 12», «132.5 LB × 12», «402.5 LB × 12», a
+heavy one beside a light one) in the app's fonts, 2,664 renders: every figure on ONE line, the
+least air between a figure and its cell's border 7.3 px (320 px, larger text). The strip is
+62.5 px tall at normal text at every width, as it was; with larger text 66.2 px from 360 px, as
+it was, and 64 px under it (the smaller figure). So for every weight of up to five characters
+the rows under the strip do not move on Next.
+
+**What still breaks, and where.** In the app's fonts, at the five widths of the matrix, a figure
+takes two lines (and that exercise's strip is 84.5–96.4 px tall, so the rows move by 22–30 px on
+Next to or from it) only for «142.88 KG» with larger text at 360 px and under, and for
+«1,012.5 LB» at 320 and 360 px at normal text (340 px holds it: the figure is smaller there) and
+at 375 px and under with larger text. Under Verdana the five-character weights
+break too at 320 px (to 360 px with larger text): that is a test machine's font, not a phone's,
+and nothing leaves its box there either.
+
+**Tests.** `test-next-target-ui.js`, the 320 px case: the page-wide measure is asked of the run
+again for every state (`fit('.run-nxt', true)`, excused since v435); `statsHold` measures by
+rectangles that each cell is inside the strip and every piece of a figure inside its cell, for
+every state with a history and for «142.5 KG × 12», «402.5 LB × 12» and «1,012.5 LB × 12» in
+both cells; the last one must break before its ×, the weight keeping its unit and the × its
+reps; and the figure's computed size under 360 px is 19 px × the scale. `test-run-home-ui.js`, a
+new case: both cells read «142.5KG×12» in two parts on one line at 375 px, and a bodyweight set
+reads «12 reps». Contract 81 gains four clauses (the tracks, the wrap, the 19 px rule, the
+figure's ending in `app.js`): the suites' pages are fenced from the font hosts, so what was
+measured in the app's fonts is held there.
+
+**Each check seen failing.** Both new checks were written first and run on the v438 tree: the
+320 px case answered «3 px outside the row» for its own 60 kg history in the fenced page's
+fallback font, the reading case «142.5KG×12reps». Then thirteen plants in memory through an
+`fs.readFileSync` preload that refuses a plant that does not land exactly once (the five files'
+hashes equal before and after): the old strip whole (the page-wide measure names it), the figure
+unable to wrap (`statsHold`, and the break check), 22 px under 360 px (the size check), the word
+back after the ×, the two parts ungrouped (the reading case and the break check), a bodyweight
+set without its word, a figure too large for one line at 375 px, and the four contract clauses
+one by one. Twelve were caught. **One was not, and no suite can catch it:** the tracks put back
+to `1fr 1fr` with the wrap kept. A figure that wraps is never wider than its widest part, and no
+part the suite can seed is wider than a cell, so `minmax(0, 1fr)` is the promise for a part that
+does not exist yet; contract 81 alone holds it (that clause was one of the four seen failing).
+
+**Gate.** `npm run verify` on the final tree: all contracts hold (82 by number, contract 81 with
+four more clauses), ESLint clean, 38 suites passed · 0 failed · 0 skipped (wall 263 s, --jobs 3).
+
+**Fingerprint, both records made in this session before the bump** (`diff st438 st439`): views
+184/184 and sheets 130/130 identical, 26,706 elements, 0 differences: the edit reached no other
+screen. It does NOT speak for the strip: the net's run cell has no history, so its record holds
+no `.run-stat` node at all. The strip stands on the measurements above.
+
+**Not claimed.** That the rows do not move on Next is measured in the app's fonts by a script
+outside the repo; no suite holds it, because a fenced page draws the same figures in a fallback
+font and breaks them at other widths. The 19 px rule and the reading are held; the stillness is
+a measurement of this release, to be taken again when the figure, its fonts or the cell change.
+
+**Seen in the same screenshots, older, and left open.** At 320 px with larger text the weight
+FIELD of a set row cuts a five-character weight («137.5»: part of the leading digit in Arabic,
+of the trailing one in English). Seen in real screenshots in both languages; not measured
+further here (an input's `scrollWidth` did not agree with the picture), and not part of this
+release.
+
+**A second session was in the checkout.** While this release was being measured, another
+session released v438 from the same tree. Nothing of this one was written to the repo until its
+push had landed and the tree was clean; the «before» fingerprint was recorded on v438 itself.
+
 ## v438 — the reminder bar's title and body are two lines
 
 **Seen on 2026-11-16, and as old as the bar (v231).** The in-app reminder bar printed its bold
