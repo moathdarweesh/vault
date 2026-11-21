@@ -51,6 +51,13 @@ the body's one-line cap dropped (under the long words the bar grows to 98 px).
 (wall 264 s, --jobs 3). Run twice: once before a figure in the stylesheet's comment was corrected,
 once on the final tree. No contract was added: the defect is a layout, held by the suite.
 
+**After the push: one setup made independent of the font.** The long-words case joined the title
+to itself with « — », a glyph the short title does not have; from another font it could change a
+line's height by itself, and the case compares the two bars' heights. It now repeats the same
+words with a space and nothing else. Then the suite was run with the whole app forced into
+Verdana, Tahoma, Courier New and Arial Black (the stand-in for CI's fonts that v435 recorded): it
+holds in all four, and the seven plants were run again, each caught. A test-only commit.
+
 **Known and open, by the bar's own design and not this release.** The body is capped at one line
 (v231: «a glance, not a document»), so a body longer than the bar now ends in «…» where before
 it ran out of the capsule. Of the seven reminders' words measured in the app's font: the

@@ -280,7 +280,10 @@ const ROOT = path.resolve(__dirname, '..');
         'the title and the body are cut along the line only, never above or below it (overflow-x overflow-y) — ' + say);
 
       // Words four times as long: still one line each, still inside, the bar no taller.
-      const long = { title: [1, 2, 3, 4].map(() => words.title).join(' — '), body: [1, 2, 3, 4].map(() => words.body).join(' ') };
+      // The SAME words repeated with a space, and nothing else: a glyph the short
+      // words do not have could come from another font and change a line's height
+      // by itself (the fence keeps the web font out; CI's fallback is not this PC's).
+      const long = { title: [1, 2, 3, 4].map(() => words.title).join(' '), body: [1, 2, 3, 4].map(() => words.body).join(' ') };
       const L = await raise(long);
       const sayL = at + ', words four times as long: ' + JSON.stringify(L);
       assert.ok(L && L.title && L.body, at + ': the bar is up with both long nodes: ' + JSON.stringify(L));
