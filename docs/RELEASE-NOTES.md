@@ -2,6 +2,75 @@
 
 One section per release since v309, newest first, moved verbatim from `CLAUDE.md` in v401 (batch 6 of the 2026-09-25 review; `docs/REVIEW-2026-09-25.md`). `CLAUDE.md` is the guide and the authority for how the app works now. A section here records what one release changed and why, in the words written at the time, so a later section — or the guide — can supersede what an earlier one says.
 
+## v441 — the English missed-workout sentence fits the bar's two lines
+
+**The owner's answer to v440's open question.** v440 gave the bar's body a second line and left
+one sentence that still did not fit it: the English body of the missed-workout reminder, whole at
+430 px only. Asked whether to shorten it or leave it, the owner answered: **«Shorten it»**.
+
+**Before.** «{slot} was planned. No pressure: if the day ends without a session, it is recorded as
+a day without training.» With «Legs» that is 107 characters and 585 px of words in the bar's body
+size; two lines of the bar hold 632 px at 430 px, 522 at 375, 492 at 360 and 412 at 320. Measured
+on v440: cut for every day name at 375, 360 and 320 px, and at 430 px too with larger text.
+
+**After.** «Planned: {slot}. No pressure: it can stay a day without training.» 63 characters and
+343 px with «Legs»; 68 and 374 with «Shoulders», the longest day name the app writes itself. It
+says the same three things: what was planned, that nothing is owed, and what the day is without a
+session. The word «recorded» left the reminder; the Home card of the next morning still says it
+(«The day is recorded as a day without training.», unchanged). The Arabic sentence is the owner's
+own and is unchanged. The phone's own notification reads the same words (`DB.notif.text` is the
+one source), so it is shorter there too.
+
+**Measured after, in the app's own fonts** (IBM Plex Sans Arabic loaded), the reminder exactly as
+the app writes it, at 430, 375, 360 and 320 px, at both text sizes, for the sixteen day names the
+app writes itself (the fourteen of its ready plans, «Workout» for a day left unnamed, «Training»
+when no day is known): the body is whole in every cell, in English and in Arabic, and the title is
+never cut. How much room is left: at the default text size the English body is whole down to
+300 px, the narrowest measured; with larger text down to 316 px, and «Shoulders» is the first to
+lose a word, at 314 px.
+
+**The break decided it, not the length.** Twenty-two sentences were measured beside the old one.
+At 320 px with
+larger text a line holds about 187 px of default-size words, and «{slot} was planned. No pressure:»
+does not fit the first line for the seven names of seven letters and more, so «pressure:» falls to
+the second line and pushes a word onto a third. A 62-character sentence that kept «was planned»
+was cut there for those seven names while the 63-character one that opens «Planned: {slot}.» is
+whole for all sixteen. That is why the opening changed and not only the ending.
+
+**The guard, and why it counts letters.** `scripts/test-skips.js` now reads the app's own day
+names from the app (`PLAN_DAY_AR`, `workout_label`, `notif_ch_train`), asks `DB.notif.text` for the
+English body with the longest of them, and refuses more than 68 characters: the sentence that was
+measured. Letters and not pixels, because that suite has no browser, and a pixel case in a browser
+suite would read the machine's fonts (CI's are not the app's; v440's half five avoids the same
+trap by finding its own words). The count is a tripwire, not a proof: a longer sentence, or a
+longer day name of the app's own, must be measured again before the number moves.
+Fail first, in memory (`fs.readFileSync` patched through a `node -r` preload, the repo's bytes
+hashed before and after and unchanged): v440's sentence back (112 characters with «Shoulders»),
+one word more («it can just stay», 73), and a longer day name of the app's own («Chest and back»,
+73) each stop at the new assertion; the control with no plant passes.
+
+**The gate was red first, and it was the calendar.** The first `npm run verify` on this tree
+stopped at `scripts/test-arrival-ui.js`: four cases, beside the other suites and again alone
+(37 passed · 1 failed). Not this change. That suite's fixture was «a session two days ago», and
+the figure Home counts is the week's own (`startOfWeek`, the week starts on Sunday): on a Sunday
+or a Monday the session is last week and Home has nothing to count. The gate ran on Sunday
+2026-11-22; every release since the suite was written (v432) had been gated on a Tuesday, a
+Wednesday or a Saturday. Measured with the page's clock held at noon on each of seven days: the
+old fixture leaves no figure on Sunday and Monday and the week's numeral on the other five; the
+new one (two days back when the week is that old, else as far back as the week goes) gives the
+same numeral on all seven. Sunday is the day on which every «N days ago» fixture leaves the
+week, and the other 37 suites passed on it. The fix is its own commit (`test:`), ahead of this
+one. **A fixture dated «N days ago» against a figure that belongs to the week fails on the week's
+first N days: date it from the week's start.**
+
+**Gate.** `npm run verify` on the final tree, the second run: all contracts hold, ESLint clean,
+38 suites passed · 0 failed (wall 399 s, --jobs 3).
+
+**Known and open.** A day name the user typed can be any length: «Chest and triceps» still ends
+in «…» at 320 px in English (in Arabic at 320 px with larger text only), and «Chest, shoulders
+and triceps» does at 320 px, and at 360 px with larger text, in both languages. The bar still
+leaves after five seconds.
+
 ## v440 — the reminder bar's body takes a second line
 
 **The owner's answer to v438's open question.** v438 made the bar's title and body two boxes, and

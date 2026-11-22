@@ -1128,8 +1128,14 @@ const I18N = {
     // The missed-workout channel (v418). Not binding, by the owner's word: it
     // names what was planned and what the day becomes without a session, and
     // nothing is owed. {slot} is the day's own slot name, as {name} above.
+    // THE BODY MUST FIT THE BAR'S TWO LINES (v441; the owner, shown v440's «…»
+    // on it: «Shorten it»): 59 characters beside {slot}. Measured in the app's
+    // own fonts, that is whole for every day name the app writes itself (the
+    // longest is «Shoulders») from 320 px up at both text sizes; the sentence
+    // before it, 103 characters, was whole at 430 px only.
+    // scripts/test-skips.js holds the count: measure again before it grows.
     notif_missed_title: 'No workout logged today',
-    notif_missed_body: '{slot} was planned. No pressure: if the day ends without a session, it is recorded as a day without training.',
+    notif_missed_body: 'Planned: {slot}. No pressure: it can stay a day without training.',
     notif_summary_title_1: '1 reminder today',
     notif_perm_title: 'Reminders, on your terms',
     notif_perm_body: 'Six reminders, all inside your day window, each one switchable on its own.',

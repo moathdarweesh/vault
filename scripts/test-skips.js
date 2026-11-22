@@ -310,6 +310,23 @@ const sorted = (a) => { const p = plain(a); return Array.isArray(p) ? p.sort() :
       assert.ok(r.body.includes(name), `the body names the day's slot «${name}» (${l}, ${which}): «${r.body}»`);
     }
   }
+
+  // THE ENGLISH BODY KEEPS TO THE BAR'S TWO LINES (v441). Counted in letters,
+  // not pixels: this suite has no browser, and a pixel case in a browser suite
+  // would read whatever fonts the machine has (CI's are not the app's). 68 is
+  // the sentence that WAS measured, in the app's own fonts, with the longest
+  // day name the app writes itself: whole from 320 px up at both text sizes
+  // (docs/RELEASE-NOTES.md, v441). A longer sentence, or a longer name of the
+  // app's own, has to be measured again before this number moves.
+  {
+    DB.prefs.setLang('en');
+    const own = Object.keys(run('PLAN_DAY_AR')).concat(I18N.en.workout_label, I18N.en.notif_ch_train);
+    assert.ok(own.length >= 16 && own.every((n) => typeof n === 'string' && n), 'the app\'s own day names are read from the app: ' + json(own));
+    const longest = own.reduce((a, b) => (b.length > a.length ? b : a));
+    const said = DB.notif.text({ channel: 'missed', date: today, tag: 'missed:' + today, payload: { name: longest } }).body;
+    assert.ok(said.includes(longest), `the body names «${longest}»: «${said}»`);
+    assert.ok(said.length <= 68, `the English missed-workout body keeps to the two lines it was measured for (68 characters with «${longest}»), got ${said.length}: «${said}»`);
+  }
 }
 
-console.log('PASS skips: an old blob loads the default; the first settle records nothing; a settle records exactly the planned untrained days (not a trained, a rest or a non-training day; a minimum session counts, a walk does not), backfills at most 7 days and is idempotent; has() yields to a rest date; toRest postpones the slot and undoRest restores it; markSeen/unseen; the 400 cap; the blob gate drops malformed entries; the missed channel defaults on at 21:00, validates its time, opens Home, is armed on a training day only, speaks both languages without a hole, and a session silences it and the training reminder, and so does a rest declared today with no session logged');
+console.log('PASS skips: an old blob loads the default; the first settle records nothing; a settle records exactly the planned untrained days (not a trained, a rest or a non-training day; a minimum session counts, a walk does not), backfills at most 7 days and is idempotent; has() yields to a rest date; toRest postpones the slot and undoRest restores it; markSeen/unseen; the 400 cap; the blob gate drops malformed entries; the missed channel defaults on at 21:00, validates its time, opens Home, is armed on a training day only, speaks both languages without a hole, keeps its English body to the count measured for the two lines of the bar, and a session silences it and the training reminder, and so does a rest declared today with no session logged');
