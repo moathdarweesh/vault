@@ -2899,6 +2899,12 @@ body.rest-active[data-view="session-run"] .toast { bottom: calc(var(--run-nav-h)
    selector with :has() outranks that screen's two rules, and they must keep
    it. An engine without :has() drops this rule and keeps the one above. */
 body.rest-active:not([data-view="session-run"]):has(.modal-overlay:not(.is-out), .sheet-overlay.open) .toast { bottom: calc(var(--nav-h) + var(--safe-b) + 16px); }
+/* v444: ON FOOD THE «+» STANDS ABOVE THE FLOATING BAR (its own rule is with
+   .food-fab, further down), so there the toast goes one step higher: above
+   the bar, and above the «+» by the same --fab-clear it takes without a rest.
+   Under an open sheet the rule just above still wins: it is the more
+   specific of the two. */
+body.rest-active[data-view="food"] .toast { bottom: calc(var(--nav-h) + var(--safe-b) + 16px + var(--rest-h, 72px) + 12px + var(--fab-clear)); }
 /* v437: ON FOOD THE TOAST SITS ABOVE THE «+». The floating add button
    (.food-fab) lives at the toast's own anchor, the nav + 16px, so every toast
    on Food lay on it for its whole life, ten seconds for an Undo (measured in
@@ -2907,9 +2913,9 @@ body.rest-active:not([data-view="session-run"]):has(.modal-overlay:not(.is-out),
    12px gap: Undo's downward halo (-14px, below) ends 9px short of the button.
    Each :not() names a state where the «+» is NOT what the toast would land
    on, and where lifting it breaks something that works:
-   · .rest-active: the floating rest bar covers the «+», and the bar's own rule
-     above places the toast on every view. This selector outranks that rule, so
-     it steps aside BY NAME; source order cannot do it.
+   · .rest-active: while a rest floats the «+» is somewhere else (above the
+     bar, since v444) and the rest rules above place the toast. This selector
+     outranks them, so it steps aside BY NAME; source order cannot do it.
    · an OPEN sheet of either kind (#modal-root's, or the add sheet in .app): the
      «+» is under it, and the sheet has made room for the toast at its old
      place («the SHEET makes room», further down). A lifted toast lies on the
@@ -6971,6 +6977,19 @@ body:has(> .auth-gate) .modal-overlay { z-index: 1001; }
    it was before the toast moved (27px under a two-line Undo at 375px). */
 .view[data-view="food"] { padding-bottom: calc(84px + var(--fab-clear)); }
 body[data-view="food"] .food-fab { display: inline-flex; }
+/* v444: WHILE A REST FLOATS, THE «+» STANDS ABOVE THE BAR. The floating rest
+   bar (.rest-timer.floating) stands on the button's own anchor, the nav +
+   16px, is wider and is painted over it: the «+» was covered whole (English,
+   375px: [16,672,84,732] inside the bar [12,660,363,732]) and food could not
+   be added from this tab until the rest ended. The owner's decision: lift it.
+   It takes the bar's anchor, the bar's measured height and a 12px gap, as the
+   toast does on every other view; here the toast goes above the «+» in turn
+   (the rule is with the toast's). It snaps there, as the toast does: `bottom`
+   is not animated. The page's end keeps that much more room while the rest
+   floats, so its last box is clear of the button and of the toast.
+   scripts/test-toast-place-ui.js holds the three rules by rectangles. */
+body.rest-active[data-view="food"] .food-fab { bottom: calc(var(--nav-h) + var(--safe-b) + 16px + var(--rest-h, 72px) + 12px); }
+body.rest-active .view[data-view="food"] { padding-bottom: calc(84px + var(--fab-clear) + var(--rest-h, 72px) + 12px); }
 
 /* --- Food library picker: catalog shown as small rectangular chips --- */
 .food-lib-search { margin-bottom: 12px; }

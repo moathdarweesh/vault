@@ -2,6 +2,49 @@
 
 One section per release since v309, newest first, moved verbatim from `CLAUDE.md` in v401 (batch 6 of the 2026-09-25 review; `docs/REVIEW-2026-09-25.md`). `CLAUDE.md` is the guide and the authority for how the app works now. A section here records what one release changed and why, in the words written at the time, so a later section — or the guide — can supersede what an earlier one says.
 
+## v444 — on Food the «+» stands above the floating rest bar
+
+**The item v437 and v443 left open, and the owner's decision.** A rest started in the guided run
+follows the user to every tab as a floating bar on the nav + 16 px. That is the «+»'s own anchor
+on Food; the bar is wider and painted over it, so the button was covered WHOLE. English at
+375 px: the «+» [16,672,84,732] inside the bar [12,660,363,732]. Food could not be added from the
+Food tab until the rest ended or was skipped. Asked whether to lift it, the owner answered
+«نعم، ارفعه».
+
+**The fix.** While a rest floats, on Food: the «+» takes the bar's anchor, the bar's measured
+height and a 12 px gap, the formula the toast takes on every other view. It keeps its size and
+its edge, and a real tap on it opens the add sheet. The toast goes one step higher, above the
+«+» by the same clearance it takes without a rest. Measured after, 375 px in both languages: the
+«+» from 588 to 648 over the bar from 660, an Undo from 523 to 576 over the «+»; at 320 px with
+larger text the same gaps (12 and 12.5 px).
+
+**The end of the page moves with them.** The Food page keeps the bar's height and the gap more
+at its end while a rest floats, so its last box is clear of the button and of the toast there.
+
+**What it does not do.** The «+» snaps up and back down with the rest; `bottom` is not animated,
+as the toast's is not. A rest never starts on Food, so the user arrives to a button already in
+its place, and it returns to its own place when the rest ends (the one moment a control moves
+under the thumb). Under an open sheet nothing changes: v443's sheet rule is the more specific.
+
+**Tests.** `scripts/test-toast-place-ui.js` gains one case and widens two (13 in all,
+Arabic/dark and English/light, 375 px and 320 px with larger text). Written before the fix and
+run on v443 as shipped: it failed in both languages on «the «+» [16,672,84,732] is under the
+rest bar [12,660,363,732]». Then 29 plants in memory (the file on disk never written, its bytes
+hashed before and after), each caught in both languages by every case it names: the 23 of v437
+and v443, and six new ones: the «+» not lifted; no toast rule for Food while a rest floats (the
+toast lands on the lifted button); the gap under the «+» closed; the bar's measured height not
+read; no more room at the page's end; the gap between the toast and the «+» closed. One of the
+old plants was nearly dropped as «equivalent now» and was run first instead: taking
+`:not(.rest-active)` out of v437's Food rule still breaks the screen, because that rule
+outranks the new one and puts the toast on the lifted button. It stays in the list.
+
+**Gate.** `npm run verify`: the 83 contracts hold, ESLint clean, 38 suites passed · 0 failed (wall 273 s, --jobs 3).
+
+**Fingerprint** (`diff v443y v444a`, both captured for this release on the app's own faces; the baseline is the working tree with the three rules removed in memory): sheets 130/130 identical (9,606 elements), views 184/184 identical (17,100 elements). No view or sheet of the net has a rest running, so the net cannot see this change; it shows that nothing else moved.
+
+**Looked at** in real pictures, before and after: Arabic and English at 375 px, Arabic at 320 px
+with larger text.
+
 ## 2026-11-22 — the suites measure the app in the app's own faces (a test-harness change: no release, no shipped file)
 
 **What was red, and for how long.** On GitHub the «Test suites» step failed on every commit from

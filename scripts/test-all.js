@@ -48,7 +48,7 @@ const HEAVY = [
   'test-cardio-sleep-ui.js',   // 126 s
   'test-ai-retry-ui.js',       //  62 s
   'test-program-ui.js',        //  60 s
-  'test-toast-place-ui.js',    //  ~52 s (alone, 2026-11-22: 12 cases × 2 languages, every toast awaited at rest)
+  'test-toast-place-ui.js',    //  ~57 s (alone, 2026-11-22: 13 cases × 2 languages, every toast awaited at rest)
   'test-fingerprint.js',       //  47 s
   'test-what-to-eat-ui.js',    //  ~26 s (alone, 2026-11-17: 22 cases × 2 languages on a fixed clock)
   'test-run-home-ui.js',       //  21 s
