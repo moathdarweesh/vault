@@ -2,6 +2,62 @@
 
 One section per release since v309, newest first, moved verbatim from `CLAUDE.md` in v401 (batch 6 of the 2026-09-25 review; `docs/REVIEW-2026-09-25.md`). `CLAUDE.md` is the guide and the authority for how the app works now. A section here records what one release changed and why, in the words written at the time, so a later section — or the guide — can supersede what an earlier one says.
 
+## v443 — a toast sits above the floating rest bar
+
+**Left open by v437, with its measurement.** A rest started in the guided run follows the user to
+every other tab as a FLOATING bar, standing on the nav + 16 px (where the Food tab's «+» stands
+too). Every toast raised meanwhile lay ON that bar. Measured again on v441, English at 375 px: an
+Undo [19,651,356,712] on the bar [12,660,363,732] (on v436, a plain toast [49,671,326,712]
+wholly inside it). Asked
+whether to fix the two small defects v437 had measured, the owner answered «نعم، أصلحهما». The
+other one, the reminder bar's title touching its body, had meanwhile been fixed by another
+session (v438, v440, v441), so this release is the one that was left.
+
+**Why it was wrong.** `body.rest-active .toast` was written for a floating timer, then re-measured
+from the screen FLOOR for the bar that sticks on the guided screen, which has no nav. v431 gave
+the guided screen two rules of its own, and that left the old line to the floating bar alone,
+still measured from the floor: 100 px, under a bar that stands from 80 to 152.
+
+**The fix.** The line is measured from the floating bar's own anchor again: the nav + 16 px, the
+bar's measured height (`--rest-h`) and a 12 px gap. The toast's bottom edge sits 12 px above the
+bar, and Undo's tap halo ends 9 px short of it. Looked at in real pictures, before and after:
+Arabic and English at 375 px, Arabic at 320 px with larger text.
+
+**Under a sheet the toast goes back to its plain place.** An open sheet covers the floating bar
+as it covers the «+», and has made room for the toast at the nav + 16 px. The old line left the
+toast 36 px above the nav there, 20 px off the place the sheet reserved; the new line alone would
+have put it 100 px above the nav, on the sheet's Save. So a second rule returns it to the plain
+place while a sheet of either kind is open. A leaving sheet does not count: the toast a Save
+raises as its sheet closes is above the bar from its first frame.
+
+**The guided run is untouched, and that needed a name.** Its two rules are more specific than
+the first line. The second rule carries `:has()` and would outrank them, so it excludes
+`[data-view="session-run"]` by name. Measured before and after: with a rest running there, the
+toast's bottom edge is the rest bar's height + 24 px above the floor bar, sheet or no sheet.
+
+**Tests.** `scripts/test-toast-place-ui.js` gains three cases (12 in all, Arabic/dark and
+English/light): above the floating bar on Food, Home, Program and the day page at 375 px, and on
+Food and Home at 320 px with larger text, on Food exactly as on Home; under a sheet and under the
+add sheet, with the first frame of a sheet's leaving; and the guided run where it was. Written
+before the fix and run on v441 as shipped: the first two failed in both languages, naming the
+rectangles above, and the third held, as it must. Then 23 plants in memory (the file on disk
+never written, its bytes hashed before and after), each caught in both languages by every case
+it names: v437's thirteen, and ten new ones: the rule measured from the floor; the gap closed; a
+lift 60 px too far; the bar's measured height not read; no rule for a sheet over a floating rest;
+a leaving sheet counted as open; the add sheet not counted as a sheet; the sheet rule reaching
+the guided run; the floating bar's rule outranking the guided run's; the floating bar raised
+24 px without the toast following (the two places that must agree). The suite also holds with
+the whole app forced into Verdana, Tahoma, Courier New and Arial Black, the stand-in for CI.
+
+**Gate.** `npm run verify`: the 82 contracts hold, ESLint clean, 38 suites passed · 0 failed (wall 270 s, --jobs 3). That was the second run. The first was 37 passed · 1 failed: `test-what-to-eat.js` took 15.5 s on its grid against a 15 s limit, while another session's Java build was loading the machine; alone it passed twice, and no file changed between the two runs.
+
+**Fingerprint** (`diff v442x v443a`, both captured for this release: the baseline is the working tree with the two rules reverted in memory): sheets 130/130 identical (9,606 elements), views 184/184 identical (17,100 elements). No view or sheet of the net has a rest running, so the net cannot see this change; it shows that nothing else moved.
+
+**Still open from v437, and not this release.** On Food the floating rest bar covers the «+»
+whole, so food cannot be added from that tab until the rest ends or is skipped. Where the «+»
+goes while a rest floats is a decision, not a measurement. An engine without `:has()` keeps the
+first rule only: the toast is above the floating bar there too, and stays above it under a sheet.
+
 ## v442 — a set row's field holds its number
 
 **The owner's answer to v439's open item.** v439 left one thing seen in its screenshots and not

@@ -2874,13 +2874,31 @@ button.schedule-prev-row { width: 100%; min-height: var(--btn-h-m); font: inheri
    never overlap (they otherwise share the same bottom anchor). The timer bar is
    ~70px tall sitting 16px above the nav, so ~120px clears it plus the toast's
    own slide-in. */
-/* Clears the sticky rest bar at its stuck position: anchor + measured height +
-   a gap. It used to be measured from --nav-h, which the guided screen hides. */
-body.rest-active .toast { bottom: calc(var(--safe-b) + var(--rest-h, 72px) + 28px); }
+/* v443: THE TOAST SITS ABOVE THE FLOATING REST BAR, AGAIN. This line was once
+   re-measured from the screen FLOOR, for the bar that sticks on the guided
+   screen (which has no nav). v431 then gave that screen the two rules below,
+   which left this one to the bar that FLOATS: off the guided run, standing on
+   the nav + 16px (.rest-timer.floating). Measured from the floor it put every
+   toast ON that bar (English, 375px: a toast [49,671,326,712] wholly inside
+   the bar [12,660,363,732]). It is the bar's own anchor again, the bar's
+   measured height, and a 12px gap: Undo's downward halo (-14px, below) ends
+   9px short of the bar. The anchor is written twice, here and on
+   .rest-timer.floating; scripts/test-toast-place-ui.js holds the two together
+   by rectangles. */
+body.rest-active .toast { bottom: calc(var(--nav-h) + var(--safe-b) + 16px + var(--rest-h, 72px) + 12px); }
 /* v431: on the guided screen the floor bar is under it too. 16px clears Undo's
    downward halo (-14px, below) off the bar's top edge, so it never steals Next. */
 body[data-view="session-run"] .toast { bottom: calc(var(--run-nav-h) + 16px); }
 body.rest-active[data-view="session-run"] .toast { bottom: calc(var(--run-nav-h) + var(--rest-h, 72px) + 24px); }
+/* v443: …BUT NOT UNDER A SHEET. An open sheet covers the floating bar as it
+   covers the «+» (v437, below), and it has made room for the toast at the
+   toast's plain place, the nav + 16px («the SHEET makes room», further down):
+   above the hidden bar the toast would lie on the sheet's Save. A LEAVING
+   sheet is not an open one, so a toast raised as its sheet closes is above
+   the bar from its first frame. The guided run is excluded BY NAME: a
+   selector with :has() outranks that screen's two rules, and they must keep
+   it. An engine without :has() drops this rule and keeps the one above. */
+body.rest-active:not([data-view="session-run"]):has(.modal-overlay:not(.is-out), .sheet-overlay.open) .toast { bottom: calc(var(--nav-h) + var(--safe-b) + 16px); }
 /* v437: ON FOOD THE TOAST SITS ABOVE THE «+». The floating add button
    (.food-fab) lives at the toast's own anchor, the nav + 16px, so every toast
    on Food lay on it for its whole life, ten seconds for an Undo (measured in

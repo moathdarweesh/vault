@@ -1,7 +1,7 @@
-// WHERE A TOAST SITS (v437) — in real Chrome.
+// WHERE A TOAST SITS (v437, v443) — in real Chrome.
 //
 //   node scripts/test-toast-place-ui.js            # ar/dark + en/light, 375 px (and 320 px with larger text where a case says)
-//   QA_ONLY=<words> node scripts/test-toast-place-ui.js
+//   QA_ONLY=<words> node scripts/test-toast-place-ui.js     # one phrase of a case's name, or several joined by «|»
 //
 // WHY THIS EXISTS. The toast and the Food tab's floating «+» (#food-fab) shared
 // ONE anchor: bottom = the nav + 16 px. Measured 2026-11-17 on v436, in both
@@ -20,27 +20,42 @@
 //   · NOT over a sheet: a sheet opened from Food hides the «+» and has made
 //     room for the toast at its old place (styles.css, «the SHEET makes room»),
 //     so there the toast must not move — a lifted one lies on the sheet's Save;
-//   · NOT while a rest runs: the floating rest bar's own rule keeps the toast
-//     where it puts it on every view.
+//   · NOT while a rest runs: the floating rest bar covers the «+», so Food takes
+//     no lift of its own and the toast sits where the BAR's rule puts it (below).
 //   · a toast ALREADY on screen follows the sheet: down to the old place when a
 //     sheet opens under it, above the «+» again when the sheet has closed.
 //
+// SINCE v443 THE SAME IS HELD FOR THE FLOATING REST BAR (a rest started in the
+// guided run, then another tab: the bar follows, standing on the nav + 16 px as
+// the «+» does). The toast's rest rule was still measured from the screen FLOOR —
+// right for the sticky bar it was written for, and since v431 gave the guided
+// run two rules of its own, used only where the bar floats — so every toast lay
+// ON the bar (measured on v436, English at 375 px: a toast [49,671,326,712]
+// wholly inside the bar [12,660,363,732]). Now:
+//   · above the bar, by rectangles, on Food, Home, Program and the day page,
+//     with Undo's tap halo off the bar — and on Food exactly as on Home;
+//   · NOT under a sheet: the bar is under the sheet as the «+» is, so the toast
+//     is back where the sheet made room for it, and above the bar again from
+//     the first frame of the sheet's leaving;
+//   · NOT on the guided run, which keeps its own two rules, sheet or no sheet.
+//
 // Every place is read off the screen and compared with the things around it
-// (the «+», the nav, the page's last box, the sheet's Save), never with a
-// figure copied out of the stylesheet. The harness is the one
+// (the «+», the nav, the rest bar, the page's last box, the sheet's Save), never
+// with a figure copied out of the stylesheet. The harness is the one
 // scripts/test-next-target-ui.js uses: the repo over loopback, js/cloud.js as an
 // offline stub, every non-loopback request aborted.
 //
 // Each check was seen failing on an in-memory plant of styles.css (the file on
-// disk never written), and the first two on v436 as shipped; they are named in
-// docs/RELEASE-NOTES.md under v437.
+// disk never written): the «+» cases on v436 as shipped, the rest-bar cases on
+// the release before v443; they are named in docs/RELEASE-NOTES.md under v437
+// and v443.
 'use strict';
 
 const assert = require('node:assert/strict');
 const { chromium } = require('playwright');
 const { start, fence } = require('./fp/server.js');
 
-const ONLY = process.env.QA_ONLY || '';
+const ONLY = (process.env.QA_ONLY || '').split('|').filter(Boolean);
 const LIVE = '#modal-root .modal-overlay:not(.is-out)';
 // A name long enough that the toast is as wide as a toast gets (max-width 90vw).
 const NAME = { ar: 'شاورما دجاج عربي بالثوم', en: 'Chicken shawarma plate' };
@@ -76,6 +91,11 @@ const INSTALL = () => {
       low: low ? [low.left, low.top, low.right, low.bottom].map((n) => Math.round(n * 10) / 10) : null, lowName,
       atEnd: !!main && main.scrollTop + main.clientHeight >= main.scrollHeight - 1, scrolls: !!main && main.scrollHeight > main.clientHeight + 1,
       rest: box(document.querySelector('.rest-timer.floating')),
+      // The guided run's own: its rest bar while a rest runs (sticky, never floating), its floor bar, and
+      // the bar's height as the app measured it when the rest began (--rest-h).
+      runBar: box(document.querySelector('.view.active .rest-timer.live:not(.floating)')),
+      runNav: box(document.querySelector('.view.active .run-nav')),
+      restH: parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--rest-h')) || null,
       modal: box(document.querySelector('#modal-root .modal-overlay:not(.is-out) .modal')),
       extra: extraSel ? box(document.querySelector(extraSel)) : null,
       view: document.body.dataset.view,
@@ -204,6 +224,18 @@ function aboveFab(g, what) {
     assert.ok(!hits(g.halo, g.fab), `${what}: Undo's tap halo ${fmt(g.halo)} reaches the «+» ${fmt(g.fab)}`);
   }
   assert.ok(g.fabTaps, `${what}: a tap on the middle of the «+» reaches the «+»`);
+}
+// ABOVE THE FLOATING REST BAR: no shared pixel, a real gap, and no further up than a gap needs to be.
+function aboveBar(g, what) {
+  assert.ok(g.rest, `setup: a rest bar floats here (${what})`);
+  assert.ok(!hits(g.toast, g.rest), `${what}: the toast ${fmt(g.toast)} lies on the rest bar ${fmt(g.rest)}`);
+  const gap = Math.round((g.rest[1] - g.toast[3]) * 10) / 10;
+  assert.ok(gap >= 8 && gap <= 16, `${what}: the toast's bottom edge is ${gap} px above the rest bar (wanted 8–16: clear of it, and no further up than that)`);
+  assert.ok(g.toast[0] >= 0 && g.toast[2] <= g.vw + 0.5 && g.toast[1] >= 0, `${what}: the toast ${fmt(g.toast)} is on the screen (${g.vw} px wide)`);
+  if (g.halo) {
+    assert.ok(g.halo[3] > g.act[3], `setup: Undo's tap halo reaches below its button (${what})`);
+    assert.ok(!hits(g.halo, g.rest), `${what}: Undo's tap halo ${fmt(g.halo)} reaches the rest bar ${fmt(g.rest)}`);
+  }
 }
 // THE OLD PLACE: 16 px above the nav's top edge, measured against the nav itself.
 function oldPlace(g, what) {
@@ -357,18 +389,84 @@ const CASES = [
     await kit.page.waitForFunction(() => !document.querySelector('#modal-root .modal-overlay'), null, { timeout: 4000 });
     aboveFab(await still(kit), 'the standing Undo, once the sheet has closed');
   }],
-  ['a rest running: the rest bar\'s own rule places the toast, on Food as on Home', async (kit) => {
+  ['a rest floating over a view: the toast sits above the rest bar, never on it', async (kit) => {
+    const today = await kit.ev(() => todayISO());
+    // 375 px on the four views a rest is carried to; 320 px with larger text (a taller bar, a wrapped toast) on two.
+    for (const [size, views] of [['375', [['food'], ['home'], ['workouts'], ['session-day', { date: today }]]], ['320', [['food'], ['home']]]]) {
+      if (size === '320') await small(kit);
+      const at = `${size} px${size === '320' ? ', larger text' : ''}`;
+      await food(kit);
+      // Off the guided screen a started rest FLOATS (startRestTimer's own branch), and it follows the user from view to view.
+      await kit.ev(() => startRestTimer(90, 0, null, null));
+      const seen = {};
+      for (const [view, ctx] of views) {
+        await go(kit, view, ctx);
+        await standingUndo(kit);
+        const g = await still(kit);
+        assert.ok(g.view === view && g.act, `setup: an Undo on «${view}» (${at})`);
+        aboveBar(g, `an Undo on «${view}» (${at})`);
+        seen[view] = g.toast;
+      }
+      // v437's clause, kept: the «+» is under the bar, so Food takes no lift of its own.
+      assert.deepEqual(seen.food, seen.home, `with a rest floating the toast sits on Food exactly where it sits on Home (${at})`);
+      await kit.ev(() => { hideToast(); clearRestTimer(); });
+    }
+  }],
+  ['a sheet over a floating rest keeps the toast where the sheet made room for it, and gives it back above the bar', async (kit) => {
     await food(kit);
-    // Off the guided screen a started rest floats (startRestTimer's own branch), and it follows the user from view to view.
+    await kit.ev(() => startRestTimer(90, 0, null, null));
+    // The bar is under the sheet as the «+» is: the toast belongs where the sheet made room for it.
+    await kit.ev(() => openManualFoodEntry(null, () => {}));
+    await kit.page.waitForSelector(LIVE + ' #mf-save', { timeout: 4000 });
+    await sheetStill(kit, LIVE + ' .modal');
+    await kit.page.locator(LIVE + ' #mf-name').fill('QA');
+    await kit.ev(() => requestClose());
+    let g = await still(kit, LIVE + ' #mf-save');
+    assert.ok(g.modal && g.rest && /holds-sheet/.test(g.cls), 'setup: a sheet is open over a floating rest, under its instruction');
+    oldPlace(g, 'the unsaved-changes instruction over a sheet, a rest floating');
+    await kit.ev((sel) => { const m = document.querySelector(sel); m.scrollTop = m.scrollHeight; }, LIVE + ' .modal');
+    g = await still(kit, LIVE + ' #mf-save');
+    assert.ok(g.extra && !hits(g.toast, g.extra), `a rest floating: the instruction ${fmt(g.toast)} lies on the sheet's Save ${fmt(g.extra)}`);
+    // The sheet's own Save closes it and says «added» in one task: above the BAR from that first frame.
+    await kit.page.locator(LIVE + ' #mf-name').fill('QA oats');
+    await kit.page.locator(LIVE + ' #mf-cal').fill('300');
+    const first = await kit.ev(() => {
+      document.getElementById('mf-save').click();
+      return Object.assign(window.__qaAnchor(), { leaving: !!document.querySelector('#modal-root .modal-overlay.is-out'), barTop: document.querySelector('.rest-timer.floating').getBoundingClientRect().top });
+    });
+    assert.ok(first.shown && first.leaving, 'setup: Save said so in a toast while its sheet is still leaving');
+    assert.ok(first.edge <= first.barTop - 8, `in the very task that raised it the toast is anchored above the rest bar (its bottom edge at ${first.edge}, the bar from ${first.barTop})`);
+    // The add sheet (inside .app) is a sheet too. The «+» is under the bar, so it is opened the way Home's food card opens it.
+    await kit.ev(() => hideToast());
+    await kit.page.waitForFunction(() => !document.querySelector('#modal-root .modal-overlay'), null, { timeout: 4000 });
+    await kit.ev(() => openAddSheet(null, () => {}));
+    await kit.page.waitForSelector('.sheet-overlay.open .add-sheet', { timeout: 4000 });
+    await sheetStill(kit, '.sheet-overlay.open .add-sheet');
+    await plain(kit, 'sc_failed');
+    g = await still(kit);
+    assert.ok(g.rest, 'setup: the rest still floats under the add sheet');
+    oldPlace(g, 'a toast over the add sheet, a rest floating');
+  }],
+  ['the guided run with a rest running keeps the toast where it was', async (kit) => {
+    // No nav there, and two rules of its own (v431): above its floor bar, and above the rest bar that
+    // sticks over it. Neither rule of the FLOATING bar may reach this screen, sheet or no sheet.
+    const { id, today } = await kit.ev(() => ({ id: DB.exercises.list()[0].id, today: todayISO() }));
+    await go(kit, 'session-run', { date: today, runOnly: [id] });
     await kit.ev(() => startRestTimer(90, 0, null, null));
     await plain(kit, 'fl_recent_logged', kit.name);
-    const onFood = await still(kit);
-    assert.ok(onFood.rest && onFood.view === 'food', 'setup: a rest bar floats over Food');
-    await kit.ev(() => { hideToast(); navigate('home'); });
+    let g = await still(kit);
+    assert.ok(g.view === 'session-run' && g.runBar && g.runNav && !g.rest && g.restH, 'setup: the guided run, its own rest bar live and not floating');
+    // Measured against the floor bar and the rest bar's own height: the toast's bottom edge is that height + 24 px above the floor bar.
+    const over = (x) => Math.round((x.runNav[1] - x.toast[3] - x.restH) * 10) / 10;
+    assert.equal(over(g), 24, `the toast's bottom edge is the rest bar's height + ${over(g)} px above the floor bar (it was + 24, and is still)`);
+    assert.ok(!hits(g.toast, g.runNav), `the toast ${fmt(g.toast)} lies on the floor bar ${fmt(g.runNav)}`);
+    await kit.ev(() => { hideToast(); openPlateCalc(60, 'kg', () => {}); });
+    await kit.page.waitForSelector(LIVE + ' .modal', { timeout: 4000 });
+    await sheetStill(kit, LIVE + ' .modal');
     await plain(kit, 'fl_recent_logged', kit.name);
-    const onHome = await still(kit);
-    assert.ok(onHome.rest && onHome.view === 'home', 'setup: the same rest bar floats over Home');
-    assert.deepEqual(onFood.toast, onHome.toast, 'with a rest running the toast sits on Food exactly where it sits on Home');
+    g = await still(kit);
+    assert.ok(g.modal && g.runNav && g.restH, 'setup: a sheet is open over the guided run, the rest still running');
+    assert.equal(over(g), 24, `under a sheet too: the rest bar's height + ${over(g)} px above the floor bar (it was + 24, and is still)`);
   }],
   ['at 320 px with larger text a wrapped toast sits above the «+»', async (kit) => {
     await small(kit);
@@ -402,7 +500,7 @@ async function main() {
     for (const [lang, theme] of [['ar', 'dark'], ['en', 'light']]) {
       const kit = await openPage(browser, origin, { lang, theme });
       for (const [name, fn] of CASES) {
-        if (ONLY && !name.includes(ONLY)) continue;
+        if (ONLY.length && !ONLY.some((words) => name.includes(words))) continue;
         try { await fn(kit); passed++; console.log(`  ok    ${lang}/${theme}  ${name}`); }
         catch (e) { failures.push(`${lang}/${theme}  ${name}: ${e.message}`); console.log(`  FAIL  ${lang}/${theme}  ${name}\n        ${e.message.split('\n')[0]}`); }
         finally { await settle(kit).catch(() => {}); }
@@ -413,7 +511,7 @@ async function main() {
     }
   } finally { await browser.close(); await srv.close(); }
   if (failures.length) { console.error(`FAIL  toast place UI: ${failures.length} failure(s)`); failures.forEach((f) => console.error('  - ' + f)); process.exitCode = 1; return; }
-  console.log(`PASS  toast place UI (${passed} cases, AR/dark + EN/light, 375px and 320px with larger text, ${Math.round((Date.now() - t0) / 1000)} s): on Food a toast sits above the «+» and never on it — plain, long, an error, an Undo with its tap halo, wrapped at 320 px — from its first frame when a sheet closes under it, and a standing one follows a sheet down and up again; the end of the Food page keeps its last box clear of it; Home, the food log and the suggestions page keep the old place; over a sheet or the add sheet the toast stays where the sheet made room for it, off its Save; with a rest running the rest bar's rule places it on Food as on Home`);
+  console.log(`PASS  toast place UI (${passed} cases, AR/dark + EN/light, 375px and 320px with larger text, ${Math.round((Date.now() - t0) / 1000)} s): on Food a toast sits above the «+» and never on it — plain, long, an error, an Undo with its tap halo, wrapped at 320 px — from its first frame when a sheet closes under it, and a standing one follows a sheet down and up again; the end of the Food page keeps its last box clear of it; Home, the food log and the suggestions page keep the old place; over a sheet or the add sheet the toast stays where the sheet made room for it, off its Save; with a rest floating it sits above the rest bar and never on it — Food, Home, Program, the day page, on Food exactly as on Home — back where the sheet made room under a sheet, above the bar again from the first frame of its leaving; the guided run keeps its own place, sheet or no sheet`);
 }
 
 if (require.main === module) main().catch((e) => { console.error(e); process.exitCode = 1; });
