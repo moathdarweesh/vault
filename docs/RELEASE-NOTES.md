@@ -98,6 +98,12 @@ the next release that touches it corrects them.
 
 **The gate.** `npm run verify`: 83 contracts, lint clean, 38 suites passed and none failed (271 s pooled). The suites were then run once more with DejaVu served as the fallback for every glyph outside the brand faces, which is what the runner will draw after this change: 38 of 38 (273 s). Whether the runner agrees is read from its own run after the push, below.
 
+**After the push (c56e513).** GitHub's run 45058423291: the «Test suites» step is green for the
+first time since v415 — 38 passed · 0 failed · 0 skipped, 276.8 s pooled (it took 480 to 556 s
+while five suites failed and each bought its lonely retry). The runner agreed with the
+emulation run here, suite for suite. Its browser, printed by the new step: Google Chrome
+157.0.8103.78, Playwright 1.65.1. From here a red suites step on CI is a reading to make.
+
 ## v443 — a toast sits above the floating rest bar
 
 **Left open by v437, with its measurement.** A rest started in the guided run follows the user to
