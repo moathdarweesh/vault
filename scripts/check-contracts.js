@@ -2899,6 +2899,13 @@ const cssOwner = (i) => CSS_BLOCKS.reduce((best, b) => (b.open < i && b.close > 
   if (!/@media \(max-width: 359px\) \{\s*\.run-stat-figure \{ font-size: calc\(19px \* var\(--fs-scale\)\); \}\s*\}/.test(css)) problems.push('styles.css: under 360 px the run\'s stat figure must be 19 px — at 22 px «142.5 KG × 12» does not fit two cells on one line there, and the strip\'s height would depend on the exercise (v439)');
   const cell = topFn('js/app.js', 'renderSessionRun');
   if (!cell.includes('part(`<span class="run-stat-x" aria-hidden="true">×</span><span class="num">${fmtNum(ts.r)}</span>`)')) problems.push('js/app.js: the run\'s stat figure must end «× 12» — the word «reps» after the × is what made two cells too wide for a 375 px phone (v439)');
+  // The set rows' fields (v442). The browser cuts a number at the inner edge of its field's
+  // padding, and the number is centred — so side padding only takes room from a long one. The
+  // suite holds the room in em; the declarations that give it, measured in the app's fonts, are here.
+  const runField = (css.match(/^\.run-set-row input \{[^}]*\}/m) || [''])[0];
+  if (!/padding:\s*12px 2px;/.test(runField)) problems.push('styles.css: .run-set-row input must keep 2 px at its sides — with 12 px a 320 px phone left 41 px for the number: «137.5» was cut by 2.4 px (6.7 with larger text) and «142.88» lost its first figure (v442)');
+  const dayField = (css.match(/^\.sd-set-row input \{[^}]*\}/m) || [''])[0];
+  if (!/padding:\s*10px 2px;/.test(dayField)) problems.push('styles.css: .sd-set-row input must keep 2 px at its sides — with 12 px a six-character weight was cut by 5.3 px on the day card at 320 px with larger text (v442)');
   const line = (css.match(/^\.run-nxt, \.sd-nxt \{[^}]*\}/m) || [''])[0];
   if (!line || /white-space:\s*nowrap|text-overflow/.test(line) || !/overflow-wrap:\s*anywhere;/.test(line)) problems.push('styles.css: the reason line (.run-nxt, .sd-nxt) must wrap and never be ellipsised — a reason cut short is no reason');
   contract(`both logging screens hint the ONE next target: the run and the day card ask nxtFor(), ${STATES.length} states each with its own line, the rule pure and sliceable, the old suggestion card gone, the planner's door to the range on every slot`, problems);

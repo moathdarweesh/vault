@@ -3316,7 +3316,10 @@ body[data-view="food"]:not(.rest-active):not(:has(.modal-overlay:not(.is-out), .
 }
 .sd-set-row input {
   width: 100%;
-  padding: 10px 12px;
+  /* 2 px at the sides, not 12 (v442; the reasoning is on .run-set-row input):
+     at 320 px with larger text this field left 53 px, and a six-character
+     weight («142.88», 58.3 px) was cut by 5.3 px. */
+  padding: 10px 2px;
   background: var(--surface-2);
   border: 1px solid var(--border);
   border-radius: 10px;
@@ -3704,7 +3707,16 @@ body[data-view="session-run"] .bottom-nav { display: none; }
 }
 .run-set-row input {
   width: 100%;
-  padding: 12px;
+  /* THE FIELD HOLDS ITS NUMBER (v442): 2 px at the sides, not 12. The number is
+     centred, so side padding gives a short number nothing; it only takes room
+     from a long one, and the browser cuts a value at the padding's inner edge
+     (its first figures on an Arabic page, its last on an English one). At 320 px
+     the field is 67 px wide and 12 px a side left 41 px for the number: «137.5»
+     is 43.4 px (47.7 with larger text) and lost the edge of a figure, «142.88»
+     is 53 px (58.3) and lost its first one. With 2 px the room is 61 px.
+     Measured in the app's own fonts; scripts/test-next-target-ui.js holds the
+     room in em, contract 81 this declaration. */
+  padding: 12px 2px;
   background: var(--surface-2);
   border: 1px solid var(--border);
   border-radius: 10px;

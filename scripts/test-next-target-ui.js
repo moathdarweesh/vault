@@ -25,7 +25,9 @@
 // (the file on disk never written); they are named in docs/RELEASE-NOTES.md
 // under v434. Since v439 the 320 px case also holds the run's two stat cells —
 // inside their row, every piece of a figure inside its cell, the page-wide
-// measure asked of the run again; its plants are named there under v439.
+// measure asked of the run again; its plants are named there under v439. Since
+// v442 it also holds the room a set row's field leaves for its number, on both
+// screens, asked in em so that no font decides the answer; plants under v442.
 'use strict';
 
 const assert = require('node:assert/strict');
@@ -446,7 +448,7 @@ const CASES = [
     assert.deepEqual(await runRows(kit), x(3, ['', '5', '', '102.5']), 'three fives at 100, twice, against a declared «5»: 102.5 × 5');
     assert.equal(await textOf(kit, '.run-nxt'), await uncited(kit, 'nxt_up'), 'the plan block prints the «5» just saved, so the line does not repeat it');
   }],
-  ['at 320 px with larger text the line wraps inside its card and is never cut, in the run and on the day card, and the run\'s two stat cells stay in their row', async (kit) => {
+  ['at 320 px with larger text the line wraps inside its card and is never cut, in the run and on the day card, the run\'s two stat cells stay in their row, and a set row\'s fields keep room for a six-figure weight', async (kit) => {
     const { a } = kit.ids;
     // `wholePage`: also refuse the PAGE scrolling sideways. Asked of BOTH screens again since v439.
     // From v435 to v438 the guided run was excused, because there that measure answered for an older
@@ -544,6 +546,33 @@ const CASES = [
       await seed(kit, a, [[3, S(3, 12, 142.5)]]);
       await run(kit, a);
       assert.deepEqual(await kit.ev(() => [...document.querySelectorAll('.view.active .run-stat-figure')].map((f) => Math.round(parseFloat(getComputedStyle(f).fontSize) * 10) / 10)), [20.9, 20.9], 'under 360 px the stat figure is 19 px × the larger-text scale');
+      // THE FIELDS HOLD THEIR NUMBERS (v442), in the run's rows and on the day card. The room a
+      // field leaves for its number is its box less its borders and its padding: the browser cuts
+      // a value at that edge — its first figures on an Arabic page, its last on an English one.
+      // The room is asked in EM of the field's own font size, so the answer does not depend on
+      // the font this fenced page fell back to: six characters of the app's tabular figures
+      // («142.88», a weight logged in pounds and read in kilograms) are 3.32 em in IBM Plex Sans
+      // Arabic — 58.3 px at this case's 17.6 px. (The field's own scrollWidth does report a cut,
+      // but of the value as THIS browser drew it — in this machine's font, and in the figures of
+      // the browser's language — and it says nothing of the ghost.) Before v442 the run's field
+      // left 2.33 em here (41 px of a 67 px field; 24 px of it were padding beside a centred
+      // number): «137.5» lost the edge of a figure and «142.88» its first one. The day card's
+      // field left 3.01 em.
+      const SIX_FIGURES = 3.32;
+      const fieldsRoom = (rowSel) => kit.ev((rowSel) => [...document.querySelectorAll('.view.active ' + rowSel)].map((row) => {
+        const box = row.getBoundingClientRect();
+        return [...row.querySelectorAll('input')].map((el) => {
+          const r = el.getBoundingClientRect(), cs = getComputedStyle(el);
+          const room = r.width - parseFloat(cs.borderLeftWidth) - parseFloat(cs.borderRightWidth) - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight);
+          return { field: el.dataset.field, inRow: r.left >= box.left - 0.5 && r.right <= box.right + 0.5, em: Math.round((room / parseFloat(cs.fontSize)) * 100) / 100 };
+        });
+      }), rowSel);
+      const hold = (rows) => rows.length > 0 && rows.every((row) => row.length === 2 && row.every((f) => f.inRow && f.em >= SIX_FIGURES));
+      const runFields = await fieldsRoom('.run-set-row');
+      assert.ok(hold(runFields), `the run's reps and weight fields stay inside their row and leave ${SIX_FIGURES} em for the number at 320 px with larger text (${JSON.stringify(runFields[0] || null)})`);
+      await dayOf(kit, [a]);
+      const dayFields = await fieldsRoom(`[data-ex-card="${a}"] .sd-set-row`);
+      assert.ok(hold(dayFields), `the day card's reps and weight fields stay inside their row and leave ${SIX_FIGURES} em for the number at 320 px with larger text (${JSON.stringify(dayFields[0] || null)})`);
     } finally {
       await kit.ev(() => { DB.prefs.setUnit('kg'); DB.prefs.setTextLg(false); document.body.classList.remove('text-lg'); });
       await kit.page.setViewportSize({ width: 375, height: 812 });
@@ -572,7 +601,7 @@ async function main() {
     }
   } finally { await browser.close(); await srv.close(); }
   if (failures.length) { console.error(`FAIL  next target UI: ${failures.length} failure(s)`); failures.forEach((f) => console.error('  - ' + f)); process.exitCode = 1; return; }
-  console.log(`PASS  next target UI (${passed} cases, AR/dark + EN/light, 375px): every open row of the run and of the day card hints the next target with one line saying why, the range cited where no plan block prints it; no row is asked for more than one rep over the weakest set; a ✓ or «اعتمد المقترح» takes it, names the suggestion and can be undone, and a typed figure is handed on as the lifter's own; a first-ever exercise has no ghost, is told its own range once and ends its first day on a computed figure; the plan's range and set count steer it and its block stays; a timed target, bodyweight at the top of the plan's range and an assisted machine silence it; pounds land on a pound plate; three weeks away repeats, row by row; the run resumes with the target; the unit switch and a changed history re-ask an untouched card; the planner opens the range for a hand-built plan; every line fits at 320 px with larger text, where neither screen scrolls sideways and the run's two stat cells stay inside their row with every figure inside its cell — one too long for two cells breaking before its ×`);
+  console.log(`PASS  next target UI (${passed} cases, AR/dark + EN/light, 375px): every open row of the run and of the day card hints the next target with one line saying why, the range cited where no plan block prints it; no row is asked for more than one rep over the weakest set; a ✓ or «اعتمد المقترح» takes it, names the suggestion and can be undone, and a typed figure is handed on as the lifter's own; a first-ever exercise has no ghost, is told its own range once and ends its first day on a computed figure; the plan's range and set count steer it and its block stays; a timed target, bodyweight at the top of the plan's range and an assisted machine silence it; pounds land on a pound plate; three weeks away repeats, row by row; the run resumes with the target; the unit switch and a changed history re-ask an untouched card; the planner opens the range for a hand-built plan; every line fits at 320 px with larger text, where neither screen scrolls sideways and the run's two stat cells stay inside their row with every figure inside its cell — one too long for two cells breaking before its ×, and the reps and weight fields of both screens keep room for a six-figure weight`);
 }
 
 if (require.main === module) main().catch((e) => { console.error(e); process.exitCode = 1; });

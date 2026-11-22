@@ -2,6 +2,129 @@
 
 One section per release since v309, newest first, moved verbatim from `CLAUDE.md` in v401 (batch 6 of the 2026-09-25 review; `docs/REVIEW-2026-09-25.md`). `CLAUDE.md` is the guide and the authority for how the app works now. A section here records what one release changed and why, in the words written at the time, so a later section — or the guide — can supersede what an earlier one says.
 
+## v442 — a set row's field holds its number
+
+**The owner's answer to v439's open item.** v439 left one thing seen in its screenshots and not
+measured: at 320 px with larger text the weight field of a set row cut «137.5». Asked whether to
+fix it, the owner answered: **«نعم، أصلحه»**.
+
+**Measured first, in the app's own fonts** (IBM Plex Sans Arabic loaded, real Chrome, the guided
+run). A row is a grid of `34px 42px 1fr 1fr 46px` with 8 px gaps, so each of its two fields is
+(viewport − 186) / 2 wide: 67 px at 320, 77 at 340, 87 at 360, 94.5 at 375. A field had a 1 px
+border and 12 px of padding on each side, which left the number 41 / 51 / 61 / 68.5 px. The figures
+are tabular, 0.6 em each with a 0.31 em point, so every five-character weight («137.5», «142.5»,
+«402.5») is 43.4 px (47.7 with larger text) and every six-character one («142.88», a weight logged
+in pounds and read in kilograms; «1012.5») is 53 px (58.3). How much of the number was cut, in px:
+
+| viewport | five characters | with larger text | six characters | with larger text |
+|---|---|---|---|---|
+| 320 px | 2.4 | 6.7 | 12 | 17.3 |
+| 340 px | whole | whole | 2 | 7.3 |
+| 360 px and wider | whole | whole | whole | whole (2.7 px to spare at 360) |
+
+So the item was wider than v439 saw it: not only larger text, and not only 320 px. The reps field
+is the same box and held «100» everywhere.
+
+**Which end is lost.** A value too long for its line is start-aligned, so the cut is at the line's
+end: an Arabic page lost the number's FIRST figures and an English page its last. In Arabic at
+320 px «142.88» stood in the field without its «1» (and, with larger text, without most of its «4»).
+The browser cuts at the inner edge of the padding, so 24 px of empty field stood beside a cut
+number.
+
+**Two sets of figures, both measured.** A number input draws its VALUE in the figures of the
+browser's own language, whatever the page's: Chrome started with `--lang=ar-SA` draws «١٣٧.٥» in
+the same field (read back through a selection), in the Arabic and in the English interface alike.
+The ghost — the placeholder, the next target — is the raw string and is always Latin. The
+Arabic-Indic figures are narrower in this font («١٣٧.٥» 41.1 px and «١٤٢.٨٨» 47.8 px with larger
+text), so there the cut was smaller: «١٤٢.٨٨» by 2.5 px at 320 px, 6.8 with larger text, and the
+ghost beside it as in the table. The Latin string is the wider one and decided the fix.
+
+**The fix.** `.run-set-row input` keeps `padding: 12px 2px` (it was `12px`). The number is centred,
+so side padding gives a short number nothing; it only takes room from a long one. The room is now
+the field less 6 px: 61 px at 320. Nothing else changes — the field's box, the columns, the header
+and the row's height are what they were, and a short number stands where it stood.
+
+**The day card had the same defect, smaller.** Its rows are `44px 1fr 1fr 32px`, its field 79 px at
+320 px with `padding: 10px 12px`: 53 px of room, a six-character weight exactly filling it at the
+default text size and cut by 5.3 px with larger text. Same fix (`10px 2px`, 73 px of room). The
+session sheet's rows (`.set-edit-row`: an 88 px field with 66 px of room at 320 px) hold six
+characters with 7.7 px to spare and were left alone.
+
+**Measured after, on the built files, in the app's own fonts.** 48 cells of the run (320, 340, 360,
+375, 393 and 412 px × both text sizes × Arabic and English × Chrome in English and in Arabic), five
+weights in each, the Latin string and the string the browser drew: none is cut. The tightest is a
+six-character weight at 320 px with larger text, with 2.7 px to spare (8 at the default size; 12.7
+and 18 at 340); a five-character weight has 13.3 px to spare there. In every cell the field's box,
+the row's height (50 px, 52.4 with larger text) and the place of the rows on the page are the same
+numbers as before the change. The day card's field has 14.7 px to spare for six characters at
+320 px with larger text. Under two wide stand-in fonts (Verdana, Tahoma: 48 more cells) no page
+scrolls sideways and no child leaves its row.
+
+**The guard, and why it counts em.** The 320 px case of `scripts/test-next-target-ui.js` now asks
+both screens' rows for the room each field leaves its number — the box less its borders and its
+padding, where the browser cuts — divided by the field's own font size, and refuses less than
+3.32 em: six of the app's tabular figures. Em and not pixels of text, because that page is fenced
+from the font hosts and would measure the machine's fallback font (CI's is not this machine's, and
+neither is the app's); a room in em is the same number under any font. It also holds each field
+inside its row. Contract 81 holds the two declarations (two more clauses).
+
+**Each new check, seen failing first** — in memory (`fs.readFileSync` patched through a `node -r`
+preload; the repo's bytes hashed before and after, unchanged):
+
+- the run's old padding → «2.33 em»; the run at 4 px a side, where six characters are cut by 1.3 px → «3.24 em»;
+- the day card's old padding → «3.01 em»;
+- the run's fixed columns 10 px wider each, padding kept → «2.61 em»; the run's figure at 19 px, padding kept → «2.92 em»; the day row's fixed columns 20 px wider each → «3.01 em» — the check is about the room, not about the declaration;
+- a reps field moved out of its row, on each screen: caught by the new check in the English run, and a step earlier in the Arabic one (there the move makes the page scroll sideways, which the case already refused);
+- each contract clause on its own plant.
+
+Ten of ten caught. The same case under four stand-in fonts for CI's (Verdana, Tahoma, Courier New,
+Arial Black): passes under each.
+
+**Gate.** `npm run verify` on the final tree: all contracts hold, ESLint clean, 38 suites passed · 0 failed · 0 skipped (wall 388 s, --jobs 3). It ran twice. After the first run (38 · 0 as well, 399 s) one comment in the suite was corrected — it said a scrollWidth does not report the cut, which the measurements below contradict — and the whole gate was run again on that tree.
+
+**Fingerprint net** (`.fpnet/`, st441 → st442): 184 of 184 views and 130 of 130 sheets identical,
+0 differences in 26,706 elements. It shows that no other screen moved. It does not see these
+fields: its run cell has no run in context and its day cell is an empty day, so no set row is in
+either.
+
+**How it was measured** (scripts outside the repo, nothing in it written). The room is the field's
+box less its borders and its padding; the number's width is a span in the field's computed font,
+for the Latin string and for the string the browser drew. Chrome's own `scrollWidth − clientWidth`
+on the field agreed with the second to the pixel in both browser languages (on an input
+`clientWidth` is already the content box); it measures the value as drawn and never the ghost,
+which is why the ghost was measured by the Latin string. The fix was tried first as a style
+injected into the page, then measured again on the built files.
+
+**Not claimed.**
+- No phone was in hand. The measurements are real Chrome on a desktop at phone widths, with the
+  app's fonts loaded; the cut and the fix follow from the field's box and the font's advances, which
+  are the same on a phone, but it was not seen there.
+- A weight of seven characters was not measured. By the same advances it needs 68.8 px with larger
+  text and 320 px gives 61, so it would be whole from 340 px. The app does not write one below
+  1,000 kg; a lifter can type one.
+- Under Verdana a six-character weight is still cut at 320 px (1.7 px, 7.9 with larger text), and
+  under Tahoma by 0.5 px with larger text. Those are stand-ins, not fonts the app ships; CI's own
+  fonts were not measured, and the suite does not depend on them.
+- Seen while measuring and not touched: under Tahoma the header word «مجموعة» is 1–5 px wider than
+  its 42 px column (inside it in the app's font).
+
+**For the owner, not changed here.** `fmtNum`'s rule is «Latin digits regardless of UI language»,
+and a typed weight does not follow it where the browser's language is Arabic: the ghost reads
+«137.5» and the same field, once filled, «١٣٧.٥». That is the browser drawing a number input, and
+only replacing the input's type would change it — a decision about keyboards and validation, so it
+is put to the owner and not taken. Measured in desktop Chrome with `--lang`; not seen on a phone.
+
+**Three sessions, one checkout.** This work began while another session's v441 was mid-gate in
+the same tree: until its push nothing was written here and no browser ran beside its tests. Then a
+third session and this one both read «v441 pushed, tree clean» within minutes of each other. This
+one's fingerprint baseline (04:41–04:44) overlapped the first minute of that session's in-memory
+plants (from 04:43:42), and this fix was written to the working tree while they ran, so its «repo
+bytes unchanged» proof could not hold for `styles.css`. It was sent a note naming the three files;
+its plants had ended by 04:48, and before each of this release's browser runs the other sessions'
+test processes were counted (none); what ran beside the gate while it ran was not watched. **A
+clean tree is not a lock: two waiting sessions both see it. Say what you are about to write before
+the first write, not after.**
+
 ## v441 — the English missed-workout sentence fits the bar's two lines
 
 **The owner's answer to v440's open question.** v440 gave the bar's body a second line and left
