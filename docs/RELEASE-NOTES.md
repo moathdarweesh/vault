@@ -2,6 +2,102 @@
 
 One section per release since v309, newest first, moved verbatim from `CLAUDE.md` in v401 (batch 6 of the 2026-09-25 review; `docs/REVIEW-2026-09-25.md`). `CLAUDE.md` is the guide and the authority for how the app works now. A section here records what one release changed and why, in the words written at the time, so a later section — or the guide — can supersede what an earlier one says.
 
+## 2026-11-22 — the suites measure the app in the app's own faces (a test-harness change: no release, no shipped file)
+
+**What was red, and for how long.** On GitHub the «Test suites» step failed on every commit from
+v415 (2026-09-27) on, while green on the owner's PC, on text-fit cases whose set changed as
+suites were added. On v442's run (87265d6), five suites and seven cases: the sleep ring's
+verdict («دون الهدف بـ0:45»: 121.1 px at ×1.12 against a 111.0 px chord); the food log's track
+head («بروتين» + «125.5 / 150g»: 136.1 against 136); three on Program (a record's name cut at
+its two-line clamp, the muscle hint under its caption, the legend's note out of sight at
+375 px); Home's «Training days this week» on four lines at 340 px with larger text; and the
+recipe bar's caption off its one line at 320 px with larger text.
+
+**Why, measured.** The fence aborts the two font hosts, so a fenced page drew the app in the
+machine's fallback face: Segoe UI here, DejaVu Sans on the runner. Three measurements settled it.
+- DejaVu Sans and DejaVu Sans Mono (found on this PC inside a Python package) were served to the
+  page in memory in place of the fallback: the five suites then failed HERE with the runner's
+  own figures, to the tenth of a pixel. The face was the whole difference.
+- The same five suites in the app's own faces (Plex and the mono, from the files the repo
+  carries for the Android widgets): all pass.
+- And in the faces a browser really loads, the two font hosts admitted for the run (the true
+  Plex Medium and Bold among them): the five pass, and `test-next-target-ui.js` and
+  `test-what-to-eat-ui.js` with them.
+So none of the seven was a defect in the app's own faces; the checks were measuring a face that
+is not the app's. Two of them carried a second error on top: a typed «× 1.12», written to guess
+the brand's width from a NARROW fallback, which widened the runner's already wide face a second
+time (and on this PC the fallback mono was not narrow either: 0.600 em a figure, the brand's own
+advance).
+
+**The fix is in the harness.** `scripts/fp/server.js` gains `brandFaces(page)`: it registers
+IBM Plex Sans Arabic and JetBrains Mono from `android/app/src/main/res/font/` under the brand's
+own names, served by the harness server over loopback (the fence and the app's CSP both admit
+it), at the start of every document, and `page.goto` / `page.reload` resolve only once the four
+faces have loaded. `fence()` calls it, so every fenced page draws the app in the same faces on
+every machine. `test-sync-status-ui.js`, behind its own route filter, calls it before its first
+`goto`, and so do the two extra pages `test-convenience-ui.js` opens; `scripts/measure-boot.js`
+passes `{ faces: false }` (it times the app's own boot). A face that does not load, or has not
+loaded in 15 s, is an error at that `goto`, never a silent fall back. No app file changed, and
+no bound moved (the chord, the head's width, the line counts are what they were); what changed
+is the multiplier on a measured width: from a typed 1.12 on every line to the allowance below.
+
+**What is exact, and the allowance for what is not.** The repo's Plex 400 and 600 have the same
+advances as the faces a browser loads from the host: 0.00 px over 19 strings in both scripts.
+Its mono draws a figure at 0.6 em, as the host's 500 and 700 do (digits measured). It carries NO
+Plex Medium and NO Plex Bold, so a 500 line is drawn in the 400 file and a 700 line in the 600
+file, narrower than the truth by up to 4.2 % and 2.7 % (the same 19 strings). A check that
+compares a measured width with a box therefore multiplies by `window.__fpGap(el)` (1.045, 1.03
+or 1): the two rings and the food log's track head do, in place of the typed 1.12. A check that
+reads a layout result (a line count, a scrollWidth against a clientWidth, one box's edge against
+another's) cannot be widened, and is that much lenient for Plex text at those two weights.
+**Open, the owner's call:** adding the two missing files (a download, about 230 KB each, the
+same licence as the four) would retire the allowance.
+
+**What still differs between machines, and from a phone.** A glyph the brand faces do not carry
+(an emoji, Arabic set in the mono's stack) comes from the machine's fallback, as on a phone.
+The repo's files are the full fonts: a glyph they carry that the host's subsets do not serve (an
+arrow, a check mark) is drawn in the brand face here and in a phone's own face there. And the
+browser: most suites launch the machine's own Chrome, so CI now prints its version before the
+suites (`.github/workflows/ci.yml`).
+
+**Contract 83** holds what no suite would notice on the machine where it breaks: each of the
+four files is whole and is the face and the weight it is registered as, read from the file's own
+tables (a Plex file its range's lowest weight); the allowance is not under the measured gaps;
+the app's stylesheet, its scripts and its font link ask for the same two families and no third;
+`fence()` draws the faces for every caller but the boot timer; every page a test file opens asks
+for them (`test-startup.js` and `test-brand-icon.js` excepted by name: neither measures text);
+the typed factor stays out, by its name and by its form, and the allowance stays at each site
+that compares a width.
+
+**The fingerprint net** stamps each record with the faces it was drawn in and refuses to diff
+two records that disagree: a tag taken before this day cannot be compared with one taken after
+(tried: `diff v443a faces1` stops at «the two captures disagree on faces»).
+
+**Seen to fail first.** 42 plants in memory, the repo's bytes hashed before and after, each
+caught: 28 on contract 83 and 14 in a browser. Among the browser ones, the seven cases that had
+been red on CI, each made to fail again in the app's own faces by lengthening its own string or
+tightening its own rule, so the checks are alive under the new faces. Three things the plants
+corrected in the work itself: the clause «only the boot timer may switch the faces off» was
+satisfied by a COMMENT in that file (it now reads code, and any second argument to `fence()`);
+the comment remover first took the route pattern `'**/*'` for the start of a comment and
+swallowed the calls after it; and a suite that loses the faces stops at its first measurement
+with «window.__fpGap is not a function», before the assertion that names the faces.
+
+**A review, read-only, from five angles** (the harness, the allowance, the contract, the words,
+what can still differ on CI), each finding argued against by a second reader: no blocker, 26
+smaller points, acted on above. The ones that changed code: the two extra pages of
+`test-convenience-ui.js` opened past the faces; five contract clauses could be satisfied by a
+comment or missed an ordinary form of the thing they refuse; a face that never finished loading
+would have hung `goto` instead of failing it; a fingerprint taken before the change was
+comparable with one taken after.
+
+**Left as it is, on purpose.** `styles.css` still says in three comments that a ring line is
+«widened ×1.12 when the brand faces are not loaded» and that the fallback mono is «~0.55em».
+Both are about the retired guess. The stylesheet is a shipped file and this is not a release;
+the next release that touches it corrects them.
+
+**The gate.** `npm run verify`: 83 contracts, lint clean, 38 suites passed and none failed (271 s pooled). The suites were then run once more with DejaVu served as the fallback for every glyph outside the brand faces, which is what the runner will draw after this change: 38 of 38 (273 s). Whether the runner agrees is read from its own run after the push, below.
+
 ## v443 — a toast sits above the floating rest bar
 
 **Left open by v437, with its measurement.** A rest started in the guided run follows the user to

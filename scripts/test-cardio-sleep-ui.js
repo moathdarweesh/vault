@@ -493,12 +493,14 @@ const CASES = [
               const cy = ring.top + ring.height / 2;
               const sw = parseFloat(getComputedStyle(fg).strokeWidth) * (ring.width / 120);
               const R = 54 * (ring.width / 120) - sw / 2;
-              // Fonts are fenced off in this harness: the fallback face is narrower
-              // than JetBrains Mono / Plex, so a measured width is taken at x1.12
-              // unless the brand mono actually loaded.
-              const mono = [...document.fonts].some((f) => /JetBrains Mono/i.test(f.family) && f.status === 'loaded');
-              const k = mono ? 1 : 1.12;
+              // The page is drawn in the app's own faces (fp/server.js, brandFaces).
+              // The repo carries no Plex Bold, so the 700 verdict is in the 600
+              // file, a little narrow: each line's width is taken at its own
+              // allowance, __fpGap (1 for the figure: the mono is exact). Until
+              // 2026-11-22 every line was widened by a typed 1.12, a guess for a
+              // narrow fallback face that failed this case on CI's wide one.
               const lines = [...h.querySelectorAll('.cal-ring-center > *')].map((n) => {
+                const k = window.__fpGap(n);
                 const range = document.createRange(); range.selectNodeContents(n);
                 const ls = [];
                 for (const r of range.getClientRects()) {
@@ -508,7 +510,7 @@ const CASES = [
                   if (!L) { ls.push({ left: r.left, right: r.right, top: r.top, bottom: r.bottom }); continue; }
                   L.left = Math.min(L.left, r.left); L.right = Math.max(L.right, r.right); L.top = Math.min(L.top, r.top); L.bottom = Math.max(L.bottom, r.bottom);
                 }
-                return { text: n.textContent.trim(), n: ls.length, scroll: n.scrollWidth, client: n.clientWidth,
+                return { text: n.textContent.trim(), n: ls.length, scroll: n.scrollWidth, client: n.clientWidth, k,
                   fit: ls.map((L) => { const dy = Math.max(Math.abs(L.top - cy), Math.abs(L.bottom - cy)); return { w: (L.right - L.left) * k, chord: 2 * Math.sqrt(Math.max(0, R * R - dy * dy)), inside: dy <= R }; }) };
               });
               const rows = h.querySelector('.slp-rows').getBoundingClientRect();
@@ -521,7 +523,7 @@ const CASES = [
                 if (r.width && (r.right > hr.right + 0.5 || r.left < hr.left - 0.5)) clip.push(el.className + ' leaves the card');
               }
               const view = document.querySelector('.view.active');
-              return { lines, stacked: rows.top >= ring.bottom - 1, clip, sideways: view.scrollWidth > view.clientWidth + 1, scale: getComputedStyle(document.body).getPropertyValue('--fs-scale').trim(), mono };
+              return { lines, stacked: rows.top >= ring.bottom - 1, clip, sideways: view.scrollWidth > view.clientWidth + 1, scale: getComputedStyle(document.body).getPropertyValue('--fs-scale').trim() };
             });
             const where = `${lang} ${seed} ${width}px${lg ? ' text-lg' : ''}`;
             cells.push(where);
@@ -531,7 +533,7 @@ const CASES = [
               assert.equal(L.n, 1, `${where}: «${L.text}» is ONE line`);
               for (const f of L.fit) {
                 assert.ok(f.inside, `${where}: «${L.text}» runs below the ring's inner circle`);
-                assert.ok(f.w <= f.chord + 0.5, `${where}: «${L.text}» sits on the ring stroke (${f.w.toFixed(1)}px at x${c.mono ? 1 : 1.12}, chord ${f.chord.toFixed(1)}px)`);
+                assert.ok(f.w <= f.chord + 0.5, `${where}: «${L.text}» sits on the ring stroke (${f.w.toFixed(1)}px at x${L.k}, chord ${f.chord.toFixed(1)}px)`);
               }
             }
             assert.equal(c.stacked, width < 360 || (lg && width < 375), `${where}: the ring ${c.stacked ? 'stacks above' : 'sits beside'} the rows`);

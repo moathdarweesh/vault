@@ -38,9 +38,11 @@
 //   · circles    — border-radius ≥ half the box. Law: device 4, no circles.
 //   · render ms  — the synchronous cost of the screen, from the net's timer.
 //
-// ⚠️ FONTS ARE ALLOWED THROUGH THIS FENCE, unlike the net's. The net blocks
-// them for determinism (system-ui differs per machine); an audit of whether
-// text FITS is wrong in the wrong face. fonts.googleapis.com and
+// ⚠️ FONTS ARE ALLOWED THROUGH THIS FENCE, unlike the net's. The net's fence
+// aborts the font hosts and draws the brand's faces from the repo's own four
+// files instead (fp/server.js, brandFaces): no Plex Medium, no Plex Bold. An
+// audit of whether text FITS wants the very faces a browser loads.
+// fonts.googleapis.com and
 // fonts.gstatic.com are read-only hosts; everything else is still aborted and
 // the run still asserts that nothing else was ever allowed.
 'use strict';

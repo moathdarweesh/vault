@@ -313,7 +313,8 @@ const sorted = (a) => { const p = plain(a); return Array.isArray(p) ? p.sort() :
 
   // THE ENGLISH BODY KEEPS TO THE BAR'S TWO LINES (v441). Counted in letters,
   // not pixels: this suite has no browser, and a pixel case in a browser suite
-  // would read whatever fonts the machine has (CI's are not the app's). 68 is
+  // would read whatever fonts the machine has (true when this was written: CI's
+  // were not the app's; a fenced page draws the repo's faces since 2026-11-22). 68 is
   // the sentence that WAS measured, in the app's own fonts, with the longest
   // day name the app writes itself: whole from 320 px up at both text sizes
   // (docs/RELEASE-NOTES.md, v441). A longer sentence, or a longer name of the

@@ -30,8 +30,15 @@ async function run() {
     const errors = [];
     page.on('pageerror', error => { errors.push(error.message); console.error('PAGE ERROR:', error.message); });
     await page.route('**/*', route => route.request().url().startsWith('http://127.0.0.1:') ? route.continue() : route.abort());
+    // This page has its own route filter, so it asks for the app's own faces
+    // itself (fp/server.js): the convenience module it runs measures whether
+    // text fits, and in the machine's fallback face its recipe bar's caption
+    // overflowed on CI's runner and nowhere else.
+    await require('./fp/server.js').brandFaces(page);
     await page.goto(`http://127.0.0.1:${server.address().port}/`);
     await page.waitForFunction(() => typeof navigate === 'function');
+    assert.deepEqual(await page.evaluate(() => [...document.fonts].filter((f) => f.status === 'loaded').map((f) => f.family.replace(/["']/g, '') + ' ' + f.weight).sort()),
+      ['IBM Plex Sans Arabic 400 500', 'IBM Plex Sans Arabic 600 700', 'JetBrains Mono 400 500', 'JetBrains Mono 700'], 'the page is drawn in the app\'s own four faces, and no other face is loaded');
     // THE HOUR THE SUITE RUNS MUST NOT MATTER. The in-app reminder catch-up
     // shows a timed bar for whatever reminder a fresh install has due at that
     // hour — after 20:00 it was water («0 من 2,500 مل») — and the bar covers

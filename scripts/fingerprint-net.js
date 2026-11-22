@@ -29,7 +29,7 @@
 
 const fs = require('node:fs');
 const path = require('node:path');
-const { start, fence, ROOT } = require('./fp/server.js');
+const { start, fence, ROOT, FACES_ID } = require('./fp/server.js');
 const VIEWS = require('./fp/views.js');
 const PROPS = require('./fp/props.js');
 const MODALS = require('./fp/modals.js');
@@ -565,7 +565,7 @@ async function runMatrix(tag, state, props, laneFn, label, contexts, lane) {
   await withBrowser(state, async (browser, origin) => {
     const record = {
       tag, state, lane, contexts: contexts === null ? 'all' : contexts.length === 1 ? 'one' : 'extremes',
-      lang: 'matrix', theme: 'matrix', width: 'matrix',
+      lang: 'matrix', theme: 'matrix', width: 'matrix', faces: FACES_ID,
       at: FROZEN.toISOString(), tz: TZ,
       views: VIEWS.length, props,
       randomCalls: 0, contained: { escaped: 0, blockedLive: 0, blockedTotal: 0 }, problems: [], timings: [], cells: {},
@@ -596,7 +596,7 @@ async function capture() {
   await withBrowser(state, async (browser, origin) => {
     const r = await captureContext(browser, origin, { state, lang, theme, width, props });
     writeRecord(tag, {
-      tag, state, lane: 'views', contexts: 'one', lang, theme, width,
+      tag, state, lane: 'views', contexts: 'one', lang, theme, width, faces: FACES_ID,
       at: FROZEN.toISOString(), tz: TZ,
       views: VIEWS.length, props,
       randomCalls: r.randomCalls, contained: r.contained, problems: r.problems, timings: r.timings, cells: r.cells,
@@ -661,7 +661,9 @@ function diffOne(a, b, lane) {
   // `lane` and `contexts` are in this list because a views record and a sheets
   // record were silently comparable: a mistyped tag printed '160 removed, 106
   // added' instead of saying they are from different lanes.
-  for (const k of ['lane', 'contexts', 'state', 'lang', 'theme', 'width']) {
+  // `faces` since 2026-11-22: every box and overflow in a record depends on the face it was drawn in, and a
+  // record taken before the fence drew the brand's faces (no `faces` key) would diff as noise against one taken after.
+  for (const k of ['lane', 'contexts', 'state', 'lang', 'theme', 'width', 'faces']) {
     if (a[k] !== b[k]) throw new Error(`the two captures disagree on ${k} (${a[k]} vs ${b[k]}) — they are not comparable`);
   }
 

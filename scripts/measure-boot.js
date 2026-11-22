@@ -52,7 +52,9 @@ const stat = (a) => {
   for (const [lane, latency] of LANES) {
     const ctx = await browser.newContext();
     const page = await ctx.newPage();
-    const seen = await fence(page);
+    // faces: false — this tool times the app's OWN boot; the harness's four
+    // font files (fp/server.js, brandFaces) are not part of it.
+    const seen = await fence(page, { faces: false });
     const cdp = await ctx.newCDPSession(page);
     await cdp.send('Network.setCacheDisabled', { cacheDisabled: true });
     if (latency) await cdp.send('Network.emulateNetworkConditions', { offline: false, latency, downloadThroughput: -1, uploadThroughput: -1 });

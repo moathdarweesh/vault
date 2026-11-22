@@ -2890,8 +2890,8 @@ const cssOwner = (i) => CSS_BLOCKS.reduce((best, b) => (b.open < i && b.close > 
   if (!/flex-wrap:\s*wrap;/.test(actions)) problems.push('styles.css: .sd-card-actions no longer wraps (its two buttons ran 25–39 px past a 320 px card)');
   const toolbar = (css.match(/^\.sd-toolbar \{[^}]*\}/m) || [''])[0];
   if (!/flex-wrap:\s*wrap;/.test(toolbar)) problems.push('styles.css: .sd-toolbar no longer wraps — at 320 px with larger text the KG/LB toggle sat 14 px outside it, and a wider fallback font scrolled the page sideways (v435)');
-  // The run's two stat cells (v439). The suite measures them in a fenced page that cannot load the
-  // app's fonts; what was measured in those fonts is held here.
+  // The run's two stat cells (v439). When this was written a fenced page could not load the app's
+  // fonts (it draws them since 2026-11-22, contract 83); what was measured in those fonts is held here.
   const strip = (css.match(/^\.run-stats \{[^}]*\}/m) || [''])[0];
   if (!/grid-template-columns:\s*minmax\(0, 1fr\) minmax\(0, 1fr\);/.test(strip)) problems.push('styles.css: .run-stats must keep two minmax(0, 1fr) tracks — a bare 1fr cannot go below its content, and two long figures put the second stat cell outside its row (10–19 px at 375 px at normal text, v439)');
   const figure = (css.match(/^\.run-stat-figure \{[^}]*\}/m) || [''])[0];
@@ -3009,6 +3009,132 @@ const cssOwner = (i) => CSS_BLOCKS.reduce((best, b) => (b.open < i && b.close > 
   const foot = (css.match(/^\.wte-foot \{[^}]*\}/m) || [''])[0];
   if (!/position:\s*sticky/.test(foot)) problems.push('styles.css: .wte-foot is missing or not position: sticky');
   contract(`«ماذا آكل الآن؟» stays pure, in its place, and logs the portion it shows: ${PURE.length} pure functions, WTE on one line, the door last under «اقتراحات اليوم» in both states and never a data-shr-* door, servings: pick.p on the day of the tap, whole portion keys, the device's own pool, every WTE_CAT dish a catalogue meal, the actions on a sticky floor`, problems);
+}
+
+// ---------------------------------------------------------------- 83. the suites measure the app in the app's own faces
+// 2026-11-22. A fenced page cannot reach the font hosts, so until that day it
+// drew the app in the machine's fallback face: Segoe UI on the owner's PC,
+// DejaVu Sans on GitHub's runner. Every check of whether text fits a box then
+// measured a face no user sees, and a different one per machine: five suites
+// were red on CI on every commit from v415 to v443 while green here, and two
+// suites carried a typed «× 1.12» to guess the brand's width from a narrow
+// fallback. scripts/fp/server.js now registers the brand's faces from the files
+// the repo already carries for the Android widgets (brandFaces), in every
+// fenced page. What can silently undo that, and what no suite would notice on
+// the machine where it happens: a font file swapped for another face or weight
+// (every measurement would change meaning), the app adopting a face the
+// harness does not register (that text would be measured in the fallback
+// again), a suite opening its page past the fence, the faces switched off by a
+// caller that measures layout, and the typed guess coming back.
+{
+  const problems = [];
+  const server = read('scripts/fp/server.js');
+  // Read from the text, like every contract here: one face per line, in this form.
+  const facesSrc = (server.match(/^const BRAND_FACES = \[\r?\n([\s\S]*?)^\];/m) || ['', ''])[1];
+  const BRAND_FACES = [...facesSrc.matchAll(/^ {2}\['([^']+)', '([^']+)', '([^']+)'\],\r?$/gm)].map((m) => [m[1], m[2], m[3]]);
+  const FACE_DIR = (server.match(/^const FACE_DIR = '(\/[^']+\/)';/m) || [])[1] || '/';
+  const gapM = server.match(/^const FACE_GAP = \{ medium: ([\d.]+), bold: ([\d.]+) \};/m);
+  const FACE_GAP = gapM ? { medium: Number(gapM[1]), bold: Number(gapM[2]) } : null;
+  if (facesSrc.split('\n').filter((l) => l.trim()).length !== BRAND_FACES.length) problems.push('scripts/fp/server.js: a line of BRAND_FACES is not in the form «  [\'Family\', \'weight\', \'file.ttf\'],» — this contract cannot read it');
+  // Code, not words: every clause below that looks for a CALL reads the file with its comments removed
+  // (a «//» or a «/*» counts only at a line start or after a space, so 'http://…' and the route
+  // pattern '**/*' survive: read plainly, that pattern opened a «comment» that swallowed the calls after it).
+  const code = (t) => t.replace(/(^|[ \t])\/\*[\s\S]*?\*\//gm, '$1').replace(/(^|[ \t])\/\/.*$/gm, '$1');
+  // (a) the four files exist, each whole, and each IS the face and weight it is registered as.
+  const ttf = (file) => {
+    const b = fs.readFileSync(path.join(root, file));
+    if (b.length < 12) return null;
+    const tables = {};
+    for (let i = 0, n = b.readUInt16BE(4); i < n; i++) {
+      const o = 12 + i * 16;
+      if (o + 16 > b.length) return null;
+      const off = b.readUInt32BE(o + 8);
+      if (off + b.readUInt32BE(o + 12) > b.length) return null;   // a table runs past the end: the file was cut
+      tables[b.toString('latin1', o, o + 4)] = off;
+    }
+    if (tables.name === undefined || tables['OS/2'] === undefined) return null;
+    const at = tables.name, strings = at + b.readUInt16BE(at + 4);
+    let family = '';
+    for (let i = 0, n = b.readUInt16BE(at + 2); i < n && !family; i++) {
+      const r = at + 6 + i * 12;
+      if (b.readUInt16BE(r) !== 3 || b.readUInt16BE(r + 6) !== 1) continue;   // Windows platform, nameID 1 (family), UTF-16BE
+      const str = b.subarray(strings + b.readUInt16BE(r + 10), strings + b.readUInt16BE(r + 10) + b.readUInt16BE(r + 8));
+      for (let k = 0; k + 1 < str.length; k += 2) family += String.fromCharCode(str.readUInt16BE(k));
+    }
+    return { family, weight: b.readUInt16BE(tables['OS/2'] + 4) };
+  };
+  if (BRAND_FACES.length !== 4) problems.push('scripts/fp/server.js: BRAND_FACES is not the four faces (Plex 400 and 600, the mono 500 and 700)');
+  for (const [family, weight, file] of BRAND_FACES) {
+    const rel = FACE_DIR.replace(/^\//, '') + file;
+    if (!exists(rel)) { problems.push(`${rel} is missing — every fenced suite would stop at its first page.goto`); continue; }
+    let got = null;
+    try { got = ttf(rel); } catch (_) { got = null; }
+    const [lo, hi] = String(weight).split(' ').map(Number).concat(NaN);
+    // A Plex file must be the LOWEST weight of its range: FACE_GAP widens the heavier line drawn in it.
+    // The mono is fixed-pitch, so either weight of its range draws the same advances.
+    const top = family === 'IBM Plex Sans Arabic' ? lo : (Number.isFinite(hi) ? hi : lo);
+    if (!got) problems.push(`${rel} is not a whole TrueType file with name and OS/2 tables`);
+    else {
+      if (!got.family.startsWith(family)) problems.push(`${rel} is «${got.family}», registered by the harness as «${family}» — the suites would measure another face under the brand's name`);
+      if (!(got.weight >= lo && got.weight <= top)) problems.push(`${rel} is weight ${got.weight}, registered for ${weight}` + (top === lo && Number.isFinite(hi) ? ` — a Plex file must be its range's lowest weight (${lo}): FACE_GAP widens the ${hi} line drawn in it` : ''));
+    }
+  }
+  // The allowance stands on which file draws which weight: Plex 500 in the 400 file, 700 in the 600 file.
+  const plex = BRAND_FACES.filter((f) => f[0] === 'IBM Plex Sans Arabic').map((f) => f[1]).sort().join(' | ');
+  if (plex !== '400 500 | 600 700') problems.push(`BRAND_FACES registers Plex for «${plex}», not «400 500 | 600 700» — FACE_GAP (a 500 line in the 400 file, a 700 line in the 600 file) would no longer describe what is drawn`);
+  // …and on its size: the true Medium was up to 4.2 % wider than the 400 file and the true Bold up to 2.7 %
+  // wider than the 600 file (19 strings, 2026-11-22). A smaller allowance is a guess again.
+  if (!(FACE_GAP && FACE_GAP.medium >= 1.045 && FACE_GAP.bold >= 1.03)) problems.push('scripts/fp/server.js: FACE_GAP no longer widens a 500 line by at least 1.045 and a 700 line by at least 1.03 — the measured gaps to the true Medium and Bold are 4.2 % and 2.7 %');
+  // (b) the app asks for these two families and no third: its stylesheet, its scripts and its font link.
+  const families = new Set(BRAND_FACES.map((f) => f[0]));
+  for (const m of CSS_CLEAN.matchAll(/font-family:\s*([^;}]+)[;}]/g)) {
+    const first = m[1].replace(/\s*!important\s*$/i, '').trim().split(',')[0].trim().replace(/^['"]|['"]$/g, '');
+    if (first === 'inherit' || first === 'unset' || families.has(first)) continue;
+    problems.push(`styles.css sets font-family «${m[1].trim().slice(0, 60)}» — «${first}» is not a face the harness registers, so its text would be measured in the machine's fallback`);
+  }
+  for (const m of CSS_CLEAN.matchAll(/(?:^|[;{\s])font:\s*([^;}]+)[;}]/g)) {
+    if (m[1].replace(/\s*!important\s*$/i, '').trim() !== 'inherit') problems.push(`styles.css uses the shorthand «font: ${m[1].trim().slice(0, 40)}» — it sets a face this contract cannot read; write font-family, font-size and font-weight`);
+  }
+  for (const f of JS) {
+    if (/font-family\s*:|\bfontFamily\b|\.font\s*=/.test(code(src[f]))) problems.push(`${f} sets a font from script — a face set there is one the harness may not register, and nothing here reads it`);
+  }
+  const asked = new Set([...html.matchAll(/fonts\.googleapis\.com\/css2\?([^"]+)"/g)].flatMap((m) => [...m[1].matchAll(/family=([^:&]+)/g)].map((x) => x[1].replace(/\+/g, ' '))));
+  if ([...asked].sort().join(' | ') !== [...families].sort().join(' | ')) problems.push(`index.html asks the font host for «${[...asked].sort().join(' | ')}», the harness registers «${[...families].sort().join(' | ')}»`);
+  // (c) fence() draws them unless a caller says no, and the one caller that says anything is the boot timer.
+  const serverCode = code(server);
+  if (!/async function fence\(page, \{ faces = true \} = \{\}\) \{/.test(serverCode) || !/if \(faces\) await brandFaces\(page\);/.test(serverCode)) problems.push('scripts/fp/server.js: fence(page) no longer calls brandFaces(page) by default');
+  if (!/await page\.addInitScript\(installFaces, \{ dir: FACE_DIR, faces: BRAND_FACES, /.test(serverCode)) problems.push('scripts/fp/server.js: brandFaces() no longer installs BRAND_FACES from FACE_DIR in every document');
+  const scripts = fs.readdirSync(path.join(root, 'scripts')).filter((f) => f.endsWith('.js'));
+  // ANY second argument to fence()/fenceFn(): an options object over several lines or held in a variable is seen too.
+  const off = scripts.filter((f) => f !== 'check-contracts.js' && /\bfence(?:Fn)?\(\s*[\w.]+\s*,/.test(code(read('scripts/' + f))));
+  if (off.join() !== 'measure-boot.js') problems.push(`fence() is given options by «${off.join(', ') || 'nobody'}» — only scripts/measure-boot.js (it times the app's own boot, { faces: false }) may switch the faces off`);
+  // (d) per PAGE: a test file asks for the faces at least once for every page it opens.
+  const BARE = { 'test-brand-icon.js': 'draws icons/icon.svg alone: no app text', 'test-startup.js': 'asserts page errors, the stored sessions and the boot time: it measures no text' };
+  let pagesSeen = 0;
+  for (const f of scripts.filter((f) => /^test-.*\.js$/.test(f))) {
+    const t = code(read('scripts/' + f));
+    const pages = (t.match(/\.newPage\(/g) || []).length;
+    if (!pages) continue;
+    const drawn = (t.match(/await (?:fenceFn|fence)\(|\bbrandFaces\(/g) || []).length;
+    if (BARE[f]) { if (drawn) problems.push(`scripts/${f} is listed as needing no faces (${BARE[f]}) and now asks for them — drop it from the list`); continue; }
+    pagesSeen += pages;
+    if (drawn < pages) problems.push(`scripts/${f} opens ${pages} page(s) and asks for the faces ${drawn} time(s) (fence() or brandFaces(page)) — a page past them is drawn in the machine's fallback face`);
+  }
+  // (e) the typed guess is gone: no script names it, and the two suites that carried it take the
+  // allowance at every site that compares a width, with no typed factor beside it.
+  for (const f of scripts.filter((f) => f !== 'check-contracts.js')) {
+    if (/\bWIDER\b/.test(code(read('scripts/' + f)))) problems.push(`scripts/${f} carries WIDER — a typed widening factor guesses one machine's fallback face (it failed on CI's)`);
+  }
+  const SITES = {
+    'test-food-log-ui.js': ['window.__fpGap(name)', 'window.__fpGap(nums)', 'gap: window.__fpGap(n)', 'n.width * n.gap <= n.chord', '(hd.nameW + hd.numsW) * hd.gap <= hd.headW'],
+    'test-cardio-sleep-ui.js': ['const k = window.__fpGap(n);', 'w: (L.right - L.left) * k'],
+  };
+  for (const [f, sites] of Object.entries(SITES)) {
+    const t = code(read('scripts/' + f));
+    for (const site of sites) if (!t.includes(site)) problems.push(`scripts/${f} no longer carries «${site}» — a 500 or 700 line is drawn in a lighter file and would be measured narrow`);
+    if (/[*]\s*1\.\d|\?\s*1\s*:\s*1\.\d/.test(t)) problems.push(`scripts/${f} multiplies by a typed 1.x — the allowance is window.__fpGap(el), measured, never typed`);
+  }
+  contract(`the suites measure the app in the app's own faces: ${BRAND_FACES.length} files in ${FACE_DIR} that are whole and are the faces and weights they are registered as, the app asking for the same ${families.size} families and no third (stylesheet, scripts, font link), fence() drawing them for every caller but the boot timer, ${pagesSeen} test pages each asking for them (test-startup.js and test-brand-icon.js excepted, by name), no typed widening factor`, problems);
 }
 
 console.log(failures.length ? `\ncheck-contracts: ${failures.length} broken contract(s)` : '\ncheck-contracts: all contracts hold');

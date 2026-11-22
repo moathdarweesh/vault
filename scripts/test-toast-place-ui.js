@@ -339,7 +339,7 @@ const CASES = [
       g = await still(kit, LIVE + ' #mf-save');
       assert.ok(g.extra && !hits(g.toast, g.extra), `${at}: the instruction ${fmt(g.toast)} lies on the sheet's Save ${fmt(g.extra)}`);
       // An Undo over the same sheet, clean again. A SHORT name: the sheet makes room for a toast of
-      // two lines (styles.css says so), and a long name under a wide fallback font (a CI machine's)
+      // two lines (styles.css says so), and a long name under a wide fallback font (as CI drew the app before 2026-11-22)
       // needs three — seen with the whole app forced into Courier New. That limit is the sheet's and
       // is older than this suite; what is held here is the toast's place.
       await kit.page.locator(LIVE + ' #mf-name').fill('');

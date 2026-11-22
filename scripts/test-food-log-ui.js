@@ -36,21 +36,22 @@ const near = (a, b, tol, msg) => assert.ok(Math.abs(a - b) <= tol, `${msg}: ${a}
 // Every centre line inside its box (scrollWidth ≤ clientWidth) AND inside the
 // ring's inner circle (its width ≤ the chord at its farthest edge, ±0.5px).
 //
-// FONT-AWARE (v405, M3): fence() aborts Google Fonts, so under the harness the
-// figures are measured in the machine's monospace fallback, whose digits are
-// narrower than JetBrains Mono's (~0.55em against ~0.6em) — a line that fits
-// here can sit on the stroke on a phone. When the brand mono is NOT loaded,
-// every measured width is multiplied by WIDER, a documented worst-case factor
-// (the widest fallback-to-brand ratio measured, 1.09, with margin), so the
-// check is conservative under the fallback and exact under the real face.
-const WIDER = 1.12;
+// IN THE APP'S OWN FACES (2026-11-22). fence() aborts Google Fonts AND draws
+// the page in the brand's faces from the repo's own files (fp/server.js,
+// brandFaces), so a width read here is the width on a phone. The repo carries
+// no Plex Medium or Bold: a 500 or 700 line is in the 400 or 600 file, a
+// little narrow, and each measured width is taken at that line's allowance,
+// `gap` (window.__fpGap: 1.045, 1.03, or 1 — the mono is exact).
+// From v405 to v443 every width was multiplied by a typed 1.12 instead, a guess
+// for a fallback face NARROWER than the brand's. GitHub's runner falls back to
+// a wider one, where the guess widened it again: «بروتين» + «125.5 / 150g» was
+// 121.5 px in a 136 px head there and failed at «× 1.12 = 136.1».
 const fits = (c, where) => {
   assert.equal(c.centreEls, 3, `${where}: three centre lines (figure, label, sub)`);
-  const k = c.mono ? 1 : WIDER;
   for (const n of c.centre) {
     assert.ok(n.scroll <= n.client, `${where}: «${n.text}» clips its box (${n.scroll} > ${n.client}, ring ${c.ringPx}px)`);
     assert.ok(n.inside, `${where}: «${n.text}» runs below the ring's inner circle`);
-    assert.ok(n.width * k <= n.chord + 0.5, `${where}: «${n.text}» sits on the ring stroke (${n.width.toFixed(1)}px wide${k > 1 ? ` × ${k} for the missing brand mono = ${(n.width * k).toFixed(1)}` : ''}, ${n.chord.toFixed(1)}px chord, ring ${c.ringPx}px)`);
+    assert.ok(n.width * n.gap <= n.chord + 0.5, `${where}: «${n.text}» sits on the ring stroke (${n.width.toFixed(1)}px wide${n.gap > 1 ? ` × ${n.gap} for the face the repo does not carry = ${(n.width * n.gap).toFixed(1)}` : ''}, ${n.chord.toFixed(1)}px chord, ring ${c.ringPx}px)`);
   }
 };
 
@@ -99,13 +100,11 @@ const card = (page) => page.evaluate(() => {
     tilesText: (view.querySelector('.macro-totals') || {}).textContent ? view.querySelector('.macro-totals').textContent.replace(/\s+/g, ' ').trim() : null,
     emptyRing: fg ? fg.classList.contains('is-empty') : null,
     emptyTitle: (view.querySelector('#food-log-list .empty-title') || {}).textContent || null,
-    // Is the brand mono actually LOADED? document.fonts.check() answers true for
-    // a family with no registered face at all (nothing to load), which is
-    // exactly the fenced case — so the FontFaceSet is read instead.
-    mono: [...document.fonts].some((f) => f.family.replace(/["']/g, '') === 'JetBrains Mono' && f.status === 'loaded'),
-    fontsCheck: document.fonts.check('11px "JetBrains Mono"'),
+    // The faces this page is drawn in, as the FontFaceSet reports them
+    // (document.fonts.check() answers true for a family with no face at all).
+    faces: [...document.fonts].filter((f) => f.status === 'loaded').map((f) => f.family.replace(/["']/g, '') + ' ' + f.weight),
     // Each macro track's head: the name and the figures must each be ONE line,
-    // and their ink (widened for a missing brand face) must share the head's width.
+    // and their ink (at the allowance of the heavier of the two) must share the head's width.
     heads: mini ? [...mini.querySelectorAll('.macro-track-head')].map((h) => {
       // LINES, not fragments: a range over «<span class=num>125.5</span> / <span class=num>150</span>g»
       // answers one rect per inline box, six on one line. Rows are counted by
@@ -122,7 +121,7 @@ const card = (page) => page.evaluate(() => {
       };
       const w = (el) => { const r = document.createRange(); r.selectNodeContents(el); return r.getBoundingClientRect().width; };
       const name = h.querySelector('.macro-track-name'), nums = h.querySelector('.macro-track-nums');
-      return { name: name.textContent.trim(), nums: nums.textContent.replace(/\s+/g, ' ').trim(), nameLines: one(name), numsLines: one(nums), nameW: w(name), numsW: w(nums), headW: h.clientWidth };
+      return { name: name.textContent.trim(), nums: nums.textContent.replace(/\s+/g, ' ').trim(), nameLines: one(name), numsLines: one(nums), nameW: w(name), numsW: w(nums), headW: h.clientWidth, gap: Math.max(window.__fpGap(name), window.__fpGap(nums)) };
     }) : [],
     // The three centre lines: nothing may run past its box, in either language,
     // at any scale — and nothing may cross the STROKE either. `chord` is the
@@ -150,7 +149,7 @@ const card = (page) => page.evaluate(() => {
         return lines.map((L, i) => {
           const dy = Math.max(Math.abs(L.top - cy), Math.abs(L.bottom - cy));
           return { text: lines.length > 1 ? `${text} (line ${i + 1}/${lines.length})` : text, scroll: n.scrollWidth, client: n.clientWidth,
-            width: L.right - L.left, chord: 2 * Math.sqrt(Math.max(0, R * R - dy * dy)), inside: dy <= R };
+            width: L.right - L.left, gap: window.__fpGap(n), chord: 2 * Math.sqrt(Math.max(0, R * R - dy * dy)), inside: dy <= R };
         });
       });
     })() : [],
@@ -228,7 +227,7 @@ async function run() {
       document.getElementById('splash')?.remove();
       DB.prefs.setTextLg(false); document.body.classList.remove('text-lg');
     });
-    const measured = { scaleMax: null, fonts: null, bands: [], mono: null, fontsCheck: null };
+    const measured = { scaleMax: null, fonts: null, bands: [], faces: [] };
 
     for (const [lang, theme] of [['ar', 'dark'], ['en', 'light']]) {
       await page.evaluate(({ lang, theme }) => { DB.prefs.setLang(lang); DB.prefs.setTheme(theme); applyLang(lang); applyTheme(theme); }, { lang, theme });
@@ -515,7 +514,8 @@ async function run() {
 
       // L6 — the 340–374px band: every macro-track head stays ONE line, name
       // and figures, at the widest realistic figures, at both scales. The head's
-      // ink is widened like the ring's when the brand faces are absent.
+      // ink is taken at the larger allowance of its two parts (window.__fpGap), as
+      // each ring line is taken at its own.
       await page.evaluate((d) => {
         DB.foodLogs.listForDate(d).forEach((r) => DB.foodLogs.remove(d, r.id));
         DB.foodLogs.add(d, { name: 'QA wide', servings: 1, calories: 1850, protein: 125.5, carbs: 250.5, fat: 55.5, source: 'manual' });
@@ -526,14 +526,13 @@ async function run() {
         await page.evaluate((lg) => { DB.prefs.setTextLg(lg); document.body.classList.toggle('text-lg', lg); }, lg);
         await go(page, WIDE);
         c = await card(page);
-        const k = c.mono ? 1 : WIDER;
         const where = `L6 ${width}px${lg ? ' text-lg' : ''}`;
         soft(where, () => {
           assert.equal(c.heads.length, 3, 'three track heads');
           for (const hd of c.heads) {
             assert.equal(hd.nameLines, 1, `«${hd.name}» is one line (head ${hd.headW}px)`);
             assert.equal(hd.numsLines, 1, `«${hd.nums}» is one line (head ${hd.headW}px)`);
-            assert.ok((hd.nameW + hd.numsW) * k <= hd.headW, `«${hd.name}» + «${hd.nums}» = ${(hd.nameW + hd.numsW).toFixed(1)}px${k > 1 ? ` × ${k} = ${((hd.nameW + hd.numsW) * k).toFixed(1)}` : ''} does not share a ${hd.headW}px head`);
+            assert.ok((hd.nameW + hd.numsW) * hd.gap <= hd.headW, `«${hd.name}» + «${hd.nums}» = ${(hd.nameW + hd.numsW).toFixed(1)}px${hd.gap > 1 ? ` × ${hd.gap} = ${((hd.nameW + hd.numsW) * hd.gap).toFixed(1)}` : ''} does not share a ${hd.headW}px head`);
           }
           fits(c, where);
         });
@@ -542,7 +541,9 @@ async function run() {
       await page.setViewportSize({ width: 375, height: 812 });
       await page.evaluate(() => { DB.prefs.setTextLg(false); document.body.classList.remove('text-lg'); });
       await page.evaluate((TGT) => DB.nutrition.setTargets(TGT), TGT);
-      measured.fontsCheck = c.fontsCheck; measured.mono = c.mono;
+      measured.faces = c.faces;
+      // Not a figure of speech: the four files really are what this page is drawn in.
+      assert.deepEqual([...c.faces].sort(), ['IBM Plex Sans Arabic 400 500', 'IBM Plex Sans Arabic 600 700', 'JetBrains Mono 400 500', 'JetBrains Mono 700'], `${lang}: the page is drawn in the app's own four faces and nothing else is loaded`);
       assert.deepEqual(found, [], `${lang}: the v405 findings`);
 
       // (e) no targets: the four tiles, exactly as before, and their text-node patching
@@ -557,7 +558,7 @@ async function run() {
     }
     assert.deepEqual(errors, [], 'no page errors');
     const contained = net.assertContained();
-    console.log(`PASS food log UI: AR/dark + EN/light at 375×812 — a closed day's miniature hero (verdict, dash, three tracks, no water/pencil/click), today's left/over, an over day's red ring, the arrows, a delete re-rendering the card, the four tiles without targets, and nothing clipping at --fs-scale ${measured.scaleMax} (${measured.fonts.join(', ')}); the v405 findings (targets flipped under an open editor — focus kept on the saved row, the bar title kept through the arrows and every re-render, the empty ring paints no dot, unclamped legacy rows, «on target», the past day's empty line, midnight closing the day and a future day becoming today, legacy rows in the row list and the four tiles, one-line track heads at 375/360/340 ± text-lg: ${measured.bands.join(' · ')}); brand mono ${measured.mono ? 'loaded' : `absent (fonts.check says ${measured.fontsCheck}), widths × ${WIDER}`}; ${contained.blockedTotal} requests fenced`);
+    console.log(`PASS food log UI: AR/dark + EN/light at 375×812 — a closed day's miniature hero (verdict, dash, three tracks, no water/pencil/click), today's left/over, an over day's red ring, the arrows, a delete re-rendering the card, the four tiles without targets, and nothing clipping at --fs-scale ${measured.scaleMax} (${measured.fonts.join(', ')}); the v405 findings (targets flipped under an open editor — focus kept on the saved row, the bar title kept through the arrows and every re-render, the empty ring paints no dot, unclamped legacy rows, «on target», the past day's empty line, midnight closing the day and a future day becoming today, legacy rows in the row list and the four tiles, one-line track heads at 375/360/340 ± text-lg: ${measured.bands.join(' · ')}); drawn in ${measured.faces.length} of the app's own faces; ${contained.blockedTotal} requests fenced`);
   } finally { await browser.close(); await srv.close(); }
 }
 

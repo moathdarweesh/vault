@@ -479,7 +479,7 @@ const CASES = [
     // The run's two stat cells: each cell inside the strip's own box, and every piece of its figure
     // inside the cell that holds it. By rectangles again, and with no word about how the figure is
     // built, so the same question was put to the tree of v438 first: it answered «3 px outside the
-    // row» for this case's own 60 kg history, in this fenced page's fallback font.
+    // row» for this case's own 60 kg history, in the fallback font a fenced page drew then.
     const statsHold = () => kit.ev(() => {
       const strip = document.querySelector('.view.active .run-stats');
       if (!strip) return null;
@@ -539,7 +539,7 @@ const CASES = [
         if (breaks) assert.deepEqual(await figureLines(), x(2, { weightWithUnit: true, timesWithReps: true, broken: true }), `«${face}» cannot share one line here: it breaks before the ×, the weight keeps its unit and the × its reps`);
       }
       // Under 360 px the figure is set at 19 px, not 22 (× 1.1 with larger text). Measured in the
-      // app's own fonts, which this fenced page cannot load: at 22 px «142.5 KG × 12» is 137 px in a
+      // app's own fonts (which a fenced page could not load before 2026-11-22): at 22 px «142.5 KG × 12» is 137 px in a
       // 126 px cell here and would break in every such cell — the height of the strip would then
       // depend on the exercise, and the rows under it would move on Next.
       await kit.ev(() => DB.prefs.setUnit('kg'));
@@ -550,10 +550,10 @@ const CASES = [
       // field leaves for its number is its box less its borders and its padding: the browser cuts
       // a value at that edge — its first figures on an Arabic page, its last on an English one.
       // The room is asked in EM of the field's own font size, so the answer does not depend on
-      // the font this fenced page fell back to: six characters of the app's tabular figures
+      // the face the page is drawn in: six characters of the app's tabular figures
       // («142.88», a weight logged in pounds and read in kilograms) are 3.32 em in IBM Plex Sans
       // Arabic — 58.3 px at this case's 17.6 px. (The field's own scrollWidth does report a cut,
-      // but of the value as THIS browser drew it — in this machine's font, and in the figures of
+      // but of the value as THIS browser drew it — in the faces the fence registers, and in the figures of
       // the browser's language — and it says nothing of the ghost.) Before v442 the run's field
       // left 2.33 em here (41 px of a 67 px field; 24 px of it were padding beside a centred
       // number): «137.5» lost the edge of a figure and «142.88» its first one. The day card's

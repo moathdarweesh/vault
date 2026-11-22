@@ -7,11 +7,13 @@
 // hang lane (a render that never returns) into a check that runs on every push,
 // across BOTH languages, BOTH themes and two widths.
 //
-// It does NOT diff against a committed baseline: fonts are blocked by the fence,
-// so the app under test renders in system-ui, which differs between Windows,
-// macOS and the CI runner — a byte baseline would fail on every machine but the
-// one that recorded it. The invariants above hold everywhere; the diff stays a
-// local tool. Needs Playwright: absent locally it is reported as a SKIP by
+// It does NOT diff against a committed baseline. When this was written the fence
+// left the app in system-ui, which differs between Windows, macOS and the CI
+// runner — a byte baseline would have failed on every machine but the one that
+// recorded it. Since 2026-11-22 the fence draws the brand's faces from the
+// repo's own files (fp/server.js, brandFaces), but a glyph they do not carry
+// still comes from the machine's fallback, and no baseline has been tried. The
+// invariants above hold everywhere; the diff stays a local tool. Needs Playwright: absent locally it is reported as a SKIP by
 // test-all.js, and under --strict (CI) a skip is a failure.
 'use strict';
 const assert = require('node:assert/strict');

@@ -99,6 +99,15 @@ jobs:
       - name: Lint
         run: bash scripts/ci-step.sh "lint" node scripts/lint.js --strict
 
+      # Most suites launch the MACHINE's own Chrome (channel: 'chrome'), not the
+      # build installed above. Since 2026-11-22 they all draw the same font files
+      # (scripts/fp/server.js, brandFaces), so the engine that lays them out is
+      # what can still differ from the owner's PC: this line says which one it was.
+      - name: Browser versions
+        run: |
+          google-chrome --version || true
+          npx playwright --version || true
+
       # --strict: a suite that did not RUN is a failure here. Locally a missing
       # browser is a tolerable skip; in CI it means the install step lied.
       - name: Test suites

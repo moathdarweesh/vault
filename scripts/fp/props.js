@@ -55,9 +55,11 @@ const STAGE1 = [
 
 const ALL = Object.values(BANDS).flat();
 
-/* Fonts are blocked by the fence (correctly — a net that reaches the network is
-   not deterministic), so the app under test renders in system-ui, which differs
-   between Windows, macOS and the CI runner. Anything whose value depends on the
+/* The font hosts are blocked by the fence (correctly — a net that reaches the
+   network is not deterministic). When this list was made the app under test
+   therefore rendered in system-ui, which differs between Windows, macOS and the
+   CI runner; since 2026-11-22 the fence draws the brand's faces from the repo's
+   own files (fp/server.js, brandFaces), and the list was left as it was. Anything whose value depends on the
    FACE is therefore excluded from the committed CI baseline and kept only in the
    local before/after lane. That is the honest line between "the same machine ten
    minutes apart" and "any machine, any month". */

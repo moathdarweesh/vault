@@ -2379,6 +2379,7 @@ const routerHomeCases = [
       const errs = [];
       p2.on('pageerror', (e) => errs.push(e.message));
       await p2.route('**/*', (route) => (route.request().url().startsWith(origin) ? route.continue() : route.abort()));
+      await require('./fp/server.js').brandFaces(p2);   // a page of its own, behind its own filter: the app's own faces here too
       await p2.goto(origin + '/');
       await p2.waitForFunction(() => typeof navigate === 'function' && window.__vltReady);
       assert.equal(await p2.evaluate(() => !!document.getElementById('onboard-gate')), true, 'setup: a fresh install shows the first-run card');
@@ -2416,6 +2417,7 @@ const routerHomeCases = [
       const errs = [];
       p3.on('pageerror', (e) => errs.push(e.message));
       await p3.route('**/*', (route) => (route.request().url().startsWith(origin) ? route.continue() : route.abort()));
+      await require('./fp/server.js').brandFaces(p3);
       const water = () => p3.evaluate(() => DB.water.get(todayISO()));
       await p3.goto(origin + '/');
       await p3.waitForFunction(() => typeof navigate === 'function' && DB.water.get(todayISO()) === 250, null, { timeout: 6000 });
