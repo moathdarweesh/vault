@@ -39,7 +39,16 @@ async function openPage(browser, origin, { lang, theme }) {
     applyLang(lang); applyTheme(theme); hideAuthGate();
     document.getElementById('onboard-gate')?.remove();
     const ex = DB.exercises.list()[0];
-    DB.sessions.add({ exerciseId: ex.id, date: addDaysISO(todayISO(), -2), sets: [{ reps: 8, weight: 40 }] });
+    // A session INSIDE THIS WEEK, whatever today is. The figure Home counts is
+    // the week's own (startOfWeek, WEEK_START), and the fixture used to be «two
+    // days ago»: on the week's first two days that is last week, Home had
+    // nothing to count, and this suite failed on every Sunday and Monday (found
+    // on Sunday 2026-11-22 by v441's gate; measured on all seven weekdays with
+    // the page's clock held). Two days back when the week is that old, else as
+    // far back as the week goes. No plan is set, so a session dated today still
+    // leaves Home on the week's numeral.
+    const back = Math.min(2, (new Date().getDay() - WEEK_START + 7) % 7);
+    DB.sessions.add({ exerciseId: ex.id, date: addDaysISO(todayISO(), -back), sets: [{ reps: 8, weight: 40 }] });
     navigate('home');
   }, { lang, theme });
   const ev = (fn, arg) => page.evaluate(fn, arg);
@@ -158,7 +167,7 @@ const CASES = [
     await kit.ev(() => navigate('workouts'));
     await kit.settled();
     const arrival = await kit.ev(() => { navigate('home'); const n = document.querySelector('.view.active .anim[data-count]'); return { text: n.textContent, target: Number(n.dataset.count) }; });
-    assert.ok(arrival.target > 0, 'setup: a figure to count (a session two days ago)');
+    assert.ok(arrival.target > 0, 'setup: a figure to count (a session inside this week)');
     assert.equal(arrival.text, '0', 'an arrival starts the count at 0');
     await kit.page.waitForTimeout(800);
     assert.equal(await kit.ev(() => document.querySelector('.view.active .anim[data-count]').textContent), await kit.ev((t) => fmtNum(t), arrival.target), 'and lands on the figure');
